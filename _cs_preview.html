@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Candy Star Preview</title>
+<link rel="stylesheet" href="css/botz-base.css">
+<style>body{background:var(--bg-deep,#08080B); padding:24px;}</style>
+</head>
+<body>
+<div id="app" style="display:block; max-width:700px; margin:0 auto;">
+  <div class="page-header">
+    <div class="page-title" style="font-size:20px; font-weight:900; color:#fff;">🍬 Candy Star Generator</div>
+    <div class="page-subtitle" style="color:var(--text-muted); font-size:12px;">Make an alpaca 🦙 — a streaming playlist built around the current goals</div>
+  </div>
+  <div id="candystarContent"></div>
+</div>
+
+<script>
+function $(id) { return document.getElementById(id); }
+function sanitize(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function showToast(msg, kind) { console.log('[toast]', kind, msg); }
+
+window._candyStar = { songByLabel: {}, albums: [] };
+const CANDY_GOALS = ["Swim", "Wild Flower", "DSYLM", "Haegeum", "Killin' It Girl", "Arirang"];
+
+const MOCK_SONGS = [
+  { name: 'Swim', artists: ['Agust D'], key: 's1' },
+  { name: 'Wild Flower', artists: ['j-hope', 'Kim Sejeong'], key: 's2' },
+  { name: 'Come Over', artists: ['RM'], key: 's3' },
+  { name: 'Haegeum', artists: ['Agust D'], key: 's4' },
+  { name: "Killin' It Girl", artists: ['BTS', 'Jimin'], key: 's5' },
+  { name: 'Arirang', artists: ['BTS'], key: 's6' },
+];
+const MOCK_ALBUMS = [
+  { name: 'Face', count: 7, trackKeys: Array.from({length:7},(_,i)=>'a'+i) },
+  { name: 'D-Day', count: 10, trackKeys: Array.from({length:10},(_,i)=>'b'+i) },
+  { name: 'Map of the Soul: 7', count: 20, trackKeys: Array.from({length:20},(_,i)=>'c'+i) },
+  { name: 'Love Yourself: Answer', count: 25, trackKeys: Array.from({length:25},(_,i)=>'d'+i) },
+  { name: 'BE', count: 8, trackKeys: Array.from({length:8},(_,i)=>'e'+i) },
+  { name: 'Proof', count: 48, trackKeys: Array.from({length:48},(_,i)=>'f'+i) },
+  { name: 'Hope World', count: 7, trackKeys: Array.from({length:7},(_,i)=>'g'+i) },
+  { name: 'Indigo', count: 10, trackKeys: Array.from({length:10},(_,i)=>'h'+i) },
+];
+
+function candyFocusRow(mult) {
+  return `<div class="cs-focus-row">
+    <input class="cs-focus-sel" list="cs-song-datalist" placeholder="Type a song…" autocomplete="off" aria-label="Song" oninput="candyUpdateEstimate()" onblur="candyValidateRow(this)" onkeydown="candyRowKeydown(event)">
+    <input class="cs-focus-mult" type="number" min="1" value="${mult}" title="Times to stream" aria-label="Times to stream" oninput="candyUpdateEstimate()" onblur="candyValidateRow(this)" onkeydown="candyRowKeydown(event)">
+    <button type="button" class="cs-row-remove" title="Remove song" onclick="candyRemoveRow(this)">×</button>
+  </div>`;
+}
+function candyRowKeydown(e) {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const row = e.target.closest('.cs-focus-row');
+  const next = row?.nextElementSibling;
+  if (next) next.querySelector('.cs-focus-sel')?.focus();
+  else candyAddFocusRow();
+}
+function candyAddFocusRow() {
+  const wrap = $('cs-focus-rows');
+  if (!wrap) return;
+  wrap.insertAdjacentHTML('beforeend', candyFocusRow(4));
+  wrap.lastElementChild?.querySelector('.cs-focus-sel')?.focus();
+}
+function candyRemoveRow(btn) {
+  btn.closest('.cs-focus-row')?.remove();
+  candyUpdateEstimate();
+}
+function candyValidateRow(el) {
+  const row = el.closest('.cs-focus-row');
+  if (!row) return;
+  const selEl = row.querySelector('.cs-focus-sel');
+  const multEl = row.querySelector('.cs-focus-mult');
+  const typed = selEl.value.trim();
+  const labelMap = window._candyStar.songByLabel || {};
+  selEl.classList.toggle('cs-invalid', !!typed && !labelMap[typed]);
+  const mult = parseInt(multEl.value) || 0;
+  multEl.classList.toggle('cs-invalid', !!typed && mult <= 0);
+}
+function candyUpdateEstimate() {
+  const out = $('cs-estimate-val');
+  if (!out) return;
+  let total = 0;
+  const labelMap = window._candyStar.songByLabel || {};
+  document.querySelectorAll('#cs-focus-rows .cs-focus-row').forEach(row => {
+    const typed = row.querySelector('.cs-focus-sel')?.value?.trim();
+    const mult = parseInt(row.querySelector('.cs-focus-mult')?.value) || 0;
+    if (typed && labelMap[typed] && mult > 0) total += mult;
+  });
+  const checkedAlbums = document.querySelectorAll('.cs-album-check:checked');
+  checkedAlbums.forEach(chk => {
+    try { total += (JSON.parse(chk.value) || []).length; } catch (_) {}
+  });
+  out.textContent = total > 0 ? `~${total} tracks` : '0 tracks';
+
+  const albumCountEl = $('cs-album-selected-count');
+  if (albumCountEl) {
+    albumCountEl.classList.toggle('is-visible', checkedAlbums.length > 0);
+    albumCountEl.textContent = checkedAlbums.length ? `${checkedAlbums.length} selected` : '';
+  }
+
+  const allBoxes = document.querySelectorAll('.cs-album-check');
+  const toggleAllEl = $('cs-album-toggle-all');
+  if (toggleAllEl && allBoxes.length) {
+    toggleAllEl.textContent = checkedAlbums.length === allBoxes.length ? 'Clear all' : 'Select all';
+  }
+}
+function candyToggleAllAlbums() {
+  const boxes = document.querySelectorAll('.cs-album-check');
+  const selectAll = document.querySelectorAll('.cs-album-check:checked').length !== boxes.length;
+  boxes.forEach(b => { b.checked = selectAll; });
+  candyUpdateEstimate();
+}
+function candySwitchTab(tab) {
+  document.querySelectorAll('.cs-tab[data-tab]').forEach(b => {
+    const active = b.dataset.tab === tab;
+    b.classList.toggle('is-active', active);
+    b.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+  document.querySelectorAll('.cs-panel').forEach(p => {
+    p.classList.toggle('is-active', p.id === `cs-panel-${tab}`);
+  });
+}
+function candySetStatus(kind, html) {
+  const el = $('cs-status');
+  if (!el) return;
+  el.className = `cs-status-card is-visible cs-status-${kind}`;
+  el.innerHTML = html;
+}
+
+function renderCandyStar() {
+  const container = $('candystarContent');
+  const opt = { success: true, songs: MOCK_SONGS, albums: MOCK_ALBUMS };
+
+  window._candyStar = { songByLabel: {}, albums: opt.albums || [] };
+  const songOpts = (opt.songs || []).map(s => {
+    const label = `${s.name} — ${(s.artists || []).join(', ')}`;
+    window._candyStar.songByLabel[label] = s.key;
+    return `<option value="${sanitize(label)}"></option>`;
+  }).join('');
+
+  const goalChips = CANDY_GOALS.map(g => `<span class="cs-goal-chip">${sanitize(g)}</span>`).join('');
+
+  container.innerHTML = `
+  <div class="cs-wrap">
+    <div class="cs-tabs" role="tablist">
+      <button type="button" class="cs-tab is-active" data-tab="quick" role="tab" aria-selected="true" onclick="candySwitchTab('quick')">⚡ Quick</button>
+      <button type="button" class="cs-tab" data-tab="custom" role="tab" aria-selected="false" onclick="candySwitchTab('custom')">🎛️ Custom</button>
+    </div>
+
+    <div class="cs-panel is-active" id="cs-panel-quick" role="tabpanel">
+      <div class="archive-card" style="text-align:center;">
+        <div class="cs-hero-icon">🦙</div>
+        <div style="font-size:14px; font-weight:900; color:#fff; margin-bottom:8px;">One tap, one alpaca</div>
+        <div style="font-size:11.5px; color:var(--text-muted); line-height:1.6; margin-bottom:12px; max-width:420px; margin-left:auto; margin-right:auto;">
+          We build a playlist around the current streaming goals, woven with other songs so it plays naturally.
+        </div>
+        <div style="margin-bottom:16px;">${goalChips}</div>
+        <button type="button" class="btn-red" onclick="candyGenerate('quick')">🦙 Make me an alpaca</button>
+      </div>
+    </div>
+
+    <div class="cs-panel" id="cs-panel-custom" role="tabpanel">
+      <div class="archive-card">
+        <div style="font-size:13px; font-weight:900; color:var(--red-core); letter-spacing:0.04em; margin-bottom:6px; text-transform:uppercase;">🎛️ Build your own</div>
+        <div style="font-size:11px; color:var(--text-muted); margin-bottom:14px; line-height:1.5;">
+          Type each song and how many times to stream it (e.g. 12× Swim · 6× Come Over · 5× Haegeum). Other songs fill the gaps automatically.
+        </div>
+        <datalist id="cs-song-datalist">${songOpts}</datalist>
+
+        <div class="cs-col-headers"><span>Song</span><span>Times</span><span></span></div>
+        <div id="cs-focus-rows">${candyFocusRow(10)}${candyFocusRow(5)}${candyFocusRow(4)}</div>
+        <button type="button" class="cs-add-row" onclick="candyAddFocusRow()">+ Add another song</button>
+
+        ${(opt.albums || []).length ? `
+        <div class="cs-album-label-row">
+          <label class="cs-field-label">Include full albums (each track once) · ${opt.albums.length}</label>
+          <div class="cs-album-actions">
+            <span class="cs-album-selected-count" id="cs-album-selected-count"></span>
+            <button type="button" class="cs-link-btn" id="cs-album-toggle-all" onclick="candyToggleAllAlbums()">Select all</button>
+          </div>
+        </div>
+        <div id="cs-album-checks" class="cs-album-grid">
+          ${opt.albums.map((a, i) => `<label class="cs-album-chip" title="${sanitize(a.name)}">
+            <input type="checkbox" class="cs-album-check" id="cs-album-${i}" value='${sanitize(JSON.stringify(a.trackKeys))}' onchange="candyUpdateEstimate()">
+            <span class="cs-album-meta">
+              <span class="cs-album-name">💿 ${sanitize(a.name)}</span>
+              <span class="cs-album-count">${a.count} tracks</span>
+            </span>
+          </label>`).join('')}
+        </div>` : ''}
+
+        <label class="cs-field-label" for="cs-name" style="margin-top:16px;">Playlist name</label>
+        <input id="cs-name" class="input-field" placeholder="Leave blank for a random name">
+      </div>
+
+      <div class="cs-actionbar">
+        <div class="cs-actionbar-total">
+          <span>Estimated</span>
+          <span id="cs-estimate-val">0 tracks</span>
+        </div>
+        <button type="button" class="btn-red" onclick="candyGenerate('custom')">🎧 Generate in Spotify</button>
+      </div>
+    </div>
+
+    <div id="cs-status" class="cs-status-card"></div>
+  </div>`;
+
+  candyUpdateEstimate();
+}
+
+function candyGenerate(mode) {
+  if (mode === 'custom') {
+    const focus = [];
+    const seen = new Set();
+    const labelMap = window._candyStar.songByLabel || {};
+    const unmatched = [];
+    document.querySelectorAll('#cs-focus-rows .cs-focus-row').forEach(row => {
+      const selEl = row.querySelector('.cs-focus-sel');
+      const multEl = row.querySelector('.cs-focus-mult');
+      const typed = selEl?.value?.trim();
+      const mult = parseInt(multEl?.value) || 0;
+      if (!typed || mult <= 0) return;
+      const key = labelMap[typed] || null;
+      if (!key) { unmatched.push(typed); selEl?.classList.add('cs-invalid'); return; }
+      if (!seen.has(key)) { seen.add(key); focus.push({ key, multiplier: mult }); }
+    });
+    if (unmatched.length) {
+      candySetStatus('error', `⚠️ Pick songs from the suggestions — not recognised: <b>${sanitize(unmatched.slice(0, 3).join(', '))}</b>`);
+      return;
+    }
+    if (!focus.length) {
+      candySetStatus('error', '⚠️ Add at least one song with a count.');
+      return;
+    }
+  }
+  candySetStatus('loading', `<span class="cs-spinner"></span><span>Building your alpaca… 🦙<br><span style="color:var(--text-ghost); font-size:10.5px;">this can take ~20s</span></span>`);
+  setTimeout(() => {
+    candySetStatus('success', `<span style="font-size:16px;">✅</span><span><b>Mock Alpaca Mix</b> is ready — <a href="#" style="color:#1DB954; font-weight:800;">open in Spotify ↗</a>
+      <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">42 tracks</div></span>`);
+  }, 1200);
+}
+
+renderCandyStar();
+</script>
+</body>
+</html>

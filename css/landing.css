@@ -1,0 +1,339 @@
+/* Op: Reconnect — landing page.
+   Calm on purpose. The first screen carries one message, one button and a
+   lot of empty space; everything else waits below the fold. An earlier pass
+   put a dense card panel beside the hero and a bright crowd behind it, and
+   the two fought each other — a landing page has one job, and detail sitting
+   at eye level is what stops it doing that job.
+
+   PALETTE DISCIPLINE carries over from reconnect.css: purple is the network,
+   gold is restored/lit, crimson belongs to the Red Zone and appears nowhere
+   here. */
+
+:root {
+  --purple: #8b5cf6;
+  --purple-lt: #a78bfa;
+  --gold: #d9ad5f;
+
+  --bg: #07060d;
+  --text: #ece9f2;
+  --muted: #9c96b0;
+  --dim: #635d78;
+  --border: rgba(255, 255, 255, 0.09);
+  --border-str: rgba(255, 255, 255, 0.18);
+
+  --mono: 'Share Tech Mono', monospace;
+  --disp: 'Orbitron', sans-serif;
+  --r: 12px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body.landing {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* ── the arena ──────────────────────────────────────────────────
+   Fixed to the first screen only. Scrolling past the hero leaves it
+   behind — the detail sections below get a plain dark background so
+   body copy is read, not decoded.
+
+   Deliberately dark, not just calm. The premise of this whole game is
+   that the network is DOWN — a vivid, saturated concert photo says "the
+   show is already happening," which is the opposite of what a page about
+   restoring a dead city should say. So: heavily desaturated toward black
+   and white (a memory of the network, not a live feed of it), brightness
+   cut hard, and every purple accent on the page kept dim rather than
+   glowing — see the badge dot and .btn-primary below. The one exception
+   is the CTA button's own fill colour: it's allowed to be the brightest
+   thing on the page, on purpose, because it's the one thing that's still
+   live and the one thing the player can act on.
+
+   Two layers: a real stadium photo carries the atmosphere (a photo of an
+   actual crowd beats any amount of drawn dots), and a thin strip of the
+   procedural lightstick field (js/concert-bg.js) rides along the bottom
+   edge on top of it — dimmed to embers, not an active crowd (see that
+   file's own alpha comments). */
+.crowd-photo {
+  position: fixed; inset: 0; height: 100vh; z-index: 0;
+  /* TEST SWAP, not yet decided — hero2.jpg was picked specifically because
+     the members' faces read clearly, so it gets a much lighter touch than
+     hero.jpg's near-grayscale treatment below. If this isn't the keeper,
+     revert background-image to hero.jpg and the filter to:
+     grayscale(0.55) brightness(0.32) contrast(1.1) saturate(0.75)
+     with background-position: 50% 38% (portrait source, different crop math). */
+  background-image: url('../img/hero2.jpg');
+  background-size: cover;
+  /* Landscape source (hero2 is ~4:3 vs hero.jpg's portrait 0.75), so `cover`
+     crops far less on a wide desktop — the whole reason this one was worth
+     testing technically, separate from the face-visibility question. Screens
+     sit upper-left-of-centre in the source; 45%/28% keeps them in frame
+     without losing too much crowd below. */
+  background-position: 45% 28%;
+  background-repeat: no-repeat;
+  /* Much lighter than hero.jpg's treatment: barely desaturated (outfit colour
+     stays legible — the red/white/black is part of why faces read at all),
+     brightness roughly 50% higher, so the screens don't disappear into the
+     dark the way full grayscale+crush would take them. */
+  filter: grayscale(0.15) brightness(0.5) contrast(1.08) saturate(0.9);
+  animation: heroPan 46s ease-in-out infinite alternate;
+}
+/* Slow enough to read as "the venue breathing," not a slideshow transition. */
+@keyframes heroPan {
+  from { transform: scale(1.02) translateY(0); }
+  to   { transform: scale(1.09) translateY(-1.4%); }
+}
+
+.crowd-strip {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 1;
+  width: 100%; height: 24vh; display: block;
+  /* Fades the canvas's own top edge to transparent so it blends into the
+     photo above instead of ending on a visible rectangle line. */
+  -webkit-mask-image: linear-gradient(to top, black 45%, transparent 100%);
+  mask-image: linear-gradient(to top, black 45%, transparent 100%);
+}
+
+.crowd-scrim {
+  position: fixed; inset: 0; height: 100vh; z-index: 2; pointer-events: none;
+  background:
+    radial-gradient(ellipse 62% 46% at 50% 30%, rgba(7,6,13,0.90) 0%, rgba(7,6,13,0.60) 55%, rgba(7,6,13,0.15) 100%),
+    linear-gradient(180deg, rgba(7,6,13,0.70) 0%, rgba(7,6,13,0.34) 34%, rgba(7,6,13,0.28) 60%, rgba(7,6,13,0.78) 100%);
+}
+
+/* ── hero ───────────────────────────────────────────────────────── */
+.hero {
+  position: relative; z-index: 3;
+  min-height: 100vh; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  text-align: center; padding: 80px 24px 100px;
+}
+.hero-inner { max-width: 620px; display: flex; flex-direction: column; align-items: center; }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: 2.5px;
+  color: var(--muted); text-transform: uppercase;
+  border: 1px solid rgba(139,92,246,0.22); border-radius: 999px;
+  padding: 7px 15px; background: rgba(7,6,13,0.55);
+  backdrop-filter: blur(6px);
+}
+/* A weak signal, not a healthy heartbeat — small, dim, barely there
+   between beats. This is the one live thing in a dark network; it should
+   read as fragile, not as proof everything's already fine. */
+.badge .dot {
+  width: 5px; height: 5px; border-radius: 50%; background: var(--purple-lt);
+  box-shadow: 0 0 3px rgba(167,139,250,0.6); animation: pulse 3.6s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100% { opacity: 0.85; } 50% { opacity: 0.12; } }
+
+.title {
+  margin-top: 34px;
+  font-family: var(--disp); font-weight: 900;
+  font-size: clamp(42px, 7.5vw, 88px); line-height: 1.0;
+  letter-spacing: -1.5px;
+  text-shadow: 0 0 60px rgba(7,6,13,0.9), 0 6px 28px rgba(0,0,0,0.9);
+}
+.lede {
+  margin-top: 22px; font-size: clamp(16px, 2vw, 19px); line-height: 1.6;
+  color: var(--muted); max-width: 34ch;
+  text-shadow: 0 2px 14px rgba(7,6,13,0.95);
+}
+
+.btn {
+  display: inline-block; text-decoration: none; text-align: center;
+  padding: 16px 40px; border-radius: var(--r); border: 0;
+  font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 16px;
+  letter-spacing: 0.5px; cursor: pointer;
+  transition: filter 0.15s ease, transform 0.1s ease;
+}
+.btn-primary {
+  background: var(--purple); color: #fff;
+  /* The one deliberately bright thing on the page — it's the single live
+     control in an otherwise dark scene — but a tap-affordance shadow, not
+     a glowing halo. The old 34px/0.4 spread was doing the "everything is
+     already lit up" thing this whole pass exists to undo. */
+  box-shadow: 0 4px 14px rgba(139,92,246,0.24);
+}
+.btn-primary:hover { filter: brightness(1.12); }
+.btn-primary:active { transform: translateY(1px); }
+.hero .btn { margin-top: 38px; }
+
+/* Secondary, but still a real way in — --dim over the lit part of the crowd
+   was effectively invisible. Quiet means lower contrast than the button,
+   not unreadable. */
+.quiet-link {
+  margin-top: 20px; font-size: 14.5px; color: var(--muted);
+  text-decoration: underline; text-underline-offset: 4px;
+  text-shadow: 0 2px 12px rgba(7,6,13,1), 0 0 20px rgba(7,6,13,0.9);
+}
+.quiet-link:hover { color: var(--text); }
+
+.scroll-cue {
+  position: absolute; bottom: 34px; left: 50%; transform: translateX(-50%);
+  width: 24px; height: 38px; border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 999px; display: flex; justify-content: center; padding-top: 8px;
+}
+.scroll-cue span {
+  width: 3px; height: 7px; border-radius: 2px; background: var(--purple-lt);
+  animation: drop 1.9s ease-in-out infinite;
+}
+@keyframes drop { 0% { opacity: 0; transform: translateY(-4px); } 40% { opacity: 1; } 100% { opacity: 0; transform: translateY(12px); } }
+
+/* ── below the fold ─────────────────────────────────────────────
+   Opaque, so the crowd never sits behind reading material. */
+.below {
+  position: relative; z-index: 3;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+}
+.sec { max-width: 720px; margin: 0 auto; padding: 76px 24px; }
+.sec + .sec { border-top: 1px solid var(--border); }
+
+.sec-head {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 3px;
+  color: var(--purple-lt); text-transform: uppercase; font-weight: 400;
+  margin-bottom: 30px;
+}
+.sec-lede { font-size: clamp(17px, 2.2vw, 21px); line-height: 1.7; color: var(--text); }
+
+/* ── the dark map ───────────────────────────────────────────────
+   The actual illustrated city (map/city-dark.webp) — the same artwork and
+   the same hand-placed island coordinates (city-map.js's ISLANDS) that the
+   in-game World screen overlays. A dim, static ring marks each real ward's
+   island; nothing here can light one. Colour means state, and the only
+   state a stranger gets to see is "off". */
+.map { margin-top: -6px; }
+.lm-wrap {
+  position: relative; border-radius: var(--r); overflow: hidden;
+  border: 1px solid var(--border);
+}
+.lm-sr {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap;
+}
+.lm-art { display: block; width: 100%; height: auto; }
+.lm-ring { fill: none; stroke: rgba(196,181,253,0.45); stroke-width: 0.3; }
+.lm-dot { fill: rgba(196,181,253,0.55); }
+
+.lm-foot {
+  margin-top: 18px; font-family: var(--mono); font-size: 10.5px;
+  letter-spacing: 1.4px; color: var(--dim); text-transform: uppercase;
+}
+
+/* ── status ticker ──────────────────────────────────────────────
+   Replaces a 3-card stat dashboard. A famous-game landing page doesn't
+   explain itself in labelled panels — it drops one live readout, HQ's own
+   monitor line, and moves on. Same three real numbers as before
+   (game-design §13.3: never invent one), just said in one breath instead
+   of three cards. */
+.ticker {
+  text-align: center; font-family: var(--mono); font-size: 12px;
+  letter-spacing: 0.6px; color: var(--dim);
+}
+.ticker .is-loading { animation: pulse 1.6s ease-in-out infinite; }
+.ticker #statAgents, .ticker #statDistricts, .ticker #statDistrictsTotal, .ticker #statCharge {
+  color: var(--muted); font-weight: 700;
+}
+.ticker-dot {
+  display: inline-block; width: 5px; height: 5px; border-radius: 50%;
+  background: var(--purple-lt); margin-right: 9px; vertical-align: middle;
+  box-shadow: 0 0 3px rgba(167,139,250,0.6); animation: pulse 3.6s ease-in-out infinite;
+}
+.ticker-sep { margin: 0 9px; color: var(--border-str); }
+.ticker-boost { margin-left: 6px; color: var(--purple-lt); }
+
+.closing { text-align: center; }
+.closing-line {
+  font-size: clamp(20px, 3vw, 30px); font-weight: 700; font-style: italic;
+  text-transform: uppercase; letter-spacing: 5px; margin-bottom: 34px;
+}
+.closing-line span { color: var(--gold); }
+
+.foot {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: 1.5px;
+  color: var(--dim); text-transform: uppercase; text-align: center;
+  padding: 30px 24px 44px; line-height: 2; border-top: 1px solid var(--border);
+}
+.foot .love { display: block; color: var(--purple-lt); letter-spacing: 1px; }
+
+/* ── the handshake ──────────────────────────────────────────────
+   Covers the navigation into the game (js/landing-boot.js). Sits above
+   everything including the fixed arena layers, and is opaque — the point is
+   that the landing page is gone and something else is coming up. */
+.boot {
+  position: fixed; inset: 0; z-index: 40;
+  background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; transition: opacity 0.18s ease;
+  cursor: pointer;
+}
+.boot.is-on { opacity: 1; }
+
+.boot-inner {
+  width: min(420px, calc(100vw - 48px));
+  /* Left-aligned and fixed-height-agnostic: lines append downward from a
+     stable top edge so the block doesn't jump as each one lands. */
+  display: flex; flex-direction: column; gap: 7px;
+}
+
+.boot-line {
+  font-family: var(--mono); font-size: 12.5px; letter-spacing: 1.1px;
+  color: var(--purple-lt);
+  /* Purple, never gold. Gold means restored, and nothing has been restored
+     at the point this runs — it's the network waking up, not the city. */
+  animation: bootIn 0.22s ease both;
+}
+@keyframes bootIn { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+
+.boot-line.has-caret::after {
+  content: '_'; margin-left: 3px; color: var(--purple-lt);
+  animation: bootCaret 0.9s step-end infinite;
+}
+@keyframes bootCaret { 0%, 50% { opacity: 1; } 50.01%, 100% { opacity: 0; } }
+
+/* ── narrow ─────────────────────────────────────────────────────── */
+@media (max-width: 720px) {
+  .hero { padding: 70px 20px 90px; }
+  .sec { padding: 58px 20px; }
+  /* One line of terminal text doesn't fit 375px in one breath — let it wrap
+     rather than shrink the font past legible. */
+  .ticker { line-height: 1.9; }
+  .hero .btn { width: 100%; max-width: 320px; }
+  /* A 24vh strip eats real space on a short phone viewport; the photo
+     alone still carries the scene fine without it taking that much. */
+  .crowd-strip { height: 16vh; }
+  /* hero2.jpg is landscape (~1080x785) and the members sit spread across
+     roughly the middle 65% of its width. On a portrait phone, `cover` has to
+     zoom in until the image's HEIGHT fills the screen — and at that zoom
+     only about a third of the width is ever visible, no matter where it's
+     centered. That crops someone off one edge or both regardless of
+     position, which is the bug: no position fixes it, only the sizing does.
+     So on narrow screens, fit the full WIDTH instead and let the image
+     letterbox top/bottom — the loss is empty stadium roof and floor, not
+     people, and the dark bands blend into the page's own near-black bg. */
+  .crowd-photo {
+    background-size: 100% auto; background-position: 50% 32%;
+    /* Full width now visible instead of an edge-to-edge cropped scene, so it
+       can take a touch more brightness before the scrim below tones it down. */
+    filter: grayscale(0.15) brightness(0.62) contrast(1.08) saturate(0.9);
+  }
+  /* The scrim's center ellipse was tuned against a photo filling the whole
+     screen; on a letterboxed mobile band it lands squarely on the only part
+     of the photo that's visible and blacks it out. Ease it back so the
+     members actually read. */
+  .crowd-scrim {
+    background:
+      radial-gradient(ellipse 62% 46% at 50% 32%, rgba(7,6,13,0.55) 0%, rgba(7,6,13,0.38) 55%, rgba(7,6,13,0.12) 100%),
+      linear-gradient(180deg, rgba(7,6,13,0.55) 0%, rgba(7,6,13,0.30) 34%, rgba(7,6,13,0.30) 60%, rgba(7,6,13,0.78) 100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  * { animation: none !important; transition: none !important; }
+}

@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Op: Reconnect (PREVIEW MOCK) | HopeTracker</title>
+  <meta name="theme-color" content="#080810">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/reconnect.css">
+  <style>[hidden] { display: none !important; }</style>
+  <script>
+    // ---- LOCAL DESIGN PREVIEW ONLY: stubs the edge function so the UI can be
+    // rendered/screenshotted without a live session. Not shipped.
+    // #signedout replays the front door (no session at all).
+    if (location.hash.includes('signedout')) localStorage.removeItem('rc_agent')
+    else localStorage.setItem('rc_agent', JSON.stringify({ agentNo: 'AGENT000', handle: 'hopesizeyouknow', sessionToken: 'mock-token' }))
+
+    const WARDS = [
+      { id: 'mono',      name: 'Mono Ward',      status: 'active',   restoredCount: 7,  totalCount: 25 },
+      { id: 'happy',     name: 'Happy Ward',     status: 'restored', restoredCount: 26, totalCount: 26 },
+      { id: 'dday',      name: 'D-Day Ward',     status: 'available',restoredCount: 0,  totalCount: 27 },
+      { id: 'hopeworld', name: 'Hopeworld Ward', status: 'locked',   restoredCount: 0,  totalCount: 24 },
+      { id: 'golden',    name: 'Golden Ward',    status: 'locked',   restoredCount: 0,  totalCount: 19 },
+      { id: 'friends',   name: 'Friends Ward',   status: 'locked',   restoredCount: 0,  totalCount: 26 },
+      { id: 'muse',      name: 'Sector Muse',    status: 'locked',   restoredCount: 0,  totalCount: 12 },
+      { id: 'layover',   name: 'Sector Layover', status: 'locked',   restoredCount: 0,  totalCount: 12 },
+      { id: 'oldgrid',   name: 'The Old Grid',   status: 'locked',   restoredCount: 0,  totalCount: 40 },
+    ]
+    WARDS[0].centerpiece = { name: 'The Silent Observatory', lit: false }
+    WARDS[1].centerpiece = { name: 'Festival Square', lit: true }
+    WARDS[2].centerpiece = { name: 'The Midnight Foundry', lit: false }
+
+    // Real district names + echo handles from docs/op-reconnect-districts.md
+    // for every ward the preview can actually open. Locked wards keep
+    // generated filler — their names are never shown.
+    const REAL = {
+      mono: [
+        ['Hopesize Station','hopesizeyouknow',"The ward's heart. Every train through Mono Ward once stopped here."],
+        ['Dazzledew Fountain','dewzofdazzle','The fountain ran even in the rain. Locals said the drops sparkled brighter than the streetlights.'],
+        ['Map of Seven Crossing','mapofseven_','Seven roads meet here. No one ever got lost — the crossing always led you home.'],
+        ['Puple Sky Overlook','puple_sky7',"The sign painter misspelled it years ago. Nobody ever fixed it. It's theirs."],
+        ['Lowkey Kavs Alley','lowkeykavs','Easy to miss, impossible to forget. The best music in the ward played from this alley.'],
+        ['Carabonara Diner','carabonara013','Open all night. Order 013 was never on the menu, but the regulars knew to ask.'],
+        ['Tae Pier','tae_13','Thirteen lanterns lined the pier. On quiet nights you could hear the water keeping time.'],
+        ['Zeal Arcade','not_zeal.9809','The high-score board still reads 9809. Nobody has beaten it. Nobody ever will.'],
+        ['Namu Grove','875namu','A grove of quiet trees in a concrete ward. Namu means tree — this one grew anyway.'],
+        ['Excusemeee Boulevard','excusemeeee_e','The politest street in the network. Even the traffic signals apologized.'],
+        ['Minimin Court','minimin.ot7','Small court, seven benches. All seven always full at sunset.'],
+        ['Urmi Terrace','urmi.9561','The terrace caught the only sunlight Mono Ward ever got. People queued for it.'],
+        ['Angel 613 Bell Tower','angel_army_613','The bells rang 6/13 every year, on the minute. The ward set its clocks by them.'],
+        ['Bangtan Seven Bridge','bangtanthe7','Seven arches over grey water. Painted purple underneath, where only the boats could see.'],
+        ['Samiksha Springs','mni._.samiksha','Warm springs under a cold city. The steam wrote shapes the locals swore were song titles.'],
+        ['RM Gurlie Gallery','rm_gurlie','Every exhibit hand-labeled. The permanent collection: one lavender wall, always fresh.'],
+        ['Pparapio Plaza','pprnessian_pparapio_07','The echo here doubled every word. Street performers loved it. Librarians did not.'],
+        ['Uthiita Caves','uutthiiitaaaa',"The caves stretch the ward's name out long, the way its keeper always typed it."],
+        ['Xodid Depot','amb0497_xodid','Freight went in labeled 0497 and came out humming. No one questioned the depot.'],
+        ['Aanya Meadow','aanyagoran',"A meadow that shouldn't exist between two towers. It bloomed out of spite, beautifully."],
+        ['Sarif Balika Chowk','miss.sarif_balika.2819','The market square. Loudest at dusk, kindest at closing time.'],
+        ['Lucky Lane','lucky__army_girl_22019','Find a coin on Lucky Lane and the ward says your next song will be your favorite.'],
+        ['Bangtan Signal Yard','bangtan72614','Rows of antennas, all tuned to the same frequency. The yard never truly went silent.'],
+        ['Mnixe Studio','j.mnixe',"One room, one desk, one perfect monitor glow. Half the ward's art was made here."],
+        ['Armyechos Junction','btsarmy75432','The last stop before the Observatory. Every echo in the ward passes through eventually.'],
+      ],
+      happy: [['Keep Swimming Lido','keep_swimmming'],['Dayzeedream Meadow','dayzeedream'],['Matapak Market','mata_pak95'],['Youknowpurple Bridge','youknowpurple'],['Thv Terrace','ot7army_thv'],['Bias Corner','bias7242'],['Martina Café','insta.martina7'],['Hobiz Ziee Funfair','hobiz_ziee'],['Jjkloviie Carousel','jjkloviie'],['Mnijks Parlor','mnijksbabe'],['Muchopicantae Cantina','vantaemuchopicantae'],['Pjm.exe Terminal','_pjm.exe'],['Luv Lantern Row','luvbts7136'],['Bangtan Vibes Plaza','just.bangtan.vibes'],['My Universe Planetarium','myuniverse_0t7'],['Diancie Crystal Garden','pvt_diancie'],['Kawigim Pier','kawigim10'],['Thats Riaa Theater','thats._riaa'],['Not-That-Short Tower','jiminie_not_that_short'],['Crazy4V Carnival','mishal_crazy4_v'],['Mariecmmj Conservatory','mariecmmj'],['Army Promenade','btsarmy061396'],['Kookieee Bakery','_kookieee_ot7'],['Fairy Glade','fairy.kook97'],['Kimjeon Overpass','kimjeon_vk'],['Seven Hearts Fountain','bangtanhearts7']],
+      dday: [['Yaminiie Nightmarket','_yaminiie'],['Smexybish Speakeasy','smexybish_'],['Lowkey Hideout','who._lowkey.ananya'],['Galaxyvibes Observatory','galaxyvibes._'],['Grace Ballroom','_graceful_ruth7'],['Falak Skydeck','farheenfalak07'],['Vincy Den','vincy_im'],['Radhey Ghat','urz_radhey75'],['Tang Yoongs Teahouse','tang_yoongs'],['Soul of Seven Sanctum','soul0fot7'],['JM Alley','j.m.11_'],['Musicophile Records','btsmusicophile'],['Haruly Ramin Lane','harulyramin'],['Lawgurl Chambers','agustdslawgurl'],['Armyst Ocean Wharf','armyst_ocean'],['Marryme Chapel','mnimarryme613'],['Euphoric Krystal Cavern','euphoric_.krystal'],['Jeonsuax Rooftop','jeonsuax_252'],['Slayoongi Stage','slayoongi_7'],['Iishi Shrine','me_iishi'],['Sugawa Riverside','sugawa.93'],['Pink Jinnie Rose Garden','pink._.jinnie'],['Drishti Watchtower','mnidrishti2006'],['Dtmine Mineshaft','dtmine'],['Buttercup Field','buttercupdarlin'],['Tulika Tulip Court','tulika.b06407'],["Jung's No-Cook Kitchen",'jungwhodoesnotcook']],
+    }
+    const NAMES = ['Ferry Lane','Old Radio Row','Paper Moon','Blue Hour Rise','Nine Bridges','Sundial Court','Quiet Harbor','Amber Gate','Tin Roof Block','Winter Bear Hall','Signal Hill','Low Tide','Cassette Alley','Long Way Home','Still Water','Two Lamps','Northline','Ember Yard','Half Moon','Rooftop 7','Grey Hour','Last Stop']
+    const districts = []
+    WARDS.forEach((w) => {
+      const real = REAL[w.id]
+      for (let i = 0; i < w.totalCount; i++) {
+        let status = 'available'
+        if (w.status === 'locked') status = 'locked'
+        else if (i < w.restoredCount) status = 'restored'
+        else if (w.status === 'active' && i === w.restoredCount) status = 'active'
+        districts.push({
+          id: `${w.id}-${i}`, wardId: w.id,
+          name: real ? real[i][0] : NAMES[i % NAMES.length],
+          status,
+          echoOf: real ? real[i][1] : (status === 'restored' ? 'AGENT 0417' : null),
+          memory: real?.[i]?.[2]
+            || (status === 'restored' ? 'She logged every stream by hand for two years and never once asked to be counted.' : null),
+        })
+      }
+      districts.push({
+        id: `${w.id}-cp`, wardId: w.id, name: w.centerpiece?.name || 'Landmark',
+        status: w.centerpiece?.lit ? 'centerpiece_lit' : 'centerpiece_dark',
+        memory: w.id === 'mono'
+          ? 'It has no keeper. It watched over everyone who did. When the ward is whole, it speaks.'
+          : 'It watches over every agent who came before you.',
+      })
+    })
+
+    const STATE = {
+      success: true, joined: true,
+      player: { codename: 'AGENT VIOLET', xp: 412, rank: { title: 'Cipher', index: 4, nextAt: 700 }, streak: { current: 12 }, mode: 'medium' },
+      bomb: { charge: 0.62, defuse: null, brownout: false, multiplier: 1.5, communityStreams: 184203 },
+      // Lifetime totals — only ever go up. The edge function should send these.
+      resources: { signal: 482, fuel: 17, intel: 41 },
+      // Owned collectibles, hydrated from rc_items (migration 017).
+      items: [
+        { id: 'pi1', itemId: 'album-arirang', name: 'Arirang', kind: 'album', era: 'Arirang', rarity: 'common', blurb: 'The comeback. Still shrink-wrapped.', districtId: 'mono-0', districtName: 'Hopesize Station', usedAt: null },
+        { id: 'pi2', itemId: 'poster-tour', name: 'Tour poster', kind: 'poster', era: 'Tour', rarity: 'common', blurb: 'Creased from the tube it shipped in.', districtId: 'mono-0', districtName: 'Hopesize Station', usedAt: null },
+        { id: 'pi3', itemId: 'lightstick-v4', name: 'ARMY Bomb Ver.4', kind: 'lightstick', era: 'Tour', rarity: 'rare', blurb: 'It still connects to the room.', districtId: 'mono-2', districtName: 'Map of Seven Crossing', usedAt: null },
+        { id: 'pi4', itemId: 'pc-arirang', name: 'Arirang photocard', kind: 'photocard', era: 'Arirang', rarity: 'common', blurb: 'Straight out of the album. Sleeve it.', districtId: null, usedAt: null },
+        { id: 'pi5', itemId: 'banner-fanproject', name: 'Fan project banner', kind: 'banner', era: 'Tour', rarity: 'common', blurb: 'Held up by a whole section at once.', districtId: null, usedAt: null },
+        { id: 'pi6', itemId: 'ticket-voyage', name: 'Concert ticket', kind: 'ticket', era: 'Tour', rarity: 'legendary', blurb: 'One night. Row unknown. Use it and the lights go down.', districtId: null, usedAt: null },
+        { id: 'pi7', itemId: 'mug-tracklist', name: 'Tracklist mug', kind: 'mug', era: 'Arirang', rarity: 'common', blurb: 'Chipped handle. Still the one you reach for.', districtId: 'mono-0', districtName: 'Hopesize Station', usedAt: null },
+        { id: 'pi8', itemId: 'rug-hope', name: 'Face rug', kind: 'rug', era: 'Hope', rarity: 'rare', blurb: 'Nobody is allowed to step on it.', districtId: 'mono-0', districtName: 'Hopesize Station', usedAt: null },
+        { id: 'pi9', itemId: 'lightbox-onair', name: 'On Air light box', kind: 'lightbox', era: 'Tour', rarity: 'rare', blurb: 'Left on all night more often than not.', districtId: null, usedAt: null },
+        { id: 'pi10', itemId: 'cushion-logo', name: 'Logo cushion', kind: 'cushion', era: 'Arirang', rarity: 'common', blurb: 'Propped in the corner of every photo you take.', districtId: null, usedAt: null },
+        { id: 'pi11', itemId: 'plush-mascot', name: 'Mascot plush', kind: 'plush', era: 'Mascot', rarity: 'common', blurb: 'Sits where the sun hits in the afternoon.', districtId: null, usedAt: null },
+        { id: 'pi12', itemId: 'slipmat-set', name: 'Slipmat set', kind: 'record', era: 'Arirang', rarity: 'common', blurb: 'Two mats, one turntable that mostly sits idle.', districtId: null, usedAt: null },
+        { id: 'pi13', itemId: 'tee-popup', name: 'Pop-up tee', kind: 'apparel', era: 'Proof', rarity: 'common', blurb: 'Washed so often the print went soft.', districtId: null, usedAt: null },
+        { id: 'pi14', itemId: 'keyring-turntable', name: 'Turntable keyring', kind: 'keyring', era: 'Arirang', rarity: 'common', blurb: 'Spins if you flick it. You will flick it.', districtId: null, usedAt: null },
+        { id: 'pi15', itemId: 'blanket-tour', name: 'Tour blanket', kind: 'blanket', era: 'Tour', rarity: 'common', blurb: 'Went to the venue, came back smelling of rain.', districtId: null, usedAt: null },
+        { id: 'pi16', itemId: 'figure-island', name: 'Island figure', kind: 'figure', era: 'Island', rarity: 'rare', blurb: 'Balanced on the shelf edge, permanently.', districtId: null, usedAt: null },
+        { id: 'pi17', itemId: 'magnet-set', name: 'Magnet set', kind: 'magnet', era: 'Dalmajung', rarity: 'common', blurb: 'Holds the fridge together, mostly.', districtId: null, usedAt: null },
+        { id: 'pi18', itemId: 'tray-mirror', name: 'Mirror tray', kind: 'tray', era: 'Arirang', rarity: 'common', blurb: 'Keys, rings, whatever is in your pocket.', districtId: null, usedAt: null },
+      ],
+      transmission: { text: 'HQ intercepted chatter: Haegeum is 163M from 1B. Route 3 passes today.', progress: 2, required: 3, done: false, xpOnComplete: 10 },
+      map: { wards: WARDS, districts },
+      activeDistrict: {
+        id: 'mono-7', name: 'Zeal Arcade',
+        missions: [
+          { id: 'tracks',  icon: '🎧', label: 'Route the focus tracks', status: 'active' },
+          { id: 'albums',  icon: '💿', label: 'Full album passes',      status: 'active' },
+          { id: 'signal',  icon: '📶', label: 'Signal strength',        status: 'active', progress: 64 },
+          { id: 'intel',   icon: '🗄️', label: 'Recover agent files',    status: 'locked', progress: 1, required: 3 },
+        ],
+        trackGoals: [
+          { label: 'Swim',                 progress: 14, target: 14, done: true },
+          { label: 'Haegeum',              progress: 6,  target: 10, done: false },
+          { label: "Don't Say You Love Me",progress: 3,  target: 10, done: false },
+          { label: 'Wild Flower',          progress: 0,  target: 10, done: false },
+        ],
+        album: { label: 'Arirang', passesDone: 1, target: 2, done: false, nextPassTracks: [{ label: 'Intro', need: 1 }, { label: 'Arirang', need: 1 }, { label: 'Homecoming', need: 2 }] },
+        files: [
+          { title: 'Transmission 04', body: 'They kept the lights on in shifts. Nobody told them to.', revealed: true },
+          { title: 'Encrypted', body: '', revealed: false },
+        ],
+        restoredNow: false,
+      },
+    }
+
+    // #restored replays the restoration moment; #wardwhole is the bigger
+    // version where that district was the ward's last one.
+    if (location.hash.includes('restored') || location.hash.includes('wardwhole')) {
+      STATE.activeDistrict.restoredNow = true
+      STATE.activeDistrict.echoOf = 'not_zeal.9809'
+      STATE.activeDistrict.memory = 'The high-score board still reads 9809. Nobody has beaten it. Nobody ever will.'
+      STATE.activeDistrict.xpAwarded = 40
+      STATE.activeDistrict.itemDropped = { itemId: 'lightstick-v3', name: 'ARMY Bomb Ver.3', kind: 'lightstick', era: 'Tour', rarity: 'rare', blurb: 'The one that survived three tours.' }
+      STATE.activeDistrict.trackGoals = STATE.activeDistrict.trackGoals.map(g => ({ ...g, progress: g.target, done: true }))
+      STATE.activeDistrict.album = { ...STATE.activeDistrict.album, passesDone: 2, done: true }
+      if (location.hash.includes('wardwhole')) {
+        WARDS[0].restoredCount = WARDS[0].totalCount
+        WARDS[0].centerpiece = { name: 'The Silent Observatory', lit: true }
+      }
+    }
+
+    if (location.hash.includes('attack')) {
+      STATE.bomb.defuse = { title: 'THE NETWORK IS UNDER ATTACK', message: 'An infiltrator is draining the core. Stream together to defuse it.', progress: 640, target: 1000, yourStreams: 18, rewardXp: 25, activeUntil: new Date(Date.now() + (2 * 3600 + 47 * 60 + 12) * 1000).toISOString() }
+    }
+
+    // #onboard replays a brand-new agent's first run (joined: false).
+    const ONBOARD = {
+      success: true, joined: false,
+      intro: {
+        title: 'INCOMING TRANSMISSION',
+        chapter: 'Operation: Reconnect',
+        welcome: 'Welcome, Agent.',
+        securityNotice: 'Your Agent Number is classified. Never reveal it — not every signal on this grid is friendly.',
+        body: "After the collapse of the old tracking network, HQ lost contact with thousands of agents worldwide. We rebuilt what we could and called it BOTZ.\n\nBut the grid is dark, and the districts — named for the agents we lost — are silent.\n\nYou made it back. That makes you the only agent on the board.",
+      },
+      modes: {
+        easy:   { label: 'Easy',   multiplier: 1 },
+        medium: { label: 'Medium', multiplier: 2 },
+        hard:   { label: 'Hard',   multiplier: 4 },
+      },
+    }
+
+    const realFetch = window.fetch
+    window.fetch = async (url, opts) => {
+      if (String(url).includes('op-reconnect')) {
+        const body = JSON.parse(opts?.body || '{}')
+        if (body.action === 'getGameState') {
+          const on = location.hash.includes('onboard')
+          return { json: async () => JSON.parse(JSON.stringify(on ? ONBOARD : STATE)) }
+        }
+        if (body.action === 'joinGame') {
+          return { json: async () => ({ ...JSON.parse(JSON.stringify(STATE)), success: true, joined: true }) }
+        }
+        // Collectibles: persist against the mock STATE so moves survive a re-render.
+        if (body.action === 'placeItem') {
+          const it = STATE.items.find(x => x.id === body.playerItemId)
+          if (it) {
+            it.districtId = body.districtId
+            const d = districts.find(x => x.id === body.districtId)
+            it.districtName = d ? d.name : null
+          }
+          return { json: async () => ({ success: true }) }
+        }
+        if (body.action === 'useItem') {
+          const it = STATE.items.find(x => x.id === body.playerItemId)
+          if (it) it.usedAt = new Date().toISOString()
+          return { json: async () => ({ success: true }) }
+        }
+        // ── auth stubs (the real ones live in the op-reconnect function) ──
+        if (body.action === 'registerAgent') {
+          if (String(body.handle).toLowerCase() === 'taken') {
+            return { json: async () => ({ success: false, error: 'handle_taken' }) }
+          }
+          localStorage.removeItem('rc_onboarded')
+          return { json: async () => ({ success: true, agent: { agentNo: 'AGENT042', handle: body.handle, sessionToken: 'mock-token' } }) }
+        }
+        if (body.action === 'loginAgent') {
+          if (body.password !== 'correct') {
+            return { json: async () => ({ success: false, error: 'bad_credentials' }) }
+          }
+          return { json: async () => ({ success: true, agent: { agentNo: body.agentNo, handle: 'hopesizeyouknow', sessionToken: 'mock-token' } }) }
+        }
+        return { json: async () => ({ ...JSON.parse(JSON.stringify(STATE)), success: true }) }
+      }
+      return realFetch(url, opts)
+    }
+  </script>
+</head>
+<body>
+  <div id="auth" hidden></div>
+  <div id="loading" class="center-screen">
+    <div class="panel"><div class="scan-pulse"></div><div class="eyebrow">ESTABLISHING UPLINK…</div></div>
+  </div>
+  <div id="onboarding" hidden></div>
+  <div id="game" hidden>
+    <header id="hud"></header>
+    <main id="scene" class="scene"></main>
+    <footer class="page-foot">
+      HopeTracker • Op: Reconnect
+      <span class="love">"Every mission begins with a single stream." 💜</span>
+    </footer>
+  </div>
+  <div id="overlay" hidden></div>
+  <!-- concert_voyage.js expects these four to already exist — its own header
+       says they're declared in app.js and must not be re-declared there. This
+       page doesn't load app.js, so the host declares them instead. Without
+       this, changeBombColor and the strobe throw ReferenceError. -->
+  <script>var concertPlayer, strobeInterval, waveInterval, progressInterval;</script>
+  <script src="concert_voyage.js"></script>
+  <script type="module" src="js/main.js"></script>
+  <script type="module">
+    // PREVIEW ONLY: jump straight to the district so the moment plays.
+    if (location.hash.includes('restored') || location.hash.includes('wardwhole')) {
+      const { goDistrict } = await import('./js/router.js')
+      const t = setInterval(() => {
+        if (window.__rcState?.joined) { clearInterval(t); goDistrict('mono', 'mono-7') }
+      }, 200)
+    }
+  </script>
+</body>
+</html>

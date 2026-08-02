@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>All districts — before &amp; after | Op: Reconnect</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/reconnect.css">
+  <style>
+    /* REVIEW SHEET — not shipped. Every district rendered dark and restored,
+       so a bad-looking one can be spotted and its name changed. */
+    body { padding: 0 0 60px; }
+    .rv-head { position: sticky; top: 0; z-index: 10; background: rgba(10,9,16,0.95);
+      backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); padding: 14px 20px; }
+    .rv-title { font-family: var(--disp); font-weight: 900; font-size: 20px; }
+    .rv-sub { font-family: var(--mono); font-size: 11px; color: var(--dim); margin-top: 4px; }
+    .rv-tools { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 11px; align-items: center; }
+    .rv-wrap { max-width: 1180px; margin: 0 auto; padding: 22px 20px; }
+    .rv-ward { font-family: var(--disp); font-weight: 900; font-size: 17px; margin: 30px 0 4px;
+      padding-top: 14px; border-top: 1px solid var(--border); }
+    .rv-ward:first-child { border-top: none; padding-top: 0; margin-top: 0; }
+    .rv-wardsub { font-family: var(--mono); font-size: 10.5px; color: var(--dim); margin-bottom: 14px; }
+    .rv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+    .rv-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
+      overflow: hidden; }
+    .rv-card.flagged { border-color: var(--crimson); box-shadow: 0 0 0 1px rgba(229,56,79,0.3); }
+    .rv-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border); }
+    .rv-pane { position: relative; background: #06050d; }
+    .rv-pane canvas { display: block; width: 100%; }
+    .rv-tag { position: absolute; top: 6px; left: 8px; font-family: var(--mono); font-size: 10.5px;
+      font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: #d8d4e6;
+      background: rgba(6,5,13,0.55); padding: 2px 7px; border-radius: 20px;
+      text-shadow: 0 1px 3px #000; }
+    .rv-tag.on { color: var(--gold); }
+    .rv-meta { padding: 10px 12px 11px; display: flex; align-items: flex-start; gap: 8px; }
+    .rv-name { font-weight: 700; font-size: 14.5px; line-height: 1.25; }
+    /* Handles need to be readable — people scan this list for their own. */
+    .rv-echo { font-family: var(--mono); font-size: 10.5px; color: var(--muted); margin-top: 4px; }
+    .rv-kind { margin-left: auto; font-family: var(--mono); font-size: 9px; letter-spacing: 1px;
+      text-transform: uppercase; font-weight: 700; color: #ede9fb; background: var(--purple-soft);
+      border: 1px solid rgba(196,181,253,0.45); padding: 3px 7px; border-radius: 20px; white-space: nowrap; }
+    .rv-kind.none { color: var(--crimson); background: var(--crimson-soft); }
+    .rv-flag, .rv-seen { margin-left: 6px; background: none; border: 1px solid var(--border);
+      border-radius: 20px; color: var(--dim); font-family: var(--mono); font-size: 9px;
+      padding: 3px 8px; cursor: pointer; }
+    .rv-flag.on { border-color: var(--crimson); color: var(--crimson); }
+    .rv-seen.on { border-color: var(--gold); color: var(--gold); }
+    /* Reviewed cards recede so unreviewed ones stand out while you scan. */
+    .rv-card.seen { opacity: 0.52; }
+    .rv-card.seen:hover { opacity: 1; }
+    .rv-card.flagged { opacity: 1; }
+    #rvOut { width: 100%; min-height: 90px; margin-top: 10px; background: rgba(0,0,0,0.4);
+      border: 1px solid var(--border); border-radius: var(--r); color: var(--text);
+      font-family: var(--mono); font-size: 11px; padding: 10px; display: none; }
+  </style>
+</head>
+<body>
+  <div class="rv-head">
+    <div class="rv-title">All districts — dark vs restored</div>
+    <div class="rv-sub" id="rvCount">loading…</div>
+    <div class="rv-tools">
+      <button class="chip sel" data-f="all">All</button>
+      <button class="chip" data-f="unseen">Not reviewed</button>
+      <button class="chip" data-f="none">No landmark</button>
+      <button class="chip" data-f="flagged">Flagged</button>
+      <button class="chip" data-f="centerpiece">Centerpieces</button>
+      <input class="ob-input" id="rvSearch" placeholder="Search name or guardian…" style="max-width:260px;padding:7px 11px;font-size:12px">
+      <button class="btn btn-ghost" id="rvCopy" style="margin:0;padding:7px 13px;font-size:11px">Copy flagged list</button>
+    </div>
+    <textarea id="rvOut" readonly></textarea>
+  </div>
+  <div class="rv-wrap" id="rvWrap"></div>
+
+  <!-- Real people's Instagram handles live in this file, which is why it
+       sits outside reconnect/ at the repo's own .claude/ — a folder that
+       never ships and never lands in reconnect/dist/. This preview page
+       reaches up for it with `../`, so it only resolves when served from a
+       config rooted at the REPO root (e.g. the root-src launch config), not
+       when reconnect/ itself is served as an independent site root. That's
+       intentional, not a bug to route around: this sheet was never meant to
+       be reachable from the deployed game. -->
+  <script src="../.claude/_districts_data.js"></script>
+  <script type="module">
+    import { buildModel, renderScene } from './js/scene.js'
+    import { landmarkType } from './js/landmarks.js'
+
+    const W = 168, H = 92
+    const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+    // Matches the seed convention in migration 011 (`mono-hopesize-station`),
+    // so these scenes are the ones the real districts will draw.
+    const districtId = (d) => `${d.wardId}-${slug(d.name)}`
+
+    const flagged = new Set(JSON.parse(localStorage.getItem('rv_flagged') || '[]'))
+    const saveFlags = () => localStorage.setItem('rv_flagged', JSON.stringify([...flagged]))
+
+    // "Reviewed" is separate from "flagged" — you can look at something and
+    // decide it's fine. Without this there's no way to know what's left.
+    const seen = new Set(JSON.parse(localStorage.getItem('rv_seen') || '[]'))
+    const saveSeen = () => localStorage.setItem('rv_seen', JSON.stringify([...seen]))
+
+    function sizeCanvas(canvas) {
+      const dpr = Math.min(2, window.devicePixelRatio || 1)
+      canvas.width = W * dpr; canvas.height = H * dpr
+      canvas.style.width = W + 'px'; canvas.style.height = H + 'px'
+      const ctx = canvas.getContext('2d')
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      return ctx
+    }
+    function buildFor(d) {
+      return buildModel(districtId(d), W, H, d.name, { wardId: d.wardId, centerpiece: !!d.centerpiece })
+    }
+    // The dark pane is meant to read as dormant, so it stays a single still
+    // frame (reduced=true). The restored pane used to be a still frame too —
+    // which hid every animation the game actually has (ferris spin, window
+    // flicker, birds, beam sweeps) from anyone reviewing these cards. It now
+    // runs a live rAF loop, started/stopped by the IntersectionObserver
+    // below so only on-screen cards spend a frame budget.
+    function paintStatic(canvas, d, progress) {
+      const ctx = sizeCanvas(canvas)
+      const model = buildFor(d)
+      renderScene(ctx, model, progress, 1200, true, progress)
+    }
+    function startLive(canvas, d) {
+      const ctx = sizeCanvas(canvas)
+      const model = buildFor(d)
+      let raf = requestAnimationFrame(function frame(t) {
+        renderScene(ctx, model, 1, t, false, 1)
+        raf = requestAnimationFrame(frame)
+      })
+      return () => cancelAnimationFrame(raf)
+    }
+
+    const wrap = document.getElementById('rvWrap')
+    const byWard = {}
+    for (const d of window.DISTRICTS) (byWard[d.ward] = byWard[d.ward] || []).push(d)
+
+    const cards = []
+    for (const [ward, list] of Object.entries(byWard)) {
+      wrap.insertAdjacentHTML('beforeend',
+        `<div class="rv-ward">${ward}</div><div class="rv-wardsub">${list.length} places</div>`)
+      const grid = document.createElement('div')
+      grid.className = 'rv-grid'
+      for (const d of list) {
+        const kind = landmarkType(d.name)
+        const id = districtId(d)
+        const card = document.createElement('div')
+        card.className = 'rv-card' + (flagged.has(id) ? ' flagged' : '') + (seen.has(id) ? ' seen' : '')
+        card.innerHTML = `
+          <div class="rv-pair">
+            <div class="rv-pane"><canvas></canvas><span class="rv-tag">dark</span></div>
+            <div class="rv-pane"><canvas></canvas><span class="rv-tag on">restored</span></div>
+          </div>
+          <div class="rv-meta">
+            <div>
+              <div class="rv-name">${d.name}</div>
+              <div class="rv-echo">${d.centerpiece ? '★ centerpiece' : '👤 ' + (d.echoOf || '—')}</div>
+            </div>
+            <span class="rv-kind ${kind ? '' : 'none'}">${kind || 'plain skyline'}</span>
+            <button class="rv-seen ${seen.has(id) ? 'on' : ''}" title="Mark reviewed">✓</button>
+            <button class="rv-flag ${flagged.has(id) ? 'on' : ''}" title="Needs work">⚑</button>
+          </div>`
+        const btn = card.querySelector('.rv-flag')
+        const sbtn = card.querySelector('.rv-seen')
+        btn.onclick = () => {
+          if (flagged.has(id)) { flagged.delete(id); btn.classList.remove('on'); card.classList.remove('flagged') }
+          else {
+            flagged.add(id); btn.classList.add('on'); card.classList.add('flagged')
+            // Flagging is a review — you clearly looked at it.
+            seen.add(id); sbtn.classList.add('on'); card.classList.add('seen')
+          }
+          saveFlags(); saveSeen(); count()
+        }
+        sbtn.onclick = () => {
+          if (seen.has(id)) { seen.delete(id); sbtn.classList.remove('on'); card.classList.remove('seen') }
+          else { seen.add(id); sbtn.classList.add('on'); card.classList.add('seen') }
+          saveSeen(); count()
+        }
+        grid.appendChild(card)
+        cards.push({ card, d, id, kind, painted: false })
+      }
+      wrap.appendChild(grid)
+    }
+
+    // 500+ canvases would choke on load — paint them as they scroll in, and
+    // only run the live loop while a card is actually on screen (keeps
+    // observing, rather than unobserving after first paint, so scrolling
+    // back to a card resumes its animation).
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        const rec = cards.find((c) => c.card === e.target)
+        if (!rec) continue
+        if (e.isIntersecting) {
+          const [a, b] = rec.card.querySelectorAll('canvas')
+          if (!rec.painted) { paintStatic(a, rec.d, 0.04); rec.painted = true }
+          if (!rec.stopLive) rec.stopLive = startLive(b, rec.d)
+        } else if (rec.stopLive) {
+          rec.stopLive()
+          rec.stopLive = null
+        }
+      }
+    }, { rootMargin: '400px' })
+    cards.forEach((c) => io.observe(c.card))
+
+    function count() {
+      const left = cards.length - seen.size
+      document.getElementById('rvCount').textContent =
+        `${cards.length} places · ${seen.size} reviewed · ${left} left · ${flagged.size} flagged`
+        + ` · ${cards.filter((c) => !c.kind).length} with no landmark`
+    }
+    count()
+
+    let filter = 'all', q = ''
+    function apply() {
+      for (const c of cards) {
+        const hay = (c.d.name + ' ' + (c.d.echoOf || '')).toLowerCase()
+        const okF = filter === 'all'
+          || (filter === 'none' && !c.kind)
+          || (filter === 'flagged' && flagged.has(c.id))
+          || (filter === 'unseen' && !seen.has(c.id))
+          || (filter === 'centerpiece' && c.d.centerpiece)
+        c.card.style.display = okF && hay.includes(q) ? '' : 'none'
+      }
+    }
+    for (const chip of document.querySelectorAll('.chip')) {
+      chip.onclick = () => {
+        document.querySelectorAll('.chip').forEach((x) => x.classList.toggle('sel', x === chip))
+        filter = chip.dataset.f; apply()
+      }
+    }
+    document.getElementById('rvSearch').oninput = (e) => { q = e.target.value.toLowerCase().trim(); apply() }
+    document.getElementById('rvCopy').onclick = () => {
+      const out = document.getElementById('rvOut')
+      const lines = cards.filter((c) => flagged.has(c.id))
+        .map((c) => `${c.d.ward} · ${c.d.name} — ${c.kind || 'plain skyline'}`)
+      out.value = lines.length ? lines.join('\n') : 'Nothing flagged yet — hit ⚑ on any district that looks wrong.'
+      out.style.display = 'block'
+      out.select()
+      try { navigator.clipboard.writeText(out.value) } catch {}
+    }
+  </script>
+</body>
+</html>

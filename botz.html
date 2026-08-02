@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#06060A">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>BOTZ | Op: Reconnect</title>
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/botz-base.css">
+  <style>
+    /* ── PURPLE THEME — opt-in alternate to the site's default ARIRANG red/spy
+       look. Overrides just the accent + background tokens BOTZ actually
+       consumes (see the grep list this was built from), so every existing
+       component re-skins automatically without touching component CSS. ── */
+    :root[data-theme="purple"] {
+      --bg-abyss: #0a0612;
+      --red-core: #A78BFA;
+      --red-mid: #B9A3FB;
+      --red-soft: #C9B8FC;
+      --red-whisper: rgba(167, 139, 250, 0.08);
+      --red-border: rgba(167, 139, 250, 0.20);
+      --red-glow: rgba(167, 139, 250, 0.40);
+    }
+
+    /* ── BOTZ-SPECIFIC OVERRIDES ── */
+    .botz-page {
+      min-height: 100vh;
+      background: var(--bg-abyss);
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Header */
+    .botz-topbar {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: rgba(6,6,10,0.92);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 12px 16px;
+      padding-top: calc(12px + env(safe-area-inset-top));
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .botz-back-btn {
+      background: none;
+      border: 1px solid var(--border-light);
+      color: var(--text-muted);
+      border-radius: var(--radius-sm);
+      padding: 5px 11px;
+      font-family: var(--font-mono);
+      font-size: 0.625rem;
+      letter-spacing: 1px;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: color 0.2s, border-color 0.2s;
+      flex-shrink: 0;
+    }
+    .botz-back-btn:hover { color: var(--text-primary); border-color: var(--border-mid); }
+
+    .botz-theme-toggle {
+      background: none;
+      border: 1px solid var(--border-light);
+      color: var(--text-muted);
+      border-radius: var(--radius-full, 999px);
+      width: 30px;
+      height: 30px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.2s, border-color 0.2s, transform 0.2s;
+      flex-shrink: 0;
+    }
+    .botz-theme-toggle:hover { border-color: var(--border-mid); transform: scale(1.06); }
+    .botz-theme-toggle:active { transform: scale(0.94); }
+
+    .botz-brand {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+    .botz-brand-name {
+      font-family: var(--font-display);
+      font-weight: 900;
+      font-size: 1.1rem;
+      letter-spacing: 6px;
+      color: var(--red-core);
+      line-height: 1;
+      text-shadow: 0 0 20px var(--red-glow);
+    }
+    .botz-brand-sub {
+      font-family: var(--font-mono);
+      font-size: 0.55rem;
+      letter-spacing: 2px;
+      color: rgba(255,255,255,0.82);
+      text-transform: uppercase;
+    }
+
+    .botz-agent-chip {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 1px;
+    }
+    .botz-agent-chip-label {
+      font-family: var(--font-mono);
+      font-size: 0.5rem;
+      letter-spacing: 2px;
+      color: var(--text-ghost);
+      text-transform: uppercase;
+    }
+    .botz-agent-chip-no {
+      font-family: var(--font-display);
+      font-size: 0.7rem;
+      font-weight: 800;
+      letter-spacing: 2px;
+      color: var(--red-core);
+    }
+
+    /* ── HERO ── */
+    .botz-hero {
+      padding: 28px 16px 20px;
+      text-align: center;
+      position: relative;
+    }
+    .botz-hero::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 10%; right: 10%;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--red-border), transparent);
+    }
+    .botz-hero-label {
+      font-family: var(--font-mono);
+      font-size: 0.6rem;
+      letter-spacing: 4px;
+      color: rgba(255,255,255,0.82);
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+    .botz-hero-count {
+      font-family: var(--font-display);
+      font-weight: 900;
+      font-size: clamp(3rem, 14vw, 5rem);
+      color: var(--red-core);
+      text-shadow: 0 0 40px var(--red-glow), 0 0 80px rgba(255,20,95,0.15);
+      line-height: 1;
+      letter-spacing: -2px;
+    }
+    .botz-hero-unit {
+      font-family: var(--font-mono);
+      font-size: 0.6rem;
+      letter-spacing: 5px;
+      color: rgba(255,255,255,0.82);
+      text-transform: uppercase;
+      margin-top: 8px;
+    }
+
+    /* ── DATE FILTER ── */
+    .botz-filter-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 16px 16px 0;
+      flex-wrap: wrap;
+    }
+    .botz-filter-label {
+      font-family: var(--font-mono);
+      font-size: 0.575rem;
+      letter-spacing: 2px;
+      color: var(--text-ghost);
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .botz-date-input {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border-light);
+      color: var(--text-secondary);
+      border-radius: var(--radius-sm);
+      padding: 7px 10px;
+      font-family: var(--font-mono);
+      font-size: 0.625rem;
+      letter-spacing: 1px;
+      outline: none;
+      transition: border-color 0.2s, background 0.2s;
+      flex: 1;
+      min-width: 100px;
+    }
+    .botz-date-input:focus { border-color: var(--red-border); background: var(--red-whisper); }
+    .botz-date-input::-webkit-calendar-picker-indicator { filter: invert(0.4); cursor: pointer; }
+
+    .botz-filter-actions { display: flex; gap: 6px; }
+
+    /* ── TABS ── */
+    .botz-tabs {
+      display: flex;
+      gap: 4px;
+      padding: 16px 16px 0;
+    }
+    .botz-tab-btn {
+      flex: 1;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-ghost);
+      font-family: var(--font-mono);
+      font-size: 0.575rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      padding: 9px 6px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .botz-tab-btn.active {
+      background: var(--red-whisper);
+      border-color: var(--red-border);
+      color: var(--red-core);
+      text-shadow: 0 0 8px var(--red-glow);
+    }
+    .botz-tab-btn:hover:not(.active) {
+      border-color: var(--border-mid);
+      color: var(--text-muted);
+    }
+
+    /* ── PANEL ── */
+    .botz-panel { display: none; padding: 12px 16px calc(32px + env(safe-area-inset-bottom)); }
+    .botz-panel.active { display: block; }
+
+    .botz-section-label {
+      font-family: var(--font-mono);
+      font-size: 0.575rem;
+      letter-spacing: 3px;
+      color: var(--text-ghost);
+      text-transform: uppercase;
+      padding: 10px 0 8px;
+      border-bottom: 1px solid var(--border-subtle);
+      margin-bottom: 8px;
+    }
+
+    /* ── TRACK ROW ── */
+    .botz-row-list { display: flex; flex-direction: column; gap: 3px; }
+
+    .botz-track-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 11px 12px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-md);
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.2s, background 0.2s;
+      cursor: default;
+    }
+    .botz-track-row:hover {
+      background: rgba(255,255,255,0.04);
+      border-color: var(--border-light);
+    }
+    /* bar fill */
+    .botz-track-row::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      background: linear-gradient(90deg, rgba(255,20,95,0.06), transparent);
+      width: var(--bar-w, 0%);
+      pointer-events: none;
+      transition: width 0.6s var(--ease-out);
+    }
+    /* top glow line for #1 */
+    .botz-track-row.rank-1 {
+      border-color: rgba(255,20,95,0.18);
+      background: rgba(255,20,95,0.04);
+    }
+    .botz-track-row.rank-1::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--red-core), transparent);
+    }
+
+    .botz-rank {
+      font-family: var(--font-mono);
+      font-size: 0.55rem;
+      color: var(--text-ghost);
+      width: 18px;
+      text-align: right;
+      flex-shrink: 0;
+      line-height: 1;
+    }
+    .botz-track-row.rank-1 .botz-rank { color: var(--red-core); font-weight: 700; }
+
+    .botz-row-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 8px;
+      background: rgba(255,20,95,0.08);
+      border: 1px solid var(--red-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+    .botz-row-icon img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 7px;
+      display: block;
+    }
+    .botz-track-row.rank-1 .botz-row-icon {
+      background: rgba(255,20,95,0.15);
+      border-color: rgba(255,20,95,0.3);
+    }
+    .botz-art-fallback {
+      width: 100%; height: 100%;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .botz-art-fallback::after {
+      content: '';
+      width: 16px; height: 16px;
+      background: var(--red-core);
+      opacity: 0.4;
+      mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 18V5l12-2v13' stroke='white' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='6' cy='18' r='3' fill='white'/%3E%3Ccircle cx='18' cy='16' r='3' fill='white'/%3E%3C/svg%3E") no-repeat center/contain;
+      -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 18V5l12-2v13' stroke='white' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='6' cy='18' r='3' fill='white'/%3E%3Ccircle cx='18' cy='16' r='3' fill='white'/%3E%3C/svg%3E") no-repeat center/contain;
+    }
+    .botz-row-icon img[src=""] { display: none !important; }
+    .botz-art-thumb {
+      width: 36px;
+      height: 36px;
+      border-radius: 5px;
+      object-fit: cover;
+      flex-shrink: 0;
+      display: block;
+    }
+
+    .botz-row-info { flex: 1; min-width: 0; }
+    .botz-row-name {
+      font-family: var(--font-ui);
+      font-weight: 700;
+      font-size: 0.9rem;
+      letter-spacing: 0.3px;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: 1.2;
+    }
+    .botz-row-sub {
+      font-family: var(--font-mono);
+      font-size: 0.55rem;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .botz-row-count {
+      flex-shrink: 0;
+      text-align: right;
+    }
+    .botz-row-count-num {
+      font-family: var(--font-display);
+      font-size: 1rem;
+      font-weight: 800;
+      color: var(--red-core);
+      line-height: 1;
+    }
+    .botz-track-row.rank-1 .botz-row-count-num {
+      text-shadow: 0 0 12px var(--red-glow);
+    }
+    .botz-row-count-label {
+      font-family: var(--font-mono);
+      font-size: 0.48rem;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-top: 1px;
+    }
+
+    /* ── RECENT ROW ── */
+    .botz-recent-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-md);
+      transition: border-color 0.15s;
+    }
+    .botz-recent-row:hover { border-color: var(--border-light); }
+
+    .botz-recent-dot {
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: var(--red-core);
+      flex-shrink: 0;
+      box-shadow: 0 0 6px var(--red-glow);
+    }
+    .botz-recent-info { flex: 1; min-width: 0; }
+    .botz-recent-name {
+      font-family: var(--font-ui);
+      font-weight: 700;
+      font-size: 0.85rem;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .botz-recent-meta {
+      font-family: var(--font-mono);
+      font-size: 0.53rem;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 1px;
+    }
+    .botz-recent-time {
+      font-family: var(--font-mono);
+      font-size: 0.53rem;
+      color: var(--text-muted);
+      flex-shrink: 0;
+      letter-spacing: 0.5px;
+    }
+    .botz-recent-right { display:flex; flex-direction:column; align-items:flex-end; gap:4px; flex-shrink:0; }
+    .botz-src-pill {
+      font-family: var(--font-mono);
+      font-size: 0.45rem;
+      font-weight: 800;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 2px 6px;
+      border-radius: 20px;
+    }
+    .botz-src-lb  { background:rgba(235,116,59,0.12); color:#eb743b; border:1px solid rgba(235,116,59,0.25); }
+    .botz-src-pano{ background:rgba(34,197,94,0.1);   color:#22c55e; border:1px solid rgba(34,197,94,0.2);  }
+    .botz-src-sfm { background:rgba(29,185,84,0.1);   color:#1db954; border:1px solid rgba(29,185,84,0.2);  }
+    .botz-src-musicat { background:rgba(139,92,246,0.1); color:#8b5cf6; border:1px solid rgba(139,92,246,0.2); }
+    .botz-src-mc  { background:rgba(139,92,246,0.1); color:#8b5cf6; border:1px solid rgba(139,92,246,0.2); }
+
+    /* ── MEDAL RANKS ── */
+    .botz-track-row.rank-2 { border-color:rgba(192,192,192,0.15); }
+    .botz-track-row.rank-2 .botz-rank { color:#c0c0c0; font-weight:700; }
+    .botz-track-row.rank-3 { border-color:rgba(205,127,50,0.15); }
+    .botz-track-row.rank-3 .botz-rank { color:#cd7f32; font-weight:700; }
+
+    /* ── SOURCE CHIPS IN HERO ── */
+    .botz-source-chips { display:flex; gap:6px; justify-content:center; margin-top:10px; flex-wrap:wrap; }
+    .botz-source-chip {
+      display:inline-flex; align-items:center; gap:5px;
+      padding:3px 10px; border-radius:20px;
+      font-family:var(--font-mono); font-size:0.48rem;
+      font-weight:800; letter-spacing:1px; text-transform:uppercase;
+    }
+    .botz-chip-lb  { background:rgba(235,116,59,0.1); border:1px solid rgba(235,116,59,0.25); color:#eb743b; }
+    .botz-chip-pano{ background:rgba(34,197,94,0.08); border:1px solid rgba(34,197,94,0.2);   color:#22c55e; }
+    .botz-chip-sfm { background:rgba(29,185,84,0.08); border:1px solid rgba(29,185,84,0.2);   color:#1db954; }
+    .botz-chip-mc  { background:rgba(139,92,246,0.08); border:1px solid rgba(139,92,246,0.2); color:#8b5cf6; }
+    .botz-chip-dot { width:5px; height:5px; border-radius:50%; flex-shrink:0; }
+
+    /* ── NOW PLAYING EQ BARS ── */
+    .botz-eq { display:flex; align-items:flex-end; gap:2px; height:14px; flex-shrink:0; }
+    .botz-eq span {
+      width:3px; border-radius:2px; background:var(--red-core);
+      animation:botz-eq 0.7s ease-in-out infinite alternate;
+    }
+    .botz-eq span:nth-child(2){animation-delay:.12s}
+    .botz-eq span:nth-child(3){animation-delay:.28s}
+    .botz-eq span:nth-child(4){animation-delay:.06s}
+    @keyframes botz-eq{0%{height:3px}100%{height:14px}}
+
+    /* ── LOADING / EMPTY ── */
+    .botz-loading, .botz-empty {
+      text-align: center;
+      padding: 48px 20px;
+      font-family: var(--font-mono);
+      font-size: 0.6rem;
+      color: var(--text-ghost);
+      letter-spacing: 3px;
+      text-transform: uppercase;
+    }
+    .botz-spinner {
+      width: 28px; height: 28px;
+      border: 2px solid rgba(255,20,95,0.15);
+      border-top-color: var(--red-core);
+      border-radius: 50%;
+      animation: botz-spin 0.7s linear infinite;
+      margin: 0 auto 14px;
+    }
+    @keyframes botz-spin { to { transform: rotate(360deg); } }
+
+    /* ── DATE PRESETS ── */
+    .botz-presets {
+      display: flex;
+      gap: 6px;
+      padding: 10px 16px 0;
+      flex-wrap: wrap;
+    }
+    .botz-preset-btn {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.15);
+      color: rgba(255,255,255,0.6);
+      font-family: var(--font-mono);
+      font-size: 0.55rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .botz-preset-btn:hover {
+      border-color: var(--border-mid);
+      color: var(--text-muted);
+    }
+    .botz-preset-btn.active {
+      background: var(--red-whisper);
+      border-color: var(--red-border);
+      color: var(--red-core);
+    }
+
+    /* ── SKELETON LOADING ── */
+    .botz-skeleton-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 11px 12px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+    }
+    .botz-skel {
+      background: linear-gradient(90deg, rgba(255,255,255,0.06) 25%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.06) 75%);
+      background-size: 200% 100%;
+      animation: botz-shimmer 1.4s infinite;
+      border-radius: 4px;
+    }
+    @keyframes botz-shimmer { to { background-position: -200% 0; } }
+    .botz-skel-icon { width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0; }
+    .botz-skel-lines { flex: 1; display: flex; flex-direction: column; gap: 5px; }
+    .botz-skel-name { height: 12px; width: 60%; }
+    .botz-skel-sub  { height: 8px;  width: 35%; }
+    .botz-skel-num  { width: 28px;  height: 16px; flex-shrink: 0; }
+
+    /* ── LAST UPDATED ── */
+    .botz-updated {
+      font-family: var(--font-mono);
+      font-size: 0.5rem;
+      letter-spacing: 1.5px;
+      color: rgba(255,255,255,0.55);
+      text-align: right;
+      padding: 8px 16px 0;
+    }
+
+    /* ── PULL-TO-REFRESH ── */
+    .botz-ptr {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      overflow: hidden;
+      height: 0;
+      transition: height 0.2s;
+      font-family: var(--font-mono);
+      font-size: 0.55rem;
+      letter-spacing: 2px;
+      color: var(--text-ghost);
+      text-transform: uppercase;
+    }
+    .botz-ptr.visible { height: 40px; }
+    .botz-ptr-arrow {
+      font-size: 0.8rem;
+      transition: transform 0.2s;
+      display: inline-block;
+    }
+    .botz-ptr.ready .botz-ptr-arrow { transform: rotate(180deg); color: var(--red-core); }
+
+    /* ── RETRY BUTTON ── */
+    .botz-retry-btn {
+      display: inline-block;
+      margin-top: 10px;
+      background: none;
+      border: 1px solid var(--red-border);
+      color: var(--red-core);
+      font-family: var(--font-mono);
+      font-size: 0.55rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      padding: 7px 16px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .botz-retry-btn:hover { background: var(--red-whisper); }
+
+    /* ── TABS (underline style) ── */
+    .botz-tab-btn.active {
+      background: var(--red-whisper);
+      border-color: transparent;
+      border-bottom-color: var(--red-core);
+      color: var(--red-core);
+      text-shadow: 0 0 8px var(--red-glow);
+    }
+
+    /* ── NOW PLAYING ── */
+    .botz-np {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 16px;
+      background: rgba(167,139,250,0.06);
+      border-bottom: 1px solid var(--purple-border);
+    }
+    .botz-np.visible { display: flex; }
+    .botz-np-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--purple-core);
+      flex-shrink: 0;
+      animation: botz-np-pulse 1.8s ease-in-out infinite;
+    }
+    @keyframes botz-np-pulse { 0%,100%{opacity:1} 50%{opacity:0.25} }
+    .botz-np-label {
+      font-family: var(--font-mono);
+      font-size: 0.5rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--purple-core);
+    }
+    .botz-np-track {
+      font-family: var(--font-ui);
+      font-weight: 700;
+      font-size: 0.85rem;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      letter-spacing: 0.2px;
+    }
+    .botz-np-artist {
+      font-family: var(--font-mono);
+      font-size: 0.5rem;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      margin-top: 1px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .botz-np-info { flex: 1; min-width: 0; }
+    .botz-np-live {
+      flex-shrink: 0;
+      font-family: var(--font-mono);
+      font-size: 0.48rem;
+      letter-spacing: 2px;
+      color: rgba(167,139,250,0.45);
+      text-transform: uppercase;
+    }
+
+    /* ── STREAK + HEATMAP ── */
+    .botz-streak-card {
+      margin: 8px 16px 0;
+      padding: 12px 14px;
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-md);
+      background: rgba(255,255,255,0.02);
+    }
+    .botz-streak-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .botz-streak-label {
+      font-family: var(--font-mono);
+      font-size: 0.5rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--text-ghost);
+    }
+    .botz-streak-num {
+      font-family: var(--font-display);
+      font-weight: 900;
+      font-size: 1.3rem;
+      color: var(--red-core);
+      text-shadow: 0 0 14px var(--red-glow);
+    }
+    .botz-streak-best {
+      font-family: var(--font-mono);
+      font-size: 0.5rem;
+      color: var(--text-muted);
+      letter-spacing: 1px;
+      text-align: right;
+    }
+    .botz-heatmap {
+      display: grid;
+      grid-auto-flow: column;
+      grid-template-rows: repeat(7, 1fr);
+      gap: 3px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+    .botz-heat-cell {
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      background: rgba(255,255,255,0.05);
+      flex-shrink: 0;
+    }
+    .botz-heat-cell[data-lvl="1"] { background: var(--red-core); opacity: 0.25; }
+    .botz-heat-cell[data-lvl="2"] { background: var(--red-core); opacity: 0.5; }
+    .botz-heat-cell[data-lvl="3"] { background: var(--red-core); opacity: 0.75; }
+    .botz-heat-cell[data-lvl="4"] { background: var(--red-core); opacity: 1; box-shadow: 0 0 6px var(--red-glow); }
+
+    /* ── SHARE BUTTON ── */
+    .botz-share-btn {
+      background: none;
+      border: 1px solid var(--border-light);
+      color: var(--text-muted);
+      border-radius: var(--radius-full, 999px);
+      width: 30px;
+      height: 30px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.2s, border-color 0.2s, transform 0.2s;
+      flex-shrink: 0;
+    }
+    .botz-share-btn:hover { border-color: var(--border-mid); transform: scale(1.06); }
+    .botz-share-btn:active { transform: scale(0.94); }
+
+    /* ── MILESTONE TOAST ── */
+    @keyframes botzMilestoneIn {
+      0%   { transform: translate(-50%, 20px); opacity: 0; }
+      100% { transform: translate(-50%, 0);     opacity: 1; }
+    }
+    .botz-milestone-toast {
+      position: fixed;
+      left: 50%;
+      bottom: 24px;
+      transform: translate(-50%, 0);
+      z-index: 99999;
+      background: linear-gradient(135deg, rgba(20,10,14,0.97), rgba(10,6,10,0.97));
+      border: 1px solid var(--red-border);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 24px var(--red-glow);
+      border-radius: 14px;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      max-width: 90vw;
+      animation: botzMilestoneIn 0.4s ease;
+    }
+    .botz-milestone-emoji { font-size: 1.6rem; flex-shrink: 0; }
+    .botz-milestone-title {
+      font-family: var(--font-display);
+      font-weight: 900;
+      font-size: 0.8rem;
+      color: var(--red-core);
+      letter-spacing: 0.5px;
+    }
+    .botz-milestone-sub {
+      font-family: var(--font-mono);
+      font-size: 0.55rem;
+      color: rgba(255,255,255,0.7);
+      letter-spacing: 0.5px;
+      margin-top: 2px;
+    }
+
+    /* ── NOT LOGGED IN ── */
+    .botz-not-logged {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 48px 24px;
+      text-align: center;
+    }
+    .botz-not-logged-icon { font-size: 2rem; }
+    .botz-not-logged-title {
+      font-family: var(--font-display);
+      font-size: 0.9rem;
+      font-weight: 900;
+      letter-spacing: 4px;
+      color: var(--text-muted);
+    }
+    .botz-not-logged-sub {
+      font-family: var(--font-mono);
+      font-size: 0.6rem;
+      letter-spacing: 2px;
+      color: var(--text-ghost);
+    }
+  </style>
+  <script>
+    // Apply the saved theme before first paint — avoids a flash of the wrong
+    // theme (reconnect-botz.js itself loads at the end of body, too late for this).
+    (function () {
+      try {
+        if (localStorage.getItem('botz_theme') === 'purple') {
+          document.documentElement.setAttribute('data-theme', 'purple');
+        }
+      } catch (_) {}
+    })();
+  </script>
+</head>
+<body class="botz-page">
+
+<!-- ── TOP BAR ── -->
+<header class="botz-topbar">
+  <a href="game.html" class="botz-back-btn">← BACK</a>
+  <div class="botz-brand">
+    <div class="botz-brand-name">BOTZ</div>
+    <div class="botz-brand-sub">if you know you know</div>
+  </div>
+  <div class="botz-agent-chip">
+    <span class="botz-agent-chip-label">AGENT</span>
+    <span class="botz-agent-chip-no" id="displayAgentNo">—</span>
+  </div>
+  <button type="button" class="botz-share-btn" id="botzShareBtn" onclick="shareBotzSnapshot()" title="Share snapshot">📤</button>
+  <button type="button" class="botz-theme-toggle" id="botzThemeToggle" onclick="toggleBotzTheme()" title="Switch theme">🕵️</button>
+</header>
+
+<!-- ── MAIN CONTENT (hidden until loaded) ── -->
+<div id="mainContent" style="display:none; flex:1; flex-direction:column;">
+
+  <!-- WHAT'S NEW BANNER (populated once on first visit) -->
+  <div id="botzWhatsNewBanner"></div>
+
+  <!-- NOW PLAYING -->
+  <div class="botz-np" id="nowPlayingBar">
+    <div class="botz-np-dot"></div>
+    <div class="botz-np-info">
+      <div class="botz-np-label">Now Playing</div>
+      <div class="botz-np-track" id="npTrack"></div>
+      <div class="botz-np-artist" id="npArtist"></div>
+    </div>
+    <div class="botz-eq" aria-hidden="true">
+      <span></span><span></span><span></span><span></span>
+    </div>
+    <div class="botz-np-live">Live</div>
+  </div>
+
+  <!-- PULL-TO-REFRESH -->
+  <div class="botz-ptr" id="ptrBar">
+    <span class="botz-ptr-arrow">↓</span>
+    <span id="ptrText">Pull to refresh</span>
+  </div>
+
+  <!-- ═══ HISTORY VIEW (all-time listening) ═══ -->
+  <div id="historyView">
+
+  <!-- HERO -->
+  <div class="botz-hero">
+    <div class="botz-hero-label" id="heroLabel">Total Jams</div>
+    <div class="botz-hero-count" id="heroTotal">—</div>
+    <div class="botz-hero-unit">jams logged</div>
+    <div id="heroAllTime" style="display:none; font-size:9px; color:rgba(255,255,255,0.35); font-family:var(--font-mono); letter-spacing:1px; margin-top:4px;"></div>
+    <div class="botz-source-chips" id="heroSourceChips" style="display:none;"></div>
+  </div>
+
+  <!-- DATE PRESETS -->
+  <div class="botz-presets">
+    <button class="botz-preset-btn active" data-preset="all" onclick="applyPreset('all')">All</button>
+    <button class="botz-preset-btn" data-preset="today" onclick="applyPreset('today')">Today</button>
+    <button class="botz-preset-btn" data-preset="7d" onclick="applyPreset('7d')">7D</button>
+    <button class="botz-preset-btn" data-preset="30d" onclick="applyPreset('30d')">30D</button>
+    <button class="botz-preset-btn" data-preset="custom" onclick="toggleCustomFilter()">Custom</button>
+  </div>
+
+  <!-- DATE FILTER (custom, hidden by default) -->
+  <div class="botz-filter-bar" id="customFilterBar" style="display:none;">
+    <span class="botz-filter-label">From</span>
+    <input type="date" class="botz-date-input" id="filterFrom">
+    <span class="botz-filter-label">To</span>
+    <input type="date" class="botz-date-input" id="filterTo">
+    <div class="botz-filter-actions">
+      <button class="btn-outline" onclick="applyFilter()" style="padding:7px 14px; font-size:0.575rem;">FILTER</button>
+      <button class="btn-ghost" onclick="clearFilter()" style="font-size:0.575rem;">CLEAR</button>
+    </div>
+  </div>
+
+  <!-- LAST UPDATED -->
+  <div style="display:flex; justify-content:space-between; align-items:center; padding:0 16px;">
+    <div class="botz-updated" id="lastUpdated"></div>
+    <div style="font-family:var(--font-mono); font-size:0.5rem; letter-spacing:1px; color:rgba(255,255,255,0.6); text-transform:uppercase;">🕐 KST</div>
+  </div>
+
+  <!-- SYNC STATUS -->
+  <div id="syncStatus" style="display:none; margin:8px 16px 0; padding:10px 12px; border:1px solid rgba(255,255,255,0.08); border-radius:10px; background:rgba(255,255,255,0.02);">
+    <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px;">
+      <span id="syncDot" style="width:7px; height:7px; border-radius:50%; background:#22c55e;"></span>
+      <span style="font-family:var(--font-mono); font-size:0.5rem; letter-spacing:1.5px; text-transform:uppercase; color:rgba(255,255,255,0.75);">Sync Status</span>
+      <span id="syncSource" style="margin-left:auto; font-family:var(--font-mono); font-size:0.5rem; letter-spacing:1px; color:rgba(255,255,255,0.55); text-transform:uppercase;"></span>
+    </div>
+    <div style="display:flex; justify-content:space-between; gap:8px; font-size:0.6rem; color:rgba(255,255,255,0.7);">
+      <div>Last counted<br><span id="syncLast" style="color:#fff; font-weight:600;">—</span></div>
+      <div style="text-align:center;">Next sync<br><span id="syncNext" style="color:#fff; font-weight:600;">—</span></div>
+      <div style="text-align:right;">Pending<br><span id="syncPending" style="color:#fff; font-weight:600;">—</span></div>
+    </div>
+  </div>
+
+  <!-- STREAK + HEATMAP -->
+  <div class="botz-streak-card" id="streakCard" style="display:none;">
+    <div class="botz-streak-top">
+      <div>
+        <div class="botz-streak-label">🔥 Current Streak</div>
+        <div class="botz-streak-num" id="streakCurrent">0 days</div>
+      </div>
+      <div class="botz-streak-best" id="streakBest">Best: —</div>
+    </div>
+    <div class="botz-heatmap" id="streakHeatmap"></div>
+  </div>
+
+  <!-- TABS -->
+  <div class="botz-tabs">
+    <button class="botz-tab-btn active" data-tab="tracks" onclick="switchTab('tracks')">Tracks</button>
+    <button class="botz-tab-btn" data-tab="albums" onclick="switchTab('albums')">Albums</button>
+    <button class="botz-tab-btn" data-tab="members" onclick="switchTab('members')">Members</button>
+    <button class="botz-tab-btn" data-tab="recent" onclick="switchTab('recent')">Recent</button>
+  </div>
+
+  <!-- PANEL: TRACKS -->
+  <div class="botz-panel active" id="panel-tracks">
+    <div class="botz-section-label">Top Tracks</div>
+    <div class="botz-row-list" id="trackList">
+      <div class="botz-loading"><div class="botz-spinner"></div>Loading jams...</div>
+    </div>
+  </div>
+
+  <!-- PANEL: ALBUMS -->
+  <div class="botz-panel" id="panel-albums">
+    <div class="botz-section-label">Top Albums</div>
+    <div class="botz-row-list" id="albumList">
+      <div class="botz-loading"><div class="botz-spinner"></div>Loading...</div>
+    </div>
+  </div>
+
+  <!-- PANEL: MEMBERS -->
+  <div class="botz-panel" id="panel-members">
+    <div class="botz-section-label">Top Members</div>
+    <div class="botz-row-list" id="memberList">
+      <div class="botz-loading"><div class="botz-spinner"></div>Loading...</div>
+    </div>
+  </div>
+
+  <!-- PANEL: RECENT -->
+  <div class="botz-panel" id="panel-recent">
+    <div class="botz-section-label">Recent Jams</div>
+    <div class="botz-row-list" id="recentList">
+      <div class="botz-loading"><div class="botz-spinner"></div>Loading...</div>
+    </div>
+  </div>
+
+  </div><!-- /historyView -->
+
+</div>
+
+<!-- ── NOT LOGGED IN ── -->
+<div id="notLoggedIn" style="display:none;" class="botz-not-logged">
+  <div class="botz-not-logged-icon">🔒</div>
+  <div class="botz-not-logged-title">NOT LOGGED IN</div>
+  <div class="botz-not-logged-sub">Sign in to Op: Reconnect first</div>
+  <a href="game.html" class="btn-outline" style="margin-top:8px; text-decoration:none;">← BACK TO THE GAME</a>
+</div>
+
+<!-- ═══ ALBUM BREAKDOWN / TRACK HISTORY OVERLAY ═══ -->
+<div id="botzOverlay" onclick="if(event.target===this)closeBotzOverlay()"
+  style="display:none; position:fixed; inset:0; z-index:200; background:rgba(0,0,0,0.7); backdrop-filter:blur(4px); align-items:flex-end; justify-content:center;">
+  <div style="width:100%; max-width:520px; max-height:82vh; overflow-y:auto; background:#0e0e12; border-top:1px solid rgba(255,255,255,0.12); border-radius:16px 16px 0 0; padding:16px;">
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+      <button onclick="closeBotzOverlay()" style="background:rgba(255,255,255,0.08); border:none; color:#fff; width:30px; height:30px; border-radius:8px; font-size:16px; cursor:pointer;">✕</button>
+      <div id="botzOverlayTitle" style="font-weight:800; color:#fff; font-size:0.95rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></div>
+    </div>
+    <div id="botzOverlayBody"></div>
+  </div>
+</div>
+
+<!-- botz-api.js defines window.RCBotz and MUST load before botz.js -->
+<script src="js/botz-api.js"></script>
+<script src="js/botz.js"></script>
+</body>
+</html>
+

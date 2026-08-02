@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Op: Reconnect</title>
+  <meta name="description" content="Operation: Reconnect — restore the network, one stream at a time.">
+  <meta name="theme-color" content="#080810">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/reconnect.css">
+  <!-- Critical: several view containers carry a display rule that would otherwise
+       beat the UA [hidden] rule and leave every screen stacked on top of each
+       other. Inlined so a stale cached stylesheet can never reintroduce that. -->
+  <style>[hidden] { display: none !important; }</style>
+</head>
+<body>
+
+  <!-- Sign in / create an agent file — this season owns its own accounts -->
+  <div id="auth" hidden></div>
+
+  <!-- Loading -->
+  <div id="loading" class="center-screen">
+    <div class="panel">
+      <div class="scan-pulse"></div>
+      <div class="eyebrow">ESTABLISHING UPLINK…</div>
+    </div>
+  </div>
+
+  <!-- Onboarding (chapter intro → codename → identity) -->
+  <div id="onboarding" hidden></div>
+
+  <!-- Game -->
+  <div id="game" hidden>
+    <header id="hud"></header>
+    <main id="scene" class="scene"></main>
+    <footer class="page-foot">
+      Op: Reconnect
+      <span class="love">"Every mission begins with a single stream." 💜</span>
+    </footer>
+  </div>
+
+  <!-- Overlay root (file reveals, restoration cascade, sheets) -->
+  <div id="overlay" hidden></div>
+
+  <!-- Concert tickets run Launch the Voyage. concert-voyage.js is fully
+       self-contained here: the four globals it used to inherit from the old
+       site's app.js are declared inside the file itself now. -->
+  <script src="js/concert-voyage.js"></script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

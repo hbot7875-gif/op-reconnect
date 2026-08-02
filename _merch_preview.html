@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BTS Merch Earned — the full set | Op: Reconnect</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/reconnect.css">
+  <style>
+    /* REVIEW SHEET — not shipped. Every catalogue item as it appears in game. */
+    .mv-head { position: sticky; top: 0; z-index: 10; background: rgba(10,9,16,0.95);
+      backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); padding: 14px 20px; }
+    .mv-title { font-family: var(--disp); font-weight: 900; font-size: 20px; }
+    .mv-sub { font-family: var(--mono); font-size: 11px; color: var(--dim); margin-top: 4px; }
+    .mv-wrap { max-width: 1120px; margin: 0 auto; padding: 22px 20px 60px; }
+    .mv-group { font-family: var(--disp); font-weight: 900; font-size: 16px; margin: 30px 0 3px;
+      padding-top: 16px; border-top: 1px solid var(--border); }
+    .mv-group:first-child { border-top: none; padding-top: 0; margin-top: 0; }
+    .mv-note { font-family: var(--mono); font-size: 10.5px; color: var(--dim); margin-bottom: 14px; }
+    .mv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); gap: 11px; }
+    .mv-kind { font-family: var(--mono); font-size: 8px; letter-spacing: 1px; text-transform: uppercase;
+      color: var(--dim); text-align: center; margin-top: 5px; }
+  </style>
+</head>
+<body>
+  <div class="mv-head">
+    <div class="mv-title">BTS Merch Earned — the full set</div>
+    <div class="mv-sub" id="mvCount">loading…</div>
+  </div>
+  <div class="mv-wrap" id="mvWrap"></div>
+
+  <script type="module">
+    import { itemArt } from './js/items-art.js'
+
+    // Mirrors migrations 017 + 018.
+    const CATALOG = [
+      ['Home + living', 'the pieces that make a district feel lived in', [
+        ['Tracklist mug','mug','Arirang','common'],
+        ['Logo cushion','cushion','Arirang','common'],
+        ['Tracklist cushion','cushion','Arirang','common'],
+        ['Face rug','rug','Hope','rare'],
+        ['On Air light box','lightbox','Tour','rare'],
+        ['Mirror tray','tray','Arirang','common'],
+        ['Slipmat set','record','Arirang','common'],
+        ['Record crate','record','Arirang','rare'],
+      ]],
+      ['Wearable + carried', '', [
+        ['Pop-up tee','apparel','Proof','common'],
+        ['Heavyweight hoodie','apparel','Hope','rare'],
+        ['Heart knit sweater','apparel','Hope','rare'],
+        ['Turntable keyring','keyring','Arirang','common'],
+        ['Headphones keyring','keyring','Arirang','common'],
+        ['Face keyring set','keyring','Island','common'],
+      ]],
+      ['Figures + plush', '', [
+        ['Mascot plush','plush','Mascot','common'],
+        ['Plush doll set','plush','Mascot','rare'],
+        ['Island figure','figure','Island','rare'],
+      ]],
+      ['Tour', '', [
+        ['Tour blanket','blanket','Tour','common'],
+        ['Tour poster set','poster','Tour','common'],
+        ['Magnet set','magnet','Dalmajung','common'],
+        ['Souvenir bottle','mug','Tour','common'],
+        ['Image picket','banner','Tour','common'],
+        ['Light stick hat','lightstick','Tour','rare'],
+        ['Fan project banner','banner','Tour','common'],
+        ['Purple bandana','banner','Tour','common'],
+      ]],
+      ['Albums + media', '', [
+        ['Arirang','album','Arirang','common'],
+        ['Proof','album','Proof','common'],
+        ['BE','album','BE','common'],
+        ['Map of the Soul: 7','album','MOTS','common'],
+        ['Concert film','album','Media','rare'],
+        ['Tour documentary','album','Media','common'],
+        ['Arirang photocard','photocard','Arirang','common'],
+        ['Era photocard','photocard','Proof','rare'],
+      ]],
+      ['Light sticks', '', [
+        ['ARMY Bomb Ver.3','lightstick','Tour','rare'],
+        ['ARMY Bomb Ver.4','lightstick','Tour','rare'],
+        ['ARMY Bomb Ver.4 (boxed)','lightstick','Tour','legendary'],
+      ]],
+      ['Tickets — milestone only', 'never drop at random; these come from real milestones', [
+        ['Concert ticket','ticket','Tour','legendary'],
+        ['Tour ticket','ticket','Tour','legendary'],
+      ]],
+      ['Posters', '', [
+        ['Comeback poster','poster','Arirang','common'],
+      ]],
+    ]
+
+    const RARITY = { common: 'Common', rare: 'Rare', legendary: 'Legendary' }
+    const wrap = document.getElementById('mvWrap')
+    let n = 0
+
+    for (const [group, note, items] of CATALOG) {
+      wrap.insertAdjacentHTML('beforeend',
+        `<div class="mv-group">${group}</div><div class="mv-note">${note || items.length + ' items'}</div>`)
+      const grid = document.createElement('div')
+      grid.className = 'mv-grid'
+      for (const [name, kind, era, rarity] of items) {
+        n++
+        const cell = document.createElement('div')
+        cell.innerHTML = `
+          <div class="item-card r-${rarity}" style="cursor:default">
+            <span class="ic-foil"></span>
+            <span class="ic-top"><span class="ic-era">${era}</span></span>
+            <span class="ic-glyph">${itemArt({ kind })}</span>
+            <span class="ic-name">${name}</span>
+            <span class="ic-rarity">${RARITY[rarity]}</span>
+          </div>
+          <div class="mv-kind">${kind}</div>`
+        grid.appendChild(cell)
+      }
+      wrap.appendChild(grid)
+    }
+    document.getElementById('mvCount').textContent =
+      `${n} items · 18 drawable kinds · every one drawn in-palette, nothing copied`
+  </script>
+</body>
+</html>
