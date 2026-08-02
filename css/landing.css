@@ -125,6 +125,11 @@ body.landing {
 /* A weak signal, not a healthy heartbeat — small, dim, barely there
    between beats. This is the one live thing in a dark network; it should
    read as fragile, not as proof everything's already fine. */
+/* The badge and footer below both force uppercase for the terminal-readout
+   look, but that flattens "ReConnect" back to "RECONNECT" — same problem
+   any all-caps container has for this name. This override keeps the brand's
+   own mixed case wherever it's dropped inside one. */
+.brand { text-transform: none; }
 .badge .dot {
   width: 5px; height: 5px; border-radius: 50%; background: var(--purple-lt);
   box-shadow: 0 0 3px rgba(167,139,250,0.6); animation: pulse 3.6s ease-in-out infinite;
