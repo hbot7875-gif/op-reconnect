@@ -1,7 +1,7 @@
 {
   "name": "op-reconnect",
   "version": "1.0.0",
-  "description": "Op: Reconnect — an individual streaming game for ARMY. The city went dark; every stream brings a piece of it back.",
+  "description": "OP: ReConnect — an individual streaming game for ARMY. The city went dark; every stream brings a piece of it back.",
   "private": true,
   "type": "module",
   "scripts": {

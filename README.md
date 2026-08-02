@@ -1,4 +1,4 @@
-# Op: Reconnect
+# OP: ReConnect
 
 A standalone streaming game. **Separate from the arirang / Mission Control site
 in every layer** — separate frontend, separate build, separate backend,

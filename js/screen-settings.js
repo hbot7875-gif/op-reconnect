@@ -152,7 +152,7 @@ function paintSections(body, state) {
   ]))
 
   body.appendChild(el('div', 'set-foot',
-    `Agent since ${fmtDate(account.createdAt)} · Op: Reconnect`))
+    `Agent since ${fmtDate(account.createdAt)} · OP: ReConnect`))
 }
 
 function section(title, sub, rows) {

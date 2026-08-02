@@ -99,7 +99,7 @@ export function openPlaylist(state) {
 
   const copy = el('button', 'btn btn-primary', '📋 Copy the order')
   copy.onclick = async () => {
-    const text = `Op: Reconnect — ${d.name}\n\n`
+    const text = `OP: ReConnect — ${d.name}\n\n`
       + queue.map((q, i) => `${i + 1}. ${q.label}`).join('\n')
     try {
       await navigator.clipboard.writeText(text)

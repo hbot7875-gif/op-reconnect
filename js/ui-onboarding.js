@@ -20,7 +20,7 @@ export function renderOnboarding(container, payload, agentNo, onJoined) {
   const step1 = el('div', 'ob-wrap')
   step1.append(
     el('div', 'eyebrow', esc(intro.title || 'TRANSMISSION')),
-    el('h1', 'title-sm', esc(intro.chapter || 'Operation: Reconnect')),
+    el('h1', 'title-sm', esc(intro.chapter || 'Operation: ReConnect')),
     el('div', 'ob-body', esc(intro.body || '')),
   )
   const btn1 = el('button', 'btn btn-primary', "I'm in")
