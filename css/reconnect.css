@@ -1062,11 +1062,29 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 /* ── auth: the front door ──
    The one screen most agents only ever see once, and until now it was a
    plain form on a flat background — nothing tying it to the landing page's
-   "real stadium, real crowd" mood. The lightstick canvas below is the exact
-   same effect the landing hero uses (js/concert-bg.js), just dropped behind
-   a form instead of a photo: same dim, ember-level restraint, so it reads as
-   atmosphere, not decoration competing with the inputs. */
-.auth-bg { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+   "real stadium, real crowd" mood. Same photo treatment as index.html's
+   .crowd-photo (img/hero.jpg — portrait, a better crop fit for a tall form
+   than landscape hero2.jpg), dimmed the same heavy way, with a scrim on top
+   so input borders and text keep contrast against a busy photo instead of a
+   flat colour. */
+.auth-bg {
+  /* z-index: -1, not 0 — a positioned z-index:0 element paints ABOVE plain
+     static-flow content in the same stacking context (CSS2.1 Appendix E),
+     which fully hid every word of the form behind this opaque photo until
+     caught. Negative z-index is the "behind normal content" layer. */
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background-image: url('../img/hero.jpg');
+  background-size: cover;
+  background-position: 50% 38%;
+  background-repeat: no-repeat;
+  filter: grayscale(0.55) brightness(0.32) contrast(1.1) saturate(0.75);
+}
+.auth-scrim {
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(ellipse 65% 45% at 50% 22%, rgba(10,9,16,0.7) 0%, rgba(10,9,16,0.35) 55%, rgba(10,9,16,0.1) 100%),
+    linear-gradient(180deg, rgba(10,9,16,0.45) 0%, rgba(10,9,16,0.2) 30%, rgba(10,9,16,0.65) 100%);
+}
 .auth-wrap { max-width: 440px; margin: 0 auto; padding: 46px 20px 60px; position: relative; z-index: 1; }
 .auth-lede { margin: 10px 0 22px; }
 .auth-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 22px; }
@@ -1099,6 +1117,8 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 /* ── onboarding / misc ── */
 .ob-wrap { max-width: 520px; margin: 0 auto; padding: 48px 20px; }
 .ob-body { color: var(--muted); line-height: 1.8; font-size: 15px; white-space: pre-line; margin: 16px 0; }
+.ob-voiceover { margin-top: 0; }
+.ob-voiceover.is-playing { border-color: var(--purple); color: var(--purple-lt); }
 .ob-input { width: 100%; padding: 14px; border-radius: var(--r); border: 1px solid var(--border);
   background: var(--panel); color: var(--text); font-family: var(--mono); font-size: 15px; }
 .ob-input:focus { border-color: var(--purple); outline: none; box-shadow: 0 0 0 3px rgba(139,92,246,0.15); }

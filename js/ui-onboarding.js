@@ -23,6 +23,13 @@ export function renderOnboarding(container, payload, agentNo, onJoined) {
     el('h1', 'title-sm', esc(intro.chapter || 'Operation: ReConnect')),
     el('div', 'ob-body', esc(intro.body || '')),
   )
+
+  // Voice-over for the lore, when the chapter has one. No recording exists
+  // for any chapter yet, so intro.audioUrl is never set today and this stays
+  // out of the DOM entirely — the day a real narration lands, the server
+  // payload gains that one field and this appears with no other code change.
+  if (intro.audioUrl) step1.appendChild(voiceoverButton(intro.audioUrl))
+
   const btn1 = el('button', 'btn btn-primary', "I'm in")
   step1.appendChild(btn1)
   container.appendChild(step1)
@@ -102,4 +109,21 @@ export function renderOnboarding(container, payload, agentNo, onJoined) {
     step3.appendChild(btn3)
     step3.hidden = false
   }
+}
+
+/* ── voice-over ───────────────────────────────────────────────────────── */
+
+/** A play/pause toggle for the chapter's narration. Fails silent, not
+ *  broken: if the URL 404s or the format won't play, the button removes
+ *  itself rather than sitting there as a dead control. */
+function voiceoverButton(src) {
+  const audio = new Audio(src)
+  const btn = el('button', 'btn btn-ghost ob-voiceover', '▶ Play transmission')
+  audio.onerror = () => btn.remove()
+  audio.onended = () => { btn.textContent = '▶ Play transmission'; btn.classList.remove('is-playing') }
+  btn.onclick = () => {
+    if (audio.paused) { audio.play(); btn.textContent = '⏸ Playing…'; btn.classList.add('is-playing') }
+    else { audio.pause(); btn.textContent = '▶ Play transmission'; btn.classList.remove('is-playing') }
+  }
+  return btn
 }
