@@ -15,6 +15,7 @@ import { renderDistrictScreen, teardownDistrictScreen } from './screen-district.
 import { renderResources } from './screen-resources.js'
 import { renderSettings } from './screen-settings.js'
 import { renderCandyStar } from './screen-candystar.js'
+import { renderRanking } from './screen-ranking.js'
 
 const $ = (id) => document.getElementById(id)
 
@@ -53,6 +54,7 @@ function renderScreen(state) {
     else if (scr.name === 'resources') renderResources(scene, state)
     else if (scr.name === 'settings') renderSettings(scene, state)
     else if (scr.name === 'candystar') renderCandyStar(scene, state)
+    else if (scr.name === 'ranking') renderRanking(scene, state)
     else renderWorld(scene, state)
     if (isNav) {
       scene.classList.remove('scene-out')

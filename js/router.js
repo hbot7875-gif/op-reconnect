@@ -37,6 +37,10 @@ export function goCandyStar(origin = null) {
   set({ name: 'candystar', wardId: null, districtId: null, origin })
 }
 
+export function goRanking(origin = null) {
+  set({ name: 'ranking', wardId: null, districtId: null, origin })
+}
+
 export function goWard(wardId, origin = null) {
   set({ name: 'ward', wardId, districtId: null, origin })
 }

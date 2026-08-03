@@ -25,7 +25,7 @@
 
 import { el, esc, showOverlay } from './state.js'
 import { getAgentNo } from './session.js'
-import { goCandyStar } from './router.js'
+import { goCandyStar, goRanking } from './router.js'
 import { openPlaylist } from './playlist.js'
 import { resourceRow, resourceSheet } from './resources.js'
 import { itemTile, itemSheet, itemsInPack } from './items.js'
@@ -54,6 +54,13 @@ const TOOLS = [
       const no = getAgentNo()
       return 'botz.html' + (no ? `?agent=${encodeURIComponent(no)}` : '')
     },
+  },
+  {
+    icon: '🏆',
+    name: 'Rankings',
+    tag: 'In game · every agent, by mode',
+    body: "See where you land on level and XP against everyone on your mode — Easy, Medium and Hard rank separately.",
+    action: (_state, e) => goRanking(e ? { x: e.clientX, y: e.clientY } : null),
   },
 ]
 
