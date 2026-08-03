@@ -4,6 +4,7 @@
 import { call } from './api.js'
 import { el, esc, toast, setState } from './state.js'
 import { ambientToggle } from './ambient.js'
+import { openStreamSource, uplinkBroken } from './settings-streams.js'
 
 const ERRORS = {
   codename_invalid: 'Codenames are 3-24 letters or numbers — and can\'t be your agent number.',
@@ -109,14 +110,77 @@ export function renderOnboarding(container, payload, agentNo, onJoined) {
       el('p', 'muted', 'This is the name other agents see. Your agent number stays private.'),
     )
     const btn3 = el('button', 'btn btn-primary', "Let's go")
-    btn3.onclick = () => {
-      container.hidden = true
-      if (joinedState) setState(joinedState)
-      onJoined()
-    }
+    btn3.onclick = () => showFirstRun(container, agentNo, joinedState, onJoined)
     step3.appendChild(btn3)
     step3.hidden = false
   }
+}
+
+/* ── first run ────────────────────────────────────────────────────────────
+   This only ever runs once per account — main.js only calls
+   renderOnboarding for an agent that hasn't joined yet, and joining is a
+   one-way transition. That makes it the one guaranteed moment to catch two
+   things before dropping someone into the full World screen (Bomb, map,
+   resources, settings, all at once): whether their stream source actually
+   works at all (see settings-streams.js's own header comment — skipping
+   that field used to mean zero counted streams with no explanation, forever,
+   silently), and telling them the one concrete first move instead of
+   leaving them to find the one open district themselves. */
+
+function showFirstRun(container, agentNo, joinedState, onJoined) {
+  const step4 = el('div', 'ob-wrap')
+  container.innerHTML = ''
+  container.appendChild(step4)
+
+  const enter = () => {
+    container.hidden = true
+    if (joinedState) setState(joinedState)
+    onJoined()
+  }
+  const showFirstMove = () => renderFirstMove(step4, joinedState, enter)
+
+  call('getAccount', { agentNo }).then((res) => {
+    if (res.success && uplinkBroken(res.account)) {
+      renderUplinkPrompt(step4, res.account, showFirstMove)
+    } else {
+      showFirstMove()
+    }
+  }).catch(showFirstMove) // best-effort — never block joining over this check failing
+}
+
+function renderUplinkPrompt(mount, account, onContinue) {
+  mount.innerHTML = ''
+  mount.append(
+    el('div', 'eyebrow', 'ONE THING FIRST'),
+    el('h1', 'title-sm', 'Where do your streams come from?'),
+    el('p', 'muted', "Without this, nothing you stream gets counted — no XP, no restoration, no explanation why. Takes a few seconds."),
+  )
+  const go = el('button', 'btn btn-primary', 'Set it up')
+  go.onclick = () => openStreamSource(account, onContinue)
+  mount.appendChild(go)
+  const skip = el('button', 'auth-link', "I'll do this later")
+  skip.onclick = onContinue
+  mount.appendChild(skip)
+}
+
+function renderFirstMove(mount, joinedState, proceed) {
+  mount.innerHTML = ''
+  const wards = joinedState?.map?.wards || []
+  const districts = joinedState?.map?.districts || []
+  const activeDistrict = districts.find((d) => d.status === 'active')
+  const ward = wards.find((w) => w.id === activeDistrict?.wardId)
+
+  mount.append(
+    el('div', 'eyebrow', "YOU'RE UP"),
+    el('h1', 'title-sm', "Here's the move"),
+    el('p', 'muted', activeDistrict
+      ? `${esc(activeDistrict.name)}${ward ? ` in ${esc(ward.name)}` : ''} is already open and waiting. Stream any BTS track to start restoring it.`
+      : 'One district is already open on the map. Stream any BTS track to start restoring it.'),
+    el('p', 'dim', "The ARMY Bomb charges as the network heals — watch it above the map."),
+  )
+  const btn = el('button', 'btn btn-primary', 'Enter the network')
+  btn.onclick = proceed
+  mount.appendChild(btn)
 }
 
 /* ── typewriter ───────────────────────────────────────────────────────── */
