@@ -1059,33 +1059,49 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 .mode-opt .t { font-weight: 700; font-size: 15px; }
 .mode-opt .s { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 3px; }
 
-/* ── auth: the front door ── */
-.auth-wrap { max-width: 440px; margin: 0 auto; padding: 46px 20px 60px; }
+/* ── auth: the front door ──
+   The one screen most agents only ever see once, and until now it was a
+   plain form on a flat background — nothing tying it to the landing page's
+   "real stadium, real crowd" mood. The lightstick canvas below is the exact
+   same effect the landing hero uses (js/concert-bg.js), just dropped behind
+   a form instead of a photo: same dim, ember-level restraint, so it reads as
+   atmosphere, not decoration competing with the inputs. */
+.auth-bg { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+.auth-wrap { max-width: 440px; margin: 0 auto; padding: 46px 20px 60px; position: relative; z-index: 1; }
 .auth-lede { margin: 10px 0 22px; }
 .auth-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 22px; }
 .auth-tab { background: none; border: none; cursor: pointer; padding: 9px 2px 11px; margin-right: 20px;
   font-family: var(--mono); font-size: 11px; letter-spacing: 1.6px; text-transform: uppercase;
   color: var(--dim); border-bottom: 2px solid transparent; margin-bottom: -1px;
-  transition: color 0.2s, border-color 0.2s; }
+  transition: color 0.2s, border-color 0.2s, filter 0.2s; }
 .auth-tab:hover { color: var(--muted); }
-.auth-tab.sel { color: var(--text); border-bottom-color: var(--purple); cursor: default; }
+.auth-tab.sel { color: var(--text); border-bottom-color: var(--purple); cursor: default;
+  filter: drop-shadow(0 3px 6px rgba(139,92,246,0.45)); }
+
+.auth-panel { animation: authIn 0.22s ease; }
+@keyframes authIn { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
 
 .auth-field { margin-bottom: 15px; }
 .auth-label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 1.5px;
   text-transform: uppercase; color: var(--purple-lt); margin-bottom: 7px; }
 .auth-hint { font-size: 12.5px; line-height: 1.5; color: var(--dim); margin-top: 6px; }
-.btn.auth-go { display: block; width: 100%; margin-top: 20px; padding: 15px 20px; font-size: 14px; }
+.btn.auth-go { display: block; width: 100%; margin-top: 20px; padding: 15px 20px; font-size: 14px;
+  box-shadow: 0 4px 14px rgba(139,92,246,0.24); }
 .auth-foot { margin-top: 26px; padding-top: 18px; border-top: 1px solid var(--border);
   font-size: 13px; color: var(--dim); text-align: center; }
 .auth-foot a { color: var(--muted); text-decoration: none; }
 .auth-foot a:hover { color: var(--text); }
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-panel { animation: none; }
+}
 
 /* ── onboarding / misc ── */
 .ob-wrap { max-width: 520px; margin: 0 auto; padding: 48px 20px; }
 .ob-body { color: var(--muted); line-height: 1.8; font-size: 15px; white-space: pre-line; margin: 16px 0; }
 .ob-input { width: 100%; padding: 14px; border-radius: var(--r); border: 1px solid var(--border);
   background: var(--panel); color: var(--text); font-family: var(--mono); font-size: 15px; }
-.ob-input:focus { border-color: var(--purple); outline: none; }
+.ob-input:focus { border-color: var(--purple); outline: none; box-shadow: 0 0 0 3px rgba(139,92,246,0.15); }
 .warn-box { background: var(--crimson-soft); border: 1px solid rgba(229,56,79,0.4); border-radius: var(--r);
   padding: 14px; font-size: 13.5px; line-height: 1.6; margin: 14px 0; }
 .scan-pulse { width: 40px; height: 40px; margin: 0 auto 14px; border-radius: 50%;

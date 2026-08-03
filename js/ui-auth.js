@@ -11,6 +11,7 @@
 import { call } from './api.js'
 import { el, esc, toast } from './state.js'
 import { setSession } from './session.js'
+import { startConcertBackground } from './concert-bg.js'
 
 const ERRORS = {
   handle_taken: 'That handle is already registered. Sign in instead?',
@@ -27,10 +28,20 @@ const ERRORS = {
 }
 const friendly = (e) => ERRORS[e] || e || 'Something went wrong'
 
+// Same lightstick field the landing hero runs (js/concert-bg.js), just
+// behind a form instead of a stadium photo — see the .auth-bg comment in
+// reconnect.css for why. Tracked so a second renderAuth() call (sign out,
+// sign back in) stops the old animation loop instead of leaking one.
+let stopAuthBg = null
+
 export function renderAuth(container, onAuthed) {
   container.innerHTML = ''
   container.hidden = false
   const wrap = el('div', 'auth-wrap')
+
+  const bg = el('canvas', 'auth-bg')
+  bg.setAttribute('aria-hidden', 'true')
+  wrap.appendChild(bg)
 
   wrap.appendChild(el('div', 'eyebrow', 'OP: RECONNECT'))
   wrap.appendChild(el('h1', 'title-sm', 'The network needs agents'))
@@ -72,6 +83,11 @@ export function renderAuth(container, onAuthed) {
   wrap.appendChild(foot)
 
   container.appendChild(wrap)
+
+  // Only now is the canvas actually laid out — clientWidth/Height read 0
+  // before it's attached to the live document.
+  if (stopAuthBg) stopAuthBg()
+  stopAuthBg = startConcertBackground(bg)
 }
 
 /* ── Create an agent file ─────────────────────────────────────────────── */
