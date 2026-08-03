@@ -37,15 +37,22 @@ export function renderAuth(container, onAuthed) {
   wrap.appendChild(el('p', 'muted auth-lede',
     'This is a new season with new agent files. Old numbers from the last mission don\'t work here — make a fresh one.'))
 
+  // The landing page's "I already have an agent file" link sends
+  // ?mode=signin so it actually lands somewhere different from "Start your
+  // mission" — both used to point at the same URL and land on the same
+  // Create-file-by-default tab regardless of which one you clicked.
+  const wantsSignIn = new URLSearchParams(location.search).get('mode') === 'signin'
+
   const tabs = el('div', 'auth-tabs')
-  const tabNew = el('button', 'auth-tab sel', 'Create file')
-  const tabOld = el('button', 'auth-tab', 'I have one')
+  const tabNew = el('button', `auth-tab${wantsSignIn ? '' : ' sel'}`, 'Create file')
+  const tabOld = el('button', `auth-tab${wantsSignIn ? ' sel' : ''}`, 'I have one')
   tabs.append(tabNew, tabOld)
   wrap.appendChild(tabs)
 
   const panelNew = buildRegister(onAuthed)
   const panelOld = buildLogin(onAuthed)
-  panelOld.hidden = true
+  panelNew.hidden = wantsSignIn
+  panelOld.hidden = !wantsSignIn
   wrap.append(panelNew, panelOld)
 
   tabNew.onclick = () => {
