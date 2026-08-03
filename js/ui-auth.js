@@ -11,6 +11,7 @@
 import { call } from './api.js'
 import { el, esc, toast } from './state.js'
 import { setSession } from './session.js'
+import { ambientToggle } from './ambient.js'
 
 const ERRORS = {
   handle_taken: 'That handle is already registered. Sign in instead?',
@@ -40,6 +41,7 @@ export function renderAuth(container, onAuthed) {
   wrap.appendChild(el('div', 'auth-bg'))
   wrap.appendChild(el('div', 'mist'))
   wrap.appendChild(el('div', 'auth-scrim'))
+  wrap.appendChild(ambientToggle('audio/weather-ambient.mp3'))
 
   wrap.appendChild(el('div', 'eyebrow', 'OP: RECONNECT'))
   wrap.appendChild(el('h1', 'title-sm', 'The network needs agents'))

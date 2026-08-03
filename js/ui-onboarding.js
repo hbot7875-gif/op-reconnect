@@ -3,6 +3,7 @@
 
 import { call } from './api.js'
 import { el, esc, toast, setState } from './state.js'
+import { ambientToggle } from './ambient.js'
 
 const ERRORS = {
   codename_invalid: 'Codenames are 3-24 letters or numbers — and can\'t be your agent number.',
@@ -22,6 +23,7 @@ export function renderOnboarding(container, payload, agentNo, onJoined) {
   // auth screen uses (reconnect.css's .mist), just over the plain dark
   // background here since this screen has no photo of its own.
   step1.appendChild(el('div', 'mist'))
+  step1.appendChild(ambientToggle('audio/weather-ambient.mp3'))
   step1.append(
     el('div', 'eyebrow', esc(intro.title || 'TRANSMISSION')),
     el('h1', 'title-sm', esc(intro.chapter || 'Operation: ReConnect')),
