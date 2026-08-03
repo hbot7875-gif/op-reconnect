@@ -114,16 +114,96 @@ function buildRegister(onAuthed) {
   email.placeholder = 'you@example.com'
   email.autocomplete = 'email'
 
-  const lb = el('input', 'ob-input')
-  lb.placeholder = 'ListenBrainz username (optional)'
-  lb.autocomplete = 'off'
+  // Same three sources the profile's own Streams setting offers
+  // (settings-streams.js) — the old site's register.html collected all
+  // three at signup too; this form used to only ever ask for ListenBrainz.
+  // registerAgent itself still only understands lbUsername, so stats.fm and
+  // Musicat go through the same setStreamSource call Settings uses, right
+  // after the account exists (see the submit handler below).
+  const SOURCES = [
+    { key: 'statsfm', icon: '🎵', name: 'stats.fm', sub: 'Spotify · Apple Music',
+      help: 'Find your ID: stats.fm → Settings → Profile → Custom URL — enter the part after stats.fm/. Your profile must be set to Public (Settings → Privacy).',
+      placeholder: 'Your stats.fm username (optional)' },
+    { key: 'musicat', icon: '🐱', name: 'Musicat', sub: 'Spotify · Apple Music',
+      help: 'Find your ID: musicat.fm → your profile picture → Settings → Profile URL — copy the value there.',
+      placeholder: 'Your musicat handle (optional)' },
+    { key: 'lb', icon: '📻', name: 'ListenBrainz', sub: 'Any scrobbler app',
+      help: 'No account yet? Create one on listenbrainz.org, then connect Spotify from there.',
+      placeholder: 'ListenBrainz username (optional)' },
+  ]
+  let selectedSrc = 'statsfm'
+  const srcInputs = {}
+  const srcTabs = el('div', 'src-tabs')
+  const paneEls = {}
+
+  for (const s of SOURCES) {
+    const tab = el('button', 'src-tab' + (s.key === selectedSrc ? ' sel' : ''),
+      `${s.icon} ${esc(s.name)}<span class="src-sub">${esc(s.sub)}</span>`)
+    tab.type = 'button'
+    tab.onclick = () => {
+      selectedSrc = s.key
+      srcTabs.querySelectorAll('.src-tab').forEach((t) => t.classList.remove('sel'))
+      tab.classList.add('sel')
+      for (const k in paneEls) paneEls[k].hidden = k !== s.key
+    }
+    srcTabs.appendChild(tab)
+
+    const input = el('input', 'ob-input')
+    input.placeholder = s.placeholder
+    input.autocomplete = 'off'
+    srcInputs[s.key] = input
+
+    const pane = el('div', 'src-pane')
+    pane.hidden = s.key !== selectedSrc
+    pane.append(el('div', 'src-help', esc(s.help)), input)
+
+    // Same live ListenBrainz check the old register.html ran, ported
+    // as-is: it's a public, keyless ListenBrainz endpoint, not this game's
+    // own backend, so it can run before the account exists.
+    if (s.key === 'lb') {
+      const status = el('div', 'src-status')
+      pane.appendChild(status)
+      let lbTimer = null
+      input.oninput = () => {
+        clearTimeout(lbTimer)
+        const val = input.value.trim()
+        status.textContent = ''
+        input.classList.remove('is-good', 'is-bad')
+        if (!val) return
+        lbTimer = setTimeout(async () => {
+          try {
+            const r = await fetch(`https://api.listenbrainz.org/1/user/${encodeURIComponent(val)}/listen-count`)
+            if (input.value.trim() !== val) return
+            if (r.ok) {
+              const data = await r.json()
+              const count = data?.payload?.count
+              status.textContent = `✓ Verified${count != null ? ` — ${Number(count).toLocaleString()} listens` : ''}`
+              input.classList.add('is-good')
+            } else {
+              status.textContent = '✗ Username not found — check spelling (case-sensitive)'
+              input.classList.add('is-bad')
+            }
+          } catch {
+            status.textContent = 'Could not verify — ListenBrainz may be unavailable'
+          }
+        }, 800)
+      }
+    }
+
+    paneEls[s.key] = pane
+  }
+
+  const streamsField = el('div', 'auth-field')
+  streamsField.append(el('label', 'auth-label', 'Streams'), srcTabs)
+  for (const k in paneEls) streamsField.appendChild(paneEls[k])
+  streamsField.appendChild(el('div', 'auth-hint', 'Optional — pick the app you listen with, or set this up later in Settings.'))
 
   panel.append(
     field('Handle', 'Everyone sees this. It becomes your district on the map.', handle),
     field('Email', 'Only ever used to get you back in if you lose your number or password.', email),
     field('Password', 'At least 6 characters.', pw),
     field('', '', pw2),
-    field('Streams', 'Link it now or set it up in Settings — this is how your streams reach the network.', lb),
+    streamsField,
   )
 
   // Live check, so "taken" arrives before a password gets typed. checkHandle
@@ -152,17 +232,34 @@ function buildRegister(onAuthed) {
 
     btn.disabled = true
     btn.textContent = 'CREATING…'
+    const lbVal = srcInputs.lb.value.trim()
     const res = await call('registerAgent', {
       handle: h,
       email: email.value.trim(),
       password: pw.value,
-      lbUsername: lb.value.trim() || null,
+      lbUsername: lbVal || null,
     })
     btn.disabled = false
     btn.textContent = 'Create my agent file'
 
     if (!res.success) { toast(friendly(res.error)); return }
     setSession(res.agent)
+
+    // stats.fm/Musicat aren't understood by registerAgent — same
+    // setStreamSource call Settings uses, now that the account exists.
+    // Only sent when ListenBrainz was left empty: LB stays the default
+    // source whenever it's given, same as the old site's signup did.
+    const sfm = srcInputs.statsfm.value.trim()
+    const mus = srcInputs.musicat.value.trim()
+    if (!lbVal && (sfm || mus)) {
+      await call('setStreamSource', {
+        agentNo: res.agent.agentNo,
+        preference: sfm ? 'statsfm' : 'musicat',
+        statsfmUsername: sfm || undefined,
+        musicatPublicId: mus || undefined,
+      })
+    }
+
     showNumber(res.agent, onAuthed)
   }
   panel.appendChild(btn)
