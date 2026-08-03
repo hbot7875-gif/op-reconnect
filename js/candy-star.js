@@ -6,15 +6,27 @@
 // different Supabase project with a different accounts table, where this
 // game's agent numbers don't exist at all.
 //
-// The shims below re-point those globals at Op: Reconnect's own modules, so
-// the file is self-consistent here rather than depending on a script this
-// project never loads. The three playlist actions have no equivalent on
-// op-reconnect yet (building one needs real Spotify OAuth credentials), so
-// they resolve to a clear "not available" instead of calling the old backend
-// cross-origin and failing with a confusing "agent not found".
+// The shims below re-point those globals at Op: Reconnect's own modules.
+// getAlpacaOptions/generateAlpaca/previewAlpaca now have a real, matching
+// implementation on THIS project's own backend (supabase/functions/op-reconnect,
+// lib/candy-star.ts) — same action names, same param/response shapes — so
+// they're routed through the normal api.js call() like everything else.
+// api.js already attaches this agent's own sessionToken automatically (it's
+// not in api.js's PUBLIC_ACTIONS set), which is what makes these agent-scoped
+// on the new backend instead of the old site's role-based gate.
+//
+// One real limitation remains, and it's data, not wiring: `bts_song_catalog`
+// and `spotify_filler_library` start EMPTY on this project (see migration
+// 030's own comment) until an admin runs the catalog-refresh/filler-import
+// admin actions from candy-star-admin.html. Until then getAlpacaOptions
+// returns an empty catalog and generateAlpaca fails with an honest
+// "Need ~N unique non-BTS fillers…" / "No playable BTS catalog songs…"
+// error — surfaced through candySetStatus like any other real error, not a
+// bug in this file.
 
 import { esc, toast } from './state.js'
 import { getAgentNo } from './session.js'
+import { call as apiCall } from './api.js'
 
 // ── compatibility shims for the globals this section grew up with ──
 const $ = (id) => document.getElementById(id)
@@ -25,18 +37,12 @@ const showToast = toast
 const isPLMaker = () => true
 const STATE = { get agentNo() { return getAgentNo() } }
 
-const PLAYLIST_ACTIONS = new Set(['generateAlpaca', 'previewAlpaca', 'getAlpacaOptions'])
-const NOT_AVAILABLE = 'Playlist generation is not wired up on this network yet.'
-
 const Api = {
-  async call(action, _params, _opts) {
-    if (PLAYLIST_ACTIONS.has(action)) {
-      // Deliberately not routed to the old backend: its generateAlpaca would
-      // reject this game's agent numbers outright.
-      return { success: false, error: NOT_AVAILABLE }
-    }
-    const { call } = await import('./api.js')
-    return call(action, _params || {})
+  // _opts (dedupe/cache/timeout) was the old site's own fetch-wrapper config;
+  // api.js's call() is a plain fetch with no such knobs, so it's accepted
+  // here for call-site compatibility and simply ignored.
+  async call(action, params, _opts) {
+    return apiCall(action, { ...(params || {}), agentNo: STATE.agentNo })
   },
 }
 
@@ -128,7 +134,7 @@ function candyWireDropdownClicks(dropdown, input) {
   });
   dropdown._activeIdx = -1;
 }
-function candySongInput(input) {
+export function candySongInput(input) {
   input.dataset.resolvedKey = '';
   input.classList.remove('cs-invalid');
   const dropdown = input.parentElement.querySelector('.cs-song-dropdown');
@@ -145,7 +151,7 @@ function candySongInput(input) {
 }
 // Empty-field focus: show recent picks + this week's goal tracks, so most
 // users can click straight through without typing at all.
-function candySongFocus(input) {
+export function candySongFocus(input) {
   if (input.value.trim()) { candySongInput(input); return; }
   const dropdown = input.parentElement.querySelector('.cs-song-dropdown');
   if (!dropdown) return;
@@ -180,7 +186,7 @@ function candyCloseDropdown(input) {
   const dropdown = input?.parentElement?.querySelector('.cs-song-dropdown');
   if (dropdown) dropdown.classList.remove('is-open');
 }
-function candyRowBlur(e) {
+export function candyRowBlur(e) {
   const input = e.target;
   // Delay so a dropdown mousedown-select still lands before we hide it.
   setTimeout(() => { candyCloseDropdown(input); candyValidateRow(input); }, 120);
@@ -200,7 +206,7 @@ function candyFocusRow(mult) {
 // Song field: arrow keys move the dropdown highlight, Enter picks the
 // highlighted (or first) result, Escape closes it. Enter with no dropdown
 // open — or from the Times field — jumps to the next row, adding one if needed.
-function candyRowKeydown(e) {
+export function candyRowKeydown(e) {
   if (e.target.classList.contains('cs-focus-sel')) {
     const dropdown = e.target.parentElement.querySelector('.cs-song-dropdown');
     const items = dropdown?.classList.contains('is-open') ? [...dropdown.querySelectorAll('.cs-dd-item')] : [];
@@ -231,17 +237,17 @@ function candyRowKeydown(e) {
   if (next) next.querySelector('.cs-focus-sel')?.focus();
   else candyAddFocusRow();
 }
-function candyAddFocusRow() {
+export function candyAddFocusRow() {
   const wrap = $('cs-focus-rows');
   if (!wrap) return;
   wrap.insertAdjacentHTML('beforeend', candyFocusRow(4));
   wrap.lastElementChild?.querySelector('.cs-focus-sel')?.focus();
 }
-function candyRemoveRow(btn) {
+export function candyRemoveRow(btn) {
   btn.closest('.cs-focus-row')?.remove();
   candyUpdateEstimate();
 }
-function candyValidateRow(el) {
+export function candyValidateRow(el) {
   const row = el.closest('.cs-focus-row');
   if (!row) return;
   const selEl = row.querySelector('.cs-focus-sel');
@@ -271,7 +277,7 @@ function candySetHTML(id, html) {
   const b = $(`${id}-mobile`);
   if (b) b.innerHTML = html;
 }
-function candyToggleMobileDetails() {
+export function candyToggleMobileDetails() {
   const body = $('cs-mobile-details-body');
   const btn = document.querySelector('.cs-mobile-details-toggle');
   if (!body || !btn) return;
@@ -279,7 +285,7 @@ function candyToggleMobileDetails() {
   btn.setAttribute('aria-expanded', open ? 'true' : 'false');
   btn.classList.toggle('is-open', open);
 }
-function candyUpdateEstimate() {
+export function candyUpdateEstimate() {
   const out = $('cs-estimate-val');
   if (!out) return;
   let focusTotal = 0;
@@ -415,13 +421,13 @@ function candyAlbumHue(name) {
   for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
   return hash % 360;
 }
-function candyToggleAllAlbums() {
+export function candyToggleAllAlbums() {
   const boxes = document.querySelectorAll('.cs-album-check');
   const selectAll = document.querySelectorAll('.cs-album-check:checked').length !== boxes.length;
   boxes.forEach(b => { b.checked = selectAll; });
   candyUpdateEstimate();
 }
-function candySwitchTab(tab) {
+export function candySwitchTab(tab) {
   document.querySelectorAll('.cs-tab[data-tab]').forEach(b => {
     const active = b.dataset.tab === tab;
     b.classList.toggle('is-active', active);
@@ -445,7 +451,7 @@ const CANDY_QUICK_MULTS = [10, 5, 4];
 /** 3 songs on their own, or 2 alongside the Arirang album. */
 function candyQuickCap() { return window._candyStar?.quickAlbum ? 2 : 3; }
 
-function candyQuickToggle(btn) {
+export function candyQuickToggle(btn) {
   const cs = window._candyStar;
   if (!cs) return;
   const key = btn.dataset.key;
@@ -455,7 +461,7 @@ function candyQuickToggle(btn) {
   candyQuickRefresh();
 }
 
-function candyQuickAlbumToggle() {
+export function candyQuickAlbumToggle() {
   const cs = window._candyStar;
   if (!cs) return;
   cs.quickAlbum = !!$('cs-quick-album')?.checked;
@@ -490,7 +496,7 @@ function candyQuickRefresh() {
   if (btn) btn.disabled = !picked;
 }
 
-async function renderCandyStar() {
+export async function renderCandyStar() {
   const container = $('candystarContent');
   if (!container) return;
   container.innerHTML = `<div class="cs-wrap cs-skeleton" aria-busy="true" aria-label="Loading the candy machine">
@@ -683,7 +689,7 @@ async function renderCandyStar() {
   candyUpdateEstimate();
 }
 
-async function candyGenerate(mode) {
+export async function candyGenerate(mode) {
   const payload = { action: 'generateAlpaca', agentNo: STATE.agentNo, mode };
 
   // Quick is a pre-filled Custom: the picked goal songs are the focus tracks,

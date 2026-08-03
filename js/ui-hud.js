@@ -40,10 +40,15 @@ export function renderHud(container, state) {
   container.querySelector('#modePill').onclick = () => openModeSheet(state)
 
   // "Network" covers the whole game (world / ward / district); the Pack and
-  // Settings screens sit outside it.
+  // Settings screens sit outside it. Candy Star is a Pack sub-screen (reached
+  // from its "Candy Star Generator" tool card), so it keeps the Pack tab lit.
   const here = getScreen().name
   const tabs = container.querySelectorAll('.hud-tab')
-  const sel = { network: here !== 'resources' && here !== 'settings', resources: here === 'resources', settings: here === 'settings' }
+  const sel = {
+    network: here !== 'resources' && here !== 'settings' && here !== 'candystar',
+    resources: here === 'resources' || here === 'candystar',
+    settings: here === 'settings',
+  }
   tabs[0].classList.toggle('sel', sel.network)
   tabs[1].classList.toggle('sel', sel.resources)
   tabs[2].classList.toggle('sel', sel.settings)

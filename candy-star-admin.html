@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Candy Star — Admin</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="stylesheet" href="css/reconnect.css">
+<style>
+  body { max-width: 720px; margin: 0 auto; padding: 24px var(--gut) 60px; }
+  .cs-admin-head { margin: 10px 0 22px; }
+  .cs-admin-head h1 { font-family: var(--disp); font-size: 22px; margin: 8px 0 6px; }
+  .cs-admin-key-row { display: flex; gap: 8px; align-items: center; margin: 14px 0 28px; }
+  .cs-admin-key-row .ob-input { flex: 1; }
+  .cs-admin-key-status { font-size: 11px; font-family: var(--mono); }
+  .cs-admin-key-status.ok { color: var(--gold); }
+  .cs-admin-key-status.bad { color: var(--crimson); }
+  .cs-admin-section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
+    padding: 20px; margin-bottom: 18px; }
+  .cs-admin-section h2 { font-family: var(--disp); font-size: 14px; letter-spacing: 0.03em; margin: 0 0 4px; }
+  .cs-admin-section .muted { font-size: 12px; margin-bottom: 14px; }
+  .cs-admin-row { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  .cs-admin-row .ob-input { flex: 1; min-width: 200px; }
+  .cs-admin-row .btn { flex-shrink: 0; padding: 10px 16px; font-size: 11px; }
+  .cs-admin-out { font-family: var(--mono); font-size: 11.5px; color: var(--muted); white-space: pre-wrap;
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r); padding: 10px 12px;
+    margin-top: 8px; max-height: 220px; overflow-y: auto; display: none; }
+  .cs-admin-out.is-visible { display: block; }
+  .cs-admin-out.is-error { color: var(--crimson); border-color: rgba(229,56,79,0.4); }
+  .cs-admin-out.is-ok { color: var(--gold); border-color: rgba(217,173,95,0.4); }
+  .cs-conn-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700;
+    padding: 6px 10px; border-radius: 999px; border: 1px solid var(--border); margin-bottom: 12px; }
+  .cs-conn-badge.on { color: var(--gold); border-color: rgba(217,173,95,0.4); }
+  .cs-conn-badge.off { color: var(--muted); }
+  .cs-lib-list { display: flex; flex-direction: column; gap: 1px; background: var(--border); border: 1px solid var(--border);
+    border-radius: var(--r); overflow: hidden; margin-top: 10px; max-height: 320px; overflow-y: auto; }
+  .cs-lib-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: var(--surface); font-size: 12px; }
+  .cs-lib-row .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cs-lib-row .rm { background: none; border: none; color: var(--crimson); cursor: pointer; font-size: 13px; flex-shrink: 0; }
+  textarea.ob-input { font-family: var(--mono); font-size: 12px; min-height: 90px; resize: vertical; }
+  .cs-admin-nav { font-size: 11px; margin-bottom: 18px; }
+  .cs-admin-nav a { color: var(--purple-lt); }
+</style>
+</head>
+<body>
+
+<div class="cs-admin-nav"><a href="game.html">← Back to the game</a></div>
+
+<div class="cs-admin-head">
+  <span class="eyebrow">CANDY STAR — ADMIN</span>
+  <h1>🍬 Catalog &amp; Spotify control</h1>
+  <p class="muted">Site-owner tools for the Candy Star Generator: refresh the BTS catalog, manage the
+    filler library, connect the one site-wide Spotify account, and trigger a real generation for
+    validation. Not part of the player-facing game — reach it only from this direct link.</p>
+</div>
+
+<div class="cs-admin-key-row">
+  <input id="adminKey" class="ob-input" type="password" placeholder="Admin key (SYNC_ADMIN_KEY)" autocomplete="off">
+  <span id="adminKeyStatus" class="cs-admin-key-status"></span>
+</div>
+
+<!-- ── Spotify connection ── -->
+<div class="cs-admin-section">
+  <h2>Spotify connection</h2>
+  <p class="muted">One site-wide account, not per-agent. Only ever connect the account this game
+    should generate real playlists from.</p>
+  <div id="connBadge" class="cs-conn-badge off">Checking…</div>
+  <div class="cs-admin-row">
+    <button class="btn btn-primary" id="btnConnect" type="button">Connect Spotify</button>
+    <button class="btn btn-ghost" id="btnDisconnect" type="button">Disconnect</button>
+    <button class="btn btn-ghost" id="btnRefreshConn" type="button">Refresh status</button>
+  </div>
+  <div id="connOut" class="cs-admin-out"></div>
+</div>
+
+<!-- ── BTS catalog ── -->
+<div class="cs-admin-section">
+  <h2>BTS song catalog</h2>
+  <p class="muted">Pulls fresh from iTunes Search (free, no auth) and overwrites <code>bts_song_catalog</code>.
+    Empty until this has run at least once — that's expected on a brand-new project, not a bug.</p>
+  <div class="cs-admin-row">
+    <button class="btn btn-primary" id="btnRefreshCatalog" type="button">Refresh BTS catalog</button>
+    <button class="btn btn-ghost" id="btnGetCatalog" type="button">Check catalog size</button>
+  </div>
+  <div id="catalogOut" class="cs-admin-out"></div>
+</div>
+
+<!-- ── Filler library ── -->
+<div class="cs-admin-section">
+  <h2>Filler library</h2>
+  <p class="muted">The non-BTS "not just BTS on repeat" tracks the generator weaves in. Import a whole
+    playlist (K-pop tracks are filtered out automatically) or add one track at a time.</p>
+  <div class="cs-admin-row">
+    <input id="fillerPlaylistUrl" class="ob-input" type="text" placeholder="Spotify playlist URL to import">
+    <button class="btn btn-primary" id="btnImportFiller" type="button">Import playlist</button>
+  </div>
+  <div class="cs-admin-row">
+    <input id="fillerTrackUrl" class="ob-input" type="text" placeholder="Spotify track URL to add manually">
+    <button class="btn btn-primary" id="btnAddFiller" type="button">Add track</button>
+  </div>
+  <div class="cs-admin-row">
+    <button class="btn btn-ghost" id="btnLoadFillers" type="button">Load library</button>
+  </div>
+  <div id="fillerOut" class="cs-admin-out"></div>
+  <div id="fillerList" class="cs-lib-list" hidden></div>
+</div>
+
+<!-- ── Manual playlist generation (validation) ── -->
+<div class="cs-admin-section">
+  <h2>Generate a playlist (validation)</h2>
+  <p class="muted">Runs the real generator against the connected Spotify account — same rule engine
+    agents' Candy Star screen uses. One line per focus song: <code>key,multiplier</code> — get a
+    song's <code>key</code> from "Check catalog size" output or the live function's
+    <code>getBTSCatalog</code> response.</p>
+  <textarea id="genFocus" class="ob-input" placeholder="lfm:bts:swim,10&#10;lfm:agust d:haegeum,5"></textarea>
+  <div class="cs-admin-row" style="margin-top:10px;">
+    <input id="genName" class="ob-input" type="text" placeholder="Playlist name (blank = random)">
+    <input id="genMinutes" class="ob-input" type="number" min="10" max="180" value="180" style="max-width:120px;" placeholder="Minutes">
+    <button class="btn btn-primary" id="btnGenerate" type="button">Generate playlist</button>
+  </div>
+  <div id="genOut" class="cs-admin-out"></div>
+</div>
+
+<script type="module">
+import { API_URL } from './js/api.js'
+
+const $ = (id) => document.getElementById(id)
+const KEY_STORAGE = 'rc_admin_key'
+
+function getAdminKey() { return $('adminKey').value.trim() }
+
+function loadStoredKey() {
+  try {
+    const saved = localStorage.getItem(KEY_STORAGE)
+    if (saved) $('adminKey').value = saved
+  } catch (_) { /* localStorage unavailable */ }
+}
+$('adminKey').addEventListener('input', () => {
+  try { localStorage.setItem(KEY_STORAGE, $('adminKey').value.trim()) } catch (_) {}
+  $('adminKeyStatus').textContent = ''
+  $('adminKeyStatus').className = 'cs-admin-key-status'
+})
+
+async function call(action, params = {}) {
+  const body = { action, adminKey: getAdminKey(), ...params }
+  try {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    const json = await res.json()
+    if (json && json.error === 'Unauthorized') {
+      $('adminKeyStatus').textContent = 'Admin key rejected'
+      $('adminKeyStatus').className = 'cs-admin-key-status bad'
+    } else if (getAdminKey()) {
+      $('adminKeyStatus').textContent = 'Key accepted'
+      $('adminKeyStatus').className = 'cs-admin-key-status ok'
+    }
+    return json
+  } catch (e) {
+    return { success: false, error: 'Network error — check your connection' }
+  }
+}
+
+function showOut(id, text, kind) {
+  const el = $(id)
+  el.textContent = typeof text === 'string' ? text : JSON.stringify(text, null, 2)
+  el.className = 'cs-admin-out is-visible' + (kind ? ` is-${kind}` : '')
+}
+
+// ── Spotify connection ──
+async function refreshConn() {
+  const res = await call('getSpotifyConnection')
+  const badge = $('connBadge')
+  if (res && res.success && res.connected) {
+    badge.textContent = `Connected — ${res.displayName || res.spotifyUser || 'unknown account'}`
+    badge.className = 'cs-conn-badge on'
+  } else {
+    badge.textContent = 'Not connected'
+    badge.className = 'cs-conn-badge off'
+  }
+}
+$('btnRefreshConn').onclick = refreshConn
+$('btnConnect').onclick = async () => {
+  const redirectUri = location.origin + location.pathname
+  const res = await call('spotifyAuthUrl', { redirectUri })
+  if (res && res.success && res.url) {
+    location.href = res.url
+  } else {
+    showOut('connOut', res, 'error')
+  }
+}
+$('btnDisconnect').onclick = async () => {
+  const res = await call('disconnectSpotify')
+  showOut('connOut', res, res?.success ? 'ok' : 'error')
+  refreshConn()
+}
+
+// OAuth redirects back here with ?code=... — exchange it, then clean the URL
+// so a page refresh doesn't try to reuse an already-spent code.
+async function handleOAuthReturn() {
+  const params = new URLSearchParams(location.search)
+  const code = params.get('code')
+  if (!code) return
+  if (!getAdminKey()) {
+    showOut('connOut', 'Paste the admin key first, then reconnect Spotify (the code in this URL is now spent).', 'error')
+    history.replaceState({}, '', location.pathname)
+    return
+  }
+  const redirectUri = location.origin + location.pathname
+  const res = await call('spotifyExchangeCode', { code, redirectUri })
+  showOut('connOut', res, res?.success ? 'ok' : 'error')
+  history.replaceState({}, '', location.pathname)
+  refreshConn()
+}
+
+// ── BTS catalog ──
+$('btnRefreshCatalog').onclick = async () => {
+  showOut('catalogOut', 'Refreshing — this can take a few seconds…', null)
+  const res = await call('refreshBTSCatalog')
+  showOut('catalogOut', res, res?.success ? 'ok' : 'error')
+}
+$('btnGetCatalog').onclick = async () => {
+  const res = await call('getBTSCatalog')
+  if (res && res.success) {
+    showOut('catalogOut', `${res.songCount} song(s) in catalog. Updated: ${res.updatedAt || 'never'}\n\n` +
+      (res.songs || []).slice(0, 20).map(s => `${s.key}  —  ${s.name}`).join('\n') +
+      (res.songs?.length > 20 ? `\n… +${res.songs.length - 20} more` : ''), 'ok')
+  } else {
+    showOut('catalogOut', res, 'error')
+  }
+}
+
+// ── Filler library ──
+$('btnImportFiller').onclick = async () => {
+  const playlistUrl = $('fillerPlaylistUrl').value.trim()
+  if (!playlistUrl) return
+  showOut('fillerOut', 'Importing…', null)
+  const res = await call('importFillerPlaylist', { playlistUrl })
+  showOut('fillerOut', res, res?.success ? 'ok' : 'error')
+}
+$('btnAddFiller').onclick = async () => {
+  const trackUrl = $('fillerTrackUrl').value.trim()
+  if (!trackUrl) return
+  const res = await call('addFillerManual', { trackUrl })
+  showOut('fillerOut', res, res?.success ? 'ok' : 'error')
+  if (res?.success) $('fillerTrackUrl').value = ''
+}
+async function loadFillers() {
+  const res = await call('getFillerLibrary')
+  const list = $('fillerList')
+  if (!res || !res.success) { showOut('fillerOut', res, 'error'); return }
+  list.hidden = false
+  list.innerHTML = (res.fillers || []).map(f => `
+    <div class="cs-lib-row" data-id="${f.track_id}">
+      <span class="name">${f.name} — ${(f.artists || []).join(', ')}</span>
+      <button class="rm" type="button" title="Remove">✕</button>
+    </div>
+  `).join('') || '<div class="cs-lib-row"><span class="name">No fillers yet.</span></div>'
+  list.querySelectorAll('.rm').forEach(btn => {
+    btn.onclick = async () => {
+      const row = btn.closest('.cs-lib-row')
+      const trackId = row.dataset.id
+      const res = await call('removeFiller', { trackId })
+      if (res?.success) row.remove()
+    }
+  })
+  showOut('fillerOut', `${res.count} filler track(s).`, 'ok')
+}
+$('btnLoadFillers').onclick = loadFillers
+
+// ── Manual generate ──
+$('btnGenerate').onclick = async () => {
+  const lines = $('genFocus').value.split('\n').map(l => l.trim()).filter(Boolean)
+  const focus = lines.map(l => {
+    const [key, mult] = l.split(',').map(s => s.trim())
+    return { key, multiplier: parseInt(mult) || 0 }
+  }).filter(f => f.key && f.multiplier > 0)
+  if (!focus.length) { showOut('genOut', 'Add at least one "key,multiplier" line.', 'error'); return }
+  showOut('genOut', 'Generating — this can take up to ~20s…', null)
+  const res = await call('generatePlaylist', {
+    focus,
+    name: $('genName').value.trim() || undefined,
+    targetMinutes: parseInt($('genMinutes').value) || 180,
+  })
+  showOut('genOut', res, res?.success ? 'ok' : 'error')
+}
+
+loadStoredKey()
+handleOAuthReturn()
+refreshConn()
+</script>
+</body>
+</html>
