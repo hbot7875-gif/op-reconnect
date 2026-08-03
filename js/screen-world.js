@@ -1,8 +1,9 @@
 // World screen — the hub.
 //
-// Reads top to bottom as: the ARMY Bomb (who we are), a breach if there is one
-// (drop everything), what I'm restoring right now (the one button that matters),
-// how the network is doing, then where I can go.
+// Reads top to bottom as: any active broadcast (HQ has something to say),
+// the ARMY Bomb (who we are), a breach if there is one (drop everything),
+// what I'm restoring right now (the one button that matters), how the
+// network is doing, then where I can go.
 //
 // The map is a stack of ward tiles (ward-tiles.js) — each ward a card with a
 // mini skyline, one building per district, lit as they restore. The tiles
@@ -18,12 +19,15 @@ import { openFinder } from './search.js'
 import { openShare } from './share.js'
 import { tickCountdowns } from './countdown.js'
 import { bombSheet } from './bomb-sheet.js'
+import { broadcastCards } from './broadcasts.js'
 
 export function renderWorld(container, state) {
   container.innerHTML = ''
   const wrap = el('div', 'world-screen')
   const b = state.bomb || { charge: 0, defuse: null, brownout: false }
 
+  const bc = broadcastCards(state)
+  if (bc.children.length) wrap.appendChild(bc)
   wrap.appendChild(coreBlock(state))
   wrap.appendChild(coreFeed(state))
   if (b.defuse) wrap.appendChild(redZoneCard(state))

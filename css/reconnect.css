@@ -1565,3 +1565,31 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
   text-underline-offset: 3px; cursor: pointer;
 }
 .auth-link:hover { color: var(--text); }
+
+/* ── Broadcasts ─────────────────────────────────────────────────────────
+   Site-owner announcements (screen-world.js's broadcastCards, fed by
+   getGameState's `broadcasts` array). Deliberately NOT a third accent
+   colour on top of purple/gold/crimson — 'info' reads purple (in-progress/
+   network, the same language the core and status tiles already use),
+   'gold' reads gold (good news), and neither ever borrows Red Zone's
+   crimson. Dismissible; screen-world.js only renders what's unseen. */
+.bcast-stack { display: flex; flex-direction: column; gap: 10px; }
+.bcast-card {
+  background: var(--surface); border: 1px solid rgba(139,92,246,0.35);
+  border-radius: var(--r-lg); padding: 14px 16px;
+  box-shadow: 0 0 0 1px rgba(139,92,246,0.06) inset;
+}
+.bcast-card.is-gold { border-color: rgba(217,173,95,0.4); box-shadow: 0 0 0 1px rgba(217,173,95,0.08) inset; }
+.bcast-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.bcast-eyebrow {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 1.6px; text-transform: uppercase;
+  color: var(--purple-lt);
+}
+.bcast-card.is-gold .bcast-eyebrow { color: var(--gold); }
+.bcast-x {
+  background: none; border: 0; color: var(--dim); font-size: 13px; line-height: 1;
+  cursor: pointer; padding: 4px; margin: -4px; border-radius: 6px;
+}
+.bcast-x:hover { color: var(--text); background: rgba(255,255,255,0.06); }
+.bcast-title { font-family: var(--disp); font-weight: 800; font-size: 15px; margin-top: 8px; }
+.bcast-msg { color: var(--muted); font-size: 13.5px; line-height: 1.55; margin-top: 5px; }

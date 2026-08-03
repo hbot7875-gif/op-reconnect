@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Op: Reconnect — Admin</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="stylesheet" href="css/reconnect.css">
+<style>
+  body { max-width: 760px; margin: 0 auto; padding: 24px var(--gut) 60px; }
+  .adm-nav { font-size: 11px; margin-bottom: 18px; display: flex; gap: 10px; flex-wrap: wrap; }
+  .adm-nav a { color: var(--purple-lt); }
+  .adm-nav span { color: var(--dim); }
+
+  .adm-head { margin: 10px 0 22px; }
+  .adm-head h1 { font-family: var(--disp); font-size: 23px; margin: 8px 0 6px; }
+
+  .adm-key-row { display: flex; gap: 8px; align-items: center; margin: 14px 0 18px; }
+  .adm-key-row .ob-input { flex: 1; }
+  .adm-key-status { font-size: 11px; font-family: var(--mono); white-space: nowrap; }
+  .adm-key-status.ok { color: var(--gold); }
+  .adm-key-status.bad { color: var(--crimson); }
+
+  /* ── Snapshot strip ── */
+  .adm-snapshot { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 22px; }
+  .adm-snap-tile {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
+    padding: 13px 14px; cursor: pointer; transition: border-color 0.15s;
+  }
+  .adm-snap-tile:hover { border-color: var(--border-str); }
+  .adm-snap-tile.is-alert { border-color: rgba(229,56,79,0.4); }
+  .adm-snap-tile.is-live { border-color: rgba(217,173,95,0.4); }
+  .adm-snap-label { font-family: var(--mono); font-size: 9.5px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--dim); }
+  .adm-snap-val { font-family: var(--disp); font-weight: 800; font-size: 17px; margin-top: 4px; }
+  .adm-snap-tile.is-alert .adm-snap-val { color: var(--crimson); }
+  .adm-snap-tile.is-live .adm-snap-val { color: var(--gold); }
+  .adm-snap-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  /* ── Tabs ── */
+  .adm-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+  .adm-tab {
+    background: none; border: 0; color: var(--muted); font: inherit; font-size: 13px; font-weight: 600;
+    padding: 10px 14px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
+    display: flex; align-items: center; gap: 6px; transition: color 0.15s, border-color 0.15s;
+  }
+  .adm-tab:hover { color: var(--text); }
+  .adm-tab.is-active { color: var(--purple-lt); border-bottom-color: var(--purple); }
+  .adm-panel[hidden] { display: none; }
+  .adm-panel { animation: admIn 0.22s ease; }
+  @keyframes admIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* ── Cards / fields ── */
+  .adm-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
+    padding: 20px; margin-bottom: 16px; }
+  .adm-card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
+  .adm-card h2 { font-family: var(--disp); font-size: 14px; letter-spacing: 0.03em; margin: 0 0 4px; }
+  .adm-card > .muted { font-size: 12.5px; margin-bottom: 16px; }
+  .adm-card .btn-ghost { padding: 7px 12px; font-size: 10.5px; }
+
+  .adm-field { display: block; margin-bottom: 12px; }
+  .adm-field > span { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.8px;
+    text-transform: uppercase; color: var(--dim); margin-bottom: 6px; }
+  .adm-field .ob-input { width: 100%; }
+  .adm-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  textarea.ob-input { font-family: inherit; font-size: 14px; min-height: 78px; resize: vertical; }
+  .adm-block { display: block; width: 100%; margin-top: 6px; }
+  .adm-row { display: flex; gap: 8px; margin-bottom: 4px; }
+  .adm-row .ob-input { flex: 1; }
+
+  .adm-toggle { display: flex; border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; }
+  .adm-toggle-opt { flex: 1; background: transparent; border: 0; color: var(--muted); font: inherit;
+    font-size: 12.5px; padding: 11px 8px; cursor: pointer; transition: background 0.15s, color 0.15s; }
+  .adm-toggle-opt.is-active { background: var(--purple-soft); color: var(--purple-lt); }
+  .adm-toggle-opt.is-active[data-val="gold"] { background: var(--gold-soft); color: var(--gold); }
+
+  .adm-out { font-family: var(--mono); font-size: 11.5px; color: var(--muted); white-space: pre-wrap;
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r); padding: 10px 12px;
+    margin-top: 12px; max-height: 220px; overflow-y: auto; display: none; }
+  .adm-out.is-visible { display: block; }
+  .adm-out.is-error { color: var(--crimson); border-color: rgba(229,56,79,0.4); }
+  .adm-out.is-ok { color: var(--gold); border-color: rgba(217,173,95,0.4); }
+
+  .adm-spin { width: 15px; height: 15px; border-radius: 50%; display: inline-block; vertical-align: -3px;
+    border: 2px solid var(--purple-soft); border-top-color: var(--purple); animation: admSpin 0.7s linear infinite; margin-right: 6px; }
+  @keyframes admSpin { to { transform: rotate(360deg); } }
+  .adm-empty { color: var(--dim); font-size: 12.5px; padding: 10px 2px; }
+
+  /* ── Red Zone status box ── */
+  .adm-rz-clear { display: flex; align-items: center; gap: 8px; padding: 10px 2px; color: var(--muted); font-size: 13px; }
+  .adm-rz-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
+  .adm-rz-dot.on { background: var(--crimson); box-shadow: 0 0 8px var(--crimson); animation: admPulse 1.4s ease-in-out infinite; }
+  @keyframes admPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.45; } }
+
+  /* ── Broadcast list ── */
+  .adm-list { display: flex; flex-direction: column; gap: 8px; }
+  .adm-list-row { border: 1px solid var(--border); border-radius: var(--r); padding: 10px 12px;
+    display: flex; align-items: flex-start; gap: 10px; }
+  .adm-list-row.is-expired { opacity: 0.5; }
+  .adm-list-dot { width: 7px; height: 7px; border-radius: 50%; margin-top: 6px; flex-shrink: 0; background: var(--purple); }
+  .adm-list-row[data-tone="gold"] .adm-list-dot { background: var(--gold); }
+  .adm-list-body { flex: 1; min-width: 0; }
+  .adm-list-title { font-weight: 700; font-size: 13.5px; }
+  .adm-list-msg { color: var(--muted); font-size: 12px; margin-top: 2px; line-height: 1.5; }
+  .adm-list-meta { font-family: var(--mono); font-size: 10px; color: var(--dim); margin-top: 5px; letter-spacing: 0.3px; }
+  .adm-list-del { background: none; border: none; color: var(--crimson); cursor: pointer; font-size: 13px; flex-shrink: 0; padding: 2px 4px; }
+
+  /* ── Agent lookup result ── */
+  .adm-agent-card { border: 1px solid var(--border-str); border-radius: var(--r-lg); padding: 18px; margin-top: 16px; }
+  .adm-agent-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .adm-agent-handle { font-family: var(--disp); font-weight: 800; font-size: 19px; }
+  .adm-agent-no { font-family: var(--mono); font-size: 11px; color: var(--dim); }
+  .adm-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700;
+    padding: 4px 9px; border-radius: 999px; border: 1px solid var(--border); }
+  .adm-badge.ok { color: var(--gold); border-color: rgba(217,173,95,0.4); }
+  .adm-badge.bad { color: var(--crimson); border-color: rgba(229,56,79,0.4); }
+  .adm-agent-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px 18px; margin-top: 16px; }
+  .adm-agent-stat .k { font-family: var(--mono); font-size: 9.5px; letter-spacing: 1px; text-transform: uppercase; color: var(--dim); }
+  .adm-agent-stat .v { font-size: 14px; margin-top: 3px; }
+  .adm-agent-section { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+  .adm-agent-section h3 { font-family: var(--mono); font-size: 10.5px; letter-spacing: 1.2px; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 8px; }
+
+  @media (max-width: 480px) {
+    .adm-snapshot { grid-template-columns: 1fr; }
+    .adm-grid2, .adm-agent-grid { grid-template-columns: 1fr; }
+    .adm-tabs { overflow-x: auto; }
+    .adm-tab { flex-shrink: 0; }
+  }
+</style>
+</head>
+<body>
+
+<div class="adm-nav"><a href="game.html">← Back to the game</a> <span>&middot;</span> <a href="candy-star-admin.html">Candy Star admin →</a></div>
+
+<div class="adm-head">
+  <span class="eyebrow">OP: RECONNECT — ADMIN</span>
+  <h1>🛰️ Command Panel</h1>
+  <p class="muted">Site-owner tools: launch and monitor Red Zone events, broadcast announcements straight into
+    every agent's World screen, and look up an account for support. Not part of the player-facing game —
+    reach it only from this direct link.</p>
+</div>
+
+<div class="adm-key-row">
+  <input id="adminKey" class="ob-input" type="password" placeholder="Admin key (SYNC_ADMIN_KEY)" autocomplete="off">
+  <span id="adminKeyStatus" class="adm-key-status"></span>
+</div>
+
+<div class="adm-snapshot">
+  <div class="adm-snap-tile" id="snapRZ" data-tab="redzone">
+    <div class="adm-snap-label">Red Zone</div>
+    <div class="adm-snap-val" id="snapRZVal">—</div>
+    <div class="adm-snap-sub" id="snapRZSub">Tap to check</div>
+  </div>
+  <div class="adm-snap-tile" id="snapBC" data-tab="broadcast">
+    <div class="adm-snap-label">Broadcasts</div>
+    <div class="adm-snap-val" id="snapBCVal">—</div>
+    <div class="adm-snap-sub" id="snapBCSub">Tap to check</div>
+  </div>
+</div>
+
+<div class="adm-tabs" role="tablist">
+  <button class="adm-tab is-active" data-tab="redzone" type="button">🛡️ Red Zone</button>
+  <button class="adm-tab" data-tab="broadcast" type="button">📡 Broadcasts</button>
+  <button class="adm-tab" data-tab="lookup" type="button">🔎 Agent Lookup</button>
+</div>
+
+<!-- ── Red Zone ── -->
+<div class="adm-panel" id="panel-redzone" data-panel="redzone">
+  <section class="adm-card">
+    <div class="adm-card-head">
+      <h2>Live status</h2>
+      <button class="btn btn-ghost" id="btnRefreshRZ" type="button">↻ Refresh</button>
+    </div>
+    <div id="rzStatus" class="adm-rz-clear"><span class="adm-spin"></span> Checking…</div>
+  </section>
+
+  <section class="adm-card">
+    <h2>Launch a Red Zone event</h2>
+    <p class="muted">Every agent sees a breach warning and streams together to defuse it before the timer
+      runs out. Launching while one is already active <b>overwrites it</b> — you'll be asked to confirm first.</p>
+    <div class="adm-grid2">
+      <label class="adm-field"><span>Target streams</span>
+        <input id="rzTarget" class="ob-input" type="number" min="1" value="2000"></label>
+      <label class="adm-field"><span>Duration (hours, 1–72)</span>
+        <input id="rzHours" class="ob-input" type="number" min="1" max="72" value="24"></label>
+    </div>
+    <label class="adm-field"><span>Title</span>
+      <input id="rzTitle" class="ob-input" type="text" placeholder="INCOMING: RED ZONE"></label>
+    <label class="adm-field"><span>Message</span>
+      <textarea id="rzMessage" class="ob-input" placeholder="The ARMY Bomb is under attack. Stream together to defuse it before the timer runs out."></textarea></label>
+    <label class="adm-field"><span>Reward XP (per contributing agent)</span>
+      <input id="rzReward" class="ob-input" type="number" min="0" value="50"></label>
+    <button class="btn btn-alert adm-block" id="btnLaunchRZ" type="button">🛡️ Launch Red Zone</button>
+    <div id="rzOut" class="adm-out"></div>
+  </section>
+</div>
+
+<!-- ── Broadcasts ── -->
+<div class="adm-panel" id="panel-broadcast" data-panel="broadcast" hidden>
+  <section class="adm-card">
+    <h2>New broadcast</h2>
+    <p class="muted">Shows as a dismissible card at the top of every agent's World screen the next time
+      their app polls (within ~90 seconds — see main.js).</p>
+    <label class="adm-field"><span>Title</span>
+      <input id="bcTitle" class="ob-input" type="text" placeholder="HQ transmission"></label>
+    <label class="adm-field"><span>Message</span>
+      <textarea id="bcMessage" class="ob-input" placeholder="What do agents need to know?"></textarea></label>
+    <div class="adm-grid2">
+      <div class="adm-field">
+        <span>Tone</span>
+        <div class="adm-toggle" id="bcTone">
+          <button class="adm-toggle-opt is-active" data-val="info" type="button">📡 Info</button>
+          <button class="adm-toggle-opt" data-val="gold" type="button">★ Good news</button>
+        </div>
+      </div>
+      <label class="adm-field"><span>Expires in hours (blank = never)</span>
+        <input id="bcExpires" class="ob-input" type="number" min="1" placeholder="never"></label>
+    </div>
+    <button class="btn btn-primary adm-block" id="btnSendBroadcast" type="button">📡 Send broadcast</button>
+    <div id="bcOut" class="adm-out"></div>
+  </section>
+
+  <section class="adm-card">
+    <div class="adm-card-head">
+      <h2>Recent broadcasts</h2>
+      <button class="btn btn-ghost" id="btnLoadBroadcasts" type="button">↻ Load</button>
+    </div>
+    <div id="bcList" class="adm-list"><div class="adm-empty">Not loaded yet — tap Load.</div></div>
+  </section>
+</div>
+
+<!-- ── Agent Lookup ── -->
+<div class="adm-panel" id="panel-lookup" data-panel="lookup" hidden>
+  <section class="adm-card">
+    <h2>Find an agent</h2>
+    <p class="muted">Search by handle or agent number (e.g. <code>AGENT042</code>). Look-up only — this
+      doesn't edit anything.</p>
+    <div class="adm-row">
+      <input id="lkQuery" class="ob-input" type="text" placeholder="Handle or AGENT###" autocomplete="off">
+      <button class="btn btn-primary" id="btnLookup" type="button">Search</button>
+    </div>
+    <div id="lkOut"></div>
+  </section>
+</div>
+
+<script type="module">
+import { call as rawCall, API_URL } from './js/api.js'
+
+const $ = (id) => document.getElementById(id)
+const KEY_STORAGE = 'rc_admin_key' // shared with candy-star-admin.html on purpose
+
+function getAdminKey() { return $('adminKey').value.trim() }
+
+function loadStoredKey() {
+  try {
+    const saved = localStorage.getItem(KEY_STORAGE)
+    if (saved) $('adminKey').value = saved
+  } catch (_) { /* localStorage unavailable */ }
+}
+$('adminKey').addEventListener('input', () => {
+  try { localStorage.setItem(KEY_STORAGE, $('adminKey').value.trim()) } catch (_) {}
+  $('adminKeyStatus').textContent = ''
+  $('adminKeyStatus').className = 'adm-key-status'
+})
+
+async function call(action, params = {}) {
+  const body = { action, adminKey: getAdminKey(), ...params }
+  try {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    const json = await res.json()
+    if (json && json.error === 'Unauthorized') {
+      $('adminKeyStatus').textContent = 'Admin key rejected'
+      $('adminKeyStatus').className = 'adm-key-status bad'
+    } else if (getAdminKey()) {
+      $('adminKeyStatus').textContent = 'Key accepted'
+      $('adminKeyStatus').className = 'adm-key-status ok'
+    }
+    return json
+  } catch (e) {
+    return { success: false, error: 'Network error — check your connection' }
+  }
+}
+
+function showOut(id, text, kind) {
+  const el = $(id)
+  el.textContent = typeof text === 'string' ? text : JSON.stringify(text, null, 2)
+  el.className = 'adm-out is-visible' + (kind ? ` is-${kind}` : '')
+}
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]))
+}
+function fmtDate(iso) {
+  if (!iso) return '—'
+  try { return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) } catch { return iso }
+}
+
+/* ── Tabs ── */
+const tabs = document.querySelectorAll('.adm-tab')
+function selectTab(name) {
+  for (const t of tabs) t.classList.toggle('is-active', t.dataset.tab === name)
+  for (const p of document.querySelectorAll('.adm-panel')) p.hidden = p.dataset.panel !== name
+}
+tabs.forEach((t) => t.onclick = () => selectTab(t.dataset.tab))
+$('snapRZ').onclick = () => selectTab('redzone')
+$('snapBC').onclick = () => selectTab('broadcast')
+
+/* ── Red Zone ── */
+let rzActive = false
+
+function paintRZStatus(res) {
+  const box = $('rzStatus')
+  if (!res || !res.success) {
+    box.innerHTML = `<span>${esc(res?.error || "Couldn't reach the backend")}</span>`
+    rzActive = false
+    paintSnapRZ(null)
+    return
+  }
+  rzActive = !!res.active
+  paintSnapRZ(res)
+  if (!res.active) {
+    box.innerHTML = `<span class="adm-rz-dot"></span><span>No active Red Zone — the network is clear.</span>`
+    return
+  }
+  const d = res.defuse
+  const pct = Math.min(100, Math.round((d.progress / Math.max(1, d.target)) * 100))
+  const ends = fmtDate(d.activeUntil)
+  box.className = ''
+  box.innerHTML = `
+    <div class="redzone" style="padding:0;background:none;border:none;">
+      <div class="rz-head"><span class="rz-dot"></span>Red Zone &middot; active</div>
+      <div class="rz-title">${esc(d.title)}</div>
+      <p class="rz-msg">${esc(d.message || '')}</p>
+      <div class="rz-goal-top"><span>Global target</span><span class="rz-num">${d.progress.toLocaleString()}<i>/${d.target.toLocaleString()}</i></span></div>
+      <div class="rz-bar"><i style="width:${pct}%"></i></div>
+      <div class="rz-timer"><span>Ends</span><b style="font-size:13px;letter-spacing:0;">${esc(ends)}</b></div>
+      <div class="rz-foot">Reward: +${d.rewardXp} XP per contributing agent</div>
+    </div>
+  `
+}
+function paintSnapRZ(res) {
+  const tile = $('snapRZ'), val = $('snapRZVal'), sub = $('snapRZSub')
+  tile.classList.remove('is-alert')
+  if (!res) { val.textContent = '—'; sub.textContent = 'Tap to check'; return }
+  if (res.active) {
+    tile.classList.add('is-alert')
+    val.textContent = 'ACTIVE'
+    sub.textContent = `${res.defuse.progress.toLocaleString()} / ${res.defuse.target.toLocaleString()} streams`
+  } else {
+    val.textContent = 'Clear'
+    sub.textContent = 'No event running'
+  }
+}
+async function refreshRZ() {
+  $('rzStatus').innerHTML = `<span class="adm-spin"></span> Checking…`
+  const res = await call('adminGetActiveDefuse')
+  paintRZStatus(res)
+}
+$('btnRefreshRZ').onclick = refreshRZ
+
+$('btnLaunchRZ').onclick = async () => {
+  if (rzActive && !confirm('A Red Zone event is already active. Launching a new one overwrites it — the old one stops counting. Continue?')) return
+  const btn = $('btnLaunchRZ')
+  btn.disabled = true
+  btn.textContent = 'LAUNCHING…'
+  const res = await call('launchDefuse', {
+    target: parseInt($('rzTarget').value) || 2000,
+    hours: parseInt($('rzHours').value) || 24,
+    title: $('rzTitle').value.trim() || undefined,
+    message: $('rzMessage').value.trim() || undefined,
+    rewardXp: parseInt($('rzReward').value) || 50,
+  })
+  btn.disabled = false
+  btn.textContent = '🛡️ Launch Red Zone'
+  showOut('rzOut', res, res?.success ? 'ok' : 'error')
+  if (res?.success) refreshRZ()
+}
+
+/* ── Broadcasts ── */
+let bcTone = 'info'
+document.querySelectorAll('#bcTone .adm-toggle-opt').forEach((btn) => {
+  btn.onclick = () => {
+    bcTone = btn.dataset.val
+    document.querySelectorAll('#bcTone .adm-toggle-opt').forEach((b) => b.classList.toggle('is-active', b === btn))
+  }
+})
+
+$('btnSendBroadcast').onclick = async () => {
+  const title = $('bcTitle').value.trim()
+  const message = $('bcMessage').value.trim()
+  if (!title || !message) { showOut('bcOut', 'Title and message are both required.', 'error'); return }
+  const btn = $('btnSendBroadcast')
+  btn.disabled = true
+  btn.textContent = 'SENDING…'
+  const res = await call('adminCreateBroadcast', {
+    title, message, tone: bcTone,
+    expiresInHours: $('bcExpires').value ? parseInt($('bcExpires').value) : undefined,
+  })
+  btn.disabled = false
+  btn.textContent = '📡 Send broadcast'
+  showOut('bcOut', res, res?.success ? 'ok' : 'error')
+  if (res?.success) {
+    $('bcTitle').value = ''
+    $('bcMessage').value = ''
+    $('bcExpires').value = ''
+    loadBroadcasts()
+  }
+}
+
+async function loadBroadcasts() {
+  const list = $('bcList')
+  list.innerHTML = `<div class="adm-empty"><span class="adm-spin"></span> Loading…</div>`
+  const res = await call('adminListBroadcasts')
+  if (!res || !res.success) { list.innerHTML = `<div class="adm-empty">${esc(res?.error || "Couldn't load broadcasts")}</div>`; return }
+  const rows = res.broadcasts || []
+  paintSnapBC(rows)
+  if (!rows.length) { list.innerHTML = `<div class="adm-empty">No broadcasts yet.</div>`; return }
+  list.innerHTML = rows.map((b) => `
+    <div class="adm-list-row${b.active ? '' : ' is-expired'}" data-id="${b.id}" data-tone="${esc(b.tone)}">
+      <span class="adm-list-dot"></span>
+      <div class="adm-list-body">
+        <div class="adm-list-title">${esc(b.title)}</div>
+        <div class="adm-list-msg">${esc(b.message)}</div>
+        <div class="adm-list-meta">${b.active ? 'LIVE' : 'EXPIRED'} &middot; sent ${fmtDate(b.createdAt)}${b.expiresAt ? ` &middot; expires ${fmtDate(b.expiresAt)}` : ' &middot; no expiry'}</div>
+      </div>
+      <button class="adm-list-del" type="button" title="Delete">✕</button>
+    </div>
+  `).join('')
+  list.querySelectorAll('.adm-list-del').forEach((btn) => {
+    btn.onclick = async () => {
+      const row = btn.closest('.adm-list-row')
+      const id = row.dataset.id
+      btn.disabled = true
+      const res = await call('adminDeleteBroadcast', { id })
+      if (res?.success) { row.remove(); loadBroadcastsSnapOnly() } else btn.disabled = false
+    }
+  })
+}
+async function loadBroadcastsSnapOnly() {
+  const res = await call('adminListBroadcasts')
+  if (res?.success) paintSnapBC(res.broadcasts || [])
+}
+function paintSnapBC(rows) {
+  const tile = $('snapBC'), val = $('snapBCVal'), sub = $('snapBCSub')
+  const live = rows.filter((r) => r.active).length
+  tile.classList.toggle('is-live', live > 0)
+  val.textContent = live
+  sub.textContent = live === 1 ? 'live announcement' : 'live announcements'
+}
+$('btnLoadBroadcasts').onclick = loadBroadcasts
+
+/* ── Agent lookup ── */
+function progressBar(pct) {
+  return `<div class="pbar"><div class="pfill${pct >= 100 ? ' done' : ''}" style="width:${Math.min(100, pct)}%"></div></div>`
+}
+function renderAgent(a) {
+  const uplinkOk = !a.uplinkBroken
+  const sourceLabel = { lb: 'ListenBrainz', direct: 'Scrobbler app (direct)', statsfm: 'stats.fm', musicat: 'musicat.fm' }[a.streamSource] || a.streamSource
+  const p = a.progress
+  return `
+    <div class="adm-agent-card">
+      <div class="adm-agent-head">
+        <div>
+          <div class="adm-agent-handle">${esc(a.handle)}</div>
+          <div class="adm-agent-no">${esc(a.agentNo)}</div>
+        </div>
+        <span class="adm-badge ${uplinkOk ? 'ok' : 'bad'}">${uplinkOk ? '✓ Uplink OK' : '⚠ Uplink broken'}</span>
+      </div>
+
+      <div class="adm-agent-grid">
+        <div class="adm-agent-stat"><div class="k">Email</div><div class="v">${esc(a.email || '—')}</div></div>
+        <div class="adm-agent-stat"><div class="k">Joined game</div><div class="v">${a.joined ? 'Yes' : 'No — account only'}</div></div>
+        <div class="adm-agent-stat"><div class="k">Account created</div><div class="v">${esc(fmtDate(a.createdAt))}</div></div>
+        <div class="adm-agent-stat"><div class="k">Last login</div><div class="v">${esc(fmtDate(a.lastLoginAt))}</div></div>
+      </div>
+
+      ${a.joined ? `
+      <div class="adm-agent-section">
+        <h3>Progress</h3>
+        <div class="adm-agent-grid">
+          <div class="adm-agent-stat"><div class="k">Level</div><div class="v">${a.level} &middot; ${esc(a.rank || '')}</div></div>
+          <div class="adm-agent-stat"><div class="k">Lifetime XP</div><div class="v">${a.xp.toLocaleString()}</div></div>
+          <div class="adm-agent-stat"><div class="k">Codename</div><div class="v">${esc(p.codename)} (${esc(p.mode)} mode)</div></div>
+          <div class="adm-agent-stat"><div class="k">Active district</div><div class="v">${esc(p.activeDistrict || 'None')}</div></div>
+        </div>
+        <div style="margin-top:12px;">
+          <div class="k" style="font-family:var(--mono);font-size:9.5px;letter-spacing:1px;text-transform:uppercase;color:var(--dim);margin-bottom:6px;">
+            Districts restored — ${p.districtsRestored} / ${p.districtsTotal}
+          </div>
+          ${progressBar(p.districtsTotal ? (p.districtsRestored / p.districtsTotal) * 100 : 0)}
+        </div>
+        <div style="margin-top:10px;">
+          <div class="k" style="font-family:var(--mono);font-size:9.5px;letter-spacing:1px;text-transform:uppercase;color:var(--dim);margin-bottom:6px;">
+            Wards restored — ${p.wardsRestored} / ${p.wardsTotal}
+          </div>
+          ${progressBar(p.wardsTotal ? (p.wardsRestored / p.wardsTotal) * 100 : 0)}
+        </div>
+      </div>` : ''}
+
+      <div class="adm-agent-section">
+        <h3>Uplink source</h3>
+        <div class="adm-agent-grid">
+          <div class="adm-agent-stat"><div class="k">Configured source</div><div class="v">${esc(sourceLabel)}</div></div>
+          <div class="adm-agent-stat"><div class="k">ListenBrainz user</div><div class="v">${esc(a.lbUsername || '—')}</div></div>
+          <div class="adm-agent-stat"><div class="k">stats.fm user</div><div class="v">${esc(a.statsfmUsername || '—')}</div></div>
+          <div class="adm-agent-stat"><div class="k">musicat.fm ID</div><div class="v">${esc(a.musicatPublicId || '—')}</div></div>
+        </div>
+        <div class="adm-agent-stat" style="margin-top:10px;"><div class="k">Direct scrobble PIN</div><div class="v">${a.hasPin ? 'Generated' : 'Not generated'}</div></div>
+        ${!uplinkOk ? `<p class="muted" style="margin-top:10px;color:var(--crimson);">This agent's counted-source is unset or missing its username/ID — they will earn zero XP from streaming until it's fixed in Settings.</p>` : ''}
+      </div>
+    </div>
+  `
+}
+$('btnLookup').onclick = async () => {
+  const q = $('lkQuery').value.trim()
+  const out = $('lkOut')
+  if (!q) { out.innerHTML = `<div class="adm-empty">Enter a handle or agent number first.</div>`; return }
+  out.innerHTML = `<div class="adm-empty"><span class="adm-spin"></span> Searching…</div>`
+  const res = await call('adminGetAgent', { query: q })
+  if (!res || !res.success) {
+    out.innerHTML = `<div class="adm-empty">${res?.error === 'agent_not_found' ? `No agent found matching "${esc(q)}".` : esc(res?.error || 'Search failed')}</div>`
+    return
+  }
+  out.innerHTML = renderAgent(res.agent)
+}
+$('lkQuery').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btnLookup').click() })
+
+loadStoredKey()
+refreshRZ()
+loadBroadcastsSnapOnly()
+</script>
+</body>
+</html>

@@ -38,6 +38,11 @@ export default defineConfig({
         // it silently 404'd on every deploy despite building/deploying
         // clean otherwise. Not linked from anywhere in-game on purpose.
         candyAdmin: resolve(__dirname, 'candy-star-admin.html'),
+        // Site-owner-only tool (Red Zone, broadcasts, agent lookup) — same
+        // 'must be registered here or it silently 404s' lesson candyAdmin's
+        // own comment above already documents. Not linked from anywhere
+        // in-game on purpose.
+        admin: resolve(__dirname, 'admin.html'),
       },
     },
   },
