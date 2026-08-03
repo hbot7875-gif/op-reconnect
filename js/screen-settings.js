@@ -69,7 +69,7 @@ function paintSections(body, state) {
     const warn = el('button', 'set-alarm', `
       <span class="sa-icon">⚠</span>
       <span class="sa-main">
-        <span class="sa-title">Your uplink isn't set up</span>
+        <span class="sa-title">Your stream source isn't set up</span>
         <span class="sa-body">Nothing you stream is being counted. Tap to fix it — it takes a minute.</span>
       </span>
     `)
@@ -88,8 +88,8 @@ function paintSections(body, state) {
     body.appendChild(warn)
   }
 
-  // ── Uplink ──────────────────────────────────────────────────────
-  body.appendChild(section('Uplink', 'How your streams reach the network', [
+  // ── Stream source ─────────────────────────────────────────────
+  body.appendChild(section('Stream source', 'How your streams reach the network', [
     {
       // Naming the source while it's missing its username reads as "this is
       // handled" when nothing is being counted — say what's actually true.
@@ -104,7 +104,7 @@ function paintSections(body, state) {
       onClick: () => openPin(account, refresh),
     },
     {
-      icon: '📻', name: 'Check the uplink', value: '',
+      icon: '📻', name: 'Check your streams', value: '',
       body: "See what the network heard from you in the last 24 hours, and what counted.",
       onClick: () => openSignalLog(),
     },

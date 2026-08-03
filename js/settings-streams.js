@@ -28,7 +28,7 @@ const SOURCES = [
     key: 'direct',
     name: 'Scrobbler app',
     sub: 'Web Scrobbler · Pano Scrobbler',
-    body: 'Send plays straight here from a scrobbler extension or app, using your own uplink PIN. No third-party account needed.',
+    body: 'Send plays straight here from a scrobbler extension or app, using your own PIN. No third-party account needed.',
     needsPin: true,
   },
   {
@@ -66,7 +66,7 @@ export function uplinkBroken(account) {
 export function streamSourceSheet(account, onSaved) {
   const sheet = el('div', 'sheet set-sheet')
   sheet.append(
-    el('div', 'eyebrow', 'UPLINK SOURCE'),
+    el('div', 'eyebrow', 'STREAM SOURCE'),
     el('h3', '', 'Where do your streams come from?'),
     el('p', 'muted', 'Pick one. This is how the network sees what you played — without it, nothing you stream counts.'),
   )
@@ -93,7 +93,7 @@ export function streamSourceSheet(account, onSaved) {
     }
     if (s.needsPin) {
       const note = el('div', 'src-note', account.hasPin
-        ? '✓ Uplink PIN ready — open “Scrobbler PIN” below to see it.'
+        ? '✓ PIN ready — open “Scrobbler PIN” below to see it.'
         : '⚠ Needs a PIN first — close this and tap “Scrobbler PIN”.')
       opt.appendChild(note)
     }
@@ -107,7 +107,7 @@ export function streamSourceSheet(account, onSaved) {
   }
   sheet.appendChild(grid)
 
-  const save = el('button', 'btn btn-primary', 'Save uplink')
+  const save = el('button', 'btn btn-primary', 'Save')
   save.onclick = async () => {
     save.disabled = true
     save.textContent = 'SAVING…'
@@ -117,10 +117,10 @@ export function streamSourceSheet(account, onSaved) {
     }
     const res = await call('setStreamSource', payload)
     save.disabled = false
-    save.textContent = 'Save uplink'
+    save.textContent = 'Save'
     if (!res.success) { toast(sourceError(res.error)); return }
     hideOverlay()
-    toast(`Uplink set to ${sourceName(selected)}`)
+    toast(`Stream source set to ${sourceName(selected)}`)
     onSaved?.()
   }
   sheet.appendChild(save)
@@ -136,7 +136,7 @@ function sourceError(code) {
     lb_username_required: 'Add your ListenBrainz username first.',
     statsfm_username_required: 'Add your stats.fm username first.',
     musicat_id_required: 'Add your musicat public ID first.',
-    pin_required: 'Generate an uplink PIN before switching to a scrobbler app.',
+    pin_required: 'Generate a PIN before switching to a scrobbler app.',
     invalid_preference: 'Pick one of the listed sources.',
   }[code] || code || "Couldn't save that"
 }
@@ -234,7 +234,7 @@ function copyRow(label, value) {
 export function signalLogSheet() {
   const sheet = el('div', 'sheet set-sheet')
   sheet.append(
-    el('div', 'eyebrow', 'UPLINK CHECK'),
+    el('div', 'eyebrow', 'STREAM CHECK'),
     el('h3', '', 'What the network is hearing'),
   )
   const body = el('div', 'sig-body', '<p class="muted">Listening…</p>')
@@ -247,7 +247,7 @@ export function signalLogSheet() {
   call('getSignalLog', { agentNo: getAgentNo() }).then((res) => {
     body.innerHTML = ''
     if (!res.success) {
-      body.appendChild(el('p', 'muted', esc(res.error || "Couldn't reach the uplink")))
+      body.appendChild(el('p', 'muted', esc(res.error || "Couldn't reach your stream source")))
       return
     }
     const t = res.totals || {}
@@ -257,7 +257,7 @@ export function signalLogSheet() {
     `))
 
     if (!res.streams?.length) {
-      body.appendChild(el('p', 'muted', 'Nothing has come through in the last 24 hours. If you\'ve been streaming, your uplink source is probably wrong — check it above.'))
+      body.appendChild(el('p', 'muted', 'Nothing has come through in the last 24 hours. If you\'ve been streaming, your stream source is probably wrong — check it above.'))
       return
     }
     if (res.nowPlaying) {

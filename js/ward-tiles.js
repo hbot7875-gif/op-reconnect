@@ -14,7 +14,7 @@ import { profileFor, drawCap, drawDecor, n, hashStr, rng } from './ward-profiles
 
 // A one-line identity per ward — the map file's own descriptions, shortened.
 const SUBTITLE = {
-  'relay-zero': 'HQ relay',
+  'relay-zero': 'Home base',
   mono: 'Rain district',
   happy: 'Carnival quarter',
   dday: 'The foundry',
