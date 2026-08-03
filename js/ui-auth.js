@@ -38,6 +38,7 @@ export function renderAuth(container, onAuthed) {
   // canvas: a real photo ties this screen to the landing page directly
   // instead of an abstract effect that only rhymed with it.
   wrap.appendChild(el('div', 'auth-bg'))
+  wrap.appendChild(el('div', 'mist'))
   wrap.appendChild(el('div', 'auth-scrim'))
 
   wrap.appendChild(el('div', 'eyebrow', 'OP: RECONNECT'))

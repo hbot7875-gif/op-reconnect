@@ -18,6 +18,10 @@ export function renderOnboarding(container, payload, agentNo, onJoined) {
 
   // ── Step 1: the transmission ──
   const step1 = el('div', 'ob-wrap')
+  // Minimal mystery instead of a narrator: same drifting-mist layer the
+  // auth screen uses (reconnect.css's .mist), just over the plain dark
+  // background here since this screen has no photo of its own.
+  step1.appendChild(el('div', 'mist'))
   step1.append(
     el('div', 'eyebrow', esc(intro.title || 'TRANSMISSION')),
     el('h1', 'title-sm', esc(intro.chapter || 'Operation: ReConnect')),
