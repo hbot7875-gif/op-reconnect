@@ -116,16 +116,27 @@ function peekSheet(d, ward, state) {
 
 /* ── The ARMY Bomb ──────────────────────────────────────────────────────── */
 
+// The World screen re-renders on every poll (main.js, every 90s + tab focus)
+// — the power-on entrance and the count-up should only ever play the first
+// time an agent sees the bomb this session, not replay on every refresh,
+// which would read as glitchy rather than as an entrance.
+let bombIntroPlayed = false
+const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
 function coreBlock(state) {
   const b = state.bomb || { charge: 0, defuse: null, brownout: false }
   const underAttack = !!b.defuse
   const pct = Math.round((b.charge || 0) * 100)
+  const firstReveal = !bombIntroPlayed
+  bombIntroPlayed = true
 
   const zone = el('div', 'core-block')
   zone.appendChild(el('div', 'core-eyebrow', 'Network core'))
   zone.appendChild(el('div', 'core-title', 'ARMY Bomb'))
 
-  const btn = el('button', 'army-core' + (underAttack ? ' is-attack' : b.brownout ? ' is-brownout' : ''))
+  const btn = el('button', 'army-core'
+    + (underAttack ? ' is-attack' : b.brownout ? ' is-brownout' : '')
+    + (firstReveal && !reducedMotion() ? ' core-intro' : ''))
   btn.setAttribute('aria-label', `ARMY Bomb — ${pct}% charged. Open details.`)
   // The lightstick is the Launch the Voyage bomb (the .cs-bomb build from
   // app.js's concert mode): glassy sphere, ⟭⟬ logo, dark handle, gentle sway.
@@ -168,6 +179,21 @@ function coreBlock(state) {
   `
   zone.appendChild(read)
   if (deadline) tickCountdowns()
+
+  // Charges up from 0 rather than just appearing, same "this is happening
+  // live" feeling the count-up rings already sell — but only on the entrance,
+  // never on a routine poll where the value usually hasn't moved.
+  if (firstReveal && !underAttack && !reducedMotion()) {
+    const numEl = read.querySelector('.core-pct')
+    const start = performance.now()
+    const dur = 900
+    requestAnimationFrame(function frame(now) {
+      const t = Math.min(1, (now - start) / dur)
+      const eased = 1 - Math.pow(1 - t, 3)
+      numEl.textContent = `${Math.round(pct * eased)}%`
+      if (t < 1) requestAnimationFrame(frame)
+    })
+  }
   return zone
 }
 

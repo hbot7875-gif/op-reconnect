@@ -435,22 +435,38 @@ body.red-zone .wtb.now { fill: var(--crimson); filter: drop-shadow(0 0 3px rgba(
 @keyframes corePulse { 0%,100% { opacity: 0.20; transform: scale(1); } 50% { opacity: 0.34; transform: scale(1.07); } }
 @keyframes ringSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-/* ── the conduit: bomb → city ── */
-.core-feed { position: relative; width: 2px; height: 34px; margin: 2px auto 0; }
-.cf-line { position: absolute; inset: 0; border-radius: 2px;
-  background: linear-gradient(180deg, rgba(139,92,246,0.55), rgba(139,92,246,0.06)); }
-.cf-pulse { position: absolute; left: 50%; top: 0; width: 6px; height: 6px; margin-left: -3px;
-  border-radius: 50%; background: var(--gold); box-shadow: 0 0 10px var(--gold);
+/* First World-screen mount only (screen-world.js gates this with a
+   module-level flag so it never replays on the 90s poll) — the bomb visibly
+   powers on rather than just appearing, so the one moment a new agent meets
+   it actually reads as an entrance. */
+.army-core.core-intro { animation: corePowerOn 1s cubic-bezier(.2,.8,.3,1) both; }
+@keyframes corePowerOn {
+  0% { opacity: 0; transform: scale(0.7); filter: brightness(0.3); }
+  55% { opacity: 1; transform: scale(1.06); filter: brightness(1.4); }
+  100% { opacity: 1; transform: scale(1); filter: brightness(1); }
+}
+@media (prefers-reduced-motion: reduce) { .army-core.core-intro { animation: none; } }
+
+/* ── the conduit: bomb → city ──
+   Was 2px × 34px with a 6px dot — technically there, but easy to miss
+   entirely, which undercuts the whole point ("the bomb isn't decoration,
+   it powers the city"). Widened and brightened so the flow actually reads
+   at a glance instead of requiring someone to already know to look for it. */
+.core-feed { position: relative; width: 3px; height: 46px; margin: 3px auto 0; }
+.cf-line { position: absolute; inset: 0; border-radius: 3px;
+  background: linear-gradient(180deg, rgba(139,92,246,0.75), rgba(139,92,246,0.08)); }
+.cf-pulse { position: absolute; left: 50%; top: 0; width: 9px; height: 9px; margin-left: -4.5px;
+  border-radius: 50%; background: var(--gold); box-shadow: 0 0 14px 2px var(--gold);
   animation: cfDrop 2.2s linear infinite; }
 .cf-pulse.d2 { animation-delay: -1.1s; }
 @keyframes cfDrop {
-  0% { transform: translateY(-5px); opacity: 0; }
-  18% { opacity: 1; }
+  0% { transform: translateY(-6px) scale(0.8); opacity: 0; }
+  18% { opacity: 1; transform: translateY(4px) scale(1); }
   82% { opacity: 1; }
-  100% { transform: translateY(34px); opacity: 0; }
+  100% { transform: translateY(46px) scale(0.8); opacity: 0; }
 }
-.core-feed.is-attack .cf-line { background: linear-gradient(180deg, rgba(229,56,79,0.65), rgba(229,56,79,0.06)); }
-.core-feed.is-attack .cf-pulse { background: var(--crimson); box-shadow: 0 0 10px var(--crimson);
+.core-feed.is-attack .cf-line { background: linear-gradient(180deg, rgba(229,56,79,0.85), rgba(229,56,79,0.08)); }
+.core-feed.is-attack .cf-pulse { background: var(--crimson); box-shadow: 0 0 14px 2px var(--crimson);
   animation-duration: 0.75s !important; }
 .core-feed.is-brownout .cf-pulse { animation-play-state: paused; opacity: 0.2; }
 .core-feed.is-brownout .cf-line { background: linear-gradient(180deg, rgba(99,93,120,0.4), transparent); }
@@ -1175,6 +1191,12 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 /* ── onboarding / misc ── */
 .ob-wrap { max-width: 520px; margin: 0 auto; padding: 48px 20px; }
 .ob-body { color: var(--muted); line-height: 1.8; font-size: 15px; white-space: pre-line; margin: 16px 0; }
+/* Words arrive one at a time (see typewriterWords in ui-onboarding.js) —
+   each span gets its own animation-delay set inline, this rule just defines
+   the per-word fade/rise itself. */
+.ob-body .tw-word { display: inline-block; opacity: 0; animation: twIn 0.4s ease forwards; }
+@keyframes twIn { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .ob-body .tw-word { opacity: 1; animation: none; } }
 .ob-voiceover { margin-top: 0; }
 .ob-voiceover.is-playing { border-color: var(--purple); color: var(--purple-lt); }
 .ob-input { width: 100%; padding: 14px; border-radius: var(--r); border: 1px solid var(--border);

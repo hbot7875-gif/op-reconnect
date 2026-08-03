@@ -24,10 +24,12 @@ export function renderOnboarding(container, payload, agentNo, onJoined) {
   // background here since this screen has no photo of its own.
   step1.appendChild(el('div', 'mist'))
   step1.appendChild(ambientToggle('audio/weather-ambient.mp3'))
+  const body = el('div', 'ob-body')
+  body.appendChild(typewriterWords(intro.body || ''))
   step1.append(
     el('div', 'eyebrow', esc(intro.title || 'TRANSMISSION')),
     el('h1', 'title-sm', esc(intro.chapter || 'Operation: ReConnect')),
-    el('div', 'ob-body', esc(intro.body || '')),
+    body,
   )
 
   // Voice-over for the lore, when the chapter has one. No recording exists
@@ -115,6 +117,33 @@ export function renderOnboarding(container, payload, agentNo, onJoined) {
     step3.appendChild(btn3)
     step3.hidden = false
   }
+}
+
+/* ── typewriter ───────────────────────────────────────────────────────── */
+
+/** The lore reads as a transmission arriving, not a wall of text dumped on
+ *  screen — each word fades/rises in on its own staggered CSS delay (.ob-body
+ *  .tw-word in reconnect.css). Pure CSS animation-delay rather than a JS
+ *  setTimeout chain: it can't drift or desync, and prefers-reduced-motion
+ *  turns it off with one rule instead of branching this function.
+ *  Splits on whitespace and keeps every whitespace run as a plain text node
+ *  (not wrapped), so \n\n paragraph breaks survive for .ob-body's own
+ *  white-space: pre-line to render. */
+function typewriterWords(text) {
+  const frag = document.createDocumentFragment()
+  const tokens = String(text).split(/(\s+)/)
+  let i = 0
+  for (const tok of tokens) {
+    if (!tok) continue
+    if (/^\s+$/.test(tok)) { frag.appendChild(document.createTextNode(tok)); continue }
+    const span = document.createElement('span')
+    span.className = 'tw-word'
+    span.textContent = tok
+    span.style.animationDelay = `${(i * 0.035).toFixed(3)}s`
+    i++
+    frag.appendChild(span)
+  }
+  return frag
 }
 
 /* ── voice-over ───────────────────────────────────────────────────────── */
