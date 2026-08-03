@@ -33,6 +33,11 @@ export default defineConfig({
         index: resolve(__dirname, 'index.html'),
         game: resolve(__dirname, 'game.html'),
         botz: resolve(__dirname, 'botz.html'),
+        // Site-owner-only tool (catalog refresh, Spotify connect) — added
+        // when candy-star-admin.html was written, but never added HERE, so
+        // it silently 404'd on every deploy despite building/deploying
+        // clean otherwise. Not linked from anywhere in-game on purpose.
+        candyAdmin: resolve(__dirname, 'candy-star-admin.html'),
       },
     },
   },
