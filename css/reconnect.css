@@ -363,14 +363,18 @@ body.red-zone .wtb.now { fill: var(--crimson); filter: drop-shadow(0 0 3px rgba(
 
 .army-core { position: relative; width: 132px; height: 150px; background: none; border: none;
   cursor: pointer; padding: 0; margin: 6px 0 0;
-  --bomb: var(--purple); }
+  --bomb: var(--purple); --charge: 0; }
 .army-core.is-attack { --bomb: var(--crimson); }
 .army-core.is-brownout { --bomb: #3d3852; }
 
-/* the Voyage back-glow: one big blurred disc behind the sphere */
+/* the Voyage back-glow: one big blurred disc behind the sphere.
+   Opacity now scales with --charge (set inline from real b.charge in
+   screen-world.js) — a fresh, uncharged network reads as dim embers, not a
+   sphere that already looks fully powered before anything's happened. */
 .core-glow { position: absolute; top: -16px; left: 50%; margin-left: -75px; width: 150px; height: 150px;
   border-radius: 50%; background: var(--bomb); filter: blur(46px);
-  animation: corePulse 4.5s ease-in-out infinite; transition: background 0.8s; }
+  opacity: calc(0.22 + var(--charge) * 0.78);
+  animation: corePulse 4.5s ease-in-out infinite; transition: background 0.8s, opacity 0.9s ease; }
 .army-core.is-attack .core-glow { animation-duration: 1.1s; }
 .army-core.is-brownout .core-glow { opacity: 0.12; animation: none; }
 
@@ -407,10 +411,11 @@ body.red-zone .wtb.now { fill: var(--crimson); filter: drop-shadow(0 0 3px rgba(
   overflow: hidden; display: flex; align-items: center; justify-content: center;
   background: radial-gradient(circle at 35% 30%, rgba(255,255,255,0.8), rgba(255,255,255,0.1) 40%, rgba(0,0,0,0.5));
   border: 1.5px solid rgba(255,255,255,0.4);
-  box-shadow: 0 0 50px var(--bomb), inset 0 0 30px var(--bomb);
-  transition: box-shadow 0.5s; }
-.rc-fill { position: absolute; inset: 0; opacity: 0.38;
-  background: linear-gradient(to top, var(--bomb), transparent); transition: background 1s; }
+  box-shadow: 0 0 calc(14px + var(--charge) * 38px) var(--bomb),
+              inset 0 0 calc(6px + var(--charge) * 26px) var(--bomb);
+  transition: box-shadow 0.9s ease; }
+.rc-fill { position: absolute; inset: 0; opacity: calc(0.10 + var(--charge) * 0.45);
+  background: linear-gradient(to top, var(--bomb), transparent); transition: background 1s, opacity 0.9s ease; }
 .rc-logo { font-size: 27px; font-weight: 900; color: #fff; z-index: 2; opacity: 0.95;
   text-shadow: 0 0 16px var(--bomb); transition: text-shadow 0.5s; }
 .rc-handle { width: 17px; height: 60px; margin-top: -5px; position: relative; z-index: 1;

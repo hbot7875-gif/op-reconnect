@@ -148,6 +148,12 @@ function coreBlock(state) {
       <div class="rc-handle"></div>
     </div>
   `
+  // The ring arc already carries real charge — the glow/sphere didn't, so the
+  // bomb looked fully lit from 0% on. --charge scales glow opacity and
+  // box-shadow spread in CSS so a fresh network reads as dim/embers and
+  // brightens as it actually charges, same intensity-follows-state language
+  // the map and auth screen already use elsewhere.
+  btn.style.setProperty('--charge', arcFrac.toFixed(3))
   btn.onclick = () => showOverlay(bombSheet(state))
   zone.appendChild(btn)
 
