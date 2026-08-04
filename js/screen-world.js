@@ -1,19 +1,29 @@
 // World screen — the hub.
 //
-// Reads top to bottom as: any active broadcast (HQ has something to say),
-// the ARMY Bomb (who we are), a breach if there is one (drop everything),
-// what I'm restoring right now (the one button that matters), how the
-// network is doing, then where I can go.
+// Reads top to bottom as: any active broadcast (HQ has something to say), a
+// breach if there is one (drop everything), what I'm restoring right now
+// (the one button that matters — the mission dominates, it's the reason
+// this screen exists), the ARMY Bomb as a compact status line (real data,
+// but it's network status, not the mission), then how the whole city is
+// doing and where I can go.
+//
+// The mission card used to sit after the ARMY Bomb, which by itself was
+// most of a screen's height before a player ever reached the thing they
+// came here to do. The Bomb still shows real charge/boost data, just
+// smaller and lower down the page — see .army-core's ~30%-smaller sizing
+// in reconnect.css.
 //
 // The map is a stack of ward tiles (ward-tiles.js) — each ward a card with a
 // mini skyline, one building per district, lit as they restore. The tiles
 // carry the name/count/state text themselves, so there is no separate ward
-// list: the map IS the list.
+// list: the map IS the list. Home Base itself never gets a tile there — see
+// ward-tiles.js's header comment — since it's already this mission card and
+// the map's own centre landmark; a third copy was pure repetition.
 
 import { el, esc, showOverlay, hideOverlay, unlockAfter } from './state.js'
 import { goWard, goDistrict, goCandyStar } from './router.js'
 import { districtFraction } from './ui-district.js'
-import { renderWardTiles, wardDisplayName, HOME_BASE_WARD } from './ward-tiles.js'
+import { renderWardTiles, glanceStrip, wardDisplayName, HOME_BASE_WARD } from './ward-tiles.js'
 import { renderCityMap } from './city-map.js'
 import { districtIcon } from './landmarks.js'
 import { openFinder } from './search.js'
@@ -29,10 +39,10 @@ export function renderWorld(container, state) {
 
   const bc = broadcastCards(state)
   if (bc.children.length) wrap.appendChild(bc)
-  wrap.appendChild(coreBlock(state))
-  wrap.appendChild(coreFeed(state))
   if (b.defuse) wrap.appendChild(redZoneCard(state))
   wrap.appendChild(opCard(state))
+  wrap.appendChild(coreBlock(state))
+  wrap.appendChild(coreFeed(state))
   wrap.appendChild(statusStrip(state))
   // The map's heading and its tiles travel together: on desktop the whole
   // group moves into the second column as ONE cell. Kept as two separate
@@ -41,6 +51,12 @@ export function renderWorld(container, state) {
   // "Operations map" and the first tile.
   const map = el('div', 'world-map')
   map.appendChild(mapHead(state))
+  // City Recovery used to sit after the map (inside mapField, as the first
+  // thing in the ward-tile stack) — reads backward: you'd inspect the whole
+  // map before finding out what it's a map OF. It's the map's own header
+  // stat now, above the plan itself.
+  const wards = state.map?.wards || []
+  if (wards.length) map.appendChild(glanceStrip(wards, state.map?.districts || []))
   map.appendChild(cityPlan(state))
   map.appendChild(mapField(state))
   wrap.appendChild(map)
@@ -66,9 +82,18 @@ function mapHead(state) {
   // Persistent, not a one-time tip — a stranger's first instinct is to tap
   // the ARMY Bomb (it's the biggest, brightest thing on screen), not this
   // map. Saying outright that the map is the way in beats hoping the visual
-  // pulse on the available ward (below) gets noticed on its own.
-  wrap.appendChild(el('div', 'map-hint', 'Tap a ward to enter the city.'))
+  // pulse on the available ward (below) gets noticed on its own. "Tap a
+  // ward" is actively wrong early on, when every ward but Home Base is
+  // sealed — name the one thing that's actually open instead.
+  wrap.appendChild(el('div', 'map-hint', mapHint(state)))
   return wrap
+}
+
+function mapHint(state) {
+  const home = (state.map?.wards || []).find((w) => w.id === HOME_BASE_WARD)
+  return home && home.status !== 'restored'
+    ? 'Home Base is open — tap the center to begin.'
+    : 'Tap a ward to enter the city.'
 }
 /* The whole world, on the home screen — the entire valley at once, one block
    per district, each lighting as that district comes back. city-map.js has
@@ -92,8 +117,7 @@ function mapField(state) {
   if (!wards.length) return el('div')
   return renderWardTiles(wards, state.map?.districts || [],
     (w, origin) => goWard(w.id, origin),
-    (d, w) => showOverlay(peekSheet(d, w, state)),
-    state.bomb)
+    (d, w) => showOverlay(peekSheet(d, w, state)))
 }
 
 /* ── Peeking at one building ────────────────────────────────────────────

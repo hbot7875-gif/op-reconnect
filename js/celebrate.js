@@ -10,7 +10,8 @@
 // rather than decorating a number. Tap anywhere to skip to the end; nobody
 // should be held hostage by an animation they've seen forty times.
 
-import { el, esc, showOverlay, joinNames } from './state.js'
+import { el, esc, showOverlay, hideOverlay, joinNames } from './state.js'
+import { tickCountdowns } from './countdown.js'
 import { mountScene } from './scene.js'
 import { openShare } from './share.js'
 import { itemArt, RARITY, itemsAt } from './items.js'
@@ -212,4 +213,75 @@ function sparks(host, count) {
     host.appendChild(s)
     setTimeout(() => s.remove(), 3200)
   }
+}
+
+/* ── the level-up moment ─────────────────────────────────────────────────
+   Levels come around far more often than a district restoration, so this is
+   a beat, not a sequence: what you reached, what you got, done. Reuses the
+   plain showOverlay/hideOverlay pair (no scene to mount, nothing to tear
+   down) rather than playRestoration's direct #overlay handling above.
+
+   A few consistent line-icons instead of emoji — every platform draws ⛽🧊⚡
+   in its own house style, so three emoji next to each other never actually
+   look like a matched set. These are plain currentColor strokes/fills, one
+   visual language, themeable with the same gold the numbers use. */
+const ICONS = {
+  fuel: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="9" height="12" rx="1"/><path d="M7 5V3h3v2"/><path d="M13 8h1.5a1.5 1.5 0 0 1 1.5 1.5V13a1.3 1.3 0 0 0 2.6 0V8.6L16 6"/></svg>',
+  freeze: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M10 2v16M3.7 5.5l12.6 9M16.3 5.5l-12.6 9"/><path d="M10 4.6 8 6M10 4.6l2 1.4M10 15.4 8 14M10 15.4l2-1.4"/></svg>',
+  boost: '<svg viewBox="0 0 20 20" fill="currentColor"><path d="M11 2 4 11h5l-1 7 8-10h-5l1-6z"/></svg>',
+}
+
+/**
+ * @param state   full game state right after crossing a level — reads
+ *                state.levelUp ({level, name, levelsGained,
+ *                streakFreezeGranted, fuelGranted, boostMultiplier,
+ *                boostExpiresAt}) and state.player.rank.title as a fallback
+ *                for levels past the named ladder
+ * @param onDone  called when the player dismisses it
+ */
+export function playLevelUp(state, onDone) {
+  const levelUp = state.levelUp
+  const reduced = REDUCED()
+  const box = el('div', 'lvlup')
+  box.appendChild(el('div', 'lvlup-sparks'))
+  box.appendChild(el('div', 'lvlup-eyebrow', 'LEVEL UP'))
+
+  const ring = el('div', 'lvlup-ring')
+  ring.innerHTML = `
+    <svg viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="43" class="lvlup-ring-bg"/>
+      <circle cx="50" cy="50" r="43" class="lvlup-ring-fg"/>
+    </svg>
+    <div class="lvlup-num">${levelUp.level}</div>
+  `
+  box.appendChild(ring)
+  // The level's own name if this level has one; otherwise fall back to the
+  // rank title so the line under the ring is never just empty.
+  const subtitle = levelUp.name || state.player?.rank?.title
+  if (subtitle) box.appendChild(el('div', 'lvlup-rank', esc(subtitle)))
+
+  // Progression only means something if the city feels it too.
+  box.appendChild(el('p', 'lvlup-tie', 'Your Home Base gained more power.'))
+
+  const rows = []
+  if (levelUp.fuelGranted > 0) rows.push([ICONS.fuel, `+${levelUp.fuelGranted} Fuel`])
+  if (levelUp.streakFreezeGranted > 0) rows.push([ICONS.freeze, `+${levelUp.streakFreezeGranted} Streak Freeze`])
+  if (levelUp.boostMultiplier > 1 && levelUp.boostExpiresAt) {
+    rows.push([ICONS.boost,
+      `${levelUp.boostMultiplier}&times; XP Boost &middot; <b class="lvlup-clock" data-deadline="${esc(levelUp.boostExpiresAt)}">--:--:--</b> remaining`])
+  }
+  if (rows.length) {
+    const rewards = el('div', 'lvlup-rewards')
+    for (const [icon, label] of rows) rewards.appendChild(el('div', 'lvlup-reward', `<span class="lvlup-ico">${icon}</span><span>${label}</span>`))
+    box.appendChild(rewards)
+  }
+
+  const go = el('button', 'btn btn-primary lvlup-go', 'Continue mission')
+  go.onclick = () => { hideOverlay(); onDone?.() }
+  box.appendChild(go)
+
+  showOverlay(box)
+  tickCountdowns() // paints the boost clock immediately instead of a 1s flash of --:--:--
+  if (!reduced) sparks(box.querySelector('.lvlup-sparks'), 22)
+  buzz([30, 60, 40])
 }

@@ -16,6 +16,7 @@ import { renderResources } from './screen-resources.js'
 import { renderSettings } from './screen-settings.js'
 import { renderCandyStar } from './screen-candystar.js'
 import { renderRanking } from './screen-ranking.js'
+import { playLevelUp } from './celebrate.js'
 
 const $ = (id) => document.getElementById(id)
 
@@ -78,6 +79,15 @@ function renderScreen(state) {
   }
 }
 
+// state.levelUp is only ever present on the one response that just crossed
+// a level (see leveling.ts's applyLevelUpIfNeeded — a completion-latch
+// against rc_players.last_level, so it goes back to null on the next real
+// fetch). Guarded the same way screen-district.js guards a restoration
+// replay: local optimistic setState() calls elsewhere in the app spread the
+// current state, which could otherwise carry a stale levelUp along for the
+// ride and replay the celebration on an unrelated action.
+let celebratedLevel = null
+
 subscribe((state) => {
   if (!state || !state.joined) return
   window.__rcState = state
@@ -85,6 +95,10 @@ subscribe((state) => {
   renderHud($('hud'), state)
   renderTabbar($('tabbar'), state)
   renderScreen(state)
+  if (state.levelUp && state.levelUp.level !== celebratedLevel) {
+    celebratedLevel = state.levelUp.level
+    playLevelUp(state)
+  }
 })
 
 onScreenChange(() => {

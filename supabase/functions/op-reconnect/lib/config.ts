@@ -75,11 +75,11 @@ export function limits(content: GameContent): { backfillMaxDays: number; lbMaxPa
   return { backfillMaxDays: 35, lbMaxPages: 100, streakLookbackDays: 110, ...(content.config.limits || {}) }
 }
 
-/** Rank for a lifetime XP total: current title + next threshold. */
-export function rankFor(content: GameContent, xp: number): { index: number; title: string; nextAt: number | null } {
+/** Rank for a lifetime XP total: current title + next threshold/title. */
+export function rankFor(content: GameContent, xp: number): { index: number; title: string; nextAt: number | null; nextTitle: string | null } {
   const ladder: { xp: number; title: string }[] = content.config.ranks || [{ xp: 0, title: 'Agent' }]
   let idx = 0
   for (let i = 0; i < ladder.length; i++) if (xp >= ladder[i].xp) idx = i
   const next = ladder[idx + 1]
-  return { index: idx + 1, title: ladder[idx].title, nextAt: next ? next.xp : null }
+  return { index: idx + 1, title: ladder[idx].title, nextAt: next ? next.xp : null, nextTitle: next ? next.title : null }
 }

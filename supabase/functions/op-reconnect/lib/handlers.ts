@@ -9,7 +9,7 @@ import { evaluateTransmission } from './transmission.ts'
 import { freezeGoals, computeBaseline, districtProgress, missionBoard, filesRevealedCount } from './districts.ts'
 import { todayKst, nextKstMidnightUtc, kstDateOf } from './kst.ts'
 import { getBombView, launchDefuse } from './bomb.ts'
-import { levelFor, applyLevelUpIfNeeded } from './leveling.ts'
+import { levelFor, applyLevelUpIfNeeded, nextLevelRewards } from './leveling.ts'
 import { getActiveBroadcasts } from './broadcasts.ts'
 
 // rc_agents (migration 016) is this season's own account table — a clean
@@ -265,7 +265,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     player: {
       codename: player.codename, mode: player.mode, xp,
       rank: rankFor(content, xp),
-      level,
+      level: { ...level, nextRewards: nextLevelRewards(content) },
       streakFreezeCharges: streak.freezeChargesRemaining,
       boost: levelUp
         ? { multiplier: levelUp.boostMultiplier, expiresAt: levelUp.boostExpiresAt }

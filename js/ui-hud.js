@@ -1,38 +1,108 @@
-// HUD header: codename, rank + XP progress, streak, mode pill.
-// XP is the long-game hook, so it gets a real labelled bar rather than the
-// 3px hairline it used to be — a player should be able to see "how close am
-// I to the next rank" without opening anything.
+// HUD header: codename + level (the frequent progression number), rank as
+// smaller narrative status, streak, and — only when one's running — an
+// active XP boost. Streaming mode used to live here as a pill; it's a
+// once-in-a-while setting, not something that should compete for space with
+// player progression, so it's Settings-only now (openModeSheet is still
+// exported from here so that row can open the exact same sheet).
+//
+// The level ladder (frequent, escalating: level/xpIntoLevel/xpForNextLevel)
+// and the rank ladder (rare, narrative titles) are two different systems the
+// backend already computes — see leveling.ts / config.ts's rankFor. This
+// used to show only rank progress, with XP-bar math approximated from a
+// hardcoded rank-threshold guess (rankFloor, now gone) because the real
+// per-rank floor wasn't in the payload. Showing level progress instead needs
+// no guessing: xpIntoLevel/xpForNextLevel come straight from the server.
 
 import { call } from './api.js'
 import { el, esc, toast, setState, showOverlay, hideOverlay } from './state.js'
 import { getScreen, goWorld, goResources, goSettings, goCandyStar, goRanking } from './router.js'
 import { getAgentNo } from './session.js'
 
+/** { multiplier, minsLeft } while state.player.boost is live, else null. */
+function activeBoost(boost) {
+  if (!boost?.expiresAt) return null
+  const msLeft = new Date(boost.expiresAt).getTime() - Date.now()
+  if (msLeft <= 0) return null
+  return { multiplier: boost.multiplier, minsLeft: Math.max(1, Math.round(msLeft / 60000)) }
+}
+
 export function renderHud(container, state) {
   const p = state.player
-  const prevRankAt = rankFloor(state)
-  const isMax = p.rank.nextAt === null
-  const span = (p.rank.nextAt ?? p.xp) - prevRankAt
-  const pct = isMax ? 100
-    : Math.max(0, Math.min(100, Math.round(((p.xp - prevRankAt) / Math.max(1, span)) * 100)))
+  const lvl = p.level
+  const pct = Math.max(0, Math.min(100, Math.round((lvl.xpIntoLevel / Math.max(1, lvl.xpForNextLevel)) * 100)))
+  const xpLeft = Math.max(0, lvl.xpForNextLevel - lvl.xpIntoLevel)
+  const boost = activeBoost(p.boost)
+  const streakLabel = p.streak.current > 0 ? `🔥 ${p.streak.current}-day streak` : 'No streak yet'
 
   container.innerHTML = `
     <div class="hud-inner">
-      <div class="hud-id">
+      <div class="hud-row">
         <div class="hud-code">${esc(p.codename)}</div>
-        <div class="hud-rank">${esc(p.rank.title)}</div>
+        <button class="hud-level" id="levelPill" type="button" title="View progress">
+          <span class="hlv-lv">LV</span><span class="hlv-num">${lvl.level}</span>
+        </button>
       </div>
-      <div class="hud-right">
-        <span class="hud-streak" title="${p.streak.current} days in a row">🔥 ${p.streak.current}</span>
-        <button class="hud-mode" id="modePill" title="Streaming mode">${esc(p.mode)}</button>
+      <div class="hud-row hud-row-sub">
+        <div class="hud-rank">${esc(p.rank.title)}</div>
+        <div class="hud-streak" title="${p.streak.current} days in a row">${streakLabel}</div>
       </div>
     </div>
     <div class="hud-xp">
       <div class="xp-bar"><div class="xp-fill" style="width:${pct}%"></div></div>
-      <span class="xp-label">${isMax ? `${p.xp} XP · max rank` : `${p.xp} / ${p.rank.nextAt} XP`}</span>
+      <span class="xp-label">${lvl.xpIntoLevel} / ${lvl.xpForNextLevel} XP</span>
+    </div>
+    <div class="hud-xp-sub">
+      <span class="hud-xp-note">${xpLeft} XP until Level ${lvl.level + 1}</span>
+      ${boost ? `<span class="hud-boost">${boost.multiplier}&times; BOOST &middot; ${boost.minsLeft}m</span>` : ''}
     </div>
   `
-  container.querySelector('#modePill').onclick = () => openModeSheet(state)
+  container.querySelector('#levelPill').onclick = () => showOverlay(progressSheet(state))
+}
+
+/** LEVEL {n}, XP progress, next-level rewards, active boost (if any), rank +
+ *  next rank, badge count — everything the compact HUD strip leaves out. */
+function progressSheet(state) {
+  const p = state.player
+  const lvl = p.level
+  const pct = Math.max(0, Math.min(100, Math.round((lvl.xpIntoLevel / Math.max(1, lvl.xpForNextLevel)) * 100)))
+  const rewards = lvl.nextRewards || {}
+  const boost = activeBoost(p.boost)
+
+  const sheet = el('div', 'sheet')
+  sheet.appendChild(el('div', 'eyebrow', `LEVEL ${lvl.level}`))
+  if (lvl.name) sheet.appendChild(el('h3', '', esc(lvl.name)))
+  sheet.appendChild(el('div', 'goal-line', `
+    <div class="pbar" style="flex:1"><div class="pfill" style="width:${pct}%"></div></div>
+    <span class="count">${lvl.xpIntoLevel} / ${lvl.xpForNextLevel} XP</span>
+  `))
+
+  const rewardLines = []
+  if (rewards.fuel) rewardLines.push(`<div class="bd-line"><span>Fuel</span><b>+${rewards.fuel}</b></div>`)
+  if (rewards.streakFreeze) rewardLines.push(`<div class="bd-line"><span>Streak freeze</span><b>+${rewards.streakFreeze}</b></div>`)
+  if (rewards.boostMultiplier > 1) rewardLines.push(`<div class="bd-line"><span>XP boost</span><b>${rewards.boostMultiplier}&times; for ${rewards.boostMinutes}m</b></div>`)
+  if (rewardLines.length) {
+    sheet.appendChild(el('div', 'bd-block', `<div class="bd-block-head">Next level rewards</div>${rewardLines.join('')}`))
+  }
+
+  if (boost) {
+    sheet.appendChild(el('div', 'bd-block', `
+      <div class="bd-block-head">Active boost</div>
+      <div class="bd-line"><span>Multiplier</span><b>${boost.multiplier}&times;</b></div>
+      <div class="bd-line"><span>Time left</span><b>${boost.minsLeft}m</b></div>
+    `))
+  }
+
+  sheet.appendChild(el('div', 'bd-block', `
+    <div class="bd-block-head">Rank</div>
+    <div class="bd-line"><span>Current</span><b>${esc(p.rank.title)}</b></div>
+    ${p.rank.nextTitle ? `<div class="bd-line"><span>Next rank</span><b>${esc(p.rank.nextTitle)}</b></div>` : ''}
+    <div class="bd-line"><span>Badges earned</span><b>${(p.badges || []).length}</b></div>
+  `))
+
+  const close = el('button', 'btn btn-ghost', 'Close')
+  close.onclick = hideOverlay
+  sheet.appendChild(close)
+  return sheet
 }
 
 // Candy Star, BOTZ and Rankings used to be cards inside the Pack screen —
@@ -87,13 +157,6 @@ const MODES = {
   easy: { title: 'Easy', sub: '1 device · normal targets' },
   medium: { title: 'Medium', sub: '2–4 accounts · 2× targets' },
   hard: { title: 'Hard', sub: '5–6 accounts · 4× targets' },
-}
-
-function rankFloor(state) {
-  // The rank ladder isn't in the payload; approximate the current floor from
-  // known thresholds embedded in rank index — fall back to 0.
-  const known = [0, 100, 300, 700, 1500, 3000]
-  return known[Math.max(0, (state.player.rank.index || 1) - 1)] ?? 0
 }
 
 /** Exported so the Settings screen's "Streaming mode" row opens the same

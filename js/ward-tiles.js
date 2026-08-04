@@ -1,9 +1,15 @@
 // The operations map: the city as a stack of ward tiles.
 //
-// Three jobs, in order: say how the whole city is doing (the glance strip),
-// say which ward you're in the middle of, and keep the 200-odd districts you
-// can't reach yet out of the way. Sealed wards are collapsed behind a
-// summary — most sessions only ever touch the active ward.
+// Two jobs, in order: say which ward you're in the middle of, and keep the
+// 200-odd districts you can't reach yet out of the way. Sealed wards are
+// collapsed behind a summary — most sessions only ever touch the active
+// ward. glanceStrip ("City recovery") is exported rather than folded into
+// the stack itself — screen-world.js places it above the map, not after it,
+// so the map's own heading tells you what it represents before you read it.
+//
+// Home Base never gets a tile in this stack — it's already the World
+// screen's mission card and the map's own centre landmark, so a third card
+// here was pure repetition.
 //
 // Each ward draws its own skyline from ward-profiles.js: one building per
 // district, lit as it's restored, with a silhouette you can recognise
@@ -156,54 +162,9 @@ function skyline(w, stops, onPeek) {
   return svg
 }
 
-/** Home Base's own card, in place of a skyline. A skyline built from one
- *  building is always going to read as a lone bar no matter how it's drawn —
- *  the fix isn't a better building, it's the right metaphor. Home Base isn't
- *  a ward with a district count, it's the reactor everything else plugs
- *  into, so its card draws the same core-and-charge-ring language as the
- *  world map above it: a halo, a live charge arc (real bomb.charge, the
- *  exact number the ARMY Bomb screen shows), and conduit lines fanning out
- *  to the edges of the frame — the rest of the city, off-card. */
-function coreArt(w, onPeek, stops, bomb) {
-  const charge = Math.max(0, Math.min(1, bomb?.charge || 0))
-  const cx = 50, cy = 21, r = 10
-
-  const svg = n('svg', {
-    class: 'wt-sky wt-core', viewBox: `0 0 100 ${SKY_H}`,
-    preserveAspectRatio: 'none', 'aria-hidden': 'true',
-  })
-
-  const conduits = n('g', { class: 'wt-core-conduits' })
-  ;[[-1, -0.42], [-1, 0.5], [1, -0.42], [1, 0.5], [0, -1]].forEach(([dx, dy]) => {
-    const len = Math.hypot(dx, dy)
-    const ex = cx + (dx / len) * 46, ey = cy + (dy / len) * 30
-    const ix = cx + (dx / len) * (r + 1), iy = cy + (dy / len) * (r + 1)
-    conduits.appendChild(n('line', { x1: ix.toFixed(1), y1: iy.toFixed(1), x2: ex.toFixed(1), y2: ey.toFixed(1), class: 'wt-core-conduit' }))
-  })
-  svg.appendChild(conduits)
-
-  svg.appendChild(n('circle', { cx, cy, r: r + 3.4, class: 'wt-core-halo' }))
-  svg.appendChild(n('circle', { cx, cy, r, class: 'wt-core-ring-bg' }))
-  const circ = 2 * Math.PI * r
-  svg.appendChild(n('circle', {
-    cx, cy, r, class: 'wt-core-ring', transform: `rotate(-90 ${cx} ${cy})`,
-    'stroke-dasharray': `${(circ * charge).toFixed(1)} ${circ.toFixed(1)}`,
-  }))
-  svg.appendChild(n('circle', { cx, cy, r: 3, class: 'wt-core-dot' }))
-
-  svg.appendChild(n('rect', { x: 0, y: GROUND - 0.4, width: 100, height: 0.7, class: 'wt-ground' }))
-
-  if (onPeek && w.status !== 'locked' && stops[0]) {
-    const hit = n('rect', { x: 0, y: 0, width: 100, height: SKY_H, class: 'wt-hit' })
-    hit.addEventListener('click', (e) => { e.stopPropagation(); onPeek(stops[0], w) })
-    svg.appendChild(hit)
-  }
-  return svg
-}
-
 /* ── the city at a glance ─────────────────────────────────────────────── */
 
-function glanceStrip(wards, districts) {
+export function glanceStrip(wards, districts) {
   const total = wards.reduce((a, w) => a + (w.totalCount || 0), 0)
   const done = wards.reduce((a, w) => a + (w.restoredCount || 0), 0)
   const pct = total ? Math.round((done / total) * 100) : 0
@@ -226,7 +187,7 @@ function glanceStrip(wards, districts) {
 
 /* ── one ward ─────────────────────────────────────────────────────────── */
 
-function tile(w, stops, onSelect, onPeek, wards, bomb) {
+function tile(w, stops, onSelect, onPeek, wards) {
   const locked = w.status === 'locked'
   const gate = locked ? unlockAfter(wards, w.id) : null
   const t = el('button', `wt-tile ${w.status}`)
@@ -249,7 +210,7 @@ function tile(w, stops, onSelect, onPeek, wards, bomb) {
         : `${left} <i>left</i>`}</span>
     </span>
   `))
-  t.appendChild(w.id === HOME_BASE_WARD ? coreArt(w, onPeek, stops, bomb) : skyline(w, stops, onPeek))
+  t.appendChild(skyline(w, stops, onPeek))
 
   // A sealed ward shouldn't just say "sealed" — say what opens it.
   if (locked) {
@@ -269,29 +230,31 @@ const GROUPS = [
   { key: 'restored', title: 'Online' },
 ]
 
-export function renderWardTiles(wards, districts, onSelect, onPeek, bomb) {
+// Home Base never gets a tile here — it's already the mission card at the
+// top of the World screen AND the map's own centre landmark, and a third
+// copy in this list was the exact repetition players kept noticing.
+export function renderWardTiles(wards, districts, onSelect, onPeek) {
   const wrap = el('div', 'ward-tiles')
+  const rest = wards.filter((w) => w.id !== HOME_BASE_WARD)
   const stopsFor = (w) => districts.filter((d) => d.wardId === w.id)
 
-  wrap.appendChild(glanceStrip(wards, districts))
-
   for (const g of GROUPS) {
-    const list = wards.filter((w) => w.status === g.key)
+    const list = rest.filter((w) => w.status === g.key)
     if (!list.length) continue
     wrap.appendChild(el('div', 'wt-group', `${esc(g.title)} <i>${list.length}</i>`))
-    for (const w of list) wrap.appendChild(tile(w, stopsFor(w), onSelect, onPeek, wards, bomb))
+    for (const w of list) wrap.appendChild(tile(w, stopsFor(w), onSelect, onPeek, wards))
   }
 
   // Sealed wards are the long tail — folded away so the active ward stays
   // near the top of the screen instead of 7 tiles down.
-  const sealed = wards.filter((w) => w.status === 'locked')
+  const sealed = rest.filter((w) => w.status === 'locked')
   if (sealed.length) {
     const fold = el('details', 'wt-fold')
     const sum = document.createElement('summary')
     sum.className = 'wt-group is-fold'
     sum.innerHTML = `Sealed <i>${sealed.length}</i><span class="wt-fold-hint">still dark</span>`
     fold.appendChild(sum)
-    for (const w of sealed) fold.appendChild(tile(w, stopsFor(w), onSelect, onPeek, wards, bomb))
+    for (const w of sealed) fold.appendChild(tile(w, stopsFor(w), onSelect, onPeek, wards))
     wrap.appendChild(fold)
   }
 

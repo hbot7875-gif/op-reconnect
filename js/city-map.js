@@ -456,7 +456,13 @@ export function renderCityMap(wards, districts, onSelect, bomb, onCandyStar) {
 
   /* ── the core: Home Base, with the ARMY Bomb inside it ─────────────── */
   const charge = Math.max(0, Math.min(1, bomb?.charge || 0))
-  const coreG = n('g', { class: `cm-core ${core?.status || 'active'}` })
+  // Every other ward is sealed at the start, so the core is the only thing
+  // on the map actually worth tapping — is-open drives a slow pulse and a
+  // "START HERE" tag so that's obvious without reading the hint line above
+  // the map. Once Home Base itself is restored, it quiets down like any
+  // other lit ward.
+  const stillOpen = !!core && core.status !== 'restored'
+  const coreG = n('g', { class: `cm-core ${core?.status || 'active'}${stillOpen ? ' is-open' : ''}` })
   coreG.appendChild(n('circle', { cx: CX, cy: CY, r: CORE_R + 2.2, class: 'cm-core-halo' }))
   coreG.appendChild(n('circle', { cx: CX, cy: CY, r: CORE_R, class: 'cm-core-land' }))
   coreG.appendChild(n('circle', { cx: CX, cy: CY, r: CORE_R, class: 'cm-core-edge' }))
@@ -472,6 +478,9 @@ export function renderCityMap(wards, districts, onSelect, bomb, onCandyStar) {
   }))
   coreG.appendChild(n('circle', { cx: CX, cy: CY, r: 3.4, class: 'cm-core-bomb' }))
   coreG.appendChild(n('text', { x: CX, y: CY + 7.4, class: 'cm-core-name' }, 'HOME BASE'))
+  if (stillOpen) {
+    coreG.appendChild(n('text', { x: CX, y: CY + 10.4, class: 'cm-core-tag' }, 'START HERE'))
+  }
   if (core) {
     coreG.style.cursor = 'pointer'
     coreG.onclick = (e) => onSelect(core, { x: e.clientX, y: e.clientY })
