@@ -49,12 +49,12 @@ export function itemTile(item, onPick) {
 
 /* ── moving things around ─────────────────────────────────────────────── */
 
-async function moveItem(item, districtId) {
+async function moveItem(item, districtId, districtName = '') {
   const state = getState()
   // Optimistic: the shelf should respond instantly, it's a tiny action.
   const list = state.items || []
   const hit = list.find((x) => x.id === item.id)
-  if (hit) hit.districtId = districtId
+  if (hit) { hit.districtId = districtId; hit.districtName = districtId ? districtName : null }
   setState({ ...state, items: [...list] })
 
   const res = await call('placeItem', {
@@ -88,7 +88,7 @@ export function itemSheet(item, opts = {}) {
 
   if (districtId && item.districtId !== districtId) {
     const place = el('button', 'btn btn-primary', `Keep it at ${esc(districtName)}`)
-    place.onclick = async () => { hideOverlay(); await moveItem(item, districtId); toast(`Placed at ${districtName}`) }
+    place.onclick = async () => { hideOverlay(); await moveItem(item, districtId, districtName); toast(`Placed at ${districtName}`) }
     sheet.appendChild(place)
   }
   if (item.districtId) {
@@ -111,7 +111,19 @@ export function useTicket(item) {
   const hit = list.find((x) => x.id === item.id)
   if (hit) hit.usedAt = new Date().toISOString()
   setState({ ...state, items: [...list] })
-  call('useItem', { agentNo: getAgentNo(), playerItemId: item.id })
+
+  // Fired, not awaited — the concert should feel instant, not wait on a round
+  // trip. But a redemption the backend actually rejects still needs to be
+  // seen: undo the optimistic mark and say so, rather than leaving a ticket
+  // that looks spent when it wasn't.
+  call('useItem', { agentNo: getAgentNo(), playerItemId: item.id }).then((res) => {
+    if (res?.success) return
+    const s = getState()
+    const h = (s.items || []).find((x) => x.id === item.id)
+    if (h) h.usedAt = null
+    setState({ ...s, items: [...(s.items || [])] })
+    toast(res?.error || "Couldn't confirm that ticket — check your Pack")
+  })
 
   // concert_voyage.js is self-contained — it builds its own overlay, styles
   // and player, and needs nothing from app.js.

@@ -274,7 +274,7 @@ function redZoneCard(state) {
     ${(d.activeUntil || d.active_until)
       ? `<div class="rz-timer">Time left <b data-deadline="${esc(d.activeUntil || d.active_until)}">--:--:--</b></div>`
       : ''}
-    <div class="rz-foot">You've routed ${d.yourStreams} &middot; everyone who helps gets +${d.rewardXp} XP</div>
+    <div class="rz-foot">You've routed ${(d.yourStreams || 0).toLocaleString()} &middot; everyone who helps gets +${d.rewardXp} XP</div>
   `
   const go = el('button', 'btn btn-alert', 'View Red Zone')
   go.onclick = () => showOverlay(bombSheet(state))
@@ -373,7 +373,7 @@ function statusStrip(state) {
         <span class="st-val">${pct}%</span>
       </div>
       <div class="st-bar"><div class="st-fill" style="width:${pct}%"></div></div>
-      <div class="st-sub">Boost &times;${b.multiplier}</div>
+      ${Number.isFinite(b.multiplier) ? `<div class="st-sub">Boost &times;${b.multiplier}</div>` : ''}
     `
     tile.onclick = () => showOverlay(bombSheet(state))
     row.appendChild(tile)

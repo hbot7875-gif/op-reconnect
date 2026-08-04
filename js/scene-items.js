@@ -24,6 +24,8 @@ const INK = {
   spine: 'rgba(255,255,255,0.10)',
   line: 'rgba(255,255,255,0.22)',
   outline: 'rgba(255,255,255,0.35)',
+  perf: 'rgba(255,255,255,0.3)',
+  groove: 'rgba(255,255,255,0.14)',
 }
 
 // Flat things go on walls, everything else stands on the ground. Anything not
@@ -55,6 +57,8 @@ function itemImage(item) {
   const style = `.ia-body{fill:${body}}.ia-accent{fill:${accent}}.ia-shine{fill:${INK.shine}}`
     + `.ia-hole{fill:${INK.hole}}.ia-spine{fill:${INK.spine}}.ia-line{fill:${INK.line}}`
     + `.ia-outline{fill:none;stroke:${INK.outline};stroke-width:2}`
+    + `.ia-perf{stroke:${INK.perf};stroke-width:0.8;stroke-dasharray:1.6 1.6}`
+    + `.ia-groove{fill:none;stroke:${INK.groove};stroke-width:1.4}`
 
   const svg = itemArt(item)
     .replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" ')

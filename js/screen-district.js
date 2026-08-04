@@ -160,7 +160,18 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
       go.textContent = 'STARTING…'
       const res = await call('startDistrict', { agentNo: getAgentNo(), districtId })
       if (res.success) { setState(res); toast(`${mapD.name} — you're on it`) }
-      else { toast(friendly(res.error)); go.disabled = false; go.textContent = 'Light it up' }
+      else {
+        toast(friendly(res.error))
+        go.disabled = false
+        go.textContent = 'Light it up'
+        // The message promises a refresh (someone/something else already
+        // started this district) — make that true instead of leaving the
+        // screen stale until the next 90s poll.
+        if (res.error === 'district_already_started') {
+          const fresh = await call('getGameState', { agentNo: getAgentNo() })
+          if (fresh.success) setState(fresh)
+        }
+      }
     }
     card.appendChild(go)
   }
