@@ -165,7 +165,7 @@ function toggleCustomFilter() {
   }
 }
 
-function render(data) {
+async function render(data) {
   _lastBotzData = data
   // getSignalLog is a fixed rolling 24h window — there's no all-time total to
   // show yet, so the hero reports exactly that window instead of a fake 0.
@@ -206,27 +206,24 @@ function render(data) {
   renderStreak(data.streak, data.dailyCounts)
 
   // Stats.fm / Musicat source agents: overlay hero + recent jams with live
-  // data from that platform (the LB feed above can lag hours behind for them)
-  const srcPref = (data.sources || {}).pref
+  // data from that platform (the LB feed above can lag hours behind for
+  // them). data.sources is always {} today — botz-api.js hasn't got a real
+  // "sources" rollup yet — so the account's own streamSource is what
+  // actually decides this, not the jams payload.
+  const srcPref = await getProfileField('streamSource')
   if (srcPref === 'statsfm') overlayStatsfm(++_sfmSeq)
   else if (srcPref === 'musicat') overlayMusicat(++_sfmSeq)
 }
 
 async function getProfileField(field) {
-  // localStorage copy may predate newer profile fields — fall back to a
-  // fresh dashboard fetch when the field is absent.
+  // streamSource/musicatPublicId/statsfmUsername live on the account record,
+  // fetched with getAccount — the same action screen-settings.js uses. They
+  // were never in the rc_agent session blob (see session.js: it only ever
+  // holds agentNo/handle/email/sessionToken), so the old localStorage lookup
+  // here could never have found them.
   if (_agentProfile === undefined) {
-    try {
-      const saved = JSON.parse(localStorage.getItem(window.RCBotz.SESSION_KEY) || '{}')
-      _agentProfile = saved.profile || undefined
-    } catch (e) { _agentProfile = undefined }
-  }
-  if (_agentProfile === undefined || (_agentProfile && !(field in _agentProfile))) {
-    try {
-      // No profile endpoint on this backend — rc_agents carries no profile
-      // blob at all, so there is nothing to fall back to.
-      _agentProfile = null
-    } catch (e) { _agentProfile = null }
+    const res = await window.RCBotz.callAction('getAccount', {})
+    _agentProfile = (res && res.success && res.account) || null
   }
   return _agentProfile ? (_agentProfile[field] || null) : null
 }
