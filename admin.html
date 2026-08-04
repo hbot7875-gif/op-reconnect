@@ -24,6 +24,19 @@
   .adm-key-status.ok { color: var(--gold); }
   .adm-key-status.bad { color: var(--crimson); }
 
+  /* ── Gate — nothing below fires until this is explicitly unlocked.
+     No automatic call ever runs against a key the agent hasn't submitted
+     themselves, so "rejected" only ever appears as the direct result of
+     something they just did — never as a surprise on page load. ── */
+  .adm-gate { display: flex; align-items: center; justify-content: center; min-height: 60vh; }
+  .adm-gate-card { width: 100%; max-width: 360px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--r-lg); padding: 22px; }
+  .adm-gate-label { font-family: var(--disp); font-size: 13px; font-weight: 800; letter-spacing: 1px;
+    color: var(--purple-lt); margin-bottom: 14px; }
+  .adm-gate-msg { font-size: 11.5px; margin-top: 10px; min-height: 14px; }
+  .adm-gate-msg.bad { color: var(--crimson); }
+  .adm-gate-msg.checking { color: var(--dim); }
+
   /* ── Snapshot strip ── */
   .adm-snapshot { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 22px; }
   .adm-snap-tile {
@@ -119,6 +132,8 @@
   .adm-goal-input-row { display: flex; gap: 8px; margin-top: 10px; }
   .adm-goal-input-row .ob-input:first-child { flex: 1; }
   .adm-goal-input-row .ob-input.adm-target-input { max-width: 84px; flex: 0 0 auto; }
+  .adm-goal-row.is-inactive { opacity: 0.45; }
+  textarea.adm-goal-tracks { font-family: var(--mono); font-size: 12px; }
   .adm-mode-preview { font-family: var(--mono); font-size: 10px; letter-spacing: 0.4px; color: var(--dim);
     margin-top: 6px; }
   .adm-mode-preview b { color: var(--muted); font-weight: 700; }
@@ -171,10 +186,20 @@
     reach it only from this direct link.</p>
 </div>
 
-<div class="adm-key-row">
-  <input id="adminKey" class="ob-input" type="password" placeholder="Admin key (SYNC_ADMIN_KEY)" autocomplete="off">
-  <span id="adminKeyStatus" class="adm-key-status"></span>
+<!-- ── GATE ── shown until the key is explicitly verified; nothing past
+     it ever fires a request on its own. -->
+<div id="admGate" class="adm-gate">
+  <div class="adm-gate-card">
+    <div class="adm-gate-label">🔐 Clearance required</div>
+    <div class="adm-key-row">
+      <input id="adminKey" class="ob-input" type="password" placeholder="Admin key (SYNC_ADMIN_KEY)" autocomplete="off">
+      <button class="btn btn-primary" id="btnUnlock" type="button">Unlock</button>
+    </div>
+    <div id="adminGateMsg" class="adm-gate-msg"></div>
+  </div>
 </div>
+
+<div id="admApp" hidden>
 
 <div class="adm-snapshot">
   <div class="adm-snap-tile" id="snapRZ" data-tab="redzone">
@@ -265,49 +290,35 @@
 <div class="adm-panel" id="panel-goals" data-panel="goals" hidden>
   <section class="adm-card">
     <div class="adm-card-head">
-      <h2>Districts</h2>
-      <button class="btn btn-ghost" id="btnLoadDistricts" type="button">↻ Load</button>
+      <h2>Goals</h2>
+      <button class="btn btn-ghost" id="btnLoadGoals" type="button">↻ Load</button>
     </div>
-    <p class="muted">Pick a district below to manage its track goals and album goal. Goals are the shared
-      targets every agent restoring this district streams toward — editing them here doesn't touch anyone's
-      progress, only what they're progressing toward.</p>
-    <div id="goalsDistrictList" class="adm-list"><div class="adm-empty">Not loaded yet — tap Load.</div></div>
-  </section>
+    <p class="muted">One shared goal set for the whole game — every district a player restores freezes in
+      whatever's active here the moment they start it. Editing a goal only affects districts started after
+      the edit; a district already in progress keeps the goals it started with. Deleting is safe even for a
+      goal currently live in gameplay, for the same reason.</p>
 
-  <section class="adm-card" id="goalsEditorCard" hidden>
-    <div class="adm-card-head">
-      <h2 id="goalsDistrictName">—</h2>
+    <h3 style="margin:4px 0 8px;">Track goals</h3>
+    <div id="goalsTrackList" class="adm-list"><div class="adm-empty">Not loaded yet — tap Load.</div></div>
+    <div class="adm-goal-input-row">
+      <input id="goalTrackLabel" class="ob-input" type="text" placeholder="Track name (e.g. Dynamite)">
+      <input id="goalTrackArtist" class="ob-input" type="text" placeholder="Artist" style="max-width:130px;">
+      <input id="goalTrackTarget" class="ob-input adm-target-input" type="number" min="1" value="20" title="Base target — multiplied per streaming mode">
+      <button class="btn btn-primary" id="btnAddTrackGoal" type="button">+ Add</button>
     </div>
+    <input id="goalTrackAliases" class="ob-input adm-block" style="margin-top:6px;" type="text" placeholder="Alternate titles, comma-separated (optional — helps match different platforms' naming)">
+    <div class="adm-mode-preview" id="goalTrackPreview"></div>
 
-    <div id="goalsWeekBox" class="adm-week-box">
-      <div>
-        <div class="adm-week-status" id="goalsWeekStatus">—</div>
-        <div class="adm-week-sub" id="goalsWeekSub"></div>
-      </div>
-      <button class="btn btn-ghost" id="btnStartWeek" type="button">▶ Start new week</button>
+    <h3 style="margin:22px 0 8px;">Album goal <span class="muted" style="font-weight:400;">— one full-album pass counted per target</span></h3>
+    <div id="goalsAlbumList" class="adm-list"><div class="adm-empty">Not loaded yet.</div></div>
+    <div class="adm-goal-input-row">
+      <input id="goalAlbumLabel" class="ob-input" type="text" placeholder="Album name (e.g. BE)">
+      <input id="goalAlbumArtist" class="ob-input" type="text" placeholder="Artist" style="max-width:130px;">
+      <input id="goalAlbumTarget" class="ob-input adm-target-input" type="number" min="1" value="3" title="Base target — multiplied per streaming mode">
     </div>
-
-    <div class="adm-agent-section" style="margin-top:0;padding-top:0;border-top:0;">
-      <h3>Track goals</h3>
-      <div id="goalsTrackList" class="adm-list"><div class="adm-empty">No track goals yet.</div></div>
-      <div class="adm-goal-input-row">
-        <input id="goalTrackLabel" class="ob-input" type="text" placeholder="Track name (e.g. Dynamite)">
-        <input id="goalTrackTarget" class="ob-input adm-target-input" type="number" min="1" value="10" title="Base target — multiplied per streaming mode">
-        <button class="btn btn-primary" id="btnAddTrackGoal" type="button">+ Add</button>
-      </div>
-      <div class="adm-mode-preview" id="goalTrackPreview"></div>
-    </div>
-
-    <div class="adm-agent-section">
-      <h3>Album goal <span class="muted" style="font-weight:400;">— one full-album pass counted per target</span></h3>
-      <div id="goalsAlbumBox"><div class="adm-empty">No album goal set.</div></div>
-      <div class="adm-goal-input-row">
-        <input id="goalAlbumLabel" class="ob-input" type="text" placeholder="Album name (e.g. BE)">
-        <input id="goalAlbumTarget" class="ob-input adm-target-input" type="number" min="1" value="3" title="Base target — multiplied per streaming mode">
-        <button class="btn btn-primary" id="btnSetAlbumGoal" type="button">Save</button>
-      </div>
-      <div class="adm-mode-preview" id="goalAlbumPreview"></div>
-    </div>
+    <textarea id="goalAlbumTracks" class="ob-input adm-block adm-goal-tracks" style="margin-top:6px;min-height:70px;" placeholder="One album track per line: Track Name | alias1, alias2 (aliases optional)"></textarea>
+    <button class="btn btn-primary adm-block" id="btnAddAlbumGoal" type="button" style="margin-top:8px;">+ Add album goal</button>
+    <div class="adm-mode-preview" id="goalAlbumPreview"></div>
 
     <div id="goalsOut" class="adm-out"></div>
   </section>
@@ -327,6 +338,8 @@
   </section>
 </div>
 
+</div><!-- /admApp -->
+
 <script type="module">
 import { call as rawCall, API_URL } from './js/api.js'
 
@@ -334,18 +347,6 @@ const $ = (id) => document.getElementById(id)
 const KEY_STORAGE = 'rc_admin_key' // shared with candy-star-admin.html on purpose
 
 function getAdminKey() { return $('adminKey').value.trim() }
-
-function loadStoredKey() {
-  try {
-    const saved = localStorage.getItem(KEY_STORAGE)
-    if (saved) $('adminKey').value = saved
-  } catch (_) { /* localStorage unavailable */ }
-}
-$('adminKey').addEventListener('input', () => {
-  try { localStorage.setItem(KEY_STORAGE, $('adminKey').value.trim()) } catch (_) {}
-  $('adminKeyStatus').textContent = ''
-  $('adminKeyStatus').className = 'adm-key-status'
-})
 
 async function call(action, params = {}) {
   const body = { action, adminKey: getAdminKey(), ...params }
@@ -355,18 +356,65 @@ async function call(action, params = {}) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
-    const json = await res.json()
-    if (json && json.error === 'Unauthorized') {
-      $('adminKeyStatus').textContent = 'Admin key rejected'
-      $('adminKeyStatus').className = 'adm-key-status bad'
-    } else if (getAdminKey()) {
-      $('adminKeyStatus').textContent = 'Key accepted'
-      $('adminKeyStatus').className = 'adm-key-status ok'
-    }
-    return json
+    return await res.json()
   } catch (e) {
     return { success: false, error: 'Network error — check your connection' }
   }
+}
+
+/* ── Gate ─────────────────────────────────────────────────────────────
+   The backend's admin check is a single stateless comparison — every
+   'admin'-tagged action just checks params.adminKey against SYNC_ADMIN_KEY
+   on that one request, there's no login/session action to call first. So
+   "verifying" the key here means literally making one real admin call and
+   seeing whether it comes back Unauthorized — reusing adminGetActiveDefuse
+   since the panel needs that status anyway right after unlocking. */
+function showGateMsg(text, kind) {
+  const el = $('adminGateMsg')
+  el.textContent = text
+  el.className = 'adm-gate-msg' + (kind ? ` ${kind}` : '')
+}
+
+function revealApp(res) {
+  showGateMsg('', '')
+  $('admGate').hidden = true
+  $('admApp').hidden = false
+  paintRZStatus(res)
+  loadBroadcastsSnapOnly()
+}
+
+async function unlockAdmin() {
+  const key = $('adminKey').value.trim()
+  if (!key) { showGateMsg('Enter the admin key first.', 'bad'); return }
+  const btn = $('btnUnlock')
+  btn.disabled = true
+  btn.textContent = 'CHECKING…'
+  showGateMsg('Checking…', 'checking')
+  const res = await call('adminGetActiveDefuse')
+  btn.disabled = false
+  btn.textContent = 'Unlock'
+  if (!res || !res.success) {
+    showGateMsg(res?.error === 'Unauthorized' ? 'Admin key rejected.' : (res?.error || "Couldn't reach the backend — try again."), 'bad')
+    return
+  }
+  try { localStorage.setItem(KEY_STORAGE, key) } catch (_) {}
+  revealApp(res)
+}
+$('btnUnlock').onclick = unlockAdmin
+$('adminKey').addEventListener('keydown', (e) => { if (e.key === 'Enter') unlockAdmin() })
+
+/** Silently tries a key saved from a previous visit. If it still works, skip
+ *  straight past the gate. If not, fall back to the gate quietly — no
+ *  alarming "rejected" flash for something the agent didn't just do. */
+async function tryStoredKey() {
+  let saved = ''
+  try { saved = localStorage.getItem(KEY_STORAGE) || '' } catch (_) { /* unavailable */ }
+  if (!saved) return
+  $('adminKey').value = saved
+  showGateMsg('Checking saved key…', 'checking')
+  const res = await call('adminGetActiveDefuse')
+  if (res && res.success) revealApp(res)
+  else showGateMsg('', '')
 }
 
 function showOut(id, text, kind) {
@@ -536,36 +584,24 @@ function paintSnapBC(rows) {
 }
 $('btnLoadBroadcasts').onclick = loadBroadcasts
 
-/* ── District Goals ──
-   Backend actions this needs (none exist yet — see conversation):
-     adminListDistricts()
-       → { success,
-           modes: { easy: {label,multiplier}, medium: {label,multiplier}, hard: {label,multiplier} },
-           districts: [{ id, name, weekStartsAt: ISOString|null,
-                          trackGoals: [{id,label,target}], album: {id,label,target}|null }] }
-     adminAddTrackGoal({districtId, label, target})   → { success, goal: {id,label,target} }
-     adminDeleteTrackGoal({districtId, goalId})        → { success }
-     adminSetAlbumGoal({districtId, label, target})    → { success, album: {id,label,target} }  (upsert — replaces any existing album goal)
-     adminClearAlbumGoal({districtId})                 → { success }
-     adminStartDistrictWeek({districtId})               → { success, weekStartsAt: ISOString }  (stamps "now" — used both to
-                                                            start a district's first week and to roll it into a fresh one)
+/* ── Goals ──
+   rc_goals is one shared, GLOBAL list — track goals plus a single album
+   goal — not per-district. Every district a player starts freezes in
+   whatever's active here at that moment (districts.ts's freezeGoals);
+   editing a goal only affects districts started after the edit, and
+   deleting one is safe even if it's currently live for that same reason.
 
-   `target` on every goal is a BASE number — the same one the rest of the game
-   already scales by each agent's streaming-mode multiplier (see modes.* and
-   ui-onboarding.js's "Targets ×N"), so entering one number here is enough;
-   easy/medium/hard targets are all `Math.round(target * modes[key].multiplier)`.
-   Goal *definitions* only — no per-agent progress lives here, that's computed
-   client-side per player against whatever goals exist for their district.
+     adminListGoals()   → { success, modes, goals: [{id,kind,label,artist,aliases,tracks,target,active,sortOrder}] }
+     adminAddGoal({kind,label,artist?,aliases?,tracks?,target})   → { success, goal }
+     adminUpdateGoal({id, ...only the fields changing})            → { success, goal }
+     adminDeleteGoal({id})                                          → { success }
 
-   A district's `weekStartsAt` marks when its current goal set went live. Each
-   week runs exactly 7 days — the UI below computes the end from the start,
-   there's no separate end field. When a week ends the goals don't auto-clear;
-   an admin edits the goal list for what's next, then hits "Start new week" to
-   reset the clock. */
-let goalsDistricts = []
+   `target` is a BASE number — every mode's real target is
+   target * modes[key].multiplier (same math ui-onboarding.js's "Targets ×N"
+   describes), computed here for the live preview only; the backend does the
+   identical math when it freezes a district's goals. */
+let allGoals = []
 let goalsModes = null
-let goalsSelectedId = null
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000
 
 function modeTargets(base) {
   const modes = goalsModes || { easy: { multiplier: 1 }, medium: { multiplier: 1 }, hard: { multiplier: 1 } }
@@ -581,119 +617,78 @@ function modePreviewHtml(base) {
 function goalModesLine(target) {
   return `<div class="adm-goal-modes">${modeTargets(target).map((m) => `${esc(m.label || m.key)} ${m.value}`).join(' · ')}</div>`
 }
-
-async function loadDistricts() {
-  const list = $('goalsDistrictList')
-  list.innerHTML = `<div class="adm-empty"><span class="adm-spin"></span> Loading…</div>`
-  const res = await call('adminListDistricts')
-  if (!res || !res.success) { list.innerHTML = `<div class="adm-empty">${esc(res?.error || "Couldn't load districts")}</div>`; return }
-  goalsDistricts = res.districts || []
-  goalsModes = res.modes || null
-  if (!goalsDistricts.length) { list.innerHTML = `<div class="adm-empty">No districts found.</div>`; return }
-  list.innerHTML = goalsDistricts.map((d) => `
-    <div class="adm-list-row is-pick${d.id === goalsSelectedId ? ' is-selected' : ''}" data-id="${esc(d.id)}">
-      <div class="adm-list-body">
-        <div class="adm-list-title">${esc(d.name)}</div>
-        <div class="adm-list-meta">${(d.trackGoals || []).length} track goal${(d.trackGoals || []).length === 1 ? '' : 's'}${d.album ? ' · album goal set' : ''}${d.weekStartsAt ? '' : ' · no active week'}</div>
-      </div>
-    </div>
-  `).join('')
-  list.querySelectorAll('.adm-list-row').forEach((row) => {
-    row.onclick = () => selectDistrict(row.dataset.id)
-  })
-  // Keep the editor in sync if the currently-open district's goals changed.
-  if (goalsSelectedId) renderGoalsEditor()
+function parseAliases(text) {
+  return String(text || '').split(',').map((s) => s.trim()).filter(Boolean)
+}
+/** "Track Name | alias1, alias2" per line — aliases after the pipe are optional. */
+function parseAlbumTracks(text) {
+  return String(text || '').split('\n').map((line) => line.trim()).filter(Boolean).map((line) => {
+    const [label, aliasPart] = line.split('|')
+    return { label: (label || '').trim(), aliases: parseAliases(aliasPart) }
+  }).filter((t) => t.label)
 }
 
-function renderWeekBox(d) {
-  const box = $('goalsWeekBox')
-  const statusEl = $('goalsWeekStatus')
-  const subEl = $('goalsWeekSub')
-  box.classList.remove('is-active', 'is-expired')
-  if (!d.weekStartsAt) {
-    statusEl.innerHTML = 'No active week'
-    subEl.textContent = "Goals won't rotate until you start one."
-    $('btnStartWeek').textContent = '▶ Start week'
+async function loadGoals() {
+  $('goalsTrackList').innerHTML = `<div class="adm-empty"><span class="adm-spin"></span> Loading…</div>`
+  $('goalsAlbumList').innerHTML = ''
+  const res = await call('adminListGoals')
+  if (!res || !res.success) {
+    $('goalsTrackList').innerHTML = `<div class="adm-empty">${esc(res?.error || "Couldn't load goals")}</div>`
+    $('goalsAlbumList').innerHTML = ''
     return
   }
-  const start = new Date(d.weekStartsAt)
-  const end = new Date(start.getTime() + WEEK_MS)
-  const now = Date.now()
-  if (now >= end.getTime()) {
-    box.classList.add('is-expired')
-    statusEl.innerHTML = `<b>Week ended</b>`
-    subEl.textContent = `Ran ${fmtDate(start)} → ${fmtDate(end)}. Update the goals below, then start the next one.`
-  } else {
-    box.classList.add('is-active')
-    const daysLeft = Math.max(1, Math.ceil((end.getTime() - now) / 86400000))
-    statusEl.innerHTML = `<b>Week active</b> — ${daysLeft} day${daysLeft === 1 ? '' : 's'} left`
-    subEl.textContent = `${fmtDate(start)} → ${fmtDate(end)}`
-  }
-  $('btnStartWeek').textContent = '🔄 Start new week'
+  allGoals = res.goals || []
+  goalsModes = res.modes || null
+  renderGoalLists()
 }
 
-function selectDistrict(id) {
-  goalsSelectedId = id
-  $('goalsDistrictList').querySelectorAll('.adm-list-row').forEach((row) => {
-    row.classList.toggle('is-selected', row.dataset.id === id)
-  })
-  renderGoalsEditor()
+function goalRowHtml(g) {
+  const sub = g.kind === 'album'
+    ? `${(g.tracks || []).length} track${(g.tracks || []).length === 1 ? '' : 's'}`
+    : (g.artist || '')
+  return `
+    <div class="adm-goal-row${g.active ? '' : ' is-inactive'}" data-id="${esc(g.id)}">
+      <span class="adm-goal-name">${esc(g.label)}${sub ? ` <span class="muted" style="font-weight:400;">— ${esc(sub)}</span>` : ''}${g.active ? '' : ' <b style="color:var(--crimson);">inactive</b>'}
+        ${goalModesLine(g.target)}
+      </span>
+      <span class="adm-goal-target">${g.target} base</span>
+      <button class="btn btn-ghost" data-act="toggle" type="button" title="${g.active ? 'Retire' : 'Reactivate'}" style="padding:5px 9px;font-size:12px;">${g.active ? '⏸' : '▶'}</button>
+      <button class="adm-list-del" data-act="delete" type="button" title="Delete">✕</button>
+    </div>`
 }
 
-function renderGoalsEditor() {
-  const d = goalsDistricts.find((x) => x.id === goalsSelectedId)
-  $('goalsOut').className = 'adm-out'
-  if (!d) { $('goalsEditorCard').hidden = true; return }
-  $('goalsEditorCard').hidden = false
-  $('goalsDistrictName').textContent = d.name
-  renderWeekBox(d)
-
-  const tracks = d.trackGoals || []
-  $('goalsTrackList').innerHTML = tracks.length
-    ? tracks.map((g) => `
-      <div class="adm-goal-row" data-goal-id="${esc(g.id)}">
-        <span class="adm-goal-name">${esc(g.label)}
-          ${goalModesLine(g.target)}
-        </span>
-        <span class="adm-goal-target">${g.target} base</span>
-        <button class="adm-list-del" type="button" title="Delete">✕</button>
-      </div>`).join('')
-    : `<div class="adm-empty">No track goals yet.</div>`
-  $('goalsTrackList').querySelectorAll('.adm-list-del').forEach((btn) => {
-    btn.onclick = async () => {
-      const row = btn.closest('.adm-goal-row')
-      btn.disabled = true
-      const res = await call('adminDeleteTrackGoal', { districtId: d.id, goalId: row.dataset.goalId })
-      if (res?.success) {
-        d.trackGoals = (d.trackGoals || []).filter((g) => g.id !== row.dataset.goalId)
-        renderGoalsEditor()
-      } else {
-        showOut('goalsOut', res, 'error')
-        btn.disabled = false
-      }
-    }
-  })
-
-  $('goalsAlbumBox').innerHTML = d.album
-    ? `<div class="adm-goal-row">
-        <span class="adm-goal-name">💿 ${esc(d.album.label)}
-          ${goalModesLine(d.album.target)}
-        </span>
-        <span class="adm-goal-target">${d.album.target} base</span>
-        <button class="adm-list-del" type="button" title="Clear">✕</button>
-      </div>`
-    : `<div class="adm-empty">No album goal set.</div>`
-  const clearBtn = $('goalsAlbumBox').querySelector('.adm-list-del')
-  if (clearBtn) clearBtn.onclick = async () => {
-    clearBtn.disabled = true
-    const res = await call('adminClearAlbumGoal', { districtId: d.id })
-    if (res?.success) { d.album = null; renderGoalsEditor() } else { showOut('goalsOut', res, 'error'); clearBtn.disabled = false }
-  }
-
-  $('goalAlbumLabel').value = d.album?.label || ''
-  $('goalAlbumTarget').value = d.album?.target || 3
+function renderGoalLists() {
+  const tracks = allGoals.filter((g) => g.kind === 'track')
+  const albums = allGoals.filter((g) => g.kind === 'album')
+  $('goalsTrackList').innerHTML = tracks.length ? tracks.map(goalRowHtml).join('') : `<div class="adm-empty">No track goals yet.</div>`
+  $('goalsAlbumList').innerHTML = albums.length ? albums.map(goalRowHtml).join('') : `<div class="adm-empty">No album goal yet.</div>`
+  wireGoalRowButtons($('goalsTrackList'))
+  wireGoalRowButtons($('goalsAlbumList'))
   updateTrackPreview()
   updateAlbumPreview()
+}
+
+function wireGoalRowButtons(container) {
+  container.querySelectorAll('.adm-goal-row').forEach((row) => {
+    const id = row.dataset.id
+    const goal = allGoals.find((g) => g.id === id)
+    if (!goal) return
+    const toggleBtn = row.querySelector('[data-act="toggle"]')
+    const delBtn = row.querySelector('[data-act="delete"]')
+    toggleBtn.onclick = async () => {
+      toggleBtn.disabled = true
+      const res = await call('adminUpdateGoal', { id, active: !goal.active })
+      if (res?.success) { goal.active = res.goal.active; renderGoalLists() }
+      else { showOut('goalsOut', res, 'error'); toggleBtn.disabled = false }
+    }
+    delBtn.onclick = async () => {
+      if (!confirm(`Delete "${goal.label}" for good? Districts already in progress keep it — this only affects newly-started ones.`)) return
+      delBtn.disabled = true
+      const res = await call('adminDeleteGoal', { id })
+      if (res?.success) { allGoals = allGoals.filter((g) => g.id !== id); renderGoalLists() }
+      else { showOut('goalsOut', res, 'error'); delBtn.disabled = false }
+    }
+  })
 }
 
 function updateTrackPreview() {
@@ -705,54 +700,47 @@ function updateAlbumPreview() {
 $('goalTrackTarget').addEventListener('input', updateTrackPreview)
 $('goalAlbumTarget').addEventListener('input', updateAlbumPreview)
 
-$('btnStartWeek').onclick = async () => {
-  const d = goalsDistricts.find((x) => x.id === goalsSelectedId)
-  if (!d) return
-  const isRestart = !!d.weekStartsAt && Date.now() < new Date(d.weekStartsAt).getTime() + WEEK_MS
-  if (isRestart && !confirm("This district's week is still active — starting a new one resets the 7-day clock now. Continue?")) return
-  const btn = $('btnStartWeek')
-  btn.disabled = true
-  const res = await call('adminStartDistrictWeek', { districtId: d.id })
-  btn.disabled = false
-  if (res?.success) loadDistricts()
-  else showOut('goalsOut', res, 'error')
-}
-
-$('btnLoadDistricts').onclick = loadDistricts
+$('btnLoadGoals').onclick = loadGoals
 
 $('btnAddTrackGoal').onclick = async () => {
-  const d = goalsDistricts.find((x) => x.id === goalsSelectedId)
-  if (!d) return
   const label = $('goalTrackLabel').value.trim()
+  const artist = $('goalTrackArtist').value.trim()
   const target = parseInt($('goalTrackTarget').value) || 0
+  const aliases = parseAliases($('goalTrackAliases').value)
   if (!label || target < 1) { showOut('goalsOut', 'Enter a track name and a target of at least 1.', 'error'); return }
   const btn = $('btnAddTrackGoal')
   btn.disabled = true
-  const res = await call('adminAddTrackGoal', { districtId: d.id, label, target })
+  const res = await call('adminAddGoal', { kind: 'track', label, artist: artist || undefined, aliases, target })
   btn.disabled = false
   if (res?.success) {
-    d.trackGoals = [...(d.trackGoals || []), res.goal]
+    allGoals.push(res.goal)
     $('goalTrackLabel').value = ''
-    renderGoalsEditor()
+    $('goalTrackArtist').value = ''
+    $('goalTrackAliases').value = ''
+    renderGoalLists()
   } else {
     showOut('goalsOut', res, 'error')
   }
 }
 $('goalTrackLabel').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btnAddTrackGoal').click() })
 
-$('btnSetAlbumGoal').onclick = async () => {
-  const d = goalsDistricts.find((x) => x.id === goalsSelectedId)
-  if (!d) return
+$('btnAddAlbumGoal').onclick = async () => {
   const label = $('goalAlbumLabel').value.trim()
+  const artist = $('goalAlbumArtist').value.trim()
   const target = parseInt($('goalAlbumTarget').value) || 0
+  const tracks = parseAlbumTracks($('goalAlbumTracks').value)
   if (!label || target < 1) { showOut('goalsOut', 'Enter an album name and a target of at least 1.', 'error'); return }
-  const btn = $('btnSetAlbumGoal')
+  if (!tracks.length) { showOut('goalsOut', 'List at least one album track, one per line.', 'error'); return }
+  const btn = $('btnAddAlbumGoal')
   btn.disabled = true
-  const res = await call('adminSetAlbumGoal', { districtId: d.id, label, target })
+  const res = await call('adminAddGoal', { kind: 'album', label, artist: artist || undefined, tracks, target })
   btn.disabled = false
   if (res?.success) {
-    d.album = res.album
-    renderGoalsEditor()
+    allGoals.push(res.goal)
+    $('goalAlbumLabel').value = ''
+    $('goalAlbumArtist').value = ''
+    $('goalAlbumTracks').value = ''
+    renderGoalLists()
   } else {
     showOut('goalsOut', res, 'error')
   }
@@ -834,9 +822,7 @@ $('btnLookup').onclick = async () => {
 }
 $('lkQuery').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btnLookup').click() })
 
-loadStoredKey()
-refreshRZ()
-loadBroadcastsSnapOnly()
+tryStoredKey()
 </script>
 </body>
 </html>
