@@ -69,40 +69,6 @@ async function init() {
   initPullToRefresh()
   initNowPlaying()
   await loadJams()
-
-  // Show "What's New" banner once per agent on first visit after this update
-  const seenKey = `botz_whats_new_seen_${agentNo}`
-  if (!localStorage.getItem(seenKey)) {
-    localStorage.setItem(seenKey, '1')
-    renderWhatsNewBanner()
-  }
-}
-
-function renderWhatsNewBanner() {
-  const el = document.getElementById('botzWhatsNewBanner')
-  if (!el) return
-  el.innerHTML = `
-    <div id="botzWhatsNewCard" style="margin:12px 16px; padding:14px 16px; background:linear-gradient(135deg,rgba(232,40,43,0.1),rgba(232,40,43,0.03)); border:1px solid rgba(232,40,43,0.3); border-radius:12px; display:flex; align-items:flex-start; gap:12px;">
-      <div style="font-size:20px; flex-shrink:0; margin-top:1px;">✨</div>
-      <div style="flex:1;">
-        <div style="font-size:12px; font-weight:900; color:#ff6b6e; letter-spacing:0.5px; margin-bottom:8px;">What's New</div>
-        <div style="display:flex; flex-direction:column; gap:10px;">
-          <div>
-              <div style="font-size:12px; font-weight:800; color:#ff6b6e; margin-bottom:4px;">⚔ Battle Goals view</div>
-              <div style="font-size:11px; color:rgba(255,255,255,0.7); line-height:1.5;">Toggle between "All History" and "Battle Goals" to see exactly which of your streams count toward XP this week, with progress bars per goal.</div>
-          </div>
-          <div>
-              <div style="font-size:12px; font-weight:800; color:#ff6b6e; margin-bottom:4px;">💿 Album breakdown</div>
-              <div style="font-size:11px; color:rgba(255,255,255,0.7); line-height:1.5;">Tap any album to see its full official tracklist and how your jams split across tracks (tap a track for its play history).</div>
-          </div>
-          <div>
-              <div style="font-size:12px; font-weight:800; color:#ff6b6e; margin-bottom:4px;">🔄 Fixed sync status</div>
-              <div style="font-size:11px; color:rgba(255,255,255,0.7); line-height:1.5;">"Last counted" and "Pending jams" now show the real hourly battle sync time, not a stale manual-refresh timestamp.</div>
-          </div>
-        </div>
-      </div>
-      <button onclick="document.getElementById('botzWhatsNewBanner').innerHTML=''" style="background:none; border:none; color:var(--text-ghost); font-size:18px; cursor:pointer; padding:0; line-height:1; flex-shrink:0;">&times;</button>
-    </div>`
 }
 
 // Current date range (epoch secs) shared with the album breakdown so it
@@ -201,23 +167,13 @@ function toggleCustomFilter() {
 
 function render(data) {
   _lastBotzData = data
-  const chartTotal = data.chartTotal ?? data.total ?? 0
-  const lbAllTime  = data.sources?.lb || 0
-  document.getElementById('heroTotal').textContent = chartTotal.toLocaleString()
-  checkBotzMilestone(chartTotal)
+  // getSignalLog is a fixed rolling 24h window — there's no all-time total to
+  // show yet, so the hero reports exactly that window instead of a fake 0.
+  const jams24h = data.counted24h || 0
+  document.getElementById('heroTotal').textContent = jams24h.toLocaleString()
+  checkBotzMilestone(jams24h)
 
-  const allTimeEl  = document.getElementById('heroAllTime')
-  const labelEl    = document.getElementById('heroLabel')
-  const chipsEl    = document.getElementById('heroSourceChips')
-  allTimeEl.dataset.lb = String(Math.max(lbAllTime, chartTotal))
-  if (lbAllTime > 0 && lbAllTime > chartTotal) {
-    allTimeEl.textContent = lbAllTime.toLocaleString() + ' all-time on ListenBrainz'
-    allTimeEl.style.display = 'block'
-    labelEl.textContent = activePreset === 'all' ? 'Last 90 Days' : 'Jams in Range'
-  } else {
-    allTimeEl.style.display = 'none'
-    labelEl.textContent = 'Total Jams'
-  }
+  const chipsEl = document.getElementById('heroSourceChips')
 
   const src = data.sources || {}
   // src.hasPano is really "has custom_scrobbles rows" — true for Pano, Stats.fm,
@@ -246,12 +202,8 @@ function render(data) {
   } else chipsEl.style.display = 'none'
 
   renderSyncStatus(data.syncStatus)
-  renderTracks(data.topTracks || [])
-  renderAlbums(data.topAlbums || [])
-  renderMembers(data.topArtists || [])
-  renderRecent(data.recentJams || [])
+  renderRecent(data.recent || [])
   renderStreak(data.streak, data.dailyCounts)
-  setTimeout(lazyLoadArt, 100)
 
   // Stats.fm / Musicat source agents: overlay hero + recent jams with live
   // data from that platform (the LB feed above can lag hours behind for them)
@@ -289,9 +241,9 @@ async function overlayStatsfm(seq) {
   // has ever played (confirmed via their public API: a real profile with
   // ~800 BTS jams reports a `count` in the tens of thousands, with
   // cardinality.artists in the hundreds), and that endpoint has no artist
-  // filter to narrow it down. The backend's chartTotal/total from the
-  // initial render(data) call is already correctly filtered to
-  // Arirang-relevant tracks, so the hero total is left alone here.
+  // filter to narrow it down. The backend's counted24h from the initial
+  // render(data) call is already correctly filtered to Arirang-relevant
+  // tracks, so the hero total is left alone here.
   try {
     const recentRes = await fetch(`${base}/streams/recent?limit=50`)
     const recent = await recentRes.json()
@@ -359,7 +311,7 @@ async function overlayMusicat(seq) {
   // No hero-total override here (for any preset, not just "all"): Musicat's
   // listening-history API has no artist filter, so any count built from it
   // includes every artist the agent has played, not just BTS. The backend's
-  // chartTotal/total from the initial render(data) call is already correctly
+  // counted24h from the initial render(data) call is already correctly
   // filtered to Arirang-relevant tracks, so the hero total is left alone —
   // this overlay only refreshes the source chip + recent-jams list.
   try {
@@ -432,88 +384,6 @@ function renderSyncStatus(s) {
 
   // Connection dot: green = connected, red = no source
   dot.style.background = s.connected ? '#22c55e' : '#ef4444'
-}
-
-function renderTracks(tracks) {
-  const el = document.getElementById('trackList')
-  if (!tracks.length) { el.innerHTML = '<div class="botz-empty">No jams yet</div>'; return }
-  const max = tracks[0]?.jams || 1
-  el.innerHTML = tracks.map((t, i) => {
-    const pct = Math.round((t.jams / max) * 100)
-    const rankClass = i === 0 ? ' rank-1' : i === 1 ? ' rank-2' : i === 2 ? ' rank-3' : ''
-    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1
-    return `
-      <div class="botz-track-row${rankClass}" style="--bar-w:${pct}%">
-        <span class="botz-rank">${medal}</span>
-        <div class="botz-row-icon">
-          ${t.mbid
-            ? `<img src="https://coverartarchive.org/release/${t.mbid}/front-250" alt="" onerror="this.src='';this.dataset.artTrack='${esc(t.name)}';this.dataset.artArtist='${esc(t.artist||'')}';this.style.display='none';lazyLoadArt()">`
-            : `<img src="" alt="" style="display:none" data-art-track="${esc(t.name)}" data-art-artist="${esc(t.artist||'')}"><div class="botz-art-fallback"></div>`}
-        </div>
-        <div class="botz-row-info">
-          <div class="botz-row-name">${esc(t.name)}</div>
-          ${t.artist ? `<div class="botz-row-sub">${esc(t.artist)}</div>` : ''}
-        </div>
-        <div class="botz-row-count">
-          <div class="botz-row-count-num">${t.jams}</div>
-          <div class="botz-row-count-label">jams</div>
-        </div>
-      </div>`
-  }).join('')
-}
-
-function renderAlbums(albums) {
-  const el = document.getElementById('albumList')
-  if (!albums.length) { el.innerHTML = '<div class="botz-empty">No albums yet</div>'; return }
-  const max = albums[0]?.jams || 1
-  el.innerHTML = albums.map((a, i) => {
-    const pct = Math.round((a.jams / max) * 100)
-    const rankClass = i === 0 ? ' rank-1' : i === 1 ? ' rank-2' : i === 2 ? ' rank-3' : ''
-    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1
-    return `
-      <div class="botz-track-row${rankClass}" style="--bar-w:${pct}%; cursor:pointer;"
-        onclick="openAlbumBreakdown('${esc(a.name).replace(/'/g, "\\'")}')">
-        <span class="botz-rank">${medal}</span>
-        <div class="botz-row-icon">
-          <img src="" alt="" style="display:none"
-            data-art-album="${esc(a.name)}" data-art-artist="${esc(a.artist||'')}">
-          <div class="botz-art-fallback"></div>
-        </div>
-        <div class="botz-row-info">
-          <div class="botz-row-name">${esc(a.name)} <span style="opacity:0.4; font-size:0.7em;">›</span></div>
-          ${a.artist ? `<div class="botz-row-sub">${esc(a.artist)}</div>` : ''}
-        </div>
-        <div class="botz-row-count">
-          <div class="botz-row-count-num">${a.jams}</div>
-          <div class="botz-row-count-label">jams</div>
-        </div>
-      </div>`
-  }).join('')
-  setTimeout(lazyLoadArt, 50)
-}
-
-function renderMembers(artists) {
-  const el = document.getElementById('memberList')
-  if (!el) return
-  if (!artists.length) { el.innerHTML = '<div class="botz-empty">No jams yet</div>'; return }
-  const max = artists[0]?.jams || 1
-  el.innerHTML = artists.map((a, i) => {
-    const pct = Math.round((a.jams / max) * 100)
-    const rankClass = i === 0 ? ' rank-1' : i === 1 ? ' rank-2' : i === 2 ? ' rank-3' : ''
-    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1
-    return `
-      <div class="botz-track-row${rankClass}" style="--bar-w:${pct}%">
-        <span class="botz-rank">${medal}</span>
-        <div class="botz-row-icon" style="font-size:1.1rem;">${memberEmoji(a.name)}</div>
-        <div class="botz-row-info">
-          <div class="botz-row-name">${esc(a.name)}</div>
-        </div>
-        <div class="botz-row-count">
-          <div class="botz-row-count-num">${a.jams}</div>
-          <div class="botz-row-count-label">jams</div>
-        </div>
-      </div>`
-  }).join('')
 }
 
 // ── STREAK + HEATMAP ──────────────────────────────────────────
@@ -613,93 +483,6 @@ function fireBotzConfetti() {
   setTimeout(() => pieces.forEach(p => p.remove()), 4500)
 }
 
-function rangeQS() {
-  let qs = ''
-  if (currentFromEpoch) qs += `&from=${currentFromEpoch}`
-  if (currentToEpoch)   qs += `&to=${currentToEpoch}`
-  return qs
-}
-
-// Album breakdown overlay — reuses getBotzAlbumBreakdown (same dataset/range).
-async function openAlbumBreakdown(album) {
-  const ov = document.getElementById('botzOverlay')
-  const body = document.getElementById('botzOverlayBody')
-  document.getElementById('botzOverlayTitle').textContent = album
-  body.innerHTML = '<div class="botz-loading"><div class="botz-spinner"></div>Loading breakdown...</div>'
-  ov.style.display = 'flex'
-  try {
-    const d = await window.RCBotz.unavailable()
-    if (!d.success) { body.innerHTML = `<div class="botz-empty">${esc(d.error || 'Failed')}</div>`; return }
-    const max = Math.max(1, ...d.tracks.map(t => t.jams))
-    const rows = d.tracks.map(t => {
-      const bar = Math.round((t.jams / max) * 100)
-      const played = t.jams > 0
-      const dim = played ? '' : 'opacity:0.4;'
-      return `
-        <div class="botz-track-row" style="--bar-w:${bar}%; ${played ? 'cursor:pointer;' : ''} ${dim}"
-          ${played ? `onclick="openTrackHistory('${esc(t.name).replace(/'/g, "\\'")}')"` : ''}>
-          <div class="botz-row-info">
-            <div class="botz-row-name">${esc(t.name)}${played ? ' <span style="opacity:0.4; font-size:0.7em;">›</span>' : ''}</div>
-          </div>
-          <div class="botz-row-count">
-            <div class="botz-row-count-num">${t.jams}</div>
-            <div class="botz-row-count-label">${played ? t.pct + '%' : 'not yet'}</div>
-          </div>
-        </div>`
-    }).join('')
-    const scrobbledCount = d.tracks.filter(t => t.jams > 0).length
-    const subline = d.hasOfficialTracklist
-      ? `${scrobbledCount}/${d.tracks.length} tracks scrobbled · full album tracklist`
-      : `${d.tracks.length} tracks scrobbled`
-    body.innerHTML = `
-      <div style="text-align:center; margin-bottom:12px;">
-        <div style="font-size:1.6rem; font-weight:900; color:#fff;">${d.albumTotal.toLocaleString()}</div>
-        <div style="font-family:var(--font-mono); font-size:0.5rem; letter-spacing:1.5px; color:rgba(255,255,255,0.55); text-transform:uppercase;">total album jams</div>
-        <div style="font-size:9px; color:rgba(255,255,255,0.4); margin-top:4px;">${subline}</div>
-      </div>
-      <div class="botz-row-list">${rows}</div>`
-  } catch (e) {
-    body.innerHTML = '<div class="botz-empty">Network error</div>'
-  }
-}
-
-// Track history drill-down — reuses getBotzTrackHistory (same dataset/range).
-async function openTrackHistory(track) {
-  const body = document.getElementById('botzOverlayBody')
-  document.getElementById('botzOverlay').style.display = 'flex'
-  document.getElementById('botzOverlayTitle').textContent = track
-  body.innerHTML = '<div class="botz-loading"><div class="botz-spinner"></div>Loading history...</div>'
-  try {
-    const d = await window.RCBotz.unavailable()
-    if (!d.success) { body.innerHTML = `<div class="botz-empty">${esc(d.error || 'Failed')}</div>`; return }
-    const plays = d.plays.map(p => {
-      const dt = new Date(p.at * 1000)
-      const srcLabel = { lb: 'ListenBrainz', statsfm: 'Stats.fm', musicat: 'Musicat', pano: 'Pano' }[p.source] || 'Pano'
-      const meta = [p.album, srcLabel].filter(Boolean).join(' · ')
-      return `
-        <div class="botz-recent-row">
-          <div class="botz-recent-info">
-            <div class="botz-recent-name">${relTime(dt)}</div>
-            ${meta ? `<div class="botz-recent-meta">${esc(meta)}</div>` : ''}
-          </div>
-          <div class="botz-recent-right"><div class="botz-recent-time">${dt.toLocaleDateString('en-GB', { day:'numeric', month:'short' })}</div></div>
-        </div>`
-    }).join('')
-    body.innerHTML = `
-      <div style="text-align:center; margin-bottom:12px;">
-        <div style="font-size:1.6rem; font-weight:900; color:#fff;">${d.count.toLocaleString()}</div>
-        <div style="font-family:var(--font-mono); font-size:0.5rem; letter-spacing:1.5px; color:rgba(255,255,255,0.55); text-transform:uppercase;">total jams (all albums)</div>
-      </div>
-      <div class="botz-row-list">${plays || '<div class="botz-empty">No plays in range</div>'}</div>`
-  } catch (e) {
-    body.innerHTML = '<div class="botz-empty">Network error</div>'
-  }
-}
-
-function closeBotzOverlay() {
-  document.getElementById('botzOverlay').style.display = 'none'
-}
-
 function renderRecent(jams) {
   const el = document.getElementById('recentList')
   if (!jams.length) { el.innerHTML = '<div class="botz-empty">No recent jams</div>'; return }
@@ -730,50 +513,6 @@ function renderRecent(jams) {
         </div>
       </div>`
   }).join('')
-}
-
-const _artCache = new Map()
-
-async function lazyLoadArt() {
-  const trackImgs  = document.querySelectorAll('img[data-art-track]')
-  const albumImgs  = document.querySelectorAll('img[data-art-album]')
-  const all = [...trackImgs, ...albumImgs]
-  for (const img of all) {
-    if (img.dataset.artLoaded) continue
-    img.dataset.artLoaded = '1'
-    const isAlbum = !!img.dataset.artAlbum
-    const term    = isAlbum ? img.dataset.artAlbum : img.dataset.artTrack
-    const artist  = img.dataset.artArtist || ''
-    const url = await fetchArt(term, artist, isAlbum)
-    if (url) {
-      img.src = url
-      img.style.display = 'block'
-      const fallback = img.nextElementSibling
-      if (fallback?.classList.contains('botz-art-fallback')) fallback.style.display = 'none'
-    }
-    await new Promise(r => setTimeout(r, 80))
-  }
-}
-
-async function fetchArt(term, artist, isAlbum = false) {
-  const key = `${term}||${artist}||${isAlbum}`
-  if (_artCache.has(key)) return _artCache.get(key)
-  try {
-    const q = encodeURIComponent(`${term} ${artist}`.trim())
-    const entity = isAlbum ? 'album' : 'song'
-    const r = await fetch(`https://itunes.apple.com/search?term=${q}&media=music&entity=${entity}&limit=1`)
-    const d = await r.json()
-    const raw = d.results?.[0]?.artworkUrl100 || null
-    const url = raw ? raw.replace('100x100bb', '300x300bb') : null
-    _artCache.set(key, url)
-    return url
-  } catch { _artCache.set(key, null); return null }
-}
-
-function switchTab(tab) {
-  document.querySelectorAll('.botz-tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab))
-  document.querySelectorAll('.botz-panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + tab))
-  if (tab === 'tracks' || tab === 'albums') setTimeout(lazyLoadArt, 50)
 }
 
 function applyFilter() { loadJams() }
@@ -839,19 +578,13 @@ function skeletonRows(n) {
 
 function setLoading(on) {
   if (!on) return
-  const s = skeletonRows(5)
-  document.getElementById('trackList').innerHTML = s
-  document.getElementById('albumList').innerHTML = s
-  document.getElementById('memberList').innerHTML = s
-  document.getElementById('recentList').innerHTML = s
+  document.getElementById('recentList').innerHTML = skeletonRows(5)
   document.getElementById('heroTotal').textContent = '—'
   document.getElementById('lastUpdated').textContent = ''
 }
 
 function setError(msg) {
   const h = `<div class="botz-empty">${esc(msg)}<br><button class="botz-retry-btn" onclick="loadJams()">↺ Retry</button></div>`
-  document.getElementById('trackList').innerHTML = h
-  document.getElementById('albumList').innerHTML = h
   document.getElementById('recentList').innerHTML = h
 }
 
@@ -948,10 +681,10 @@ async function shareBotzSnapshot() {
     ctx.font = '600 22px "Share Tech Mono", monospace'
     ctx.fillText('IF YOU KNOW YOU KNOW', W / 2, 188)
 
-    const total = _lastBotzData.chartTotal ?? _lastBotzData.total ?? 0
+    const total = _lastBotzData.counted24h || 0
     ctx.fillStyle = 'rgba(255,255,255,0.5)'
     ctx.font = '700 26px "Share Tech Mono", monospace'
-    ctx.fillText('TOTAL JAMS', W / 2, 400)
+    ctx.fillText('JAMS (LAST 24H)', W / 2, 400)
     ctx.fillStyle = accent
     ctx.font = '900 170px Orbitron, sans-serif'
     ctx.shadowColor = accentGlow
@@ -988,9 +721,9 @@ async function shareBotzSnapshot() {
       y += 170
     }
 
-    const topTrack  = (_lastBotzData.topTracks  || [])[0]
-    const topAlbum  = (_lastBotzData.topAlbums  || [])[0]
-    const topMember = (_lastBotzData.topArtists || [])[0]
+    const topTrack  = (_lastBotzData.tracks  || [])[0]
+    const topAlbum  = (_lastBotzData.albums  || [])[0]
+    const topMember = (_lastBotzData.artists || [])[0]
     if (topTrack)  drawStatBlock('🎵 TOP TRACK',  topTrack.name,  topTrack.artist, topTrack.jams)
     if (topAlbum)  drawStatBlock('📀 TOP ALBUM',  topAlbum.name,  topAlbum.artist, topAlbum.jams)
     if (topMember) drawStatBlock('👤 TOP MEMBER', `${memberEmoji(topMember.name)} ${topMember.name}`, '', topMember.jams)
