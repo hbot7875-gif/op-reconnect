@@ -8,7 +8,7 @@ import { renderAuth } from './ui-auth.js'
 import { setState, getState, subscribe } from './state.js'
 import { getScreen, onScreenChange } from './router.js'
 import { renderOnboarding } from './ui-onboarding.js'
-import { renderHud } from './ui-hud.js'
+import { renderHud, renderTabbar } from './ui-hud.js'
 import { renderWorld } from './screen-world.js'
 import { renderWard, teardownWard } from './screen-ward.js'
 import { renderDistrictScreen, teardownDistrictScreen } from './screen-district.js'
@@ -83,14 +83,17 @@ subscribe((state) => {
   window.__rcState = state
   show('game')
   renderHud($('hud'), state)
+  renderTabbar($('tabbar'), state)
   renderScreen(state)
 })
 
 onScreenChange(() => {
   const state = getState()
   if (!state?.joined) return
-  // The HUD carries the tab strip, so it repaints on navigation too.
+  // The tab bar reflects which screen is current, so it repaints on
+  // navigation too.
   renderHud($('hud'), state)
+  renderTabbar($('tabbar'), state)
   renderScreen(state)
 })
 

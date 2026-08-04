@@ -179,7 +179,7 @@ function renderFirstMove(mount, joinedState, proceed) {
       : 'One district is already open on the map. Stream any BTS track to start restoring it.'),
     el('p', 'dim', "The ARMY Bomb charges as the network heals — watch it above the map."),
   )
-  const btn = el('button', 'btn btn-primary', 'Enter the network')
+  const btn = el('button', 'btn btn-primary', 'Show me my first district')
   btn.onclick = proceed
   mount.appendChild(btn)
 }

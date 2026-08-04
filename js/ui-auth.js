@@ -44,31 +44,65 @@ export function renderAuth(container, onAuthed) {
   wrap.appendChild(el('p', 'muted auth-lede',
     'This is a new season with new agent files. Old numbers from the last mission don\'t work here — make a fresh one.'))
 
+  // The ask ("make an account") should come after the reason, not before it —
+  // shown once, above the tabs, so it's read before anyone starts typing.
+  wrap.appendChild(authSteps())
+
   // The landing page's "I already have an agent file" link sends
-  // ?mode=signin so it actually lands somewhere different from "Start your
-  // mission" — both used to point at the same URL and land on the same
+  // ?mode=signin so it actually lands somewhere different from "Create your
+  // agent file" — both used to point at the same URL and land on the same
   // Create-file-by-default tab regardless of which one you clicked.
   const wantsSignIn = new URLSearchParams(location.search).get('mode') === 'signin'
 
   const tabs = el('div', 'auth-tabs')
-  const tabNew = el('button', `auth-tab${wantsSignIn ? '' : ' sel'}`, 'Create file')
-  const tabOld = el('button', `auth-tab${wantsSignIn ? ' sel' : ''}`, 'I have one')
+  tabs.setAttribute('role', 'tablist')
+  const tabNew = el('button', 'auth-tab', 'Create file')
+  const tabOld = el('button', 'auth-tab', 'I have one')
+  tabNew.type = 'button'
+  tabOld.type = 'button'
+  tabNew.id = 'auth-tab-new'
+  tabOld.id = 'auth-tab-old'
+  tabNew.setAttribute('role', 'tab')
+  tabOld.setAttribute('role', 'tab')
   tabs.append(tabNew, tabOld)
   wrap.appendChild(tabs)
 
   const panelNew = buildRegister(onAuthed)
   const panelOld = buildLogin(onAuthed)
-  panelNew.hidden = wantsSignIn
-  panelOld.hidden = !wantsSignIn
+  panelNew.id = 'auth-panel-new'
+  panelOld.id = 'auth-panel-old'
+  panelNew.setAttribute('role', 'tabpanel')
+  panelOld.setAttribute('role', 'tabpanel')
+  panelNew.setAttribute('aria-labelledby', tabNew.id)
+  panelOld.setAttribute('aria-labelledby', tabOld.id)
+  tabNew.setAttribute('aria-controls', panelNew.id)
+  tabOld.setAttribute('aria-controls', panelOld.id)
   wrap.append(panelNew, panelOld)
 
-  tabNew.onclick = () => {
-    tabNew.classList.add('sel'); tabOld.classList.remove('sel')
-    panelNew.hidden = false; panelOld.hidden = true
+  const selectTab = (which, { focus } = {}) => {
+    const isNew = which === 'new'
+    tabNew.classList.toggle('sel', isNew)
+    tabOld.classList.toggle('sel', !isNew)
+    tabNew.setAttribute('aria-selected', String(isNew))
+    tabOld.setAttribute('aria-selected', String(!isNew))
+    tabNew.tabIndex = isNew ? 0 : -1
+    tabOld.tabIndex = isNew ? -1 : 0
+    panelNew.hidden = !isNew
+    panelOld.hidden = isNew
+    if (focus) (isNew ? tabNew : tabOld).focus()
   }
-  tabOld.onclick = () => {
-    tabOld.classList.add('sel'); tabNew.classList.remove('sel')
-    panelOld.hidden = false; panelNew.hidden = true
+  selectTab(wantsSignIn ? 'old' : 'new')
+
+  tabNew.onclick = () => selectTab('new')
+  tabOld.onclick = () => selectTab('old')
+  // Arrow keys move between tabs and follow focus, matching the standard
+  // tablist keyboard pattern screen reader users expect.
+  tabs.onkeydown = (e) => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return
+    e.preventDefault()
+    if (e.key === 'Home') selectTab('new', { focus: true })
+    else if (e.key === 'End') selectTab('old', { focus: true })
+    else selectTab(document.activeElement === tabNew ? 'old' : 'new', { focus: true })
   }
 
   // No link out to the old site's Mission Control: that's a separate
@@ -81,6 +115,24 @@ export function renderAuth(container, onAuthed) {
   container.appendChild(wrap)
 }
 
+function authSteps() {
+  const wrap = el('div', 'auth-steps')
+  const steps = [
+    'Connect a listening service',
+    'Stream BTS',
+    'Restore districts and unlock rewards',
+  ]
+  steps.forEach((text, i) => {
+    const step = el('div', 'auth-step')
+    step.append(
+      el('span', 'auth-step-num', String(i + 1)),
+      el('span', 'auth-step-txt', esc(text)),
+    )
+    wrap.appendChild(step)
+  })
+  return wrap
+}
+
 /* ── Create an agent file ─────────────────────────────────────────────── */
 
 function buildRegister(onAuthed) {
@@ -91,15 +143,8 @@ function buildRegister(onAuthed) {
   handle.maxLength = 30
   handle.autocomplete = 'username'
 
-  const pw = el('input', 'ob-input')
-  pw.type = 'password'
-  pw.placeholder = 'Create a password'
-  pw.autocomplete = 'new-password'
-
-  const pw2 = el('input', 'ob-input')
-  pw2.type = 'password'
-  pw2.placeholder = 'Type it again'
-  pw2.autocomplete = 'new-password'
+  const { wrap: pwWrap, input: pw } = pwToggleInput('Create a password', 'new-password')
+  const { wrap: pw2Wrap, input: pw2 } = pwToggleInput('Type it again', 'new-password')
 
   // Required, as of migration 023. The agent number is shown exactly once
   // and is what you sign in with — without an address on file, one forgotten
@@ -110,103 +155,31 @@ function buildRegister(onAuthed) {
   email.placeholder = 'you@example.com'
   email.autocomplete = 'email'
 
-  // Same three sources the profile's own Streams setting offers
-  // (settings-streams.js) — the old site's register.html collected all
-  // three at signup too; this form used to only ever ask for ListenBrainz.
-  // registerAgent itself still only understands lbUsername, so stats.fm and
-  // Musicat go through the same setStreamSource call Settings uses, right
-  // after the account exists (see the submit handler below).
-  const SOURCES = [
-    { key: 'statsfm', icon: '🎵', name: 'stats.fm', sub: 'Spotify · Apple Music',
-      help: 'Find your ID: stats.fm → Settings → Profile → Custom URL — enter the part after stats.fm/. Your profile must be set to Public (Settings → Privacy).',
-      placeholder: 'Your stats.fm username (optional)' },
-    { key: 'musicat', icon: '🐱', name: 'Musicat', sub: 'Spotify · Apple Music',
-      help: 'Find your ID: musicat.fm → your profile picture → Settings → Profile URL — copy the value there.',
-      placeholder: 'Your musicat handle (optional)' },
-    { key: 'lb', icon: '📻', name: 'ListenBrainz', sub: 'Any scrobbler app',
-      help: 'No account yet? Create one on listenbrainz.org, then connect Spotify from there.',
-      placeholder: 'ListenBrainz username (optional)' },
-  ]
-  let selectedSrc = 'statsfm'
-  const srcInputs = {}
-  const srcTabs = el('div', 'src-tabs')
-  const paneEls = {}
+  const handleField = field('Handle', 'Everyone sees this. It becomes your district on the map.', handle)
+  const emailField = field('Email', 'Only ever used to get you back in if you lose your number or password.', email)
+  const pwField = field('Password', 'At least 6 characters — a couple of words works well.', pwWrap, pw)
+  const pw2Field = field('', '', pw2Wrap, pw2)
+  const pwStatus = el('div', 'auth-status')
+  pwStatus.hidden = true
+  pw2Field.appendChild(pwStatus)
 
-  for (const s of SOURCES) {
-    const tab = el('button', 'src-tab' + (s.key === selectedSrc ? ' sel' : ''),
-      `${s.icon} ${esc(s.name)}<span class="src-sub">${esc(s.sub)}</span>`)
-    tab.type = 'button'
-    tab.onclick = () => {
-      selectedSrc = s.key
-      srcTabs.querySelectorAll('.src-tab').forEach((t) => t.classList.remove('sel'))
-      tab.classList.add('sel')
-      for (const k in paneEls) paneEls[k].hidden = k !== s.key
-    }
-    srcTabs.appendChild(tab)
+  panel.append(handleField, emailField, pwField, pw2Field)
 
-    const input = el('input', 'ob-input')
-    input.placeholder = s.placeholder
-    input.autocomplete = 'off'
-    srcInputs[s.key] = input
-
-    const pane = el('div', 'src-pane')
-    pane.hidden = s.key !== selectedSrc
-    pane.append(el('div', 'src-help', esc(s.help)), input)
-
-    // Same live ListenBrainz check the old register.html ran, ported
-    // as-is: it's a public, keyless ListenBrainz endpoint, not this game's
-    // own backend, so it can run before the account exists.
-    if (s.key === 'lb') {
-      const status = el('div', 'src-status')
-      pane.appendChild(status)
-      let lbTimer = null
-      input.oninput = () => {
-        clearTimeout(lbTimer)
-        const val = input.value.trim()
-        status.textContent = ''
-        input.classList.remove('is-good', 'is-bad')
-        if (!val) return
-        lbTimer = setTimeout(async () => {
-          try {
-            const r = await fetch(`https://api.listenbrainz.org/1/user/${encodeURIComponent(val)}/listen-count`)
-            if (input.value.trim() !== val) return
-            if (r.ok) {
-              const data = await r.json()
-              const count = data?.payload?.count
-              status.textContent = `✓ Verified${count != null ? ` — ${Number(count).toLocaleString()} listens` : ''}`
-              input.classList.add('is-good')
-            } else {
-              status.textContent = '✗ Username not found — check spelling (case-sensitive)'
-              input.classList.add('is-bad')
-            }
-          } catch {
-            status.textContent = 'Could not verify — ListenBrainz may be unavailable'
-          }
-        }, 800)
-      }
-    }
-
-    paneEls[s.key] = pane
-  }
-
-  const streamsField = el('div', 'auth-field')
-  streamsField.append(el('label', 'auth-label', 'Streams'), srcTabs)
-  for (const k in paneEls) streamsField.appendChild(paneEls[k])
-  streamsField.appendChild(el('div', 'auth-hint', 'Optional — pick the app you listen with, or set this up later in Settings.'))
-
-  panel.append(
-    field('Handle', 'Everyone sees this. It becomes your district on the map.', handle),
-    field('Email', 'Only ever used to get you back in if you lose your number or password.', email),
-    field('Password', 'At least 6 characters.', pw),
-    field('', '', pw2),
-    streamsField,
-  )
+  // Streams aren't collected here anymore. Registering used to also ask for
+  // stats.fm / Musicat / ListenBrainz up front — three tabs and a live
+  // lookup, in a form whose only job is getting an account created. That
+  // step already exists post-signup: ui-onboarding.js's "ONE THING FIRST"
+  // screen asks the same question once the account is real, with the full
+  // picker (settings-streams.js), and can't be skipped into silence because
+  // uplinkBroken() re-checks it. Nothing is lost, and the form asks for four
+  // things instead of seven.
 
   // Live check, so "taken" arrives before a password gets typed. checkHandle
   // was listed in api.js's public actions from the start and only now exists.
   let handleTimer = null
   handle.oninput = () => {
     clearTimeout(handleTimer)
+    clearFieldError(handleField)
     const h = handle.value.trim()
     handle.classList.remove('is-bad', 'is-good')
     if (h.length < 3) return
@@ -217,45 +190,60 @@ function buildRegister(onAuthed) {
       handle.classList.toggle('is-bad', !res.available)
     }, 400)
   }
+  email.oninput = () => clearFieldError(emailField)
+
+  pw.oninput = () => {
+    clearFieldError(pwField)
+    pw.classList.toggle('is-good', pw.value.length >= 6)
+    pw.classList.toggle('is-bad', pw.value.length > 0 && pw.value.length < 6)
+    updateMatch()
+  }
+  pw2.oninput = () => { clearFieldError(pw2Field); updateMatch() }
+  function updateMatch() {
+    if (!pw2.value) {
+      pwStatus.hidden = true
+      pw2.classList.remove('is-good', 'is-bad')
+      return
+    }
+    const match = pw.value === pw2.value
+    pwStatus.hidden = false
+    pwStatus.textContent = match ? '✓ Passwords match' : "✗ Doesn't match yet"
+    pwStatus.className = 'auth-status ' + (match ? 'ok' : 'bad')
+    pw2.classList.toggle('is-good', match)
+    pw2.classList.toggle('is-bad', !match)
+  }
 
   const btn = el('button', 'btn btn-primary auth-go', 'Create my agent file')
   btn.onclick = async () => {
     const h = handle.value.trim()
-    if (h.length < 3) { toast('Handle needs at least 3 characters'); return }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim())) { toast('Add an email so you can get back in later'); return }
-    if (pw.value.length < 6) { toast('Password needs at least 6 characters'); return }
-    if (pw.value !== pw2.value) { toast("Passwords don't match"); return }
+    let bad = null
+    if (h.length < 3) { setFieldError(handleField, 'Handle needs at least 3 characters'); bad = bad || handle }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim())) {
+      setFieldError(emailField, 'Add an email so you can get back in later'); bad = bad || email
+    }
+    if (pw.value.length < 6) { setFieldError(pwField, 'Password needs at least 6 characters'); bad = bad || pw }
+    else if (pw.value !== pw2.value) { setFieldError(pw2Field, "Passwords don't match"); bad = bad || pw2 }
+    if (bad) { bad.focus(); return }
 
     btn.disabled = true
     btn.textContent = 'CREATING…'
-    const lbVal = srcInputs.lb.value.trim()
     const res = await call('registerAgent', {
       handle: h,
       email: email.value.trim(),
       password: pw.value,
-      lbUsername: lbVal || null,
+      lbUsername: null,
     })
     btn.disabled = false
     btn.textContent = 'Create my agent file'
 
-    if (!res.success) { toast(friendly(res.error)); return }
-    setSession(res.agent)
-
-    // stats.fm/Musicat aren't understood by registerAgent — same
-    // setStreamSource call Settings uses, now that the account exists.
-    // Only sent when ListenBrainz was left empty: LB stays the default
-    // source whenever it's given, same as the old site's signup did.
-    const sfm = srcInputs.statsfm.value.trim()
-    const mus = srcInputs.musicat.value.trim()
-    if (!lbVal && (sfm || mus)) {
-      await call('setStreamSource', {
-        agentNo: res.agent.agentNo,
-        preference: sfm ? 'statsfm' : 'musicat',
-        statsfmUsername: sfm || undefined,
-        musicatPublicId: mus || undefined,
-      })
+    if (!res.success) {
+      if (res.error === 'handle_taken' || res.error === 'handle_invalid') setFieldError(handleField, friendly(res.error))
+      else if (res.error === 'email_invalid' || res.error === 'email_taken') setFieldError(emailField, friendly(res.error))
+      else if (res.error === 'password_short') setFieldError(pwField, friendly(res.error))
+      else toast(friendly(res.error))
+      return
     }
-
+    setSession(res.agent)
     showNumber(res.agent, onAuthed)
   }
   panel.appendChild(btn)
@@ -271,26 +259,33 @@ function buildLogin(onAuthed) {
   no.placeholder = 'Agent number (e.g. AGENT042)'
   no.autocomplete = 'username'
 
-  const pw = el('input', 'ob-input')
-  pw.type = 'password'
-  pw.placeholder = 'Password'
-  pw.autocomplete = 'current-password'
+  const { wrap: pwWrap, input: pw } = pwToggleInput('Password', 'current-password')
 
-  panel.append(
-    field('Agent number', 'The one HQ gave you when you signed up.', no),
-    field('Password', '', pw),
-  )
+  const noField = field('Agent number', 'The one HQ gave you when you signed up.', no)
+  const pwField = field('Password', '', pwWrap, pw)
+  panel.append(noField, pwField)
+
+  no.oninput = () => clearFieldError(noField)
+  pw.oninput = () => clearFieldError(pwField)
 
   const btn = el('button', 'btn btn-primary auth-go', 'Sign in')
   const go = async () => {
     const agentNo = no.value.trim().toUpperCase()
-    if (!agentNo || !pw.value) { toast('Agent number and password, please'); return }
+    let bad = null
+    if (!agentNo) { setFieldError(noField, 'Enter your agent number'); bad = bad || no }
+    if (!pw.value) { setFieldError(pwField, 'Enter your password'); bad = bad || pw }
+    if (bad) { bad.focus(); return }
     btn.disabled = true
     btn.textContent = 'CHECKING…'
     const res = await call('loginAgent', { agentNo, password: pw.value })
     btn.disabled = false
     btn.textContent = 'Sign in'
-    if (!res.success) { toast(friendly(res.error)); return }
+    if (!res.success) {
+      if (res.error === 'agent_not_found') setFieldError(noField, friendly(res.error))
+      else if (res.error === 'bad_credentials') setFieldError(pwField, friendly(res.error))
+      else toast(friendly(res.error))
+      return
+    }
     setSession(res.agent)
     onAuthed()
   }
@@ -322,18 +317,24 @@ function showRecovery(onAuthed) {
   email.type = 'email'
   email.placeholder = 'you@example.com'
   email.autocomplete = 'email'
-  wrap.appendChild(field('Email', '', email))
+  const emailField = field('Email', '', email)
+  email.oninput = () => clearFieldError(emailField)
+  wrap.appendChild(emailField)
 
   const send = el('button', 'btn btn-primary auth-go', 'Send my code')
   send.onclick = async () => {
     const addr = email.value.trim()
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr)) { toast('Enter the email on your agent file'); return }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr)) { setFieldError(emailField, 'Enter the email on your agent file'); email.focus(); return }
     send.disabled = true
     send.textContent = 'SENDING…'
     const res = await call('requestPasswordReset', { email: addr })
     send.disabled = false
     send.textContent = 'Send my code'
-    if (!res.success) { toast(friendly(res.error)); return }
+    if (!res.success) {
+      if (res.error === 'email_invalid') setFieldError(emailField, friendly(res.error))
+      else toast(friendly(res.error))
+      return
+    }
     showCodeStep(addr, res.expiresInMinutes || 30, onAuthed)
   }
   wrap.appendChild(send)
@@ -361,32 +362,35 @@ function showCodeStep(addr, minutes, onAuthed) {
   code.autocomplete = 'one-time-code'
   code.style.textTransform = 'uppercase'
 
-  const pw = el('input', 'ob-input')
-  pw.type = 'password'
-  pw.placeholder = 'New password'
-  pw.autocomplete = 'new-password'
+  const { wrap: pwWrap, input: pw } = pwToggleInput('New password', 'new-password')
+  const { wrap: pw2Wrap, input: pw2 } = pwToggleInput('Type it again', 'new-password')
 
-  const pw2 = el('input', 'ob-input')
-  pw2.type = 'password'
-  pw2.placeholder = 'Type it again'
-  pw2.autocomplete = 'new-password'
+  const codeField = field('Code', '', code)
+  const pwField = field('New password', 'At least 6 characters.', pwWrap, pw)
+  const pw2Field = field('', '', pw2Wrap, pw2)
+  code.oninput = () => clearFieldError(codeField)
+  pw.oninput = () => clearFieldError(pwField)
+  pw2.oninput = () => clearFieldError(pw2Field)
 
-  wrap.append(
-    field('Code', '', code),
-    field('New password', 'At least 6 characters.', pw),
-    field('', '', pw2),
-  )
+  wrap.append(codeField, pwField, pw2Field)
 
   const go = el('button', 'btn btn-primary auth-go', 'Set my new password')
   go.onclick = async () => {
-    if (pw.value.length < 6) { toast('Password needs at least 6 characters'); return }
-    if (pw.value !== pw2.value) { toast("Passwords don't match"); return }
+    let bad = null
+    if (!code.value.trim()) { setFieldError(codeField, 'Enter the code from the email'); bad = bad || code }
+    if (pw.value.length < 6) { setFieldError(pwField, 'Password needs at least 6 characters'); bad = bad || pw }
+    else if (pw.value !== pw2.value) { setFieldError(pw2Field, "Passwords don't match"); bad = bad || pw2 }
+    if (bad) { bad.focus(); return }
     go.disabled = true
     go.textContent = 'RESETTING…'
     const res = await call('resetPassword', { code: code.value.trim(), newPassword: pw.value })
     go.disabled = false
     go.textContent = 'Set my new password'
-    if (!res.success) { toast(friendly(res.error)); return }
+    if (!res.success) {
+      if (res.error === 'code_invalid' || res.error === 'code_expired') setFieldError(codeField, friendly(res.error))
+      else toast(friendly(res.error))
+      return
+    }
     // The reset hands back a live session, so there's no reason to bounce
     // someone to a sign-in form they'd fill in with what they just typed.
     setSession(res.agent)
@@ -420,10 +424,71 @@ function showNumber(agent, onAuthed) {
 
 /* ── bits ─────────────────────────────────────────────────────────────── */
 
-function field(label, hint, input) {
+let fieldSeq = 0
+
+/** A labelled form field. `node` is what gets mounted (an input, or a
+ *  password field's .pw-wrap); `labelFor` is the actual control the label
+ *  and error message should point at — same element unless `node` wraps one.
+ *  Returns the wrapper div, with an `.errEl` reference for setFieldError. */
+function field(label, hint, node, labelFor) {
+  const target = labelFor || node
+  if (!target.id) target.id = `auth-f-${++fieldSeq}`
   const f = el('div', 'auth-field')
-  if (label) f.appendChild(el('label', 'auth-label', esc(label)))
-  f.appendChild(input)
+  if (label) {
+    const lab = el('label', 'auth-label', esc(label))
+    lab.htmlFor = target.id
+    f.appendChild(lab)
+  }
+  f.appendChild(node)
+  const err = el('div', 'auth-error')
+  err.id = `${target.id}-err`
+  err.hidden = true
+  f.appendChild(err)
+  target.setAttribute('aria-describedby', err.id)
   if (hint) f.appendChild(el('div', 'auth-hint', esc(hint)))
+  f.errEl = err
+  f.inputEl = target
   return f
+}
+
+function setFieldError(f, msg) {
+  if (!f?.errEl) return
+  f.errEl.textContent = msg
+  f.errEl.hidden = false
+  f.inputEl?.setAttribute('aria-invalid', 'true')
+  f.inputEl?.classList.add('is-bad')
+}
+
+function clearFieldError(f) {
+  if (!f?.errEl || f.errEl.hidden) return
+  f.errEl.hidden = true
+  f.errEl.textContent = ''
+  f.inputEl?.removeAttribute('aria-invalid')
+}
+
+/** A password input with a show/hide toggle. Returns both the `.pw-wrap`
+ *  (what gets mounted) and the `input` itself (what field() should label). */
+function pwToggleInput(placeholder, autocomplete) {
+  const input = el('input', 'ob-input')
+  input.type = 'password'
+  input.placeholder = placeholder
+  input.autocomplete = autocomplete
+
+  const wrap = el('div', 'pw-wrap')
+  wrap.appendChild(input)
+
+  const toggle = el('button', 'pw-toggle', '👁')
+  toggle.type = 'button'
+  toggle.setAttribute('aria-label', 'Show password')
+  toggle.setAttribute('aria-pressed', 'false')
+  toggle.onclick = () => {
+    const showing = input.type === 'text'
+    input.type = showing ? 'password' : 'text'
+    toggle.textContent = showing ? '👁' : '🙈'
+    toggle.setAttribute('aria-pressed', String(!showing))
+    toggle.setAttribute('aria-label', showing ? 'Show password' : 'Hide password')
+  }
+  wrap.appendChild(toggle)
+
+  return { wrap, input }
 }

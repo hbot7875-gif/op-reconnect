@@ -119,19 +119,50 @@ body {
 .hud-mode:hover { border-color: var(--border-str); color: var(--text); }
 
 .hud-xp { max-width: 620px; margin: 0 auto; padding: 9px var(--gut) 8px; display: flex; align-items: center; gap: 9px; }
-
-/* ── tabs: the game vs. the tools ── */
-.hud-tabs { max-width: 620px; margin: 0 auto; padding: 0 var(--gut); display: flex; gap: 4px; }
-.hud-tab {
-  background: none; border: none; cursor: pointer; padding: 7px 2px 9px; margin-right: 14px;
-  font-family: var(--mono); font-size: 11px; letter-spacing: 1.6px; text-transform: uppercase;
-  color: var(--dim); border-bottom: 2px solid transparent; transition: color 0.2s, border-color 0.2s;
-}
-.hud-tab:hover { color: var(--muted); }
-.hud-tab.sel { color: var(--text); border-bottom-color: var(--purple); cursor: default; }
 .xp-bar { flex: 1; height: 5px; border-radius: 3px; background: rgba(255,255,255,0.09); overflow: hidden; }
 .xp-fill { height: 100%; border-radius: 3px; background: var(--gold); transition: width 0.6s; }
 .xp-label { font-family: var(--mono); font-size: 10px; color: var(--dim); letter-spacing: 0.5px; flex-shrink: 0; }
+
+/* ── tabs: the game vs. the tools ──
+   A thumb-reach bottom bar, not a strip under the status header — this is a
+   phone game first, and the tabs are the one control used on every screen.
+   Floating pill, not an edge-to-edge strip: #tabbar is just a positioning
+   shell (fixed, transparent, no pointer events of its own) and .hud-tabs is
+   the actual bar, so it reads as a control sitting ON the screen rather than
+   a strip of chrome bolted to it. Fixed regardless of where #tabbar actually
+   sits in the DOM (game.html keeps it before #scene on purpose, for the
+   desktop width-matching rule below). #scene and the footer get bottom
+   padding so this doesn't cover the last inch of content. */
+#tabbar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
+  display: flex; justify-content: center; pointer-events: none;
+  padding: 0 var(--gut) calc(14px + env(safe-area-inset-bottom));
+}
+#game { padding-bottom: calc(78px + env(safe-area-inset-bottom)); }
+.hud-tabs {
+  pointer-events: auto; width: 100%; max-width: 620px;
+  display: flex; gap: 1px; padding: 7px;
+  background: rgba(20, 18, 30, 0.94); backdrop-filter: blur(14px);
+  border: 1px solid var(--border); border-radius: 20px;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.5);
+  /* Six tabs fit most phones without scrolling, but a couple more (or a
+     narrow device) shouldn't be able to squash a label unreadable — scroll
+     instead, same escape hatch a native app's tab bar would use. Scrollbar
+     hidden since the pill shape already signals "this is a bar", not a
+     content region that wants a visible scroll affordance. */
+  overflow-x: auto; scrollbar-width: none;
+}
+.hud-tabs::-webkit-scrollbar { display: none; }
+.hud-tab {
+  flex: 1 0 auto; min-width: 62px; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  background: none; border: none; cursor: pointer; padding: 7px 4px; border-radius: 14px;
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.7px; text-transform: uppercase;
+  color: var(--dim); text-decoration: none; white-space: nowrap; transition: color 0.2s, background 0.2s;
+}
+.hud-tab-ico { font-size: 17px; line-height: 1; filter: grayscale(1); opacity: 0.7; transition: filter 0.2s, opacity 0.2s; }
+.hud-tab:hover { color: var(--muted); }
+.hud-tab.sel { color: var(--text); background: var(--purple-soft); cursor: default; }
+.hud-tab.sel .hud-tab-ico { filter: grayscale(0); opacity: 1; }
 
 /* ════════════════════════════════════════════════════════════════
    WORLD
@@ -156,13 +187,13 @@ body {
    query adds no specificity, so declaring `display: grid` earlier in the
    file just loses to that `display: flex`. */
 @media (min-width: 1040px) {
-  /* #hud and #scene are siblings in game.html, hud first — so the header can
-     match on what the scene below it is currently rendering and keep its own
-     inner rails aligned with the wider grid. */
+  /* #hud, #tabbar and #scene are siblings in game.html, in that order — so
+     each header piece can match on what the scene below it is currently
+     rendering and keep its own inner rails aligned with the wider grid. */
   .scene:has(.world-screen),
   #hud:has(~ #scene .world-screen) .hud-inner,
   #hud:has(~ #scene .world-screen) .hud-xp,
-  #hud:has(~ #scene .world-screen) .hud-tabs { max-width: 1000px; }
+  #tabbar:has(~ #scene .world-screen) .hud-tabs { max-width: 1000px; }
 
   .world-screen {
     display: grid;
@@ -184,7 +215,8 @@ body {
   color: var(--dim); text-transform: uppercase;
 }
 .map-head { display: flex; align-items: center; justify-content: space-between;
-  gap: 10px; margin-bottom: -12px; }
+  gap: 10px; margin-bottom: 6px; }
+.map-hint { font-size: 12.5px; color: var(--muted); margin: 0 0 -12px; }
 .map-tools { display: flex; gap: 6px; flex-shrink: 0; }
 .find-btn { background: none; border: 1px solid var(--border); border-radius: 20px;
   padding: 6px 13px; color: var(--muted); font-family: var(--mono); font-size: 11px;
@@ -262,6 +294,20 @@ body {
   letter-spacing: 0.35px; text-anchor: middle;
   paint-order: stroke; stroke: rgba(6,5,13,0.9); stroke-width: 0.9px; }
 
+/* ── tool markers: Candy Star's spot on the map ──
+   Deliberately NOT wedge-shaped (see toolMarker's own comment in
+   city-map.js) — a small tethered satellite past the coastline instead, so
+   it can never be mistaken for a restorable ward. */
+.cm-tool-line { stroke: rgba(139,92,246,0.3); stroke-width: 0.35; stroke-dasharray: 1.1 1; }
+.cm-tool-halo { fill: rgba(139,92,246,0.12); transition: fill 0.2s; }
+.cm-tool-body { fill: #14121e; stroke: rgba(167,139,250,0.5); stroke-width: 0.45; transition: stroke 0.2s; }
+.cm-tool-icon { font-size: 4.6px; text-anchor: middle; }
+.cm-tool-label { fill: var(--muted); font-family: var(--mono); font-size: 2.4px;
+  letter-spacing: 0.3px; text-anchor: middle;
+  paint-order: stroke; stroke: rgba(6,5,13,0.9); stroke-width: 0.8px; }
+.cm-tool:hover .cm-tool-halo { fill: rgba(139,92,246,0.22); }
+.cm-tool:hover .cm-tool-body { stroke: var(--purple-lt); }
+
 /* Conduits — the line each ward is reconnected by. Dark while sealed, live
    while it's being restored, gold once it's whole. */
 .cm-conduit { stroke: rgba(255,255,255,0.07); stroke-width: 0.3; }
@@ -331,6 +377,15 @@ body {
 .cm-ward.locked .cm-zone { fill: rgba(0,0,0,0.25); }
 .cm-ward:hover:not(.locked) .cm-zone { fill: rgba(255,255,255,0.05); }
 
+/* The one ward with nothing restoring yet but nothing stopping you either —
+   a first-time agent has no other cue that the map itself is the way in, so
+   this is the one wedge that visibly invites a tap. */
+.cm-ward.available .cm-edge { stroke: rgba(139,92,246,0.7); stroke-width: 0.4; animation: cmAvailablePulse 2.6s ease-in-out infinite; }
+@keyframes cmAvailablePulse {
+  0%, 100% { stroke-opacity: 0.55; }
+  50% { stroke-opacity: 1; }
+}
+
 .cm-label { pointer-events: none; }
 /* Centred: labels now sit at the middle of their wedge rather than in a
    card's top-left corner, which is most of what stopped this reading as a
@@ -387,6 +442,15 @@ body.red-zone .cm-mark.active .cm-glow { fill: url(#cm-g-alert); }
 .wt-tile.active { border-color: rgba(139,92,246,0.4); }
 .wt-tile.restored { border-color: rgba(217,173,95,0.32); }
 .wt-tile[disabled] { cursor: not-allowed; opacity: 0.6; }
+
+/* Same cue as the city map's pulsing wedge — the ward with nothing
+   restoring yet is the one that most needs to read as "tap this". */
+.wt-tile.available { border-color: rgba(139,92,246,0.55); animation: wtAvailablePulse 2.6s ease-in-out infinite; }
+@keyframes wtAvailablePulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(139,92,246,0.28); }
+  50% { box-shadow: 0 0 0 5px rgba(139,92,246,0); }
+}
+.wt-tile.available .wt-state { color: var(--purple-lt); }
 
 .wt-head { display: flex; align-items: flex-start; gap: 10px; }
 .wt-id { min-width: 0; }
@@ -669,6 +733,9 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 .op-card { background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--r-lg); padding: 17px 18px 18px; }
 .op-card.is-live { border-color: rgba(139,92,246,0.45); }
+/* Before you've opened anything, this card IS the instruction — the border
+   glow says "start here" without needing a separate tooltip or tour step. */
+.op-card.is-spotlight { border-color: rgba(139,92,246,0.5); box-shadow: 0 0 0 1px rgba(139,92,246,0.18), 0 0 24px rgba(139,92,246,0.12); }
 .op-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .op-eyebrow { font-family: var(--mono); font-size: 10px; letter-spacing: 2.5px;
   text-transform: uppercase; color: var(--purple-lt); }
@@ -1267,6 +1334,18 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 
 .auth-wrap { max-width: 440px; margin: 0 auto; padding: 46px 20px 60px; position: relative; z-index: 1; }
 .auth-lede { margin: 10px 0 22px; }
+
+/* Three-step explainer, shown above the tabs so the ask ("make an account")
+   comes after the reason, not before it. */
+.auth-steps { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 24px; }
+.auth-step { flex: 1 1 150px; display: flex; gap: 9px; align-items: flex-start; padding: 12px;
+  border: 1px solid var(--border); border-radius: var(--r); background: var(--panel); }
+.auth-step-num { flex: none; width: 20px; height: 20px; border-radius: 50%;
+  background: var(--purple-soft); color: var(--purple-lt); font-family: var(--mono);
+  font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.auth-step-txt { font-size: 13px; line-height: 1.4; color: var(--muted); }
+@media (max-width: 480px) { .auth-step { flex-basis: 100%; } }
+
 .auth-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 22px; }
 .auth-tab { background: none; border: none; cursor: pointer; padding: 9px 2px 11px; margin-right: 20px;
   font-family: var(--mono); font-size: 11px; letter-spacing: 1.6px; text-transform: uppercase;
@@ -1275,24 +1354,7 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 .auth-tab:hover { color: var(--muted); }
 .auth-tab.sel { color: var(--text); border-bottom-color: var(--purple); cursor: default;
   filter: drop-shadow(0 3px 6px rgba(139,92,246,0.45)); }
-
-/* Stream-source picker inside the create-file form — same three sources
-   Settings offers, ported from the old site's register.html tab pattern. */
-.src-tabs { display: flex; gap: 6px; margin-bottom: 10px; }
-.src-tab {
-  flex: 1; background: var(--panel); border: 1px solid var(--border); border-radius: var(--r);
-  padding: 8px 6px; font-family: 'Rajdhani', sans-serif; font-size: 12.5px; font-weight: 600;
-  color: var(--muted); cursor: pointer; text-align: center;
-  transition: border-color 0.2s, color 0.2s, background 0.2s;
-}
-.src-tab .src-sub {
-  display: block; font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.5px;
-  color: var(--dim); font-weight: 400; margin-top: 2px;
-}
-.src-tab.sel { border-color: var(--purple); color: var(--text); background: var(--purple-soft); }
-.src-pane { margin-bottom: 4px; }
-.src-help { font-size: 12px; line-height: 1.5; color: var(--dim); margin-bottom: 8px; }
-.src-status { font-family: var(--mono); font-size: 11px; margin-top: 6px; color: var(--muted); }
+.auth-tab:focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; }
 
 .auth-panel { animation: authIn 0.22s ease; }
 @keyframes authIn { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
@@ -1300,13 +1362,30 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 .auth-field { margin-bottom: 15px; }
 .auth-label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 1.5px;
   text-transform: uppercase; color: var(--purple-lt); margin-bottom: 7px; }
-.auth-hint { font-size: 12.5px; line-height: 1.5; color: var(--dim); margin-top: 6px; }
+.auth-hint { font-size: 14px; line-height: 1.5; color: var(--muted); margin-top: 6px; }
+.auth-error { font-size: 13px; line-height: 1.4; color: #ff8095; margin-top: 6px; }
+.auth-status { font-family: var(--mono); font-size: 12px; margin-top: 6px; color: var(--muted); }
+.auth-status.ok { color: #d9ad5f; }
+.auth-status.bad { color: var(--crimson); }
 .btn.auth-go { display: block; width: 100%; margin-top: 20px; padding: 15px 20px; font-size: 14px;
   box-shadow: 0 4px 14px rgba(139,92,246,0.24); }
 .auth-foot { margin-top: 26px; padding-top: 18px; border-top: 1px solid var(--border);
   font-size: 13px; color: var(--dim); text-align: center; }
 .auth-foot a { color: var(--muted); text-decoration: none; }
 .auth-foot a:hover { color: var(--text); }
+
+/* Password fields: a visibility toggle sits inside the input, so it needs
+   right padding to keep typed text from running under the button. */
+.pw-wrap { position: relative; }
+.pw-wrap .ob-input { padding-right: 46px; }
+.pw-toggle {
+  position: absolute; right: 3px; top: 50%; transform: translateY(-50%);
+  width: 38px; height: 38px; display: flex; align-items: center; justify-content: center;
+  background: transparent; border: none; border-radius: 8px; color: var(--dim);
+  font-size: 15px; cursor: pointer; transition: color 0.15s, background 0.15s;
+}
+.pw-toggle:hover { color: var(--text); background: var(--panel); }
+.pw-toggle:focus-visible { outline: 2px solid var(--purple); outline-offset: 1px; }
 
 @media (prefers-reduced-motion: reduce) {
   .auth-panel { animation: none; }
@@ -1398,8 +1477,6 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 
 .set-foot { font-family: var(--mono); font-size: 10.5px; letter-spacing: 1px;
   color: var(--dim); text-align: center; padding: 6px 0 10px; text-transform: uppercase; }
-
-.hud-tab-set { flex: 0 0 auto; padding-left: 12px; padding-right: 12px; font-size: 14px; }
 
 /* ── settings sheets ────────────────────────────────────────────── */
 .set-sheet { max-height: 86vh; overflow-y: auto; }

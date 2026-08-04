@@ -280,6 +280,38 @@ export function renderArtOverlay(wards, onSelect) {
   return svg
 }
 
+/** A tool's entry point on the map — deliberately NOT a wedge. Every wedge on
+ *  this map means "real ward, real districts, real restore state"; Candy
+ *  Star has none of that; it's a generator you use wherever you're already
+ *  playing. Giving it a wedge would either steal angular width from wards
+ *  whose size is supposed to track real district counts, or read as a ward
+ *  that can never be restored. Drawn instead as a small satellite just
+ *  outside the coastline — never overlaps a wedge at any angle, so it can't
+ *  be mistaken for one — tethered back to the core with a dashed line, same
+ *  idea as Home Base's own break from the wedge pattern (it's the reactor,
+ *  not a restoration goal, so it isn't drawn as one either). */
+function toolMarker(angle, icon, label, onClick) {
+  // r=49: clears the coastline (max ~46.7) with room to spare, and stays
+  // inside the viewBox edge (55 units from centre in any direction, since
+  // the canvas is square and PAD is uniform) once the halo's own radius is
+  // added on top.
+  const [mx, my] = pt(angle, 49)
+  const [tx, ty] = pt(angle, RING_IN)
+  const g = n('g', { class: 'cm-tool' })
+  g.appendChild(n('line', {
+    x1: tx.toFixed(2), y1: ty.toFixed(2), x2: mx.toFixed(2), y2: my.toFixed(2), class: 'cm-tool-line',
+  }))
+  g.appendChild(n('circle', { cx: mx.toFixed(2), cy: my.toFixed(2), r: 5.6, class: 'cm-tool-halo' }))
+  g.appendChild(n('circle', { cx: mx.toFixed(2), cy: my.toFixed(2), r: 3.8, class: 'cm-tool-body' }))
+  g.appendChild(n('text', { x: mx.toFixed(2), y: (my + 1.3).toFixed(2), class: 'cm-tool-icon' }, icon))
+  g.appendChild(n('text', { x: mx.toFixed(2), y: (my + 8.6).toFixed(2), class: 'cm-tool-label' }, label))
+  if (onClick) {
+    g.style.cursor = 'pointer'
+    g.onclick = (e) => onClick({ x: e.clientX, y: e.clientY })
+  }
+  return g
+}
+
 /**
  * The whole city, drawn, with one block per district and Home Base at the
  * centre of it.
@@ -292,8 +324,10 @@ export function renderArtOverlay(wards, onSelect) {
  * @param onSelect   (ward, {x,y}) => void
  * @param bomb       state.bomb — the core's charge drives the glow at the
  *                   centre, so the map shows the thing keeping it alive.
+ * @param onCandyStar  ({x,y}) => void — optional. Draws the Candy Star tool
+ *                     marker (see toolMarker above) when passed.
  */
-export function renderCityMap(wards, districts, onSelect, bomb) {
+export function renderCityMap(wards, districts, onSelect, bomb, onCandyStar) {
   const PAD = 5
   const svg = n('svg', {
     class: 'city-map', 'aria-hidden': 'true',
@@ -452,6 +486,11 @@ export function renderCityMap(wards, districts, onSelect, bomb) {
       w.status === 'locked' ? 'sealed' : `${w.restoredCount}/${w.totalCount}`))
     svg.appendChild(g)
   }
+
+  // The seam where the ward ring closes (Old Grid back to Mono) is the one
+  // angle guaranteed not to cut across the middle of a wedge's label — same
+  // reasoning wardless placement gets elsewhere in this file.
+  if (onCandyStar) svg.appendChild(toolMarker(-Math.PI / 2, '🍬', 'Candy Star', onCandyStar))
 
   return svg
 }

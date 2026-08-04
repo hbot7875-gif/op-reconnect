@@ -189,6 +189,12 @@ body.landing {
 .btn-primary:active { transform: translateY(1px); }
 .hero .btn { margin-top: 38px; }
 
+.cta-hint {
+  display: block; margin-top: 10px; font-size: 12.5px; color: var(--muted);
+  text-shadow: 0 2px 12px rgba(7,6,13,1), 0 0 20px rgba(7,6,13,0.9);
+}
+.closing .cta-hint { margin-top: 12px; }
+
 /* Secondary, but still a real way in — --dim over the lit part of the crowd
    was effectively invisible. Quiet means lower contrast than the button,
    not unreadable. */

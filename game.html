@@ -39,6 +39,10 @@
   <!-- Game -->
   <div id="game" hidden>
     <header id="hud"></header>
+    <!-- Fixed to the bottom in CSS regardless of where it sits in the DOM —
+         kept here, before #scene, so the existing sibling-combinator rule
+         that widens the tab strip on desktop (reconnect.css) still works. -->
+    <nav id="tabbar"></nav>
     <main id="scene" class="scene"></main>
     <footer class="page-foot">
       OP: ReConnect

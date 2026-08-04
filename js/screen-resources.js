@@ -1,31 +1,17 @@
-// Agent Pack — what you're carrying, and the tools that use it.
+// Agent Pack — what you're carrying, and the one tool that lives here.
 //
-// The loop this screen closes:
-//   BOTZ shows what you actually listened to → Candy Star builds the playlist
-//   → the map shows where that effort went.
-//
-// Three tools, and they are NOT interchangeable:
-//   · Today's Queue  in-game text list of what this district still needs.
-//                    Derived from state, no backend. Good offline, good for
-//                    people who queue by hand.
-//   · Candy Star     the real generator — an actual Spotify playlist from the
-//                    current goals, ported onto this project's own backend
-//                    (lib/candy-star.ts, migration 030). Wired up, but the
-//                    catalog + filler library it reads start EMPTY on this
-//                    project until an admin runs the catalog-refresh/import
-//                    actions from candy-star-admin.html — see screen-candystar.js.
-//   · BOTZ           the listening page — now playing and what the network
-//                    has heard from you. This is WHERE STREAMS ARE TRACKED,
-//                    not a report about them. It lives in this project now
-//                    (botz.html), reading getSignalLog off this backend.
+// Candy Star, BOTZ and Rankings used to be cards in this list too — one tap
+// to get here, a second to actually reach the tool. They're bottom tabs now
+// (ui-hud.js), reachable directly from every screen instead of nested behind
+// Pack. Today's Queue stays: it's derived from state with no backend call,
+// which makes it feel more like part of what's in the pack than a
+// destination the way the other three are.
 //
 // Every tap here stays inside this deployment. Nothing links out to the old
 // arirang site — that's a separate deployment with separate accounts, so a
 // relative path to it resolves to nothing.
 
 import { el, esc, showOverlay } from './state.js'
-import { getAgentNo } from './session.js'
-import { goCandyStar, goRanking } from './router.js'
 import { openPlaylist } from './playlist.js'
 import { resourceRow, resourceSheet } from './resources.js'
 import { itemTile, itemSheet, itemsInPack } from './items.js'
@@ -37,30 +23,6 @@ const TOOLS = [
     tag: 'In game · what to play',
     body: 'Reads what this district still needs and lists the play order, spaced so no track runs back to back. Copy it and queue it yourself.',
     action: (state) => showOverlay(openPlaylist(state)),
-  },
-  {
-    icon: '🍬',
-    name: 'Candy Star Generator',
-    tag: 'Make an alpaca 🦙',
-    body: 'Builds a real Spotify playlist around the current goals, woven with enough variety it plays like a real mix instead of one song on loop.',
-    action: (_state, e) => goCandyStar(e ? { x: e.clientX, y: e.clientY } : null),
-  },
-  {
-    icon: '📻',
-    name: 'BOTZ',
-    tag: 'In game · your listening page',
-    body: 'Where your streams are tracked. Now playing and everything the network has heard from you recently.',
-    href: () => {
-      const no = getAgentNo()
-      return 'botz.html' + (no ? `?agent=${encodeURIComponent(no)}` : '')
-    },
-  },
-  {
-    icon: '🏆',
-    name: 'Rankings',
-    tag: 'In game · every agent, by mode',
-    body: "See where you land on level and XP against everyone on your mode — Easy, Medium and Hard rank separately.",
-    action: (_state, e) => goRanking(e ? { x: e.clientX, y: e.clientY } : null),
   },
 ]
 
@@ -111,12 +73,6 @@ export function renderResources(container, state) {
     list.appendChild(card)
   }
   wrap.appendChild(list)
-
-  const foot = el('div', 'pack-foot')
-  foot.innerHTML = 'BOTZ runs inside the game now. If Candy Star says the '
-    + "catalog isn't ready yet, that's expected until an admin refreshes it "
-    + '— not a bug.'
-  wrap.appendChild(foot)
 
   container.appendChild(wrap)
 }

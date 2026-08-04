@@ -5,7 +5,7 @@
 
 import { call } from './api.js'
 import { el, esc, toast, setState, showOverlay, hideOverlay } from './state.js'
-import { getScreen, goWorld, goResources, goSettings } from './router.js'
+import { getScreen, goWorld, goResources, goSettings, goCandyStar, goRanking } from './router.js'
 import { getAgentNo } from './session.js'
 
 export function renderHud(container, state) {
@@ -31,30 +31,56 @@ export function renderHud(container, state) {
       <div class="xp-bar"><div class="xp-fill" style="width:${pct}%"></div></div>
       <span class="xp-label">${isMax ? `${p.xp} XP · max rank` : `${p.xp} / ${p.rank.nextAt} XP`}</span>
     </div>
-    <nav class="hud-tabs">
-      <button class="hud-tab" data-tab="network">Network</button>
-      <button class="hud-tab" data-tab="resources">Pack</button>
-      <button class="hud-tab hud-tab-set" data-tab="settings" title="Settings">⚙</button>
-    </nav>
   `
   container.querySelector('#modePill').onclick = () => openModeSheet(state)
+}
 
-  // "Network" covers the whole game (world / ward / district); the Pack and
-  // Settings screens sit outside it. Candy Star and Rankings are both Pack
-  // sub-screens (reached from tool cards there), so they keep the Pack tab lit.
+// Candy Star, BOTZ and Rankings used to be cards inside the Pack screen —
+// one tap to Pack, then a second to whichever tool you actually wanted. They
+// get their own tabs now, directly reachable from every screen; Pack keeps
+// Today's Queue plus the resource/merch view, which don't fit a tab (no icon
+// alone says "what you're carrying"). BOTZ leaves the app entirely
+// (botz.html is its own page), so it's the one tab that's a real `<a href>`
+// rather than a router push — it can never show as "selected" the way the
+// others do, same as any link out.
+const TABS = [
+  { key: 'network', icon: '🏙️', label: 'City', go: goWorld,
+    sel: (here) => here !== 'resources' && here !== 'settings' && here !== 'candystar' && here !== 'ranking' },
+  { key: 'resources', icon: '🎒', label: 'Pack', go: goResources,
+    sel: (here) => here === 'resources' },
+  { key: 'candystar', icon: '🍬', label: 'Candy Star', go: goCandyStar,
+    sel: (here) => here === 'candystar' },
+  { key: 'botz', icon: '📻', label: 'BOTZ',
+    href: () => 'botz.html' + (getAgentNo() ? `?agent=${encodeURIComponent(getAgentNo())}` : '') },
+  { key: 'ranking', icon: '🏆', label: 'Rankings', go: goRanking,
+    sel: (here) => here === 'ranking' },
+  { key: 'settings', icon: '⚙️', label: 'Settings', go: goSettings,
+    sel: (here) => here === 'settings' },
+]
+
+/** The nav strip — a separate element from the status header above so it can
+ *  sit fixed to the bottom of the screen (reconnect.css's #tabbar), in thumb
+ *  reach on a phone. Reads state fresh each call (screen changes repaint the
+ *  whole HUD anyway, see main.js), so there's no state to keep in sync
+ *  between the two containers. */
+export function renderTabbar(container, state) {
   const here = getScreen().name
-  const tabs = container.querySelectorAll('.hud-tab')
-  const sel = {
-    network: here !== 'resources' && here !== 'settings' && here !== 'candystar' && here !== 'ranking',
-    resources: here === 'resources' || here === 'candystar' || here === 'ranking',
-    settings: here === 'settings',
+  const tabsHtml = TABS.map((t) => {
+    const isSel = t.sel ? t.sel(here) : false
+    const tag = t.href ? 'a' : 'button'
+    const attrs = t.href ? ` href="${esc(t.href())}"` : ' type="button"'
+    return `<${tag} class="hud-tab${isSel ? ' sel' : ''}" data-tab="${t.key}"${attrs}>
+      <span class="hud-tab-ico" aria-hidden="true">${t.icon}</span>
+      <span class="hud-tab-lbl">${esc(t.label)}</span>
+    </${tag}>`
+  }).join('')
+  container.innerHTML = `<div class="hud-tabs">${tabsHtml}</div>`
+
+  for (const t of TABS) {
+    if (!t.go) continue
+    const node = container.querySelector(`[data-tab="${t.key}"]`)
+    if (!node.classList.contains('sel')) node.onclick = (e) => t.go({ x: e.clientX, y: e.clientY })
   }
-  tabs[0].classList.toggle('sel', sel.network)
-  tabs[1].classList.toggle('sel', sel.resources)
-  tabs[2].classList.toggle('sel', sel.settings)
-  tabs[0].onclick = (e) => { if (!sel.network) goWorld({ x: e.clientX, y: e.clientY }) }
-  tabs[1].onclick = (e) => { if (!sel.resources) goResources({ x: e.clientX, y: e.clientY }) }
-  tabs[2].onclick = (e) => { if (!sel.settings) goSettings({ x: e.clientX, y: e.clientY }) }
 }
 
 const MODES = {

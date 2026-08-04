@@ -11,7 +11,7 @@
 // list: the map IS the list.
 
 import { el, esc, showOverlay, hideOverlay, unlockAfter } from './state.js'
-import { goWard, goDistrict } from './router.js'
+import { goWard, goDistrict, goCandyStar } from './router.js'
 import { districtFraction } from './ui-district.js'
 import { renderWardTiles, wardDisplayName, HOME_BASE_WARD } from './ward-tiles.js'
 import { renderCityMap } from './city-map.js'
@@ -52,8 +52,9 @@ export function renderWorld(container, state) {
    Ward skyline tiles — see ward-tiles.js. */
 
 function mapHead(state) {
+  const wrap = el('div')
   const row = el('div', 'map-head')
-  row.appendChild(el('span', 'world-eyebrow', 'Operations map'))
+  row.appendChild(el('span', 'world-eyebrow', 'City map'))
   const tools = el('span', 'map-tools')
   const share = el('button', 'find-btn', '📤 Share')
   share.onclick = () => showOverlay(openShare(state))
@@ -61,7 +62,13 @@ function mapHead(state) {
   find.onclick = () => openFinder(state)
   tools.append(share, find)
   row.appendChild(tools)
-  return row
+  wrap.appendChild(row)
+  // Persistent, not a one-time tip — a stranger's first instinct is to tap
+  // the ARMY Bomb (it's the biggest, brightest thing on screen), not this
+  // map. Saying outright that the map is the way in beats hoping the visual
+  // pulse on the available ward (below) gets noticed on its own.
+  wrap.appendChild(el('div', 'map-hint', 'Tap a ward to enter the city.'))
+  return wrap
 }
 /* The whole world, on the home screen — the entire valley at once, one block
    per district, each lighting as that district comes back. city-map.js has
@@ -75,7 +82,8 @@ function cityPlan(state) {
   if (!wards.length) return el('div')
   const box = el('div', 'city-plan')
   box.appendChild(renderCityMap(wards, state.map?.districts || [],
-    (w, origin) => goWard(w.id, origin), state.bomb))
+    (w, origin) => goWard(w.id, origin), state.bomb,
+    (origin) => goCandyStar(origin)))
   return box
 }
 
@@ -167,7 +175,11 @@ function coreBlock(state) {
   const btn = el('button', 'army-core'
     + (underAttack ? ' is-attack' : b.brownout ? ' is-brownout' : '')
     + (firstReveal && !reducedMotion() ? ' core-intro' : ''))
-  btn.setAttribute('aria-label', `ARMY Bomb — ${pct}% charged. Open details.`)
+  // Worded as secondary status, not a call to action — the ARMY Bomb is the
+  // biggest, brightest thing on this screen, and a first-time agent's first
+  // instinct is to tap it. It's real data (community charge), but it isn't
+  // where missions are picked; that's the map below.
+  btn.setAttribute('aria-label', `Network power — ${pct}% charged. Tap for details.`)
   // The lightstick is the Launch the Voyage bomb (the .cs-bomb build from
   // app.js's concert mode): glassy sphere, ⟭⟬ logo, dark handle, gentle sway.
   // The outer arc is live data: community charge (or, under attack, how far
@@ -205,7 +217,7 @@ function coreBlock(state) {
     <div class="core-lbl">until detonation &middot; stream to defuse</div>
   ` : `
     <div class="core-pct">${pct}%</div>
-    <div class="core-lbl">power charged</div>
+    <div class="core-lbl">network power &middot; tap for details</div>
   `
   zone.appendChild(read)
   if (deadline) tickCountdowns()
@@ -316,7 +328,7 @@ function opCard(state) {
         : left === 0 ? "All done — go switch the lights on"
         : `${left} more to go and it's back online`}</div>
     `
-    const go = el('button', 'btn btn-primary op-go', left === 0 ? 'Finish it' : 'Keep going')
+    const go = el('button', 'btn btn-primary op-go', left === 0 ? 'Finish it' : `Enter ${esc(name)}`)
     go.onclick = (e) => goDistrict(active.wardId, active.id, { x: e.clientX, y: e.clientY })
     card.appendChild(go)
     return card
@@ -326,15 +338,19 @@ function opCard(state) {
     || wards.find((w) => w.status === 'available')
     || wards.find((w) => w.status !== 'locked')
 
+  // Nothing open yet, so this card doubles as the tutorial: it names the
+  // exact ward that's pulsing on the map below (see .wt-tile.available /
+  // .cm-ward.available in reconnect.css) instead of just saying "pick one".
+  card.classList.add('is-spotlight')
   card.innerHTML = `
     <div class="op-top"><span class="op-eyebrow">You're up</span></div>
     <div class="op-name">Pick a district</div>
     <div class="op-note">${ward
-      ? `Head into ${esc(wardDisplayName(ward))} and pick who you're bringing back.`
+      ? `Start here — <b>${esc(wardDisplayName(ward))}</b> is highlighted on the map below. Open it and pick who you're bringing back.`
       : 'All quiet out there. Check back tomorrow.'}</div>
   `
   if (ward) {
-    const go = el('button', 'btn btn-primary op-go', `Open ${wardDisplayName(ward)}`)
+    const go = el('button', 'btn btn-primary op-go', `Choose a district in ${wardDisplayName(ward)}`)
     go.onclick = (e) => goWard(ward.id, { x: e.clientX, y: e.clientY })
     card.appendChild(go)
   }
