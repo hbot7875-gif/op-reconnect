@@ -5,6 +5,7 @@ import { call } from './api.js'
 import { el, esc, toast, setState } from './state.js'
 import { ambientToggle } from './ambient.js'
 import { openStreamSource, uplinkBroken } from './settings-streams.js'
+import { wardDisplayName } from './ward-tiles.js'
 
 const ERRORS = {
   codename_invalid: 'Codenames are 3-24 letters or numbers — and can\'t be your agent number.',
@@ -174,7 +175,7 @@ function renderFirstMove(mount, joinedState, proceed) {
     el('div', 'eyebrow', "YOU'RE UP"),
     el('h1', 'title-sm', "Here's the move"),
     el('p', 'muted', activeDistrict
-      ? `${esc(activeDistrict.name)}${ward ? ` in ${esc(ward.name)}` : ''} is already open and waiting. Stream any BTS track to start restoring it.`
+      ? `${esc(activeDistrict.name)}${ward ? ` in ${esc(wardDisplayName(ward))}` : ''} is already open and waiting. Stream any BTS track to start restoring it.`
       : 'One district is already open on the map. Stream any BTS track to start restoring it.'),
     el('p', 'dim', "The ARMY Bomb charges as the network heals — watch it above the map."),
   )

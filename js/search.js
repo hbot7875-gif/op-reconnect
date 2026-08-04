@@ -12,6 +12,7 @@ import { el, esc, showOverlay, hideOverlay } from './state.js'
 import { districtIcon } from './landmarks.js'
 import { goDistrict } from './router.js'
 import { getSession } from './session.js'
+import { wardDisplayName } from './ward-tiles.js'
 
 const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
 
@@ -40,7 +41,7 @@ function matches(d, q) {
 export function openFinder(state) {
   const districts = state.map?.districts || []
   const wards = state.map?.wards || []
-  const wardName = (id) => wards.find((w) => w.id === id)?.name || ''
+  const wardName = (id) => wardDisplayName(wards.find((w) => w.id === id))
 
   // "Mine" only appears if this agent's handle actually keeps a district.
   const handle = getSession()?.handle

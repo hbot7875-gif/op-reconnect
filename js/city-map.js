@@ -17,6 +17,8 @@
 // proportional to a ward's real district count, so Echo Quarter's 86 genuinely
 // dominates the map the way its description says it should.
 
+import { wardDisplayName } from './ward-tiles.js'
+
 const SVG_NS = 'http://www.w3.org/2000/svg'
 export function n(tag, attrs, text) {
   const node = document.createElementNS(SVG_NS, tag)
@@ -265,7 +267,7 @@ export function renderArtOverlay(wards, onSelect) {
       }))
     }
     g.appendChild(n('circle', { cx, cy, r, class: 'cm-hit' }))
-    g.appendChild(n('text', { x: cx, y: cy, class: 'cm-mark-name' }, mapLabel(w.name)))
+    g.appendChild(n('text', { x: cx, y: cy, class: 'cm-mark-name' }, mapLabel(wardDisplayName(w))))
     g.appendChild(n('text', { x: cx, y: cy + 3.6, class: 'cm-mark-count' },
       locked ? 'sealed' : `${w.restoredCount}/${w.totalCount}`))
 
@@ -445,7 +447,7 @@ export function renderCityMap(wards, districts, onSelect, bomb) {
   // labels on top of everything
   for (const { w, at } of labels) {
     const g = n('g', { class: `cm-label ${w.status}` })
-    g.appendChild(n('text', { x: at[0].toFixed(2), y: at[1].toFixed(2), class: 'cm-name' }, mapLabel(w.name)))
+    g.appendChild(n('text', { x: at[0].toFixed(2), y: at[1].toFixed(2), class: 'cm-name' }, mapLabel(wardDisplayName(w))))
     g.appendChild(n('text', { x: at[0].toFixed(2), y: (at[1] + 3.4).toFixed(2), class: 'cm-count' },
       w.status === 'locked' ? 'sealed' : `${w.restoredCount}/${w.totalCount}`))
     svg.appendChild(g)

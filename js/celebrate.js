@@ -14,6 +14,7 @@ import { el, esc, showOverlay, joinNames } from './state.js'
 import { mountScene } from './scene.js'
 import { openShare } from './share.js'
 import { itemArt, RARITY, itemsAt } from './items.js'
+import { wardDisplayName } from './ward-tiles.js'
 
 const REDUCED = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
 const buzz = (pattern) => { try { navigator.vibrate?.(pattern) } catch {} }
@@ -59,7 +60,7 @@ export function playRestoration(d, ward, state, onDone) {
   body.appendChild(beatBox)
 
   const banner = el('div', 'cel-banner', wardWhole
-    ? `<span class="cel-flag">${esc(ward.name)} is whole</span>`
+    ? `<span class="cel-flag">${esc(wardDisplayName(ward))} is whole</span>`
     : '<span class="cel-flag">District restored</span>')
   body.appendChild(banner)
 

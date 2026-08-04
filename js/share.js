@@ -10,6 +10,7 @@
 // shape and counts only, so posting it can't spoil the lore for anyone.
 
 import { el, esc, hideOverlay, toast } from './state.js'
+import { wardDisplayName } from './ward-tiles.js'
 
 const LIT = '🟨'
 const NOW = '🟪'
@@ -47,7 +48,7 @@ export function buildShareText(state) {
 
   if (ward) {
     const stops = districts.filter((d) => d.wardId === ward.id)
-    lines.push(`${ward.name} — ${ward.restoredCount}/${ward.totalCount} restored`)
+    lines.push(`${wardDisplayName(ward)} — ${ward.restoredCount}/${ward.totalCount} restored`)
     if (stops.length) lines.push(grid(stops))
     lines.push('')
   }
