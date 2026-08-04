@@ -33,14 +33,10 @@ export function renderAuth(container, onAuthed) {
   container.hidden = false
   const wrap = el('div', 'auth-wrap')
 
-  // The same real stadium photo as the landing hero (img/hero.jpg — the
-  // portrait one, a better crop fit for a form screen than landscape
-  // hero2.jpg), dimmed the same way. Replaces an earlier lightstick-dot
-  // canvas: a real photo ties this screen to the landing page directly
-  // instead of an abstract effect that only rhymed with it.
-  wrap.appendChild(el('div', 'auth-bg'))
-  wrap.appendChild(el('div', 'mist'))
-  wrap.appendChild(el('div', 'auth-scrim'))
+  // No photo, no mist, no scrim behind these forms. The landing page is where
+  // the atmosphere belongs; here the job is reading labels and typing into
+  // fields, and a dimmed stadium shot behind them only ever competed with the
+  // inputs sitting on top of it. Plain page background instead.
   wrap.appendChild(ambientToggle('audio/weather-ambient.mp3'))
 
   wrap.appendChild(el('div', 'eyebrow', 'OP: RECONNECT'))

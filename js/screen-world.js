@@ -13,7 +13,8 @@
 import { el, esc, showOverlay, hideOverlay, unlockAfter } from './state.js'
 import { goWard, goDistrict } from './router.js'
 import { districtFraction } from './ui-district.js'
-import { renderWardTiles } from './ward-tiles.js'
+import { renderWardTiles, wardDisplayName, HOME_BASE_WARD } from './ward-tiles.js'
+import { renderCityMap } from './city-map.js'
 import { districtIcon } from './landmarks.js'
 import { openFinder } from './search.js'
 import { openShare } from './share.js'
@@ -33,8 +34,16 @@ export function renderWorld(container, state) {
   if (b.defuse) wrap.appendChild(redZoneCard(state))
   wrap.appendChild(opCard(state))
   wrap.appendChild(statusStrip(state))
-  wrap.appendChild(mapHead(state))
-  wrap.appendChild(mapField(state))
+  // The map's heading and its tiles travel together: on desktop the whole
+  // group moves into the second column as ONE cell. Kept as two separate
+  // children, each landed in its own grid row, and the row heights are set by
+  // the much taller core block on the left — which opened a dead gap between
+  // "Operations map" and the first tile.
+  const map = el('div', 'world-map')
+  map.appendChild(mapHead(state))
+  map.appendChild(cityPlan(state))
+  map.appendChild(mapField(state))
+  wrap.appendChild(map)
 
   container.appendChild(wrap)
 }
@@ -54,6 +63,22 @@ function mapHead(state) {
   row.appendChild(tools)
   return row
 }
+/* The whole world, on the home screen — the entire valley at once, one block
+   per district, each lighting as that district comes back. city-map.js has
+   drawn this for a long time but nothing ever mounted it; the World screen
+   showed only the ward tiles below, so you could see a ward's skyline but
+   never the city those wards add up to. Tapping a ward opens it, same as its
+   tile. The tiles stay: this answers "how much of the world is back", the
+   tiles answer "what do I do next". */
+function cityPlan(state) {
+  const wards = state.map?.wards || []
+  if (!wards.length) return el('div')
+  const box = el('div', 'city-plan')
+  box.appendChild(renderCityMap(wards, state.map?.districts || [],
+    (w, origin) => goWard(w.id, origin), state.bomb))
+  return box
+}
+
 function mapField(state) {
   const wards = state.map?.wards || []
   if (!wards.length) return el('div')
@@ -83,7 +108,7 @@ function peekSheet(d, ward, state) {
     <span class="peek-icon">${districtIcon(d.name)}</span>
     <span class="peek-id">
       <span class="peek-name">${esc(d.name)}</span>
-      <span class="peek-ward">${esc(ward?.name || '')} &middot; ${PEEK_STATE[d.status] || ''}</span>
+      <span class="peek-ward">${esc(wardDisplayName(ward))} &middot; ${PEEK_STATE[d.status] || ''}</span>
     </span>
   `))
 
@@ -104,7 +129,7 @@ function peekSheet(d, ward, state) {
   } else if (d.status === 'locked') {
     const gate = unlockAfter(state.map?.wards || [], d.wardId)
     sheet.appendChild(el('div', 'dim', gate
-      ? `🔒 Sealed until ${esc(gate.name)} is whole.`
+      ? `🔒 Sealed until ${esc(wardDisplayName(gate))} is whole.`
       : '🔒 Opens later in the operation.'))
   }
 
@@ -265,14 +290,26 @@ function opCard(state) {
     const pct = Math.round((live ? districtFraction(live) : 0) * 100)
     const left = live ? goalsLeft(live) : null
 
+    // Home base's single district carries the same name as the ward around
+    // it, so the two lines below rendered "Relay Zero" twice — on the most
+    // prominent card of the first screen after sign-in. Show the place's real
+    // identity once, and drop the "where" line whenever it would only repeat
+    // the title back (kept general: any ward whose centrepiece shares its
+    // name hits the same thing).
+    const wardName = wardDisplayName(ward)
+    const name = active.wardId === HOME_BASE_WARD ? wardName : active.name
+    const echo = active.echoOf ? `kept by ${esc(active.echoOf)}` : ''
+    const where = wardName === name ? echo
+      : [esc(wardName), echo].filter(Boolean).join(' &middot; ')
+
     card.classList.add('is-live')
     card.innerHTML = `
       <div class="op-top">
         <span class="op-eyebrow">Now restoring</span>
         <span class="op-badge">${pct}%</span>
       </div>
-      <div class="op-name">${esc(active.name)}</div>
-      <div class="op-where">${esc(ward?.name || '')}${active.echoOf ? ` &middot; kept by ${esc(active.echoOf)}` : ''}</div>
+      <div class="op-name">${esc(name)}</div>
+      ${where ? `<div class="op-where">${where}</div>` : ''}
       <div class="op-meter"><div class="op-meter-fill" style="width:${pct}%"></div></div>
       <div class="op-note">${left === null ? 'Loading&hellip;'
         : left === 0 ? "All done — go switch the lights on"
@@ -292,11 +329,11 @@ function opCard(state) {
     <div class="op-top"><span class="op-eyebrow">You're up</span></div>
     <div class="op-name">Pick a district</div>
     <div class="op-note">${ward
-      ? `Head into ${esc(ward.name)} and pick who you're bringing back.`
+      ? `Head into ${esc(wardDisplayName(ward))} and pick who you're bringing back.`
       : 'All quiet out there. Check back tomorrow.'}</div>
   `
   if (ward) {
-    const go = el('button', 'btn btn-primary op-go', `Open ${ward.name}`)
+    const go = el('button', 'btn btn-primary op-go', `Open ${wardDisplayName(ward)}`)
     go.onclick = (e) => goWard(ward.id, { x: e.clientX, y: e.clientY })
     card.appendChild(go)
   }

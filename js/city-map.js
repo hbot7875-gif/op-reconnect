@@ -5,10 +5,17 @@
 // — unlike elevation views, which are painting, which code does badly. Three
 // previous attempts failed on exactly that distinction.
 //
-// The map is one fixed city plan (nine wards tiling a river valley), not a
-// procedural layout, so it's the same place every time you open it and you
-// learn where your wards are. Restoration lights each ward's blocks
-// individually, so a half-restored ward is visibly half-lit.
+// The plan is RADIAL, and that's the whole idea: Home Base sits dead centre
+// with the ARMY Bomb inside it, and the seven city wards ring it like slices,
+// each joined back to the core by a conduit that lights when that ward starts
+// coming back. You are reconnecting the city outward from the relay, so the
+// map should look like that.
+//
+// It replaced a 3x3 grid of quadrilaterals tiling a rectangle. No amount of
+// block jitter, glow or landmark detail could stop that reading as a
+// dashboard, because the geometry itself was a spreadsheet. Angular width is
+// proportional to a ward's real district count, so Echo Quarter's 86 genuinely
+// dominates the map the way its description says it should.
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 export function n(tag, attrs, text) {
@@ -33,43 +40,54 @@ function rng(seed) {
 }
 
 export const CITY_W = 100
-export const CITY_H = 62          // drawn city
+export const CITY_H = 100         // square: a radial plan wants a square canvas
 export const CITY_H_ART = 56.3    // matches city-dark.webp at 1672x941
+
+const CX = 50, CY = 50
+const CORE_R = 12                 // Home Base
+const RING_IN = 16                // where the ward ring starts
+const RING_OUT = 43               // ...and roughly where the coast is
 
 /** Where each ward sits on the illustrated map, as [x, y, radius] in viewBox
  *  units. Hand-placed against the artwork's islands — the centre plaza is left
  *  free because that's the ARMY Bomb. Order matches state.map.wards.
  *  Exported so landing-map.js can drop its own redacted markers onto the same
- *  islands without re-deriving the coordinates. */
+ *  islands without re-deriving the coordinates. Used only by renderArtOverlay
+ *  and the landing page; the drawn plan below is radial and ignores these. */
 export const ISLANDS = [
   [18, 10.5, 13], [47, 12, 12.5], [68, 12, 9],
   [88, 15, 9],    [20, 26, 12],   [68, 28, 9],
   [20, 43, 11],   [47, 43, 13],   [70, 44, 10],
 ]
 
-/** Nine wards tiling the valley: three along the north bank, six south of the
- *  river. Edges are slightly off-square so the plan reads as a place rather
- *  than a spreadsheet. */
-const ZONES = [
-  { pts: [[0, 0], [34, 0], [33, 16.4], [0, 15.4]],          label: [3, 9] },
-  { pts: [[34, 0], [67, 0], [68, 18.4], [33, 16.4]],        label: [37, 9] },
-  { pts: [[67, 0], [100, 0], [100, 20.4], [68, 18.4]],      label: [70, 9] },
+/** Home Base is the core, never a slice. Everything else rings it, clockwise
+ *  from the top in story order. */
+const CORE_WARD = 'relay-zero'
+const RING_ORDER = ['mono', 'happy', 'dday', 'hopeworld', 'golden', 'friends', 'oldgrid']
 
-  { pts: [[0, 21.6], [32, 22.6], [31, 40.4], [0, 39.4]],    label: [3, 30] },
-  { pts: [[32, 22.6], [66, 24], [65, 42], [31, 40.4]],      label: [35, 31] },
-  { pts: [[66, 24], [100, 25.6], [100, 43.6], [65, 42]],    label: [69, 32] },
+const pt = (a, r) => [CX + Math.cos(a) * r, CY + Math.sin(a) * r]
+const pointsAttr = (pts) => pts.map((p) => `${p[0].toFixed(2)},${p[1].toFixed(2)}`).join(' ')
 
-  { pts: [[0, 42], [30, 43], [29, 62], [0, 62]],            label: [3, 50] },
-  { pts: [[30, 43], [64, 44.6], [63, 62], [29, 62]],        label: [33, 51] },
-  { pts: [[64, 44.6], [100, 46.2], [100, 62], [63, 62]],    label: [67, 53] },
-]
+/** A wavy coastline instead of a clean circle. Two sine terms at different
+ *  frequencies give an irregular edge that's still smooth and — because it's
+ *  a pure function of the angle — identical on every render. */
+function coastR(a) {
+  return RING_OUT + Math.sin(a * 3 + 0.7) * 2.6 + Math.sin(a * 5.3 + 2.1) * 1.5
+}
 
-const RIVER = [[0, 15.4], [33, 16.4], [68, 18.4], [100, 20.4],
-               [100, 25.6], [66, 24], [32, 22.6], [0, 21.6]]
-
-const BRIDGES = [[14, 15.9, 3.2, 6.4], [50, 17.6, 3.2, 6.6], [83, 19.6, 3.2, 6.4]]
-
-const pointsAttr = (pts) => pts.map((p) => p.join(',')).join(' ')
+/** One ward's slice, as a polygon: along the inner arc, then back along the
+ *  coast. `gap` opens a small street between neighbouring wards. */
+function wedgePts(a0, a1, gap = 0.02) {
+  const s = a0 + gap, e = a1 - gap
+  const steps = Math.max(5, Math.round((e - s) / 0.1))
+  const out = []
+  for (let i = 0; i <= steps; i++) out.push(pt(s + (e - s) * (i / steps), RING_IN))
+  for (let i = steps; i >= 0; i--) {
+    const a = s + (e - s) * (i / steps)
+    out.push(pt(a, coastR(a)))
+  }
+  return out
+}
 
 /** Map labels are tight, and every one of these is a ward, so the words that
  *  say so can go: "Sector Layover" → "Layover", "The Old Grid" → "Old Grid".
@@ -81,25 +99,139 @@ function mapLabel(name) {
     .replace(/^the\s+/i, '')
 }
 
-/** Block footprints on a loose street grid inside a ward, clipped to its
- *  outline. Sorted by a stable key so "40% restored" always lights the same
- *  40% of blocks rather than reshuffling on every poll. */
-function blocksFor(zone, seed) {
-  const xs = zone.pts.map((p) => p[0]), ys = zone.pts.map((p) => p[1])
-  const x0 = Math.min(...xs), x1 = Math.max(...xs)
-  const y0 = Math.min(...ys), y1 = Math.max(...ys)
+/** Buildings laid out in POLAR space, so they fill a wedge properly and sit
+ *  square-on to the ring roads. A cartesian grid clipped to a wedge threw most
+ *  of its blocks away, which broke the one-block-per-district promise the
+ *  moment a ward wasn't a rectangle. */
+function polarBlocks(a0, a1, count, seed) {
+  const span = a1 - a0
+  const midR = (RING_IN + RING_OUT) / 2
+  const radial = RING_OUT - RING_IN
+  const arc = midR * span
+  const rings = Math.max(1, Math.round(Math.sqrt(Math.max(1, count) * radial / Math.max(0.001, arc))))
+  const per = Math.ceil(Math.max(1, count) / rings)
   const r = rng(seed)
   const out = []
-  for (let x = x0 + 1.4; x < x1 - 1; x += 4.1) {
-    for (let y = y0 + 1.4; y < y1 - 1; y += 3.3) {
-      if (r() < 0.12) continue                     // gaps: yards, lots, squares
-      const w = 1.7 + r() * 1.5
-      const h = 1.2 + r() * 1.1
-      out.push({ x: x + r() * 0.7, y: y + r() * 0.5, w, h, k: r() })
-    }
+  for (let i = 0; i < count; i++) {
+    const ring = Math.floor(i / per), k = i % per
+    const cellR = radial / rings, cellA = span / per
+    const rr = RING_IN + cellR * (ring + 0.5) + (r() - 0.5) * cellR * 0.28
+    const aa = a0 + cellA * (k + 0.5) + (r() - 0.5) * cellA * 0.28
+    const long = r() < 0.2
+    const w = Math.min(rr * cellA * 0.6, 2.3) * (long ? 1.5 : 1) * (0.62 + r() * 0.55)
+    const h = Math.min(cellR * 0.52, 1.6) * (0.6 + r() * 0.6)
+    const [x, y] = pt(aa, rr)
+    out.push({
+      x, y, w, h,
+      rot: (aa * 180) / Math.PI + 90,
+      // Fake elevation. Top-down can't show height, but a darker body behind
+      // each roof reads as a building rather than a floor tile.
+      lift: 0.25 + r() * 0.45,
+    })
   }
-  out.sort((a, b) => a.k - b.k)
-  return out
+  return { blocks: out, rings, per }
+}
+
+/** Ring roads and radial avenues, on the same grid the blocks were laid to. */
+function streetsFor(g, a0, a1, rings, per) {
+  const radial = RING_OUT - RING_IN
+  for (let i = 1; i < rings; i++) {
+    const rr = RING_IN + (radial / rings) * i
+    const p0 = pt(a0, rr), p1 = pt(a1, rr)
+    g.appendChild(n('path', {
+      d: `M${p0[0].toFixed(2)} ${p0[1].toFixed(2)} A${rr.toFixed(2)} ${rr.toFixed(2)} 0 ${a1 - a0 > Math.PI ? 1 : 0} 1 ${p1[0].toFixed(2)} ${p1[1].toFixed(2)}`,
+      class: 'cm-street', fill: 'none',
+    }))
+  }
+  const avenues = Math.min(6, Math.max(1, Math.round((a1 - a0) / 0.35)))
+  for (let i = 1; i < avenues; i++) {
+    const a = a0 + ((a1 - a0) / avenues) * i
+    const p0 = pt(a, RING_IN), p1 = pt(a, coastR(a))
+    g.appendChild(n('line', {
+      x1: p0[0].toFixed(2), y1: p0[1].toFixed(2), x2: p1[0].toFixed(2), y2: p1[1].toFixed(2),
+      class: 'cm-street',
+    }))
+  }
+}
+
+/** One district's contribution to the map: is its block lit, mid-restore, or
+ *  still dark. Mirrors ward-tiles.js's stateOf so a district reads the same
+ *  whether you're looking at the skyline or the city plan. */
+function blockClass(d) {
+  if (!d) return ''
+  if (d.status === 'restored' || d.status === 'centerpiece_lit') return ' lit'
+  if (d.status === 'active') return ' now'
+  return ''
+}
+
+/* ── landmarks ──────────────────────────────────────────────────────────
+   The best thing about the illustrated maps we tried was that shape told you
+   where you were before you read a word: the ferris wheel IS Happy Ward.
+   Generated art couldn't give us that reliably — two images never came back
+   the same — so the landmarks are drawn here, where they're exact and cheap
+   and light up with their ward. */
+const LANDMARKS = {
+  // Mono — the Silent Observatory: a domed telescope between two towers.
+  mono(g, x, y) {
+    g.appendChild(n('rect', { x: x - 3.3, y: y - 2.2, width: 0.9, height: 4.4, class: 'cm-lm-s' }))
+    g.appendChild(n('rect', { x: x + 2.4, y: y - 1.4, width: 0.9, height: 3.6, class: 'cm-lm-s' }))
+    g.appendChild(n('circle', { cx: x, cy: y, r: 2.1, class: 'cm-lm-s' }))
+    g.appendChild(n('path', { d: `M${x - 2.1} ${y} A2.1 2.1 0 0 1 ${x + 2.1} ${y}`, class: 'cm-lm-l' }))
+  },
+  // Happy — Festival Square: the ferris wheel.
+  happy(g, x, y) {
+    g.appendChild(n('circle', { cx: x, cy: y, r: 2.6, class: 'cm-lm-o' }))
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2
+      g.appendChild(n('line', {
+        x1: x, y1: y, x2: (x + Math.cos(a) * 2.6).toFixed(2), y2: (y + Math.sin(a) * 2.6).toFixed(2),
+        class: 'cm-lm-spoke',
+      }))
+    }
+    g.appendChild(n('circle', { cx: x, cy: y, r: 0.55, class: 'cm-lm-l' }))
+  },
+  // D-Day — the Midnight Foundry: three chimneys on a shed.
+  dday(g, x, y) {
+    g.appendChild(n('rect', { x: x - 3.4, y: y + 0.6, width: 6.8, height: 1.8, class: 'cm-lm-s' }))
+    ;[[-2.2, 3.4], [0, 4.6], [2.2, 3.8]].forEach(([dx, h]) => {
+      g.appendChild(n('rect', { x: x + dx - 0.45, y: y + 0.6 - h, width: 0.9, height: h, class: 'cm-lm-s' }))
+      g.appendChild(n('circle', { cx: x + dx, cy: y + 0.6 - h, r: 0.42, class: 'cm-lm-l' }))
+    })
+  },
+  // Hopeworld — the Sun Relay Tower over its concert bowl.
+  hopeworld(g, x, y) {
+    g.appendChild(n('ellipse', { cx: x, cy: y + 0.4, rx: 4.2, ry: 2.6, class: 'cm-lm-o' }))
+    g.appendChild(n('ellipse', { cx: x, cy: y + 0.4, rx: 2.4, ry: 1.4, class: 'cm-lm-l' }))
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2
+      g.appendChild(n('line', {
+        x1: (x + Math.cos(a) * 2.4).toFixed(2), y1: (y + 0.4 + Math.sin(a) * 1.4).toFixed(2),
+        x2: (x + Math.cos(a) * 4.2).toFixed(2), y2: (y + 0.4 + Math.sin(a) * 2.6).toFixed(2),
+        class: 'cm-lm-spoke',
+      }))
+    }
+  },
+  // Golden — the Golden Spire, dwarfing everything around it.
+  golden(g, x, y) {
+    g.appendChild(n('polygon', { points: `${x},${y - 5.2} ${x + 1.5},${y + 2.4} ${x - 1.5},${y + 2.4}`, class: 'cm-lm-s' }))
+    g.appendChild(n('polygon', { points: `${x},${y - 5.2} ${x + 0.6},${y - 1.2} ${x - 0.6},${y - 1.2}`, class: 'cm-lm-l' }))
+    g.appendChild(n('circle', { cx: x, cy: y - 5.2, r: 0.5, class: 'cm-lm-l' }))
+  },
+  // Friends — the Evening Hearth: a row of porch lights.
+  friends(g, x, y) {
+    ;[-3, 0, 3].forEach((dx) => {
+      g.appendChild(n('polygon', {
+        points: `${x + dx},${y - 1.9} ${x + dx + 1.7},${y - 0.4} ${x + dx + 1.7},${y + 1.6} ${x + dx - 1.7},${y + 1.6} ${x + dx - 1.7},${y - 0.4}`,
+        class: 'cm-lm-s',
+      }))
+      g.appendChild(n('circle', { cx: x + dx, cy: y + 0.5, r: 0.42, class: 'cm-lm-l' }))
+    })
+  },
+  // Echo Quarter — the Echo Chamber: rings going out.
+  oldgrid(g, x, y) {
+    ;[1.5, 2.9, 4.3].forEach((r) => g.appendChild(n('circle', { cx: x, cy: y, r, class: 'cm-lm-o' })))
+    g.appendChild(n('circle', { cx: x, cy: y, r: 0.7, class: 'cm-lm-l' }))
+  },
 }
 
 /** Ward markers over the illustration. The artwork's buildings are pixels, so
@@ -126,16 +258,13 @@ export function renderArtOverlay(wards, onSelect) {
     const locked = w.status === 'locked'
     const g = n('g', { class: `cm-mark ${w.status}` })
 
-    // the glow itself — grows and brightens with restoration
     if (!locked && p > 0) {
       g.appendChild(n('circle', {
         cx, cy, r: (r * (0.55 + p * 0.45)).toFixed(2),
         class: 'cm-glow', opacity: (0.35 + p * 0.65).toFixed(2),
       }))
     }
-    // invisible hit area so the whole island is tappable
     g.appendChild(n('circle', { cx, cy, r, class: 'cm-hit' }))
-
     g.appendChild(n('text', { x: cx, y: cy, class: 'cm-mark-name' }, mapLabel(w.name)))
     g.appendChild(n('text', { x: cx, y: cy + 3.6, class: 'cm-mark-count' },
       locked ? 'sealed' : `${w.restoredCount}/${w.totalCount}`))
@@ -150,73 +279,177 @@ export function renderArtOverlay(wards, onSelect) {
 }
 
 /**
- * @param wards     state.map.wards
- * @param onSelect  (ward, {x,y}) => void
+ * The whole city, drawn, with one block per district and Home Base at the
+ * centre of it.
+ *
+ * @param wards      state.map.wards
+ * @param districts  state.map.districts — every district, so each one owns a
+ *                   block that lights when THAT district comes back. Pass an
+ *                   empty array and it falls back to lighting `restoredCount`
+ *                   blocks per ward.
+ * @param onSelect   (ward, {x,y}) => void
+ * @param bomb       state.bomb — the core's charge drives the glow at the
+ *                   centre, so the map shows the thing keeping it alive.
  */
-export function renderCityMap(wards, onSelect) {
+export function renderCityMap(wards, districts, onSelect, bomb) {
+  const PAD = 5
   const svg = n('svg', {
-    class: 'city-map', viewBox: `0 0 ${CITY_W} ${CITY_H}`, 'aria-hidden': 'true',
+    class: 'city-map', 'aria-hidden': 'true',
+    viewBox: `${-PAD} ${-PAD} ${CITY_W + PAD * 2} ${CITY_H + PAD * 2}`,
   })
   const defs = n('defs', {})
   svg.appendChild(defs)
 
-  // land
-  svg.appendChild(n('rect', { x: 0, y: 0, width: CITY_W, height: CITY_H, class: 'cm-land' }))
+  // Bloom over a copy of the lit roofs rather than a glow per element — 248
+  // individually-filtered rects would cost far more for the same picture.
+  const blur = n('filter', { id: 'cm-bloom', x: '-30%', y: '-30%', width: '160%', height: '160%' })
+  blur.appendChild(n('feGaussianBlur', { stdDeviation: '1.1' }))
+  defs.appendChild(blur)
 
-  const list = wards.slice(0, ZONES.length)
+  svg.appendChild(n('rect', {
+    x: -PAD, y: -PAD, width: CITY_W + PAD * 2, height: CITY_H + PAD * 2, class: 'cm-sea',
+  }))
 
-  list.forEach((w, i) => {
-    const zone = ZONES[i]
-    const p = w.totalCount > 0 ? w.restoredCount / w.totalCount : 0
+  // the island itself, one closed coastline around the whole ring
+  const coast = []
+  for (let i = 0; i < 180; i++) {
+    const a = (i / 180) * Math.PI * 2
+    coast.push(pt(a, coastR(a) + 1.6))
+  }
+  svg.appendChild(n('polygon', { points: pointsAttr(coast), class: 'cm-shore' }))
+  const land = coast.map((_, i) => {
+    const a = (i / 180) * Math.PI * 2
+    return pt(a, coastR(a))
+  })
+  svg.appendChild(n('polygon', { points: pointsAttr(land), class: 'cm-land' }))
+
+  const all = districts || []
+  const byId = (id) => wards.find((w) => w.id === id)
+  const ring = RING_ORDER.map(byId).filter(Boolean)
+  const core = byId(CORE_WARD)
+
+  // Angular width tracks real district count, so Echo Quarter's 86 dominates
+  // the map exactly as much as it dominates the city.
+  const totalD = ring.reduce((a, w) => a + Math.max(1, w.totalCount || 1), 0) || 1
+  const bloom = n('g', { filter: 'url(#cm-bloom)', class: 'cm-bloom' })
+  const conduits = n('g', { class: 'cm-conduits' })
+  const labels = []
+
+  let a = -Math.PI / 2
+  for (const w of ring) {
+    const span = (Math.max(1, w.totalCount || 1) / totalD) * Math.PI * 2
+    const a0 = a, a1 = a + span
+    a = a1
     const locked = w.status === 'locked'
+    const mid = (a0 + a1) / 2
 
-    const clipId = `cm-clip-${i}`
+    const mine = all.filter((d) => d.wardId === w.id)
+      .sort((x, y) => String(x.id).localeCompare(String(y.id)))
+    const count = Math.max(mine.length, w.totalCount || 0, 1)
+
+    const pts = wedgePts(a0, a1)
+    const clipId = `cm-clip-${w.id}`
     const clip = n('clipPath', { id: clipId })
-    clip.appendChild(n('polygon', { points: pointsAttr(zone.pts) }))
+    clip.appendChild(n('polygon', { points: pointsAttr(pts) }))
     defs.appendChild(clip)
 
     const g = n('g', { class: `cm-ward ${w.status}` })
-    g.appendChild(n('polygon', { points: pointsAttr(zone.pts), class: 'cm-zone' }))
+    g.appendChild(n('polygon', { points: pointsAttr(pts), class: 'cm-zone' }))
 
-    const blocks = blocksFor(zone, hashStr(w.id))
-    const litCount = locked ? 0 : Math.round(blocks.length * p)
+    const fallbackLit = mine.length ? -1
+      : (locked ? 0 : Math.round(count * (w.totalCount > 0 ? w.restoredCount / w.totalCount : 0)))
+
+    const { blocks, rings, per } = polarBlocks(a0, a1, count, hashStr(w.id))
+
+    const streets = n('g', { 'clip-path': `url(#${clipId})` })
+    streetsFor(streets, a0, a1, rings, per)
+    g.appendChild(streets)
+
     const gb = n('g', { 'clip-path': `url(#${clipId})` })
+    const gl = n('g', { 'clip-path': `url(#${clipId})` })
     blocks.forEach((b, bi) => {
-      gb.appendChild(n('rect', {
-        x: b.x.toFixed(2), y: b.y.toFixed(2),
-        width: b.w.toFixed(2), height: b.h.toFixed(2),
-        rx: 0.25, class: 'cm-block' + (bi < litCount ? ' lit' : ''),
-      }))
+      const cls = locked ? ''
+        : mine.length ? blockClass(mine[bi])
+        : (bi < fallbackLit ? ' lit' : '')
+      const base = {
+        x: (b.x - b.w / 2).toFixed(2), width: b.w.toFixed(2), height: b.h.toFixed(2), rx: 0.22,
+        transform: `rotate(${b.rot.toFixed(1)} ${b.x.toFixed(2)} ${b.y.toFixed(2)})`,
+      }
+      gb.appendChild(n('rect', { ...base, y: (b.y - b.h / 2).toFixed(2), class: 'cm-body' + cls }))
+      gb.appendChild(n('rect', { ...base, y: (b.y - b.h / 2 - b.lift).toFixed(2), class: 'cm-block' + cls }))
+      if (cls) {
+        gl.appendChild(n('rect', { ...base, y: (b.y - b.h / 2 - b.lift).toFixed(2), class: 'cm-block' + cls }))
+      }
     })
     g.appendChild(gb)
+    if (gl.childNodes.length) bloom.appendChild(gl)
 
-    // ward outline last so it sits above its own blocks
-    g.appendChild(n('polygon', { points: pointsAttr(zone.pts), class: 'cm-edge' }))
+    // Landmark inner, label outer. Both sat at mid-radius before, which put
+    // the ferris wheel directly underneath the word "Happy" — the landmarks
+    // were being drawn correctly the whole time and simply couldn't be seen.
+    const lm = LANDMARKS[w.id]
+    if (lm) {
+      const lg = n('g', { class: 'cm-lm' })
+      const [lx, ly] = pt(mid, RING_IN + (RING_OUT - RING_IN) * 0.36)
+      lm(lg, lx, ly)
+      g.appendChild(lg)
+    }
+
+    g.appendChild(n('polygon', { points: pointsAttr(pts), class: 'cm-edge' }))
 
     if (!locked) {
       g.style.cursor = 'pointer'
       g.onclick = (e) => onSelect(w, { x: e.clientX, y: e.clientY })
     }
     svg.appendChild(g)
-  })
 
-  // river over the land, under the labels
-  const river = n('g', { class: 'cm-river-g' })
-  river.appendChild(n('polygon', { points: pointsAttr(RIVER), class: 'cm-river' }))
-  for (const [x, y, w, h] of BRIDGES) {
-    river.appendChild(n('rect', { x, y, width: w, height: h, class: 'cm-bridge' }))
+    // The conduit back to the core: this ward's line to the ARMY Bomb, lit
+    // only as far as the ward has actually come back.
+    const [ix, iy] = pt(mid, CORE_R)
+    const [ox, oy] = pt(mid, RING_IN)
+    conduits.appendChild(n('line', {
+      x1: ix.toFixed(2), y1: iy.toFixed(2), x2: ox.toFixed(2), y2: oy.toFixed(2),
+      class: `cm-conduit ${w.status}`,
+    }))
+
+    labels.push({ w, at: pt(mid, RING_IN + (RING_OUT - RING_IN) * 0.84) })
   }
-  svg.appendChild(river)
+
+  svg.appendChild(conduits)
+  svg.appendChild(bloom)
+
+  /* ── the core: Home Base, with the ARMY Bomb inside it ─────────────── */
+  const charge = Math.max(0, Math.min(1, bomb?.charge || 0))
+  const coreG = n('g', { class: `cm-core ${core?.status || 'active'}` })
+  coreG.appendChild(n('circle', { cx: CX, cy: CY, r: CORE_R + 2.2, class: 'cm-core-halo' }))
+  coreG.appendChild(n('circle', { cx: CX, cy: CY, r: CORE_R, class: 'cm-core-land' }))
+  coreG.appendChild(n('circle', { cx: CX, cy: CY, r: CORE_R, class: 'cm-core-edge' }))
+  // charge ring — real data, same as the bomb on the world screen
+  const CIRC = 2 * Math.PI * (CORE_R - 2.2)
+  coreG.appendChild(n('circle', {
+    cx: CX, cy: CY, r: CORE_R - 2.2, class: 'cm-core-ring-bg',
+  }))
+  coreG.appendChild(n('circle', {
+    cx: CX, cy: CY, r: CORE_R - 2.2, class: 'cm-core-ring',
+    transform: `rotate(-90 ${CX} ${CY})`,
+    'stroke-dasharray': `${(CIRC * charge).toFixed(2)} ${CIRC.toFixed(2)}`,
+  }))
+  coreG.appendChild(n('circle', { cx: CX, cy: CY, r: 3.4, class: 'cm-core-bomb' }))
+  coreG.appendChild(n('text', { x: CX, y: CY + 7.4, class: 'cm-core-name' }, 'HOME BASE'))
+  if (core) {
+    coreG.style.cursor = 'pointer'
+    coreG.onclick = (e) => onSelect(core, { x: e.clientX, y: e.clientY })
+  }
+  svg.appendChild(coreG)
 
   // labels on top of everything
-  list.forEach((w, i) => {
-    const [lx, ly] = ZONES[i].label
+  for (const { w, at } of labels) {
     const g = n('g', { class: `cm-label ${w.status}` })
-    g.appendChild(n('text', { x: lx, y: ly, class: 'cm-name' }, mapLabel(w.name)))
-    g.appendChild(n('text', { x: lx, y: ly + 4.2, class: 'cm-count' },
+    g.appendChild(n('text', { x: at[0].toFixed(2), y: at[1].toFixed(2), class: 'cm-name' }, mapLabel(w.name)))
+    g.appendChild(n('text', { x: at[0].toFixed(2), y: (at[1] + 3.4).toFixed(2), class: 'cm-count' },
       w.status === 'locked' ? 'sealed' : `${w.restoredCount}/${w.totalCount}`))
     svg.appendChild(g)
-  })
+  }
 
   return svg
 }
