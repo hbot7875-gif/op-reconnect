@@ -141,14 +141,11 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
     }
   } else if (mapD.status === 'centerpiece_dark') {
     card.appendChild(el('p', 'muted', 'Nobody keeps this one. It stays dark until every district around it is back.'))
-    if (mapD.memory) card.appendChild(el('div', 'file-body', esc(mapD.memory)))
   } else if (mapD.status === 'centerpiece_lit') {
     card.appendChild(el('p', 'muted', 'The ward is whole. It watches over every agent who came before you.'))
-    if (mapD.memory) card.appendChild(el('div', 'file-body', esc(mapD.memory)))
   } else if (mapD.status === 'restored') {
-    // The keeper is already on the hero above — just the memory here.
-    if (mapD.memory) card.appendChild(el('div', 'file-body', esc(mapD.memory)))
     board.appendChild(card)
+    board.appendChild(reconnectMissionCard(state, mapD))
     board.appendChild(shelf(state, mapD))
     return
   } else {
@@ -177,6 +174,137 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
   }
 
   board.appendChild(card)
+}
+
+/* ── Reconnect Mission ──────────────────────────────────────────────────
+   The cooperative bonus stage a district's own player unlocks once THEY'VE
+   personally restored it — team up with other agents who've ALSO restored
+   this exact district, everyone streams one shared track, everyone gets a
+   bonus. Not every district has one (server says so via `available`), so
+   this is fetched lazily rather than folded into the normal state poll —
+   most districts will just quietly render nothing. */
+
+const RECONNECT_ERRORS = {
+  not_eligible: "You haven't restored this district yet.",
+  mission_already_open: 'A mission is already open here — refreshing…',
+  no_open_mission: 'That mission just closed — refreshing…',
+  mission_full: 'That mission just filled up.',
+  already_in_mission: "You're already in this mission.",
+  invitee_not_eligible: "That agent hasn't restored this district yet.",
+  invitee_required: 'Enter an agent number to invite.',
+  cannot_invite_self: "You can't invite yourself.",
+  not_in_mission: 'Join the mission before inviting someone.',
+}
+function reconnectError(code) { return RECONNECT_ERRORS[code] || code || 'Something went wrong' }
+
+function reconnectMissionCard(state, mapD) {
+  const box = el('div', 'card reconnect-card')
+  box.hidden = true
+  call('getReconnectMission', { agentNo: getAgentNo(), districtId: mapD.id }).then((res) => {
+    if (!res?.success || !res.available) return // this district doesn't have one — stays hidden
+    box.hidden = false
+    paintReconnectCard(box, mapD, res)
+  })
+  return box
+}
+
+function paintReconnectCard(box, mapD, res) {
+  const refresh = async () => {
+    const fresh = await call('getReconnectMission', { agentNo: getAgentNo(), districtId: mapD.id })
+    if (fresh?.success) paintReconnectCard(box, mapD, fresh)
+  }
+
+  box.innerHTML = ''
+  box.appendChild(el('div', 'eyebrow', 'RECONNECT MISSION'))
+  const m = res.mission
+
+  if (m?.status === 'complete') {
+    box.appendChild(el('p', 'muted', `Done — everyone streamed "${esc(m.trackLabel)}" together. Bonus banked.`))
+    return
+  }
+
+  const me = getAgentNo()
+  const myRow = m?.participants?.find((p) => p.agentNo === me)
+
+  if (!m || m.status !== 'open') {
+    box.appendChild(el('p', 'muted',
+      `Team up with ${res.config.required} agents who've also restored ${esc(mapD.name)} — everyone streams "${esc(res.config.trackLabel)}" for a bonus.`))
+    if (!res.eligible) {
+      box.appendChild(el('div', 'dim', 'Finish this district yourself first.'))
+    } else {
+      const openBtn = el('button', 'btn btn-primary', 'Open a mission')
+      openBtn.onclick = async () => {
+        openBtn.disabled = true
+        const r = await call('openReconnectMission', { agentNo: me, districtId: mapD.id })
+        if (r.success) paintReconnectCard(box, mapD, { success: true, available: true, eligible: true, config: res.config, mission: r.mission })
+        else { toast(reconnectError(r.error)); openBtn.disabled = false; if (r.error === 'mission_already_open') refresh() }
+      }
+      box.appendChild(openBtn)
+    }
+    return
+  }
+
+  // A mission is open — show live progress either way.
+  const joined = m.participants.filter((p) => p.status === 'joined')
+  const streamedCount = joined.filter((p) => p.streamed).length
+  box.appendChild(el('div', 'goal-line', `
+    <div class="pbar" style="flex:1"><div class="pfill${streamedCount === m.requiredAgents ? ' done' : ''}" style="width:${Math.round((joined.length / m.requiredAgents) * 100)}%"></div></div>
+    <span class="count">${joined.length}/${m.requiredAgents} joined</span>
+  `))
+  box.appendChild(el('div', 'dim', `"${esc(m.trackLabel)}"${m.trackArtist ? ` — ${esc(m.trackArtist)}` : ''} · ${streamedCount}/${joined.length} streamed it so far`))
+
+  const list = el('div', 'reconnect-roster')
+  for (const p of m.participants) {
+    list.appendChild(el('div', 'reconnect-agent' + (p.status === 'invited' ? ' is-pending' : ''), `
+      <span>${esc(p.agentNo)}${p.agentNo === me ? ' (you)' : ''}</span>
+      <span>${p.status === 'invited' ? 'invited' : p.streamed ? '✓ streamed' : 'waiting'}</span>
+    `))
+  }
+  box.appendChild(list)
+
+  if (myRow?.status === 'invited') {
+    const row = el('div', 'reconnect-invite-actions')
+    const accept = el('button', 'btn btn-primary', 'Accept')
+    accept.onclick = async () => {
+      accept.disabled = true
+      const r = await call('respondReconnectInvite', { agentNo: me, districtId: mapD.id, accept: true })
+      if (r.success) refresh(); else { toast(reconnectError(r.error)); accept.disabled = false }
+    }
+    const decline = el('button', 'btn btn-ghost', 'Decline')
+    decline.onclick = async () => {
+      decline.disabled = true
+      const r = await call('respondReconnectInvite', { agentNo: me, districtId: mapD.id, accept: false })
+      if (r.success) refresh(); else { decline.disabled = false }
+    }
+    row.append(accept, decline)
+    box.appendChild(row)
+  } else if (myRow?.status === 'joined') {
+    if (joined.length < m.requiredAgents) {
+      const inviteRow = el('div', 'reconnect-invite-row')
+      const input = el('input', 'ob-input')
+      input.placeholder = 'Invite by agent number'
+      const inviteBtn = el('button', 'btn btn-ghost', 'Invite')
+      inviteBtn.onclick = async () => {
+        const inviteeAgentNo = input.value.trim()
+        if (!inviteeAgentNo) { toast(reconnectError('invitee_required')); return }
+        inviteBtn.disabled = true
+        const r = await call('inviteReconnectMission', { agentNo: me, districtId: mapD.id, inviteeAgentNo })
+        inviteBtn.disabled = false
+        if (r.success) { toast(`Invited ${inviteeAgentNo}`); input.value = ''; refresh() }
+        else toast(reconnectError(r.error))
+      }
+      inviteRow.append(input, inviteBtn)
+      box.appendChild(inviteRow)
+    }
+  } else if (res.eligible && joined.length < m.requiredAgents) {
+    const joinBtn = el('button', 'btn btn-primary', 'Join this mission')
+    joinBtn.onclick = async () => {
+      joinBtn.disabled = true
+      const r = await call('joinReconnectMission', { agentNo: me, districtId: mapD.id })
+      if (r.success) refresh(); else { toast(reconnectError(r.error)); joinBtn.disabled = false }
+    }
+    box.appendChild(joinBtn)
+  }
 }
 
 /* ── The shelf ──────────────────────────────────────────────────────────

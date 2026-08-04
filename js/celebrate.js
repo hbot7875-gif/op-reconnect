@@ -86,7 +86,6 @@ export function playRestoration(d, ward, state, onDone) {
 
   const reveal = el('div', 'cel-reveal')
   if (d.echoOf) reveal.appendChild(el('div', 'cel-guardian', `<span>👤 Guardian</span><b>${esc(d.echoOf)}</b>`))
-  if (d.memory) reveal.appendChild(el('div', 'file-body', esc(d.memory)))
   // Echo Quarter lights up four at once (one per season-one team) — see
   // joinNames in screen-ward.js's ward-foot line for the same pattern.
   if (wardWhole && ward.centerpieces?.length) {

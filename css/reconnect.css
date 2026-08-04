@@ -1127,6 +1127,21 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 .r-legendary .ia-body { fill: #2a1c12; }
 .r-legendary .ia-accent { fill: var(--gold); }
 
+/* ── Reconnect Mission ── the cooperative bonus stage on a restored
+   district's own screen. Quietly hidden (box.hidden) for districts that
+   don't have one — most won't, at least at first. */
+.reconnect-card { margin-top: 22px; }
+.reconnect-card .btn { margin-top: 12px; }
+.reconnect-roster { display: flex; flex-direction: column; gap: 5px; margin-top: 12px; }
+.reconnect-agent { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 8px 12px; border-radius: var(--r); background: var(--panel); border: 1px solid var(--border);
+  font-family: var(--mono); font-size: 11.5px; }
+.reconnect-agent.is-pending { opacity: 0.55; border-style: dashed; }
+.reconnect-invite-row { display: flex; gap: 8px; margin-top: 12px; }
+.reconnect-invite-row .ob-input { flex: 1; }
+.reconnect-invite-actions { display: flex; gap: 8px; margin-top: 12px; }
+.reconnect-invite-actions .btn { flex: 1; margin-top: 0; }
+
 .shelf { margin-top: 22px; }
 .shelf-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
 .shelf-title { font-family: var(--disp); font-weight: 800; font-size: 15px; letter-spacing: 0.5px; }

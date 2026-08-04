@@ -24,7 +24,12 @@ import { adminGetActiveDefuse } from './lib/bomb.ts'
 import { adminCreateBroadcast, adminListBroadcasts, adminDeleteBroadcast } from './lib/broadcasts.ts'
 import { adminGetAgent } from './lib/admin-agent.ts'
 import { adminListGoals, adminAddGoal, adminUpdateGoal, adminDeleteGoal } from './lib/goals.ts'
+import {
+  getReconnectMission, openReconnectMission, joinReconnectMission,
+  inviteReconnectMission, respondReconnectInvite,
+} from './lib/reconnect-missions.ts'
 import { getLeaderboard } from './lib/leaderboard.ts'
+import { loadContent } from './lib/config.ts'
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -76,6 +81,15 @@ const ROUTES: Record<string, Route> = {
   useItem: { auth: 'agent', handler: (sb, p) => useItem(sb, p) },
   getSignalLog: { auth: 'agent', handler: (sb, p) => getSignalLog(sb, p) },
   getLeaderboard: { auth: 'agent', handler: (sb, p) => getLeaderboard(sb, p) },
+  // Reconnect Missions — the cooperative bonus stage a district's own player
+  // unlocks after finishing its solo goals. All agent-scoped since
+  // eligibility is always checked against the caller's own restored
+  // districts (rc_player_districts), never anyone else's.
+  getReconnectMission: { auth: 'agent', handler: async (sb, p) => getReconnectMission(sb, await loadContent(sb), p) },
+  openReconnectMission: { auth: 'agent', handler: async (sb, p) => openReconnectMission(sb, await loadContent(sb), p) },
+  joinReconnectMission: { auth: 'agent', handler: async (sb, p) => joinReconnectMission(sb, await loadContent(sb), p) },
+  inviteReconnectMission: { auth: 'agent', handler: async (sb, p) => inviteReconnectMission(sb, await loadContent(sb), p) },
+  respondReconnectInvite: { auth: 'agent', handler: async (sb, p) => respondReconnectInvite(sb, await loadContent(sb), p) },
   // admin-gated inside the handler via SYNC_ADMIN_KEY
   launchDefuse: { auth: 'public', handler: (sb, p) => adminLaunchDefuse(sb, p) },
 

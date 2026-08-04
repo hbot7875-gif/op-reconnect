@@ -155,9 +155,7 @@ function peekSheet(d, ward, state) {
       <span class="count">${pct}%</span>`))
   }
 
-  if (d.memory && (d.status === 'restored' || d.status === 'centerpiece_lit')) {
-    sheet.appendChild(el('div', 'file-body', esc(d.memory)))
-  } else if (d.status === 'centerpiece_dark') {
+  if (d.status === 'centerpiece_dark') {
     sheet.appendChild(el('div', 'dim', 'Nobody keeps this one. It stays dark until every district around it is back.'))
   } else if (d.status === 'locked') {
     const gate = unlockAfter(state.map?.wards || [], d.wardId)
