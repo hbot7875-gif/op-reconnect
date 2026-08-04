@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Rajdhani:wght@500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/reconnect.css">
 <style>
-  body { max-width: 720px; margin: 0 auto; padding: 24px var(--gut) 60px; }
+  body { max-width: 780px; margin: 0 auto; padding: 24px var(--gut) 60px; }
   .cs-admin-head { margin: 10px 0 22px; }
   .cs-admin-head h1 { font-family: var(--disp); font-size: 22px; margin: 8px 0 6px; }
   .cs-admin-key-row { display: flex; gap: 8px; align-items: center; margin: 14px 0 28px; }
@@ -35,6 +35,13 @@
     padding: 6px 10px; border-radius: 999px; border: 1px solid var(--border); margin-bottom: 12px; }
   .cs-conn-badge.on { color: var(--gold); border-color: rgba(217,173,95,0.4); }
   .cs-conn-badge.off { color: var(--muted); }
+  .cs-redirect-box { margin-top: 10px; padding: 10px; background: var(--surface-2); border: 1px dashed var(--border);
+    border-radius: var(--r); }
+  .cs-redirect-box .label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+  .cs-redirect-box .row { display: flex; gap: 8px; align-items: center; }
+  .cs-redirect-box code { flex: 1; font-size: 11px; color: var(--gold); word-break: break-all; background: rgba(0,0,0,0.3);
+    padding: 6px 8px; border-radius: 4px; font-family: var(--mono); }
+  .cs-redirect-box .hint { font-size: 10px; color: var(--muted); margin-top: 6px; }
   .cs-lib-list { display: flex; flex-direction: column; gap: 1px; background: var(--border); border: 1px solid var(--border);
     border-radius: var(--r); overflow: hidden; margin-top: 10px; max-height: 320px; overflow-y: auto; }
   .cs-lib-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: var(--surface); font-size: 12px; }
@@ -43,6 +50,62 @@
   textarea.ob-input { font-family: var(--mono); font-size: 12px; min-height: 90px; resize: vertical; }
   .cs-admin-nav { font-size: 11px; margin-bottom: 18px; }
   .cs-admin-nav a { color: var(--purple-lt); }
+
+  /* catalog summary + table */
+  .cs-cat-summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+  .cs-cat-summary .stats { font-size: 12px; color: var(--muted); }
+  .cs-cat-summary .stats b.ok { color: var(--gold); }
+  .cs-cat-summary .stats b.warn { color: var(--purple-lt); }
+  .cs-cat-toggle { background: none; border: none; color: var(--muted); font-size: 11px; cursor: pointer; padding: 0; margin-bottom: 8px; }
+  .cs-cat-table-wrap { max-height: 340px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--r); }
+  .cs-cat-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  .cs-cat-table col.c-name { width: 30%; } .cs-cat-table col.c-artist { width: 16%; }
+  .cs-cat-table col.c-status { width: 14%; } .cs-cat-table col.c-isrc { width: 18%; }
+  .cs-cat-table col.c-open { width: 8%; } .cs-cat-table col.c-patch { width: 14%; }
+  .cs-cat-table th { padding: 5px 8px; font-size: 10px; color: var(--dim); font-weight: 600; text-align: left;
+    border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); }
+  .cs-cat-table td { padding: 5px 8px; font-size: 11px; color: var(--text); border-bottom: 1px solid var(--border);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cs-cat-table td.artist { font-size: 10px; color: var(--muted); }
+  .cs-status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; flex-shrink: 0; }
+  .cs-status-dot.ok { background: var(--gold); } .cs-status-dot.pending { background: var(--purple-lt); }
+  .cs-cat-table a { color: var(--gold); text-decoration: none; font-size: 10px; }
+  .cs-isrc-patch { display: flex; gap: 4px; align-items: center; }
+  .cs-isrc-patch input { width: 108px; padding: 3px 6px; background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 4px; color: var(--text); font-size: 10px; font-family: var(--mono); }
+  .cs-isrc-patch button { padding: 3px 8px; background: transparent; border: 1px solid var(--border); color: var(--muted);
+    border-radius: 4px; font-size: 10px; cursor: pointer; }
+  .cs-search-results { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+  .cs-search-result { display: flex; justify-content: space-between; gap: 8px; padding: 6px 8px; background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: var(--r); font-size: 11px; }
+  .cs-search-result .sub { color: var(--muted); font-size: 10px; }
+
+  /* album list */
+  .cs-album-list { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .cs-album-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px;
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r); font-size: 11px; }
+  .cs-album-row .sub { color: var(--muted); font-size: 10px; }
+
+  /* generate section */
+  .cs-focus-row { display: grid; grid-template-columns: 1fr 68px 32px; gap: 8px; margin-bottom: 8px; align-items: center; }
+  .cs-focus-row input[type="number"] { text-align: center; }
+  .cs-focus-row .rm { background: none; border: 1px solid var(--border); border-radius: 6px; color: var(--crimson);
+    cursor: pointer; padding: 8px 0; }
+  .cs-album-checks { display: flex; flex-direction: column; gap: 4px; margin: 4px 0 8px; }
+  .cs-album-checks label { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text); cursor: pointer; }
+  .cs-gen-field-label { display: block; font-size: 11px; color: var(--muted); margin-top: 14px; margin-bottom: 4px; }
+  select.ob-input { font-family: inherit; }
+  .cs-gen-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin: 4px 0; }
+  .cs-warn-box { font-size: 11px; color: var(--purple-lt); background: var(--purple-soft); border: 1px solid rgba(139,92,246,0.3);
+    border-radius: var(--r); padding: 9px 10px; margin-bottom: 10px; }
+
+  /* validate / generate report */
+  .cs-report-summary { font-size: 11px; color: var(--muted); margin-bottom: 8px; font-family: var(--mono); }
+  .cs-report-row { display: flex; gap: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--r); margin-bottom: 6px; }
+  .cs-report-row .ico { font-weight: 900; }
+  .cs-report-row .ico.pass { color: var(--gold); } .cs-report-row .ico.warn { color: var(--purple-lt); } .cs-report-row .ico.fail { color: var(--crimson); }
+  .cs-report-row .rule { font-size: 12px; color: var(--text); font-weight: 700; }
+  .cs-report-row .detail { font-size: 11px; color: var(--muted); margin-top: 2px; }
 </style>
 </head>
 <body>
@@ -53,8 +116,8 @@
   <span class="eyebrow">CANDY STAR — ADMIN</span>
   <h1>🍬 Catalog &amp; Spotify control</h1>
   <p class="muted">Site-owner tools for the Candy Star Generator: refresh the BTS catalog, manage the
-    filler library, connect the one site-wide Spotify account, and trigger a real generation for
-    validation. Not part of the player-facing game — reach it only from this direct link.</p>
+    filler library, connect the one site-wide Spotify account, and build or validate a real playlist.
+    Not part of the player-facing game — reach it only from this direct link.</p>
 </div>
 
 <div class="cs-admin-key-row">
@@ -62,9 +125,9 @@
   <span id="adminKeyStatus" class="cs-admin-key-status"></span>
 </div>
 
-<!-- ── Spotify connection ── -->
+<!-- ── ① Spotify connection ── -->
 <div class="cs-admin-section">
-  <h2>Spotify connection</h2>
+  <h2>① Spotify connection</h2>
   <p class="muted">One site-wide account, not per-agent. Only ever connect the account this game
     should generate real playlists from.</p>
   <div id="connBadge" class="cs-conn-badge off">Checking…</div>
@@ -73,24 +136,83 @@
     <button class="btn btn-ghost" id="btnDisconnect" type="button">Disconnect</button>
     <button class="btn btn-ghost" id="btnRefreshConn" type="button">Refresh status</button>
   </div>
+  <div class="cs-redirect-box">
+    <div class="label">Register this exact redirect URI in your Spotify app</div>
+    <div class="row">
+      <code id="redirectUriDisplay"></code>
+      <button class="btn btn-ghost" id="btnCopyRedirect" type="button">Copy</button>
+    </div>
+    <div class="hint">Spotify Dashboard → your app → Settings → Edit → Redirect URIs. Must match character-for-character (no trailing slash).</div>
+  </div>
   <div id="connOut" class="cs-admin-out"></div>
 </div>
 
-<!-- ── BTS catalog ── -->
+<!-- ── ② BTS catalog ── -->
 <div class="cs-admin-section">
-  <h2>BTS song catalog</h2>
+  <h2>② BTS song catalog</h2>
   <p class="muted">Pulls fresh from iTunes Search (free, no auth) and overwrites <code>bts_song_catalog</code>.
     Empty until this has run at least once — that's expected on a brand-new project, not a bug.</p>
-  <div class="cs-admin-row">
-    <button class="btn btn-primary" id="btnRefreshCatalog" type="button">Refresh BTS catalog</button>
-    <button class="btn btn-ghost" id="btnGetCatalog" type="button">Check catalog size</button>
+
+  <div class="cs-cat-summary">
+    <div class="stats" id="catStats">Loading…</div>
+    <button class="btn btn-primary" id="btnRefreshCatalog" type="button">Refresh catalog</button>
   </div>
-  <div id="catalogOut" class="cs-admin-out"></div>
+  <div id="catTableSection" hidden>
+    <button class="cs-cat-toggle" id="btnToggleCatTable" type="button">▶ Show all songs</button>
+    <div class="cs-cat-table-wrap" id="catTableWrap" hidden>
+      <table class="cs-cat-table">
+        <colgroup><col class="c-name"><col class="c-artist"><col class="c-status"><col class="c-isrc"><col class="c-open"><col class="c-patch"></colgroup>
+        <thead><tr><th>Song</th><th>Artist</th><th>Status</th><th>ISRC</th><th>Spotify</th><th>Patch ISRC</th></tr></thead>
+        <tbody id="catTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="cs-admin-row" style="margin-top:14px;">
+    <input id="catSearch" class="ob-input" type="text" placeholder="Search a BTS song or member…">
+    <button class="btn btn-primary" id="btnCatSearch" type="button">Search</button>
+  </div>
+  <div id="catSearchResults" class="cs-search-results"></div>
+
+  <div class="cs-admin-row" style="margin-top:10px;">
+    <button class="btn btn-ghost" id="btnResolveMore" type="button">⚡ Resolve more playable links</button>
+    <button class="btn btn-ghost" id="btnStopResolve" type="button">Stop</button>
+  </div>
+  <div class="muted" style="font-size:11px;">Links the iTunes catalog to Spotify via name search.</div>
+  <div id="resolveOut" class="cs-admin-out"></div>
+
+  <div class="cs-admin-row" style="margin-top:10px;">
+    <button class="btn btn-ghost" id="btnBulkIsrc" type="button">🔍 Auto-fetch ISRCs</button>
+  </div>
+  <div class="muted" style="font-size:11px;">Fetches ISRCs from MusicBrainz for pending songs (10 per run). Run repeatedly until done.</div>
+  <div id="isrcOut" class="cs-admin-out"></div>
+
+  <p class="muted" style="margin-top:14px;">Or add a song manually with its Spotify link — works even when rate-limited (no Spotify API call).</p>
+  <div class="cs-admin-row">
+    <input id="catManualUrl" class="ob-input" type="text" placeholder="Paste Spotify track link, e.g. https://open.spotify.com/track/…">
+    <button class="btn btn-primary" id="btnCatManual" type="button">Add song</button>
+  </div>
+  <div id="catManualOut" class="cs-admin-out"></div>
+
+  <p class="muted" style="margin-top:14px;">Bulk-add from a <b>BTS playlist</b> (e.g. "This Is BTS") — every BTS track becomes playable. Non-BTS tracks are skipped.</p>
+  <div class="cs-admin-row">
+    <input id="catPlaylistUrl" class="ob-input" type="text" placeholder="Paste Spotify playlist link, e.g. https://open.spotify.com/playlist/…">
+    <button class="btn btn-primary" id="btnCatPlaylist" type="button">Add playlist</button>
+  </div>
+  <div id="catPlaylistOut" class="cs-admin-out"></div>
+
+  <p class="muted" style="margin-top:14px;">Add a full <b>album</b> by its Spotify link — every track becomes playable, and you can drop the whole album into a playlist (each track once).</p>
+  <div class="cs-admin-row">
+    <input id="catAlbumUrl" class="ob-input" type="text" placeholder="Paste Spotify album link, e.g. https://open.spotify.com/album/…">
+    <button class="btn btn-primary" id="btnCatAlbum" type="button">Add album</button>
+  </div>
+  <div id="catAlbumOut" class="cs-admin-out"></div>
+  <div id="albumList" class="cs-album-list"></div>
 </div>
 
-<!-- ── Filler library ── -->
+<!-- ── ③ Filler library ── -->
 <div class="cs-admin-section">
-  <h2>Filler library</h2>
+  <h2>③ Filler library</h2>
   <p class="muted">The non-BTS "not just BTS on repeat" tracks the generator weaves in. Import a whole
     playlist (K-pop tracks are filtered out automatically) or add one track at a time.</p>
   <div class="cs-admin-row">
@@ -108,20 +230,46 @@
   <div id="fillerList" class="cs-lib-list" hidden></div>
 </div>
 
-<!-- ── Manual playlist generation (validation) ── -->
+<!-- ── ④ Generate a playlist ── -->
 <div class="cs-admin-section">
-  <h2>Generate a playlist (validation)</h2>
-  <p class="muted">Runs the real generator against the connected Spotify account — same rule engine
-    agents' Candy Star screen uses. One line per focus song: <code>key,multiplier</code> — get a
-    song's <code>key</code> from "Check catalog size" output or the live function's
-    <code>getBTSCatalog</code> response.</p>
-  <textarea id="genFocus" class="ob-input" placeholder="lfm:bts:swim,10&#10;lfm:agust d:haegeum,5"></textarea>
-  <div class="cs-admin-row" style="margin-top:10px;">
-    <input id="genName" class="ob-input" type="text" placeholder="Playlist name (blank = random)">
-    <input id="genMinutes" class="ob-input" type="number" min="10" max="180" value="180" style="max-width:120px;" placeholder="Minutes">
-    <button class="btn btn-primary" id="btnGenerate" type="button">Generate playlist</button>
+  <h2>④ Generate a playlist</h2>
+  <div id="genEmptyWarn" class="cs-warn-box" hidden>
+    ⚠ No <b>Spotify-playable</b> songs yet. Use the search box in <b>② BTS song catalog</b> to find the songs you
+    want (e.g. "Spring Day", "Seven") — each one becomes pickable here. Last.fm-only names can't be used because
+    they don't resolve to Spotify.
   </div>
+  <p class="muted">Type each song name and how many times to stream it — like a 148 combo line
+    (e.g. 12x Swim · 6x CO · 5x Hae · 4x WF…). Fillers are woven in automatically.</p>
+  <datalist id="songDatalist"></datalist>
+  <div id="focusRows"></div>
+  <button class="btn btn-ghost" id="btnAddFocusRow" type="button">+ Add song</button>
+
+  <label class="cs-gen-field-label" id="genAlbumLabel" hidden>Include full albums (each track added once)</label>
+  <div id="genAlbumChecks" class="cs-album-checks"></div>
+
+  <label class="cs-gen-field-label">Optional individual songs (ctrl/cmd-click to multi-select — added once each)</label>
+  <select id="genIndividual" class="ob-input" multiple size="4"></select>
+
+  <div class="cs-gen-grid">
+    <input id="genName" class="ob-input" type="text" placeholder="Name (blank = random)">
+    <input id="genMinutes" class="ob-input" type="number" min="30" max="180" value="180" title="Max minutes" placeholder="Max min">
+    <input id="genFillerEvery" class="ob-input" type="number" min="5" max="30" value="20" title="Non-BTS filler every N songs" placeholder="Filler /N">
+  </div>
+  <p class="muted" style="font-size:10px;">Gaps fill with other BTS songs; a non-Kpop song drops roughly every 60–75 min (~2 per playlist), capped at one per N tracks.</p>
+  <button class="btn btn-primary" id="btnGenerate" type="button">🎧 Generate &amp; create in Spotify</button>
   <div id="genOut" class="cs-admin-out"></div>
+  <div id="genReport"></div>
+</div>
+
+<!-- ── ⑤ Validate a playlist ── -->
+<div class="cs-admin-section">
+  <h2>⑤ Validate a playlist</h2>
+  <div class="cs-admin-row">
+    <input id="validateUrl" class="ob-input" type="text" placeholder="Paste any Spotify playlist link to check the rules">
+    <button class="btn btn-primary" id="btnValidate" type="button">Validate</button>
+  </div>
+  <div id="validateOut" class="cs-admin-out"></div>
+  <div id="validateReport"></div>
 </div>
 
 <script type="module">
@@ -129,6 +277,7 @@ import { API_URL } from './js/api.js'
 
 const $ = (id) => document.getElementById(id)
 const KEY_STORAGE = 'rc_admin_key'
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
 
 function getAdminKey() { return $('adminKey').value.trim() }
 
@@ -173,6 +322,10 @@ function showOut(id, text, kind) {
 }
 
 // ── Spotify connection ──
+const redirectUri = location.origin + location.pathname
+$('redirectUriDisplay').textContent = redirectUri
+$('btnCopyRedirect').onclick = () => navigator.clipboard.writeText(redirectUri)
+
 async function refreshConn() {
   const res = await call('getSpotifyConnection')
   const badge = $('connBadge')
@@ -186,7 +339,6 @@ async function refreshConn() {
 }
 $('btnRefreshConn').onclick = refreshConn
 $('btnConnect').onclick = async () => {
-  const redirectUri = location.origin + location.pathname
   const res = await call('spotifyAuthUrl', { redirectUri })
   if (res && res.success && res.url) {
     location.href = res.url
@@ -211,28 +363,179 @@ async function handleOAuthReturn() {
     history.replaceState({}, '', location.pathname)
     return
   }
-  const redirectUri = location.origin + location.pathname
   const res = await call('spotifyExchangeCode', { code, redirectUri })
   showOut('connOut', res, res?.success ? 'ok' : 'error')
   history.replaceState({}, '', location.pathname)
   refreshConn()
 }
 
-// ── BTS catalog ──
-$('btnRefreshCatalog').onclick = async () => {
-  showOut('catalogOut', 'Refreshing — this can take a few seconds…', null)
-  const res = await call('refreshBTSCatalog')
-  showOut('catalogOut', res, res?.success ? 'ok' : 'error')
+// ── BTS catalog + album state (shared with the generate section below) ──
+let allSongs = [], playableSongs = [], albums = [], songKeyByLabel = new Map()
+
+function songLabel(s) {
+  return `${s.name} — ${(s.artists || []).join(', ')} (${(s.versions || []).length}v)`
 }
-$('btnGetCatalog').onclick = async () => {
-  const res = await call('getBTSCatalog')
-  if (res && res.success) {
-    showOut('catalogOut', `${res.songCount} song(s) in catalog. Updated: ${res.updatedAt || 'never'}\n\n` +
-      (res.songs || []).slice(0, 20).map(s => `${s.key}  —  ${s.name}`).join('\n') +
-      (res.songs?.length > 20 ? `\n… +${res.songs.length - 20} more` : ''), 'ok')
-  } else {
-    showOut('catalogOut', res, 'error')
+
+function rebuildGenerateInputs() {
+  songKeyByLabel = new Map()
+  $('songDatalist').innerHTML = playableSongs.map(s => {
+    const label = songLabel(s)
+    songKeyByLabel.set(label, s.key || s.isrc)
+    return `<option value="${esc(label)}"></option>`
+  }).join('')
+  $('genIndividual').innerHTML = playableSongs.map(s =>
+    `<option value="${esc(s.key || s.isrc)}">${esc(s.name)} — ${esc((s.artists || []).join(', '))} (${(s.versions || []).length}v)</option>`).join('')
+  $('genEmptyWarn').hidden = playableSongs.length > 0
+
+  $('genAlbumLabel').hidden = albums.length === 0
+  $('genAlbumChecks').innerHTML = albums.map(a => `
+    <label><input type="checkbox" class="gen-album-check" value='${esc(JSON.stringify(a.trackKeys))}'> 💿 ${esc(a.name)} <span class="sub">(${a.count})</span></label>
+  `).join('')
+}
+
+function renderAlbumList() {
+  const list = $('albumList')
+  if (!albums.length) { list.innerHTML = ''; return }
+  list.innerHTML = albums.map(a => `
+    <div class="cs-album-row" data-id="${esc(a.id)}">
+      <div><div>💿 ${esc(a.name)}</div><div class="sub">${a.count} tracks</div></div>
+      <button class="rm" type="button" title="Remove">✕</button>
+    </div>
+  `).join('')
+  list.querySelectorAll('.rm').forEach(btn => {
+    btn.onclick = async () => {
+      const row = btn.closest('.cs-album-row')
+      const res = await call('removeCatalogAlbum', { albumId: row.dataset.id })
+      if (res?.success) await loadCatalog()
+    }
+  })
+}
+
+function statusDot(ok) { return `<span class="cs-status-dot ${ok ? 'ok' : 'pending'}"></span>` }
+
+function renderCatTable() {
+  const resolved = allSongs.filter(s => (s.versions || []).length > 0)
+  const pending = allSongs.filter(s => !(s.versions || []).length)
+  $('catStats').innerHTML = allSongs.length
+    ? `<b class="ok">${resolved.length}</b> resolved to Spotify · <b class="warn">${pending.length}</b> pending · <b>${allSongs.length}</b> total`
+    : 'Empty — refresh the catalog to start.'
+  $('catTableSection').hidden = allSongs.length === 0
+  $('btnToggleCatTable').textContent = `▶ Show all ${allSongs.length} songs`
+
+  const row = (s, showIsrcEdit) => {
+    const uri = s.versions?.[0]?.uri || null
+    const spId = uri ? uri.split(':')[2] : null
+    const artist = (s.artists || []).join(', ')
+    const keyEsc = String(s.key || s.isrc || '').replace(/'/g, "\\'")
+    return `<tr>
+      <td title="${esc(s.name)}">${esc(s.name)}</td>
+      <td class="artist">${esc(artist)}</td>
+      <td>${statusDot(!!uri)}${uri ? 'Resolved' : 'Pending'}</td>
+      <td>${esc(s.isrc || '—')}</td>
+      <td>${spId ? `<a href="https://open.spotify.com/track/${spId}" target="_blank" rel="noopener">open ↗</a>` : '—'}</td>
+      <td>${showIsrcEdit ? `<div class="cs-isrc-patch">
+        <input id="isrc-${keyEsc}" placeholder="e.g. QM7282022872" value="${esc(s.isrc || '')}">
+        <button data-key="${esc(s.key || s.isrc)}" class="patch-isrc-btn">Save</button>
+      </div>` : ''}</td>
+    </tr>`
   }
+  $('catTableBody').innerHTML = resolved.map(s => row(s, false)).join('') + pending.map(s => row(s, true)).join('')
+  $('catTableBody').querySelectorAll('.patch-isrc-btn').forEach(btn => {
+    btn.onclick = async () => {
+      const key = btn.dataset.key
+      const input = $(`isrc-${key.replace(/'/g, "\\'")}`)
+      const isrc = input ? input.value.trim() : ''
+      if (!isrc) return
+      const res = await call('patchCatalogSongIsrc', { key, isrc })
+      if (res?.success) await loadCatalog()
+    }
+  })
+}
+
+async function loadCatalog() {
+  const [cat, alb] = await Promise.all([call('getBTSCatalog'), call('getCatalogAlbums')])
+  allSongs = (cat && cat.songs) || []
+  playableSongs = allSongs.filter(s => (s.versions || []).length > 0)
+  albums = (alb && alb.albums) || []
+  renderCatTable()
+  renderAlbumList()
+  rebuildGenerateInputs()
+}
+
+$('btnToggleCatTable').onclick = () => {
+  const wrap = $('catTableWrap')
+  wrap.hidden = !wrap.hidden
+  $('btnToggleCatTable').textContent = wrap.hidden ? `▶ Show all ${allSongs.length} songs` : '▼ Hide song list'
+}
+
+$('btnRefreshCatalog').onclick = async () => {
+  showOut('resolveOut', 'Refreshing — this can take a few seconds…', null)
+  const res = await call('refreshBTSCatalog')
+  showOut('resolveOut', res, res?.success ? 'ok' : 'error')
+  if (res?.success) await loadCatalog()
+}
+
+$('btnCatSearch').onclick = async () => {
+  const query = $('catSearch').value.trim()
+  if (!query) return
+  const res = await call('searchBTSTracks', { query })
+  const box = $('catSearchResults')
+  if (!res || !res.success) { box.innerHTML = ''; showOut('resolveOut', res, 'error'); return }
+  box.innerHTML = (res.results || []).map(t => `
+    <div class="cs-search-result"><span>${esc(t.name)}</span><span class="sub">${esc((t.artists || []).join(', '))}</span></div>
+  `).join('') || '<div class="cs-search-result"><span>No BTS matches.</span></div>'
+  showOut('resolveOut', `Found ${res.found}, newly added ${res.addedToCatalog}.`, 'ok')
+  if (res.addedToCatalog > 0) await loadCatalog()
+}
+
+let resolveStop = false
+$('btnStopResolve').onclick = () => { resolveStop = true }
+$('btnResolveMore').onclick = async () => {
+  resolveStop = false
+  let round = 0
+  while (!resolveStop) {
+    round++
+    showOut('resolveOut', `Resolving… (round ${round})`, null)
+    const res = await call('resolveMoreCatalog', { batchSize: 15 })
+    if (!res || !res.success) { showOut('resolveOut', res, 'error'); break }
+    showOut('resolveOut', `Resolved ${res.resolvedThisRun}, not found ${res.notFoundThisRun} — ${res.totalResolved} total, ${res.remaining} remaining.`, 'ok')
+    await loadCatalog()
+    if (res.done || res.rateLimited) break
+  }
+}
+
+$('btnBulkIsrc').onclick = async () => {
+  showOut('isrcOut', 'Fetching ISRCs…', null)
+  const res = await call('bulkFetchIsrcs', { batchSize: 10 })
+  if (!res || !res.success) { showOut('isrcOut', res, 'error'); return }
+  showOut('isrcOut', `Updated ${res.updated}, not found ${res.notFound}, ${res.remaining} still missing.`, 'ok')
+  if (res.updated > 0) await loadCatalog()
+}
+
+$('btnCatManual').onclick = async () => {
+  const trackUrl = $('catManualUrl').value.trim()
+  if (!trackUrl) return
+  const res = await call('addCatalogSongManual', { trackUrl })
+  showOut('catManualOut', res, res?.success ? 'ok' : 'error')
+  if (res?.success) { $('catManualUrl').value = ''; await loadCatalog() }
+}
+
+$('btnCatPlaylist').onclick = async () => {
+  const playlistUrl = $('catPlaylistUrl').value.trim()
+  if (!playlistUrl) return
+  showOut('catPlaylistOut', 'Importing…', null)
+  const res = await call('addPlaylistToCatalog', { playlistUrl })
+  showOut('catPlaylistOut', res, res?.success ? 'ok' : 'error')
+  if (res?.success) { $('catPlaylistUrl').value = ''; await loadCatalog() }
+}
+
+$('btnCatAlbum').onclick = async () => {
+  const albumUrl = $('catAlbumUrl').value.trim()
+  if (!albumUrl) return
+  showOut('catAlbumOut', 'Adding album…', null)
+  const res = await call('addAlbumToCatalog', { albumUrl })
+  showOut('catAlbumOut', res, res?.success ? 'ok' : 'error')
+  if (res?.success) { $('catAlbumUrl').value = ''; await loadCatalog() }
 }
 
 // ── Filler library ──
@@ -257,7 +560,7 @@ async function loadFillers() {
   list.hidden = false
   list.innerHTML = (res.fillers || []).map(f => `
     <div class="cs-lib-row" data-id="${f.track_id}">
-      <span class="name">${f.name} — ${(f.artists || []).join(', ')}</span>
+      <span class="name">${esc(f.name)} — ${esc((f.artists || []).join(', '))}</span>
       <button class="rm" type="button" title="Remove">✕</button>
     </div>
   `).join('') || '<div class="cs-lib-row"><span class="name">No fillers yet.</span></div>'
@@ -273,26 +576,78 @@ async function loadFillers() {
 }
 $('btnLoadFillers').onclick = loadFillers
 
-// ── Manual generate ──
-$('btnGenerate').onclick = async () => {
-  const lines = $('genFocus').value.split('\n').map(l => l.trim()).filter(Boolean)
-  const focus = lines.map(l => {
-    const [key, mult] = l.split(',').map(s => s.trim())
-    return { key, multiplier: parseInt(mult) || 0 }
-  }).filter(f => f.key && f.multiplier > 0)
-  if (!focus.length) { showOut('genOut', 'Add at least one "key,multiplier" line.', 'error'); return }
-  showOut('genOut', 'Generating — this can take up to ~20s…', null)
-  const res = await call('generatePlaylist', {
-    focus,
-    name: $('genName').value.trim() || undefined,
-    targetMinutes: parseInt($('genMinutes').value) || 180,
-  })
-  showOut('genOut', res, res?.success ? 'ok' : 'error')
+// ── Generate a playlist ──
+function focusRowHtml(mult) {
+  return `<div class="cs-focus-row">
+    <input class="focus-sel ob-input" list="songDatalist" placeholder="Type a song…" autocomplete="off">
+    <input class="focus-mult ob-input" type="number" min="1" value="${mult}" title="times to stream">
+    <button type="button" class="rm" title="Remove">×</button>
+  </div>`
+}
+function addFocusRow(mult = 3) {
+  $('focusRows').insertAdjacentHTML('beforeend', focusRowHtml(mult))
+  const row = $('focusRows').lastElementChild
+  row.querySelector('.rm').onclick = () => row.remove()
+}
+$('btnAddFocusRow').onclick = () => addFocusRow()
+
+function reportHtml(report) {
+  if (!report || !report.findings) return ''
+  const s = report.summary || {}
+  const rows = report.findings.map(f => `
+    <div class="cs-report-row">
+      <span class="ico ${f.status}">${f.status === 'pass' ? '✓' : f.status === 'warn' ? '⚠' : '✗'}</span>
+      <div><div class="rule">${esc(f.rule)}</div><div class="detail">${esc(f.detail)}</div></div>
+    </div>`).join('')
+  return `<div style="margin-top:12px;">
+    <div class="cs-report-summary">${s.tracks || 0} tracks · ${s.runtimeMin || 0} min · <b class="ok">${s.passed || 0} passed</b> · <b style="color:var(--crimson);">${s.failed || 0} failed</b></div>
+    ${rows}</div>`
 }
 
+$('btnGenerate').onclick = async () => {
+  const focus = [...document.querySelectorAll('.cs-focus-row')].map(row => {
+    const label = row.querySelector('.focus-sel').value.trim()
+    const multiplier = parseInt(row.querySelector('.focus-mult').value) || 0
+    const key = songKeyByLabel.get(label)
+    return key && multiplier > 0 ? { key, multiplier } : null
+  }).filter(Boolean)
+  if (!focus.length) { showOut('genOut', 'Add at least one song with a valid multiplier — pick it from the dropdown as you type.', 'error'); return }
+
+  const albumKeys = [...document.querySelectorAll('.gen-album-check:checked')]
+    .flatMap(cb => JSON.parse(cb.value))
+  const individualKeys = [...$('genIndividual').selectedOptions].map(o => o.value)
+  const album = [...new Set([...albumKeys, ...individualKeys])]
+
+  $('genReport').innerHTML = ''
+  showOut('genOut', 'Generating — this can take up to ~20s…', null)
+  const res = await call('generatePlaylist', {
+    focus, album,
+    name: $('genName').value.trim() || undefined,
+    targetMinutes: parseInt($('genMinutes').value) || 180,
+    fillerEvery: parseInt($('genFillerEvery').value) || 20,
+  })
+  showOut('genOut', res?.success ? `${res.name} — ${res.trackCount} tracks\n${res.url}` : res, res?.success ? 'ok' : 'error')
+  $('genReport').innerHTML = reportHtml(res?.report)
+}
+
+// ── Validate a playlist ──
+$('btnValidate').onclick = async () => {
+  const playlistUrl = $('validateUrl').value.trim()
+  if (!playlistUrl) return
+  $('validateReport').innerHTML = ''
+  showOut('validateOut', 'Checking…', null)
+  const res = await call('validatePlaylist', { playlistUrl })
+  showOut('validateOut', res?.success ? `${res.summary?.tracks || 0} tracks · ${res.summary?.runtimeMin || 0} min` : res, res?.success ? 'ok' : 'error')
+  $('validateReport').innerHTML = reportHtml(res)
+}
+
+addFocusRow(12)
+addFocusRow(6)
+addFocusRow(4)
 loadStoredKey()
 handleOAuthReturn()
 refreshConn()
+loadCatalog()
 </script>
 </body>
 </html>
