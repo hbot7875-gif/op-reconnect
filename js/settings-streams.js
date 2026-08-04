@@ -147,7 +147,7 @@ export function pinSheet(account, onChanged) {
   const sheet = el('div', 'sheet set-sheet')
   sheet.append(
     el('div', 'eyebrow', 'SCROBBLER PIN'),
-    el('h3', '', 'Your private uplink key'),
+    el('h3', '', 'Your private connection key'),
     el('p', 'muted', 'Paste these into Web Scrobbler or Pano Scrobbler and your plays arrive here directly. Treat the PIN like a password — anyone who has it can log streams as you.'),
   )
 

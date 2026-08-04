@@ -11,7 +11,7 @@
 // that isn't happening, and it'd break the same rule the Network status
 // section obeys (game-design §13.3 — never invent a number). Nothing here
 // reports a percentage, a count, or a state it can't stand behind. The lines
-// are all things that are simply true: an uplink opens, the grid is dark,
+// are all things that are simply true: a connection opens, the city is dark,
 // and either the network knows your agent number or it's waiting for one.
 //
 // Three hard rules this has to respect:
@@ -29,12 +29,18 @@ const HOLD = 260       // ms on the last line before the page changes
 // Spoiler-free by construction: no ward names, no district names, no totals.
 // A stranger reading these learns the network is down and that agents exist,
 // which is what the page above already says out loud.
+//
+// Plain words, not radio jargon. "opening uplink / handshake ok" was left
+// over from when the settings screen called your stream source an "uplink" —
+// that name is gone from the UI now, and these lines were the last place
+// still speaking it. They're also the FIRST thing a new player reads, which
+// is the worst possible place to sound like a manual.
 function script(agentNo) {
   return [
-    '> opening uplink',
-    '> handshake ok',
-    '> locating the grid',
-    '> the grid is dark',
+    '> connecting',
+    '> connected',
+    '> looking for the city',
+    '> the city is dark',
     agentNo ? `> ${agentNo} recognised` : '> awaiting agent',
   ]
 }
