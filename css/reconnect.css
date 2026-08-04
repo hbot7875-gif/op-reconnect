@@ -32,8 +32,8 @@
   --muted: #9c96b0;
   --dim: #635d78;
 
-  --mono: 'Share Tech Mono', monospace;
-  --disp: 'Orbitron', sans-serif;
+  --mono: 'Space Mono', monospace;
+  --disp: 'Rajdhani', sans-serif;
 
   --r: 12px;          /* one radius, used everywhere */
   --r-lg: 16px;
@@ -47,7 +47,7 @@ body {
     radial-gradient(ellipse 70% 38% at 25% -4%, var(--purple-soft) 0%, transparent 58%),
     var(--bg);
   color: var(--text);
-  font-family: 'Rajdhani', sans-serif;
+  font-family: 'Inter', sans-serif;
   min-height: 100vh;
   font-size: 16px;
   -webkit-font-smoothing: antialiased;
