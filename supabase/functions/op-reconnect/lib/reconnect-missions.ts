@@ -2,16 +2,21 @@
 // unlocks once THEY have personally finished that district's solo track+
 // album goals (rc_player_districts.status = 'restored'). Doesn't gate or
 // change solo restoration at all; it's what becomes available next, not a
-// requirement to get there. See migrations/034_rc_reconnect_missions.sql.
+// requirement to get there. See migrations/034_rc_reconnect_missions.sql
+// and 035_rc_reconnect_multi.sql.
 //
 // A mission needs N agents (district-configured, varies per district) who
 // have ALL personally restored that same district, then everyone streams
 // one shared target track (also district-configured). Filled either by
-// open matchmaking (joinReconnectMission) or direct invite
-// (inviteReconnectMission / respondReconnectInvite). Recomputed on every
-// read — refreshMission() re-checks expiry and each participant's actual
-// streaming activity — the same "derive from source data on read" pattern
-// bomb.ts's refreshDefuse already uses for Red Zone events.
+// open matchmaking (joinReconnectMission), direct invite
+// (inviteReconnectMission / respondReconnectInvite), or an admin batch-
+// assigning a whole series at once (adminAutoAssignMissions) — several can
+// run concurrently for the same district, so every read/write here works
+// against "the mission this agent is in", never "the district's mission"
+// singular. Recomputed on every read — refreshMission() re-checks expiry
+// and each participant's actual streaming activity — the same "derive from
+// source data on read" pattern bomb.ts's refreshDefuse already uses for Red
+// Zone events.
 
 import type { GameContent, SupabaseDB } from './config.ts'
 import { goalKeys } from './transmission.ts'
@@ -81,9 +86,9 @@ function shape(m: any, participants: any[]) {
   }
 }
 
-/** Re-derives an open mission's real state from source data: expire it if
- *  time's up, check every joined participant's actual streaming activity,
- *  and settle it (award rewards) the moment everyone required has streamed.
+/** Re-derives one mission's real state from source data: expire it if time's
+ *  up, check every joined participant's actual streaming activity, and
+ *  settle it (award rewards) the moment everyone required has streamed.
  *  Called at the top of every action below, same as refreshDefuse. */
 async function refreshMission(supabase: SupabaseDB, content: GameContent, mission: any) {
   if (mission.status !== 'open') return mission
@@ -134,15 +139,52 @@ async function refreshMission(supabase: SupabaseDB, content: GameContent, missio
   return mission
 }
 
-async function loadOpenMission(supabase: SupabaseDB, districtId: string) {
-  return (await supabase.from('rc_reconnect_missions')
-    .select('*').eq('district_id', districtId).eq('status', 'open')
-    .order('created_at', { ascending: false }).limit(1).maybeSingle()).data
+/** The mission this agent is currently a live part of for this district, if
+ *  any — 'joined' or 'invited', most recent first. Several missions can be
+ *  open for the same district at once, so "my mission" is always looked up
+ *  by participation, never by district alone. */
+async function myMission(supabase: SupabaseDB, agentNo: string, districtId: string) {
+  // Two plain queries rather than an embedded-resource filter
+  // (rc_reconnect_missions!inner(...).eq('rc_reconnect_missions.x', ...)) —
+  // PostgREST's dot-filter on an embed filters what's INCLUDED in the
+  // embedded object, not which base rows come back, so that would have
+  // silently returned every district's participation rows for this agent,
+  // not just this district's open ones.
+  const { data: openMissions } = await supabase.from('rc_reconnect_missions')
+    .select('id').eq('district_id', districtId).eq('status', 'open')
+  const missionIds = (openMissions || []).map((m: any) => m.id)
+  if (!missionIds.length) return null
+
+  const { data: rows } = await supabase.from('rc_reconnect_participants')
+    .select('mission_id').eq('agent_no', agentNo).in('mission_id', missionIds)
+    .order('joined_at', { ascending: false }).limit(1)
+  const row: any = (rows || [])[0]
+  if (!row) return null
+
+  const { data: mission } = await supabase.from('rc_reconnect_missions')
+    .select('*').eq('id', row.mission_id).maybeSingle()
+  return mission
 }
 
-/** Read-only: this district's current mission (any status, most recent) —
- *  the client needs to show a just-completed or just-expired one too, not
- *  just an open one. */
+/** An open mission for this district with a free slot — for the "just show
+ *  me something to join" path when the agent isn't already in one. Oldest
+ *  first: fill the mission that's been waiting longest before starting a
+ *  new one. */
+async function joinableMission(supabase: SupabaseDB, districtId: string, requiredAgents: number) {
+  const { data: missions } = await supabase.from('rc_reconnect_missions')
+    .select('*').eq('district_id', districtId).eq('status', 'open')
+    .order('created_at', { ascending: true })
+  for (const m of missions || []) {
+    const { count } = await supabase.from('rc_reconnect_participants')
+      .select('agent_no', { count: 'exact', head: true }).eq('mission_id', m.id).eq('status', 'joined')
+    if ((count || 0) < (m.required_agents ?? requiredAgents)) return m
+  }
+  return null
+}
+
+/** Read-only: the mission this agent is in for this district, or (if
+ *  they're not in one) a joinable one they could enter — never "the"
+ *  district mission, since several can run at once. */
 export async function getReconnectMission(supabase: SupabaseDB, content: GameContent, params: any) {
   const districtId = String(params.districtId || '')
   const agentNo = String(params.agentNo || '').trim().toUpperCase()
@@ -153,9 +195,8 @@ export async function getReconnectMission(supabase: SupabaseDB, content: GameCon
 
   const eligible = await hasRestored(supabase, agentNo, districtId)
 
-  let { data: mission } = await supabase.from('rc_reconnect_missions')
-    .select('*').eq('district_id', districtId)
-    .order('created_at', { ascending: false }).limit(1).maybeSingle()
+  let mission = await myMission(supabase, agentNo, districtId)
+  if (!mission) mission = await joinableMission(supabase, districtId, cfg.required)
   if (mission) mission = await refreshMission(supabase, content, mission)
 
   const { data: participants } = mission
@@ -169,17 +210,16 @@ export async function getReconnectMission(supabase: SupabaseDB, content: GameCon
   }
 }
 
-/** Opens a new mission for this district (must be none currently open) and
- *  auto-joins the opener as its first participant. */
+/** Opens a fresh mission for this district and auto-joins the opener as its
+ *  first participant. Several can be open for the same district at once —
+ *  this doesn't check for or block on existing ones. */
 export async function openReconnectMission(supabase: SupabaseDB, content: GameContent, params: any) {
   const districtId = String(params.districtId || '')
   const agentNo = String(params.agentNo || '').trim().toUpperCase()
   const cfg = await districtCfg(supabase, districtId)
   if (!cfg) return { success: false, error: 'not_available' }
   if (!(await hasRestored(supabase, agentNo, districtId))) return { success: false, error: 'not_eligible' }
-
-  const existing = await loadOpenMission(supabase, districtId)
-  if (existing) return { success: false, error: 'mission_already_open' }
+  if (await myMission(supabase, agentNo, districtId)) return { success: false, error: 'already_in_mission' }
 
   const { data: mission, error } = await supabase.from('rc_reconnect_missions').insert({
     district_id: districtId, required_agents: cfg.required,
@@ -193,21 +233,20 @@ export async function openReconnectMission(supabase: SupabaseDB, content: GameCo
   return { success: true, mission: shape(mission, participants || []) }
 }
 
-/** Open-matchmaking join — fills a slot directly, no invite needed. */
+/** Open-matchmaking join — finds a mission for this district with a free
+ *  slot and fills it, no invite needed. */
 export async function joinReconnectMission(supabase: SupabaseDB, content: GameContent, params: any) {
   const districtId = String(params.districtId || '')
   const agentNo = String(params.agentNo || '').trim().toUpperCase()
+  const cfg = await districtCfg(supabase, districtId)
+  if (!cfg) return { success: false, error: 'not_available' }
   if (!(await hasRestored(supabase, agentNo, districtId))) return { success: false, error: 'not_eligible' }
+  if (await myMission(supabase, agentNo, districtId)) return { success: false, error: 'already_in_mission' }
 
-  let mission = await loadOpenMission(supabase, districtId)
+  let mission = await joinableMission(supabase, districtId, cfg.required)
   if (!mission) return { success: false, error: 'no_open_mission' }
   mission = await refreshMission(supabase, content, mission)
   if (mission.status !== 'open') return { success: false, error: 'mission_' + mission.status }
-
-  const { data: participants } = await supabase.from('rc_reconnect_participants').select('*').eq('mission_id', mission.id)
-  const joinedCount = (participants || []).filter((p: any) => p.status === 'joined').length
-  if ((participants || []).some((p: any) => p.agent_no === agentNo)) return { success: false, error: 'already_in_mission' }
-  if (joinedCount >= mission.required_agents) return { success: false, error: 'mission_full' }
 
   const { error } = await supabase.from('rc_reconnect_participants')
     .insert({ mission_id: mission.id, agent_no: agentNo, status: 'joined' })
@@ -228,16 +267,13 @@ export async function inviteReconnectMission(supabase: SupabaseDB, content: Game
   if (!inviteeAgentNo) return { success: false, error: 'invitee_required' }
   if (inviteeAgentNo === agentNo) return { success: false, error: 'cannot_invite_self' }
 
-  let mission = await loadOpenMission(supabase, districtId)
-  if (!mission) return { success: false, error: 'no_open_mission' }
+  let mission = await myMission(supabase, agentNo, districtId)
+  if (!mission) return { success: false, error: 'not_in_mission' }
   mission = await refreshMission(supabase, content, mission)
   if (mission.status !== 'open') return { success: false, error: 'mission_' + mission.status }
+  if (await myMission(supabase, inviteeAgentNo, districtId)) return { success: false, error: 'already_in_mission' }
 
   const { data: participants } = await supabase.from('rc_reconnect_participants').select('*').eq('mission_id', mission.id)
-  const me = (participants || []).find((p: any) => p.agent_no === agentNo && p.status === 'joined')
-  if (!me) return { success: false, error: 'not_in_mission' }
-  if ((participants || []).some((p: any) => p.agent_no === inviteeAgentNo)) return { success: false, error: 'already_in_mission' }
-
   const joinedCount = (participants || []).filter((p: any) => p.status === 'joined').length
   if (joinedCount >= mission.required_agents) return { success: false, error: 'mission_full' }
   if (!(await hasRestored(supabase, inviteeAgentNo, districtId))) return { success: false, error: 'invitee_not_eligible' }
@@ -255,8 +291,8 @@ export async function respondReconnectInvite(supabase: SupabaseDB, content: Game
   const agentNo = String(params.agentNo || '').trim().toUpperCase()
   const accept = !!params.accept
 
-  let mission = await loadOpenMission(supabase, districtId)
-  if (!mission) return { success: false, error: 'no_open_mission' }
+  let mission = await myMission(supabase, agentNo, districtId)
+  if (!mission) return { success: false, error: 'no_pending_invite' }
   mission = await refreshMission(supabase, content, mission)
   if (mission.status !== 'open') return { success: false, error: 'mission_' + mission.status }
 
@@ -279,4 +315,124 @@ export async function respondReconnectInvite(supabase: SupabaseDB, content: Game
   if (error) return { success: false, error: error.message }
   await refreshMission(supabase, content, mission)
   return { success: true, joined: true }
+}
+
+/* ── Admin ────────────────────────────────────────────────────────────── */
+
+/** Every district, with its reconnect config if it has one — the panel's
+ *  district picker doubles as "which ones are enabled". */
+export async function adminListReconnectDistricts(supabase: SupabaseDB) {
+  const { data, error } = await supabase.from('rc_districts')
+    .select('id, name, ward_id, reconnect_required, reconnect_track_label, reconnect_track_artist, reconnect_track_aliases')
+    .eq('active', true).order('ward_id').order('sequence')
+  if (error) return { success: false, error: error.message }
+  return {
+    success: true,
+    districts: (data || []).map((d: any) => ({
+      id: d.id, name: d.name, wardId: d.ward_id,
+      reconnect: d.reconnect_required ? {
+        required: d.reconnect_required, trackLabel: d.reconnect_track_label,
+        trackArtist: d.reconnect_track_artist, trackAliases: d.reconnect_track_aliases || [],
+      } : null,
+    })),
+  }
+}
+
+/** Admin: set/update a district's reconnect config (required agent count +
+ *  target track). Doesn't touch any mission already in flight. */
+export async function adminSetReconnectConfig(supabase: SupabaseDB, params: any) {
+  const districtId = String(params.districtId || '')
+  const required = parseInt(params.required)
+  const trackLabel = String(params.trackLabel || '').trim()
+  if (!districtId) return { success: false, error: 'district_required' }
+  if (!Number.isFinite(required) || required < 2) return { success: false, error: 'required_agents_at_least_2' }
+  if (!trackLabel) return { success: false, error: 'track_required' }
+
+  const { error } = await supabase.from('rc_districts').update({
+    reconnect_required: required,
+    reconnect_track_label: trackLabel,
+    reconnect_track_artist: params.trackArtist ? String(params.trackArtist).trim() : null,
+    reconnect_track_aliases: Array.isArray(params.trackAliases)
+      ? params.trackAliases.map((a: any) => String(a).trim()).filter(Boolean) : [],
+  }).eq('id', districtId)
+  if (error) return { success: false, error: error.message }
+  return { success: true }
+}
+
+/** Admin: disable Reconnect Missions for a district going forward. Missions
+ *  already open keep running to their own resolution — this only stops new
+ *  ones (open/join/admin-assign all check districtCfg first). */
+export async function adminClearReconnectConfig(supabase: SupabaseDB, params: any) {
+  const districtId = String(params.districtId || '')
+  if (!districtId) return { success: false, error: 'district_required' }
+  const { error } = await supabase.from('rc_districts')
+    .update({ reconnect_required: null }).eq('id', districtId)
+  if (error) return { success: false, error: error.message }
+  return { success: true }
+}
+
+/** Fisher-Yates — every ordering equally likely, which is the entire point
+ *  of "randomly assign" (a biased shuffle would quietly always favor
+ *  whoever's agent_no sorts first). */
+function shuffle<T>(arr: T[]): T[] {
+  const a = arr.slice()
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
+}
+
+/**
+ * Admin: launch a whole series of missions for one district at once — every
+ * agent who's personally restored it and isn't already in a live mission
+ * there gets shuffled and split into full groups of the configured size.
+ * Each group becomes its own mission, everyone in it already 'joined' (no
+ * matchmaking/invite step — the admin already did the assigning). Leftover
+ * agents who don't make a full group sit out this round; they're still
+ * free to open/join one themselves, or catch the next batch-assign.
+ */
+export async function adminAutoAssignMissions(supabase: SupabaseDB, params: any) {
+  const districtId = String(params.districtId || '')
+  if (!districtId) return { success: false, error: 'district_required' }
+  const cfg = await districtCfg(supabase, districtId)
+  if (!cfg) return { success: false, error: 'not_available' }
+
+  const { data: restoredRows } = await supabase.from('rc_player_districts')
+    .select('agent_no').eq('district_id', districtId).eq('status', 'restored')
+  const restored = new Set((restoredRows || []).map((r: any) => r.agent_no))
+
+  // Plain two-step lookup, not an embedded-resource filter — see myMission's
+  // comment above for why that silently returns the wrong rows.
+  const { data: openMissions } = await supabase.from('rc_reconnect_missions')
+    .select('id').eq('district_id', districtId).eq('status', 'open')
+  const openMissionIds = (openMissions || []).map((m: any) => m.id)
+  const alreadyIn = new Set<string>()
+  if (openMissionIds.length) {
+    const { data: liveRows } = await supabase.from('rc_reconnect_participants')
+      .select('agent_no').in('mission_id', openMissionIds)
+    for (const r of liveRows || []) alreadyIn.add(r.agent_no)
+  }
+
+  const available = shuffle([...restored].filter((a) => !alreadyIn.has(a)))
+  const groups: string[][] = []
+  for (let i = 0; i + cfg.required <= available.length; i += cfg.required) {
+    groups.push(available.slice(i, i + cfg.required))
+  }
+  const leftover = available.length - groups.length * cfg.required
+
+  const created: string[] = []
+  for (const group of groups) {
+    const { data: mission, error } = await supabase.from('rc_reconnect_missions').insert({
+      district_id: districtId, required_agents: cfg.required,
+      track_label: cfg.trackLabel, track_artist: cfg.trackArtist, track_aliases: cfg.trackAliases,
+      created_by: '__admin__',
+    }).select().single()
+    if (error || !mission) continue
+    await supabase.from('rc_reconnect_participants').insert(
+      group.map((agentNo) => ({ mission_id: mission.id, agent_no: agentNo, status: 'joined' })))
+    created.push(mission.id)
+  }
+
+  return { success: true, missionsCreated: created.length, agentsAssigned: groups.length * cfg.required, agentsLeftOver: leftover }
 }

@@ -27,6 +27,7 @@ import { adminListGoals, adminAddGoal, adminUpdateGoal, adminDeleteGoal } from '
 import {
   getReconnectMission, openReconnectMission, joinReconnectMission,
   inviteReconnectMission, respondReconnectInvite,
+  adminListReconnectDistricts, adminSetReconnectConfig, adminClearReconnectConfig, adminAutoAssignMissions,
 } from './lib/reconnect-missions.ts'
 import { getLeaderboard } from './lib/leaderboard.ts'
 import { loadContent } from './lib/config.ts'
@@ -133,6 +134,14 @@ const ROUTES: Record<string, Route> = {
   adminListBroadcasts: { auth: 'admin', handler: (sb) => adminListBroadcasts(sb) },
   adminDeleteBroadcast: { auth: 'admin', handler: (sb, p) => adminDeleteBroadcast(sb, p) },
   adminGetAgent: { auth: 'admin', handler: (sb, p) => adminGetAgent(sb, p) },
+
+  // ── Admin panel — Reconnect Missions ── configure which districts offer
+  // one and launch a batch-assigned series for a district on demand. Same
+  // SYNC_ADMIN_KEY gate as everything else marked 'admin' above.
+  adminListReconnectDistricts: { auth: 'admin', handler: (sb) => adminListReconnectDistricts(sb) },
+  adminSetReconnectConfig: { auth: 'admin', handler: (sb, p) => adminSetReconnectConfig(sb, p) },
+  adminClearReconnectConfig: { auth: 'admin', handler: (sb, p) => adminClearReconnectConfig(sb, p) },
+  adminAutoAssignMissions: { auth: 'admin', handler: (sb, p) => adminAutoAssignMissions(sb, p) },
 
   // ── Admin panel (admin.html) — Goals ── rc_goals is one shared, global
   // list (track goals + a single album goal), not per-district — see

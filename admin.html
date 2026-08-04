@@ -218,6 +218,7 @@
   <button class="adm-tab is-active" data-tab="redzone" type="button">🛡️ Red Zone</button>
   <button class="adm-tab" data-tab="broadcast" type="button">📡 Broadcasts</button>
   <button class="adm-tab" data-tab="goals" type="button">🎯 Goals</button>
+  <button class="adm-tab" data-tab="reconnect" type="button">🤝 Reconnect</button>
   <button class="adm-tab" data-tab="lookup" type="button">🔎 Agent Lookup</button>
 </div>
 
@@ -321,6 +322,49 @@
     <div class="adm-mode-preview" id="goalAlbumPreview"></div>
 
     <div id="goalsOut" class="adm-out"></div>
+  </section>
+</div>
+
+<!-- ── Reconnect Missions ── -->
+<div class="adm-panel" id="panel-reconnect" data-panel="reconnect" hidden>
+  <section class="adm-card">
+    <div class="adm-card-head">
+      <h2>Districts</h2>
+      <button class="btn btn-ghost" id="btnLoadReconnect" type="button">↻ Load</button>
+    </div>
+    <p class="muted">Reconnect Missions are the cooperative bonus stage a district's own player unlocks once
+      they've personally restored it — team up with other agents who've also restored it, everyone streams
+      one shared track, everyone gets a bonus. Pick a district below to configure it or launch a batch.</p>
+    <div id="reconnectDistrictList" class="adm-list"><div class="adm-empty">Not loaded yet — tap Load.</div></div>
+  </section>
+
+  <section class="adm-card" id="reconnectEditorCard" hidden>
+    <div class="adm-card-head">
+      <h2 id="reconnectDistrictName">—</h2>
+    </div>
+
+    <div class="adm-goal-input-row">
+      <input id="reconnectRequired" class="ob-input adm-target-input" type="number" min="2" value="4" title="Agents required">
+      <input id="reconnectTrackLabel" class="ob-input" type="text" placeholder="Target track (e.g. Swim)">
+      <input id="reconnectTrackArtist" class="ob-input" type="text" placeholder="Artist" style="max-width:120px;">
+    </div>
+    <input id="reconnectTrackAliases" class="ob-input adm-block" style="margin-top:6px;" type="text" placeholder="Alternate titles, comma-separated (optional)">
+    <div class="adm-row" style="margin-top:10px;">
+      <button class="btn btn-primary" id="btnSaveReconnectConfig" type="button">Save</button>
+      <button class="btn btn-ghost" id="btnClearReconnectConfig" type="button">Disable for this district</button>
+    </div>
+
+    <div class="adm-agent-section">
+      <h3>Launch a series</h3>
+      <p class="muted" style="margin-bottom:10px;">Every agent who's personally restored this district and
+        isn't already in a live mission here gets shuffled and split into full groups of the required size.
+        Each group becomes its own mission, already fully staffed — no matchmaking needed. Leftover agents
+        who don't make a full group sit out this round.</p>
+      <button class="btn btn-alert adm-block" id="btnAutoAssign" type="button">🎲 Randomly assign missions</button>
+      <div id="reconnectAssignOut" class="adm-out"></div>
+    </div>
+
+    <div id="reconnectOut" class="adm-out"></div>
   </section>
 </div>
 
@@ -743,6 +787,130 @@ $('btnAddAlbumGoal').onclick = async () => {
     renderGoalLists()
   } else {
     showOut('goalsOut', res, 'error')
+  }
+}
+
+/* ── Reconnect Missions ──
+   Per-district config (required agent count + target track) lives on
+   rc_districts directly — adminListReconnectDistricts returns every active
+   district with its config (null if not enabled). adminAutoAssignMissions
+   is the "launch a series, randomly assigned" action: shuffles every agent
+   who's personally restored the district and isn't already in a live
+   mission there, splits them into full groups of the required size, and
+   creates one already-fully-staffed mission per group — no matchmaking
+   needed for those. */
+let reconnectDistricts = []
+let reconnectSelectedId = null
+
+async function loadReconnectDistricts() {
+  const list = $('reconnectDistrictList')
+  list.innerHTML = `<div class="adm-empty"><span class="adm-spin"></span> Loading…</div>`
+  const res = await call('adminListReconnectDistricts')
+  if (!res || !res.success) { list.innerHTML = `<div class="adm-empty">${esc(res?.error || "Couldn't load districts")}</div>`; return }
+  reconnectDistricts = res.districts || []
+  if (!reconnectDistricts.length) { list.innerHTML = `<div class="adm-empty">No districts found.</div>`; return }
+  list.innerHTML = reconnectDistricts.map((d) => `
+    <div class="adm-list-row is-pick${d.id === reconnectSelectedId ? ' is-selected' : ''}" data-id="${esc(d.id)}">
+      <div class="adm-list-body">
+        <div class="adm-list-title">${esc(d.name)}</div>
+        <div class="adm-list-meta">${d.reconnect
+          ? `${d.reconnect.required} agents · "${esc(d.reconnect.trackLabel)}"`
+          : 'not enabled'}</div>
+      </div>
+    </div>
+  `).join('')
+  list.querySelectorAll('.adm-list-row').forEach((row) => {
+    row.onclick = () => selectReconnectDistrict(row.dataset.id)
+  })
+  if (reconnectSelectedId) renderReconnectEditor()
+}
+
+function selectReconnectDistrict(id) {
+  reconnectSelectedId = id
+  $('reconnectDistrictList').querySelectorAll('.adm-list-row').forEach((row) => {
+    row.classList.toggle('is-selected', row.dataset.id === id)
+  })
+  renderReconnectEditor()
+}
+
+function renderReconnectEditor() {
+  const d = reconnectDistricts.find((x) => x.id === reconnectSelectedId)
+  $('reconnectOut').className = 'adm-out'
+  $('reconnectAssignOut').className = 'adm-out'
+  if (!d) { $('reconnectEditorCard').hidden = true; return }
+  $('reconnectEditorCard').hidden = false
+  $('reconnectDistrictName').textContent = d.name
+
+  $('reconnectRequired').value = d.reconnect?.required || 4
+  $('reconnectTrackLabel').value = d.reconnect?.trackLabel || ''
+  $('reconnectTrackArtist').value = d.reconnect?.trackArtist || ''
+  $('reconnectTrackAliases').value = (d.reconnect?.trackAliases || []).join(', ')
+  $('btnClearReconnectConfig').hidden = !d.reconnect
+  $('btnAutoAssign').disabled = !d.reconnect
+}
+
+$('btnLoadReconnect').onclick = loadReconnectDistricts
+
+$('btnSaveReconnectConfig').onclick = async () => {
+  const d = reconnectDistricts.find((x) => x.id === reconnectSelectedId)
+  if (!d) return
+  const required = parseInt($('reconnectRequired').value) || 0
+  const trackLabel = $('reconnectTrackLabel').value.trim()
+  const trackArtist = $('reconnectTrackArtist').value.trim()
+  const trackAliases = parseAliases($('reconnectTrackAliases').value)
+  if (required < 2) { showOut('reconnectOut', 'Needs at least 2 agents.', 'error'); return }
+  if (!trackLabel) { showOut('reconnectOut', 'Enter a target track.', 'error'); return }
+  const btn = $('btnSaveReconnectConfig')
+  btn.disabled = true
+  const res = await call('adminSetReconnectConfig', {
+    districtId: d.id, required, trackLabel, trackArtist: trackArtist || undefined, trackAliases,
+  })
+  btn.disabled = false
+  if (res?.success) {
+    d.reconnect = { required, trackLabel, trackArtist: trackArtist || null, trackAliases }
+    showOut('reconnectOut', 'Saved.', 'ok')
+    renderReconnectEditor()
+    loadReconnectDistricts()
+  } else {
+    showOut('reconnectOut', res, 'error')
+  }
+}
+
+$('btnClearReconnectConfig').onclick = async () => {
+  const d = reconnectDistricts.find((x) => x.id === reconnectSelectedId)
+  if (!d) return
+  if (!confirm(`Disable Reconnect Missions for ${d.name}? Any mission already in flight keeps running to its own resolution — this only stops new ones.`)) return
+  const btn = $('btnClearReconnectConfig')
+  btn.disabled = true
+  const res = await call('adminClearReconnectConfig', { districtId: d.id })
+  btn.disabled = false
+  if (res?.success) {
+    d.reconnect = null
+    showOut('reconnectOut', 'Disabled.', 'ok')
+    renderReconnectEditor()
+    loadReconnectDistricts()
+  } else {
+    showOut('reconnectOut', res, 'error')
+  }
+}
+
+$('btnAutoAssign').onclick = async () => {
+  const d = reconnectDistricts.find((x) => x.id === reconnectSelectedId)
+  if (!d || !d.reconnect) return
+  if (!confirm(`Randomly assign missions for ${d.name}? This shuffles every eligible agent not already in a live mission here and creates a new, already-staffed mission per full group of ${d.reconnect.required}.`)) return
+  const btn = $('btnAutoAssign')
+  btn.disabled = true
+  btn.textContent = 'ASSIGNING…'
+  const res = await call('adminAutoAssignMissions', { districtId: d.id })
+  btn.disabled = false
+  btn.textContent = '🎲 Randomly assign missions'
+  if (res?.success) {
+    showOut('reconnectAssignOut',
+      `${res.missionsCreated} mission${res.missionsCreated === 1 ? '' : 's'} created · ${res.agentsAssigned} agent${res.agentsAssigned === 1 ? '' : 's'} assigned` +
+      (res.agentsLeftOver ? ` · ${res.agentsLeftOver} left over (not enough for a full group)` : ''),
+      'ok')
+  } else {
+    showOut('reconnectAssignOut', res, 'error')
   }
 }
 
