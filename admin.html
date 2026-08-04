@@ -106,6 +106,34 @@
   .adm-list-msg { color: var(--muted); font-size: 12px; margin-top: 2px; line-height: 1.5; }
   .adm-list-meta { font-family: var(--mono); font-size: 10px; color: var(--dim); margin-top: 5px; letter-spacing: 0.3px; }
   .adm-list-del { background: none; border: none; color: var(--crimson); cursor: pointer; font-size: 13px; flex-shrink: 0; padding: 2px 4px; }
+  .adm-list-row.is-pick { cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+  .adm-list-row.is-pick:hover { border-color: var(--border-str); }
+  .adm-list-row.is-pick.is-selected { border-color: var(--purple); background: var(--purple-soft); }
+  .adm-list-row.is-pick .adm-list-meta { margin-top: 2px; }
+
+  /* ── Goals editor ── */
+  .adm-goal-row { display: flex; align-items: center; gap: 10px; border: 1px solid var(--border); border-radius: var(--r);
+    padding: 9px 11px; }
+  .adm-goal-name { flex: 1; font-size: 13px; }
+  .adm-goal-target { font-family: var(--mono); font-size: 11px; color: var(--dim); flex-shrink: 0; }
+  .adm-goal-input-row { display: flex; gap: 8px; margin-top: 10px; }
+  .adm-goal-input-row .ob-input:first-child { flex: 1; }
+  .adm-goal-input-row .ob-input.adm-target-input { max-width: 84px; flex: 0 0 auto; }
+  .adm-mode-preview { font-family: var(--mono); font-size: 10px; letter-spacing: 0.4px; color: var(--dim);
+    margin-top: 6px; }
+  .adm-mode-preview b { color: var(--muted); font-weight: 700; }
+  .adm-goal-modes { font-family: var(--mono); font-size: 9.5px; color: var(--dim); margin-top: 2px; }
+
+  /* ── Weekly window ── */
+  .adm-week-box { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    border: 1px solid var(--border); border-radius: var(--r); padding: 10px 12px; margin-bottom: 14px; flex-wrap: wrap; }
+  .adm-week-box.is-active { border-color: rgba(217,173,95,0.35); background: var(--gold-soft); }
+  .adm-week-box.is-expired { border-color: rgba(229,56,79,0.35); background: rgba(229,56,79,0.05); }
+  .adm-week-status { font-size: 12.5px; }
+  .adm-week-status b { color: var(--text); }
+  .adm-week-box.is-active .adm-week-status b { color: var(--gold); }
+  .adm-week-box.is-expired .adm-week-status b { color: var(--crimson); }
+  .adm-week-sub { font-family: var(--mono); font-size: 10px; color: var(--dim); margin-top: 2px; }
 
   /* ── Agent lookup result ── */
   .adm-agent-card { border: 1px solid var(--border-str); border-radius: var(--r-lg); padding: 18px; margin-top: 16px; }
@@ -164,6 +192,7 @@
 <div class="adm-tabs" role="tablist">
   <button class="adm-tab is-active" data-tab="redzone" type="button">🛡️ Red Zone</button>
   <button class="adm-tab" data-tab="broadcast" type="button">📡 Broadcasts</button>
+  <button class="adm-tab" data-tab="goals" type="button">🎯 Goals</button>
   <button class="adm-tab" data-tab="lookup" type="button">🔎 Agent Lookup</button>
 </div>
 
@@ -229,6 +258,58 @@
       <button class="btn btn-ghost" id="btnLoadBroadcasts" type="button">↻ Load</button>
     </div>
     <div id="bcList" class="adm-list"><div class="adm-empty">Not loaded yet — tap Load.</div></div>
+  </section>
+</div>
+
+<!-- ── District Goals ── -->
+<div class="adm-panel" id="panel-goals" data-panel="goals" hidden>
+  <section class="adm-card">
+    <div class="adm-card-head">
+      <h2>Districts</h2>
+      <button class="btn btn-ghost" id="btnLoadDistricts" type="button">↻ Load</button>
+    </div>
+    <p class="muted">Pick a district below to manage its track goals and album goal. Goals are the shared
+      targets every agent restoring this district streams toward — editing them here doesn't touch anyone's
+      progress, only what they're progressing toward.</p>
+    <div id="goalsDistrictList" class="adm-list"><div class="adm-empty">Not loaded yet — tap Load.</div></div>
+  </section>
+
+  <section class="adm-card" id="goalsEditorCard" hidden>
+    <div class="adm-card-head">
+      <h2 id="goalsDistrictName">—</h2>
+    </div>
+
+    <div id="goalsWeekBox" class="adm-week-box">
+      <div>
+        <div class="adm-week-status" id="goalsWeekStatus">—</div>
+        <div class="adm-week-sub" id="goalsWeekSub"></div>
+      </div>
+      <button class="btn btn-ghost" id="btnStartWeek" type="button">▶ Start new week</button>
+    </div>
+
+    <div class="adm-agent-section" style="margin-top:0;padding-top:0;border-top:0;">
+      <h3>Track goals</h3>
+      <div id="goalsTrackList" class="adm-list"><div class="adm-empty">No track goals yet.</div></div>
+      <div class="adm-goal-input-row">
+        <input id="goalTrackLabel" class="ob-input" type="text" placeholder="Track name (e.g. Dynamite)">
+        <input id="goalTrackTarget" class="ob-input adm-target-input" type="number" min="1" value="10" title="Base target — multiplied per streaming mode">
+        <button class="btn btn-primary" id="btnAddTrackGoal" type="button">+ Add</button>
+      </div>
+      <div class="adm-mode-preview" id="goalTrackPreview"></div>
+    </div>
+
+    <div class="adm-agent-section">
+      <h3>Album goal <span class="muted" style="font-weight:400;">— one full-album pass counted per target</span></h3>
+      <div id="goalsAlbumBox"><div class="adm-empty">No album goal set.</div></div>
+      <div class="adm-goal-input-row">
+        <input id="goalAlbumLabel" class="ob-input" type="text" placeholder="Album name (e.g. BE)">
+        <input id="goalAlbumTarget" class="ob-input adm-target-input" type="number" min="1" value="3" title="Base target — multiplied per streaming mode">
+        <button class="btn btn-primary" id="btnSetAlbumGoal" type="button">Save</button>
+      </div>
+      <div class="adm-mode-preview" id="goalAlbumPreview"></div>
+    </div>
+
+    <div id="goalsOut" class="adm-out"></div>
   </section>
 </div>
 
@@ -454,6 +535,228 @@ function paintSnapBC(rows) {
   sub.textContent = live === 1 ? 'live announcement' : 'live announcements'
 }
 $('btnLoadBroadcasts').onclick = loadBroadcasts
+
+/* ── District Goals ──
+   Backend actions this needs (none exist yet — see conversation):
+     adminListDistricts()
+       → { success,
+           modes: { easy: {label,multiplier}, medium: {label,multiplier}, hard: {label,multiplier} },
+           districts: [{ id, name, weekStartsAt: ISOString|null,
+                          trackGoals: [{id,label,target}], album: {id,label,target}|null }] }
+     adminAddTrackGoal({districtId, label, target})   → { success, goal: {id,label,target} }
+     adminDeleteTrackGoal({districtId, goalId})        → { success }
+     adminSetAlbumGoal({districtId, label, target})    → { success, album: {id,label,target} }  (upsert — replaces any existing album goal)
+     adminClearAlbumGoal({districtId})                 → { success }
+     adminStartDistrictWeek({districtId})               → { success, weekStartsAt: ISOString }  (stamps "now" — used both to
+                                                            start a district's first week and to roll it into a fresh one)
+
+   `target` on every goal is a BASE number — the same one the rest of the game
+   already scales by each agent's streaming-mode multiplier (see modes.* and
+   ui-onboarding.js's "Targets ×N"), so entering one number here is enough;
+   easy/medium/hard targets are all `Math.round(target * modes[key].multiplier)`.
+   Goal *definitions* only — no per-agent progress lives here, that's computed
+   client-side per player against whatever goals exist for their district.
+
+   A district's `weekStartsAt` marks when its current goal set went live. Each
+   week runs exactly 7 days — the UI below computes the end from the start,
+   there's no separate end field. When a week ends the goals don't auto-clear;
+   an admin edits the goal list for what's next, then hits "Start new week" to
+   reset the clock. */
+let goalsDistricts = []
+let goalsModes = null
+let goalsSelectedId = null
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000
+
+function modeTargets(base) {
+  const modes = goalsModes || { easy: { multiplier: 1 }, medium: { multiplier: 1 }, hard: { multiplier: 1 } }
+  return ['easy', 'medium', 'hard'].map((key) => ({
+    key, label: modes[key]?.label || key,
+    value: Math.max(1, Math.round((base || 0) * (modes[key]?.multiplier ?? 1))),
+  }))
+}
+function modePreviewHtml(base) {
+  if (!base || base < 1) return ''
+  return modeTargets(base).map((m) => `<b>${esc(m.label || m.key)}</b> ${m.value}`).join(' · ')
+}
+function goalModesLine(target) {
+  return `<div class="adm-goal-modes">${modeTargets(target).map((m) => `${esc(m.label || m.key)} ${m.value}`).join(' · ')}</div>`
+}
+
+async function loadDistricts() {
+  const list = $('goalsDistrictList')
+  list.innerHTML = `<div class="adm-empty"><span class="adm-spin"></span> Loading…</div>`
+  const res = await call('adminListDistricts')
+  if (!res || !res.success) { list.innerHTML = `<div class="adm-empty">${esc(res?.error || "Couldn't load districts")}</div>`; return }
+  goalsDistricts = res.districts || []
+  goalsModes = res.modes || null
+  if (!goalsDistricts.length) { list.innerHTML = `<div class="adm-empty">No districts found.</div>`; return }
+  list.innerHTML = goalsDistricts.map((d) => `
+    <div class="adm-list-row is-pick${d.id === goalsSelectedId ? ' is-selected' : ''}" data-id="${esc(d.id)}">
+      <div class="adm-list-body">
+        <div class="adm-list-title">${esc(d.name)}</div>
+        <div class="adm-list-meta">${(d.trackGoals || []).length} track goal${(d.trackGoals || []).length === 1 ? '' : 's'}${d.album ? ' · album goal set' : ''}${d.weekStartsAt ? '' : ' · no active week'}</div>
+      </div>
+    </div>
+  `).join('')
+  list.querySelectorAll('.adm-list-row').forEach((row) => {
+    row.onclick = () => selectDistrict(row.dataset.id)
+  })
+  // Keep the editor in sync if the currently-open district's goals changed.
+  if (goalsSelectedId) renderGoalsEditor()
+}
+
+function renderWeekBox(d) {
+  const box = $('goalsWeekBox')
+  const statusEl = $('goalsWeekStatus')
+  const subEl = $('goalsWeekSub')
+  box.classList.remove('is-active', 'is-expired')
+  if (!d.weekStartsAt) {
+    statusEl.innerHTML = 'No active week'
+    subEl.textContent = "Goals won't rotate until you start one."
+    $('btnStartWeek').textContent = '▶ Start week'
+    return
+  }
+  const start = new Date(d.weekStartsAt)
+  const end = new Date(start.getTime() + WEEK_MS)
+  const now = Date.now()
+  if (now >= end.getTime()) {
+    box.classList.add('is-expired')
+    statusEl.innerHTML = `<b>Week ended</b>`
+    subEl.textContent = `Ran ${fmtDate(start)} → ${fmtDate(end)}. Update the goals below, then start the next one.`
+  } else {
+    box.classList.add('is-active')
+    const daysLeft = Math.max(1, Math.ceil((end.getTime() - now) / 86400000))
+    statusEl.innerHTML = `<b>Week active</b> — ${daysLeft} day${daysLeft === 1 ? '' : 's'} left`
+    subEl.textContent = `${fmtDate(start)} → ${fmtDate(end)}`
+  }
+  $('btnStartWeek').textContent = '🔄 Start new week'
+}
+
+function selectDistrict(id) {
+  goalsSelectedId = id
+  $('goalsDistrictList').querySelectorAll('.adm-list-row').forEach((row) => {
+    row.classList.toggle('is-selected', row.dataset.id === id)
+  })
+  renderGoalsEditor()
+}
+
+function renderGoalsEditor() {
+  const d = goalsDistricts.find((x) => x.id === goalsSelectedId)
+  $('goalsOut').className = 'adm-out'
+  if (!d) { $('goalsEditorCard').hidden = true; return }
+  $('goalsEditorCard').hidden = false
+  $('goalsDistrictName').textContent = d.name
+  renderWeekBox(d)
+
+  const tracks = d.trackGoals || []
+  $('goalsTrackList').innerHTML = tracks.length
+    ? tracks.map((g) => `
+      <div class="adm-goal-row" data-goal-id="${esc(g.id)}">
+        <span class="adm-goal-name">${esc(g.label)}
+          ${goalModesLine(g.target)}
+        </span>
+        <span class="adm-goal-target">${g.target} base</span>
+        <button class="adm-list-del" type="button" title="Delete">✕</button>
+      </div>`).join('')
+    : `<div class="adm-empty">No track goals yet.</div>`
+  $('goalsTrackList').querySelectorAll('.adm-list-del').forEach((btn) => {
+    btn.onclick = async () => {
+      const row = btn.closest('.adm-goal-row')
+      btn.disabled = true
+      const res = await call('adminDeleteTrackGoal', { districtId: d.id, goalId: row.dataset.goalId })
+      if (res?.success) {
+        d.trackGoals = (d.trackGoals || []).filter((g) => g.id !== row.dataset.goalId)
+        renderGoalsEditor()
+      } else {
+        showOut('goalsOut', res, 'error')
+        btn.disabled = false
+      }
+    }
+  })
+
+  $('goalsAlbumBox').innerHTML = d.album
+    ? `<div class="adm-goal-row">
+        <span class="adm-goal-name">💿 ${esc(d.album.label)}
+          ${goalModesLine(d.album.target)}
+        </span>
+        <span class="adm-goal-target">${d.album.target} base</span>
+        <button class="adm-list-del" type="button" title="Clear">✕</button>
+      </div>`
+    : `<div class="adm-empty">No album goal set.</div>`
+  const clearBtn = $('goalsAlbumBox').querySelector('.adm-list-del')
+  if (clearBtn) clearBtn.onclick = async () => {
+    clearBtn.disabled = true
+    const res = await call('adminClearAlbumGoal', { districtId: d.id })
+    if (res?.success) { d.album = null; renderGoalsEditor() } else { showOut('goalsOut', res, 'error'); clearBtn.disabled = false }
+  }
+
+  $('goalAlbumLabel').value = d.album?.label || ''
+  $('goalAlbumTarget').value = d.album?.target || 3
+  updateTrackPreview()
+  updateAlbumPreview()
+}
+
+function updateTrackPreview() {
+  $('goalTrackPreview').innerHTML = modePreviewHtml(parseInt($('goalTrackTarget').value) || 0)
+}
+function updateAlbumPreview() {
+  $('goalAlbumPreview').innerHTML = modePreviewHtml(parseInt($('goalAlbumTarget').value) || 0)
+}
+$('goalTrackTarget').addEventListener('input', updateTrackPreview)
+$('goalAlbumTarget').addEventListener('input', updateAlbumPreview)
+
+$('btnStartWeek').onclick = async () => {
+  const d = goalsDistricts.find((x) => x.id === goalsSelectedId)
+  if (!d) return
+  const isRestart = !!d.weekStartsAt && Date.now() < new Date(d.weekStartsAt).getTime() + WEEK_MS
+  if (isRestart && !confirm("This district's week is still active — starting a new one resets the 7-day clock now. Continue?")) return
+  const btn = $('btnStartWeek')
+  btn.disabled = true
+  const res = await call('adminStartDistrictWeek', { districtId: d.id })
+  btn.disabled = false
+  if (res?.success) loadDistricts()
+  else showOut('goalsOut', res, 'error')
+}
+
+$('btnLoadDistricts').onclick = loadDistricts
+
+$('btnAddTrackGoal').onclick = async () => {
+  const d = goalsDistricts.find((x) => x.id === goalsSelectedId)
+  if (!d) return
+  const label = $('goalTrackLabel').value.trim()
+  const target = parseInt($('goalTrackTarget').value) || 0
+  if (!label || target < 1) { showOut('goalsOut', 'Enter a track name and a target of at least 1.', 'error'); return }
+  const btn = $('btnAddTrackGoal')
+  btn.disabled = true
+  const res = await call('adminAddTrackGoal', { districtId: d.id, label, target })
+  btn.disabled = false
+  if (res?.success) {
+    d.trackGoals = [...(d.trackGoals || []), res.goal]
+    $('goalTrackLabel').value = ''
+    renderGoalsEditor()
+  } else {
+    showOut('goalsOut', res, 'error')
+  }
+}
+$('goalTrackLabel').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btnAddTrackGoal').click() })
+
+$('btnSetAlbumGoal').onclick = async () => {
+  const d = goalsDistricts.find((x) => x.id === goalsSelectedId)
+  if (!d) return
+  const label = $('goalAlbumLabel').value.trim()
+  const target = parseInt($('goalAlbumTarget').value) || 0
+  if (!label || target < 1) { showOut('goalsOut', 'Enter an album name and a target of at least 1.', 'error'); return }
+  const btn = $('btnSetAlbumGoal')
+  btn.disabled = true
+  const res = await call('adminSetAlbumGoal', { districtId: d.id, label, target })
+  btn.disabled = false
+  if (res?.success) {
+    d.album = res.album
+    renderGoalsEditor()
+  } else {
+    showOut('goalsOut', res, 'error')
+  }
+}
 
 /* ── Agent lookup ── */
 function progressBar(pct) {

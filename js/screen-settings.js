@@ -151,6 +151,19 @@ function paintSections(body, state) {
     },
   ]))
 
+  // ── HQ access — agent000 only. Not a real security boundary (admin.html
+  // is still gated by its own SYNC_ADMIN_KEY), just keeps the entry point
+  // out of every other agent's settings screen.
+  if ((account.agentNo || '').toUpperCase() === 'AGENT000') {
+    body.appendChild(section('HQ Access', 'Command panel', [
+      {
+        icon: '🛰️', name: 'Admin Panel', value: '',
+        body: 'Red Zone events, broadcasts, district goals, agent lookup.',
+        onClick: () => { window.location.href = 'admin.html' },
+      },
+    ]))
+  }
+
   body.appendChild(el('div', 'set-foot',
     `Agent since ${fmtDate(account.createdAt)} · OP: ReConnect`))
 }
