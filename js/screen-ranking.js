@@ -61,7 +61,9 @@ function paintList(body, agents, state) {
 
   const rows = activeTab === 'all' ? agents : agents.filter((a) => a.mode === activeTab)
   if (!rows.length) {
-    body.appendChild(el('p', 'muted', 'No agents on this board yet.'))
+    body.appendChild(el('p', 'muted', activeTab === 'all'
+      ? 'No agents on the board yet.'
+      : `Nobody's playing ${MODE_LABEL[activeTab] || activeTab} yet. Switch modes in the header to claim it.`))
     return
   }
 
@@ -82,6 +84,17 @@ function paintList(body, agents, state) {
     list.appendChild(row)
   })
   body.appendChild(list)
+
+  // A board with one name on it under the heading "Who's leading the network"
+  // reads as broken rather than early. Say the true and better version of it:
+  // being first here is a real thing, and it's the state the game starts in.
+  if (rows.length === 1) {
+    const alone = rows[0].codename === mine
+    body.appendChild(el('div', 'dim rank-hint', alone
+      ? "You're the first agent on this board. Everyone who signs up after you starts below this line."
+      : 'One agent on the board so far. Plenty of room at the top.'))
+    return
+  }
 
   if (activeTab === 'all') {
     body.appendChild(el('div', 'dim rank-hint',
