@@ -63,8 +63,12 @@ const PROFILES = {
   // old brick: uniform, squat, repetitive
   oldgrid: { h: (k) => 7 + k * 5, w: () => 0.95, cap: 'flat', capOdds: 0 },
 
-  // HQ: one mast, nothing else
-  'relay-zero': { h: (k) => 10 + k * 6, w: () => 0.7, cap: 'mast', capOdds: 1 },
+  // HQ: one mast, nothing else. Now that the tile centres a single narrow
+  // slot instead of stretching it across the whole width (ward-tiles.js's
+  // MAX_SLOT), this wants to be tall — a narrow, short box reads as a stub,
+  // a narrow tall one plus the 7-unit mast and its beacon reads as the relay
+  // tower the ward is named after.
+  'relay-zero': { h: (k) => 15 + k * 5, w: () => 0.7, cap: 'mast', capOdds: 1 },
 }
 
 const FALLBACK = { h: (k) => 9 + k * 12, w: () => 0.82, cap: 'antenna', capOdds: 0.3 }

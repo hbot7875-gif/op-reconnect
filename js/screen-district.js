@@ -8,6 +8,7 @@ import { el, esc, setState, toast, unlockAfter, showOverlay, hideOverlay } from 
 import { call } from './api.js'
 import { getAgentNo } from './session.js'
 import { goWard } from './router.js'
+import { wardDisplayName } from './ward-tiles.js'
 import { mountScene } from './scene.js'
 import { districtFraction, renderBoard } from './ui-district.js'
 import { playRestoration } from './celebrate.js'
@@ -130,11 +131,11 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
       <span class="sn-lock">🔒</span>
       <div class="sn-title">Sealed</div>
       <p class="sn-body">${gate
-        ? `${esc(mapD.name)} sits behind the grid wall. It opens when <b>${esc(gate.name)}</b> is whole${ward ? `, along with the rest of ${esc(ward.name)}` : ''}.`
+        ? `${esc(mapD.name)} sits behind the grid wall. It opens when <b>${esc(wardDisplayName(gate))}</b> is whole${ward ? `, along with the rest of ${esc(wardDisplayName(ward))}` : ''}.`
         : `${esc(mapD.name)} opens later in the operation.`}</p>
     `))
     if (gate) {
-      const go = el('button', 'btn btn-primary op-go', `Go to ${gate.name}`)
+      const go = el('button', 'btn btn-primary op-go', `Go to ${wardDisplayName(gate)}`)
       go.onclick = (e) => goWard(gate.id, { x: e.clientX, y: e.clientY })
       card.appendChild(go)
     }

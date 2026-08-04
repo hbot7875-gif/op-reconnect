@@ -12,9 +12,22 @@
 import { el, esc, unlockAfter } from './state.js'
 import { profileFor, drawCap, drawDecor, n, hashStr, rng } from './ward-profiles.js'
 
+// migrations/011 seeds the starting ward AND its single district both as
+// "Relay Zero", so the World screen's hero card rendered the same two words
+// stacked on top of each other. "Home Base" is what the place actually is to
+// a player — it was already this file's subtitle for it — so it's promoted to
+// the name, and everywhere that shows a ward name goes through the helper
+// below to keep the two in step.
+export const HOME_BASE_WARD = 'relay-zero'
+
+export function wardDisplayName(ward) {
+  if (!ward) return ''
+  return ward.id === HOME_BASE_WARD ? 'Home Base' : (ward.name || '')
+}
+
 // A one-line identity per ward — the map file's own descriptions, shortened.
 const SUBTITLE = {
-  'relay-zero': 'Home base',
+  'relay-zero': 'Where you started',
   mono: 'Rain district',
   happy: 'Carnival quarter',
   dday: 'The foundry',
@@ -74,7 +87,15 @@ function skyline(w, stops, onPeek) {
   svg.appendChild(back)
 
   const g = n('g', { id: `wtsk-${w.id}` })
-  const slot = 100 / count
+  // Slots are the tile width split between districts — fine at 25+, absurd at
+  // 1. Home Base has a single district, so the naive `100 / count` handed it a
+  // 70-unit-wide, 16-tall block: not a skyline, a progress bar with a mast on
+  // it. Cap the slot at one normal building's worth and centre the row, so a
+  // tiny ward reads as a lone relay standing in the dark. Wards with 9+
+  // districts divide to under MAX_SLOT on their own and are untouched.
+  const MAX_SLOT = 11
+  const slot = Math.min(100 / count, MAX_SLOT)
+  const originX = (100 - slot * count) / 2
   for (let i = 0; i < count; i++) {
     const d = stops[i]
     const cls = stateOf(d)
@@ -82,7 +103,7 @@ function skyline(w, stops, onPeek) {
     const k = r()
     const h = isCp ? GROUND - 4 : p.h(k)
     const bw = slot * (isCp ? 0.5 : p.w(k))
-    const bx = i * slot + (slot - bw) / 2
+    const bx = originX + i * slot + (slot - bw) / 2
     const y = GROUND - h
 
     g.appendChild(n('rect', {
@@ -143,7 +164,7 @@ function glanceStrip(wards, districts) {
   const pct = total ? Math.round((done / total) * 100) : 0
 
   const box = el('div', 'glance')
-  const dots = wards.map((w) => `<i class="gd ${w.status}" title="${esc(w.name)}"></i>`).join('')
+  const dots = wards.map((w) => `<i class="gd ${w.status}" title="${esc(wardDisplayName(w))}"></i>`).join('')
   box.innerHTML = `
     <div class="glance-top">
       <span class="glance-label">City recovery</span>
@@ -165,14 +186,15 @@ function tile(w, stops, onSelect, onPeek, wards) {
   const gate = locked ? unlockAfter(wards, w.id) : null
   const t = el('button', `wt-tile ${w.status}`)
   t.disabled = locked
+  const name = wardDisplayName(w)
   t.setAttribute('aria-label', locked
-    ? `${w.name} — sealed${gate ? `, unlocks after ${gate.name}` : ''}`
-    : `${w.name} — ${w.restoredCount} of ${w.totalCount} districts restored`)
+    ? `${name} — sealed${gate ? `, unlocks after ${wardDisplayName(gate)}` : ''}`
+    : `${name} — ${w.restoredCount} of ${w.totalCount} districts restored`)
 
   const left = w.totalCount - w.restoredCount
   t.appendChild(el('span', 'wt-head', `
     <span class="wt-id">
-      <span class="wt-name">${locked ? '<span class="wt-lock">🔒</span>' : ''}${esc(w.name)}</span>
+      <span class="wt-name">${locked ? '<span class="wt-lock">🔒</span>' : ''}${esc(name)}</span>
       <span class="wt-sub">${esc(SUBTITLE[w.id] || '')}</span>
     </span>
     <span class="wt-right">
@@ -187,7 +209,7 @@ function tile(w, stops, onSelect, onPeek, wards) {
   // A sealed ward shouldn't just say "sealed" — say what opens it.
   if (locked) {
     t.appendChild(el('span', 'wt-gate', gate
-      ? `Opens when <b>${esc(gate.name)}</b> is whole`
+      ? `Opens when <b>${esc(wardDisplayName(gate))}</b> is whole`
       : 'Opens later in the operation'))
   }
   if (!locked) t.onclick = (e) => onSelect(w, { x: e.clientX, y: e.clientY })

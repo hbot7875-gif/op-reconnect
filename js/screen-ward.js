@@ -13,6 +13,7 @@ import { districtFraction } from './ui-district.js'
 // scannable without reading a word.
 import { districtIcon as iconFor } from './landmarks.js'
 import { wardFilterBar } from './search.js'
+import { wardDisplayName } from './ward-tiles.js'
 
 const D_STATE = {
   locked:            { label: 'Sealed' },
@@ -39,7 +40,7 @@ export function renderWard(container, state, wardId) {
   head.appendChild(back)
   wrap.appendChild(head)
 
-  wrap.appendChild(el('div', 'screen-title', esc(ward.name)))
+  wrap.appendChild(el('div', 'screen-title', esc(wardDisplayName(ward))))
 
   if (ward.status === 'locked') {
     const gate = unlockAfter(state.map?.wards || [], ward.id)
@@ -47,7 +48,7 @@ export function renderWard(container, state, wardId) {
       <span class="sn-lock">🔒</span>
       <div class="sn-title">This ward is still dark</div>
       <p class="sn-body">${gate
-        ? `Every one of its ${ward.totalCount} districts stays sealed until <b>${esc(gate.name)}</b> is whole. Finish there and the grid opens through to here.`
+        ? `Every one of its ${ward.totalCount} districts stays sealed until <b>${esc(wardDisplayName(gate))}</b> is whole. Finish there and the grid opens through to here.`
         : `All ${ward.totalCount} of its districts are sealed. HQ opens this part of the grid later in the operation.`}</p>
     `))
   } else {
