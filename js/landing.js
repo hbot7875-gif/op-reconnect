@@ -49,6 +49,11 @@ call('getPublicStats', {}).then((res) => {
   }
   const s = res.stats
   setStat('statAgents', s.agents)
+
+  // "1 agents" on the first line a stranger reads is a small thing that makes
+  // the whole page look unfinished. Early on, 1 is a genuinely likely count.
+  const agentWord = document.getElementById('statAgentsWord')
+  if (agentWord) agentWord.textContent = s.agents === 1 ? 'agent' : 'agents'
   setStat('statDistricts', s.districtsRestored)
   setStat('statCharge', s.charge === null ? null : Math.round(s.charge * 100), '%')
 

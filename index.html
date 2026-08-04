@@ -27,14 +27,25 @@
   <canvas id="crowd" class="crowd-strip" aria-hidden="true"></canvas>
   <div class="crowd-scrim" aria-hidden="true"></div>
 
-  <!-- ── Hero: one message, one button, nothing else ───────────── -->
+  <!-- ── Hero: the message, the button, and the city it's about ────
+       The map used to live in its own section far below the fold, which
+       left the first screen as text-on-a-photo and a long empty drop
+       before anything else happened. Showing the dark grid up here does
+       the job the headline was doing alone: you can SEE that there's a
+       city and that it's off. On desktop the two sit side by side, which
+       is also what stops that breakpoint reading as a stretched phone. -->
   <header class="hero">
-    <div class="hero-inner">
-      <div class="badge"><span class="dot" aria-hidden="true"></span> OP: <span class="brand">ReConnect</span></div>
-      <h1 class="title">The city<br>went dark.</h1>
-      <p class="lede">Every stream you play turns a piece of it back on.</p>
-      <a href="game.html" id="ctaPrimary" class="btn btn-primary">Start your mission</a>
-      <a href="game.html?mode=signin" id="ctaSecondary" class="quiet-link">I already have an agent file</a>
+    <div class="hero-grid">
+      <div class="hero-inner">
+        <div class="badge"><span class="dot" aria-hidden="true"></span> OP: <span class="brand">ReConnect</span></div>
+        <h1 class="title">The city<br>went dark.</h1>
+        <p class="lede">Every stream you play turns a piece of it back on.</p>
+        <a href="game.html" id="ctaPrimary" class="btn btn-primary">Start your mission</a>
+        <a href="game.html?mode=signin" id="ctaSecondary" class="quiet-link">I already have an agent file</a>
+      </div>
+      <div class="hero-map">
+        <div class="map" id="mapMount"></div>
+      </div>
     </div>
     <a href="#brief" class="scroll-cue" aria-label="Read more">
       <span></span>
@@ -51,15 +62,6 @@
       </p>
     </section>
 
-    <!-- The map, redacted. Real ward silhouettes at their real district
-         counts, drawn dark — the city as every new agent finds it. Names
-         stay blacked out; you get briefed after you sign in. This does the
-         showing so the hero doesn't have to do any telling. -->
-    <section class="sec">
-      <h2 class="sec-head">The grid</h2>
-      <div class="map" id="mapMount"></div>
-    </section>
-
     <!-- One line, not a dashboard. A stranger doesn't need three labelled
          cards to feel "something real is happening here" — a terminal
          readout does it in less space and reads as HQ's own monitor, not
@@ -67,7 +69,7 @@
     <section class="sec">
       <div class="ticker">
         <span class="ticker-dot" aria-hidden="true"></span>
-        <span id="statAgents" class="is-loading">—</span> agents
+        <span id="statAgents" class="is-loading">—</span> <span id="statAgentsWord">agents</span>
         <span class="ticker-sep">·</span>
         <span id="statDistricts" class="is-loading">—</span><span id="statDistrictsTotal"></span> districts restored
         <span class="ticker-sep">·</span>

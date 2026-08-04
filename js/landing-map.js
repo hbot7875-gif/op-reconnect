@@ -23,6 +23,13 @@ import { n, ISLANDS, CITY_W, CITY_H_ART } from './city-map.js'
 // This is static authored content, not a server stat, so it's honest to
 // state it here; the live "how much is restored" numbers stay in the
 // Network status section, where they come from the backend or show a dash.
+// Relay Zero, the home base ward, isn't drawn on this map — it's HQ's own
+// bootstrap relay, not somewhere you go exploring — but its single district
+// IS counted in the backend's total. Leaving it out made this line say "247
+// districts" directly above a live ticker reading "0/248", which just looks
+// like one of the two numbers is broken.
+const HOME_BASE_DISTRICTS = 1
+
 const WARDS = [
   { id: 'mono', districts: 25 },
   { id: 'happy', districts: 26 },
@@ -75,7 +82,7 @@ export function renderLandingMap(mount) {
   // expectation gap into the thing it actually is: wards open in order, and
   // you're being told which one is first. Drop the second sentence only when
   // every ward is genuinely seeded.
-  const total = WARDS.reduce((a, w) => a + w.districts, 0)
+  const total = WARDS.reduce((a, w) => a + w.districts, 0) + HOME_BASE_DISTRICTS
   const foot = document.createElement('p')
   foot.className = 'lm-foot'
   foot.textContent = `${WARDS.length} wards. ${total} districts. One ward opens first.`
