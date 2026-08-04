@@ -1,14 +1,37 @@
 // Individual levels — a much more frequent, escalating ladder than the
 // handful of rank titles, so there's always a near-term target to climb
 // toward. See migrations/022_rc_leveling.sql for the schema and the reward
-// numbers' rationale.
+// numbers' rationale, and migrations/033_rc_level_names.sql for the name
+// ladder (rc_config.level_names — purely cosmetic, index i = level i+1).
 
 import type { GameContent, SupabaseDB } from './config.ts'
 
 export interface LevelInfo {
   level: number
+  name: string | null
   xpIntoLevel: number
   xpForNextLevel: number
+}
+
+export interface LevelRewardsPreview {
+  fuel: number
+  streakFreeze: number
+  boostMultiplier: number
+  boostMinutes: number
+}
+
+/** What reaching the next level actually grants — same numbers
+ *  applyLevelUpIfNeeded awards on a real crossing, read here so the client
+ *  can preview them (Progress sheet) without duplicating the config. */
+export function nextLevelRewards(content: GameContent): LevelRewardsPreview {
+  const rewards = content.config.level_rewards
+    || { streakFreezePerLevel: 1, fuelPerLevel: 5, boostMultiplier: 2, boostMinutes: 60 }
+  return {
+    fuel: rewards.fuelPerLevel || 0,
+    streakFreeze: rewards.streakFreezePerLevel || 0,
+    boostMultiplier: rewards.boostMultiplier || 1,
+    boostMinutes: rewards.boostMinutes || 60,
+  }
 }
 
 /** Level from lifetime XP, via an escalating-cost curve read from rc_config
@@ -23,11 +46,21 @@ export function levelFor(content: GameContent, xp: number): LevelInfo {
     level++
     need = Math.round(cfg.base * Math.pow(cfg.growth, level - 1))
   }
-  return { level, xpIntoLevel: xp - cum, xpForNextLevel: need }
+  return { level, name: levelName(content, level), xpIntoLevel: xp - cum, xpForNextLevel: need }
+}
+
+/** rc_config.level_names is a flat array, index i = level i+1 — cosmetic
+ *  only, nothing here feeds back into the XP math. Levels past the last
+ *  named entry just don't get one; the client falls back to the bare
+ *  number, same as it always has. */
+export function levelName(content: GameContent, level: number): string | null {
+  const names: string[] = content.config.level_names || []
+  return names[level - 1] || null
 }
 
 export interface LevelUpResult {
   level: number
+  name: string | null
   levelsGained: number
   streakFreezeGranted: number
   fuelGranted: number
@@ -64,5 +97,8 @@ export async function applyLevelUpIfNeeded(
     await supabase.rpc('rc_add_resources', { p_agent_no: player.agent_no, p_signal: 0, p_fuel: fuelGranted, p_intel: 0 })
   }
 
-  return { level, levelsGained, streakFreezeGranted, fuelGranted, boostMultiplier: rewards.boostMultiplier || 1, boostExpiresAt }
+  return {
+    level, name: levelName(content, level), levelsGained, streakFreezeGranted, fuelGranted,
+    boostMultiplier: rewards.boostMultiplier || 1, boostExpiresAt,
+  }
 }
