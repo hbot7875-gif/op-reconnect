@@ -156,6 +156,51 @@ function skyline(w, stops, onPeek) {
   return svg
 }
 
+/** Home Base's own card, in place of a skyline. A skyline built from one
+ *  building is always going to read as a lone bar no matter how it's drawn —
+ *  the fix isn't a better building, it's the right metaphor. Home Base isn't
+ *  a ward with a district count, it's the reactor everything else plugs
+ *  into, so its card draws the same core-and-charge-ring language as the
+ *  world map above it: a halo, a live charge arc (real bomb.charge, the
+ *  exact number the ARMY Bomb screen shows), and conduit lines fanning out
+ *  to the edges of the frame — the rest of the city, off-card. */
+function coreArt(w, onPeek, stops, bomb) {
+  const charge = Math.max(0, Math.min(1, bomb?.charge || 0))
+  const cx = 50, cy = 21, r = 10
+
+  const svg = n('svg', {
+    class: 'wt-sky wt-core', viewBox: `0 0 100 ${SKY_H}`,
+    preserveAspectRatio: 'none', 'aria-hidden': 'true',
+  })
+
+  const conduits = n('g', { class: 'wt-core-conduits' })
+  ;[[-1, -0.42], [-1, 0.5], [1, -0.42], [1, 0.5], [0, -1]].forEach(([dx, dy]) => {
+    const len = Math.hypot(dx, dy)
+    const ex = cx + (dx / len) * 46, ey = cy + (dy / len) * 30
+    const ix = cx + (dx / len) * (r + 1), iy = cy + (dy / len) * (r + 1)
+    conduits.appendChild(n('line', { x1: ix.toFixed(1), y1: iy.toFixed(1), x2: ex.toFixed(1), y2: ey.toFixed(1), class: 'wt-core-conduit' }))
+  })
+  svg.appendChild(conduits)
+
+  svg.appendChild(n('circle', { cx, cy, r: r + 3.4, class: 'wt-core-halo' }))
+  svg.appendChild(n('circle', { cx, cy, r, class: 'wt-core-ring-bg' }))
+  const circ = 2 * Math.PI * r
+  svg.appendChild(n('circle', {
+    cx, cy, r, class: 'wt-core-ring', transform: `rotate(-90 ${cx} ${cy})`,
+    'stroke-dasharray': `${(circ * charge).toFixed(1)} ${circ.toFixed(1)}`,
+  }))
+  svg.appendChild(n('circle', { cx, cy, r: 3, class: 'wt-core-dot' }))
+
+  svg.appendChild(n('rect', { x: 0, y: GROUND - 0.4, width: 100, height: 0.7, class: 'wt-ground' }))
+
+  if (onPeek && w.status !== 'locked' && stops[0]) {
+    const hit = n('rect', { x: 0, y: 0, width: 100, height: SKY_H, class: 'wt-hit' })
+    hit.addEventListener('click', (e) => { e.stopPropagation(); onPeek(stops[0], w) })
+    svg.appendChild(hit)
+  }
+  return svg
+}
+
 /* ── the city at a glance ─────────────────────────────────────────────── */
 
 function glanceStrip(wards, districts) {
@@ -181,7 +226,7 @@ function glanceStrip(wards, districts) {
 
 /* ── one ward ─────────────────────────────────────────────────────────── */
 
-function tile(w, stops, onSelect, onPeek, wards) {
+function tile(w, stops, onSelect, onPeek, wards, bomb) {
   const locked = w.status === 'locked'
   const gate = locked ? unlockAfter(wards, w.id) : null
   const t = el('button', `wt-tile ${w.status}`)
@@ -204,7 +249,7 @@ function tile(w, stops, onSelect, onPeek, wards) {
         : `${left} <i>left</i>`}</span>
     </span>
   `))
-  t.appendChild(skyline(w, stops, onPeek))
+  t.appendChild(w.id === HOME_BASE_WARD ? coreArt(w, onPeek, stops, bomb) : skyline(w, stops, onPeek))
 
   // A sealed ward shouldn't just say "sealed" — say what opens it.
   if (locked) {
@@ -224,7 +269,7 @@ const GROUPS = [
   { key: 'restored', title: 'Online' },
 ]
 
-export function renderWardTiles(wards, districts, onSelect, onPeek) {
+export function renderWardTiles(wards, districts, onSelect, onPeek, bomb) {
   const wrap = el('div', 'ward-tiles')
   const stopsFor = (w) => districts.filter((d) => d.wardId === w.id)
 
@@ -234,7 +279,7 @@ export function renderWardTiles(wards, districts, onSelect, onPeek) {
     const list = wards.filter((w) => w.status === g.key)
     if (!list.length) continue
     wrap.appendChild(el('div', 'wt-group', `${esc(g.title)} <i>${list.length}</i>`))
-    for (const w of list) wrap.appendChild(tile(w, stopsFor(w), onSelect, onPeek, wards))
+    for (const w of list) wrap.appendChild(tile(w, stopsFor(w), onSelect, onPeek, wards, bomb))
   }
 
   // Sealed wards are the long tail — folded away so the active ward stays
@@ -246,7 +291,7 @@ export function renderWardTiles(wards, districts, onSelect, onPeek) {
     sum.className = 'wt-group is-fold'
     sum.innerHTML = `Sealed <i>${sealed.length}</i><span class="wt-fold-hint">still dark</span>`
     fold.appendChild(sum)
-    for (const w of sealed) fold.appendChild(tile(w, stopsFor(w), onSelect, onPeek, wards))
+    for (const w of sealed) fold.appendChild(tile(w, stopsFor(w), onSelect, onPeek, wards, bomb))
     wrap.appendChild(fold)
   }
 

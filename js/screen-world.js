@@ -84,7 +84,8 @@ function mapField(state) {
   if (!wards.length) return el('div')
   return renderWardTiles(wards, state.map?.districts || [],
     (w, origin) => goWard(w.id, origin),
-    (d, w) => showOverlay(peekSheet(d, w, state)))
+    (d, w) => showOverlay(peekSheet(d, w, state)),
+    state.bomb)
 }
 
 /* ── Peeking at one building ────────────────────────────────────────────

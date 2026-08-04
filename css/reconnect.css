@@ -480,6 +480,19 @@ body.red-zone .gd.active { background: var(--crimson); }
 
 body.red-zone .wtb.now { fill: var(--crimson); filter: drop-shadow(0 0 3px rgba(229,56,79,0.8)); }
 
+/* ── Home Base's card: the core, not a skyline ─────────────────────────
+   Mirrors the world map's .cm-core language at list-tile scale, so the same
+   reactor reads as the same reactor wherever it shows up. */
+.wt-core-conduit { stroke: rgba(255,255,255,0.10); stroke-width: 0.6; }
+.wt-tile.active .wt-core-conduit { stroke: rgba(139,92,246,0.4); }
+.wt-tile.restored .wt-core-conduit { stroke: rgba(217,173,95,0.45); }
+.wt-core-halo { fill: rgba(139,92,246,0.14); animation: wtCorePulse 3.6s ease-in-out infinite; }
+@keyframes wtCorePulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+.wt-core-ring-bg { fill: none; stroke: rgba(255,255,255,0.09); stroke-width: 1.6; }
+.wt-core-ring { fill: none; stroke: var(--gold); stroke-width: 1.6; stroke-linecap: round;
+  transition: stroke-dasharray 0.9s ease; }
+.wt-core-dot { fill: var(--purple-lt); filter: drop-shadow(0 0 3px rgba(167,139,250,0.9)); }
+
 /* ── the ARMY Bomb: sphere + collar + handle in one 148x196 button ── */
 /* Compressed on purpose: the bomb is the identity, but the wards are the
    job. Anything taller pushes the operations map below the fold on a phone. */
