@@ -243,6 +243,7 @@ async function overlayStatsfm(seq) {
   // tracks, so the hero total is left alone here.
   try {
     const recentRes = await fetch(`${base}/streams/recent?limit=50`)
+    if (!recentRes.ok) { console.warn(`[BOTZ] Stats.fm streams/recent returned ${recentRes.status}`); return }
     const recent = await recentRes.json()
     if (seq !== _sfmSeq) return
 
@@ -258,7 +259,7 @@ async function overlayStatsfm(seq) {
     if (currentFromEpoch) items = items.filter(it => new Date(it.endTime).getTime() / 1000 >= currentFromEpoch)
     if (currentToEpoch)   items = items.filter(it => new Date(it.endTime).getTime() / 1000 <= currentToEpoch)
     if (items.length) renderRecentStatsfm(items)
-  } catch (e) { /* stats.fm unreachable or private: keep the default feed */ }
+  } catch (e) { console.warn('[BOTZ] Stats.fm overlay failed:', e) }
 }
 
 function renderRecentStatsfm(items) {
@@ -303,7 +304,10 @@ async function overlayMusicat(seq) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer empty' },
     body: JSON.stringify({ publicUserId: publicId, range, sorting: 'DESC', page }),
-  }).then(r => r.ok ? r.json() : null)
+  }).then(r => {
+    if (!r.ok) { console.warn(`[BOTZ] Musicat listening-history returned ${r.status}`); return null }
+    return r.json()
+  })
 
   // No hero-total override here (for any preset, not just "all"): Musicat's
   // listening-history API has no artist filter, so any count built from it
@@ -327,7 +331,7 @@ async function overlayMusicat(seq) {
     if (currentFromEpoch) items = items.filter(it => { const d = musicatDate(it.playedAt); return d && d.getTime() / 1000 >= currentFromEpoch })
     if (currentToEpoch)   items = items.filter(it => { const d = musicatDate(it.playedAt); return d && d.getTime() / 1000 <= currentToEpoch })
     if (items.length) renderRecentMusicat(items)
-  } catch (e) { /* musicat unreachable: keep the default feed */ }
+  } catch (e) { console.warn('[BOTZ] Musicat overlay failed:', e) }
 }
 
 function renderRecentMusicat(items) {
