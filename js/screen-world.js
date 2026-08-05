@@ -218,6 +218,7 @@ function coreBlock(state) {
       <circle class="ring-charge" cx="110" cy="110" r="106" transform="rotate(-90 110 110)"
         stroke-dasharray="${(CIRC * arcFrac).toFixed(1)} ${CIRC.toFixed(1)}"></circle>
     </svg>
+    <div class="core-particles"><span></span><span></span><span></span><span></span><span></span><span></span></div>
     <div class="rc-bomb">
       <div class="rc-sphere"><span class="rc-fill"></span><span class="rc-logo">⟭⟬</span></div>
       <div class="rc-handle"></div>
@@ -243,6 +244,15 @@ function coreBlock(state) {
   `
   zone.appendChild(read)
   if (deadline) tickCountdowns()
+
+  // Signal ports — a discrete "how many bars" companion to the exact
+  // percentage above: real tiers off the same arcFrac driving the ring,
+  // not decoration. Under attack this reads defuse progress instead of
+  // charge, same swap the ring/percentage already make.
+  const litPorts = Math.round(arcFrac * 4)
+  const ports = el('div', 'core-ports' + (underAttack ? ' is-attack' : b.brownout ? ' is-brownout' : ''))
+  ports.innerHTML = Array.from({ length: 4 }, (_, i) => `<span class="wp${i < litPorts ? ' lit' : ''}"></span>`).join('')
+  zone.appendChild(ports)
 
   // Charges up from 0 rather than just appearing, same "this is happening
   // live" feeling the count-up rings already sell — but only on the entrance,

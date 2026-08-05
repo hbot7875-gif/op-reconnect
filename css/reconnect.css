@@ -679,6 +679,40 @@ body.red-zone .wtb.now { fill: var(--crimson); filter: drop-shadow(0 0 3px rgba(
 .rc-handle::before { content: ''; position: absolute; top: 7px; left: 50%; transform: translateX(-50%);
   width: 7px; height: 10px; background: #000; border: 1px solid #333; border-radius: 4px; }
 
+/* Energy motes drifting around the sphere — nested inside .army-core (not
+   a sibling) so they inherit --bomb/--charge for free, same "every lit
+   ingredient scales with real charge" rule everything else here follows: a
+   fresh network is dark air, not glitter. */
+.core-particles { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+.core-particles span { position: absolute; width: 3px; height: 3px; border-radius: 50%;
+  background: var(--bomb); box-shadow: 0 0 6px var(--bomb);
+  opacity: calc(var(--charge) * 0.85); animation: particleFloat 3s ease-in-out infinite;
+  transition: opacity 0.9s ease, background 0.8s; }
+.core-particles span:nth-child(1) { top: 10%; left: 8%; animation-delay: 0s; }
+.core-particles span:nth-child(2) { top: 18%; right: 6%; animation-delay: 0.5s; }
+.core-particles span:nth-child(3) { bottom: 34%; left: 2%; animation-delay: 1s; }
+.core-particles span:nth-child(4) { bottom: 24%; right: 4%; animation-delay: 1.5s; }
+.core-particles span:nth-child(5) { top: 42%; left: -2%; animation-delay: 2s; }
+.core-particles span:nth-child(6) { top: 38%; right: -2%; animation-delay: 2.5s; }
+@keyframes particleFloat {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50%      { transform: translateY(-6px) scale(1.3); }
+}
+.army-core.is-attack .core-particles span { animation-duration: 1.1s; }
+.army-core.is-brownout .core-particles span { opacity: 0.04; animation-play-state: paused; }
+
+/* Signal ports — a discrete "how many bars" readout under the exact
+   percentage: real tiers (litPorts in screen-world.js), not decoration.
+   A sibling of .army-core rather than nested in it, so its own is-attack/
+   is-brownout modifier (set alongside the button's) picks the color;
+   .army-core's --bomb custom property doesn't inherit sideways to it. */
+.core-ports { display: flex; gap: 6px; justify-content: center; margin-top: 8px; }
+.core-ports .wp { width: 7px; height: 7px; border-radius: 50%; background: #111;
+  border: 1.5px solid rgba(255,255,255,0.12); transition: all 0.6s ease; }
+.core-ports .wp.lit { background: var(--purple); border-color: var(--purple); box-shadow: 0 0 7px var(--purple); }
+.core-ports.is-attack .wp.lit { background: var(--crimson); border-color: var(--crimson); box-shadow: 0 0 7px var(--crimson); }
+.core-ports.is-brownout .wp.lit { background: var(--dim); border-color: var(--dim); box-shadow: none; }
+
 .core-read { text-align: center; margin-top: 7px; }
 .core-pct { font-family: var(--disp); font-weight: 900; font-size: 20px; letter-spacing: 0.5px; }
 .core-read.is-attack .core-pct { color: var(--crimson); font-size: 19px; letter-spacing: 2.4px;
