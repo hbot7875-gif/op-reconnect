@@ -19,7 +19,7 @@ import {
   removeCatalogAlbum,
 } from './lib/spotify-catalog.ts'
 import { importFillerPlaylist, addFillerManual, getFillerLibrary, removeFiller } from './lib/spotify-filler.ts'
-import { generatePlaylist, validatePlaylist, getAlpacaOptions, generateAlpaca, previewAlpaca } from './lib/candy-star.ts'
+import { generatePlaylist, validatePlaylist, validatePlaylistFromTracks, getAlpacaOptions, generateAlpaca, previewAlpaca } from './lib/candy-star.ts'
 import { adminGetActiveDefuse } from './lib/bomb.ts'
 import { adminCreateBroadcast, adminListBroadcasts, adminDeleteBroadcast } from './lib/broadcasts.ts'
 import { adminGetAgent } from './lib/admin-agent.ts'
@@ -118,6 +118,7 @@ const ROUTES: Record<string, Route> = {
   getFillerLibrary: { auth: 'admin', handler: (sb) => getFillerLibrary(sb) },
   removeFiller: { auth: 'admin', handler: (sb, p) => removeFiller(sb, p as any) },
   validatePlaylist: { auth: 'admin', handler: (sb, p) => validatePlaylist(sb, p as any) },
+  validatePlaylistFromTracks: { auth: 'admin', handler: (sb, p) => validatePlaylistFromTracks(sb, p as any) },
   spotifyAuthUrl: { auth: 'admin', handler: (_sb, p) => spotifyAuthUrl(p as any) },
   spotifyExchangeCode: { auth: 'admin', handler: (sb, p) => spotifyExchangeCode(sb, p as any) },
   getSpotifyConnection: { auth: 'admin', handler: (sb) => getSpotifyConnection(sb) },

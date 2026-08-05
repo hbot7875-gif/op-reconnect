@@ -32,18 +32,16 @@ import {
   spreadFocusPlays, createUserPlaylist, uploadPlaylistCover,
 } from './candy-star-rules.ts'
 
-/** Validate an existing playlist by URL against the ARMY ruleset. Admin-only. */
-export async function validatePlaylist(supabase: SupabaseDB, params: { playlistUrl: string }): Promise<any> {
-  const pid = parseSpotifyId(params.playlistUrl, 'playlist')
-  if (!pid) throw new Error('Could not parse a Spotify playlist id from that input.')
-  const { token } = await getUserAccessToken(supabase)
-  const tracks = await fetchAllPlaylistTracks(token, pid)
-  if (!tracks.length) throw new Error('No tracks found (private playlist, or wrong link).')
-
+/** Shared by both validate paths: run the rule engine, then layer the
+ *  K-pop-filler genre check on top (needs a token for `/v1/artists` —
+ *  public catalog data, unaffected by the playlist-read restriction the
+ *  from-tracks path exists to route around). */
+async function runValidation(supabase: SupabaseDB, tracks: any[]): Promise<any> {
   const report = analyzeTracklist(tracks)
 
+  const { token } = await getUserAccessToken(supabase)
   const nonBts = tracks.filter((t: any) => !t.isBTS)
-  const genreMap = await fetchArtistGenres(token, [...new Set(nonBts.flatMap((t: any) => t.artists.map((a: any) => a.id)))] as string[])
+  const genreMap = await fetchArtistGenres(token, [...new Set(nonBts.flatMap((t: any) => (t.artists || []).map((a: any) => a.id)))] as string[])
   const kpopHits = nonBts.filter((t: any) => looksKpop(t.artists.flatMap((a: any) => genreMap[a.id] || [])))
   report.findings.push({
     rule: 'No K-pop fillers', status: kpopHits.length === 0 ? 'pass' : 'fail',
@@ -52,7 +50,50 @@ export async function validatePlaylist(supabase: SupabaseDB, params: { playlistU
   })
   report.summary.failed = report.findings.filter((f: any) => f.status === 'fail').length
   report.summary.passed = report.findings.filter((f: any) => f.status === 'pass').length
+  return report
+}
+
+/** Validate an existing playlist by URL against the ARMY ruleset. Admin-only.
+ *  Only works for playlists the connected account's token can actually read
+ *  — in practice, its own playlists. Spotify's Web API won't serve playlist
+ *  contents for another user's playlist to an app still in Development Mode,
+ *  even when that playlist is public in the Spotify app itself; it 403s as
+ *  if the resource doesn't belong to us, which — for this app's quota tier —
+ *  it doesn't. `validatePlaylistFromTracks` below is the workaround. */
+export async function validatePlaylist(supabase: SupabaseDB, params: { playlistUrl: string }): Promise<any> {
+  const pid = parseSpotifyId(params.playlistUrl, 'playlist')
+  if (!pid) throw new Error('Could not parse a Spotify playlist id from that input.')
+  const { token } = await getUserAccessToken(supabase)
+  const tracks = await fetchAllPlaylistTracks(token, pid)
+  if (!tracks.length) throw new Error('No tracks found (private playlist, or wrong link).')
+
+  const report = await runValidation(supabase, tracks)
   return { success: true, playlistId: pid, ...report }
+}
+
+/**
+ * Validate a tracklist collected client-side (see js/validate-bookmarklet.js)
+ * from a playlist page the connected account's own token can't read via the
+ * API — any public playlist is readable by a logged-in browser tab, so the
+ * bookmarklet scrapes it there and hands the list to this endpoint instead
+ * of us fetching it ourselves. Admin-only, same as the URL-based validator.
+ */
+export async function validatePlaylistFromTracks(supabase: SupabaseDB, params: { name?: string; tracks: any[] }): Promise<any> {
+  const raw = Array.isArray(params.tracks) ? params.tracks : []
+  if (!raw.length) throw new Error('No tracks in that submission — the bookmarklet may not have found the tracklist. Scroll the playlist to the bottom first, then run it again.')
+
+  const tracks = raw
+    .filter((t: any) => t && t.id && t.name)
+    .map((t: any) => ({
+      id: t.id, uri: `spotify:track:${t.id}`, name: String(t.name),
+      artists: (Array.isArray(t.artists) ? t.artists : []).map((a: any) => ({ id: a.id, name: a.name })),
+      album: t.album || '', durationMs: parseInt(t.durationMs) || 0, isrc: null,
+      isBTS: isBTSArtists(Array.isArray(t.artists) ? t.artists : []),
+    }))
+  if (!tracks.length) throw new Error('Submitted tracks were missing id/name — the page structure may have changed.')
+
+  const report = await runValidation(supabase, tracks)
+  return { success: true, name: params.name || null, scraped: true, trackCount: tracks.length, ...report }
 }
 
 /**
