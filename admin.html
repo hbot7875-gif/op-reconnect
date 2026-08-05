@@ -463,7 +463,13 @@
             <option value="invite">📡 Invite — invite helpers, no streaming needed from them</option>
           </select>
         </label>
-        <div id="goalReconnectPuzzleFields">
+        <div id="goalReconnectSotdFields">
+          <label class="adm-field"><span>Hint shown to the player (optional)</span>
+            <input id="goalReconnectPromptSotd" class="ob-input" type="text" placeholder="e.g. It's about summer"></label>
+          <label class="adm-field"><span>Correct YouTube link</span>
+            <input id="goalReconnectYoutubeUrl" class="ob-input" type="text" placeholder="e.g. https://youtu.be/xEeFrLSkMm8"></label>
+        </div>
+        <div id="goalReconnectTextFields" hidden>
           <label class="adm-field"><span>Prompt shown to the player</span>
             <input id="goalReconnectPrompt" class="ob-input" type="text" placeholder="e.g. Hint: it's about summer"></label>
           <div class="adm-goal-form-grid">
@@ -890,9 +896,10 @@ function goalRowHtml(g) {
   let sub
   if (g.kind === 'album') sub = `${(g.tracks || []).length} track${(g.tracks || []).length === 1 ? '' : 's'}`
   else if (g.kind === 'reconnect') {
-    sub = RECONNECT_COOP_VARIANTS.has(g.variant)
-      ? `${RECONNECT_VARIANT_LABELS[g.variant] || g.variant} — ${g.config?.requiredAgents || '?'} agents`
-      : `${RECONNECT_VARIANT_LABELS[g.variant] || g.variant} — answer: ${g.config?.answerLabel || '?'}`
+    const flavor = RECONNECT_VARIANT_LABELS[g.variant] || g.variant
+    sub = RECONNECT_COOP_VARIANTS.has(g.variant) ? `${flavor} — ${g.config?.requiredAgents || '?'} agents`
+      : g.variant === 'sotd' ? `${flavor} — ${g.config?.youtubeId ? `youtu.be/${g.config.youtubeId}` : 'no link set'}`
+      : `${flavor} — answer: ${g.config?.answerLabel || '?'}`
   } else sub = g.artist || ''
   const modesTitle = modeTargets(g.target).map((m) => `${m.label || m.key} ${m.value}`).join(' · ')
   const assignAction = g.kind === 'reconnect' && RECONNECT_COOP_VARIANTS.has(g.variant)
@@ -1113,27 +1120,33 @@ $('btnAddAlbumGoal').onclick = async () => {
 }
 
 /* ── Reconnect goal form ──
-   Puzzle variants (sotd/cipher/memory) share one field set (prompt +
-   answer); connect/invite share another (just an agent count). Toggle
-   which shows based on the variant picked, same in-place pattern as
-   goalReconnectVariant's <select>. "Randomly assign missions" for
-   connect/invite goals lives on the goal row itself now (see
-   wireGoalRowButtons' assignBtn), not a separate panel. */
-const RECONNECT_PUZZLE_VARIANTS = new Set(['sotd', 'cipher', 'memory'])
+   Three field sets, toggled by the variant picked: sotd (a YouTube link to
+   match, same submission mechanic as the old arirang site — never a text
+   guess), cipher/memory (prompt + typed answer), connect/invite (just an
+   agent count). "Randomly assign missions" for connect/invite goals lives
+   on the goal row itself now (see wireGoalRowButtons' assignBtn), not a
+   separate panel. */
+const RECONNECT_TEXT_VARIANTS = new Set(['cipher', 'memory'])
 
 function toggleReconnectFields() {
-  const isPuzzle = RECONNECT_PUZZLE_VARIANTS.has($('goalReconnectVariant').value)
-  $('goalReconnectPuzzleFields').hidden = !isPuzzle
-  $('goalReconnectCoopFields').hidden = isPuzzle
+  const variant = $('goalReconnectVariant').value
+  $('goalReconnectSotdFields').hidden = variant !== 'sotd'
+  $('goalReconnectTextFields').hidden = !RECONNECT_TEXT_VARIANTS.has(variant)
+  $('goalReconnectCoopFields').hidden = variant === 'sotd' || RECONNECT_TEXT_VARIANTS.has(variant)
 }
 $('goalReconnectVariant').addEventListener('change', toggleReconnectFields)
 toggleReconnectFields()
 
 $('btnAddReconnectGoal').onclick = async () => {
   const variant = $('goalReconnectVariant').value
-  const isPuzzle = RECONNECT_PUZZLE_VARIANTS.has(variant)
   let label, config
-  if (isPuzzle) {
+  if (variant === 'sotd') {
+    const prompt = $('goalReconnectPromptSotd').value.trim()
+    const youtubeUrl = $('goalReconnectYoutubeUrl').value.trim()
+    if (!youtubeUrl) { showOut('goalsOut', 'Enter the correct YouTube link.', 'error'); return }
+    label = `${RECONNECT_VARIANT_LABELS[variant]}${prompt ? ': ' + prompt : ''}`
+    config = { prompt, youtubeUrl }
+  } else if (RECONNECT_TEXT_VARIANTS.has(variant)) {
     const prompt = $('goalReconnectPrompt').value.trim()
     const answerLabel = $('goalReconnectAnswer').value.trim()
     const answerAliases = parseAliases($('goalReconnectAnswerAliases').value)
@@ -1153,6 +1166,8 @@ $('btnAddReconnectGoal').onclick = async () => {
   btn.disabled = sessionUnauthorized
   if (res?.success) {
     allGoals.push(res.goal)
+    $('goalReconnectPromptSotd').value = ''
+    $('goalReconnectYoutubeUrl').value = ''
     $('goalReconnectPrompt').value = ''
     $('goalReconnectAnswer').value = ''
     $('goalReconnectAnswerAliases').value = ''

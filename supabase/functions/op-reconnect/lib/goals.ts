@@ -22,6 +22,7 @@
 
 import type { SupabaseDB } from './config.ts'
 import { loadContent } from './config.ts'
+import { extractYoutubeId } from './text.ts'
 
 export interface GoalDbRow {
   id: string
@@ -39,13 +40,22 @@ export interface GoalDbRow {
   updated_at: string
 }
 
-const PUZZLE_VARIANTS = new Set(['sotd', 'cipher', 'memory'])
+const TEXT_PUZZLE_VARIANTS = new Set(['cipher', 'memory'])
 const COOP_VARIANTS = new Set(['connect', 'invite'])
-const RECONNECT_VARIANTS = new Set([...PUZZLE_VARIANTS, ...COOP_VARIANTS])
+const RECONNECT_VARIANTS = new Set(['sotd', ...TEXT_PUZZLE_VARIANTS, ...COOP_VARIANTS])
 
 function cleanReconnectConfig(variant: string, raw: any): { config: Record<string, any> } | { error: string } {
-  if (PUZZLE_VARIANTS.has(variant)) {
-    const prompt = String(raw?.prompt || '').trim()
+  const prompt = String(raw?.prompt || '').trim()
+  if (variant === 'sotd') {
+    // Song of the Day is a YouTube-link guess, same as the old arirang
+    // site: the player pastes a URL, matched by extracted video ID — never
+    // a text/title guess, unlike cipher/memory. The hint is optional there
+    // too (an "Intercepted Clue"), so only the link itself is required.
+    const youtubeId = extractYoutubeId(raw?.youtubeUrl)
+    if (!youtubeId) return { error: 'youtube_url_required' }
+    return { config: { prompt, youtubeId } }
+  }
+  if (TEXT_PUZZLE_VARIANTS.has(variant)) {
     const answerLabel = String(raw?.answerLabel || '').trim()
     if (!prompt) return { error: 'prompt_required' }
     if (!answerLabel) return { error: 'answer_required' }

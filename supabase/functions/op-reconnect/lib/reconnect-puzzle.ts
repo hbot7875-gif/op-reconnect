@@ -1,21 +1,22 @@
-// Solo puzzle variants of the `reconnect` goal kind — 'sotd' (guess a song
-// from a hint), 'cipher' (guess a song from its initials), 'memory' (guess
-// a piece of story/lore, admin-authored, deliberately NOT the district's
-// real `memory` text — that's hidden until restoration completes to avoid
-// spoiling the payoff). All three share one mechanic: one admin-authored
-// {prompt, answerLabel, answerAliases}, up to 2 attempts, untimed, matched
-// via the same normKeyFull/goalKeys normalization every other goal in this
-// game already uses. This is a deliberate simplification of the old
-// arirang site's SOTD/Cipher (which were calendar-day-rotating, admin-
-// authored-daily, and Cipher had a speed-decay timer) — see the reconnect
-// goal-kind plan for why.
+// Solo puzzle variants of the `reconnect` goal kind — 'sotd' (guess today's
+// song by pasting its YouTube link, same submission mechanic as the old
+// arirang site), 'cipher' (guess a song from its initials, typed), 'memory'
+// (guess a piece of story/lore, admin-authored, deliberately NOT the
+// district's real `memory` text — that's hidden until restoration completes
+// to avoid spoiling the payoff). sotd matches by extracted YouTube video ID
+// (extractYoutubeId); cipher/memory match by normKeyFull text comparison,
+// same normalization every other goal in this game already uses. All three
+// share attempts/solved bookkeeping (up to 2 attempts, untimed) — a
+// deliberate simplification of the old site's calendar-day-rotating,
+// admin-authored-daily puzzles (and Cipher's speed-decay timer) into a
+// one-shot-per-goal mechanic — see the reconnect goal-kind plan for why.
 //
 // Never awards XP/Fuel itself — completion reward happens once, when the
 // WHOLE district completes, in handlers.ts's buildState().
 
 import type { SupabaseDB } from './config.ts'
 import type { FrozenReconnectGoal } from './districts.ts'
-import { normKeyFull } from './text.ts'
+import { normKeyFull, extractYoutubeId } from './text.ts'
 
 const MAX_ATTEMPTS = 2
 
@@ -59,9 +60,15 @@ export async function submitReconnectPuzzleAnswer(supabase: SupabaseDB, content:
   if (row.solved) return { success: false, error: 'already_solved' }
   if (row.attempts >= MAX_ATTEMPTS) return { success: false, error: 'no_attempts_left' }
 
-  const answerKeys: string[] = reconnect.config.answerKeys || []
-  const guessKey = normKeyFull(answer)
-  const solved = answerKeys.includes(guessKey)
+  let solved: boolean
+  if (reconnect.variant === 'sotd') {
+    const submittedId = extractYoutubeId(answer)
+    if (!submittedId) return { success: false, error: 'youtube_url_required' }
+    solved = submittedId === reconnect.config.youtubeId
+  } else {
+    const answerKeys: string[] = reconnect.config.answerKeys || []
+    solved = answerKeys.includes(normKeyFull(answer))
+  }
   const attempts = row.attempts + 1
 
   const { error } = await supabase.from('rc_reconnect_puzzle_attempts').upsert({

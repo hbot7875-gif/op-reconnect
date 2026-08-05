@@ -202,6 +202,7 @@ const RECONNECT_ERRORS = {
   already_solved: "You've already cracked this one.",
   no_attempts_left: "You're out of attempts on this one.",
   answer_required: 'Type an answer first.',
+  youtube_url_required: "That doesn't look like a YouTube link — paste the full URL.",
 }
 function reconnectError(code) { return RECONNECT_ERRORS[code] || code || 'Something went wrong' }
 
@@ -238,11 +239,11 @@ function paintPuzzlePanel(box, d, r) {
 
   const row = el('div', 'reconnect-invite-row')
   const input = el('input', 'ob-input')
-  input.placeholder = 'Your answer'
+  input.placeholder = r.variant === 'sotd' ? 'Paste the YouTube link' : 'Your answer'
   const submitBtn = el('button', 'btn btn-primary', 'Submit')
   submitBtn.onclick = async () => {
     const answer = input.value.trim()
-    if (!answer) { toast(reconnectError('answer_required')); return }
+    if (!answer) { toast(reconnectError(r.variant === 'sotd' ? 'youtube_url_required' : 'answer_required')); return }
     submitBtn.disabled = true
     const res = await call('submitReconnectPuzzleAnswer', { agentNo: getAgentNo(), districtId: d.id, answer })
     submitBtn.disabled = false

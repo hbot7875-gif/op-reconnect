@@ -71,10 +71,11 @@ export function freezeGoals(content: GameContent, mode: string, district: Distri
   // A district can carry SEVERAL reconnect goals (different flavors) —
   // freezeGoals() rolls the dice once per agent per activation, so two
   // agents restoring the same district can land on genuinely different
-  // reconnect missions. Puzzle variants (sotd/cipher/memory) get their
-  // answer precomputed into keys here, same reasoning as track/album goals:
-  // an admin editing the answer later must never retroactively change what
-  // an already-active agent is being asked to guess.
+  // reconnect missions. Puzzle variants' answers freeze verbatim (cipher/
+  // memory precomputed into text-match keys, sotd as a plain video ID),
+  // same reasoning as track/album goals: an admin editing the answer later
+  // must never retroactively change what an already-active agent is being
+  // asked to guess.
   const reconnectCandidates = content.goals.filter((g) => g.kind === 'reconnect' && g.district_id === district.id)
   let reconnect: FrozenReconnectGoal | null = null
   if (reconnectCandidates.length > 0) {
@@ -83,6 +84,11 @@ export function freezeGoals(content: GameContent, mode: string, district: Distri
     const cfg = picked.config || {}
     const config = variant === 'connect' || variant === 'invite'
       ? { requiredAgents: cfg.requiredAgents }
+      : variant === 'sotd'
+      // A YouTube-link guess, not a text guess — frozen verbatim so an
+      // admin changing the answer later can't retroactively change what an
+      // already-active agent is being asked to identify.
+      ? { prompt: cfg.prompt, youtubeId: cfg.youtubeId }
       : {
           prompt: cfg.prompt,
           answerKeys: goalKeys({ label: cfg.answerLabel || '', aliases: cfg.answerAliases || [] }),

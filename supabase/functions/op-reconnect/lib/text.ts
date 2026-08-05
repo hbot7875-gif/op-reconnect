@@ -47,3 +47,15 @@ export function artistAllowed(artistNorm: string, allowlist: string[]): boolean 
   const padded = ` ${artistNorm} `
   return allowlist.some((entry) => padded.includes(` ${entry} `))
 }
+
+/** Pull the 11-char video ID out of any common YouTube URL shape, or accept
+ *  a bare ID pasted directly. Used both when an admin sets a Song of the Day
+ *  answer and when a player submits a guess — same extraction either side,
+ *  so matching is just an ID compare, never a URL string compare (which
+ *  would break on tracking params, http vs https, trailing slashes, etc). */
+export function extractYoutubeId(input: string): string | null {
+  const s = String(input || '').trim()
+  if (/^[\w-]{11}$/.test(s)) return s
+  const m = s.match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/|live\/)|youtu\.be\/)([\w-]{11})/)
+  return m ? m[1] : null
+}
