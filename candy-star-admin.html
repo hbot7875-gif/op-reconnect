@@ -89,6 +89,7 @@
   /* generate section */
   .cs-focus-row { display: grid; grid-template-columns: 1fr 68px 32px; gap: 8px; margin-bottom: 8px; align-items: start; }
   .cs-focus-row input[type="number"] { text-align: center; }
+  .focus-sel.is-picked { border-color: rgba(217,173,95,0.6); }
   .cs-focus-row .rm { background: none; border: 1px solid var(--border); border-radius: 6px; color: var(--crimson);
     cursor: pointer; padding: 10px 0; }
   .cs-autocomplete { position: relative; }
@@ -170,6 +171,7 @@
     <div class="stats" id="catStats">Loading…</div>
     <button class="btn btn-primary" id="btnRefreshCatalog" type="button">Refresh catalog</button>
   </div>
+  <div id="catRefreshOut" class="cs-admin-out"></div>
   <div id="catTableSection" hidden>
     <button class="cs-cat-toggle" id="btnToggleCatTable" type="button">▶ Show all songs</button>
     <div class="cs-cat-table-wrap" id="catTableWrap" hidden>
@@ -185,6 +187,7 @@
     <input id="catSearch" class="ob-input" type="text" placeholder="Search a BTS song or member…">
     <button class="btn btn-primary" id="btnCatSearch" type="button">Search</button>
   </div>
+  <div id="catSearchStatus" class="muted" style="font-size:11px;"></div>
   <div id="catSearchResults" class="cs-search-results"></div>
 
   <div class="cs-admin-row" style="margin-top:10px;">
@@ -331,7 +334,10 @@ async function call(action, params = {}) {
 
 function showOut(id, text, kind) {
   const el = $(id)
-  el.textContent = typeof text === 'string' ? text : JSON.stringify(text, null, 2)
+  const msg = typeof text === 'string' ? text
+    : kind === 'error' ? (text?.error || 'Something went wrong.')
+    : JSON.stringify(text, null, 2)
+  el.textContent = msg
   el.className = 'cs-admin-out is-visible' + (kind ? ` is-${kind}` : '')
 }
 
@@ -362,7 +368,7 @@ $('btnConnect').onclick = async () => {
 }
 $('btnDisconnect').onclick = async () => {
   const res = await call('disconnectSpotify')
-  showOut('connOut', res, res?.success ? 'ok' : 'error')
+  showOut('connOut', res?.success ? 'Disconnected.' : res, res?.success ? 'ok' : 'error')
   refreshConn()
 }
 
@@ -378,7 +384,7 @@ async function handleOAuthReturn() {
     return
   }
   const res = await call('spotifyExchangeCode', { code, redirectUri })
-  showOut('connOut', res, res?.success ? 'ok' : 'error')
+  showOut('connOut', res?.success ? `Connected as ${res.displayName || res.spotifyUser || 'account'}.` : res, res?.success ? 'ok' : 'error')
   history.replaceState({}, '', location.pathname)
   refreshConn()
 }
@@ -492,9 +498,9 @@ $('btnToggleCatTable').onclick = () => {
 }
 
 $('btnRefreshCatalog').onclick = async () => {
-  showOut('resolveOut', 'Refreshing — this can take a few seconds…', null)
+  showOut('catRefreshOut', 'Refreshing — this can take a few seconds…', null)
   const res = await call('refreshBTSCatalog')
-  showOut('resolveOut', res, res?.success ? 'ok' : 'error')
+  showOut('catRefreshOut', res?.success ? `Refreshed — ${res.songCount} songs in the catalog now.` : res, res?.success ? 'ok' : 'error')
   if (res?.success) await loadCatalog()
 }
 
@@ -503,11 +509,11 @@ $('btnCatSearch').onclick = async () => {
   if (!query) return
   const res = await call('searchBTSTracks', { query })
   const box = $('catSearchResults')
-  if (!res || !res.success) { box.innerHTML = ''; showOut('resolveOut', res, 'error'); return }
+  if (!res || !res.success) { box.innerHTML = ''; $('catSearchStatus').textContent = ''; showOut('catRefreshOut', res, 'error'); return }
   box.innerHTML = (res.results || []).map(t => `
     <div class="cs-search-result"><span>${esc(t.name)}</span><span class="sub">${esc((t.artists || []).join(', '))}</span></div>
   `).join('') || '<div class="cs-search-result"><span>No BTS matches.</span></div>'
-  showOut('resolveOut', `Found ${res.found}, newly added ${res.addedToCatalog}.`, 'ok')
+  $('catSearchStatus').textContent = `Found ${res.found}, newly added ${res.addedToCatalog}.`
   if (res.addedToCatalog > 0) await loadCatalog()
 }
 
@@ -539,7 +545,7 @@ $('btnCatManual').onclick = async () => {
   const trackUrl = $('catManualUrl').value.trim()
   if (!trackUrl) return
   const res = await call('addCatalogSongManual', { trackUrl })
-  showOut('catManualOut', res, res?.success ? 'ok' : 'error')
+  showOut('catManualOut', res?.success ? `${res.added ? 'Added' : 'Already had'} "${res.name}" — ${res.totalVersions} version(s).` : res, res?.success ? 'ok' : 'error')
   if (res?.success) { $('catManualUrl').value = ''; await loadCatalog() }
 }
 
@@ -548,7 +554,7 @@ $('btnCatPlaylist').onclick = async () => {
   if (!playlistUrl) return
   showOut('catPlaylistOut', 'Importing…', null)
   const res = await call('addPlaylistToCatalog', { playlistUrl })
-  showOut('catPlaylistOut', res, res?.success ? 'ok' : 'error')
+  showOut('catPlaylistOut', res?.success ? `Found ${res.found} BTS track(s), ${res.added} new, ${res.skipped} skipped.` : res, res?.success ? 'ok' : 'error')
   if (res?.success) { $('catPlaylistUrl').value = ''; await loadCatalog() }
 }
 
@@ -557,7 +563,7 @@ $('btnCatAlbum').onclick = async () => {
   if (!albumUrl) return
   showOut('catAlbumOut', 'Adding album…', null)
   const res = await call('addAlbumToCatalog', { albumUrl })
-  showOut('catAlbumOut', res, res?.success ? 'ok' : 'error')
+  showOut('catAlbumOut', res?.success ? `Added "${res.name}" — ${res.trackCount} track(s), ${res.addedToCatalog} new.` : res, res?.success ? 'ok' : 'error')
   if (res?.success) { $('catAlbumUrl').value = ''; await loadCatalog() }
 }
 
@@ -567,14 +573,15 @@ $('btnImportFiller').onclick = async () => {
   if (!playlistUrl) return
   showOut('fillerOut', 'Importing…', null)
   const res = await call('importFillerPlaylist', { playlistUrl })
-  showOut('fillerOut', res, res?.success ? 'ok' : 'error')
+  showOut('fillerOut', res?.success ? `Added ${res.added} filler(s), skipped ${res.skippedKpop} K-pop track(s).` : res, res?.success ? 'ok' : 'error')
+  if (res?.success) loadFillers()
 }
 $('btnAddFiller').onclick = async () => {
   const trackUrl = $('fillerTrackUrl').value.trim()
   if (!trackUrl) return
   const res = await call('addFillerManual', { trackUrl })
-  showOut('fillerOut', res, res?.success ? 'ok' : 'error')
-  if (res?.success) $('fillerTrackUrl').value = ''
+  showOut('fillerOut', res?.success ? `Added "${res.name || 'track'}".` : res, res?.success ? 'ok' : 'error')
+  if (res?.success) { $('fillerTrackUrl').value = ''; loadFillers() }
 }
 async function loadFillers() {
   const res = await call('getFillerLibrary')
@@ -607,6 +614,7 @@ function attachAutocomplete(input) {
   const close = () => { list.hidden = true; list.innerHTML = '' }
   const renderMatches = () => {
     delete input.dataset.key
+    input.classList.remove('is-picked')
     const q = input.value.trim().toLowerCase()
     if (!q) { close(); return }
     const matches = playableSongs.filter(s =>
@@ -625,6 +633,7 @@ function attachAutocomplete(input) {
         const s = shown[parseInt(item.dataset.idx)]
         input.value = s.name
         input.dataset.key = s.key || s.isrc
+        input.classList.add('is-picked')
         close()
       }
     })
