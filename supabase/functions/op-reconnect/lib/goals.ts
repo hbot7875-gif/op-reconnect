@@ -1,13 +1,21 @@
-// Admin CRUD for rc_goals — track goals + album goals, each assigned to
-// exactly one district (or none, until an admin assigns it). See migration
-// 036_rc_district_goals.sql — goals used to be one shared global list every
-// district reused; now districts.ts's freezeGoals() only picks up goals
-// whose district_id matches the district being started, so a goal sitting
-// unassigned (or assigned elsewhere) contributes to nothing. Editing a goal
-// here only affects districts activated after the edit; deleting one is
-// safe even for a goal currently "live" since freezeGoals() copies its
-// fields into rc_player_districts.goals at activation time, not a live
-// foreign-key reference back to this table.
+// Admin CRUD for rc_goals — track goals, album goals, and reconnect goals,
+// each assigned to exactly one district (or none, until an admin assigns
+// it). See migration 036_rc_district_goals.sql — goals used to be one
+// shared global list every district reused; now districts.ts's
+// freezeGoals() only picks up goals whose district_id matches the district
+// being started, so a goal sitting unassigned (or assigned elsewhere)
+// contributes to nothing. Editing a goal here only affects districts
+// activated after the edit; deleting one is safe even for a goal currently
+// "live" since freezeGoals() copies its fields into
+// rc_player_districts.goals at activation time, not a live foreign-key
+// reference back to this table.
+//
+// Reconnect goals (see migration 037_rc_reconnect_goal_kind.sql) are the odd
+// one out: a district can carry SEVERAL of them at once (different flavors),
+// and freezeGoals() randomly picks just one per agent per activation — so
+// `target`/`tracks` (track/album-only fields) are meaningless here; instead
+// `variant` + `config` hold the flavor and its settings. See
+// reconnect-goal.ts for what each flavor actually does at runtime.
 //
 // Same admin gate as everything else marked 'admin' in index.ts
 // (SYNC_ADMIN_KEY via isAdminAuthorized), same CRUD shape as broadcasts.ts.
@@ -17,7 +25,7 @@ import { loadContent } from './config.ts'
 
 export interface GoalDbRow {
   id: string
-  kind: 'track' | 'album'
+  kind: 'track' | 'album' | 'reconnect'
   label: string
   artist: string | null
   aliases: string[]
@@ -26,7 +34,27 @@ export interface GoalDbRow {
   active: boolean
   sort_order: number
   district_id: string | null
+  variant: string | null
+  config: Record<string, any>
   updated_at: string
+}
+
+const PUZZLE_VARIANTS = new Set(['sotd', 'cipher', 'memory'])
+const COOP_VARIANTS = new Set(['connect', 'invite'])
+const RECONNECT_VARIANTS = new Set([...PUZZLE_VARIANTS, ...COOP_VARIANTS])
+
+function cleanReconnectConfig(variant: string, raw: any): { config: Record<string, any> } | { error: string } {
+  if (PUZZLE_VARIANTS.has(variant)) {
+    const prompt = String(raw?.prompt || '').trim()
+    const answerLabel = String(raw?.answerLabel || '').trim()
+    if (!prompt) return { error: 'prompt_required' }
+    if (!answerLabel) return { error: 'answer_required' }
+    return { config: { prompt, answerLabel, answerAliases: cleanAliases(raw?.answerAliases) } }
+  }
+  // connect / invite
+  const requiredAgents = parseInt(raw?.requiredAgents)
+  if (!Number.isFinite(requiredAgents) || requiredAgents < 2) return { error: 'required_agents_at_least_2' }
+  return { config: { requiredAgents } }
 }
 
 function shape(r: GoalDbRow) {
@@ -34,7 +62,7 @@ function shape(r: GoalDbRow) {
     id: r.id, kind: r.kind, label: r.label, artist: r.artist,
     aliases: r.aliases || [], tracks: r.tracks || null,
     target: r.target, active: r.active, sortOrder: r.sort_order,
-    districtId: r.district_id,
+    districtId: r.district_id, variant: r.variant || null, config: r.config || {},
   }
 }
 
@@ -74,19 +102,35 @@ export async function adminListGoals(supabase: SupabaseDB) {
 
 /** Admin: add a new goal. target is the base easy-mode number — every other
  *  mode's target is target * that mode's multiplier, computed at freeze
- *  time (districts.ts), not stored here. */
+ *  time (districts.ts), not stored here. Reconnect goals ignore
+ *  target/tracks entirely; their settings live in variant/config instead. */
 export async function adminAddGoal(supabase: SupabaseDB, params: any) {
-  const kind = params.kind === 'album' ? 'album' : 'track'
+  const kind = params.kind === 'album' ? 'album' : params.kind === 'reconnect' ? 'reconnect' : 'track'
   const label = String(params.label || '').trim()
-  const target = parseInt(params.target)
   if (!label) return { success: false, error: 'label_required' }
-  if (!Number.isFinite(target) || target < 1) return { success: false, error: 'target_required' }
 
   const artist = params.artist ? String(params.artist).trim() : null
   const aliases = cleanAliases(params.aliases)
-  const tracks = kind === 'album' ? cleanTracks(params.tracks) : null
-  if (kind === 'album' && !tracks) return { success: false, error: 'tracks_required' }
   const districtId = params.districtId ? String(params.districtId).trim() : null
+
+  let target = 1 // unused for reconnect kind — kept >=1 in case target has a DB check constraint
+  let tracks: { label: string; aliases: string[] }[] | null = null
+  let variant: string | null = null
+  let config: Record<string, any> = {}
+
+  if (kind === 'reconnect') {
+    variant = String(params.variant || '')
+    if (!RECONNECT_VARIANTS.has(variant)) return { success: false, error: 'variant_required' }
+    const cleaned = cleanReconnectConfig(variant, params.config)
+    if ('error' in cleaned) return { success: false, error: cleaned.error }
+    config = cleaned.config
+  } else {
+    const parsedTarget = parseInt(params.target)
+    if (!Number.isFinite(parsedTarget) || parsedTarget < 1) return { success: false, error: 'target_required' }
+    target = parsedTarget
+    tracks = kind === 'album' ? cleanTracks(params.tracks) : null
+    if (kind === 'album' && !tracks) return { success: false, error: 'tracks_required' }
+  }
 
   // ids are stable slugs, not surrogate keys anything references by FK — a
   // collision just gets a short unique suffix, never blocks the insert.
@@ -99,7 +143,7 @@ export async function adminAddGoal(supabase: SupabaseDB, params: any) {
   const sortOrder = Number.isFinite(parseInt(params.sortOrder)) ? parseInt(params.sortOrder) : (last?.sort_order ?? -1) + 1
 
   const { data, error } = await supabase.from('rc_goals')
-    .insert({ id, kind, label, artist, aliases, tracks, target, sort_order: sortOrder, district_id: districtId })
+    .insert({ id, kind, label, artist, aliases, tracks, target, sort_order: sortOrder, district_id: districtId, variant, config })
     .select().single()
   if (error) return { success: false, error: error.message }
   return { success: true, goal: shape(data) }
@@ -129,6 +173,14 @@ export async function adminUpdateGoal(supabase: SupabaseDB, params: any) {
   if (params.active !== undefined) patch.active = !!params.active
   if (params.sortOrder !== undefined) patch.sort_order = parseInt(params.sortOrder) || 0
   if (params.districtId !== undefined) patch.district_id = params.districtId ? String(params.districtId).trim() : null
+  if (params.variant !== undefined || params.config !== undefined) {
+    const variant = String(params.variant || '')
+    if (!RECONNECT_VARIANTS.has(variant)) return { success: false, error: 'variant_required' }
+    const cleaned = cleanReconnectConfig(variant, params.config)
+    if ('error' in cleaned) return { success: false, error: cleaned.error }
+    patch.variant = variant
+    patch.config = cleaned.config
+  }
 
   const { data, error } = await supabase.from('rc_goals').update(patch).eq('id', id).select().maybeSingle()
   if (error) return { success: false, error: error.message }

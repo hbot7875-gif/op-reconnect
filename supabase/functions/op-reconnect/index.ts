@@ -26,9 +26,9 @@ import { adminGetAgent } from './lib/admin-agent.ts'
 import { adminListGoals, adminAddGoal, adminUpdateGoal, adminDeleteGoal } from './lib/goals.ts'
 import {
   getReconnectMission, openReconnectMission, joinReconnectMission,
-  inviteReconnectMission, respondReconnectInvite,
-  adminListReconnectDistricts, adminSetReconnectConfig, adminClearReconnectConfig, adminAutoAssignMissions,
+  inviteReconnectMission, respondReconnectInvite, adminAutoAssignMissions,
 } from './lib/reconnect-missions.ts'
+import { submitReconnectPuzzleAnswer } from './lib/reconnect-puzzle.ts'
 import { getLeaderboard } from './lib/leaderboard.ts'
 import { loadContent } from './lib/config.ts'
 
@@ -82,15 +82,17 @@ const ROUTES: Record<string, Route> = {
   useItem: { auth: 'agent', handler: (sb, p) => useItem(sb, p) },
   getSignalLog: { auth: 'agent', handler: (sb, p) => getSignalLog(sb, p) },
   getLeaderboard: { auth: 'agent', handler: (sb, p) => getLeaderboard(sb, p) },
-  // Reconnect Missions — the cooperative bonus stage a district's own player
-  // unlocks after finishing its solo goals. All agent-scoped since
-  // eligibility is always checked against the caller's own restored
-  // districts (rc_player_districts), never anyone else's.
+  // Reconnect goal (connect/invite co-op variants) — gates restoration now,
+  // not a post-restoration bonus. All agent-scoped since eligibility is
+  // always checked against the caller's own active district+frozen goal
+  // (rc_player_districts), never anyone else's.
   getReconnectMission: { auth: 'agent', handler: async (sb, p) => getReconnectMission(sb, await loadContent(sb), p) },
   openReconnectMission: { auth: 'agent', handler: async (sb, p) => openReconnectMission(sb, await loadContent(sb), p) },
   joinReconnectMission: { auth: 'agent', handler: async (sb, p) => joinReconnectMission(sb, await loadContent(sb), p) },
   inviteReconnectMission: { auth: 'agent', handler: async (sb, p) => inviteReconnectMission(sb, await loadContent(sb), p) },
   respondReconnectInvite: { auth: 'agent', handler: async (sb, p) => respondReconnectInvite(sb, await loadContent(sb), p) },
+  // Reconnect goal (sotd/cipher/memory puzzle variants).
+  submitReconnectPuzzleAnswer: { auth: 'agent', handler: (sb, p) => submitReconnectPuzzleAnswer(sb, null, p) },
   // admin-gated inside the handler via SYNC_ADMIN_KEY
   launchDefuse: { auth: 'public', handler: (sb, p) => adminLaunchDefuse(sb, p) },
 
@@ -136,17 +138,14 @@ const ROUTES: Record<string, Route> = {
   adminDeleteBroadcast: { auth: 'admin', handler: (sb, p) => adminDeleteBroadcast(sb, p) },
   adminGetAgent: { auth: 'admin', handler: (sb, p) => adminGetAgent(sb, p) },
 
-  // ── Admin panel — Reconnect Missions ── configure which districts offer
-  // one and launch a batch-assigned series for a district on demand. Same
-  // SYNC_ADMIN_KEY gate as everything else marked 'admin' above.
-  adminListReconnectDistricts: { auth: 'admin', handler: (sb) => adminListReconnectDistricts(sb) },
-  adminSetReconnectConfig: { auth: 'admin', handler: (sb, p) => adminSetReconnectConfig(sb, p) },
-  adminClearReconnectConfig: { auth: 'admin', handler: (sb, p) => adminClearReconnectConfig(sb, p) },
+  // Batch-assign a series of connect/invite missions for one reconnect goal
+  // at once — the rest of that system's admin config now lives on the goal
+  // itself (adminAddGoal/adminUpdateGoal below), not a separate panel.
   adminAutoAssignMissions: { auth: 'admin', handler: (sb, p) => adminAutoAssignMissions(sb, p) },
 
-  // ── Admin panel (admin.html) — Goals ── rc_goals is one shared, global
-  // list (track goals + a single album goal), not per-district — see
-  // goals.ts's module comment and districts.ts's freezeGoals().
+  // ── Admin panel (admin.html) — Goals ── rc_goals is per-district (track,
+  // album, and reconnect kinds) — see goals.ts's module comment and
+  // districts.ts's freezeGoals().
   adminListGoals: { auth: 'admin', handler: (sb) => adminListGoals(sb) },
   adminAddGoal: { auth: 'admin', handler: (sb, p) => adminAddGoal(sb, p) },
   adminUpdateGoal: { auth: 'admin', handler: (sb, p) => adminUpdateGoal(sb, p) },

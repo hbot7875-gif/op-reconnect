@@ -7,6 +7,7 @@ import { loadContent, rankFor, xpRules, modeMultiplier, restorationDays } from '
 import { ensureDailyRollups, computeStreak, awardStreakBadges, totalXp, countedStreams } from './derive.ts'
 import { evaluateTransmission } from './transmission.ts'
 import { freezeGoals, computeBaseline, districtProgress, districtDeadline, filesRevealedCount } from './districts.ts'
+import { resolveReconnectStatus } from './reconnect-goal.ts'
 import { todayKst, nextKstMidnightUtc, kstDateOf } from './kst.ts'
 import { getBombView, launchDefuse } from './bomb.ts'
 import { levelFor, applyLevelUpIfNeeded, nextLevelRewards } from './leveling.ts'
@@ -91,6 +92,12 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
       .eq('agent_no', player.agent_no).gte('kst_date', activationDate).order('kst_date')
     const progress = districtProgress(activePd.goals, activePd.baseline || {}, windowRollups || [], activePd.activated_at, content)
     const deadline = districtDeadline(activePd.activated_at, restorationDays(content))
+    // districtProgress().complete only covers solo track+album goals — the
+    // reconnect goal (if any was frozen in) needs its own live resolution
+    // (mission/puzzle-attempt rows), so it's layered on here rather than
+    // inside districts.ts's pure, DB-free districtProgress().
+    const reconnect = await resolveReconnectStatus(supabase, content, player.agent_no, activePd.district_id, activePd.goals.reconnect)
+    const districtComplete = progress.complete && (!reconnect || reconnect.done)
 
     // The week ran out before restoration finished — the attempt lapses.
     // Deleting the row (rather than some 'expired' status) is deliberate:
@@ -98,7 +105,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     // district (see the "still in progress" branch below), so there's
     // nothing to unwind — the district just goes back to available and
     // the agent can start it again.
-    if (!progress.complete && deadline.expired) {
+    if (!districtComplete && deadline.expired) {
       await supabase.from('rc_player_districts').delete()
         .eq('agent_no', player.agent_no).eq('district_id', activePd.district_id).eq('status', 'active')
       expiredDistrict = { id: activePd.district_id, name: districtRow?.name || activePd.district_id }
@@ -108,13 +115,13 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
       .eq('district_id', activePd.district_id).order('slot')
     const files = fileRows || []
     const completedGoals = progress.trackGoals.filter((g) => g.done).length
-    const revealed = progress.complete ? files.length
+    const revealed = districtComplete ? files.length
       : filesRevealedCount(completedGoals, progress.trackGoals.length, files.length)
 
     let xpAwarded: number | null = null
     let itemDropped: any = null
 
-    if (progress.complete) {
+    if (districtComplete) {
       await supabase.from('rc_player_districts')
         .update({ status: 'restored', completed_at: new Date().toISOString() })
         .eq('agent_no', player.agent_no).eq('district_id', activePd.district_id).eq('status', 'active')
@@ -181,10 +188,11 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
       itemDropped,
       trackGoals: progress.trackGoals,
       albums: progress.albums,
+      reconnect,
       files: files.map((f: any, i: number) => i < revealed
         ? { slot: f.slot, title: f.title, body: f.body, revealed: true }
         : { slot: f.slot, title: 'ENCRYPTED', revealed: false }),
-      memory: progress.complete ? districtRow?.memory || null : null,
+      memory: districtComplete ? districtRow?.memory || null : null,
     }
     }
   }
@@ -379,7 +387,10 @@ export async function startDistrict(supabase: SupabaseDB, params: any) {
   if (!wardStates(content, restored).has(district.ward_id)) return { success: false, error: 'ward_locked' }
   // Tutorial districts source their checklist from config.tutorial.trackGoalId
   // (see freezeGoals), not district_id assignment — exempt from this check.
-  if (!district.is_tutorial && !content.goals.some((g) => g.district_id === district.id)) {
+  // Requires a TRACK goal specifically, not just any goal: districtProgress's
+  // allTracksDone is only ever true when trackGoals.length > 0, so a district
+  // assigned only album/reconnect goals would otherwise be unwinnable.
+  if (!district.is_tutorial && !content.goals.some((g) => g.kind === 'track' && g.district_id === district.id)) {
     return { success: false, error: 'district_not_configured' }
   }
 

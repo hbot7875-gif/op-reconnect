@@ -7,7 +7,7 @@ export type SupabaseDB = any
 
 export interface GoalRow {
   id: string
-  kind: 'track' | 'album'
+  kind: 'track' | 'album' | 'reconnect'
   label: string
   artist: string | null
   aliases: string[]
@@ -15,6 +15,10 @@ export interface GoalRow {
   target: number
   sort_order: number
   district_id: string | null
+  // Only meaningful for kind:'reconnect' — which of the five flavors this
+  // is, and its flavor-specific settings. See reconnect-goal.ts.
+  variant: 'sotd' | 'cipher' | 'memory' | 'connect' | 'invite' | null
+  config: Record<string, any>
 }
 
 export interface DistrictRow {

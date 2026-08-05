@@ -302,7 +302,6 @@
   <button class="adm-tab is-active" data-tab="redzone" type="button">🛡️ Red Zone</button>
   <button class="adm-tab" data-tab="broadcast" type="button">📡 Broadcasts</button>
   <button class="adm-tab" data-tab="goals" type="button">🎯 Goals</button>
-  <button class="adm-tab" data-tab="reconnect" type="button">🤝 Reconnect</button>
   <button class="adm-tab" data-tab="lookup" type="button">🔎 Agent Lookup</button>
 </div>
 
@@ -408,6 +407,13 @@
         <p class="muted" style="margin-bottom:12px;">One full-album pass counted per target. A district can carry more than one album goal.</p>
         <div id="goalsAlbumList" class="adm-list"><div class="adm-empty">Not loaded yet.</div></div>
       </section>
+
+      <section class="adm-card">
+        <h3 style="margin:0 0 4px;">Reconnect goals <span class="muted" id="goalsReconnectListDistrict" style="font-weight:400;"></span></h3>
+        <p class="muted" style="margin-bottom:12px;">The 3rd restoration goal. A district can carry several flavors at once — each agent who starts it gets ONE picked at random, so two agents restoring the same district can land on different reconnect missions.</p>
+        <p class="adm-callout" id="goalNoTrackWarning" hidden style="border-color:rgba(229,56,79,0.4);">⚠️ This district has no track goal yet — it can't be started until it has at least one.</p>
+        <div id="goalsReconnectList" class="adm-list"><div class="adm-empty">Not loaded yet.</div></div>
+      </section>
     </div>
 
     <div class="adm-goal-form">
@@ -445,52 +451,38 @@
         <button class="btn btn-primary adm-block adm-mutate-btn" id="btnAddAlbumGoal" type="button" style="margin-top:10px;">+ Add album goal</button>
       </section>
 
+      <section class="adm-card">
+        <h3 style="margin:0 0 10px;">Add a reconnect goal</h3>
+        <p class="muted" id="goalReconnectDistrictNote" style="margin-bottom:10px;"></p>
+        <label class="adm-field"><span>Flavor</span>
+          <select id="goalReconnectVariant" class="ob-input">
+            <option value="sotd">🎵 Song of the Day — guess a song from a hint</option>
+            <option value="cipher">🔐 Cipher — guess a song from its initials</option>
+            <option value="memory">📖 Memory Fragment — guess a piece of lore</option>
+            <option value="connect">🤝 Connect — agents pair up, both keep streaming</option>
+            <option value="invite">📡 Invite — invite helpers, no streaming needed from them</option>
+          </select>
+        </label>
+        <div id="goalReconnectPuzzleFields">
+          <label class="adm-field"><span>Prompt shown to the player</span>
+            <input id="goalReconnectPrompt" class="ob-input" type="text" placeholder="e.g. Hint: it's about summer"></label>
+          <div class="adm-goal-form-grid">
+            <label class="adm-field"><span>Correct answer</span>
+              <input id="goalReconnectAnswer" class="ob-input" type="text" placeholder="e.g. Swim"></label>
+            <label class="adm-field"><span>Also accept (optional)</span>
+              <input id="goalReconnectAnswerAliases" class="ob-input" type="text" placeholder="Comma-separated"></label>
+          </div>
+        </div>
+        <div id="goalReconnectCoopFields" hidden>
+          <label class="adm-field"><span>Agents required</span>
+            <input id="goalReconnectRequired" class="ob-input" type="number" min="2" value="2"></label>
+        </div>
+        <button class="btn btn-primary adm-block adm-mutate-btn" id="btnAddReconnectGoal" type="button" style="margin-top:10px;">+ Add reconnect goal</button>
+      </section>
+
       <div id="goalsOut" class="adm-out"></div>
     </div>
   </div>
-</div>
-
-<!-- ── Reconnect Missions ── -->
-<div class="adm-panel" id="panel-reconnect" data-panel="reconnect" hidden>
-  <section class="adm-card">
-    <div class="adm-card-head">
-      <h2>Districts</h2>
-      <button class="btn btn-ghost" id="btnLoadReconnect" type="button">↻ Load</button>
-    </div>
-    <p class="muted">Reconnect Missions are the cooperative bonus stage a district's own player unlocks once
-      they've personally restored it — team up with other agents who've also restored it, everyone streams
-      one shared track, everyone gets a bonus. Pick a district below to configure it or launch a batch.</p>
-    <div id="reconnectDistrictList" class="adm-list"><div class="adm-empty">Not loaded yet — tap Load.</div></div>
-  </section>
-
-  <section class="adm-card" id="reconnectEditorCard" hidden>
-    <div class="adm-card-head">
-      <h2 id="reconnectDistrictName">—</h2>
-    </div>
-
-    <div class="adm-goal-input-row">
-      <input id="reconnectRequired" class="ob-input adm-target-input" type="number" min="2" value="4" title="Agents required">
-      <input id="reconnectTrackLabel" class="ob-input" type="text" placeholder="Target track (e.g. Swim)">
-      <input id="reconnectTrackArtist" class="ob-input" type="text" placeholder="Artist" style="max-width:120px;">
-    </div>
-    <input id="reconnectTrackAliases" class="ob-input adm-block" style="margin-top:6px;" type="text" placeholder="Alternate titles, comma-separated (optional)">
-    <div class="adm-row" style="margin-top:10px;">
-      <button class="btn btn-primary adm-mutate-btn" id="btnSaveReconnectConfig" type="button">Save</button>
-      <button class="btn btn-ghost adm-mutate-btn" id="btnClearReconnectConfig" type="button">Disable for this district</button>
-    </div>
-
-    <div class="adm-agent-section">
-      <h3>Launch a series</h3>
-      <p class="muted" style="margin-bottom:10px;">Every agent who's personally restored this district and
-        isn't already in a live mission here gets shuffled and split into full groups of the required size.
-        Each group becomes its own mission, already fully staffed — no matchmaking needed. Leftover agents
-        who don't make a full group sit out this round.</p>
-      <button class="btn btn-alert adm-block adm-mutate-btn" id="btnAutoAssign" type="button">🎲 Randomly assign missions</button>
-      <div id="reconnectAssignOut" class="adm-out"></div>
-    </div>
-
-    <div id="reconnectOut" class="adm-out"></div>
-  </section>
 </div>
 
 <!-- ── Agent Lookup ── -->
@@ -888,15 +880,27 @@ $('goalDistrictFilter').addEventListener('change', () => {
  *  the add-form's live preview (one place, not repeated under every row)
  *  and as a hover title on the badge for anyone who wants it without
  *  clicking anything. */
+const RECONNECT_VARIANT_LABELS = {
+  sotd: '🎵 Song of the Day', cipher: '🔐 Cipher', memory: '📖 Memory Fragment',
+  connect: '🤝 Connect', invite: '📡 Invite',
+}
+const RECONNECT_COOP_VARIANTS = new Set(['connect', 'invite'])
+
 function goalRowHtml(g) {
-  const sub = g.kind === 'album'
-    ? `${(g.tracks || []).length} track${(g.tracks || []).length === 1 ? '' : 's'}`
-    : (g.artist || '')
+  let sub
+  if (g.kind === 'album') sub = `${(g.tracks || []).length} track${(g.tracks || []).length === 1 ? '' : 's'}`
+  else if (g.kind === 'reconnect') {
+    sub = RECONNECT_COOP_VARIANTS.has(g.variant)
+      ? `${RECONNECT_VARIANT_LABELS[g.variant] || g.variant} — ${g.config?.requiredAgents || '?'} agents`
+      : `${RECONNECT_VARIANT_LABELS[g.variant] || g.variant} — answer: ${g.config?.answerLabel || '?'}`
+  } else sub = g.artist || ''
   const modesTitle = modeTargets(g.target).map((m) => `${m.label || m.key} ${m.value}`).join(' · ')
+  const assignAction = g.kind === 'reconnect' && RECONNECT_COOP_VARIANTS.has(g.variant)
+    ? `<button data-act="assign">🎲 Randomly assign missions…</button>` : ''
   return `
     <div class="adm-goal-row${g.active ? '' : ' is-inactive'}" data-id="${esc(g.id)}">
       <span class="adm-goal-name">${esc(g.label)}${sub ? ` <span class="muted" style="font-weight:400;">— ${esc(sub)}</span>` : ''}${g.active ? '' : ' <span class="adm-goal-inactive-badge">INACTIVE</span>'}</span>
-      <span class="adm-goal-target" title="${esc(modesTitle)}">${g.target} base</span>
+      <span class="adm-goal-target" title="${esc(modesTitle)}">${g.kind === 'reconnect' ? '' : `${g.target} base`}</span>
       <button class="btn btn-ghost adm-mutate-btn" data-act="toggle" type="button">${g.active ? 'Deactivate' : 'Activate'}</button>
       <div class="adm-goal-menu">
         <button class="adm-goal-menu-btn adm-mutate-btn" data-act="menu" type="button" title="More">•••</button>
@@ -905,6 +909,7 @@ function goalRowHtml(g) {
             <option value=""${g.districtId ? '' : ' selected'}>— Unassigned —</option>
             ${allDistricts.map((d) => `<option value="${esc(d.id)}"${d.id === g.districtId ? ' selected' : ''}>Move to: ${esc(d.name)}</option>`).join('')}
           </select>
+          ${assignAction}
           <button data-act="delete" type="button">Delete…</button>
         </div>
       </div>
@@ -931,28 +936,41 @@ function goalSectionHtml(items, kind, inactiveOpen, emptyLabel) {
   return html
 }
 
+let reconnectInactiveOpen = false
 function renderGoalLists() {
   const filterId = goalDistrictFilter || null
   const scoped = allGoals.filter((g) => g.districtId === filterId)
   const tracks = scoped.filter((g) => g.kind === 'track')
   const albums = scoped.filter((g) => g.kind === 'album')
+  const reconnects = scoped.filter((g) => g.kind === 'reconnect')
   const label = `— ${esc(districtName(filterId))}`
   $('goalsTrackListDistrict').textContent = label
   $('goalsAlbumListDistrict').textContent = label
+  $('goalsReconnectListDistrict').textContent = label
   $('goalTrackDistrictNote').textContent = `Adding to: ${districtName(filterId)}. Change the district above first if that's wrong.`
   $('goalAlbumDistrictNote').textContent = `Adding to: ${districtName(filterId)}. Change the district above first if that's wrong.`
+  $('goalReconnectDistrictNote').textContent = `Adding to: ${districtName(filterId)}. Change the district above first if that's wrong.`
   $('goalsTrackList').innerHTML = tracks.length
     ? goalSectionHtml(tracks, 'track', trackInactiveOpen, 'No active track goals for this district.')
     : `<div class="adm-empty">No track goals assigned to this district yet.</div>`
   $('goalsAlbumList').innerHTML = albums.length
     ? goalSectionHtml(albums, 'album', albumInactiveOpen, 'No active album goals for this district.')
     : `<div class="adm-empty">No album goals assigned to this district yet.</div>`
+  $('goalsReconnectList').innerHTML = reconnects.length
+    ? goalSectionHtml(reconnects, 'reconnect', reconnectInactiveOpen, 'No active reconnect goals for this district.')
+    : `<div class="adm-empty">No reconnect goals assigned to this district yet.</div>`
+  // A district with reconnect/album goals but no track goal can never be
+  // started (startDistrict requires at least one track goal) — surface
+  // that before it's a live surprise, matching handlers.ts's own check.
+  $('goalNoTrackWarning').hidden = !filterId || tracks.length > 0 || (albums.length === 0 && reconnects.length === 0)
   wireGoalRowButtons($('goalsTrackList'))
   wireGoalRowButtons($('goalsAlbumList'))
+  wireGoalRowButtons($('goalsReconnectList'))
   document.querySelectorAll('.adm-goal-collapse').forEach((btn) => {
     btn.onclick = () => {
       if (btn.dataset.kind === 'track') trackInactiveOpen = !trackInactiveOpen
-      else albumInactiveOpen = !albumInactiveOpen
+      else if (btn.dataset.kind === 'album') albumInactiveOpen = !albumInactiveOpen
+      else reconnectInactiveOpen = !reconnectInactiveOpen
       renderGoalLists()
     }
   })
@@ -978,6 +996,22 @@ function wireGoalRowButtons(container) {
     const menuPop = row.querySelector('.adm-goal-menu-pop')
     const delBtn = row.querySelector('[data-act="delete"]')
     const moveSel = row.querySelector('[data-act="move"]')
+    const assignBtn = row.querySelector('[data-act="assign"]')
+    if (assignBtn) {
+      assignBtn.onclick = async () => {
+        closeAllGoalMenus()
+        if (!confirm(`Randomly assign missions for "${goal.label}"? This shuffles every eligible agent not already in a live mission for this goal and creates a new, already-staffed mission per full group of ${goal.config?.requiredAgents || '?'}.`)) return
+        assignBtn.disabled = true
+        const res = await call('adminAutoAssignMissions', { goalId: id })
+        assignBtn.disabled = sessionUnauthorized
+        if (res?.success) {
+          showOut('goalsOut',
+            `${res.missionsCreated} mission${res.missionsCreated === 1 ? '' : 's'} created · ${res.agentsAssigned} agent${res.agentsAssigned === 1 ? '' : 's'} assigned` +
+            (res.agentsLeftOver ? ` · ${res.agentsLeftOver} left over (not enough for a full group)` : ''),
+            'ok')
+        } else { showOut('goalsOut', res, 'error') }
+      }
+    }
     moveSel.onclick = (e) => e.stopPropagation()
     moveSel.onchange = async () => {
       const districtId = moveSel.value || null
@@ -1078,128 +1112,53 @@ $('btnAddAlbumGoal').onclick = async () => {
   }
 }
 
-/* ── Reconnect Missions ──
-   Per-district config (required agent count + target track) lives on
-   rc_districts directly — adminListReconnectDistricts returns every active
-   district with its config (null if not enabled). adminAutoAssignMissions
-   is the "launch a series, randomly assigned" action: shuffles every agent
-   who's personally restored the district and isn't already in a live
-   mission there, splits them into full groups of the required size, and
-   creates one already-fully-staffed mission per group — no matchmaking
-   needed for those. */
-let reconnectDistricts = []
-let reconnectSelectedId = null
+/* ── Reconnect goal form ──
+   Puzzle variants (sotd/cipher/memory) share one field set (prompt +
+   answer); connect/invite share another (just an agent count). Toggle
+   which shows based on the variant picked, same in-place pattern as
+   goalReconnectVariant's <select>. "Randomly assign missions" for
+   connect/invite goals lives on the goal row itself now (see
+   wireGoalRowButtons' assignBtn), not a separate panel. */
+const RECONNECT_PUZZLE_VARIANTS = new Set(['sotd', 'cipher', 'memory'])
 
-async function loadReconnectDistricts() {
-  const list = $('reconnectDistrictList')
-  list.innerHTML = `<div class="adm-empty"><span class="adm-spin"></span> Loading…</div>`
-  const res = await call('adminListReconnectDistricts')
-  if (!res || !res.success) { list.innerHTML = `<div class="adm-empty">${esc(res?.error || "Couldn't load districts")}</div>`; return }
-  reconnectDistricts = res.districts || []
-  if (!reconnectDistricts.length) { list.innerHTML = `<div class="adm-empty">No districts found.</div>`; return }
-  list.innerHTML = reconnectDistricts.map((d) => `
-    <div class="adm-list-row is-pick${d.id === reconnectSelectedId ? ' is-selected' : ''}" data-id="${esc(d.id)}">
-      <div class="adm-list-body">
-        <div class="adm-list-title">${esc(d.name)}</div>
-        <div class="adm-list-meta">${d.reconnect
-          ? `${d.reconnect.required} agents · "${esc(d.reconnect.trackLabel)}"`
-          : 'not enabled'}</div>
-      </div>
-    </div>
-  `).join('')
-  list.querySelectorAll('.adm-list-row').forEach((row) => {
-    row.onclick = () => selectReconnectDistrict(row.dataset.id)
-  })
-  if (reconnectSelectedId) renderReconnectEditor()
+function toggleReconnectFields() {
+  const isPuzzle = RECONNECT_PUZZLE_VARIANTS.has($('goalReconnectVariant').value)
+  $('goalReconnectPuzzleFields').hidden = !isPuzzle
+  $('goalReconnectCoopFields').hidden = isPuzzle
 }
+$('goalReconnectVariant').addEventListener('change', toggleReconnectFields)
+toggleReconnectFields()
 
-function selectReconnectDistrict(id) {
-  reconnectSelectedId = id
-  $('reconnectDistrictList').querySelectorAll('.adm-list-row').forEach((row) => {
-    row.classList.toggle('is-selected', row.dataset.id === id)
-  })
-  renderReconnectEditor()
-}
-
-function renderReconnectEditor() {
-  const d = reconnectDistricts.find((x) => x.id === reconnectSelectedId)
-  $('reconnectOut').className = 'adm-out'
-  $('reconnectAssignOut').className = 'adm-out'
-  if (!d) { $('reconnectEditorCard').hidden = true; return }
-  $('reconnectEditorCard').hidden = false
-  $('reconnectDistrictName').textContent = d.name
-
-  $('reconnectRequired').value = d.reconnect?.required || 4
-  $('reconnectTrackLabel').value = d.reconnect?.trackLabel || ''
-  $('reconnectTrackArtist').value = d.reconnect?.trackArtist || ''
-  $('reconnectTrackAliases').value = (d.reconnect?.trackAliases || []).join(', ')
-  $('btnClearReconnectConfig').hidden = !d.reconnect
-  $('btnAutoAssign').disabled = !d.reconnect || sessionUnauthorized
-  if (sessionUnauthorized) setMutationButtonsDisabled(true)
-}
-
-$('btnLoadReconnect').onclick = loadReconnectDistricts
-
-$('btnSaveReconnectConfig').onclick = async () => {
-  const d = reconnectDistricts.find((x) => x.id === reconnectSelectedId)
-  if (!d) return
-  const required = parseInt($('reconnectRequired').value) || 0
-  const trackLabel = $('reconnectTrackLabel').value.trim()
-  const trackArtist = $('reconnectTrackArtist').value.trim()
-  const trackAliases = parseAliases($('reconnectTrackAliases').value)
-  if (required < 2) { showOut('reconnectOut', 'Needs at least 2 agents.', 'error'); return }
-  if (!trackLabel) { showOut('reconnectOut', 'Enter a target track.', 'error'); return }
-  const btn = $('btnSaveReconnectConfig')
-  btn.disabled = true
-  const res = await call('adminSetReconnectConfig', {
-    districtId: d.id, required, trackLabel, trackArtist: trackArtist || undefined, trackAliases,
-  })
-  btn.disabled = sessionUnauthorized
-  if (res?.success) {
-    d.reconnect = { required, trackLabel, trackArtist: trackArtist || null, trackAliases }
-    showOut('reconnectOut', 'Saved.', 'ok')
-    renderReconnectEditor()
-    loadReconnectDistricts()
+$('btnAddReconnectGoal').onclick = async () => {
+  const variant = $('goalReconnectVariant').value
+  const isPuzzle = RECONNECT_PUZZLE_VARIANTS.has(variant)
+  let label, config
+  if (isPuzzle) {
+    const prompt = $('goalReconnectPrompt').value.trim()
+    const answerLabel = $('goalReconnectAnswer').value.trim()
+    const answerAliases = parseAliases($('goalReconnectAnswerAliases').value)
+    if (!prompt) { showOut('goalsOut', 'Enter the prompt shown to the player.', 'error'); return }
+    if (!answerLabel) { showOut('goalsOut', 'Enter the correct answer.', 'error'); return }
+    label = `${RECONNECT_VARIANT_LABELS[variant]}: ${prompt}`
+    config = { prompt, answerLabel, answerAliases }
   } else {
-    showOut('reconnectOut', res, 'error')
+    const requiredAgents = parseInt($('goalReconnectRequired').value) || 0
+    if (requiredAgents < 2) { showOut('goalsOut', 'Needs at least 2 agents.', 'error'); return }
+    label = `${RECONNECT_VARIANT_LABELS[variant]} (${requiredAgents} agents)`
+    config = { requiredAgents }
   }
-}
-
-$('btnClearReconnectConfig').onclick = async () => {
-  const d = reconnectDistricts.find((x) => x.id === reconnectSelectedId)
-  if (!d) return
-  if (!confirm(`Disable Reconnect Missions for ${d.name}? Any mission already in flight keeps running to its own resolution — this only stops new ones.`)) return
-  const btn = $('btnClearReconnectConfig')
+  const btn = $('btnAddReconnectGoal')
   btn.disabled = true
-  const res = await call('adminClearReconnectConfig', { districtId: d.id })
+  const res = await call('adminAddGoal', { kind: 'reconnect', label, variant, config, districtId: goalDistrictFilter || null })
   btn.disabled = sessionUnauthorized
   if (res?.success) {
-    d.reconnect = null
-    showOut('reconnectOut', 'Disabled.', 'ok')
-    renderReconnectEditor()
-    loadReconnectDistricts()
+    allGoals.push(res.goal)
+    $('goalReconnectPrompt').value = ''
+    $('goalReconnectAnswer').value = ''
+    $('goalReconnectAnswerAliases').value = ''
+    renderGoalLists()
   } else {
-    showOut('reconnectOut', res, 'error')
-  }
-}
-
-$('btnAutoAssign').onclick = async () => {
-  const d = reconnectDistricts.find((x) => x.id === reconnectSelectedId)
-  if (!d || !d.reconnect) return
-  if (!confirm(`Randomly assign missions for ${d.name}? This shuffles every eligible agent not already in a live mission here and creates a new, already-staffed mission per full group of ${d.reconnect.required}.`)) return
-  const btn = $('btnAutoAssign')
-  btn.disabled = true
-  btn.textContent = 'ASSIGNING…'
-  const res = await call('adminAutoAssignMissions', { districtId: d.id })
-  btn.disabled = sessionUnauthorized
-  btn.textContent = '🎲 Randomly assign missions'
-  if (res?.success) {
-    showOut('reconnectAssignOut',
-      `${res.missionsCreated} mission${res.missionsCreated === 1 ? '' : 's'} created · ${res.agentsAssigned} agent${res.agentsAssigned === 1 ? '' : 's'} assigned` +
-      (res.agentsLeftOver ? ` · ${res.agentsLeftOver} left over (not enough for a full group)` : ''),
-      'ok')
-  } else {
-    showOut('reconnectAssignOut', res, 'error')
+    showOut('goalsOut', res, 'error')
   }
 }
 

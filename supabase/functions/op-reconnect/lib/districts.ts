@@ -9,9 +9,20 @@ import type { GameContent, DistrictRow } from './config.ts'
 import { modeMultiplier, xpRules } from './config.ts'
 import { kstDateOf } from './kst.ts'
 
+export interface FrozenReconnectGoal {
+  id: string
+  variant: 'sotd' | 'cipher' | 'memory' | 'connect' | 'invite'
+  // Puzzle variants (sotd/cipher/memory) carry prompt+answerKeys; connect/
+  // invite carry requiredAgents. Frozen verbatim at activation time, same
+  // "later edits don't retroactively change an in-flight district"
+  // invariant as trackGoals/albumGoals.
+  config: Record<string, any>
+}
+
 export interface FrozenGoals {
   trackGoals: { id: string; label: string; artist: string | null; target: number; keys: string[] }[]
   albumGoals: { id: string; label: string; target: number; tracks: { label: string; keys: string[] }[] }[]
+  reconnect: FrozenReconnectGoal | null
   meta: { mode: string; multiplier: number; tutorial?: boolean }
 }
 
@@ -33,6 +44,7 @@ export function freezeGoals(content: GameContent, mode: string, district: Distri
         ? [{ id: goal.id, label: goal.label, artist: goal.artist, target: tut.plays || 3, keys: goalKeys(goal) }]
         : [],
       albumGoals: [],
+      reconnect: null,
       meta: { mode, multiplier: 1, tutorial: true },
     }
   }
@@ -56,7 +68,29 @@ export function freezeGoals(content: GameContent, mode: string, district: Distri
       tracks: (g.tracks || []).map((t) => ({ label: t.label, keys: goalKeys({ label: t.label, aliases: t.aliases || [] }) })),
     }))
 
-  return { trackGoals, albumGoals, meta: { mode, multiplier } }
+  // A district can carry SEVERAL reconnect goals (different flavors) —
+  // freezeGoals() rolls the dice once per agent per activation, so two
+  // agents restoring the same district can land on genuinely different
+  // reconnect missions. Puzzle variants (sotd/cipher/memory) get their
+  // answer precomputed into keys here, same reasoning as track/album goals:
+  // an admin editing the answer later must never retroactively change what
+  // an already-active agent is being asked to guess.
+  const reconnectCandidates = content.goals.filter((g) => g.kind === 'reconnect' && g.district_id === district.id)
+  let reconnect: FrozenReconnectGoal | null = null
+  if (reconnectCandidates.length > 0) {
+    const picked = reconnectCandidates[Math.floor(Math.random() * reconnectCandidates.length)]
+    const variant = picked.variant as FrozenReconnectGoal['variant']
+    const cfg = picked.config || {}
+    const config = variant === 'connect' || variant === 'invite'
+      ? { requiredAgents: cfg.requiredAgents }
+      : {
+          prompt: cfg.prompt,
+          answerKeys: goalKeys({ label: cfg.answerLabel || '', aliases: cfg.answerAliases || [] }),
+        }
+    reconnect = { id: picked.id, variant, config }
+  }
+
+  return { trackGoals, albumGoals, reconnect, meta: { mode, multiplier } }
 }
 
 /** Capped plays already accrued today — so activation-day streams from before

@@ -15,6 +15,31 @@ export function districtFraction(d) {
   return need === 0 ? 0 : Math.max(0, Math.min(1, got / need))
 }
 
+const RECONNECT_LABELS = {
+  sotd: '🎵 Song of the Day', cipher: '🔐 Cipher', memory: '📖 Memory Fragment',
+  connect: '🤝 Connect', invite: '📡 Invite Backup',
+}
+
+/** Compact status tile for the district's reconnect goal, if it has one —
+ *  display only. The interactive part (submitting a guess, opening/joining
+ *  a mission, inviting someone) lives in screen-district.js's active-board
+ *  panel; this is just "where do things stand" for the checklist glance. */
+function reconnectRow(r) {
+  const label = RECONNECT_LABELS[r.variant] || 'Reconnect'
+  const row = el('div', 'goal-row reconnect-row' + (r.done ? ' done' : ''))
+  const status = r.done ? '✓ done'
+    : r.mission ? `${r.mission.participants.filter((p) => p.status === 'joined').length}<i>/${r.mission.requiredAgents}</i>`
+    : typeof r.attemptsLeft === 'number' ? `${r.attemptsLeft} <i>${r.attemptsLeft === 1 ? 'try' : 'tries'} left</i>`
+    : ''
+  row.innerHTML = `
+    <div class="gr-top">
+      <span class="gr-name">${esc(label)}</span>
+      <span class="gr-count">${status}</span>
+    </div>
+  `
+  return row
+}
+
 /** One "stream this, n of m times" row — the whole game's core loop in a
  *  single component. Flat and identical for tracks and album passes, because
  *  that's the one thing a player checks every day and it should never take
@@ -39,8 +64,9 @@ export function renderBoard(board, d) {
 
   const goals = [...(d.trackGoals || [])]
   const albums = d.albums || []
-  const doneCount = goals.filter((g) => g.done).length + albums.filter((a) => a.done).length
-  const totalCount = goals.length + albums.length
+  const reconnect = d.reconnect || null
+  const doneCount = goals.filter((g) => g.done).length + albums.filter((a) => a.done).length + (reconnect?.done ? 1 : 0)
+  const totalCount = goals.length + albums.length + (reconnect ? 1 : 0)
 
   const head = el('div', 'board-head')
   head.innerHTML = `
@@ -77,6 +103,7 @@ export function renderBoard(board, d) {
       : `Still need ${a.nextPassTracks.slice(0, 3).map((t) => `${esc(t.label)} ×${t.need}`).join(' · ')}`
     card.appendChild(goalRow(`💿 ${a.label}`, sub, a.passesDone, a.target, a.done, 'passes'))
   }
+  if (reconnect) card.appendChild(reconnectRow(reconnect))
   board.appendChild(card)
 
   if (d.files?.length) {
