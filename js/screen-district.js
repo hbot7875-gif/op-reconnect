@@ -371,5 +371,6 @@ function friendly(err) {
     ward_locked: 'This ward\'s still sealed — finish the one before it.',
     district_unavailable: 'You can\'t start this one directly.',
     district_already_started: 'Already started — refreshing…',
+    district_not_configured: 'This district has no goals assigned yet — check back soon.',
   }[err] || err || 'Something went wrong'
 }

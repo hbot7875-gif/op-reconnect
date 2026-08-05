@@ -48,6 +48,16 @@ export function renderBoard(board, d) {
   `
   board.appendChild(head)
 
+  // One week from activation, per district — see districtDeadline in
+  // districts.ts. daysLeft is already ceil'd server-side.
+  if (typeof d.daysLeft === 'number') {
+    const urgent = d.daysLeft <= 2
+    const text = d.daysLeft <= 0 ? 'Last day to restore this district'
+      : d.daysLeft === 1 ? '<b>1 day</b> left to restore this district'
+      : `<b>${d.daysLeft} days</b> left to restore this district`
+    board.appendChild(el('div', 'board-deadline' + (urgent ? ' is-urgent' : ''), `⏳ ${text}`))
+  }
+
   // The queue belongs here too — this is the screen you're on when you're
   // about to go stream.
   const left = remaining({ activeDistrict: d })
@@ -68,21 +78,6 @@ export function renderBoard(board, d) {
     card.appendChild(goalRow(`💿 ${a.label}`, sub, a.passesDone, a.target, a.done, 'passes'))
   }
   board.appendChild(card)
-
-  // Secondary missions — real, but not what the player came here to read.
-  const extras = (d.missions || []).filter((m) => m.id === 'signal' || m.id === 'intel')
-  if (extras.length) {
-    const row = el('div', 'sub-missions')
-    for (const m of extras) {
-      const locked = m.status === 'locked'
-      const val = m.id === 'signal' ? `${Math.min(100, m.progress)}%` : `${m.progress}/${m.required}`
-      row.appendChild(el('div', 'sub-mission' + (locked ? ' locked' : '') + (m.status === 'done' ? ' done' : ''), `
-        <span class="sm-icon">${locked ? '🔒' : m.icon}</span>
-        <span class="sm-label">${esc(m.label)}</span>
-        <span class="sm-val">${val}</span>`))
-    }
-    board.appendChild(row)
-  }
 
   if (d.files?.length) {
     const filesRow = el('div', 'files-row')

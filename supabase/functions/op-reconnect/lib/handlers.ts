@@ -3,10 +3,10 @@
 // numbers never appear in responses beyond echoing the caller's own request.
 
 import type { GameContent, SupabaseDB, DistrictRow } from './config.ts'
-import { loadContent, rankFor, xpRules, modeMultiplier } from './config.ts'
+import { loadContent, rankFor, xpRules, modeMultiplier, restorationDays } from './config.ts'
 import { ensureDailyRollups, computeStreak, awardStreakBadges, totalXp, countedStreams } from './derive.ts'
 import { evaluateTransmission } from './transmission.ts'
-import { freezeGoals, computeBaseline, districtProgress, missionBoard, filesRevealedCount } from './districts.ts'
+import { freezeGoals, computeBaseline, districtProgress, districtDeadline, filesRevealedCount } from './districts.ts'
 import { todayKst, nextKstMidnightUtc, kstDateOf } from './kst.ts'
 import { getBombView, launchDefuse } from './bomb.ts'
 import { levelFor, applyLevelUpIfNeeded, nextLevelRewards } from './leveling.ts'
@@ -77,6 +77,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
   // ── Active district progress (+ completion latch) ──────────
   let activeDistrict: any = null
   let restoredNow = false
+  let expiredDistrict: { id: string; name: string } | null = null
   // "Only ever go up" (resources.js) — start from the baked-in lifetime
   // total, add whatever's live below. A just-completed district's
   // contribution gets baked in this same pass, so it's added once, not
@@ -89,6 +90,19 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
       .select('kst_date, track_counts, transmission')
       .eq('agent_no', player.agent_no).gte('kst_date', activationDate).order('kst_date')
     const progress = districtProgress(activePd.goals, activePd.baseline || {}, windowRollups || [], activePd.activated_at, content)
+    const deadline = districtDeadline(activePd.activated_at, restorationDays(content))
+
+    // The week ran out before restoration finished — the attempt lapses.
+    // Deleting the row (rather than some 'expired' status) is deliberate:
+    // nothing was ever baked into lifetime resources for an in-progress
+    // district (see the "still in progress" branch below), so there's
+    // nothing to unwind — the district just goes back to available and
+    // the agent can start it again.
+    if (!progress.complete && deadline.expired) {
+      await supabase.from('rc_player_districts').delete()
+        .eq('agent_no', player.agent_no).eq('district_id', activePd.district_id).eq('status', 'active')
+      expiredDistrict = { id: activePd.district_id, name: districtRow?.name || activePd.district_id }
+    } else {
 
     const { data: fileRows } = await supabase.from('rc_files').select('slot, title, body')
       .eq('district_id', activePd.district_id).order('slot')
@@ -160,16 +174,18 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
       name: districtRow?.name || activePd.district_id,
       echoOf: districtRow?.echo_of || null,
       activatedAt: activePd.activated_at,
+      expiresAt: deadline.expiresAt,
+      daysLeft: Math.ceil(deadline.msLeft / 86400000),
       restoredNow,
       xpAwarded,
       itemDropped,
-      missions: missionBoard(progress, revealed, files.length),
       trackGoals: progress.trackGoals,
       album: progress.album,
       files: files.map((f: any, i: number) => i < revealed
         ? { slot: f.slot, title: f.title, body: f.body, revealed: true }
         : { slot: f.slot, title: 'ENCRYPTED', revealed: false }),
       memory: progress.complete ? districtRow?.memory || null : null,
+    }
     }
   }
 
@@ -278,6 +294,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     levelUp,
     map: { wards, districts },
     activeDistrict,
+    expiredDistrict,
     resources,
     items,
     bomb,
@@ -360,6 +377,11 @@ export async function startDistrict(supabase: SupabaseDB, params: any) {
   if ((pdRows || []).some((r: any) => r.status === 'active')) return { success: false, error: 'district_already_active' }
   if (restored.has(district.id)) return { success: false, error: 'district_already_restored' }
   if (!wardStates(content, restored).has(district.ward_id)) return { success: false, error: 'ward_locked' }
+  // Tutorial districts source their checklist from config.tutorial.trackGoalId
+  // (see freezeGoals), not district_id assignment — exempt from this check.
+  if (!district.is_tutorial && !content.goals.some((g) => g.district_id === district.id)) {
+    return { success: false, error: 'district_not_configured' }
+  }
 
   const rollups = await ensureDailyRollups(supabase, agent, player, content)
   const todayRow = rollups.find((r) => String(r.kst_date) === todayKst())

@@ -1,7 +1,7 @@
 // District mechanics: freezing goal snapshots at activation, computing
-// progress from daily activity rollups, and the 7-mission board shape.
-// A district's checklist is FROZEN when the player starts it — era goal
-// edits never change an in-flight district.
+// progress from daily activity rollups, and the one-week restoration
+// deadline. A district's checklist is FROZEN when the player starts it —
+// later goal edits never change an in-flight district.
 
 import { goalKeys } from './transmission.ts'
 import type { DayBucket } from './transmission.ts'
@@ -37,11 +37,15 @@ export function freezeGoals(content: GameContent, mode: string, district: Distri
     }
   }
 
+  // Only goals explicitly assigned to THIS district — see migration
+  // 036_rc_district_goals.sql. A goal with no district_id (or assigned
+  // elsewhere) contributes nothing here; nothing is live anywhere until
+  // the admin assigns it in the Goals tab.
   const trackGoals = content.goals
-    .filter((g) => g.kind === 'track')
+    .filter((g) => g.kind === 'track' && g.district_id === district.id)
     .map((g) => ({ id: g.id, label: g.label, artist: g.artist, target: g.target * multiplier, keys: goalKeys(g) }))
 
-  const albumRow = content.goals.find((g) => g.kind === 'album') || null
+  const albumRow = content.goals.find((g) => g.kind === 'album' && g.district_id === district.id) || null
   const albumGoal = albumRow && albumRow.tracks
     ? {
         label: albumRow.label,
@@ -135,22 +139,15 @@ export function districtProgress(
   return { trackGoals, album, allTracksDone, complete }
 }
 
-/** The player-facing 7-mission board. */
-export function missionBoard(p: DistrictProgress, filesRevealed: number, filesTotal: number): any[] {
-  const trackDone = p.allTracksDone
-  const albumDone = !p.album || p.album.done
-  const trackProg = p.trackGoals.reduce((s, g) => s + g.progress, 0)
-  const trackReq = p.trackGoals.reduce((s, g) => s + g.target, 0)
-  const restored = p.complete
-  return [
-    { id: 'tracks', icon: '🎵', label: 'Track Goals', status: trackDone ? 'done' : 'active', progress: trackProg, required: trackReq },
-    { id: 'albums', icon: '💿', label: 'Album Goals', status: albumDone ? 'done' : 'active', progress: p.album?.passesDone || 0, required: p.album?.target || 0 },
-    { id: 'intel', icon: '📂', label: 'Intel Recovery', status: trackDone ? 'done' : 'active', progress: filesRevealed, required: filesTotal },
-    { id: 'signal', icon: '📡', label: 'Signal Scan', status: albumDone ? 'done' : 'active', progress: p.album ? p.album.signalPct : 100, required: 100 },
-    { id: 'security', icon: '🔐', label: 'Security Check', status: trackDone && albumDone ? 'done' : 'locked', progress: trackDone && albumDone ? 1 : 0, required: 1 },
-    { id: 'network', icon: '🛰️', label: 'Network Restore', status: restored ? 'done' : 'locked', progress: restored ? 1 : 0, required: 1 },
-    { id: 'restored', icon: '🏛️', label: 'District Restored', status: restored ? 'done' : 'locked', progress: restored ? 1 : 0, required: 1 },
-  ]
+export interface DistrictDeadline { expiresAt: string; msLeft: number; expired: boolean }
+
+/** A district's restoration window — exactly `days` from activation. Checked
+ *  against `!progress.complete` by the caller: a completion that lands on
+ *  the buzzer still counts, since completion is evaluated before expiry. */
+export function districtDeadline(activatedAt: string, days: number): DistrictDeadline {
+  const deadlineMs = new Date(activatedAt).getTime() + days * 86400000
+  const msLeft = deadlineMs - Date.now()
+  return { expiresAt: new Date(deadlineMs).toISOString(), msLeft: Math.max(0, msLeft), expired: msLeft <= 0 }
 }
 
 export function filesRevealedCount(completedTrackGoals: number, totalTrackGoals: number, seededFiles: number): number {

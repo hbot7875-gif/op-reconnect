@@ -5,7 +5,7 @@
 import { call } from './api.js'
 import { getAgentNo, clearSession } from './session.js'
 import { renderAuth } from './ui-auth.js'
-import { setState, getState, subscribe } from './state.js'
+import { setState, getState, subscribe, toast } from './state.js'
 import { getScreen, onScreenChange } from './router.js'
 import { renderOnboarding } from './ui-onboarding.js'
 import { renderHud, renderTabbar } from './ui-hud.js'
@@ -98,6 +98,12 @@ subscribe((state) => {
   if (state.levelUp && state.levelUp.level !== celebratedLevel) {
     celebratedLevel = state.levelUp.level
     playLevelUp(state)
+  }
+  // Inherently one-shot, unlike levelUp — the backend deletes the lapsed
+  // rc_player_districts row in the same request that reports it, so it
+  // can never come back true on a later poll of the same district.
+  if (state.expiredDistrict) {
+    toast(`⏳ Time ran out on ${state.expiredDistrict.name} — restoration reset. You can start it again.`, 4500)
   }
 })
 

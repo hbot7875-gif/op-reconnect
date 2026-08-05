@@ -1,11 +1,13 @@
-// Admin CRUD for rc_goals — the game's one shared, global goal set (track
-// goals + a single album goal), not per-district. See migrations/
-// 011_op_reconnect_schema.sql for the table and districts.ts's freezeGoals()
-// for how these get copied onto a district the moment a player starts it —
-// editing a goal here only affects districts activated after the edit;
-// deleting one is safe even for a goal currently "live" since freezeGoals()
-// copies its fields into rc_player_districts.goals at activation time, not a
-// live foreign-key reference back to this table.
+// Admin CRUD for rc_goals — track goals + album goals, each assigned to
+// exactly one district (or none, until an admin assigns it). See migration
+// 036_rc_district_goals.sql — goals used to be one shared global list every
+// district reused; now districts.ts's freezeGoals() only picks up goals
+// whose district_id matches the district being started, so a goal sitting
+// unassigned (or assigned elsewhere) contributes to nothing. Editing a goal
+// here only affects districts activated after the edit; deleting one is
+// safe even for a goal currently "live" since freezeGoals() copies its
+// fields into rc_player_districts.goals at activation time, not a live
+// foreign-key reference back to this table.
 //
 // Same admin gate as everything else marked 'admin' in index.ts
 // (SYNC_ADMIN_KEY via isAdminAuthorized), same CRUD shape as broadcasts.ts.
@@ -23,6 +25,7 @@ export interface GoalDbRow {
   target: number
   active: boolean
   sort_order: number
+  district_id: string | null
   updated_at: string
 }
 
@@ -31,6 +34,7 @@ function shape(r: GoalDbRow) {
     id: r.id, kind: r.kind, label: r.label, artist: r.artist,
     aliases: r.aliases || [], tracks: r.tracks || null,
     target: r.target, active: r.active, sortOrder: r.sort_order,
+    districtId: r.district_id,
   }
 }
 
@@ -61,7 +65,11 @@ export async function adminListGoals(supabase: SupabaseDB) {
     loadContent(supabase),
   ])
   if (error) return { success: false, error: error.message }
-  return { success: true, goals: (data || []).map(shape), modes: content.config.modes || {} }
+  return {
+    success: true, goals: (data || []).map(shape), modes: content.config.modes || {},
+    // So the admin's district picker doesn't need a second round trip.
+    districts: content.districts.map((d) => ({ id: d.id, name: d.name, wardId: d.ward_id })),
+  }
 }
 
 /** Admin: add a new goal. target is the base easy-mode number — every other
@@ -78,6 +86,7 @@ export async function adminAddGoal(supabase: SupabaseDB, params: any) {
   const aliases = cleanAliases(params.aliases)
   const tracks = kind === 'album' ? cleanTracks(params.tracks) : null
   if (kind === 'album' && !tracks) return { success: false, error: 'tracks_required' }
+  const districtId = params.districtId ? String(params.districtId).trim() : null
 
   // ids are stable slugs, not surrogate keys anything references by FK — a
   // collision just gets a short unique suffix, never blocks the insert.
@@ -90,7 +99,7 @@ export async function adminAddGoal(supabase: SupabaseDB, params: any) {
   const sortOrder = Number.isFinite(parseInt(params.sortOrder)) ? parseInt(params.sortOrder) : (last?.sort_order ?? -1) + 1
 
   const { data, error } = await supabase.from('rc_goals')
-    .insert({ id, kind, label, artist, aliases, tracks, target, sort_order: sortOrder })
+    .insert({ id, kind, label, artist, aliases, tracks, target, sort_order: sortOrder, district_id: districtId })
     .select().single()
   if (error) return { success: false, error: error.message }
   return { success: true, goal: shape(data) }
@@ -119,6 +128,7 @@ export async function adminUpdateGoal(supabase: SupabaseDB, params: any) {
   if (params.tracks !== undefined) patch.tracks = cleanTracks(params.tracks)
   if (params.active !== undefined) patch.active = !!params.active
   if (params.sortOrder !== undefined) patch.sort_order = parseInt(params.sortOrder) || 0
+  if (params.districtId !== undefined) patch.district_id = params.districtId ? String(params.districtId).trim() : null
 
   const { data, error } = await supabase.from('rc_goals').update(patch).eq('id', id).select().maybeSingle()
   if (error) return { success: false, error: error.message }

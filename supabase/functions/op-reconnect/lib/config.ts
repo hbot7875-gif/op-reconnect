@@ -14,6 +14,7 @@ export interface GoalRow {
   tracks: { label: string; aliases: string[] }[] | null
   target: number
   sort_order: number
+  district_id: string | null
 }
 
 export interface DistrictRow {
@@ -69,6 +70,12 @@ export function modeMultiplier(content: GameContent, mode: string): number {
 
 export function xpRules(content: GameContent): { streamsPerXp: number; transmissionXp: number; varietyCapBase: number; districtXp: number } {
   return { streamsPerXp: 10, transmissionXp: 10, varietyCapBase: 15, districtXp: 50, ...(content.config.xp_rules || {}) }
+}
+
+/** Days an agent has, from activation, to restore a district before the
+ *  attempt lapses (see districtDeadline in districts.ts). */
+export function restorationDays(content: GameContent): number {
+  return Number(content.config.restoration_days) || 7
 }
 
 export function limits(content: GameContent): { backfillMaxDays: number; lbMaxPages: number; streakLookbackDays: number } {

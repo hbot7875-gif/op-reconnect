@@ -191,12 +191,15 @@
   .adm-goal-menu-btn { background: none; border: 1px solid var(--border); border-radius: var(--r); color: var(--muted);
     font: inherit; font-size: 15px; line-height: 1; padding: 7px 10px; cursor: pointer; }
   .adm-goal-menu-btn:hover { border-color: var(--border-str); color: var(--text); }
-  .adm-goal-menu-pop { position: absolute; right: 0; top: calc(100% + 4px); z-index: 5; min-width: 130px;
+  .adm-goal-menu-pop { position: absolute; right: 0; top: calc(100% + 4px); z-index: 5; min-width: 170px;
     background: var(--surface-2); border: 1px solid var(--border-str); border-radius: var(--r); box-shadow: 0 8px 20px rgba(0,0,0,.4);
     overflow: hidden; }
   .adm-goal-menu-pop button { display: block; width: 100%; text-align: left; background: none; border: 0;
     color: var(--crimson); font: inherit; font-size: 13px; padding: 9px 12px; cursor: pointer; }
   .adm-goal-menu-pop button:hover { background: var(--crimson-soft); }
+  .adm-goal-move-select { display: block; width: 100%; background: none; border: 0; border-bottom: 1px solid var(--border);
+    color: var(--text); font: inherit; font-size: 13px; padding: 9px 12px; cursor: pointer; border-radius: 0; }
+  .adm-goal-move-select:hover { background: var(--surface-3, rgba(255,255,255,.04)); }
 
   /* ── Weekly window ── */
   .adm-week-box { display: flex; align-items: center; justify-content: space-between; gap: 10px;
@@ -375,25 +378,33 @@
     <button class="btn btn-ghost" id="btnLoadGoals" type="button">↻ Load</button>
   </div>
   <div class="adm-callout">
-    <span>Changes affect newly started districts only.</span>
+    <span>Goals are per-district now — nothing counts toward restoring a district until you assign a goal to it here.</span>
     <button class="adm-callout-more" id="btnGoalsInfoToggle" type="button">How goal freezing works</button>
   </div>
   <p class="muted adm-callout-detail" id="goalsInfoDetail" hidden>
-    One shared goal set for the whole game — every district a player restores freezes in whatever's active
-    here the moment they start it. Editing a goal only affects districts started after the edit; a district
-    already in progress keeps the goals it started with. Deleting is safe even for a goal currently live in
-    gameplay, for the same reason.
+    Each district restores on only the track/album goals explicitly assigned to it below — pick a district
+    first, then add or reassign goals for it. A district with nothing assigned can't be started at all yet
+    (agents get a clear "no goals assigned" message). Editing a goal only affects districts started after the
+    edit; a district already in progress keeps the goals it started with, and every district gets exactly one
+    week from activation to restore before the attempt lapses. Deleting a goal is safe even if it's currently
+    live in gameplay, for the same freezing reason.
   </p>
+
+  <label class="adm-field" style="max-width:360px;"><span>District</span>
+    <select id="goalDistrictFilter" class="ob-input">
+      <option value="">— Unassigned goals —</option>
+    </select>
+  </label>
 
   <div class="adm-goals-layout">
     <div class="adm-goals-lists">
       <section class="adm-card">
-        <h3 style="margin:0 0 8px;">Track goals</h3>
-        <div id="goalsTrackList" class="adm-list"><div class="adm-empty">Not loaded yet — tap Load.</div></div>
+        <h3 style="margin:0 0 8px;">Track goals <span class="muted" id="goalsTrackListDistrict" style="font-weight:400;"></span></h3>
+        <div id="goalsTrackList" class="adm-list"><div class="adm-empty">Pick a district above, then tap Load.</div></div>
       </section>
 
       <section class="adm-card">
-        <h3 style="margin:0 0 4px;">Album goal</h3>
+        <h3 style="margin:0 0 4px;">Album goal <span class="muted" id="goalsAlbumListDistrict" style="font-weight:400;"></span></h3>
         <p class="muted" style="margin-bottom:12px;">One full-album pass counted per target.</p>
         <div id="goalsAlbumList" class="adm-list"><div class="adm-empty">Not loaded yet.</div></div>
       </section>
@@ -402,6 +413,7 @@
     <div class="adm-goal-form">
       <section class="adm-card">
         <h3 style="margin:0 0 10px;">Add a track goal</h3>
+        <p class="muted" id="goalTrackDistrictNote" style="margin-bottom:10px;"></p>
         <div class="adm-goal-form-grid">
           <label class="adm-field"><span>Track name</span>
             <input id="goalTrackLabel" class="ob-input" type="text" placeholder="e.g. Dynamite"></label>
@@ -418,6 +430,7 @@
 
       <section class="adm-card">
         <h3 style="margin:0 0 10px;">Add an album goal</h3>
+        <p class="muted" id="goalAlbumDistrictNote" style="margin-bottom:10px;"></p>
         <div class="adm-goal-form-grid">
           <label class="adm-field"><span>Album name</span>
             <input id="goalAlbumLabel" class="ob-input" type="text" placeholder="e.g. BE"></label>
@@ -810,6 +823,20 @@ $('btnLoadBroadcasts').onclick = loadBroadcasts
    identical math when it freezes a district's goals. */
 let allGoals = []
 let goalsModes = null
+let allDistricts = []
+let goalDistrictFilter = '' // '' = unassigned goals, else a district id
+
+function districtName(id) {
+  if (!id) return 'Unassigned'
+  return allDistricts.find((d) => d.id === id)?.name || id
+}
+function renderDistrictFilterOptions() {
+  const sel = $('goalDistrictFilter')
+  const current = sel.value
+  sel.innerHTML = '<option value="">— Unassigned goals —</option>' +
+    allDistricts.map((d) => `<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('')
+  sel.value = current || ''
+}
 
 function modeTargets(base) {
   const modes = goalsModes || { easy: { multiplier: 1 }, medium: { multiplier: 1 }, hard: { multiplier: 1 } }
@@ -846,8 +873,14 @@ async function loadGoals() {
   }
   allGoals = res.goals || []
   goalsModes = res.modes || null
+  allDistricts = res.districts || []
+  renderDistrictFilterOptions()
   renderGoalLists()
 }
+$('goalDistrictFilter').addEventListener('change', () => {
+  goalDistrictFilter = $('goalDistrictFilter').value
+  renderGoalLists()
+})
 
 /** Row shows only "N base" — the full Easy/Medium/Hard breakdown lives in
  *  the add-form's live preview (one place, not repeated under every row)
@@ -866,6 +899,10 @@ function goalRowHtml(g) {
       <div class="adm-goal-menu">
         <button class="adm-goal-menu-btn adm-mutate-btn" data-act="menu" type="button" title="More">•••</button>
         <div class="adm-goal-menu-pop" hidden>
+          <select class="adm-goal-move-select" data-act="move" title="Move to district">
+            <option value=""${g.districtId ? '' : ' selected'}>— Unassigned —</option>
+            ${allDistricts.map((d) => `<option value="${esc(d.id)}"${d.id === g.districtId ? ' selected' : ''}>Move to: ${esc(d.name)}</option>`).join('')}
+          </select>
           <button data-act="delete" type="button">Delete…</button>
         </div>
       </div>
@@ -893,14 +930,21 @@ function goalSectionHtml(items, kind, inactiveOpen, emptyLabel) {
 }
 
 function renderGoalLists() {
-  const tracks = allGoals.filter((g) => g.kind === 'track')
-  const albums = allGoals.filter((g) => g.kind === 'album')
+  const filterId = goalDistrictFilter || null
+  const scoped = allGoals.filter((g) => g.districtId === filterId)
+  const tracks = scoped.filter((g) => g.kind === 'track')
+  const albums = scoped.filter((g) => g.kind === 'album')
+  const label = `— ${esc(districtName(filterId))}`
+  $('goalsTrackListDistrict').textContent = label
+  $('goalsAlbumListDistrict').textContent = label
+  $('goalTrackDistrictNote').textContent = `Adding to: ${districtName(filterId)}. Change the district above first if that's wrong.`
+  $('goalAlbumDistrictNote').textContent = `Adding to: ${districtName(filterId)}. Change the district above first if that's wrong.`
   $('goalsTrackList').innerHTML = tracks.length
-    ? goalSectionHtml(tracks, 'track', trackInactiveOpen, 'No active track goals.')
-    : `<div class="adm-empty">No track goals yet.</div>`
+    ? goalSectionHtml(tracks, 'track', trackInactiveOpen, 'No active track goals for this district.')
+    : `<div class="adm-empty">No track goals assigned to this district yet.</div>`
   $('goalsAlbumList').innerHTML = albums.length
-    ? goalSectionHtml(albums, 'album', albumInactiveOpen, 'No active album goal.')
-    : `<div class="adm-empty">No album goal yet.</div>`
+    ? goalSectionHtml(albums, 'album', albumInactiveOpen, 'No active album goal for this district.')
+    : `<div class="adm-empty">No album goal assigned to this district yet.</div>`
   wireGoalRowButtons($('goalsTrackList'))
   wireGoalRowButtons($('goalsAlbumList'))
   document.querySelectorAll('.adm-goal-collapse').forEach((btn) => {
@@ -931,6 +975,19 @@ function wireGoalRowButtons(container) {
     const menuBtn = row.querySelector('[data-act="menu"]')
     const menuPop = row.querySelector('.adm-goal-menu-pop')
     const delBtn = row.querySelector('[data-act="delete"]')
+    const moveSel = row.querySelector('[data-act="move"]')
+    moveSel.onclick = (e) => e.stopPropagation()
+    moveSel.onchange = async () => {
+      const districtId = moveSel.value || null
+      closeAllGoalMenus()
+      moveSel.disabled = true
+      const res = await call('adminUpdateGoal', { id, districtId })
+      if (res?.success) {
+        goal.districtId = res.goal.districtId
+        showOut('goalsOut', `Moved "${goal.label}" to ${districtName(districtId)}.`, 'ok')
+        renderGoalLists()
+      } else { showOut('goalsOut', res, 'error'); moveSel.disabled = sessionUnauthorized }
+    }
     toggleBtn.onclick = async () => {
       toggleBtn.disabled = true
       const res = await call('adminUpdateGoal', { id, active: !goal.active })
@@ -981,7 +1038,7 @@ $('btnAddTrackGoal').onclick = async () => {
   if (dupe && !confirm(`"${dupe.label}" is already a goal${dupe.active ? '' : ' (inactive)'}. Add "${label}" as a separate duplicate anyway?`)) return
   const btn = $('btnAddTrackGoal')
   btn.disabled = true
-  const res = await call('adminAddGoal', { kind: 'track', label, artist: artist || undefined, aliases, target })
+  const res = await call('adminAddGoal', { kind: 'track', label, artist: artist || undefined, aliases, target, districtId: goalDistrictFilter || null })
   btn.disabled = sessionUnauthorized
   if (res?.success) {
     allGoals.push(res.goal)
@@ -1006,7 +1063,7 @@ $('btnAddAlbumGoal').onclick = async () => {
   if (dupeAlbum && !confirm(`"${dupeAlbum.label}" is already an album goal${dupeAlbum.active ? '' : ' (inactive)'}. Add "${label}" as a separate duplicate anyway?`)) return
   const btn = $('btnAddAlbumGoal')
   btn.disabled = true
-  const res = await call('adminAddGoal', { kind: 'album', label, artist: artist || undefined, tracks, target })
+  const res = await call('adminAddGoal', { kind: 'album', label, artist: artist || undefined, tracks, target, districtId: goalDistrictFilter || null })
   btn.disabled = sessionUnauthorized
   if (res?.success) {
     allGoals.push(res.goal)
