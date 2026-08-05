@@ -23,7 +23,7 @@ import { n, ISLANDS, CITY_W, CITY_H_ART } from './city-map.js'
 // This is static authored content, not a server stat, so it's honest to
 // state it here; the live "how much is restored" numbers stay in the
 // Network status section, where they come from the backend or show a dash.
-// Relay Zero, the home base ward, isn't drawn on this map — it's HQ's own
+// Relay Zero, the home base ward, isn't drawn on this map — it's HT's own
 // bootstrap relay, not somewhere you go exploring — but its single district
 // IS counted in the backend's total. Leaving it out made this line say "247
 // districts" directly above a live ticker reading "0/248", which just looks
