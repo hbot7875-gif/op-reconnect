@@ -10,10 +10,25 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Rajdhani:wght@500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/reconnect.css">
 <style>
-  body { max-width: 760px; margin: 0 auto; padding: 24px var(--gut) 60px; }
-  .adm-nav { font-size: 11px; margin-bottom: 18px; display: flex; gap: 10px; flex-wrap: wrap; }
+  body { max-width: 1080px; margin: 0 auto; padding: 24px var(--gut) 60px; }
+  .adm-nav { font-size: 13px; margin-bottom: 18px; display: flex; gap: 10px; flex-wrap: wrap; }
   .adm-nav a { color: var(--purple-lt); }
   .adm-nav span { color: var(--dim); }
+
+  /* ── Unauthorized banner — shown when a key that worked at unlock stops
+     working mid-session (e.g. someone rotated SYNC_ADMIN_KEY). Sits above
+     everything, freezes every write action, never touches whatever the
+     admin was mid-typing. ── */
+  .adm-unauth { display: none; position: sticky; top: 0; z-index: 30; margin: -24px calc(var(--gut) * -1) 18px;
+    padding: 12px var(--gut); background: rgba(229,56,79,0.16); border-bottom: 1px solid rgba(229,56,79,0.4);
+    backdrop-filter: blur(10px); }
+  .adm-unauth.is-visible { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .adm-unauth-msg { font-size: 13px; color: var(--text); flex: 1; min-width: 200px; }
+  .adm-unauth-msg b { color: var(--crimson); }
+  .adm-unauth-row { display: flex; gap: 8px; align-items: center; }
+  .adm-unauth-row input { width: 180px; padding: 8px 10px; border-radius: var(--r); border: 1px solid var(--border);
+    background: var(--surface-2); color: var(--text); font: inherit; font-size: 13px; }
+  .adm-unauth-err { width: 100%; font-size: 12px; color: var(--crimson); }
 
   .adm-head { margin: 10px 0 22px; }
   .adm-head h1 { font-family: var(--disp); font-size: 23px; margin: 8px 0 6px; }
@@ -46,17 +61,21 @@
   .adm-snap-tile:hover { border-color: var(--border-str); }
   .adm-snap-tile.is-alert { border-color: rgba(229,56,79,0.4); }
   .adm-snap-tile.is-live { border-color: rgba(217,173,95,0.4); }
-  .adm-snap-label { font-family: var(--mono); font-size: 9.5px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--dim); }
-  .adm-snap-val { font-family: var(--disp); font-weight: 800; font-size: 17px; margin-top: 4px; }
+  .adm-snap-label { font-family: var(--mono); font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--dim); }
+  .adm-snap-val { font-family: var(--disp); font-weight: 800; font-size: 20px; margin-top: 4px; }
   .adm-snap-tile.is-alert .adm-snap-val { color: var(--crimson); }
   .adm-snap-tile.is-live .adm-snap-val { color: var(--gold); }
-  .adm-snap-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .adm-snap-sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
 
-  /* ── Tabs ── */
-  .adm-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+  /* ── Tabs ── sticky: every panel here runs long, so the way to switch
+     tabs — and the live snapshot tiles above it — should never scroll out
+     of reach. */
+  .adm-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 20px;
+    position: sticky; top: 0; z-index: 10; background: rgba(10, 9, 16, .96); backdrop-filter: blur(12px);
+    margin-left: calc(var(--gut) * -1); margin-right: calc(var(--gut) * -1); padding: 0 var(--gut); }
   .adm-tab {
-    background: none; border: 0; color: var(--muted); font: inherit; font-size: 13px; font-weight: 600;
-    padding: 10px 14px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
+    background: none; border: 0; color: var(--muted); font: inherit; font-size: 14px; font-weight: 600;
+    padding: 12px 14px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
     display: flex; align-items: center; gap: 6px; transition: color 0.15s, border-color 0.15s;
   }
   .adm-tab:hover { color: var(--text); }
@@ -69,12 +88,12 @@
   .adm-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
     padding: 20px; margin-bottom: 16px; }
   .adm-card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
-  .adm-card h2 { font-family: var(--disp); font-size: 14px; letter-spacing: 0.03em; margin: 0 0 4px; }
-  .adm-card > .muted { font-size: 12.5px; margin-bottom: 16px; }
-  .adm-card .btn-ghost { padding: 7px 12px; font-size: 10.5px; }
+  .adm-card h2 { font-family: var(--disp); font-size: 17px; letter-spacing: 0.03em; margin: 0 0 4px; }
+  .adm-card > .muted { font-size: 14px; line-height: 1.6; margin-bottom: 16px; }
+  .adm-card .btn-ghost { padding: 7px 12px; font-size: 12px; }
 
   .adm-field { display: block; margin-bottom: 12px; }
-  .adm-field > span { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.8px;
+  .adm-field > span { display: block; font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.6px;
     text-transform: uppercase; color: var(--dim); margin-bottom: 6px; }
   .adm-field .ob-input { width: 100%; }
   .adm-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -89,7 +108,7 @@
   .adm-toggle-opt.is-active { background: var(--purple-soft); color: var(--purple-lt); }
   .adm-toggle-opt.is-active[data-val="gold"] { background: var(--gold-soft); color: var(--gold); }
 
-  .adm-out { font-family: var(--mono); font-size: 11.5px; color: var(--muted); white-space: pre-wrap;
+  .adm-out { font-family: var(--mono); font-size: 12.5px; color: var(--muted); white-space: pre-wrap;
     background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r); padding: 10px 12px;
     margin-top: 12px; max-height: 220px; overflow-y: auto; display: none; }
   .adm-out.is-visible { display: block; }
@@ -115,29 +134,69 @@
   .adm-list-dot { width: 7px; height: 7px; border-radius: 50%; margin-top: 6px; flex-shrink: 0; background: var(--purple); }
   .adm-list-row[data-tone="gold"] .adm-list-dot { background: var(--gold); }
   .adm-list-body { flex: 1; min-width: 0; }
-  .adm-list-title { font-weight: 700; font-size: 13.5px; }
-  .adm-list-msg { color: var(--muted); font-size: 12px; margin-top: 2px; line-height: 1.5; }
-  .adm-list-meta { font-family: var(--mono); font-size: 10px; color: var(--dim); margin-top: 5px; letter-spacing: 0.3px; }
+  .adm-list-title { font-weight: 700; font-size: 15px; }
+  .adm-list-msg { color: var(--muted); font-size: 13.5px; margin-top: 2px; line-height: 1.5; }
+  .adm-list-meta { font-family: var(--mono); font-size: 11.5px; color: var(--dim); margin-top: 5px; letter-spacing: 0.3px; }
   .adm-list-del { background: none; border: none; color: var(--crimson); cursor: pointer; font-size: 13px; flex-shrink: 0; padding: 2px 4px; }
   .adm-list-row.is-pick { cursor: pointer; transition: border-color 0.15s, background 0.15s; }
   .adm-list-row.is-pick:hover { border-color: var(--border-str); }
   .adm-list-row.is-pick.is-selected { border-color: var(--purple); background: var(--purple-soft); }
   .adm-list-row.is-pick .adm-list-meta { margin-top: 2px; }
 
-  /* ── Goals editor ── */
+  /* ── Goals editor ──
+     Two-column at desktop width (list left, add-forms right, form sticky
+     so it stays in reach while scrolling a long list) — see .adm-goals-layout
+     below. .adm-goal-input-row (bare, unlabeled inputs) stays as-is since
+     Reconnect's editor still uses it; Goals' own forms use the labeled
+     .adm-goal-form-grid instead. */
+  .adm-goals-layout { display: block; }
+  .adm-goal-form { margin-top: 16px; }
+  @media (min-width: 900px) {
+    .adm-goals-layout { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(320px, .65fr); gap: 20px; align-items: start; }
+    .adm-goal-form { position: sticky; top: 72px; margin-top: 0; }
+  }
+
+  .adm-callout { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--muted);
+    border: 1px solid var(--border); border-radius: var(--r); padding: 9px 12px; margin-bottom: 14px; }
+  .adm-callout-more { background: none; border: 0; color: var(--purple-lt); font: inherit; font-size: 12.5px;
+    cursor: pointer; padding: 0; text-decoration: underline; text-underline-offset: 2px; }
+  .adm-callout-detail { font-size: 13px; line-height: 1.55; margin: -6px 0 14px; }
+
   .adm-goal-row { display: flex; align-items: center; gap: 10px; border: 1px solid var(--border); border-radius: var(--r);
-    padding: 9px 11px; }
-  .adm-goal-name { flex: 1; font-size: 13px; }
-  .adm-goal-target { font-family: var(--mono); font-size: 11px; color: var(--dim); flex-shrink: 0; }
-  .adm-goal-input-row { display: flex; gap: 8px; margin-top: 10px; }
-  .adm-goal-input-row .ob-input:first-child { flex: 1; }
-  .adm-goal-input-row .ob-input.adm-target-input { max-width: 84px; flex: 0 0 auto; }
-  .adm-goal-row.is-inactive { opacity: 0.45; }
-  textarea.adm-goal-tracks { font-family: var(--mono); font-size: 12px; }
-  .adm-mode-preview { font-family: var(--mono); font-size: 10px; letter-spacing: 0.4px; color: var(--dim);
+    padding: 9px 11px; margin-bottom: 8px; }
+  .adm-goal-name { flex: 1; font-size: 14px; }
+  .adm-goal-target { font-family: var(--mono); font-size: 11.5px; color: var(--dim); flex-shrink: 0;
+    cursor: default; }
+  .adm-goal-row.is-inactive { background: rgba(255,255,255,.02); border-style: dashed; }
+  .adm-goal-row.is-inactive .adm-goal-name { color: var(--muted); }
+  .adm-goal-inactive-badge { display: inline-flex; align-items: center; font-family: var(--mono); font-size: 10px;
+    font-weight: 700; letter-spacing: 0.6px; color: var(--crimson); border: 1px solid rgba(229,56,79,0.4);
+    border-radius: 999px; padding: 2px 7px; margin-left: 8px; vertical-align: 1px; }
+  .adm-goal-collapse { background: none; border: 1px solid var(--border); border-radius: var(--r); color: var(--muted);
+    font: inherit; font-size: 12.5px; padding: 8px 12px; cursor: pointer; width: 100%; text-align: left;
+    display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
+  .adm-goal-collapse:hover { border-color: var(--border-str); color: var(--text); }
+  .adm-goal-inactive-list { margin-top: 8px; }
+
+  .adm-goal-form-grid { display: grid; grid-template-columns: 1fr 1fr 90px; gap: 8px; }
+  textarea.adm-goal-tracks { font-family: var(--mono); font-size: 13px; }
+  .adm-mode-preview { font-family: var(--mono); font-size: 11.5px; line-height: 1.5; letter-spacing: 0.4px; color: var(--dim);
     margin-top: 6px; }
   .adm-mode-preview b { color: var(--muted); font-weight: 700; }
-  .adm-goal-modes { font-family: var(--mono); font-size: 9.5px; color: var(--dim); margin-top: 2px; }
+  .adm-goal-modes { font-family: var(--mono); font-size: 11.5px; line-height: 1.5; color: var(--dim); margin-top: 2px; }
+
+  /* Overflow menu (Delete, currently) — kept out of the main row actions
+     so "Deactivate" and "Delete" can't be fat-fingered for one another. */
+  .adm-goal-menu { position: relative; flex-shrink: 0; }
+  .adm-goal-menu-btn { background: none; border: 1px solid var(--border); border-radius: var(--r); color: var(--muted);
+    font: inherit; font-size: 15px; line-height: 1; padding: 7px 10px; cursor: pointer; }
+  .adm-goal-menu-btn:hover { border-color: var(--border-str); color: var(--text); }
+  .adm-goal-menu-pop { position: absolute; right: 0; top: calc(100% + 4px); z-index: 5; min-width: 130px;
+    background: var(--surface-2); border: 1px solid var(--border-str); border-radius: var(--r); box-shadow: 0 8px 20px rgba(0,0,0,.4);
+    overflow: hidden; }
+  .adm-goal-menu-pop button { display: block; width: 100%; text-align: left; background: none; border: 0;
+    color: var(--crimson); font: inherit; font-size: 13px; padding: 9px 12px; cursor: pointer; }
+  .adm-goal-menu-pop button:hover { background: var(--crimson-soft); }
 
   /* ── Weekly window ── */
   .adm-week-box { display: flex; align-items: center; justify-content: space-between; gap: 10px;
@@ -160,11 +219,24 @@
   .adm-badge.ok { color: var(--gold); border-color: rgba(217,173,95,0.4); }
   .adm-badge.bad { color: var(--crimson); border-color: rgba(229,56,79,0.4); }
   .adm-agent-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px 18px; margin-top: 16px; }
-  .adm-agent-stat .k { font-family: var(--mono); font-size: 9.5px; letter-spacing: 1px; text-transform: uppercase; color: var(--dim); }
-  .adm-agent-stat .v { font-size: 14px; margin-top: 3px; }
+  .adm-agent-stat .k { font-family: var(--mono); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--dim); }
+  .adm-agent-stat .v { font-size: 15px; margin-top: 3px; }
   .adm-agent-section { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
   .adm-agent-section h3 { font-family: var(--mono); font-size: 10.5px; letter-spacing: 1.2px; text-transform: uppercase;
     color: var(--muted); margin-bottom: 8px; }
+
+  @media (max-width: 640px) {
+    /* .adm-goal-input-row is Reconnect's editor row now (Goals moved to the
+       labeled .adm-goal-form-grid below) — its fields aren't in a fixed
+       "main text field first" order the way Goals' old unlabeled row was,
+       so this just wraps every child to its own line instead of assuming
+       which one deserves to go full-width. */
+    .adm-goal-input-row { flex-wrap: wrap; }
+    .adm-goal-input-row .ob-input,
+    .adm-goal-input-row .adm-target-input { flex: 1 1 100%; max-width: none; }
+    .adm-goal-form-grid { grid-template-columns: 1fr; }
+    .adm-card { padding: 16px; }
+  }
 
   @media (max-width: 480px) {
     .adm-snapshot { grid-template-columns: 1fr; }
@@ -175,6 +247,15 @@
 </style>
 </head>
 <body>
+
+<div id="admUnauthBanner" class="adm-unauth">
+  <span class="adm-unauth-msg"><b>Session expired.</b> Your admin key stopped working — nothing here will save until you sign back in. Anything you were typing is still there.</span>
+  <div class="adm-unauth-row">
+    <input id="admUnauthKey" type="password" placeholder="Admin key" autocomplete="off">
+    <button class="btn btn-primary" id="btnUnauthRetry" type="button">Re-enter admin key</button>
+  </div>
+  <div id="admUnauthErr" class="adm-unauth-err" hidden></div>
+</div>
 
 <div class="adm-nav"><a href="game.html">← Back to the game</a> <span>&middot;</span> <a href="candy-star-admin.html">Candy Star admin →</a></div>
 
@@ -248,7 +329,7 @@
       <textarea id="rzMessage" class="ob-input" placeholder="The ARMY Bomb is under attack. Stream together to defuse it before the timer runs out."></textarea></label>
     <label class="adm-field"><span>Reward XP (per contributing agent)</span>
       <input id="rzReward" class="ob-input" type="number" min="0" value="50"></label>
-    <button class="btn btn-alert adm-block" id="btnLaunchRZ" type="button">🛡️ Launch Red Zone</button>
+    <button class="btn btn-alert adm-block adm-mutate-btn" id="btnLaunchRZ" type="button">🛡️ Launch Red Zone</button>
     <div id="rzOut" class="adm-out"></div>
   </section>
 </div>
@@ -274,7 +355,7 @@
       <label class="adm-field"><span>Expires in hours (blank = never)</span>
         <input id="bcExpires" class="ob-input" type="number" min="1" placeholder="never"></label>
     </div>
-    <button class="btn btn-primary adm-block" id="btnSendBroadcast" type="button">📡 Send broadcast</button>
+    <button class="btn btn-primary adm-block adm-mutate-btn" id="btnSendBroadcast" type="button">📡 Send broadcast</button>
     <div id="bcOut" class="adm-out"></div>
   </section>
 
@@ -289,40 +370,71 @@
 
 <!-- ── District Goals ── -->
 <div class="adm-panel" id="panel-goals" data-panel="goals" hidden>
-  <section class="adm-card">
-    <div class="adm-card-head">
-      <h2>Goals</h2>
-      <button class="btn btn-ghost" id="btnLoadGoals" type="button">↻ Load</button>
-    </div>
-    <p class="muted">One shared goal set for the whole game — every district a player restores freezes in
-      whatever's active here the moment they start it. Editing a goal only affects districts started after
-      the edit; a district already in progress keeps the goals it started with. Deleting is safe even for a
-      goal currently live in gameplay, for the same reason.</p>
+  <div class="adm-card-head" style="margin-bottom:10px;">
+    <h2 style="font-family:var(--disp);">Goals</h2>
+    <button class="btn btn-ghost" id="btnLoadGoals" type="button">↻ Load</button>
+  </div>
+  <div class="adm-callout">
+    <span>Changes affect newly started districts only.</span>
+    <button class="adm-callout-more" id="btnGoalsInfoToggle" type="button">How goal freezing works</button>
+  </div>
+  <p class="muted adm-callout-detail" id="goalsInfoDetail" hidden>
+    One shared goal set for the whole game — every district a player restores freezes in whatever's active
+    here the moment they start it. Editing a goal only affects districts started after the edit; a district
+    already in progress keeps the goals it started with. Deleting is safe even for a goal currently live in
+    gameplay, for the same reason.
+  </p>
 
-    <h3 style="margin:4px 0 8px;">Track goals</h3>
-    <div id="goalsTrackList" class="adm-list"><div class="adm-empty">Not loaded yet — tap Load.</div></div>
-    <div class="adm-goal-input-row">
-      <input id="goalTrackLabel" class="ob-input" type="text" placeholder="Track name (e.g. Dynamite)">
-      <input id="goalTrackArtist" class="ob-input" type="text" placeholder="Artist" style="max-width:130px;">
-      <input id="goalTrackTarget" class="ob-input adm-target-input" type="number" min="1" value="20" title="Base target — multiplied per streaming mode">
-      <button class="btn btn-primary" id="btnAddTrackGoal" type="button">+ Add</button>
-    </div>
-    <input id="goalTrackAliases" class="ob-input adm-block" style="margin-top:6px;" type="text" placeholder="Alternate titles, comma-separated (optional — helps match different platforms' naming)">
-    <div class="adm-mode-preview" id="goalTrackPreview"></div>
+  <div class="adm-goals-layout">
+    <div class="adm-goals-lists">
+      <section class="adm-card">
+        <h3 style="margin:0 0 8px;">Track goals</h3>
+        <div id="goalsTrackList" class="adm-list"><div class="adm-empty">Not loaded yet — tap Load.</div></div>
+      </section>
 
-    <h3 style="margin:22px 0 8px;">Album goal <span class="muted" style="font-weight:400;">— one full-album pass counted per target</span></h3>
-    <div id="goalsAlbumList" class="adm-list"><div class="adm-empty">Not loaded yet.</div></div>
-    <div class="adm-goal-input-row">
-      <input id="goalAlbumLabel" class="ob-input" type="text" placeholder="Album name (e.g. BE)">
-      <input id="goalAlbumArtist" class="ob-input" type="text" placeholder="Artist" style="max-width:130px;">
-      <input id="goalAlbumTarget" class="ob-input adm-target-input" type="number" min="1" value="3" title="Base target — multiplied per streaming mode">
+      <section class="adm-card">
+        <h3 style="margin:0 0 4px;">Album goal</h3>
+        <p class="muted" style="margin-bottom:12px;">One full-album pass counted per target.</p>
+        <div id="goalsAlbumList" class="adm-list"><div class="adm-empty">Not loaded yet.</div></div>
+      </section>
     </div>
-    <textarea id="goalAlbumTracks" class="ob-input adm-block adm-goal-tracks" style="margin-top:6px;min-height:70px;" placeholder="One album track per line: Track Name | alias1, alias2 (aliases optional)"></textarea>
-    <button class="btn btn-primary adm-block" id="btnAddAlbumGoal" type="button" style="margin-top:8px;">+ Add album goal</button>
-    <div class="adm-mode-preview" id="goalAlbumPreview"></div>
 
-    <div id="goalsOut" class="adm-out"></div>
-  </section>
+    <div class="adm-goal-form">
+      <section class="adm-card">
+        <h3 style="margin:0 0 10px;">Add a track goal</h3>
+        <div class="adm-goal-form-grid">
+          <label class="adm-field"><span>Track name</span>
+            <input id="goalTrackLabel" class="ob-input" type="text" placeholder="e.g. Dynamite"></label>
+          <label class="adm-field"><span>Artist</span>
+            <input id="goalTrackArtist" class="ob-input" type="text" placeholder="BTS"></label>
+          <label class="adm-field"><span>Base target</span>
+            <input id="goalTrackTarget" class="ob-input" type="number" min="1" value="20" title="Base target — multiplied per streaming mode"></label>
+        </div>
+        <label class="adm-field" style="margin-top:12px;"><span>Alternate titles (optional)</span>
+          <input id="goalTrackAliases" class="ob-input" type="text" placeholder="Comma-separated — helps match different platforms' naming"></label>
+        <div class="adm-mode-preview" id="goalTrackPreview"></div>
+        <button class="btn btn-primary adm-block adm-mutate-btn" id="btnAddTrackGoal" type="button" style="margin-top:10px;">+ Add track goal</button>
+      </section>
+
+      <section class="adm-card">
+        <h3 style="margin:0 0 10px;">Add an album goal</h3>
+        <div class="adm-goal-form-grid">
+          <label class="adm-field"><span>Album name</span>
+            <input id="goalAlbumLabel" class="ob-input" type="text" placeholder="e.g. BE"></label>
+          <label class="adm-field"><span>Artist</span>
+            <input id="goalAlbumArtist" class="ob-input" type="text" placeholder="BTS"></label>
+          <label class="adm-field"><span>Base passes</span>
+            <input id="goalAlbumTarget" class="ob-input" type="number" min="1" value="3" title="Base target — multiplied per streaming mode"></label>
+        </div>
+        <label class="adm-field" style="margin-top:12px;"><span>Album tracks</span>
+          <textarea id="goalAlbumTracks" class="ob-input adm-goal-tracks" style="min-height:70px;" placeholder="One album track per line: Track Name | alias1, alias2 (aliases optional)"></textarea></label>
+        <div class="adm-mode-preview" id="goalAlbumPreview"></div>
+        <button class="btn btn-primary adm-block adm-mutate-btn" id="btnAddAlbumGoal" type="button" style="margin-top:10px;">+ Add album goal</button>
+      </section>
+
+      <div id="goalsOut" class="adm-out"></div>
+    </div>
+  </div>
 </div>
 
 <!-- ── Reconnect Missions ── -->
@@ -350,8 +462,8 @@
     </div>
     <input id="reconnectTrackAliases" class="ob-input adm-block" style="margin-top:6px;" type="text" placeholder="Alternate titles, comma-separated (optional)">
     <div class="adm-row" style="margin-top:10px;">
-      <button class="btn btn-primary" id="btnSaveReconnectConfig" type="button">Save</button>
-      <button class="btn btn-ghost" id="btnClearReconnectConfig" type="button">Disable for this district</button>
+      <button class="btn btn-primary adm-mutate-btn" id="btnSaveReconnectConfig" type="button">Save</button>
+      <button class="btn btn-ghost adm-mutate-btn" id="btnClearReconnectConfig" type="button">Disable for this district</button>
     </div>
 
     <div class="adm-agent-section">
@@ -360,7 +472,7 @@
         isn't already in a live mission here gets shuffled and split into full groups of the required size.
         Each group becomes its own mission, already fully staffed — no matchmaking needed. Leftover agents
         who don't make a full group sit out this round.</p>
-      <button class="btn btn-alert adm-block" id="btnAutoAssign" type="button">🎲 Randomly assign missions</button>
+      <button class="btn btn-alert adm-block adm-mutate-btn" id="btnAutoAssign" type="button">🎲 Randomly assign missions</button>
       <div id="reconnectAssignOut" class="adm-out"></div>
     </div>
 
@@ -400,11 +512,60 @@ async function call(action, params = {}) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
-    return await res.json()
+    const json = await res.json()
+    // Only past the gate — the gate's own unlock flow handles a rejected
+    // key itself; this is specifically the "it worked at unlock, then
+    // stopped mid-session" case (e.g. someone rotated the key).
+    if (json && json.error === 'Unauthorized' && !$('admApp').hidden) showUnauthBanner()
+    return json
   } catch (e) {
     return { success: false, error: 'Network error — check your connection' }
   }
 }
+
+/* ── Unauthorized banner ── every write button gets tagged adm-mutate-btn
+   (statically in HTML, or via its template string if rendered dynamically)
+   so one query freezes all of them at once, and again after every re-render
+   so newly-created buttons inherit the same frozen state. */
+let sessionUnauthorized = false
+function setMutationButtonsDisabled(disabled) {
+  document.querySelectorAll('.adm-mutate-btn').forEach((b) => { b.disabled = disabled })
+}
+function showUnauthBanner() {
+  sessionUnauthorized = true
+  $('admUnauthBanner').classList.add('is-visible')
+  setMutationButtonsDisabled(true)
+}
+function hideUnauthBanner() {
+  sessionUnauthorized = false
+  $('admUnauthBanner').classList.remove('is-visible')
+  $('admUnauthErr').hidden = true
+  setMutationButtonsDisabled(false)
+}
+function showUnauthErr(text) {
+  const el = $('admUnauthErr')
+  el.textContent = text
+  el.hidden = false
+}
+$('btnUnauthRetry').onclick = async () => {
+  const key = $('admUnauthKey').value.trim()
+  if (!key) { showUnauthErr('Enter the admin key first.'); return }
+  const btn = $('btnUnauthRetry')
+  btn.disabled = true
+  btn.textContent = 'Checking…'
+  $('adminKey').value = key
+  const res = await call('adminGetActiveDefuse')
+  btn.disabled = false
+  btn.textContent = 'Re-enter admin key'
+  if (res && res.success) {
+    try { localStorage.setItem(KEY_STORAGE, key) } catch (_) {}
+    $('admUnauthKey').value = ''
+    hideUnauthBanner()
+  } else {
+    showUnauthErr(res?.error === 'Unauthorized' ? 'Still rejected — double-check the key.' : (res?.error || "Couldn't reach the backend — try again."))
+  }
+}
+$('admUnauthKey').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btnUnauthRetry').click() })
 
 /* ── Gate ─────────────────────────────────────────────────────────────
    The backend's admin check is a single stateless comparison — every
@@ -551,7 +712,7 @@ $('btnLaunchRZ').onclick = async () => {
     message: $('rzMessage').value.trim() || undefined,
     rewardXp: parseInt($('rzReward').value) || 50,
   })
-  btn.disabled = false
+  btn.disabled = sessionUnauthorized
   btn.textContent = '🛡️ Launch Red Zone'
   showOut('rzOut', res, res?.success ? 'ok' : 'error')
   if (res?.success) refreshRZ()
@@ -577,7 +738,7 @@ $('btnSendBroadcast').onclick = async () => {
     title, message, tone: bcTone,
     expiresInHours: $('bcExpires').value ? parseInt($('bcExpires').value) : undefined,
   })
-  btn.disabled = false
+  btn.disabled = sessionUnauthorized
   btn.textContent = '📡 Send broadcast'
   showOut('bcOut', res, res?.success ? 'ok' : 'error')
   if (res?.success) {
@@ -604,7 +765,7 @@ async function loadBroadcasts() {
         <div class="adm-list-msg">${esc(b.message)}</div>
         <div class="adm-list-meta">${b.active ? 'LIVE' : 'EXPIRED'} &middot; sent ${fmtDate(b.createdAt)}${b.expiresAt ? ` &middot; expires ${fmtDate(b.expiresAt)}` : ' &middot; no expiry'}</div>
       </div>
-      <button class="adm-list-del" type="button" title="Delete">✕</button>
+      <button class="adm-list-del adm-mutate-btn" type="button" title="Delete">✕</button>
     </div>
   `).join('')
   list.querySelectorAll('.adm-list-del').forEach((btn) => {
@@ -613,9 +774,10 @@ async function loadBroadcasts() {
       const id = row.dataset.id
       btn.disabled = true
       const res = await call('adminDeleteBroadcast', { id })
-      if (res?.success) { row.remove(); loadBroadcastsSnapOnly() } else btn.disabled = false
+      if (res?.success) { row.remove(); loadBroadcastsSnapOnly() } else btn.disabled = sessionUnauthorized
     }
   })
+  if (sessionUnauthorized) setMutationButtonsDisabled(true)
 }
 async function loadBroadcastsSnapOnly() {
   const res = await call('adminListBroadcasts')
@@ -660,9 +822,6 @@ function modePreviewHtml(base) {
   if (!base || base < 1) return ''
   return modeTargets(base).map((m) => `<b>${esc(m.label || m.key)}</b> ${m.value}`).join(' · ')
 }
-function goalModesLine(target) {
-  return `<div class="adm-goal-modes">${modeTargets(target).map((m) => `${esc(m.label || m.key)} ${m.value}`).join(' · ')}</div>`
-}
 function parseAliases(text) {
   return String(text || '').split(',').map((s) => s.trim()).filter(Boolean)
 }
@@ -690,31 +849,78 @@ async function loadGoals() {
   renderGoalLists()
 }
 
+/** Row shows only "N base" — the full Easy/Medium/Hard breakdown lives in
+ *  the add-form's live preview (one place, not repeated under every row)
+ *  and as a hover title on the badge for anyone who wants it without
+ *  clicking anything. */
 function goalRowHtml(g) {
   const sub = g.kind === 'album'
     ? `${(g.tracks || []).length} track${(g.tracks || []).length === 1 ? '' : 's'}`
     : (g.artist || '')
+  const modesTitle = modeTargets(g.target).map((m) => `${m.label || m.key} ${m.value}`).join(' · ')
   return `
     <div class="adm-goal-row${g.active ? '' : ' is-inactive'}" data-id="${esc(g.id)}">
-      <span class="adm-goal-name">${esc(g.label)}${sub ? ` <span class="muted" style="font-weight:400;">— ${esc(sub)}</span>` : ''}${g.active ? '' : ' <b style="color:var(--crimson);">inactive</b>'}
-        ${goalModesLine(g.target)}
-      </span>
-      <span class="adm-goal-target">${g.target} base</span>
-      <button class="btn btn-ghost" data-act="toggle" type="button" title="${g.active ? 'Retire' : 'Reactivate'}" style="padding:5px 9px;font-size:12px;">${g.active ? '⏸' : '▶'}</button>
-      <button class="adm-list-del" data-act="delete" type="button" title="Delete">✕</button>
+      <span class="adm-goal-name">${esc(g.label)}${sub ? ` <span class="muted" style="font-weight:400;">— ${esc(sub)}</span>` : ''}${g.active ? '' : ' <span class="adm-goal-inactive-badge">INACTIVE</span>'}</span>
+      <span class="adm-goal-target" title="${esc(modesTitle)}">${g.target} base</span>
+      <button class="btn btn-ghost adm-mutate-btn" data-act="toggle" type="button">${g.active ? 'Deactivate' : 'Activate'}</button>
+      <div class="adm-goal-menu">
+        <button class="adm-goal-menu-btn adm-mutate-btn" data-act="menu" type="button" title="More">•••</button>
+        <div class="adm-goal-menu-pop" hidden>
+          <button data-act="delete" type="button">Delete…</button>
+        </div>
+      </div>
     </div>`
+}
+
+/** Active goals show in full; inactive ones collapse behind a count +
+ *  Show/Hide toggle — with 14+ inactive goals possible (see the BTS
+ *  milestone batch), showing them all by default buried what admins
+ *  actually care about day to day. */
+let trackInactiveOpen = false
+let albumInactiveOpen = false
+function goalSectionHtml(items, kind, inactiveOpen, emptyLabel) {
+  const active = items.filter((g) => g.active)
+  const inactive = items.filter((g) => !g.active)
+  let html = active.length ? active.map(goalRowHtml).join('') : `<div class="adm-empty">${emptyLabel}</div>`
+  if (inactive.length) {
+    html += `
+      <button class="adm-goal-collapse" data-kind="${kind}" type="button">
+        <span>Inactive · ${inactive.length}</span><span>${inactiveOpen ? '▲ Hide' : '▼ Show'}</span>
+      </button>
+      <div class="adm-goal-inactive-list" ${inactiveOpen ? '' : 'hidden'}>${inactive.map(goalRowHtml).join('')}</div>`
+  }
+  return html
 }
 
 function renderGoalLists() {
   const tracks = allGoals.filter((g) => g.kind === 'track')
   const albums = allGoals.filter((g) => g.kind === 'album')
-  $('goalsTrackList').innerHTML = tracks.length ? tracks.map(goalRowHtml).join('') : `<div class="adm-empty">No track goals yet.</div>`
-  $('goalsAlbumList').innerHTML = albums.length ? albums.map(goalRowHtml).join('') : `<div class="adm-empty">No album goal yet.</div>`
+  $('goalsTrackList').innerHTML = tracks.length
+    ? goalSectionHtml(tracks, 'track', trackInactiveOpen, 'No active track goals.')
+    : `<div class="adm-empty">No track goals yet.</div>`
+  $('goalsAlbumList').innerHTML = albums.length
+    ? goalSectionHtml(albums, 'album', albumInactiveOpen, 'No active album goal.')
+    : `<div class="adm-empty">No album goal yet.</div>`
   wireGoalRowButtons($('goalsTrackList'))
   wireGoalRowButtons($('goalsAlbumList'))
+  document.querySelectorAll('.adm-goal-collapse').forEach((btn) => {
+    btn.onclick = () => {
+      if (btn.dataset.kind === 'track') trackInactiveOpen = !trackInactiveOpen
+      else albumInactiveOpen = !albumInactiveOpen
+      renderGoalLists()
+    }
+  })
   updateTrackPreview()
   updateAlbumPreview()
+  if (sessionUnauthorized) setMutationButtonsDisabled(true)
 }
+
+function closeAllGoalMenus() {
+  document.querySelectorAll('.adm-goal-menu-pop').forEach((p) => { p.hidden = true })
+}
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.adm-goal-menu')) closeAllGoalMenus()
+})
 
 function wireGoalRowButtons(container) {
   container.querySelectorAll('.adm-goal-row').forEach((row) => {
@@ -722,21 +928,36 @@ function wireGoalRowButtons(container) {
     const goal = allGoals.find((g) => g.id === id)
     if (!goal) return
     const toggleBtn = row.querySelector('[data-act="toggle"]')
+    const menuBtn = row.querySelector('[data-act="menu"]')
+    const menuPop = row.querySelector('.adm-goal-menu-pop')
     const delBtn = row.querySelector('[data-act="delete"]')
     toggleBtn.onclick = async () => {
       toggleBtn.disabled = true
       const res = await call('adminUpdateGoal', { id, active: !goal.active })
       if (res?.success) { goal.active = res.goal.active; renderGoalLists() }
-      else { showOut('goalsOut', res, 'error'); toggleBtn.disabled = false }
+      else { showOut('goalsOut', res, 'error'); toggleBtn.disabled = sessionUnauthorized }
+    }
+    menuBtn.onclick = (e) => {
+      e.stopPropagation()
+      const wasOpen = !menuPop.hidden
+      closeAllGoalMenus()
+      menuPop.hidden = wasOpen
     }
     delBtn.onclick = async () => {
+      closeAllGoalMenus()
       if (!confirm(`Delete "${goal.label}" for good? Districts already in progress keep it — this only affects newly-started ones.`)) return
       delBtn.disabled = true
       const res = await call('adminDeleteGoal', { id })
       if (res?.success) { allGoals = allGoals.filter((g) => g.id !== id); renderGoalLists() }
-      else { showOut('goalsOut', res, 'error'); delBtn.disabled = false }
+      else { showOut('goalsOut', res, 'error'); delBtn.disabled = sessionUnauthorized }
     }
   })
+}
+
+$('btnGoalsInfoToggle').onclick = () => {
+  const detail = $('goalsInfoDetail')
+  detail.hidden = !detail.hidden
+  $('btnGoalsInfoToggle').textContent = detail.hidden ? 'How goal freezing works' : 'Hide'
 }
 
 function updateTrackPreview() {
@@ -761,7 +982,7 @@ $('btnAddTrackGoal').onclick = async () => {
   const btn = $('btnAddTrackGoal')
   btn.disabled = true
   const res = await call('adminAddGoal', { kind: 'track', label, artist: artist || undefined, aliases, target })
-  btn.disabled = false
+  btn.disabled = sessionUnauthorized
   if (res?.success) {
     allGoals.push(res.goal)
     $('goalTrackLabel').value = ''
@@ -786,7 +1007,7 @@ $('btnAddAlbumGoal').onclick = async () => {
   const btn = $('btnAddAlbumGoal')
   btn.disabled = true
   const res = await call('adminAddGoal', { kind: 'album', label, artist: artist || undefined, tracks, target })
-  btn.disabled = false
+  btn.disabled = sessionUnauthorized
   if (res?.success) {
     allGoals.push(res.goal)
     $('goalAlbumLabel').value = ''
@@ -854,7 +1075,8 @@ function renderReconnectEditor() {
   $('reconnectTrackArtist').value = d.reconnect?.trackArtist || ''
   $('reconnectTrackAliases').value = (d.reconnect?.trackAliases || []).join(', ')
   $('btnClearReconnectConfig').hidden = !d.reconnect
-  $('btnAutoAssign').disabled = !d.reconnect
+  $('btnAutoAssign').disabled = !d.reconnect || sessionUnauthorized
+  if (sessionUnauthorized) setMutationButtonsDisabled(true)
 }
 
 $('btnLoadReconnect').onclick = loadReconnectDistricts
@@ -873,7 +1095,7 @@ $('btnSaveReconnectConfig').onclick = async () => {
   const res = await call('adminSetReconnectConfig', {
     districtId: d.id, required, trackLabel, trackArtist: trackArtist || undefined, trackAliases,
   })
-  btn.disabled = false
+  btn.disabled = sessionUnauthorized
   if (res?.success) {
     d.reconnect = { required, trackLabel, trackArtist: trackArtist || null, trackAliases }
     showOut('reconnectOut', 'Saved.', 'ok')
@@ -891,7 +1113,7 @@ $('btnClearReconnectConfig').onclick = async () => {
   const btn = $('btnClearReconnectConfig')
   btn.disabled = true
   const res = await call('adminClearReconnectConfig', { districtId: d.id })
-  btn.disabled = false
+  btn.disabled = sessionUnauthorized
   if (res?.success) {
     d.reconnect = null
     showOut('reconnectOut', 'Disabled.', 'ok')
@@ -910,7 +1132,7 @@ $('btnAutoAssign').onclick = async () => {
   btn.disabled = true
   btn.textContent = 'ASSIGNING…'
   const res = await call('adminAutoAssignMissions', { districtId: d.id })
-  btn.disabled = false
+  btn.disabled = sessionUnauthorized
   btn.textContent = '🎲 Randomly assign missions'
   if (res?.success) {
     showOut('reconnectAssignOut',
