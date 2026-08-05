@@ -33,7 +33,42 @@
       background: var(--bg-abyss);
       display: flex;
       flex-direction: column;
+      padding-bottom: calc(78px + env(safe-area-inset-bottom));
     }
+
+    /* Bottom nav — BOTZ is its own page (a real navigation, not a router
+       screen switch the way City/Pack/Candy Star/Rankings/Settings are), so
+       it can't reuse ui-hud.js's tab bar directly. This mirrors that bar's
+       look (see reconnect.css's #tabbar/.hud-tabs/.hud-tab) with BOTZ's own
+       theme tokens, so the tabs don't vanish just because you tapped in
+       here — every other tab still leaves the page (back to game.html,
+       which always boots to the City screen), same as the ← BACK link
+       already did; only BOTZ itself renders as the current tab. */
+    #botzTabbar {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+      display: flex; justify-content: center; pointer-events: none;
+      padding: 0 16px calc(14px + env(safe-area-inset-bottom));
+    }
+    .botz-tabs {
+      pointer-events: auto; width: 100%; max-width: 620px;
+      display: flex; gap: 1px; padding: 7px;
+      background: rgba(14, 14, 20, 0.94); backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid var(--border-light); border-radius: var(--radius-xl);
+      box-shadow: 0 12px 30px rgba(0,0,0,0.5);
+      overflow-x: auto; scrollbar-width: none;
+    }
+    .botz-tabs::-webkit-scrollbar { display: none; }
+    .botz-tab {
+      flex: 1 0 auto; min-width: 62px; display: flex; flex-direction: column; align-items: center; gap: 3px;
+      background: none; border: none; cursor: pointer; padding: 7px 4px; border-radius: 14px;
+      font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.7px; text-transform: uppercase;
+      color: var(--text-ghost); text-decoration: none; white-space: nowrap; transition: color 0.2s, background 0.2s;
+    }
+    .botz-tab-ico { font-size: 17px; line-height: 1; filter: grayscale(1); opacity: 0.7; transition: filter 0.2s, opacity 0.2s; }
+    .botz-tab:hover { color: var(--text-muted); }
+    .botz-tab.sel { color: var(--text-primary); background: var(--red-whisper); cursor: default; }
+    .botz-tab.sel .botz-tab-ico { filter: grayscale(0); opacity: 1; }
 
     /* Header */
     .botz-topbar {
@@ -920,6 +955,18 @@
   <div class="botz-not-logged-title">NOT LOGGED IN</div>
   <div class="botz-not-logged-sub">Sign in to OP: ReConnect first</div>
   <a href="game.html" class="btn-outline" style="margin-top:8px; text-decoration:none;">← BACK TO THE GAME</a>
+</div>
+
+<!-- ── BOTTOM NAV — matches the in-app tab bar so it doesn't disappear here ── -->
+<div id="botzTabbar">
+  <div class="botz-tabs">
+    <a href="game.html" class="botz-tab"><span class="botz-tab-ico" aria-hidden="true">🏙️</span><span>City</span></a>
+    <a href="game.html" class="botz-tab"><span class="botz-tab-ico" aria-hidden="true">🎒</span><span>Pack</span></a>
+    <a href="game.html" class="botz-tab"><span class="botz-tab-ico" aria-hidden="true">🍬</span><span>Candy Star</span></a>
+    <span class="botz-tab sel"><span class="botz-tab-ico" aria-hidden="true">📻</span><span>BOTZ</span></span>
+    <a href="game.html" class="botz-tab"><span class="botz-tab-ico" aria-hidden="true">🏆</span><span>Rankings</span></a>
+    <a href="game.html" class="botz-tab"><span class="botz-tab-ico" aria-hidden="true">⚙️</span><span>Settings</span></a>
+  </div>
 </div>
 
 <!-- botz-api.js defines window.RCBotz and MUST load before botz.js -->
