@@ -463,7 +463,9 @@ async function tryStoredKey() {
 
 function showOut(id, text, kind) {
   const el = $(id)
-  el.textContent = typeof text === 'string' ? text : JSON.stringify(text, null, 2)
+  el.textContent = typeof text === 'string' ? text
+    : kind === 'error' ? (text?.error || 'Something went wrong.')
+    : JSON.stringify(text, null, 2)
   el.className = 'adm-out is-visible' + (kind ? ` is-${kind}` : '')
 }
 function esc(s) {
@@ -667,8 +669,10 @@ function parseAliases(text) {
 /** "Track Name | alias1, alias2" per line — aliases after the pipe are optional. */
 function parseAlbumTracks(text) {
   return String(text || '').split('\n').map((line) => line.trim()).filter(Boolean).map((line) => {
-    const [label, aliasPart] = line.split('|')
-    return { label: (label || '').trim(), aliases: parseAliases(aliasPart) }
+    const pipeAt = line.indexOf('|')
+    const label = pipeAt === -1 ? line : line.slice(0, pipeAt)
+    const aliasPart = pipeAt === -1 ? '' : line.slice(pipeAt + 1)
+    return { label: label.trim(), aliases: parseAliases(aliasPart) }
   }).filter((t) => t.label)
 }
 
@@ -752,6 +756,8 @@ $('btnAddTrackGoal').onclick = async () => {
   const target = parseInt($('goalTrackTarget').value) || 0
   const aliases = parseAliases($('goalTrackAliases').value)
   if (!label || target < 1) { showOut('goalsOut', 'Enter a track name and a target of at least 1.', 'error'); return }
+  const dupe = allGoals.find((g) => g.kind === 'track' && g.label.toLowerCase() === label.toLowerCase())
+  if (dupe && !confirm(`"${dupe.label}" is already a goal${dupe.active ? '' : ' (inactive)'}. Add "${label}" as a separate duplicate anyway?`)) return
   const btn = $('btnAddTrackGoal')
   btn.disabled = true
   const res = await call('adminAddGoal', { kind: 'track', label, artist: artist || undefined, aliases, target })
@@ -775,6 +781,8 @@ $('btnAddAlbumGoal').onclick = async () => {
   const tracks = parseAlbumTracks($('goalAlbumTracks').value)
   if (!label || target < 1) { showOut('goalsOut', 'Enter an album name and a target of at least 1.', 'error'); return }
   if (!tracks.length) { showOut('goalsOut', 'List at least one album track, one per line.', 'error'); return }
+  const dupeAlbum = allGoals.find((g) => g.kind === 'album' && g.label.toLowerCase() === label.toLowerCase())
+  if (dupeAlbum && !confirm(`"${dupeAlbum.label}" is already an album goal${dupeAlbum.active ? '' : ' (inactive)'}. Add "${label}" as a separate duplicate anyway?`)) return
   const btn = $('btnAddAlbumGoal')
   btn.disabled = true
   const res = await call('adminAddGoal', { kind: 'album', label, artist: artist || undefined, tracks, target })
