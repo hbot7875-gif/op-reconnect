@@ -15,7 +15,7 @@ import { tickCountdowns } from './countdown.js'
 import { mountScene } from './scene.js'
 import { openShare } from './share.js'
 import { itemArt, RARITY, itemsAt } from './items.js'
-import { wardDisplayName } from './ward-tiles.js'
+import { wardDisplayName, districtDisplayName } from './ward-tiles.js'
 
 const REDUCED = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
 const buzz = (pattern) => { try { navigator.vibrate?.(pattern) } catch {} }
@@ -44,7 +44,7 @@ export function playRestoration(d, ward, state, onDone) {
 
   const body = el('div', 'cel-body')
   body.appendChild(el('div', 'cel-eyebrow', 'RESTORATION SEQUENCE'))
-  const title = el('div', 'cel-title', esc(d.name))
+  const title = el('div', 'cel-title', esc(districtDisplayName(d)))
   body.appendChild(title)
 
   const beatBox = el('div', 'cel-beats')

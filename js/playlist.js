@@ -11,6 +11,7 @@
 // someone a queue instead of a checklist.
 
 import { el, esc, hideOverlay, toast } from './state.js'
+import { districtDisplayName } from './ward-tiles.js'
 
 /** [{ label, need }] — everything still owed, biggest debt first. */
 export function remaining(state) {
@@ -65,7 +66,7 @@ export function openPlaylist(state) {
   const queue = buildQueue(state)
 
   sheet.appendChild(el('div', 'eyebrow', 'TODAY\'S QUEUE'))
-  sheet.appendChild(el('div', 'pl-title', d ? esc(d.name) : 'No active district'))
+  sheet.appendChild(el('div', 'pl-title', d ? esc(districtDisplayName(d)) : 'No active district'))
 
   if (!d) {
     sheet.appendChild(el('p', 'muted', 'Start restoring a district and this builds the exact play order to finish it.'))
@@ -99,7 +100,7 @@ export function openPlaylist(state) {
 
   const copy = el('button', 'btn btn-primary', '📋 Copy the order')
   copy.onclick = async () => {
-    const text = `OP: ReConnect — ${d.name}\n\n`
+    const text = `OP: ReConnect — ${districtDisplayName(d)}\n\n`
       + queue.map((q, i) => `${i + 1}. ${q.label}`).join('\n')
     try {
       await navigator.clipboard.writeText(text)

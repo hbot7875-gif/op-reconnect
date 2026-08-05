@@ -31,6 +31,15 @@ export function wardDisplayName(ward) {
   return ward.id === HOME_BASE_WARD ? 'Home Base' : (ward.name || '')
 }
 
+/** Same "Home Base" promotion for the district itself — checked by wardId,
+ *  not name, since that's the one stable field every district object
+ *  carries regardless of which screen built it (world card, ward list,
+ *  district screen, search results, the restoration celebration, ...). */
+export function districtDisplayName(district) {
+  if (!district) return ''
+  return district.wardId === HOME_BASE_WARD ? 'Home Base' : (district.name || '')
+}
+
 // A one-line identity per ward — the map file's own descriptions, shortened.
 const SUBTITLE = {
   'relay-zero': 'Where you started',

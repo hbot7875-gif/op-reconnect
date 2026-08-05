@@ -10,6 +10,7 @@
 
 import { el, esc, hideOverlay } from './state.js'
 import { tickCountdowns } from './countdown.js'
+import { districtDisplayName } from './ward-tiles.js'
 
 const R = 54
 const CIRC = 2 * Math.PI * R
@@ -98,7 +99,7 @@ export function bombSheet(state) {
     <div class="bd-block-head">Your network</div>
     <div class="bd-line"><span>Districts restored</span><b>${doneD} / ${totalD}</b></div>
     <div class="bd-line"><span>Wards online</span><b>${wardsOnline} / ${wards.length}</b></div>
-    <div class="bd-line"><span>Working on</span><b>${active ? esc(active.name) : '—'}</b></div>
+    <div class="bd-line"><span>Working on</span><b>${active ? esc(districtDisplayName(active)) : '—'}</b></div>
   `
   sheet.appendChild(yours)
 

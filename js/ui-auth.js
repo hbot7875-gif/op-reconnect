@@ -24,7 +24,7 @@ const ERRORS = {
   email_taken: 'That email already has an agent file. Sign in, or recover it.',
   code_invalid: "That code isn't right. Check the email again.",
   code_expired: 'That code has expired. Ask for a new one.',
-  mail_not_configured: "Recovery email isn't switched on yet — ask HQ to set it up.",
+  mail_not_configured: "Recovery email isn't switched on yet — ask HT to set it up.",
 }
 const friendly = (e) => ERRORS[e] || e || 'Something went wrong'
 
@@ -149,7 +149,7 @@ function buildRegister(onAuthed) {
   // Required, as of migration 023. The agent number is shown exactly once
   // and is what you sign in with — without an address on file, one forgotten
   // password ends the account permanently, with no recovery path for the
-  // player and none for HQ either.
+  // player and none for HT either.
   const email = el('input', 'ob-input')
   email.type = 'email'
   email.placeholder = 'you@example.com'
@@ -261,7 +261,7 @@ function buildLogin(onAuthed) {
 
   const { wrap: pwWrap, input: pw } = pwToggleInput('Password', 'current-password')
 
-  const noField = field('Agent number', 'The one HQ gave you when you signed up.', no)
+  const noField = field('Agent number', 'The one HT gave you when you signed up.', no)
   const pwField = field('Password', '', pwWrap, pw)
   panel.append(noField, pwField)
 
@@ -310,7 +310,7 @@ function showRecovery(onAuthed) {
   wrap.append(
     el('div', 'eyebrow', 'SIGNAL RECOVERY'),
     el('h1', 'title-sm', 'Get back into your file'),
-    el('p', 'muted auth-lede', 'Enter the email on your agent file. HQ sends back your agent number and a one-time code.'),
+    el('p', 'muted auth-lede', 'Enter the email on your agent file. HT sends back your agent number and a one-time code.'),
   )
 
   const email = el('input', 'ob-input')
@@ -415,7 +415,7 @@ function showNumber(agent, onAuthed) {
     el('p', 'muted', 'This is your agent number. You sign in with it — write it down somewhere safe.'),
     el('div', 'agent-id-box', esc(agent.agentNo || agent.agent_no)),
     el('div', 'warn-box',
-      '⚠️ <strong>Keep it to yourself</strong><br>Your number is how HQ knows it\'s you. Never post it — not every signal on this grid is friendly.'),
+      '⚠️ <strong>Keep it to yourself</strong><br>Your number is how HT knows it\'s you. Never post it — not every signal on this grid is friendly.'),
   )
   const btn = el('button', 'btn btn-primary auth-go', "Got it — let's go")
   btn.onclick = onAuthed

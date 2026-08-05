@@ -8,6 +8,7 @@
 import { el, esc, unlockAfter, joinNames } from './state.js'
 import { goWorld, goDistrict } from './router.js'
 import { districtFraction } from './ui-district.js'
+import { districtDisplayName } from './ward-tiles.js'
 // The district's name decides what kind of place it is (landmarks.js reads it
 // to draw the scene) — the same lookup gives the list its icons, so a row is
 // scannable without reading a word.
@@ -49,7 +50,7 @@ export function renderWard(container, state, wardId) {
       <div class="sn-title">This ward is still dark</div>
       <p class="sn-body">${gate
         ? `Every one of its ${ward.totalCount} districts stays sealed until <b>${esc(wardDisplayName(gate))}</b> is whole. Finish there and the grid opens through to here.`
-        : `All ${ward.totalCount} of its districts are sealed. HQ opens this part of the grid later in the operation.`}</p>
+        : `All ${ward.totalCount} of its districts are sealed. HT opens this part of the grid later in the operation.`}</p>
     `))
   } else {
     wrap.appendChild(el('div', 'ward-progress', `
@@ -101,11 +102,11 @@ function districtList(state, ward, districts) {
 
     const row = el('button', `d-row ${d.status}`)
     row.disabled = locked
-    row.setAttribute('aria-label', `${d.name} — ${st.label}${power ? `, ${power}% restored` : ''}`)
+    row.setAttribute('aria-label', `${districtDisplayName(d)} — ${st.label}${power ? `, ${power}% restored` : ''}`)
     row.innerHTML = `
       <span class="d-icon">${iconFor(d.name)}</span>
       <span class="d-main">
-        <span class="d-name">${esc(d.name)}</span>
+        <span class="d-name">${esc(districtDisplayName(d))}</span>
         <span class="d-sub">${d.echoOf ? `👤 ${esc(d.echoOf)}` : st.label}</span>
       </span>
       <span class="d-right">

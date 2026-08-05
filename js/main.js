@@ -17,6 +17,7 @@ import { renderSettings } from './screen-settings.js'
 import { renderCandyStar } from './screen-candystar.js'
 import { renderRanking } from './screen-ranking.js'
 import { playLevelUp } from './celebrate.js'
+import { districtDisplayName } from './ward-tiles.js'
 
 const $ = (id) => document.getElementById(id)
 
@@ -103,7 +104,7 @@ subscribe((state) => {
   // rc_player_districts row in the same request that reports it, so it
   // can never come back true on a later poll of the same district.
   if (state.expiredDistrict) {
-    toast(`⏳ Time ran out on ${state.expiredDistrict.name} — restoration reset. You can start it again.`, 4500)
+    toast(`⏳ Time ran out on ${districtDisplayName(state.expiredDistrict)} — restoration reset. You can start it again.`, 4500)
   }
 })
 

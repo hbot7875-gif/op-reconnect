@@ -12,7 +12,7 @@ import { el, esc, showOverlay, hideOverlay } from './state.js'
 import { districtIcon } from './landmarks.js'
 import { goDistrict } from './router.js'
 import { getSession } from './session.js'
-import { wardDisplayName } from './ward-tiles.js'
+import { wardDisplayName, districtDisplayName } from './ward-tiles.js'
 
 const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
 
@@ -33,7 +33,10 @@ const FILTERS = [
 function matches(d, q) {
   if (!q) return true
   const n = norm(q)
-  return norm(d.name).includes(n) || norm(d.echoOf).includes(n)
+  // Match against both the raw name and its display alias (Home Base's
+  // district is stored as "Relay Zero" — see ward-tiles.js) so searching
+  // for either the real or shown name finds it.
+  return norm(d.name).includes(n) || norm(districtDisplayName(d)).includes(n) || norm(d.echoOf).includes(n)
 }
 
 /* ── Global finder (overlay) ──────────────────────────────────────────── */
@@ -103,7 +106,7 @@ export function openFinder(state) {
       row.innerHTML = `
         <span class="fr-icon">${districtIcon(d.name)}</span>
         <span class="fr-main">
-          <span class="fr-name">${esc(d.name)}</span>
+          <span class="fr-name">${esc(districtDisplayName(d))}</span>
           <span class="fr-sub">${esc(wardName(d.wardId))}${d.echoOf ? ` &middot; 👤 ${esc(d.echoOf)}` : ''}</span>
         </span>
         <span class="fr-state">${STATE_LABEL[d.status] || ''}</span>

@@ -108,7 +108,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     if (!districtComplete && deadline.expired) {
       await supabase.from('rc_player_districts').delete()
         .eq('agent_no', player.agent_no).eq('district_id', activePd.district_id).eq('status', 'active')
-      expiredDistrict = { id: activePd.district_id, name: districtRow?.name || activePd.district_id }
+      expiredDistrict = { id: activePd.district_id, wardId: districtRow?.ward_id || null, name: districtRow?.name || activePd.district_id }
     } else {
 
     const { data: fileRows } = await supabase.from('rc_files').select('slot, title, body')
@@ -178,6 +178,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
 
     activeDistrict = {
       id: activePd.district_id,
+      wardId: districtRow?.ward_id || null,
       name: districtRow?.name || activePd.district_id,
       echoOf: districtRow?.echo_of || null,
       activatedAt: activePd.activated_at,

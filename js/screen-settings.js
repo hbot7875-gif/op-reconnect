@@ -111,7 +111,7 @@ function paintSections(body, state) {
   ]))
 
   // ── Agent file ──────────────────────────────────────────────────
-  body.appendChild(section('Agent file', 'Who HQ thinks you are', [
+  body.appendChild(section('Agent file', 'Who HT thinks you are', [
     {
       icon: '🪪', name: 'Agent number', value: account.agentNo,
       body: 'You sign in with this. Tap to copy it somewhere safe.',
@@ -151,11 +151,11 @@ function paintSections(body, state) {
     },
   ]))
 
-  // ── HQ access — agent000 only. Not a real security boundary (admin.html
+  // ── HT access — agent000 only. Not a real security boundary (admin.html
   // is still gated by its own SYNC_ADMIN_KEY), just keeps the entry point
   // out of every other agent's settings screen.
   if ((account.agentNo || '').toUpperCase() === 'AGENT000') {
-    body.appendChild(section('HQ Access', 'Command panel', [
+    body.appendChild(section('HT Access', 'Command panel', [
       {
         icon: '🛰️', name: 'Admin Panel', value: '',
         body: 'Red Zone events, broadcasts, district goals, agent lookup.',

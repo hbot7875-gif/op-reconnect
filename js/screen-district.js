@@ -8,7 +8,7 @@ import { el, esc, setState, toast, unlockAfter, showOverlay, hideOverlay } from 
 import { call } from './api.js'
 import { getAgentNo } from './session.js'
 import { goWard } from './router.js'
-import { wardDisplayName } from './ward-tiles.js'
+import { wardDisplayName, districtDisplayName } from './ward-tiles.js'
 import { mountScene } from './scene.js'
 import { districtFraction, renderBoard } from './ui-district.js'
 import { playRestoration } from './celebrate.js'
@@ -79,7 +79,7 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
     locked: 'SEALED', available: 'OFFLINE', active: 'RESTORING',
     restored: 'ONLINE', centerpiece_dark: 'DORMANT', centerpiece_lit: 'AWAKE',
   }[mapD.status] || ''
-  container.querySelector('.stage-name').textContent = mapD.name
+  container.querySelector('.stage-name').textContent = districtDisplayName(mapD)
   // The agent this place is named for, on the hero — not hidden until you finish.
   container.querySelector('.stage-echo').textContent = mapD.echoOf ? `👤 ${mapD.echoOf}` : ''
 
@@ -132,8 +132,8 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
       <span class="sn-lock">🔒</span>
       <div class="sn-title">Sealed</div>
       <p class="sn-body">${gate
-        ? `${esc(mapD.name)} sits behind the grid wall. It opens when <b>${esc(wardDisplayName(gate))}</b> is whole${ward ? `, along with the rest of ${esc(wardDisplayName(ward))}` : ''}.`
-        : `${esc(mapD.name)} opens later in the operation.`}</p>
+        ? `${esc(districtDisplayName(mapD))} sits behind the grid wall. It opens when <b>${esc(wardDisplayName(gate))}</b> is whole${ward ? `, along with the rest of ${esc(wardDisplayName(ward))}` : ''}.`
+        : `${esc(districtDisplayName(mapD))} opens later in the operation.`}</p>
     `))
     if (gate) {
       const go = el('button', 'btn btn-primary op-go', `Go to ${wardDisplayName(gate)}`)
@@ -156,7 +156,7 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
       go.disabled = true
       go.textContent = 'STARTING…'
       const res = await call('startDistrict', { agentNo: getAgentNo(), districtId })
-      if (res.success) { setState(res); toast(`${mapD.name} — you're on it`) }
+      if (res.success) { setState(res); toast(`${districtDisplayName(mapD)} — you're on it`) }
       else {
         toast(friendly(res.error))
         go.disabled = false
@@ -279,8 +279,8 @@ function paintMissionPanel(box, d, res) {
 
   if (!m || m.status !== 'open') {
     box.appendChild(el('p', 'muted', res.variant === 'invite'
-      ? `Invite ${res.config.requiredAgents} agents who are also restoring ${esc(d.name)} to help out — no streaming needed from them, just a yes.`
-      : `Team up with ${res.config.requiredAgents} agents also restoring ${esc(d.name)} — everyone needs to keep streaming toward their own goals here.`))
+      ? `Invite ${res.config.requiredAgents} agents who are also restoring ${esc(districtDisplayName(d))} to help out — no streaming needed from them, just a yes.`
+      : `Team up with ${res.config.requiredAgents} agents also restoring ${esc(districtDisplayName(d))} — everyone needs to keep streaming toward their own goals here.`))
     const openBtn = el('button', 'btn btn-primary', res.variant === 'invite' ? 'Start inviting' : 'Open a mission')
     openBtn.onclick = async () => {
       openBtn.disabled = true
@@ -374,7 +374,7 @@ function shelf(state, mapD) {
   const grid = el('div', 'shelf-grid')
   for (const it of kept) {
     grid.appendChild(itemTile(it, (item) => showOverlay(itemSheet(item, {
-      districtId: mapD.id, districtName: mapD.name,
+      districtId: mapD.id, districtName: districtDisplayName(mapD),
     }))))
   }
 
@@ -397,11 +397,11 @@ function shelf(state, mapD) {
 function placeSheet(state, mapD, spare) {
   const sheet = el('div', 'sheet')
   sheet.appendChild(el('div', 'eyebrow', 'FROM YOUR PACK'))
-  sheet.appendChild(el('h3', '', `Keep something at ${esc(mapD.name)}`))
+  sheet.appendChild(el('h3', '', `Keep something at ${esc(districtDisplayName(mapD))}`))
   const grid = el('div', 'shelf-grid')
   for (const it of spare) {
     grid.appendChild(itemTile(it, (item) => showOverlay(itemSheet(item, {
-      districtId: mapD.id, districtName: mapD.name,
+      districtId: mapD.id, districtName: districtDisplayName(mapD),
     }))))
   }
   sheet.appendChild(grid)

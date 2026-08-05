@@ -1,6 +1,6 @@
 // World screen — the hub.
 //
-// Reads top to bottom as: any active broadcast (HQ has something to say), a
+// Reads top to bottom as: any active broadcast (HT has something to say), a
 // breach if there is one (drop everything), what I'm restoring right now
 // (the one button that matters — the mission dominates, it's the reason
 // this screen exists), the ARMY Bomb as a compact status line (real data,
@@ -23,7 +23,7 @@
 import { el, esc, showOverlay, hideOverlay, unlockAfter } from './state.js'
 import { goWard, goDistrict, goCandyStar } from './router.js'
 import { districtFraction } from './ui-district.js'
-import { renderWardTiles, glanceStrip, wardDisplayName, HOME_BASE_WARD } from './ward-tiles.js'
+import { renderWardTiles, glanceStrip, wardDisplayName, districtDisplayName, HOME_BASE_WARD } from './ward-tiles.js'
 import { renderCityMap } from './city-map.js'
 import { districtIcon } from './landmarks.js'
 import { openFinder } from './search.js'
@@ -140,7 +140,7 @@ function peekSheet(d, ward, state) {
   sheet.appendChild(el('div', 'peek-head', `
     <span class="peek-icon">${districtIcon(d.name)}</span>
     <span class="peek-id">
-      <span class="peek-name">${esc(d.name)}</span>
+      <span class="peek-name">${esc(districtDisplayName(d))}</span>
       <span class="peek-ward">${esc(wardDisplayName(ward))} &middot; ${PEEK_STATE[d.status] || ''}</span>
     </span>
   `))
@@ -325,14 +325,15 @@ function opCard(state) {
     const pct = Math.round((live ? districtFraction(live) : 0) * 100)
     const left = live ? goalsLeft(live) : null
 
-    // Home base's single district carries the same name as the ward around
-    // it, so the two lines below rendered "Relay Zero" twice — on the most
-    // prominent card of the first screen after sign-in. Show the place's real
-    // identity once, and drop the "where" line whenever it would only repeat
-    // the title back (kept general: any ward whose centrepiece shares its
-    // name hits the same thing).
+    // Home base's single district carries the same raw name as the ward
+    // around it, so the two lines below would render "Relay Zero" twice —
+    // on the most prominent card of the first screen after sign-in.
+    // districtDisplayName/wardDisplayName both promote it to "Home Base",
+    // so drop the "where" line whenever it would only repeat the title back
+    // (kept general: any ward whose centrepiece shares its name hits the
+    // same thing).
     const wardName = wardDisplayName(ward)
-    const name = active.wardId === HOME_BASE_WARD ? wardName : active.name
+    const name = districtDisplayName(active)
     const echo = active.echoOf ? `kept by ${esc(active.echoOf)}` : ''
     const where = wardName === name ? echo
       : [esc(wardName), echo].filter(Boolean).join(' &middot; ')
