@@ -156,7 +156,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
 
       // Bake this district's resource contribution into the lifetime total.
       const trackProg = progress.trackGoals.reduce((s, g) => s + Math.min(g.progress, g.target), 0)
-      const fuelProg = progress.album ? Math.min(progress.album.passesDone, progress.album.target) : 0
+      const fuelProg = progress.albums.reduce((s, a) => s + Math.min(a.passesDone, a.target), 0)
       const intelProg = 1 + files.length
       resources.signal += trackProg
       resources.fuel += fuelProg
@@ -165,7 +165,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     } else {
       // Still in progress — live contribution, not yet baked in anywhere.
       resources.signal += progress.trackGoals.reduce((s, g) => s + Math.min(g.progress, g.target), 0)
-      resources.fuel += progress.album ? Math.min(progress.album.passesDone, progress.album.target) : 0
+      resources.fuel += progress.albums.reduce((s, a) => s + Math.min(a.passesDone, a.target), 0)
       resources.intel += revealed
     }
 
@@ -180,7 +180,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
       xpAwarded,
       itemDropped,
       trackGoals: progress.trackGoals,
-      album: progress.album,
+      albums: progress.albums,
       files: files.map((f: any, i: number) => i < revealed
         ? { slot: f.slot, title: f.title, body: f.body, revealed: true }
         : { slot: f.slot, title: 'ENCRYPTED', revealed: false }),

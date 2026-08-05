@@ -11,7 +11,7 @@ export function districtFraction(d) {
   if (!d) return 0
   let got = 0, need = 0
   for (const g of d.trackGoals || []) { got += Math.min(g.progress, g.target); need += g.target }
-  if (d.album) { got += Math.min(d.album.passesDone, d.album.target); need += d.album.target }
+  for (const a of d.albums || []) { got += Math.min(a.passesDone, a.target); need += a.target }
   return need === 0 ? 0 : Math.max(0, Math.min(1, got / need))
 }
 
@@ -38,8 +38,9 @@ export function renderBoard(board, d) {
   board.innerHTML = ''
 
   const goals = [...(d.trackGoals || [])]
-  const doneCount = goals.filter((g) => g.done).length + (d.album?.done ? 1 : 0)
-  const totalCount = goals.length + (d.album ? 1 : 0)
+  const albums = d.albums || []
+  const doneCount = goals.filter((g) => g.done).length + albums.filter((a) => a.done).length
+  const totalCount = goals.length + albums.length
 
   const head = el('div', 'board-head')
   head.innerHTML = `
@@ -71,8 +72,7 @@ export function renderBoard(board, d) {
   for (const g of goals) {
     card.appendChild(goalRow(g.label, '', g.progress, g.target, g.done, 'plays'))
   }
-  if (d.album) {
-    const a = d.album
+  for (const a of albums) {
     const sub = a.done || !a.nextPassTracks?.length ? ''
       : `Still need ${a.nextPassTracks.slice(0, 3).map((t) => `${esc(t.label)} ×${t.need}`).join(' · ')}`
     card.appendChild(goalRow(`💿 ${a.label}`, sub, a.passesDone, a.target, a.done, 'passes'))

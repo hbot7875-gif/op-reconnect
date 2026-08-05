@@ -11,7 +11,7 @@ import { kstDateOf } from './kst.ts'
 
 export interface FrozenGoals {
   trackGoals: { id: string; label: string; artist: string | null; target: number; keys: string[] }[]
-  albumGoal: { label: string; target: number; tracks: { label: string; keys: string[] }[] } | null
+  albumGoals: { id: string; label: string; target: number; tracks: { label: string; keys: string[] }[] }[]
   meta: { mode: string; multiplier: number; tutorial?: boolean }
 }
 
@@ -32,7 +32,7 @@ export function freezeGoals(content: GameContent, mode: string, district: Distri
       trackGoals: goal
         ? [{ id: goal.id, label: goal.label, artist: goal.artist, target: tut.plays || 3, keys: goalKeys(goal) }]
         : [],
-      albumGoal: null,
+      albumGoals: [],
       meta: { mode, multiplier: 1, tutorial: true },
     }
   }
@@ -40,21 +40,23 @@ export function freezeGoals(content: GameContent, mode: string, district: Distri
   // Only goals explicitly assigned to THIS district — see migration
   // 036_rc_district_goals.sql. A goal with no district_id (or assigned
   // elsewhere) contributes nothing here; nothing is live anywhere until
-  // the admin assigns it in the Goals tab.
+  // the admin assigns it in the Goals tab. Album goals work the same as
+  // track goals now — a district can carry more than one (each is its own
+  // full-album-pass checklist), not just a single one.
   const trackGoals = content.goals
     .filter((g) => g.kind === 'track' && g.district_id === district.id)
     .map((g) => ({ id: g.id, label: g.label, artist: g.artist, target: g.target * multiplier, keys: goalKeys(g) }))
 
-  const albumRow = content.goals.find((g) => g.kind === 'album' && g.district_id === district.id) || null
-  const albumGoal = albumRow && albumRow.tracks
-    ? {
-        label: albumRow.label,
-        target: albumRow.target * multiplier,
-        tracks: albumRow.tracks.map((t) => ({ label: t.label, keys: goalKeys({ label: t.label, aliases: t.aliases || [] }) })),
-      }
-    : null
+  const albumGoals = content.goals
+    .filter((g) => g.kind === 'album' && g.district_id === district.id && g.tracks)
+    .map((g) => ({
+      id: g.id,
+      label: g.label,
+      target: g.target * multiplier,
+      tracks: (g.tracks || []).map((t) => ({ label: t.label, keys: goalKeys({ label: t.label, aliases: t.aliases || [] }) })),
+    }))
 
-  return { trackGoals, albumGoal, meta: { mode, multiplier } }
+  return { trackGoals, albumGoals, meta: { mode, multiplier } }
 }
 
 /** Capped plays already accrued today — so activation-day streams from before
@@ -65,10 +67,10 @@ export function computeBaseline(todayBucket: DayBucket, frozen: FrozenGoals, cap
     const plays = g.keys.reduce((s, k) => s + (todayBucket[k]?.n || 0), 0)
     baseline[`t:${g.id}`] = Math.min(plays, cap)
   }
-  if (frozen.albumGoal) {
-    for (const t of frozen.albumGoal.tracks) {
+  for (const a of frozen.albumGoals) {
+    for (const t of a.tracks) {
       const plays = t.keys.reduce((s, k) => s + (todayBucket[k]?.n || 0), 0)
-      baseline[`a:${t.label}`] = Math.min(plays, cap)
+      baseline[`a:${a.id}:${t.label}`] = Math.min(plays, cap)
     }
   }
   return baseline
@@ -76,7 +78,7 @@ export function computeBaseline(todayBucket: DayBucket, frozen: FrozenGoals, cap
 
 export interface DistrictProgress {
   trackGoals: { id: string; label: string; artist: string | null; progress: number; target: number; done: boolean }[]
-  album: { label: string; passesDone: number; target: number; signalPct: number; done: boolean; nextPassTracks: { label: string; have: number; need: number }[] } | null
+  albums: { id: string; label: string; passesDone: number; target: number; signalPct: number; done: boolean; nextPassTracks: { label: string; have: number; need: number }[] }[]
   allTracksDone: boolean
   complete: boolean
 }
@@ -117,26 +119,25 @@ export function districtProgress(
   })
   const allTracksDone = trackGoals.length > 0 && trackGoals.every((g) => g.done)
 
-  let album: DistrictProgress['album'] = null
-  if (frozen.albumGoal) {
-    const perTrack = frozen.albumGoal.tracks.map((t) => ({
+  const albums = frozen.albumGoals.map((a) => {
+    const perTrack = a.tracks.map((t) => ({
       label: t.label,
-      total: windowedPlays(t.keys, inWindow, activationDate, baseline[`a:${t.label}`] || 0, cap, true),
+      total: windowedPlays(t.keys, inWindow, activationDate, baseline[`a:${a.id}:${t.label}`] || 0, cap, true),
     }))
-    const target = frozen.albumGoal.target
+    const target = a.target
     const passesDone = Math.min(perTrack.reduce((m, t) => Math.min(m, t.total), Infinity), target)
     const capped = perTrack.reduce((s, t) => s + Math.min(t.total, target), 0)
     const signalPct = Math.min(100, Math.round((capped / (perTrack.length * target)) * 100))
     const nextPassTracks = perTrack
       .filter((t) => t.total < target)
-      .sort((a, b) => a.total - b.total)
+      .sort((a2, b2) => a2.total - b2.total)
       .slice(0, 5)
       .map((t) => ({ label: t.label, have: t.total, need: target - t.total }))
-    album = { label: frozen.albumGoal.label, passesDone: Number.isFinite(passesDone) ? passesDone : 0, target, signalPct, done: passesDone >= target, nextPassTracks }
-  }
+    return { id: a.id, label: a.label, passesDone: Number.isFinite(passesDone) ? passesDone : 0, target, signalPct, done: passesDone >= target, nextPassTracks }
+  })
 
-  const complete = allTracksDone && (!album || album.done)
-  return { trackGoals, album, allTracksDone, complete }
+  const complete = allTracksDone && albums.every((a) => a.done)
+  return { trackGoals, albums, allTracksDone, complete }
 }
 
 export interface DistrictDeadline { expiresAt: string; msLeft: number; expired: boolean }

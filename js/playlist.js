@@ -23,9 +23,9 @@ export function remaining(state) {
     if (need > 0) out.push({ label: g.label, need, kind: 'track' })
   }
 
-  // The album only contributes the tracks the *next* pass is missing.
-  const a = d.album
-  if (a && !a.done) {
+  // Each album only contributes the tracks its *next* pass is missing.
+  for (const a of d.albums || []) {
+    if (a.done) continue
     for (const t of a.nextPassTracks || []) {
       const need = Math.max(0, t.need || 0)
       if (!need) continue

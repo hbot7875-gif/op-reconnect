@@ -51,7 +51,8 @@ export function getResources(state) {
   const districts = state?.map?.districts || []
   let signal = 0
   for (const g of d?.trackGoals || []) signal += Math.min(g.progress || 0, g.target || 0)
-  const fuel = Math.min(d?.album?.passesDone || 0, d?.album?.target || 0)
+  let fuel = 0
+  for (const a of d?.albums || []) fuel += Math.min(a.passesDone || 0, a.target || 0)
   // Every restored district gave up its memory; revealed files add to that.
   const intel = districts.filter((x) => x.status === 'restored' || x.status === 'centerpiece_lit').length
     + (d?.files || []).filter((f) => f.revealed).length

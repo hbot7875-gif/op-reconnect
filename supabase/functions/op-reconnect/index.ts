@@ -2,7 +2,7 @@
 // against the same database; mirrors its serve/CORS/dispatch conventions but
 // stays small and modular (every file under ~300 lines).
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0'
 import { getGameState, joinGame, startDistrict, setMode, adminLaunchDefuse } from './lib/handlers.ts'
 import { registerAgent, loginAgent, logoutAgent, checkHandle, verifySession } from './lib/auth.ts'
 import { getAccount, updateEmail, changePassword, generateScrobblePin, getWebhookPin, setStreamSource } from './lib/settings.ts'

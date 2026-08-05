@@ -404,8 +404,8 @@
       </section>
 
       <section class="adm-card">
-        <h3 style="margin:0 0 4px;">Album goal <span class="muted" id="goalsAlbumListDistrict" style="font-weight:400;"></span></h3>
-        <p class="muted" style="margin-bottom:12px;">One full-album pass counted per target.</p>
+        <h3 style="margin:0 0 4px;">Album goals <span class="muted" id="goalsAlbumListDistrict" style="font-weight:400;"></span></h3>
+        <p class="muted" style="margin-bottom:12px;">One full-album pass counted per target. A district can carry more than one album goal.</p>
         <div id="goalsAlbumList" class="adm-list"><div class="adm-empty">Not loaded yet.</div></div>
       </section>
     </div>
@@ -806,14 +806,16 @@ function paintSnapBC(rows) {
 $('btnLoadBroadcasts').onclick = loadBroadcasts
 
 /* ── Goals ──
-   rc_goals is one shared, GLOBAL list — track goals plus a single album
-   goal — not per-district. Every district a player starts freezes in
-   whatever's active here at that moment (districts.ts's freezeGoals);
-   editing a goal only affects districts started after the edit, and
-   deleting one is safe even if it's currently live for that same reason.
+   rc_goals is per-district — each goal (track or album) carries a
+   district_id, assigned here, not auto-applied. A district can carry any
+   number of track goals AND any number of album goals; every one assigned
+   must be met to restore. Starting a district freezes in whatever's
+   assigned to it at that moment (districts.ts's freezeGoals); editing a
+   goal only affects districts started after the edit, and deleting one is
+   safe even if it's currently live for that same reason.
 
-     adminListGoals()   → { success, modes, goals: [{id,kind,label,artist,aliases,tracks,target,active,sortOrder}] }
-     adminAddGoal({kind,label,artist?,aliases?,tracks?,target})   → { success, goal }
+     adminListGoals()   → { success, modes, districts, goals: [{id,kind,label,artist,aliases,tracks,target,active,sortOrder,districtId}] }
+     adminAddGoal({kind,label,artist?,aliases?,tracks?,target,districtId?})   → { success, goal }
      adminUpdateGoal({id, ...only the fields changing})            → { success, goal }
      adminDeleteGoal({id})                                          → { success }
 
@@ -943,8 +945,8 @@ function renderGoalLists() {
     ? goalSectionHtml(tracks, 'track', trackInactiveOpen, 'No active track goals for this district.')
     : `<div class="adm-empty">No track goals assigned to this district yet.</div>`
   $('goalsAlbumList').innerHTML = albums.length
-    ? goalSectionHtml(albums, 'album', albumInactiveOpen, 'No active album goal for this district.')
-    : `<div class="adm-empty">No album goal assigned to this district yet.</div>`
+    ? goalSectionHtml(albums, 'album', albumInactiveOpen, 'No active album goals for this district.')
+    : `<div class="adm-empty">No album goals assigned to this district yet.</div>`
   wireGoalRowButtons($('goalsTrackList'))
   wireGoalRowButtons($('goalsAlbumList'))
   document.querySelectorAll('.adm-goal-collapse').forEach((btn) => {

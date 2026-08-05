@@ -309,7 +309,7 @@ function redZoneCard(state) {
 function goalsLeft(d) {
   let left = 0
   for (const g of d.trackGoals || []) if (!g.done) left++
-  if (d.album && !d.album.done) left++
+  for (const a of d.albums || []) if (!a.done) left++
   return left
 }
 
