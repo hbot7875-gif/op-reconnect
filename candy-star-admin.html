@@ -87,14 +87,27 @@
   .cs-album-row .sub { color: var(--muted); font-size: 10px; }
 
   /* generate section */
-  .cs-focus-row { display: grid; grid-template-columns: 1fr 68px 32px; gap: 8px; margin-bottom: 8px; align-items: center; }
+  .cs-focus-row { display: grid; grid-template-columns: 1fr 68px 32px; gap: 8px; margin-bottom: 8px; align-items: start; }
   .cs-focus-row input[type="number"] { text-align: center; }
   .cs-focus-row .rm { background: none; border: 1px solid var(--border); border-radius: 6px; color: var(--crimson);
-    cursor: pointer; padding: 8px 0; }
-  .cs-album-checks { display: flex; flex-direction: column; gap: 4px; margin: 4px 0 8px; }
+    cursor: pointer; padding: 10px 0; }
+  .cs-autocomplete { position: relative; }
+  .cs-autocomplete-list { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 20;
+    background: var(--surface-2); border: 1px solid var(--border-str); border-radius: var(--r);
+    max-height: 224px; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+  .cs-autocomplete-item { display: flex; flex-direction: column; gap: 1px; padding: 8px 10px; cursor: pointer;
+    border-bottom: 1px solid var(--border); }
+  .cs-autocomplete-item:last-child { border-bottom: none; }
+  .cs-autocomplete-item .name { font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cs-autocomplete-item .sub { font-size: 10px; color: var(--muted); }
+  .cs-autocomplete-item:hover, .cs-autocomplete-item.is-active { background: var(--purple-soft); }
+  .cs-autocomplete-more { padding: 6px 10px; font-size: 10px; color: var(--dim); text-align: center; }
+  .cs-album-checks { display: flex; flex-direction: column; gap: 4px; margin: 4px 0 8px; max-height: 160px; overflow-y: auto;
+    border: 1px solid var(--border); border-radius: var(--r); padding: 8px 10px; }
   .cs-album-checks label { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text); cursor: pointer; }
   .cs-gen-field-label { display: block; font-size: 11px; color: var(--muted); margin-top: 14px; margin-bottom: 4px; }
   select.ob-input { font-family: inherit; }
+  select#genIndividual { margin-top: 6px; }
   .cs-gen-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin: 4px 0; }
   .cs-warn-box { font-size: 11px; color: var(--purple-lt); background: var(--purple-soft); border: 1px solid rgba(139,92,246,0.3);
     border-radius: var(--r); padding: 9px 10px; margin-bottom: 10px; }
@@ -240,15 +253,16 @@
   </div>
   <p class="muted">Type each song name and how many times to stream it — like a 148 combo line
     (e.g. 12x Swim · 6x CO · 5x Hae · 4x WF…). Fillers are woven in automatically.</p>
-  <datalist id="songDatalist"></datalist>
   <div id="focusRows"></div>
   <button class="btn btn-ghost" id="btnAddFocusRow" type="button">+ Add song</button>
 
   <label class="cs-gen-field-label" id="genAlbumLabel" hidden>Include full albums (each track added once)</label>
   <div id="genAlbumChecks" class="cs-album-checks"></div>
 
-  <label class="cs-gen-field-label">Optional individual songs (ctrl/cmd-click to multi-select — added once each)</label>
-  <select id="genIndividual" class="ob-input" multiple size="4"></select>
+  <label class="cs-gen-field-label">Optional individual songs (added once each)</label>
+  <input id="genIndividualFilter" class="ob-input" type="text" placeholder="Filter by name…" style="margin-bottom:6px;">
+  <select id="genIndividual" class="ob-input" multiple size="6"></select>
+  <div class="muted" style="font-size:10px; margin-top:4px;">ctrl/cmd-click to select more than one.</div>
 
   <div class="cs-gen-grid">
     <input id="genName" class="ob-input" type="text" placeholder="Name (blank = random)">
@@ -370,21 +384,30 @@ async function handleOAuthReturn() {
 }
 
 // ── BTS catalog + album state (shared with the generate section below) ──
-let allSongs = [], playableSongs = [], albums = [], songKeyByLabel = new Map()
+let allSongs = [], playableSongs = [], albums = [], individualSelected = new Set()
 
-function songLabel(s) {
-  return `${s.name} — ${(s.artists || []).join(', ')} (${(s.versions || []).length}v)`
+function songSub(s) {
+  return `${(s.artists || []).join(', ')} · ${(s.versions || []).length} version${(s.versions || []).length === 1 ? '' : 's'}`
 }
 
+function renderIndividualOptions(filter = '') {
+  const sel = $('genIndividual')
+  const q = filter.trim().toLowerCase()
+  const list = q
+    ? playableSongs.filter(s => s.name.toLowerCase().includes(q) || (s.artists || []).some(a => a.toLowerCase().includes(q)))
+    : playableSongs
+  sel.innerHTML = list.map(s => {
+    const key = s.key || s.isrc
+    return `<option value="${esc(key)}" ${individualSelected.has(key) ? 'selected' : ''}>${esc(s.name)} — ${esc((s.artists || []).join(', '))} (${(s.versions || []).length}v)</option>`
+  }).join('') || '<option disabled>No matches.</option>'
+}
+$('genIndividual').addEventListener('change', () => {
+  individualSelected = new Set([...$('genIndividual').selectedOptions].map(o => o.value))
+})
+$('genIndividualFilter').addEventListener('input', (e) => renderIndividualOptions(e.target.value))
+
 function rebuildGenerateInputs() {
-  songKeyByLabel = new Map()
-  $('songDatalist').innerHTML = playableSongs.map(s => {
-    const label = songLabel(s)
-    songKeyByLabel.set(label, s.key || s.isrc)
-    return `<option value="${esc(label)}"></option>`
-  }).join('')
-  $('genIndividual').innerHTML = playableSongs.map(s =>
-    `<option value="${esc(s.key || s.isrc)}">${esc(s.name)} — ${esc((s.artists || []).join(', '))} (${(s.versions || []).length}v)</option>`).join('')
+  renderIndividualOptions($('genIndividualFilter').value)
   $('genEmptyWarn').hidden = playableSongs.length > 0
 
   $('genAlbumLabel').hidden = albums.length === 0
@@ -455,7 +478,7 @@ function renderCatTable() {
 async function loadCatalog() {
   const [cat, alb] = await Promise.all([call('getBTSCatalog'), call('getCatalogAlbums')])
   allSongs = (cat && cat.songs) || []
-  playableSongs = allSongs.filter(s => (s.versions || []).length > 0)
+  playableSongs = allSongs.filter(s => (s.versions || []).length > 0).sort((a, b) => a.name.localeCompare(b.name))
   albums = (alb && alb.albums) || []
   renderCatTable()
   renderAlbumList()
@@ -577,9 +600,47 @@ async function loadFillers() {
 $('btnLoadFillers').onclick = loadFillers
 
 // ── Generate a playlist ──
+const AUTOCOMPLETE_LIMIT = 7
+
+function attachAutocomplete(input) {
+  const list = input.nextElementSibling
+  const close = () => { list.hidden = true; list.innerHTML = '' }
+  const renderMatches = () => {
+    delete input.dataset.key
+    const q = input.value.trim().toLowerCase()
+    if (!q) { close(); return }
+    const matches = playableSongs.filter(s =>
+      s.name.toLowerCase().includes(q) || (s.artists || []).some(a => a.toLowerCase().includes(q)))
+    if (!matches.length) { list.innerHTML = '<div class="cs-autocomplete-more">No matches.</div>'; list.hidden = false; return }
+    const shown = matches.slice(0, AUTOCOMPLETE_LIMIT)
+    list.innerHTML = shown.map((s, i) => `
+      <div class="cs-autocomplete-item" data-idx="${i}">
+        <span class="name">${esc(s.name)}</span><span class="sub">${esc(songSub(s))}</span>
+      </div>`).join('') + (matches.length > shown.length
+        ? `<div class="cs-autocomplete-more">+${matches.length - shown.length} more — keep typing to narrow it down</div>` : '')
+    list.hidden = false
+    list.querySelectorAll('.cs-autocomplete-item').forEach(item => {
+      item.onmousedown = (e) => {
+        e.preventDefault()
+        const s = shown[parseInt(item.dataset.idx)]
+        input.value = s.name
+        input.dataset.key = s.key || s.isrc
+        close()
+      }
+    })
+  }
+  input.addEventListener('input', renderMatches)
+  input.addEventListener('focus', () => { if (input.value.trim()) renderMatches() })
+  input.addEventListener('blur', () => setTimeout(close, 120))
+  input.addEventListener('keydown', (e) => { if (e.key === 'Escape') close() })
+}
+
 function focusRowHtml(mult) {
   return `<div class="cs-focus-row">
-    <input class="focus-sel ob-input" list="songDatalist" placeholder="Type a song…" autocomplete="off">
+    <div class="cs-autocomplete">
+      <input class="focus-sel ob-input" placeholder="Type a song…" autocomplete="off">
+      <div class="cs-autocomplete-list" hidden></div>
+    </div>
     <input class="focus-mult ob-input" type="number" min="1" value="${mult}" title="times to stream">
     <button type="button" class="rm" title="Remove">×</button>
   </div>`
@@ -588,6 +649,7 @@ function addFocusRow(mult = 3) {
   $('focusRows').insertAdjacentHTML('beforeend', focusRowHtml(mult))
   const row = $('focusRows').lastElementChild
   row.querySelector('.rm').onclick = () => row.remove()
+  attachAutocomplete(row.querySelector('.focus-sel'))
 }
 $('btnAddFocusRow').onclick = () => addFocusRow()
 
@@ -606,17 +668,15 @@ function reportHtml(report) {
 
 $('btnGenerate').onclick = async () => {
   const focus = [...document.querySelectorAll('.cs-focus-row')].map(row => {
-    const label = row.querySelector('.focus-sel').value.trim()
+    const key = row.querySelector('.focus-sel').dataset.key
     const multiplier = parseInt(row.querySelector('.focus-mult').value) || 0
-    const key = songKeyByLabel.get(label)
     return key && multiplier > 0 ? { key, multiplier } : null
   }).filter(Boolean)
-  if (!focus.length) { showOut('genOut', 'Add at least one song with a valid multiplier — pick it from the dropdown as you type.', 'error'); return }
+  if (!focus.length) { showOut('genOut', 'Add at least one song with a valid multiplier — pick a suggestion from the dropdown as you type.', 'error'); return }
 
   const albumKeys = [...document.querySelectorAll('.gen-album-check:checked')]
     .flatMap(cb => JSON.parse(cb.value))
-  const individualKeys = [...$('genIndividual').selectedOptions].map(o => o.value)
-  const album = [...new Set([...albumKeys, ...individualKeys])]
+  const album = [...new Set([...albumKeys, ...individualSelected])]
 
   $('genReport').innerHTML = ''
   showOut('genOut', 'Generating — this can take up to ~20s…', null)
