@@ -118,11 +118,11 @@ const TABS = [
     sel: (here) => here !== 'resources' && here !== 'settings' && here !== 'candystar' && here !== 'ranking' },
   { key: 'resources', icon: '🎒', label: 'Pack', go: goResources,
     sel: (here) => here === 'resources' },
-  { key: 'candystar', icon: '🍬', label: 'Candy Star', go: goCandyStar,
+  { key: 'candystar', icon: '🍬', label: 'Candy', go: goCandyStar,
     sel: (here) => here === 'candystar' },
   { key: 'botz', icon: '📻', label: 'BOTZ',
     href: () => 'botz.html' + (getAgentNo() ? `?agent=${encodeURIComponent(getAgentNo())}` : '') },
-  { key: 'ranking', icon: '🏆', label: 'Rankings', go: goRanking,
+  { key: 'ranking', icon: '🏆', label: 'Ranks', go: goRanking,
     sel: (here) => here === 'ranking' },
   { key: 'settings', icon: '⚙️', label: 'Settings', go: goSettings,
     sel: (here) => here === 'settings' },
@@ -139,7 +139,7 @@ export function renderTabbar(container, state) {
     const isSel = t.sel ? t.sel(here) : false
     const tag = t.href ? 'a' : 'button'
     const attrs = t.href ? ` href="${esc(t.href())}"` : ' type="button"'
-    return `<${tag} class="hud-tab${isSel ? ' sel' : ''}" data-tab="${t.key}"${attrs}>
+    return `<${tag} class="hud-tab${isSel ? ' sel' : ''}" data-tab="${t.key}" title="${esc(t.label)}"${attrs}>
       <span class="hud-tab-ico" aria-hidden="true">${t.icon}</span>
       <span class="hud-tab-lbl">${esc(t.label)}</span>
     </${tag}>`

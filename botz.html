@@ -60,15 +60,24 @@
     }
     .botz-tabs::-webkit-scrollbar { display: none; }
     .botz-tab {
-      flex: 1 0 auto; min-width: 62px; display: flex; flex-direction: column; align-items: center; gap: 3px;
-      background: none; border: none; cursor: pointer; padding: 7px 4px; border-radius: 14px;
-      font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.7px; text-transform: uppercase;
-      color: var(--text-ghost); text-decoration: none; white-space: nowrap; transition: color 0.2s, background 0.2s;
+      flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px;
+      background: none; border: none; cursor: pointer; padding: 8px 3px; border-radius: 14px;
+      font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.35px; text-transform: uppercase;
+      color: var(--text-muted); opacity: 0.8; text-decoration: none; white-space: nowrap; transition: color 0.2s, background 0.2s, opacity 0.2s;
     }
-    .botz-tab-ico { font-size: 17px; line-height: 1; filter: grayscale(1); opacity: 0.7; transition: filter 0.2s, opacity 0.2s; }
-    .botz-tab:hover { color: var(--text-muted); }
-    .botz-tab.sel { color: var(--text-primary); background: var(--red-whisper); cursor: default; }
+    .botz-tab-ico { font-size: 20px; line-height: 1; filter: grayscale(1); opacity: 0.7; transition: filter 0.2s, opacity 0.2s; }
+    .botz-tab-lbl { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+    .botz-tab:hover { color: var(--text-primary); opacity: 1; }
+    .botz-tab.sel { color: var(--text-primary); opacity: 1; background: var(--red-whisper); cursor: default; }
     .botz-tab.sel .botz-tab-ico { filter: grayscale(0); opacity: 1; }
+    /* Same narrow-phone fallback as the in-app tab bar (reconnect.css) —
+       "Settings" doesn't fit labeled below ~380px even after shortening
+       every other tab. */
+    @media (max-width: 380px) {
+      .botz-tab-lbl { display: none; }
+      .botz-tab { padding: 10px 4px; }
+      .botz-tab-ico { font-size: 22px; }
+    }
 
     /* Header */
     .botz-topbar {
@@ -960,12 +969,12 @@
 <!-- ── BOTTOM NAV — matches the in-app tab bar so it doesn't disappear here ── -->
 <div id="botzTabbar">
   <div class="botz-tabs">
-    <a href="game.html" class="botz-tab"><span class="botz-tab-ico" aria-hidden="true">🏙️</span><span>City</span></a>
-    <a href="game.html" class="botz-tab"><span class="botz-tab-ico" aria-hidden="true">🎒</span><span>Pack</span></a>
-    <a href="game.html" class="botz-tab"><span class="botz-tab-ico" aria-hidden="true">🍬</span><span>Candy Star</span></a>
-    <span class="botz-tab sel"><span class="botz-tab-ico" aria-hidden="true">📻</span><span>BOTZ</span></span>
-    <a href="game.html" class="botz-tab"><span class="botz-tab-ico" aria-hidden="true">🏆</span><span>Rankings</span></a>
-    <a href="game.html" class="botz-tab"><span class="botz-tab-ico" aria-hidden="true">⚙️</span><span>Settings</span></a>
+    <a href="game.html" class="botz-tab" title="City"><span class="botz-tab-ico" aria-hidden="true">🏙️</span><span class="botz-tab-lbl">City</span></a>
+    <a href="game.html" class="botz-tab" title="Pack"><span class="botz-tab-ico" aria-hidden="true">🎒</span><span class="botz-tab-lbl">Pack</span></a>
+    <a href="game.html" class="botz-tab" title="Candy Star"><span class="botz-tab-ico" aria-hidden="true">🍬</span><span class="botz-tab-lbl">Candy</span></a>
+    <span class="botz-tab sel" title="BOTZ"><span class="botz-tab-ico" aria-hidden="true">📻</span><span class="botz-tab-lbl">BOTZ</span></span>
+    <a href="game.html" class="botz-tab" title="Rankings"><span class="botz-tab-ico" aria-hidden="true">🏆</span><span class="botz-tab-lbl">Ranks</span></a>
+    <a href="game.html" class="botz-tab" title="Settings"><span class="botz-tab-ico" aria-hidden="true">⚙️</span><span class="botz-tab-lbl">Settings</span></a>
   </div>
 </div>
 

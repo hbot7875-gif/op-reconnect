@@ -382,7 +382,7 @@ html {
 }
 
 .subtitle {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-sub);
   letter-spacing: 3px;
   text-transform: uppercase;
@@ -423,7 +423,7 @@ html {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-label);
   letter-spacing: 1.5px;
   margin-bottom: 8px;
@@ -662,7 +662,7 @@ textarea:focus-visible,
 }
 
 .divider-text {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-sub);
 }
 
@@ -756,7 +756,7 @@ textarea:focus-visible,
 }
 
 .chart-stat-item {
-  font-size: 9px;
+  font-size: 11px;
   font-family: var(--font-mono);
   color: var(--text-ghost);
   text-transform: uppercase;
@@ -1291,7 +1291,7 @@ html {
 /* Agent Name — clean and premium */
 .sb-agent-name {
   font-family: var(--font-body) !important;
-  font-size: 12px !important;
+  font-size: 13px !important;
   font-weight: 700 !important;
   color: var(--text-primary) !important;
   letter-spacing: 0px !important;
@@ -2197,7 +2197,7 @@ html {
 }
 
 .sc-day {
-  font-size: 0.5rem;
+  font-size: 11px;
   font-weight: 700;
   color: var(--text-ghost);
   text-transform: uppercase;
@@ -2520,7 +2520,7 @@ html {
 }
 
 .cd-lbl {
-  font-size: 0.5rem;
+  font-size: 11px;
   color: var(--text-ghost);
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -2640,7 +2640,7 @@ html {
 .streak-status {
   font-family: 'Share Tech Mono', monospace;
   color: var(--green);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: bold;
   text-shadow: 0 0 8px rgba(0, 255, 102, 0.4);
   padding: 6px 12px;
@@ -2911,7 +2911,7 @@ html {
 
 .logo-subtitle {
   font-family: 'Share Tech Mono', monospace;
-  font-size: 10px;
+  font-size: 11px;
   color: rgba(125, 211, 252, 0.6);
   letter-spacing: 4px;
   margin-top: 4px;
@@ -2982,7 +2982,7 @@ html {
 
 .loading-status {
   font-family: 'Share Tech Mono', monospace;
-  font-size: 10px;
+  font-size: 11px;
   color: #e2e8f0;
   letter-spacing: 2px;
   margin-bottom: 12px;
@@ -3035,7 +3035,7 @@ html {
 
 .loading-hint {
   font-family: 'Rajdhani', sans-serif;
-  font-size: 10px;
+  font-size: 11px;
   color: rgba(125, 211, 252, 0.4);
   letter-spacing: 1px;
 }
@@ -3769,7 +3769,7 @@ html {
   }
 
   .stat-box .sl {
-    font-size: 0.5rem;
+    font-size: 11px;
   }
 
   /* Album 2x grid scroll */
@@ -4125,7 +4125,7 @@ body.sidebar-open {
   }
 
   .label-year {
-    font-size: 0.5rem;
+    font-size: 11px;
   }
 
   .label-bts {
@@ -4613,11 +4613,11 @@ textarea {
   }
 
   .briefing-text {
-    font-size: 12.5px;
+    font-size: 13px;
   }
 
   .briefing-meta {
-    font-size: 10px;
+    font-size: 11px;
   }
 
   .briefing-icon {
@@ -4813,7 +4813,7 @@ textarea {
   }
 
   .member-tag {
-    font-size: 0.5rem;
+    font-size: 11px;
     padding: 3px 8px;
   }
 
@@ -4964,7 +4964,7 @@ textarea {
   }
 
   .narrative-name {
-    font-size: 12px;
+    font-size: 13px;
     letter-spacing: 1px;
   }
 
@@ -4982,7 +4982,7 @@ textarea {
   }
 
   .narrative-directive-text {
-    font-size: 11.5px;
+    font-size: 13px;
   }
 }
 
@@ -5255,7 +5255,7 @@ textarea {
   display: flex;
   align-items: center;
   gap: 3px;
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .ms-icon {
@@ -5318,7 +5318,7 @@ textarea {
 
 .comp-name {
   font-family: var(--font-display);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 800;
   letter-spacing: 1px;
   text-transform: uppercase;
@@ -6044,7 +6044,7 @@ img {
 #page-profile .page-subtitle {
   font-family: 'Share Tech Mono', monospace;
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 11px;
   margin-top: 5px;
   text-transform: uppercase;
   letter-spacing: 2px;
@@ -6294,7 +6294,7 @@ img {
 .welcome-text-group p:first-child {
   font-family: 'Share Tech Mono', monospace;
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 2px;
   margin-bottom: 4px;
@@ -6315,7 +6315,7 @@ img {
   padding: 4px 10px;
   border-radius: 4px;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--wave-foam);
   letter-spacing: 1px;
 }
@@ -6377,7 +6377,7 @@ img {
 
 .ab-tooltip__desc {
   color: #bdbdbd;
-  font-size: 10px;
+  font-size: 11px;
   /* Slightly larger for readability */
   line-height: 1.5;
   margin-top: 6px;
@@ -6553,7 +6553,7 @@ img {
   }
 
   .xp-lbl {
-    font-size: 7px !important;
+    font-size: 11px !important;
   }
 }
 
@@ -6862,7 +6862,7 @@ img {
 
 .hud-team {
   font-family: var(--font-display);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -7110,7 +7110,7 @@ img {
   background: var(--bg-lifted, #16161f);
   border: 2px solid var(--bg-deep, #0a0a14);
   display: flex; align-items: center; justify-content: center;
-  font-size: 9px; font-weight: 800; color: var(--text-muted, #889);
+  font-size: 11px; font-weight: 800; color: var(--text-muted, #889);
   flex-shrink: 0;
 }
 
