@@ -248,8 +248,10 @@ function coreBlock(state) {
   // Signal ports — a discrete "how many bars" companion to the exact
   // percentage above: real tiers off the same arcFrac driving the ring,
   // not decoration. Under attack this reads defuse progress instead of
-  // charge, same swap the ring/percentage already make.
-  const litPorts = Math.round(arcFrac * 4)
+  // charge, same swap the ring/percentage already make. Math.ceil (not
+  // round) so any nonzero charge lights at least one port — a 3% network
+  // rounding down to "0 lit" looked identical to a dead one.
+  const litPorts = arcFrac > 0 ? Math.max(1, Math.ceil(arcFrac * 4)) : 0
   const ports = el('div', 'core-ports' + (underAttack ? ' is-attack' : b.brownout ? ' is-brownout' : ''))
   ports.innerHTML = Array.from({ length: 4 }, (_, i) => `<span class="wp${i < litPorts ? ' lit' : ''}"></span>`).join('')
   zone.appendChild(ports)
