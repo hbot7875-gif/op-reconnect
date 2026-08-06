@@ -159,6 +159,18 @@
       },
     }
 
+    // Personal ARMY Bomb fixture. Kept separately because the live endpoint
+    // returns this through getAgentCharge, not inside getGameState. Feeding
+    // mutates it so the full launch/impact/repaint animation can be tested
+    // repeatedly in this harness instead of stopping at an empty overlay.
+    const AGENT_CHARGE = {
+      hoursRemaining: 6,
+      isDark: false,
+      autoFeed: false,
+      chargeCells: STATE.player.chargeCells,
+      litEras: [],
+    }
+
     // #restored replays the restoration moment; #wardwhole is the bigger
     // version where that district was the ward's last one.
     if (location.hash.includes('restored') || location.hash.includes('wardwhole')) {
@@ -206,6 +218,24 @@
         }
         if (body.action === 'joinGame') {
           return { json: async () => ({ ...JSON.parse(JSON.stringify(STATE)), success: true, joined: true }) }
+        }
+        if (body.action === 'getAgentCharge') {
+          return { json: async () => ({ success: true, charge: JSON.parse(JSON.stringify(AGENT_CHARGE)) }) }
+        }
+        if (body.action === 'feedCharge') {
+          if (AGENT_CHARGE.chargeCells < 1) return { json: async () => ({ success: false, error: 'not_enough_charge_cells' }) }
+          AGENT_CHARGE.chargeCells -= 1
+          STATE.player.chargeCells = AGENT_CHARGE.chargeCells
+          AGENT_CHARGE.hoursRemaining += 4
+          AGENT_CHARGE.isDark = false
+          return { json: async () => ({
+            success: true,
+            chargedUntil: new Date(Date.now() + AGENT_CHARGE.hoursRemaining * 3_600_000).toISOString(),
+          }) }
+        }
+        if (body.action === 'setAutoFeed') {
+          AGENT_CHARGE.autoFeed = !!body.on
+          return { json: async () => ({ success: true, autoFeed: AGENT_CHARGE.autoFeed }) }
         }
         // Collectibles: persist against the mock STATE so moves survive a re-render.
         if (body.action === 'placeItem') {

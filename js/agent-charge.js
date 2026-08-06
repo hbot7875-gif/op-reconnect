@@ -6,8 +6,11 @@
 // separate personal stat.
 
 import { call } from './api.js'
-import { el, esc, toast, hideOverlay, showOverlay } from './state.js'
+import { el, esc, toast, hideOverlay, showOverlay, getState, setState } from './state.js'
 import { getAgentNo } from './session.js'
+
+const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 function fmtHours(h) {
   if (h <= 0) return '0h'
@@ -38,20 +41,36 @@ function paint(body, ac) {
   // hit zero. Used to just say "0h / charged", which reads as broken, not
   // as "you haven't started yet."
   const neverFed = !ac.isDark && ac.hoursRemaining <= 0
-  const status = el('div', 'ac-status' + (ac.isDark ? ' dark' : ''))
-  // --fuel scales the ember animation below — a fresh feed reads as a real
-  // flare-up, a bomb that's been running low reads as a dying fire, same
-  // "intensity follows real state" rule the ARMY Bomb sphere already uses
-  // (screen-world.js's --charge). 48h is a generous ceiling (12 Charge
-  // Cells) so a single feed still visibly brightens it, not maxes it out.
-  status.style.setProperty('--fuel', Math.max(0, Math.min(1, ac.hoursRemaining / 48)).toFixed(3))
-  status.innerHTML = `
-    <div class="ac-embers" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
-    <div class="ac-hours">${neverFed ? '—' : fmtHours(ac.hoursRemaining)}</div>
-    <div class="ac-label">${ac.isDark ? 'DARK — feed it before it costs you a district'
-      : neverFed ? 'not yet charged — feed it to start the clock' : 'charged'}</div>
+  // The charging scene is a physical interaction, not another progress
+  // card: a Cell launches from the Pack readout, locks into the handle, and
+  // sends a visible energy pulse into the globe. Real remaining hours drive
+  // the ambient brightness; the stronger motion only happens after a
+  // confirmed manual feed.
+  const stage = el('div', 'ac-stage' + (ac.isDark ? ' is-dark' : '') + (neverFed ? ' is-new' : ''))
+  stage.style.setProperty('--fuel', Math.max(0, Math.min(1, ac.hoursRemaining / 48)).toFixed(3))
+  stage.innerHTML = `
+    <div class="ac-stage-stars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="ac-bomb-glow" aria-hidden="true"></div>
+    <div class="ac-personal-bomb" aria-hidden="true">
+      <div class="ac-bomb-sphere">
+        <span class="ac-bomb-fill"></span>
+        <span class="ac-bomb-shine"></span>
+        <span class="ac-bomb-logo">⟭⟬</span>
+      </div>
+      <div class="ac-bomb-collar"></div>
+      <div class="ac-bomb-handle"><span class="ac-handle-energy"></span><i></i></div>
+    </div>
+    <div class="ac-cell-flight" aria-hidden="true"><span>⚡</span></div>
+    <div class="ac-impact-sparks" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="ac-reward" role="status" aria-live="polite"></div>
+    <div class="ac-readout">
+      <div class="ac-hours">${neverFed ? '—' : fmtHours(ac.hoursRemaining)}</div>
+      <div class="ac-label">${ac.isDark ? 'DARK — feed it before it costs you a district'
+        : neverFed ? 'not yet charged — feed it to start the clock' : 'charged'}</div>
+    </div>
+    <div class="ac-cell-source"><span>⚡</span><b class="ac-cell-count">${ac.chargeCells}</b><small>Charge Cells</small><em aria-hidden="true">−1</em></div>
   `
-  body.appendChild(status)
+  body.appendChild(stage)
 
   if (ac.isDark) {
     body.appendChild(el('p', 'muted ac-warn',
@@ -61,7 +80,7 @@ function paint(body, ac) {
   const feedCard = el('div', 'ms-card')
   feedCard.innerHTML = `
     <div class="ms-card-head"><span class="ms-card-icon">⚡</span><span class="ms-card-title">Feed the Bomb</span></div>
-    <p class="ms-card-body">You have ${ac.chargeCells} Charge Cell${ac.chargeCells === 1 ? '' : 's'}. Each one buys 4 hours.</p>
+    <p class="ms-card-body ac-feed-copy">You have ${ac.chargeCells} Charge Cell${ac.chargeCells === 1 ? '' : 's'}. Each one buys 4 hours.</p>
   `
   const feedBtn = el('button', 'btn btn-primary', 'Feed 1 Charge Cell')
   feedBtn.disabled = ac.chargeCells < 1
@@ -69,13 +88,42 @@ function paint(body, ac) {
     feedBtn.disabled = true
     const res = await call('feedCharge', { agentNo: getAgentNo(), cells: 1 })
     if (!res.success) { toast(res.error || "Couldn't feed it"); feedBtn.disabled = false; return }
+    for (const button of body.querySelectorAll('button')) button.disabled = true
+
+    const nextHours = Math.max(0, (new Date(res.chargedUntil).getTime() - Date.now()) / 3_600_000)
+    const land = () => {
+      stage.classList.add('has-landed')
+      stage.classList.remove('is-dark', 'is-new')
+      stage.style.setProperty('--fuel', Math.max(0, Math.min(1, nextHours / 48)).toFixed(3))
+      stage.querySelector('.ac-hours').textContent = fmtHours(nextHours)
+      stage.querySelector('.ac-label').textContent = 'charged'
+      stage.querySelector('.ac-cell-count').textContent = Math.max(0, ac.chargeCells - 1)
+      stage.querySelector('.ac-reward').textContent = '+4 HOURS'
+      const remainingCells = Math.max(0, ac.chargeCells - 1)
+      body.querySelector('.ac-feed-copy').textContent = `You have ${remainingCells} Charge Cell${remainingCells === 1 ? '' : 's'}. Each one buys 4 hours.`
+
+      // Keep the Pack wallet honest immediately instead of waiting for the
+      // next 90-second game-state poll.
+      const state = getState()
+      if (state?.player) setState({
+        ...state,
+        player: { ...state.player, chargeCells: Math.max(0, (state.player.chargeCells || 0) - 1) },
+      })
+    }
+
+    if (reducedMotion()) {
+      land()
+      toast('+4h charge')
+      await loadAndPaint(body)
+      return
+    }
+
+    stage.classList.add('is-feeding')
+    await wait(720) // Cell reaches the handle: commit the visible state here.
+    land()
     toast('+4h charge')
-    // Repaint FIRST so the numbers are already correct, then flare the
-    // fresh status card — a setTimeout-before-repaint here would either cut
-    // the ~0.9s flare short (paint() wipes and rebuilds .ac-status) or make
-    // the numbers lag behind the toast. This way neither happens.
+    await wait(680) // Let the globe flare and reward text finish before repaint.
     await loadAndPaint(body)
-    body.querySelector('.ac-status')?.classList.add('feeding')
   }
   feedCard.appendChild(feedBtn)
   body.appendChild(feedCard)
