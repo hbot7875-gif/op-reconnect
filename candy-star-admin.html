@@ -7,84 +7,85 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/reconnect.css">
 <style>
-  body { max-width: 780px; margin: 0 auto; padding: 24px var(--gut) 60px; }
+  body { max-width: 980px; margin: 0 auto; padding: 24px var(--gut) 60px; line-height: 1.5; }
   .cs-admin-head { margin: 10px 0 22px; }
-  .cs-admin-head h1 { font-family: var(--disp); font-size: 22px; margin: 8px 0 6px; }
+  .cs-admin-head h1 { font-family: var(--disp); font-size: clamp(26px, 3vw, 32px); line-height: 1.2; margin: 10px 0 8px; }
   .cs-admin-key-row { display: flex; gap: 8px; align-items: center; margin: 14px 0 28px; }
   .cs-admin-key-row .ob-input { flex: 1; }
-  .cs-admin-key-status { font-size: 11px; font-family: var(--mono); }
+  .cs-admin-key-status { font-size: 12.5px; font-family: var(--mono); }
   .cs-admin-key-status.ok { color: var(--gold); }
   .cs-admin-key-status.bad { color: var(--crimson); }
   .cs-admin-section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
-    padding: 20px; margin-bottom: 18px; }
-  .cs-admin-section h2 { font-family: var(--disp); font-size: 14px; letter-spacing: 0.03em; margin: 0 0 4px; }
-  .cs-admin-section .muted { font-size: 12px; margin-bottom: 14px; }
+    padding: 22px; margin-bottom: 18px; }
+  .cs-admin-section h2 { font-family: var(--disp); font-size: 18px; line-height: 1.35; letter-spacing: 0.02em; margin: 0 0 6px; }
+  .cs-admin-section .muted { font-size: 15px; line-height: 1.6; margin-bottom: 16px; }
   .cs-admin-row { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
   .cs-admin-row .ob-input { flex: 1; min-width: 200px; }
-  .cs-admin-row .btn { flex-shrink: 0; padding: 10px 16px; font-size: 11px; }
-  .cs-admin-out { font-family: var(--mono); font-size: 11.5px; color: var(--muted); white-space: pre-wrap;
+  .cs-admin-row .btn { flex-shrink: 0; padding: 11px 16px; font-size: 12.5px; }
+  .cs-admin-out { font-family: var(--mono); font-size: 12.5px; line-height: 1.5; color: var(--muted); white-space: pre-wrap;
     background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r); padding: 10px 12px;
     margin-top: 8px; max-height: 220px; overflow-y: auto; display: none; }
   .cs-admin-out.is-visible { display: block; }
   .cs-admin-out.is-error { color: var(--crimson); border-color: rgba(229,56,79,0.4); }
   .cs-admin-out.is-ok { color: var(--gold); border-color: rgba(217,173,95,0.4); }
-  .cs-conn-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700;
+  .cs-conn-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 700;
     padding: 6px 10px; border-radius: 999px; border: 1px solid var(--border); margin-bottom: 12px; }
   .cs-conn-badge.on { color: var(--gold); border-color: rgba(217,173,95,0.4); }
   .cs-conn-badge.off { color: var(--muted); }
   .cs-redirect-box { margin-top: 10px; padding: 10px; background: var(--surface-2); border: 1px dashed var(--border);
     border-radius: var(--r); }
-  .cs-redirect-box .label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+  .cs-redirect-box .label { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
   .cs-redirect-box .row { display: flex; gap: 8px; align-items: center; }
-  .cs-redirect-box code { flex: 1; font-size: 11px; color: var(--gold); word-break: break-all; background: rgba(0,0,0,0.3);
+  .cs-redirect-box code { flex: 1; font-size: 12px; color: var(--gold); word-break: break-all; background: rgba(0,0,0,0.3);
     padding: 6px 8px; border-radius: 4px; font-family: var(--mono); }
-  .cs-redirect-box .hint { font-size: 10px; color: var(--muted); margin-top: 6px; }
+  .cs-redirect-box .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
   .cs-lib-list { display: flex; flex-direction: column; gap: 1px; background: var(--border); border: 1px solid var(--border);
     border-radius: var(--r); overflow: hidden; margin-top: 10px; max-height: 320px; overflow-y: auto; }
-  .cs-lib-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: var(--surface); font-size: 12px; }
+  .cs-lib-row { display: flex; align-items: center; gap: 10px; padding: 9px 11px; background: var(--surface); font-size: 14px; }
   .cs-lib-row .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .cs-lib-row .rm { background: none; border: none; color: var(--crimson); cursor: pointer; font-size: 13px; flex-shrink: 0; }
-  textarea.ob-input { font-family: var(--mono); font-size: 12px; min-height: 90px; resize: vertical; }
-  .cs-admin-nav { font-size: 11px; margin-bottom: 18px; }
+  .ob-input, textarea.ob-input { font-family: inherit; font-size: 15px; }
+  textarea.ob-input { min-height: 90px; resize: vertical; }
+  .cs-admin-nav { font-size: 14px; font-weight: 500; margin-bottom: 22px; }
   .cs-admin-nav a { color: var(--purple-lt); }
 
   /* catalog summary + table */
   .cs-cat-summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
-  .cs-cat-summary .stats { font-size: 12px; color: var(--muted); }
+  .cs-cat-summary .stats { font-size: 14px; color: var(--muted); }
   .cs-cat-summary .stats b.ok { color: var(--gold); }
   .cs-cat-summary .stats b.warn { color: var(--purple-lt); }
-  .cs-cat-toggle { background: none; border: none; color: var(--muted); font-size: 11px; cursor: pointer; padding: 0; margin-bottom: 8px; }
+  .cs-cat-toggle { background: none; border: none; color: var(--muted); font-size: 12.5px; cursor: pointer; padding: 0; margin-bottom: 8px; }
   .cs-cat-table-wrap { max-height: 340px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--r); }
   .cs-cat-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
   .cs-cat-table col.c-name { width: 30%; } .cs-cat-table col.c-artist { width: 16%; }
   .cs-cat-table col.c-status { width: 14%; } .cs-cat-table col.c-isrc { width: 18%; }
   .cs-cat-table col.c-open { width: 8%; } .cs-cat-table col.c-patch { width: 14%; }
-  .cs-cat-table th { padding: 5px 8px; font-size: 10px; color: var(--dim); font-weight: 600; text-align: left;
+  .cs-cat-table th { padding: 7px 8px; font-size: 11px; color: var(--dim); font-weight: 700; text-align: left;
     border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); }
-  .cs-cat-table td { padding: 5px 8px; font-size: 11px; color: var(--text); border-bottom: 1px solid var(--border);
+  .cs-cat-table td { padding: 7px 8px; font-size: 12.5px; color: var(--text); border-bottom: 1px solid var(--border);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .cs-cat-table td.artist { font-size: 10px; color: var(--muted); }
+  .cs-cat-table td.artist { font-size: 11.5px; color: var(--muted); }
   .cs-status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; flex-shrink: 0; }
   .cs-status-dot.ok { background: var(--gold); } .cs-status-dot.pending { background: var(--purple-lt); }
-  .cs-cat-table a { color: var(--gold); text-decoration: none; font-size: 10px; }
+  .cs-cat-table a { color: var(--gold); text-decoration: none; font-size: 11.5px; }
   .cs-isrc-patch { display: flex; gap: 4px; align-items: center; }
   .cs-isrc-patch input { width: 108px; padding: 3px 6px; background: var(--surface-2); border: 1px solid var(--border);
-    border-radius: 4px; color: var(--text); font-size: 10px; font-family: var(--mono); }
+    border-radius: 4px; color: var(--text); font-size: 11px; font-family: var(--mono); }
   .cs-isrc-patch button { padding: 3px 8px; background: transparent; border: 1px solid var(--border); color: var(--muted);
-    border-radius: 4px; font-size: 10px; cursor: pointer; }
+    border-radius: 4px; font-size: 11px; cursor: pointer; }
   .cs-search-results { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
   .cs-search-result { display: flex; justify-content: space-between; gap: 8px; padding: 6px 8px; background: var(--surface-2);
-    border: 1px solid var(--border); border-radius: var(--r); font-size: 11px; }
-  .cs-search-result .sub { color: var(--muted); font-size: 10px; }
+    border: 1px solid var(--border); border-radius: var(--r); font-size: 13px; }
+  .cs-search-result .sub { color: var(--muted); font-size: 11.5px; }
 
   /* album list */
   .cs-album-list { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
   .cs-album-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px;
-    background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r); font-size: 11px; }
-  .cs-album-row .sub { color: var(--muted); font-size: 10px; }
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r); font-size: 13px; }
+  .cs-album-row .sub { color: var(--muted); font-size: 11.5px; }
 
   /* generate section */
   .cs-focus-row { display: grid; grid-template-columns: 1fr 68px 32px; gap: 8px; margin-bottom: 8px; align-items: start; }
@@ -99,27 +100,27 @@
   .cs-autocomplete-item { display: flex; flex-direction: column; gap: 1px; padding: 8px 10px; cursor: pointer;
     border-bottom: 1px solid var(--border); }
   .cs-autocomplete-item:last-child { border-bottom: none; }
-  .cs-autocomplete-item .name { font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .cs-autocomplete-item .sub { font-size: 10px; color: var(--muted); }
+  .cs-autocomplete-item .name { font-size: 14px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cs-autocomplete-item .sub { font-size: 11.5px; color: var(--muted); }
   .cs-autocomplete-item:hover, .cs-autocomplete-item.is-active { background: var(--purple-soft); }
-  .cs-autocomplete-more { padding: 6px 10px; font-size: 10px; color: var(--dim); text-align: center; }
+  .cs-autocomplete-more { padding: 6px 10px; font-size: 11.5px; color: var(--dim); text-align: center; }
   .cs-album-checks { display: flex; flex-direction: column; gap: 4px; margin: 4px 0 8px; max-height: 160px; overflow-y: auto;
     border: 1px solid var(--border); border-radius: var(--r); padding: 8px 10px; }
-  .cs-album-checks label { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text); cursor: pointer; }
-  .cs-gen-field-label { display: block; font-size: 11px; color: var(--muted); margin-top: 14px; margin-bottom: 4px; }
+  .cs-album-checks label { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text); cursor: pointer; }
+  .cs-gen-field-label { display: block; font-size: 12.5px; color: var(--muted); margin-top: 14px; margin-bottom: 4px; }
   select.ob-input { font-family: inherit; }
   select#genIndividual { margin-top: 6px; }
   .cs-gen-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin: 4px 0; }
-  .cs-warn-box { font-size: 11px; color: var(--purple-lt); background: var(--purple-soft); border: 1px solid rgba(139,92,246,0.3);
+  .cs-warn-box { font-size: 12.5px; line-height: 1.5; color: var(--purple-lt); background: var(--purple-soft); border: 1px solid rgba(139,92,246,0.3);
     border-radius: var(--r); padding: 9px 10px; margin-bottom: 10px; }
 
   /* validate / generate report */
-  .cs-report-summary { font-size: 11px; color: var(--muted); margin-bottom: 8px; font-family: var(--mono); }
+  .cs-report-summary { font-size: 12.5px; color: var(--muted); margin-bottom: 8px; font-family: var(--mono); }
   .cs-report-row { display: flex; gap: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--r); margin-bottom: 6px; }
   .cs-report-row .ico { font-weight: 900; }
   .cs-report-row .ico.pass { color: var(--gold); } .cs-report-row .ico.warn { color: var(--purple-lt); } .cs-report-row .ico.fail { color: var(--crimson); }
-  .cs-report-row .rule { font-size: 12px; color: var(--text); font-weight: 700; }
-  .cs-report-row .detail { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .cs-report-row .rule { font-size: 14px; color: var(--text); font-weight: 700; }
+  .cs-report-row .detail { font-size: 12.5px; line-height: 1.5; color: var(--muted); margin-top: 2px; }
 </style>
 </head>
 <body>
@@ -187,20 +188,20 @@
     <input id="catSearch" class="ob-input" type="text" placeholder="Search a BTS song or member…">
     <button class="btn btn-primary" id="btnCatSearch" type="button">Search</button>
   </div>
-  <div id="catSearchStatus" class="muted" style="font-size:11px;"></div>
+  <div id="catSearchStatus" class="muted"></div>
   <div id="catSearchResults" class="cs-search-results"></div>
 
   <div class="cs-admin-row" style="margin-top:10px;">
     <button class="btn btn-ghost" id="btnResolveMore" type="button">⚡ Resolve more playable links</button>
     <button class="btn btn-ghost" id="btnStopResolve" type="button">Stop</button>
   </div>
-  <div class="muted" style="font-size:11px;">Links the iTunes catalog to Spotify via name search.</div>
+  <div class="muted">Links the iTunes catalog to Spotify via name search.</div>
   <div id="resolveOut" class="cs-admin-out"></div>
 
   <div class="cs-admin-row" style="margin-top:10px;">
     <button class="btn btn-ghost" id="btnBulkIsrc" type="button">🔍 Auto-fetch ISRCs</button>
   </div>
-  <div class="muted" style="font-size:11px;">Fetches ISRCs from MusicBrainz for pending songs (10 per run). Run repeatedly until done.</div>
+  <div class="muted">Fetches ISRCs from MusicBrainz for pending songs (10 per run). Run repeatedly until done.</div>
   <div id="isrcOut" class="cs-admin-out"></div>
 
   <p class="muted" style="margin-top:14px;">Or add a song manually with its Spotify link — works even when rate-limited (no Spotify API call).</p>
@@ -265,14 +266,14 @@
   <label class="cs-gen-field-label">Optional individual songs (added once each)</label>
   <input id="genIndividualFilter" class="ob-input" type="text" placeholder="Filter by name…" style="margin-bottom:6px;">
   <select id="genIndividual" class="ob-input" multiple size="6"></select>
-  <div class="muted" style="font-size:10px; margin-top:4px;">ctrl/cmd-click to select more than one.</div>
+  <div class="muted" style="margin-top:4px;">ctrl/cmd-click to select more than one.</div>
 
   <div class="cs-gen-grid">
     <input id="genName" class="ob-input" type="text" placeholder="Name (blank = random)">
     <input id="genMinutes" class="ob-input" type="number" min="30" max="180" value="180" title="Max minutes" placeholder="Max min">
     <input id="genFillerEvery" class="ob-input" type="number" min="5" max="30" value="20" title="Non-BTS filler every N songs" placeholder="Filler /N">
   </div>
-  <p class="muted" style="font-size:10px;">Gaps fill with other BTS songs; a non-Kpop song drops roughly every 60–75 min (~2 per playlist), capped at one per N tracks.</p>
+  <p class="muted">Gaps fill with other BTS songs; a non-Kpop song drops roughly every 60–75 min (~2 per playlist), capped at one per N tracks.</p>
   <button class="btn btn-primary" id="btnGenerate" type="button">🎧 Generate &amp; create in Spotify</button>
   <div id="genOut" class="cs-admin-out"></div>
   <div id="genReport"></div>

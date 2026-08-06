@@ -7,11 +7,11 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/reconnect.css">
 <style>
-  body { max-width: 1080px; margin: 0 auto; padding: 24px var(--gut) 60px; }
-  .adm-nav { font-size: 13px; margin-bottom: 18px; display: flex; gap: 10px; flex-wrap: wrap; }
+  body { max-width: 1120px; margin: 0 auto; padding: 24px var(--gut) 60px; line-height: 1.5; }
+  .adm-nav { font-size: 14px; font-weight: 500; margin-bottom: 22px; display: flex; gap: 10px; flex-wrap: wrap; }
   .adm-nav a { color: var(--purple-lt); }
   .adm-nav span { color: var(--dim); }
 
@@ -30,8 +30,11 @@
     background: var(--surface-2); color: var(--text); font: inherit; font-size: 13px; }
   .adm-unauth-err { width: 100%; font-size: 12px; color: var(--crimson); }
 
-  .adm-head { margin: 10px 0 22px; }
-  .adm-head h1 { font-family: var(--disp); font-size: 23px; margin: 8px 0 6px; }
+  .adm-head { margin: 12px 0 26px; }
+  .adm-head .eyebrow { font-size: 11px; letter-spacing: 2.2px; }
+  .adm-head h1 { font-family: var(--disp); font-size: clamp(26px, 3vw, 32px); line-height: 1.2;
+    letter-spacing: 0.01em; margin: 10px 0 8px; }
+  .adm-head .muted { max-width: 850px; font-size: 16px; line-height: 1.65; }
 
   .adm-key-row { display: flex; gap: 8px; align-items: center; margin: 14px 0 18px; }
   .adm-key-row .ob-input { flex: 1; }
@@ -46,7 +49,7 @@
   .adm-gate { display: flex; align-items: center; justify-content: center; min-height: 60vh; }
   .adm-gate-card { width: 100%; max-width: 360px; background: var(--surface); border: 1px solid var(--border);
     border-radius: var(--r-lg); padding: 22px; }
-  .adm-gate-label { font-family: var(--disp); font-size: 13px; font-weight: 800; letter-spacing: 1px;
+  .adm-gate-label { font-family: var(--disp); font-size: 15px; font-weight: 700; letter-spacing: 1px;
     color: var(--purple-lt); margin-bottom: 14px; }
   .adm-gate-msg { font-size: 11.5px; margin-top: 10px; min-height: 14px; }
   .adm-gate-msg.bad { color: var(--crimson); }
@@ -62,10 +65,10 @@
   .adm-snap-tile.is-alert { border-color: rgba(229,56,79,0.4); }
   .adm-snap-tile.is-live { border-color: rgba(217,173,95,0.4); }
   .adm-snap-label { font-family: var(--mono); font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--dim); }
-  .adm-snap-val { font-family: var(--disp); font-weight: 800; font-size: 20px; margin-top: 4px; }
+  .adm-snap-val { font-family: var(--disp); font-weight: 700; font-size: 22px; margin-top: 5px; }
   .adm-snap-tile.is-alert .adm-snap-val { color: var(--crimson); }
   .adm-snap-tile.is-live .adm-snap-val { color: var(--gold); }
-  .adm-snap-sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .adm-snap-sub { font-size: 14px; color: var(--muted); margin-top: 3px; }
 
   /* ── Tabs ── sticky: every panel here runs long, so the way to switch
      tabs — and the live snapshot tiles above it — should never scroll out
@@ -74,8 +77,8 @@
     position: sticky; top: 0; z-index: 10; background: rgba(10, 9, 16, .96); backdrop-filter: blur(12px);
     margin-left: calc(var(--gut) * -1); margin-right: calc(var(--gut) * -1); padding: 0 var(--gut); }
   .adm-tab {
-    background: none; border: 0; color: var(--muted); font: inherit; font-size: 14px; font-weight: 600;
-    padding: 12px 14px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
+    background: none; border: 0; color: var(--muted); font: inherit; font-size: 15.5px; font-weight: 600;
+    padding: 14px 16px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
     display: flex; align-items: center; gap: 6px; transition: color 0.15s, border-color 0.15s;
   }
   .adm-tab:hover { color: var(--text); }
@@ -88,23 +91,25 @@
   .adm-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
     padding: 20px; margin-bottom: 16px; }
   .adm-card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
-  .adm-card h2 { font-family: var(--disp); font-size: 17px; letter-spacing: 0.03em; margin: 0 0 4px; }
-  .adm-card > .muted { font-size: 14px; line-height: 1.6; margin-bottom: 16px; }
-  .adm-card .btn-ghost { padding: 7px 12px; font-size: 12px; }
+  .adm-card h2 { font-family: var(--disp); font-size: 18px; line-height: 1.35; letter-spacing: 0.02em; margin: 0 0 6px; }
+  .adm-card > .muted { font-size: 15px; line-height: 1.65; margin-bottom: 18px; }
+  .adm-card .btn-ghost { padding: 8px 13px; font-size: 12.5px; }
 
   .adm-field { display: block; margin-bottom: 12px; }
-  .adm-field > span { display: block; font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.6px;
+  .adm-field > span { display: block; font-family: var(--mono); font-size: 11px; letter-spacing: 0.8px;
     text-transform: uppercase; color: var(--dim); margin-bottom: 6px; }
-  .adm-field .ob-input { width: 100%; }
+  .adm-field .ob-input { width: 100%; font-family: inherit; font-size: 16px;
+    font-weight: 500; line-height: 1.35; letter-spacing: 0.1px; }
+  .adm-field .ob-input::placeholder { color: var(--dim); opacity: 0.9; font-weight: 400; }
   .adm-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  textarea.ob-input { font-family: inherit; font-size: 14px; min-height: 78px; resize: vertical; }
+  textarea.ob-input { font-family: inherit; font-size: 16px; min-height: 84px; resize: vertical; }
   .adm-block { display: block; width: 100%; margin-top: 6px; }
   .adm-row { display: flex; gap: 8px; margin-bottom: 4px; }
   .adm-row .ob-input { flex: 1; }
 
   .adm-toggle { display: flex; border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; }
   .adm-toggle-opt { flex: 1; background: transparent; border: 0; color: var(--muted); font: inherit;
-    font-size: 12.5px; padding: 11px 8px; cursor: pointer; transition: background 0.15s, color 0.15s; }
+    font-size: 14px; font-weight: 600; padding: 11px 8px; cursor: pointer; transition: background 0.15s, color 0.15s; }
   .adm-toggle-opt.is-active { background: var(--purple-soft); color: var(--purple-lt); }
   .adm-toggle-opt.is-active[data-val="gold"] { background: var(--gold-soft); color: var(--gold); }
 
@@ -134,8 +139,8 @@
   .adm-list-dot { width: 7px; height: 7px; border-radius: 50%; margin-top: 6px; flex-shrink: 0; background: var(--purple); }
   .adm-list-row[data-tone="gold"] .adm-list-dot { background: var(--gold); }
   .adm-list-body { flex: 1; min-width: 0; }
-  .adm-list-title { font-weight: 700; font-size: 15px; }
-  .adm-list-msg { color: var(--muted); font-size: 13.5px; margin-top: 2px; line-height: 1.5; }
+  .adm-list-title { font-weight: 700; font-size: 16px; }
+  .adm-list-msg { color: var(--muted); font-size: 15px; margin-top: 3px; line-height: 1.55; }
   .adm-list-meta { font-family: var(--mono); font-size: 11.5px; color: var(--dim); margin-top: 5px; letter-spacing: 0.3px; }
   .adm-list-del { background: none; border: none; color: var(--crimson); cursor: pointer; font-size: 13px; flex-shrink: 0; padding: 2px 4px; }
   .adm-list-row.is-pick { cursor: pointer; transition: border-color 0.15s, background 0.15s; }
@@ -156,15 +161,15 @@
     .adm-goal-form { position: sticky; top: 72px; margin-top: 0; }
   }
 
-  .adm-callout { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--muted);
+  .adm-callout { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14.5px; color: var(--muted);
     border: 1px solid var(--border); border-radius: var(--r); padding: 9px 12px; margin-bottom: 14px; }
   .adm-callout-more { background: none; border: 0; color: var(--purple-lt); font: inherit; font-size: 12.5px;
     cursor: pointer; padding: 0; text-decoration: underline; text-underline-offset: 2px; }
-  .adm-callout-detail { font-size: 13px; line-height: 1.55; margin: -6px 0 14px; }
+  .adm-callout-detail { font-size: 14.5px; line-height: 1.6; margin: -6px 0 14px; }
 
   .adm-goal-row { display: flex; align-items: center; gap: 10px; border: 1px solid var(--border); border-radius: var(--r);
     padding: 9px 11px; margin-bottom: 8px; }
-  .adm-goal-name { flex: 1; font-size: 14px; }
+  .adm-goal-name { flex: 1; font-size: 15.5px; font-weight: 500; }
   .adm-goal-target { font-family: var(--mono); font-size: 11.5px; color: var(--dim); flex-shrink: 0;
     cursor: default; }
   .adm-goal-row.is-inactive { background: rgba(255,255,255,.02); border-style: dashed; }
@@ -179,7 +184,7 @@
   .adm-goal-inactive-list { margin-top: 8px; }
 
   .adm-goal-form-grid { display: grid; grid-template-columns: 1fr 1fr 90px; gap: 8px; }
-  textarea.adm-goal-tracks { font-family: var(--mono); font-size: 13px; }
+  textarea.adm-goal-tracks { font-family: inherit; font-size: 16px; }
   .adm-mode-preview { font-family: var(--mono); font-size: 11.5px; line-height: 1.5; letter-spacing: 0.4px; color: var(--dim);
     margin-top: 6px; }
   .adm-mode-preview b { color: var(--muted); font-weight: 700; }
@@ -215,7 +220,7 @@
   /* ── Agent lookup result ── */
   .adm-agent-card { border: 1px solid var(--border-str); border-radius: var(--r-lg); padding: 18px; margin-top: 16px; }
   .adm-agent-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
-  .adm-agent-handle { font-family: var(--disp); font-weight: 800; font-size: 19px; }
+  .adm-agent-handle { font-family: var(--disp); font-weight: 700; font-size: 21px; }
   .adm-agent-no { font-family: var(--mono); font-size: 11px; color: var(--dim); }
   .adm-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700;
     padding: 4px 9px; border-radius: 999px; border: 1px solid var(--border); }
@@ -223,7 +228,7 @@
   .adm-badge.bad { color: var(--crimson); border-color: rgba(229,56,79,0.4); }
   .adm-agent-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px 18px; margin-top: 16px; }
   .adm-agent-stat .k { font-family: var(--mono); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--dim); }
-  .adm-agent-stat .v { font-size: 15px; margin-top: 3px; }
+  .adm-agent-stat .v { font-size: 16px; margin-top: 3px; }
   .adm-agent-section { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
   .adm-agent-section h3 { font-family: var(--mono); font-size: 10.5px; letter-spacing: 1.2px; text-transform: uppercase;
     color: var(--muted); margin-bottom: 8px; }

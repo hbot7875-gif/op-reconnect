@@ -32,22 +32,18 @@
   --muted: #9c96b0;
   --dim: #635d78;
 
-  --mono: 'Space Mono', monospace;
-  /* Orbitron for every heading/stat/number, Rajdhani for body copy — the
-     same split the BTS Comeback Mission reference uses. Orbitron runs wider
-     and heavier than Rajdhani at the same px; elements that were hand-fit to
-     Rajdhani's proportions (the ARMY Bomb core button, 95px wide) may need
-     their own font-size/letter-spacing tweaks rather than inheriting this
-     blind — see .core-title/.core-pct below. */
-  --disp: 'Orbitron', 'Rajdhani', sans-serif;
+  --body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --mono: 'Share Tech Mono', monospace;
+  /* The previous mission's effective cascade: neutral system copy, Orbitron
+     for headings and major values, and mono only for short technical labels. */
+  --disp: 'Orbitron', sans-serif;
 
   --r: 12px;          /* one radius, used everywhere */
   --r-lg: 16px;
   --gut: 16px;
 
-  /* Minimum type scale for the player app — Space Mono reads smaller than
-     Inter/Rajdhani at the same px, which is why so much of this file's
-     metadata/label text sat at 9-10.5px despite inputs already being 15px.
+  /* Minimum type scale for the player app — compact mono labels need a
+     slightly larger floor than ordinary system copy to remain readable.
      Reference floors, not a hard requirement every rule pulls from — most
      of the sizes below were set per-element to match this scale directly. */
   --fs-meta: 11px;      /* decorative/status metadata */
@@ -66,7 +62,7 @@ body {
     radial-gradient(ellipse 70% 38% at 25% -4%, var(--purple-soft) 0%, transparent 58%),
     var(--bg);
   color: var(--text);
-  font-family: 'Rajdhani', sans-serif;
+  font-family: var(--body);
   min-height: 100vh;
   font-size: 16px;
   -webkit-font-smoothing: antialiased;
@@ -1838,7 +1834,7 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 .ob-voiceover { margin-top: 0; }
 .ob-voiceover.is-playing { border-color: var(--purple); color: var(--purple-lt); }
 .ob-input { width: 100%; padding: 14px; border-radius: var(--r); border: 1px solid var(--border);
-  background: var(--panel); color: var(--text); font-family: var(--mono); font-size: 15px; }
+  background: var(--panel); color: var(--text); font-family: inherit; font-size: 16px; }
 .ob-input:focus { border-color: var(--purple); outline: none; box-shadow: 0 0 0 3px rgba(139,92,246,0.15); }
 .warn-box { background: var(--crimson-soft); border: 1px solid rgba(229,56,79,0.4); border-radius: var(--r);
   padding: 14px; font-size: 13.5px; line-height: 1.6; margin: 14px 0; }
