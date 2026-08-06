@@ -28,7 +28,6 @@ import { renderCityMap } from './city-map.js'
 import { districtIcon } from './landmarks.js'
 import { openFinder } from './search.js'
 import { openShare } from './share.js'
-import { tickCountdowns } from './countdown.js'
 import { bombSheet } from './bomb-sheet.js'
 import { agentChargeSheet } from './agent-charge.js'
 import { broadcastCards } from './broadcasts.js'
@@ -186,35 +185,34 @@ let bombIntroPlayed = false
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 function coreBlock(state) {
-  const b = state.bomb || { charge: 0, defuse: null, brownout: false }
-  const underAttack = !!b.defuse
-  const pct = Math.round((b.charge || 0) * 100)
+  const charge = state.agentCharge || { hoursRemaining: 0, isDark: false }
+  const hours = Math.max(0, Number(charge.hoursRemaining) || 0)
+  const neverFed = !charge.isDark && hours <= 0
+  // Same 48-hour visual ceiling as the full Personal Charge sheet: one Cell
+  // visibly helps without making a 4-hour feed look completely full.
+  const chargeFrac = Math.max(0, Math.min(1, hours / 48))
+  const chargeText = charge.isDark ? 'DARK' : neverFed ? 'EMPTY' : `${Math.round(hours)}H`
   const firstReveal = !bombIntroPlayed
   bombIntroPlayed = true
 
   const zone = el('div', 'core-block')
-  zone.appendChild(el('div', 'core-eyebrow', 'Network core'))
+  zone.appendChild(el('div', 'core-eyebrow', 'Your lifeline'))
   zone.appendChild(el('div', 'core-title', 'ARMY Bomb'))
 
   const btn = el('button', 'army-core'
-    + (underAttack ? ' is-attack' : b.brownout ? ' is-brownout' : '')
+    + (charge.isDark || neverFed ? ' is-brownout' : '')
     + (firstReveal && !reducedMotion() ? ' core-intro' : ''))
-  // The sphere itself still visualises the shared network's charge (real
-  // data, real atmosphere) — but tapping it now opens Personal Charge, not
-  // the network sheet. That's deliberate: the network Bomb stopped
-  // affecting anyone's own XP or survival a few passes back, so the thing
-  // worth a tap from here is the Bomb that actually matters to THIS agent.
-  // The smaller "Network" status tile below (statusStrip) still opens the
-  // network sheet for anyone who wants Red Zone/community details.
-  btn.setAttribute('aria-label', `Network power — ${pct}% charged. Tap to check your own ARMY Bomb.`)
+  // This is the player's survival resource, so both the visual and the tap
+  // now describe the same system. Shared network activity still powers the
+  // city atmosphere and Red Zone, but no longer occupies the primary hero.
+  btn.setAttribute('aria-label', charge.isDark
+    ? 'Your ARMY Bomb is dark. Tap to feed it.'
+    : neverFed ? 'Your ARMY Bomb is empty. Tap to charge it.'
+    : `Your ARMY Bomb has ${Math.round(hours)} hours remaining. Tap to feed it.`)
   // The lightstick is the Launch the Voyage bomb (the .cs-bomb build from
   // app.js's concert mode): glassy sphere, ⟭⟬ logo, dark handle, gentle sway.
-  // The outer arc is live data: community charge (or, under attack, how far
-  // the defuse has come).
+  // The outer arc is the same personal charge driving the fill and glow.
   const CIRC = 2 * Math.PI * 106
-  const arcFrac = underAttack
-    ? Math.min(1, b.defuse.progress / Math.max(1, b.defuse.target))
-    : (b.charge || 0)
   btn.innerHTML = `
     <div class="core-glow"></div>
     <svg class="core-rings" viewBox="0 0 220 220" aria-hidden="true">
@@ -222,7 +220,7 @@ function coreBlock(state) {
       <circle class="ring-inner" cx="110" cy="110" r="90"></circle>
       <circle class="ring-charge-bg" cx="110" cy="110" r="106"></circle>
       <circle class="ring-charge" cx="110" cy="110" r="106" transform="rotate(-90 110 110)"
-        stroke-dasharray="${(CIRC * arcFrac).toFixed(1)} ${CIRC.toFixed(1)}"></circle>
+        stroke-dasharray="${(CIRC * chargeFrac).toFixed(1)} ${CIRC.toFixed(1)}"></circle>
     </svg>
     <div class="core-particles"><span></span><span></span><span></span><span></span><span></span><span></span></div>
     <div class="rc-bomb">
@@ -235,49 +233,34 @@ function coreBlock(state) {
       <div class="rc-handle"><span class="rc-grip"></span><span class="rc-grip"></span></div>
     </div>
   `
-  // The ring arc already carries real charge — the glow/sphere didn't, so the
-  // bomb looked fully lit from 0% on. --charge scales glow opacity and
-  // box-shadow spread in CSS so a fresh network reads as dim/embers and
-  // brightens as it actually charges, same intensity-follows-state language
-  // the map and auth screen already use elsewhere.
-  btn.style.setProperty('--charge', arcFrac.toFixed(3))
+  btn.style.setProperty('--charge', chargeFrac.toFixed(3))
   btn.onclick = () => showOverlay(agentChargeSheet())
   zone.appendChild(btn)
 
-  const read = el('div', 'core-read' + (underAttack ? ' is-attack' : ''))
-  const deadline = underAttack ? (b.defuse.activeUntil || b.defuse.active_until || null) : null
-  read.innerHTML = underAttack ? `
-    <div class="core-pct"${deadline ? ` data-deadline="${esc(deadline)}"` : ''}>${deadline ? '--:--:--' : 'BREACH'}</div>
-    <div class="core-lbl">until detonation &middot; stream to defuse</div>
-  ` : `
-    <div class="core-pct">${pct}%</div>
-    <div class="core-lbl">network power &middot; tap for your charge</div>
+  const read = el('div', 'core-read' + (charge.isDark ? ' is-attack' : ''))
+  read.innerHTML = `
+    <div class="core-pct">${chargeText}</div>
+    <div class="core-lbl">${charge.isDark ? 'charge lost &middot; tap to feed'
+      : neverFed ? 'tap to start charging' : 'charge remaining &middot; tap to feed'}</div>
   `
   zone.appendChild(read)
-  if (deadline) tickCountdowns()
 
-  // Signal ports — a discrete "how many bars" companion to the exact
-  // percentage above: real tiers off the same arcFrac driving the ring,
-  // not decoration. Under attack this reads defuse progress instead of
-  // charge, same swap the ring/percentage already make. Math.ceil (not
-  // round) so any nonzero charge lights at least one port — a 3% network
-  // rounding down to "0 lit" looked identical to a dead one.
-  const litPorts = arcFrac > 0 ? Math.max(1, Math.ceil(arcFrac * 4)) : 0
-  const ports = el('div', 'core-ports' + (underAttack ? ' is-attack' : b.brownout ? ' is-brownout' : ''))
+  const litPorts = chargeFrac > 0 ? Math.max(1, Math.ceil(chargeFrac * 4)) : 0
+  const ports = el('div', 'core-ports' + (charge.isDark || neverFed ? ' is-brownout' : ''))
   ports.innerHTML = Array.from({ length: 4 }, (_, i) => `<span class="wp${i < litPorts ? ' lit' : ''}"></span>`).join('')
   zone.appendChild(ports)
 
   // Charges up from 0 rather than just appearing, same "this is happening
   // live" feeling the count-up rings already sell — but only on the entrance,
   // never on a routine poll where the value usually hasn't moved.
-  if (firstReveal && !underAttack && !reducedMotion()) {
+  if (firstReveal && hours > 0 && !reducedMotion()) {
     const numEl = read.querySelector('.core-pct')
     const start = performance.now()
     const dur = 900
     requestAnimationFrame(function frame(now) {
       const t = Math.min(1, (now - start) / dur)
       const eased = 1 - Math.pow(1 - t, 3)
-      numEl.textContent = `${Math.round(pct * eased)}%`
+      numEl.textContent = `${Math.round(hours * eased)}H`
       if (t < 1) requestAnimationFrame(frame)
     })
   }
@@ -287,18 +270,18 @@ function coreBlock(state) {
 /* ── The conduit ────────────────────────────────────────────────────────
    The bomb isn't decoration sitting above a list — it powers the city, and
    the city feeds it back. A pulse runs down this line into the operations
-   map, faster the fuller the core is. During a breach it runs crimson and
-   urgent; in a brownout it stops, which is the whole point of a brownout. */
+   map, faster the more personal charge remains. When the Bomb goes dark,
+   it stops — the city has visibly lost its power source. */
 
 function coreFeed(state) {
-  const b = state.bomb || { charge: 0 }
-  const feed = el('div', 'core-feed'
-    + (b.defuse ? ' is-attack' : b.brownout ? ' is-brownout' : ''))
+  const charge = state.agentCharge || { hoursRemaining: 0, isDark: false }
+  const fraction = Math.max(0, Math.min(1, (Number(charge.hoursRemaining) || 0) / 48))
+  const feed = el('div', 'core-feed' + (charge.isDark || fraction <= 0 ? ' is-brownout' : ''))
   feed.setAttribute('aria-hidden', 'true')
   feed.innerHTML = '<i class="cf-line"></i><i class="cf-pulse"></i><i class="cf-pulse d2"></i>'
 
-  // A charged network visibly moves more signal: 2.6s idle → 1.2s at full.
-  const secs = (2.6 - Math.min(1, b.charge || 0) * 1.4).toFixed(2)
+  // More personal charge moves a stronger signal into the city below.
+  const secs = (2.6 - fraction * 1.4).toFixed(2)
   for (const p of feed.querySelectorAll('.cf-pulse')) p.style.animationDuration = `${secs}s`
   return feed
 }
@@ -461,26 +444,10 @@ function opCard(state) {
   return card
 }
 
-/* ── Network + transmission ─────────────────────────────────────────────── */
+/* ── Daily transmission ─────────────────────────────────────────────────── */
 
 function statusStrip(state) {
   const row = el('div', 'status-strip')
-  const b = state.bomb
-
-  if (b && !b.defuse) {
-    const pct = Math.round((b.charge || 0) * 100)
-    const tile = el('button', 'status-tile' + (b.brownout ? ' dim' : ''))
-    tile.setAttribute('aria-label', `ARMY Bomb network power ${pct}%`)
-    tile.innerHTML = `
-      <div class="st-head">
-        <span class="st-label">${b.brownout ? 'Brownout' : 'Network'}</span>
-        <span class="st-val">${pct}%</span>
-      </div>
-      <div class="st-bar"><div class="st-fill" style="width:${pct}%"></div></div>
-    `
-    tile.onclick = () => showOverlay(bombSheet(state))
-    row.appendChild(tile)
-  }
 
   const t = state.transmission
   if (t) {

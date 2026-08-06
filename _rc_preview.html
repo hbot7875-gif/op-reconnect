@@ -170,6 +170,7 @@
       chargeCells: STATE.player.chargeCells,
       litEras: [],
     }
+    STATE.agentCharge = AGENT_CHARGE
 
     // #restored replays the restoration moment; #wardwhole is the bigger
     // version where that district was the ward's last one.
@@ -218,6 +219,13 @@
         }
         if (body.action === 'joinGame') {
           return { json: async () => ({ ...JSON.parse(JSON.stringify(STATE)), success: true, joined: true }) }
+        }
+        if (body.action === 'getAccount') {
+          return { json: async () => ({ success: true, account: {
+            agentNo: 'AGENT000', handle: 'agent-violet', email: 'violet@example.com',
+            streamSource: 'lb', lbUsername: 'agent-violet', hasPin: true,
+            createdAt: '2026-08-01T00:00:00.000Z',
+          } }) }
         }
         if (body.action === 'getAgentCharge') {
           return { json: async () => ({ success: true, charge: JSON.parse(JSON.stringify(AGENT_CHARGE)) }) }

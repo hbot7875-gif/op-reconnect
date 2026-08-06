@@ -1689,8 +1689,25 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 .bd-line { display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
   padding: 5px 0; font-size: 13.5px; color: var(--muted); }
 
-.agent-manual .am-line { font-size: 13px; line-height: 1.5; color: var(--muted); margin-bottom: 6px; }
-.agent-manual .am-line:last-child { margin-bottom: 0; }
+/* Agent Manual — plain reading flow, not a stack of reference cards. */
+.agent-manual { max-width: 500px; }
+.am-intro { margin: 9px 0 2px; font-size: 14px; line-height: 1.5; color: var(--muted); }
+.am-section { padding: 18px 0; border-bottom: 1px solid var(--border); }
+.am-section-title { margin-bottom: 9px; font-family: var(--disp); font-size: 17px;
+  font-weight: 800; letter-spacing: 0.3px; color: var(--text); }
+.am-step, .am-xp-row { display: grid; grid-template-columns: 28px 1fr; gap: 10px;
+  align-items: start; padding: 8px 0; }
+.am-step-number { display: grid; place-items: center; width: 23px; height: 23px; border-radius: 50%;
+  background: var(--purple-soft); border: 1px solid rgba(139,92,246,0.45); color: var(--purple-lt);
+  font-family: var(--mono); font-size: 10px; font-weight: 800; }
+.am-step b, .am-xp-row b { display: block; font-size: 14px; color: var(--text); }
+.am-step small, .am-xp-row small { display: block; margin-top: 2px; font-size: 12.5px;
+  line-height: 1.45; color: var(--muted); }
+.am-xp-icon { width: 23px; text-align: center; font-size: 17px; line-height: 1.3; }
+.am-footnote { margin: 10px 0 0 38px; font-size: 11.5px; line-height: 1.5; color: var(--dim); }
+.am-charge-note { border-bottom: 0; }
+.am-charge-note p { margin: 7px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.agent-manual > .btn { width: 100%; margin-top: 4px; }
 .bd-line b { font-family: var(--mono); font-size: 13px; font-weight: 400; color: var(--text); }
 .bd-clock { color: var(--crimson) !important; letter-spacing: 1.5px; }
 .bomb-dash .btn-ghost { margin-top: 16px; }

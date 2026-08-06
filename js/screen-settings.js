@@ -162,7 +162,7 @@ function paintSections(body, state) {
   body.appendChild(section('Help', 'Reference, not inventory', [
     {
       icon: '📖', name: 'How to Play', value: '',
-      body: 'Plain-words explanations for every system in the game — start here if anything is unclear.',
+      body: 'The game loop, every way to earn XP, and how to protect your progress.',
       onClick: () => showOverlay(agentManualSheet()),
     },
   ]))

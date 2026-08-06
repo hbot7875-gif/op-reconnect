@@ -108,6 +108,12 @@ function paint(body, ac) {
       if (state?.player) setState({
         ...state,
         player: { ...state.player, chargeCells: Math.max(0, (state.player.chargeCells || 0) - 1) },
+        agentCharge: {
+          ...(state.agentCharge || {}),
+          hoursRemaining: nextHours,
+          isDark: false,
+          chargeCells: remainingCells,
+        },
       })
     }
 
