@@ -3,3 +3,6 @@ dist/
 .DS_Store
 *.log
 supabase/.temp/
+
+# Claude Code local/agent state — not project source
+.claude/

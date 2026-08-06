@@ -121,7 +121,7 @@ body.landing {
   display: flex; flex-direction: column; align-items: center;
 }
 .hero-inner { display: flex; flex-direction: column; align-items: center; }
-.hero-map { width: 100%; margin-top: 44px; }
+.hero-map { width: 100%; margin-top: 72px; }
 
 @media (min-width: 900px) {
   .hero { padding: 80px 40px 96px; }
@@ -372,7 +372,7 @@ body.landing {
      that none of it shows. */
   .title { margin-top: 24px; }
   .hero .btn { margin-top: 30px; }
-  .hero-map { margin-top: 34px; }
+  .hero-map { margin-top: 56px; }
   /* One line of terminal text doesn't fit 375px in one breath — let it wrap
      rather than shrink the font past legible. */
   .ticker { line-height: 1.9; }
