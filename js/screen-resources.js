@@ -16,6 +16,7 @@ import { openPlaylist } from './playlist.js'
 import { badgeDrawerSheet } from './badge-drawer.js'
 import { missionBoardSheet } from './mission-board.js'
 import { magicShopSheet } from './magic-shop.js'
+import { agentChargeSheet } from './agent-charge.js'
 import { resourceRow, resourceSheet } from './resources.js'
 import { itemTile, itemSheet, itemsInPack } from './items.js'
 
@@ -47,6 +48,13 @@ const TOOLS = [
     tag: 'Charge Cells · Wings · Tickets',
     body: 'Spend XP on Wings, track your Charge Cells, and claim a Ticket once you\'ve earned one.',
     action: () => showOverlay(magicShopSheet()),
+  },
+  {
+    icon: '⚡',
+    name: 'Personal Charge',
+    tag: 'Feed the Bomb · keep your districts alive',
+    body: 'Your own ARMY Bomb charge — feed it Charge Cells, light up eras for a boost, or leave it on auto-feed.',
+    action: () => showOverlay(agentChargeSheet()),
   },
 ]
 

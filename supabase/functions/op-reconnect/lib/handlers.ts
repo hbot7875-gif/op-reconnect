@@ -13,6 +13,7 @@ import { getBombView, launchDefuse } from './bomb.ts'
 import { getEraTimeline } from './era-timeline.ts'
 import { getMyInvites } from './reconnect-missions.ts'
 import { creditChargeCells } from './charge-economy.ts'
+import { getAgentChargeView } from './agent-charge.ts'
 import { levelFor, applyLevelUpIfNeeded, nextLevelRewards } from './leveling.ts'
 import { getActiveBroadcasts } from './broadcasts.ts'
 
@@ -67,9 +68,12 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     ? Number(player.boost_multiplier) || 1
     : 1
 
-  // Bomb view first — it reads the community's already-stored rollups, and
-  // its multiplier feeds this agent's XP for today.
+  // Bomb view first — Red Zone (target/contribution/reward) is still
+  // network-wide, but its own charge/multiplier are retired (BOTZ redesign
+  // Phase 3 — see agent-charge.ts). personalBoostMult above is the only
+  // multiplier real XP still gets.
   const bomb = await getBombView(supabase, content, player.agent_no)
+  const agentCharge = await getAgentChargeView(supabase, content, player.agent_no)
   const eraTimeline = await getEraTimeline(supabase, content)
   // Pending reconnect-mission invites — small, agent-scoped, cheap to
   // recompute every poll (unlike eraTimeline's network-wide scan, this is
@@ -326,6 +330,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     resources,
     items,
     bomb,
+    agentCharge,
     eraTimeline,
     invites,
     broadcasts,

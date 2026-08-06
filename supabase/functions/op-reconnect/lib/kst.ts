@@ -40,3 +40,15 @@ export function nextKstMidnightUtc(): string {
   const tomorrow = addDaysStr(todayKst(), 1)
   return new Date(`${tomorrow}T00:00:00+09:00`).toISOString()
 }
+
+/** Monday-based KST week key (that week's Monday, as a date string) — Lit-up
+ *  Eras (agent-charge.ts) are scoped to "this week only" and reset when this
+ *  changes, same "compare a stored key to today's" pattern computeStreak
+ *  already uses, just weekly instead of daily. */
+export function kstWeekKey(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00Z`)
+  const dow = d.getUTCDay() // 0=Sun..6=Sat
+  const sinceMonday = dow === 0 ? 6 : dow - 1
+  d.setUTCDate(d.getUTCDate() - sinceMonday)
+  return d.toISOString().slice(0, 10)
+}

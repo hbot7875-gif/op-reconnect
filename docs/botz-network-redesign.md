@@ -205,20 +205,43 @@ would be the first real currency-sink/storefront in the game.
   `generated_playlists` rows created today (KST), so a failed attempt never eats into the
   limit — only successful generations are ever inserted there.
 
-**Phase 3 — Bomb charge model change**
-- New `rc_agent_charge`-style table: per-agent charge level, last-fed timestamp, fuel
-  balance. Replaces `bomb.ts`'s shared `rc_bomb_state` read for the "does my district stay
-  alive" check. The day-to-day community-charge → shared XP multiplier goes away; Red Zone
-  stays as the one surviving shared/network-wide layer (see decision 7) but its
-  consequence on failure changes from a network brownout multiplier to a hit against every
-  agent's personal charge.
-- Retire the Era Timeline → charge-window bonus (`completedEraCount()` / `chargeWindowDays()`
-  in `bomb.ts`) or rebuild it as a per-agent bonus — it was built to extend a shared
-  window that no longer exists once charge is personal.
-- Lit-up Eras: new per-agent-per-week state (which eras lit, 10h charge each, resets weekly).
-- 7-day blackout consequence, with the streak-freeze escape hatch wired in (decision 4).
-- Mode-based streams-per-XP (decision 5) fits naturally here too, since it's the same
-  "how streaming converts into game currency" surface as fuel/botz earning.
+**Phase 3 — Bomb charge model change — ✅ CORE SHIPPED, one piece deliberately deferred**
+- New `rc_agent_charge` table (`agent_no`, `charged_until`, `auto_feed`, blackout markers) —
+  charge is an absolute expiry computed at read time, not a decaying counter, matching
+  derive.ts's "interpret at read time, nothing decrements in the background" philosophy.
+  `lib/agent-charge.ts`'s `getAgentChargeView()` is the one function handlers.ts calls each
+  poll: it catches up auto-feed retroactively, checks Lit-up Eras, then evaluates the
+  blackout consequences. New client screen `js/agent-charge.js` (Pack → Personal Charge):
+  shows hours remaining, feeds Charge Cells (4h each, `feedCharge`), toggles auto-feed
+  (`setAutoFeed`), and lists this week's lit eras.
+- **Two-tier blackout, exactly as specified in the follow-up clarification** (not just the
+  original 7-day figure): 7 continuous days dark abandons the active district back to
+  available (same shape as the existing restoration-deadline lapse); **14 days triggers a
+  full wipe — every restored district reverts, XP/badges/items stay banked.** Both are
+  rescued reactively by spending streak-freeze charges (1 day covered each) right at the
+  moment a threshold would otherwise trip, not spent proactively. Both consequences are
+  idempotent (nothing left to re-wipe once applied) and clear automatically the moment the
+  agent charges again.
+- Lit-up Eras: `rc_agent_lit_eras` (agent, era, week). Streaming every track in a whole era
+  during the current KST week (Monday-keyed) lights it for +10h, once per era per week,
+  checked BEFORE the blackout evaluation each poll so a freshly-lit era can rescue an
+  agent from going dark in the same request. Reuses `era-timeline.ts`'s `ERA_CATALOG`
+  (now exported) for the track lists, but scores per-agent/per-week, not network-wide/
+  all-time — genuinely a different question from that file's own rollup.
+- **Deliberately deferred**: `bomb.ts` itself was NOT touched this pass. The shared
+  `rc_bomb_state` charge, its community→XP multiplier, Red Zone's brownout-multiplier
+  failure consequence, and the earlier Era Timeline → `chargeWindowDays()` bonus are all
+  still live and unchanged — they now run **alongside** the new per-agent system rather
+  than being replaced by it. Retiring them (decision 7's "shared multiplier goes away,
+  Red Zone hits personal charge instead") is real surgery on the currently-live XP-award
+  pipeline (`derive.ts`'s `awardStreamsXp`, fed by `bomb.multiplier`) and on Red Zone's
+  failure branch — riskier to bundle into the same pass as three brand-new tables, so it's
+  its own follow-up rather than a half-verified rewrite.
+- Mode-based streams-per-XP (decision 5) also NOT done yet — it touches `modeMultiplier`'s
+  variety-cap role in three call sites (`derive.ts`, `handlers.ts` ×2) plus the *frozen*
+  multiplier already baked into every in-flight district's `frozen.meta.multiplier`
+  (`districts.ts`), which also feeds Phase 2's `albumGoalStreamTotal()`. Separate,
+  self-contained follow-up.
 
 **Phase 4 — Magic Shop polish + visuals**
 - Gate the existing Candy Star Generator behind spending Wings (decision 6) — no new

@@ -21,7 +21,7 @@
 import type { SupabaseDB, GameContent } from './config.ts'
 import { normKeyFull, artistAllowed } from './text.ts'
 
-interface EraDef { id: string; name: string; icon: string; description: string; tracks: string[] }
+export interface EraDef { id: string; name: string; icon: string; description: string; tracks: string[] }
 
 // Real BTS discography, grouped the way the arirang-btsbackend project's own
 // ERAS dict names/describes them — era names, icons and descriptions taken
@@ -44,7 +44,9 @@ interface EraDef { id: string; name: string; icon: string; description: string; 
 // album. Proof (2022's anthology compilation) only contributes the handful
 // of tracks actually exclusive to it, filed under The Anthology since
 // that's literally what the compilation is.
-const ERA_CATALOG: EraDef[] = [
+// Exported so agent-charge.ts's Lit-up Eras can reuse the same track
+// catalog for its per-agent, per-week check.
+export const ERA_CATALOG: EraDef[] = [
   {
     id: 'school', name: 'School Trilogy', icon: '📚',
     description: 'The foundation: Dreams, rebellion, and social commentary.',
