@@ -151,7 +151,7 @@ function paintSections(body, state) {
   body.appendChild(section('Game', 'How hard you want this', [
     {
       icon: '🎚', name: 'Streaming mode', value: state?.player?.mode || 'easy',
-      body: 'More accounts means bigger targets, same XP per stream.',
+      body: 'More accounts means bigger targets and slower XP per stream — 10/20/30 streams for 1 XP.',
       onClick: () => openModeSheet(getState() || state),
     },
   ]))

@@ -61,10 +61,15 @@ export function renderOnboarding(container, payload, agentNo, onJoined) {
   const modeGrid = el('div', 'mode-grid')
   let selectedMode = 'easy'
   const order = ['easy', 'medium', 'hard']
+  // 10/20/30 streams per XP on easy/medium/hard — same fixed ladder
+  // config.ts's streamsPerXpFor() defaults to, shown here so the tradeoff
+  // (bigger targets AND slower XP, not just bigger targets) is visible
+  // before it's picked, not discovered later in Settings.
+  const STREAMS_PER_XP = { easy: 10, medium: 20, hard: 30 }
   for (const key of order) {
     if (!modes[key]) continue
     const opt = el('div', 'mode-opt' + (key === selectedMode ? ' sel' : ''),
-      `<div class="t">${esc(modes[key].label || key)}</div><div class="dim">Targets ×${esc(modes[key].multiplier)}</div>`)
+      `<div class="t">${esc(modes[key].label || key)}</div><div class="dim">Targets ×${esc(modes[key].multiplier)} · ${STREAMS_PER_XP[key]} streams = 1 XP</div>`)
     opt.onclick = () => {
       selectedMode = key
       modeGrid.querySelectorAll('.mode-opt').forEach((o) => o.classList.remove('sel'))

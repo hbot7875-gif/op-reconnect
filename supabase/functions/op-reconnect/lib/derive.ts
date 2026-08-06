@@ -21,6 +21,7 @@ export interface DailyRow {
   transmission_done: boolean
   finalized: boolean
   bomb_mult?: number
+  mode?: string
 }
 
 /** Counted (BTS-allowlisted, variety-capped) streams for one day's bucket. */
@@ -123,6 +124,13 @@ export async function ensureDailyRollups(
       // Past days keep whatever multiplier they were finalized with; only
       // today tracks the live community charge.
       const dayMult = date === today ? bombMult : Number(existing?.bomb_mult ?? bombMult)
+      // Same rule for mode: whichever mode was live the first time THIS
+      // date's row was ever written is what that date's XP converts at,
+      // for good — a mode switch later in the day (or on any later poll)
+      // never rewrites a date that's already been touched once, today
+      // included. Prevents streaming on Hard then switching to Easy (or
+      // the reverse) before midnight from silently rewriting the day's XP.
+      const dayMode = existing?.mode || player.mode
       const row: DailyRow = {
         agent_no: player.agent_no,
         kst_date: date,
@@ -132,12 +140,13 @@ export async function ensureDailyRollups(
         transmission_done: evald.done || existing?.transmission_done || false,
         finalized: date < today,
         bomb_mult: dayMult,
+        mode: dayMode,
       }
       await supabase.from('rc_daily_activity').upsert(row, { onConflict: 'agent_no, kst_date' })
       byDate.set(date, row)
 
       const counted = countedStreams(dayData.bucket, allowlist, cap)
-      await awardStreamsXp(supabase, player.agent_no, date, counted, streamsPerXpFor(content, player.mode), !!existing?.finalized, dayMult, date === today ? personalBoostMult : 1)
+      await awardStreamsXp(supabase, player.agent_no, date, counted, streamsPerXpFor(content, dayMode), !!existing?.finalized, dayMult, date === today ? personalBoostMult : 1)
       if (row.transmission_done) {
         await awardOnce(supabase, player.agent_no, rules.transmissionXp, 'transmission',
           `transmission:${player.agent_no}:${date}`, { templateId: transmission?.templateId })

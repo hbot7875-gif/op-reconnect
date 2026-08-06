@@ -31,6 +31,13 @@ async function loadAndPaint(body) {
 function paint(body, ac) {
   body.innerHTML = ''
 
+  // A brand-new agent who's never fed the Bomb reads as isDark:false with
+  // hoursRemaining:0 (agent-charge.ts's charged_until stays null until a
+  // first real charge exists to lose) — that combination is otherwise
+  // impossible, since isDark flips true the instant real remaining hours
+  // hit zero. Used to just say "0h / charged", which reads as broken, not
+  // as "you haven't started yet."
+  const neverFed = !ac.isDark && ac.hoursRemaining <= 0
   const status = el('div', 'ac-status' + (ac.isDark ? ' dark' : ''))
   // --fuel scales the ember animation below — a fresh feed reads as a real
   // flare-up, a bomb that's been running low reads as a dying fire, same
@@ -40,8 +47,9 @@ function paint(body, ac) {
   status.style.setProperty('--fuel', Math.max(0, Math.min(1, ac.hoursRemaining / 48)).toFixed(3))
   status.innerHTML = `
     <div class="ac-embers" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
-    <div class="ac-hours">${fmtHours(ac.hoursRemaining)}</div>
-    <div class="ac-label">${ac.isDark ? 'DARK — feed it before it costs you a district' : 'charged'}</div>
+    <div class="ac-hours">${neverFed ? '—' : fmtHours(ac.hoursRemaining)}</div>
+    <div class="ac-label">${ac.isDark ? 'DARK — feed it before it costs you a district'
+      : neverFed ? 'not yet charged — feed it to start the clock' : 'charged'}</div>
   `
   body.appendChild(status)
 
@@ -62,10 +70,12 @@ function paint(body, ac) {
     const res = await call('feedCharge', { agentNo: getAgentNo(), cells: 1 })
     if (!res.success) { toast(res.error || "Couldn't feed it"); feedBtn.disabled = false; return }
     toast('+4h charge')
-    // Like tossing another log on — a brief flare on the status card before
-    // the numbers themselves update, not just a toast.
-    status.classList.add('feeding')
-    setTimeout(() => loadAndPaint(body), 260)
+    // Repaint FIRST so the numbers are already correct, then flare the
+    // fresh status card — a setTimeout-before-repaint here would either cut
+    // the ~0.9s flare short (paint() wipes and rebuilds .ac-status) or make
+    // the numbers lag behind the toast. This way neither happens.
+    await loadAndPaint(body)
+    body.querySelector('.ac-status')?.classList.add('feeding')
   }
   feedCard.appendChild(feedBtn)
   body.appendChild(feedCard)

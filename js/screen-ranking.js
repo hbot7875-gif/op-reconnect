@@ -1,10 +1,10 @@
 // Rankings — codename, level and XP for every agent, split by streaming
-// mode. Modes aren't a difficulty score (screen-settings.js: "bigger targets,
-// same XP per stream"), but they're still not directly comparable — a
-// six-account hard-mode agent and a one-device easy-mode agent are playing
-// different games, so ranking them against each other would just reward
-// account count. Each mode gets its own board; "All" is for bragging rights
-// only and says so.
+// mode. Modes scale both goal targets AND the streams-per-XP rate
+// (screen-settings.js: "bigger targets and slower XP per stream" — 10/20/30
+// streams per XP on easy/medium/hard), so a six-account hard-mode agent and
+// a one-device easy-mode agent are playing different games in two ways now,
+// not directly comparable. Each mode gets its own board; "All" is for
+// bragging rights only and says so.
 
 import { call } from './api.js'
 import { el, esc } from './state.js'

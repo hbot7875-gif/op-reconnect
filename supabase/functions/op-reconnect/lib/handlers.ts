@@ -344,7 +344,10 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
       countedStreams: counted,
       rawStreams: todayRow?.raw_streams || 0,
       varietyCap: cap,
-      xpToday: Math.floor(counted / streamsPerXpFor(content, player.mode)) + (transmission?.done ? rules.transmissionXp : 0),
+      // Today's own frozen mode (see derive.ts's dayMode), not the player's
+      // live mode — matches whatever rate today's XP actually got awarded
+      // at, even if the player has since switched modes.
+      xpToday: Math.floor(counted / streamsPerXpFor(content, todayRow?.mode || player.mode)) + (transmission?.done ? rules.transmissionXp : 0),
       resetsAtUtc: nextKstMidnightUtc(),
     },
   }

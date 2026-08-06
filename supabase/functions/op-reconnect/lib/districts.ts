@@ -149,7 +149,13 @@ export function districtProgress(
   activatedAt: string,
   content: GameContent,
 ): DistrictProgress {
-  const cap = xpRules(content).varietyCapBase * (frozen.meta.multiplier || 1)
+  // varietyCapBase is flat, not scaled by frozen.meta.multiplier — that
+  // multiplier still sizes goal *targets* (below), but its old variety-cap
+  // job was retired game-wide when streams-per-XP went mode-dependent (see
+  // config.ts's streamsPerXpFor and the matching fix in handlers.ts/
+  // derive.ts). Left scaling here would have been half-finished: the
+  // top-level daily cap already stopped scaling by mode, this one hadn't.
+  const cap = xpRules(content).varietyCapBase
   const activationDate = kstDateOf(Math.floor(new Date(activatedAt).getTime() / 1000))
   const inWindow = rollups.filter((r) => r.kst_date >= activationDate)
 
@@ -190,7 +196,8 @@ export function districtProgress(
 export function albumGoalStreamTotal(
   frozen: FrozenGoals, baseline: Record<string, number>, rollups: RollupRow[], activatedAt: string, content: GameContent,
 ): number {
-  const cap = xpRules(content).varietyCapBase * (frozen.meta.multiplier || 1)
+  // Same flat-cap fix as districtProgress() above — see its comment.
+  const cap = xpRules(content).varietyCapBase
   const activationDate = kstDateOf(Math.floor(new Date(activatedAt).getTime() / 1000))
   const inWindow = rollups.filter((r) => r.kst_date >= activationDate)
   let total = 0
