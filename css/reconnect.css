@@ -1109,6 +1109,23 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 .mb-count { font-family: var(--mono); font-size: 12px; color: var(--dim); flex-shrink: 0; }
 .mb-row.done .mb-count { color: var(--gold); }
 
+/* ── Magic Shop — BOTZ redesign Phase 2's first currency sink ── */
+.ms-stats { display: flex; gap: 8px; margin: 12px 0 4px; }
+.ms-stat { flex: 1; text-align: center; padding: 10px 6px; border-radius: var(--r);
+  background: var(--panel); border: 1px solid var(--border); }
+.ms-stat-icon { font-size: 16px; display: block; }
+.ms-stat-value { font-family: var(--disp); font-weight: 800; font-size: 16px; display: block; margin-top: 2px; }
+.ms-stat-label { font-family: var(--mono); font-size: 9px; letter-spacing: 0.5px; color: var(--dim); text-transform: uppercase; }
+.ms-note { font-size: 11.5px; margin: 8px 0 16px; }
+.ms-card { padding: 14px; border-radius: var(--r-lg); background: var(--surface-2);
+  border: 1px solid var(--border); margin-bottom: 10px; }
+.ms-card.dim { opacity: 0.6; }
+.ms-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.ms-card-icon { font-size: 18px; }
+.ms-card-title { font-family: var(--disp); font-weight: 700; font-size: 14px; }
+.ms-card-body { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+.ms-card .btn { width: 100%; margin-top: 0; }
+
 .res-back { display: inline-block; margin-top: 22px; text-decoration: none;
   font-family: var(--mono); font-size: 12px; letter-spacing: 1px; color: var(--muted); }
 .res-back:hover { color: var(--text); }

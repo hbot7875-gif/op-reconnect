@@ -181,12 +181,26 @@ would be the first real currency-sink/storefront in the game.
   The 148 Protocol and the Badge Drawer — reads existing track/album/reconnect goal state
   off `state.activeDistrict`, no new data model.
 
-**Phase 2 — new economy primitives**
-- `fuel_botz` balance per agent (new column/table), earned via album-goal streams (20:1).
-- Magic Shop screen + purchase flow (fuel/botz, Wings, tickets) — first real currency sink,
-  needs its own backend endpoints (`buyItem`-style, mirroring `retireAccount`'s
-  password-optional/session-gated pattern).
-- Ticket gate check (level/districts/XP threshold) — pure read, no new state.
+**Phase 2 — new economy primitives — ✅ DONE**
+- `charge_cells` balance per agent (`rc_players`), earned automatically at 20:1 from
+  album-goal-track streams only — `districts.ts`'s new `albumGoalStreamTotal()` isolates
+  those from general streaming by reusing `districtProgress()`'s own per-track windowed-
+  plays math, since the daily rollup pipeline (`derive.ts`) only ever sees an aggregate
+  counted total with no concept of which goal a stream belonged to. Awarded idempotently
+  via a stored per-activation baseline (`rc_player_districts.charge_cells_awarded`), same
+  shape as every other per-activation reward in this game. See `lib/charge-economy.ts`.
+  Named "Charge Cells", not "fuel/botz" — see the naming-collision note above.
+- Magic Shop screen (`js/magic-shop.js`, backend `lib/magic-shop.ts`): sells Wings (up to
+  3/day for 1 XP — spent via a real negative `rc_xp_ledger` entry, flagged in code as a
+  design tension since level/rank have never had to handle XP decreasing before) and a
+  one-time Ticket (claimed once Level 7 / 3 restored districts / 50 XP is cleared — no
+  separate cost specified, so eligibility is the price). BTS merch is a "coming soon"
+  placeholder — no catalog or pricing exists to build against.
+- **Deliberately not done**: wiring Wings as an actual cost on the Candy Star Generator
+  (`generateAlpaca` in `candy-star.ts`). That function was ported with an explicit,
+  documented "no daily limit — an agent can generate as many as they want" design
+  decision; gating it behind Wings would reverse that on the spot. Wings exist and are
+  purchasable now, but spending them is still an open decision, not an oversight.
 
 **Phase 3 — Bomb charge model change**
 - New `rc_agent_charge`-style table: per-agent charge level, last-fed timestamp, fuel

@@ -180,6 +180,28 @@ export function districtProgress(
   return { trackGoals, albums, allTracksDone, complete }
 }
 
+/** Total capped plays of this activation's album-goal tracks — the raw
+ *  number charge-economy.ts converts into Charge Cells at 20:1. Deliberately
+ *  NOT the same as albums[].passesDone (which floors at the slowest track
+ *  and caps at target): every stream toward an album goal counts here, even
+ *  past what a pass needs, the same way streaming doesn't stop mattering
+ *  once you've technically finished. Shares windowedPlays() with
+ *  districtProgress() rather than recomputing anything independently. */
+export function albumGoalStreamTotal(
+  frozen: FrozenGoals, baseline: Record<string, number>, rollups: RollupRow[], activatedAt: string, content: GameContent,
+): number {
+  const cap = xpRules(content).varietyCapBase * (frozen.meta.multiplier || 1)
+  const activationDate = kstDateOf(Math.floor(new Date(activatedAt).getTime() / 1000))
+  const inWindow = rollups.filter((r) => r.kst_date >= activationDate)
+  let total = 0
+  for (const a of frozen.albumGoals) {
+    for (const t of a.tracks) {
+      total += windowedPlays(t.keys, inWindow, activationDate, baseline[`a:${a.id}:${t.label}`] || 0, cap, true)
+    }
+  }
+  return total
+}
+
 export interface DistrictDeadline { expiresAt: string; msLeft: number; expired: boolean }
 
 /** A district's restoration window — exactly `days` from activation. Checked

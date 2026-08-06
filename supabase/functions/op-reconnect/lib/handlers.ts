@@ -12,6 +12,7 @@ import { todayKst, nextKstMidnightUtc, kstDateOf } from './kst.ts'
 import { getBombView, launchDefuse } from './bomb.ts'
 import { getEraTimeline } from './era-timeline.ts'
 import { getMyInvites } from './reconnect-missions.ts'
+import { creditChargeCells } from './charge-economy.ts'
 import { levelFor, applyLevelUpIfNeeded, nextLevelRewards } from './leveling.ts'
 import { getActiveBroadcasts } from './broadcasts.ts'
 
@@ -86,6 +87,10 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
   let activeDistrict: any = null
   let restoredNow = false
   let expiredDistrict: { id: string; name: string } | null = null
+  // Set below if creditChargeCells() awards anything this request — added to
+  // player.charge_cells for the response, since `player` was already fetched
+  // before the credit landed in the DB.
+  let chargeCellsEarnedNow = 0
   // "Only ever go up" (resources.js) — start from the baked-in lifetime
   // total, add whatever's live below. A just-completed district's
   // contribution gets baked in this same pass, so it's added once, not
@@ -97,6 +102,9 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     const { data: windowRollups } = await supabase.from('rc_daily_activity')
       .select('kst_date, track_counts, transmission')
       .eq('agent_no', player.agent_no).gte('kst_date', activationDate).order('kst_date')
+    // Charge Cells (BOTZ redesign Phase 2) — same album-goal stream data this
+    // request already fetched for districtProgress, no extra query.
+    chargeCellsEarnedNow = await creditChargeCells(supabase, content, player.agent_no, activePd, windowRollups || [])
     const progress = districtProgress(activePd.goals, activePd.baseline || {}, windowRollups || [], activePd.activated_at, content)
     const deadline = districtDeadline(activePd.activated_at, restorationDays(content))
     // districtProgress().complete only covers solo track+album goals — the
@@ -306,6 +314,10 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
           : null),
       streak,
       badges: (badgeRows || []).map((b: any) => b.badge_id),
+      // BOTZ redesign Phase 2 — see charge-economy.ts / magic-shop.ts.
+      chargeCells: (player.charge_cells || 0) + chargeCellsEarnedNow,
+      wings: player.wings || 0,
+      tickets: player.tickets || 0,
     },
     levelUp,
     map: { wards, districts },

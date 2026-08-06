@@ -31,6 +31,7 @@ import {
 } from './lib/reconnect-missions.ts'
 import { submitReconnectPuzzleAnswer } from './lib/reconnect-puzzle.ts'
 import { getLeaderboard } from './lib/leaderboard.ts'
+import { getMagicShop, buyWings, claimTicket } from './lib/magic-shop.ts'
 import { loadContent } from './lib/config.ts'
 
 const CORS_HEADERS: Record<string, string> = {
@@ -84,6 +85,10 @@ const ROUTES: Record<string, Route> = {
   useItem: { auth: 'agent', handler: (sb, p) => useItem(sb, p) },
   getSignalLog: { auth: 'agent', handler: (sb, p) => getSignalLog(sb, p) },
   getLeaderboard: { auth: 'agent', handler: (sb, p) => getLeaderboard(sb, p) },
+  // BOTZ redesign Phase 2 — see lib/magic-shop.ts.
+  getMagicShop: { auth: 'agent', handler: async (sb, p) => getMagicShop(sb, await loadContent(sb), p) },
+  buyWings: { auth: 'agent', handler: async (sb, p) => buyWings(sb, await loadContent(sb), p) },
+  claimTicket: { auth: 'agent', handler: async (sb, p) => claimTicket(sb, await loadContent(sb), p) },
   // Reconnect goal (connect/invite co-op variants) — gates restoration now,
   // not a post-restoration bonus. All agent-scoped since eligibility is
   // always checked against the caller's own active district+frozen goal
