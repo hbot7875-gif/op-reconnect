@@ -1,12 +1,19 @@
 // Magic Shop — BOTZ redesign Phase 2's first real currency sink. Shows
 // Charge Cells (not spendable yet — Phase 3 is what feeds them into the
 // per-agent ARMY Bomb), and sells Wings (bought with XP) plus a one-time
-// Ticket (unlocked by a level/district/XP bar). BTS merch is a "coming
-// soon" placeholder — no catalog or pricing exists for it yet.
+// Ticket (unlocked by a level/district/XP bar).
+//
+// BTS merch isn't sold here — items.js is explicit that nothing it holds is
+// ever purchased, it's earned as a district-restoration reward. There's no
+// catalog or pricing to build a storefront against. What was missing was
+// just that this screen said "coming soon" as if merch didn't exist yet —
+// it does, it just lives in the Pack. This card surfaces the real count and
+// hands off to it instead of pretending there's nothing here.
 
 import { call } from './api.js'
-import { el, esc, toast, hideOverlay, showOverlay } from './state.js'
+import { el, esc, toast, hideOverlay, showOverlay, getState } from './state.js'
 import { getAgentNo } from './session.js'
+import { goResources } from './router.js'
 
 function statTile(icon, label, value) {
   return el('div', 'ms-stat', `<span class="ms-stat-icon">${icon}</span><span class="ms-stat-value">${value}</span><span class="ms-stat-label">${esc(label)}</span>`)
@@ -81,11 +88,22 @@ function paint(body, shop) {
   }
   body.appendChild(ticketCard)
 
-  // ── Merch (coming soon) ──
-  body.appendChild(el('div', 'ms-card dim', `
+  // ── Merch ── earned, not sold — see header comment. Count comes straight
+  // off live game state (already loaded for the rest of the app) rather
+  // than a new backend field, since the Magic Shop just needs a number and
+  // a way in, not the collection itself.
+  const merchCount = (getState().items || []).length
+  const merchCard = el('div', 'ms-card')
+  merchCard.innerHTML = `
     <div class="ms-card-head"><span class="ms-card-icon">🛍️</span><span class="ms-card-title">BTS Merch</span></div>
-    <p class="ms-card-body">Coming soon.</p>
-  `))
+    <p class="ms-card-body">${merchCount
+      ? `${merchCount} piece${merchCount === 1 ? '' : 's'} earned from restoring districts — not sold, kept in your Pack.`
+      : "Not sold — restore a district and one shows up in your Pack."}</p>
+  `
+  const viewBtn = el('button', 'btn btn-ghost', merchCount ? 'View your collection' : 'Go restore a district')
+  viewBtn.onclick = () => { hideOverlay(); goResources() }
+  merchCard.appendChild(viewBtn)
+  body.appendChild(merchCard)
 }
 
 export function magicShopSheet() {

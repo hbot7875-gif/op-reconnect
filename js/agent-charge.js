@@ -32,7 +32,14 @@ function paint(body, ac) {
   body.innerHTML = ''
 
   const status = el('div', 'ac-status' + (ac.isDark ? ' dark' : ''))
+  // --fuel scales the ember animation below — a fresh feed reads as a real
+  // flare-up, a bomb that's been running low reads as a dying fire, same
+  // "intensity follows real state" rule the ARMY Bomb sphere already uses
+  // (screen-world.js's --charge). 48h is a generous ceiling (12 Charge
+  // Cells) so a single feed still visibly brightens it, not maxes it out.
+  status.style.setProperty('--fuel', Math.max(0, Math.min(1, ac.hoursRemaining / 48)).toFixed(3))
   status.innerHTML = `
+    <div class="ac-embers" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
     <div class="ac-hours">${fmtHours(ac.hoursRemaining)}</div>
     <div class="ac-label">${ac.isDark ? 'DARK — feed it before it costs you a district' : 'charged'}</div>
   `
@@ -55,7 +62,10 @@ function paint(body, ac) {
     const res = await call('feedCharge', { agentNo: getAgentNo(), cells: 1 })
     if (!res.success) { toast(res.error || "Couldn't feed it"); feedBtn.disabled = false; return }
     toast('+4h charge')
-    loadAndPaint(body)
+    // Like tossing another log on — a brief flare on the status card before
+    // the numbers themselves update, not just a toast.
+    status.classList.add('feeding')
+    setTimeout(() => loadAndPaint(body), 260)
   }
   feedCard.appendChild(feedBtn)
   body.appendChild(feedCard)

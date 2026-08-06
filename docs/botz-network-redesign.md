@@ -237,17 +237,36 @@ would be the first real currency-sink/storefront in the game.
   pipeline (`derive.ts`'s `awardStreamsXp`, fed by `bomb.multiplier`) and on Red Zone's
   failure branch — riskier to bundle into the same pass as three brand-new tables, so it's
   its own follow-up rather than a half-verified rewrite.
-- Mode-based streams-per-XP (decision 5) also NOT done yet — it touches `modeMultiplier`'s
-  variety-cap role in three call sites (`derive.ts`, `handlers.ts` ×2) plus the *frozen*
-  multiplier already baked into every in-flight district's `frozen.meta.multiplier`
-  (`districts.ts`), which also feeds Phase 2's `albumGoalStreamTotal()`. Separate,
-  self-contained follow-up.
+- **✅ DONE.** Mode-based streams-per-XP (decision 5): `config.ts`'s new `streamsPerXpFor()`
+  (easy 10 / medium 20 / hard 30, admin-overridable) feeds `derive.ts`'s `awardStreamsXp`
+  call and `handlers.ts`'s `xpToday` estimate. `modeMultiplier`'s variety-cap role was
+  removed from both call sites (`derive.ts`, `handlers.ts` ×2) so the two levers don't
+  stack — `modeMultiplier` still scales goal *targets* via the frozen
+  `frozen.meta.multiplier` (`districts.ts`/`goals.ts`), that part is untouched, only its
+  variety-cap job went away. `bomb.ts`'s own separate per-agent cap (the still-deferred
+  shared-pool system) wasn't touched either.
 
 **Phase 4 — Magic Shop polish + visuals**
 - Gate the existing Candy Star Generator behind spending Wings (decision 6) — no new
-  crafting system, just a cost check in front of a screen that already exists.
-- Campfire/fuel-feeding animation on the ARMY Bomb core widget — purely additive, safe to
-  build any time once Phase 2's fuel/botz balance exists to visualize.
+  crafting system, just a cost check in front of a screen that already exists. **✅ DONE**
+  (see Phase 2 note above — shipped alongside the daily cap).
+- **✅ DONE.** Campfire/fuel-feeding animation: the Personal Charge sheet (`js/agent-charge.js`,
+  `.ac-status` in `reconnect.css`) now has embers rising behind the hours readout, scaled
+  by real `hoursRemaining` via a `--fuel` custom property (same pattern as the ARMY Bomb
+  sphere's `--charge`), plus a one-shot flare (`.feeding`) when a Charge Cell is fed.
+- **✅ RESOLVED — no purchasable merch catalog.** Re-confirmed on revisit: merch stays
+  earn-only (district-restoration rewards, `items.js`), never sold — no pricing was ever
+  specified and inventing one would be guessing at the game's economy. What *was* a real
+  gap: the Magic Shop screen said "Coming soon" as if merch didn't exist at all. It now
+  shows the agent's real merch count (read off live game state, no new backend field) with
+  a hand-off button into the Pack (`js/magic-shop.js`), instead of a placeholder.
+- **Still open, blocked on pricing/catalog if ever wanted:** buying Charge Cells (fuel/botz)
+  directly in the Magic Shop. Charge Cells remain earn-only via album-goal streams
+  (`charge-economy.ts`) — no price was ever set for a direct purchase.
+- **Explicitly kept as revised, not reverted, on revisit:** the two-tier 7-day/14-day
+  blackout consequence and the 10-hour Lit-up Era duration (see decisions 2 and 4 above)
+  stay as shipped — re-confirmed rather than rolled back to this doc's original draft
+  numbers (7-day full Home Base reset, 24-hour era duration).
 
 Recommend building in that order: each phase is usable on its own, and Phase 3 (the
 riskiest, most core-mechanic-altering one) is deliberately last and gated on explicit

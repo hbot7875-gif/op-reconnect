@@ -76,6 +76,19 @@ export function xpRules(content: GameContent): { streamsPerXp: number; transmiss
   return { streamsPerXp: 10, transmissionXp: 10, varietyCapBase: 15, districtXp: 50, ...(content.config.xp_rules || {}) }
 }
 
+/** Streams needed per XP, by the player's own chosen mode — easy mode
+ *  converts streams to XP fastest, hard mode slowest, so a harder mode is
+ *  a real tradeoff and not just bigger goal targets for the same XP.
+ *  Independent of modeMultiplier (which scales goal *targets*, not the
+ *  stream-to-XP rate) so retuning one never silently moves the other.
+ *  Admin-overridable per mode via rc_config's xp_rules.streamsPerXpByMode,
+ *  same spread-over-defaults pattern as xpRules() itself. */
+const STREAMS_PER_XP_BY_MODE: Record<string, number> = { easy: 10, medium: 20, hard: 30 }
+export function streamsPerXpFor(content: GameContent, mode: string): number {
+  const overrides = content.config.xp_rules?.streamsPerXpByMode || {}
+  return overrides[mode] ?? STREAMS_PER_XP_BY_MODE[mode] ?? xpRules(content).streamsPerXp
+}
+
 /** Days an agent has, from activation, to restore a district before the
  *  attempt lapses (see districtDeadline in districts.ts). */
 export function restorationDays(content: GameContent): number {

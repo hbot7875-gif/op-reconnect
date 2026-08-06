@@ -3,7 +3,7 @@
 // numbers never appear in responses beyond echoing the caller's own request.
 
 import type { GameContent, SupabaseDB, DistrictRow } from './config.ts'
-import { loadContent, rankFor, xpRules, modeMultiplier, restorationDays } from './config.ts'
+import { loadContent, rankFor, xpRules, restorationDays, streamsPerXpFor } from './config.ts'
 import { ensureDailyRollups, computeStreak, awardStreakBadges, totalXp, countedStreams } from './derive.ts'
 import { evaluateTransmission } from './transmission.ts'
 import { freezeGoals, computeBaseline, districtProgress, districtDeadline, filesRevealedCount } from './districts.ts'
@@ -58,7 +58,11 @@ function wardStates(content: GameContent, restored: Set<string>) {
 
 async function buildState(supabase: SupabaseDB, content: GameContent, agent: any, player: any) {
   const rules = xpRules(content)
-  const cap = rules.varietyCapBase * modeMultiplier(content, player.mode)
+  // modeMultiplier no longer scales the variety cap — mode-based streams-per-XP
+  // (streamsPerXpFor, above) is the one difficulty lever now; stacking both would
+  // punish harder modes twice for the same choice. See docs/botz-network-redesign.md
+  // decision 5.
+  const cap = rules.varietyCapBase
   const allowlist: string[] = content.config.bts_artists || []
   const today = todayKst()
 
@@ -340,7 +344,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
       countedStreams: counted,
       rawStreams: todayRow?.raw_streams || 0,
       varietyCap: cap,
-      xpToday: Math.floor(counted / rules.streamsPerXp) + (transmission?.done ? rules.transmissionXp : 0),
+      xpToday: Math.floor(counted / streamsPerXpFor(content, player.mode)) + (transmission?.done ? rules.transmissionXp : 0),
       resetsAtUtc: nextKstMidnightUtc(),
     },
   }
@@ -424,7 +428,7 @@ export async function startDistrict(supabase: SupabaseDB, params: any) {
   const rollups = await ensureDailyRollups(supabase, agent, player, content)
   const todayRow = rollups.find((r) => String(r.kst_date) === todayKst())
   const frozen = freezeGoals(content, player.mode, district)
-  const cap = xpRules(content).varietyCapBase * modeMultiplier(content, player.mode)
+  const cap = xpRules(content).varietyCapBase
   const baseline = computeBaseline(todayRow?.track_counts || {}, frozen, cap)
   const { error: insErr } = await supabase.from('rc_player_districts')
     .insert({ agent_no: agentNo, district_id: district.id, status: 'active', goals: frozen, baseline })

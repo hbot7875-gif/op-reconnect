@@ -10,7 +10,7 @@ import type { AgentSourceRow } from './streams.ts'
 import { generateTransmission, evaluateTransmission } from './transmission.ts'
 import type { DayBucket, FrozenTransmission } from './transmission.ts'
 import type { GameContent, SupabaseDB } from './config.ts'
-import { xpRules, limits, modeMultiplier } from './config.ts'
+import { xpRules, limits, streamsPerXpFor } from './config.ts'
 
 export interface DailyRow {
   agent_no: string
@@ -90,7 +90,8 @@ export async function ensureDailyRollups(
   const lim = limits(content)
   const rules = xpRules(content)
   const allowlist: string[] = content.config.bts_artists || []
-  const cap = rules.varietyCapBase * modeMultiplier(content, player.mode)
+  // modeMultiplier no longer scales the variety cap — see decision 5 note in handlers.ts.
+  const cap = rules.varietyCapBase
   const today = todayKst()
   const joinedDate = kstDateOf(Math.floor(new Date(player.joined_at).getTime() / 1000))
   const windowStart = joinedDate > addDaysStr(today, -lim.backfillMaxDays) ? joinedDate : addDaysStr(today, -lim.backfillMaxDays)
@@ -136,7 +137,7 @@ export async function ensureDailyRollups(
       byDate.set(date, row)
 
       const counted = countedStreams(dayData.bucket, allowlist, cap)
-      await awardStreamsXp(supabase, player.agent_no, date, counted, rules.streamsPerXp, !!existing?.finalized, dayMult, date === today ? personalBoostMult : 1)
+      await awardStreamsXp(supabase, player.agent_no, date, counted, streamsPerXpFor(content, player.mode), !!existing?.finalized, dayMult, date === today ? personalBoostMult : 1)
       if (row.transmission_done) {
         await awardOnce(supabase, player.agent_no, rules.transmissionXp, 'transmission',
           `transmission:${player.agent_no}:${date}`, { templateId: transmission?.templateId })
