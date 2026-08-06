@@ -80,12 +80,15 @@ export function bombSheet(state) {
   if (underAttack) {
     const rz = el('div', 'bd-block alert')
     const deadline = d.activeUntil || d.active_until
+    const minimum = d.minimumStreams || 7
+    const yours = d.yourStreams || 0
     rz.innerHTML = `
       <div class="bd-block-head">Red Zone</div>
-      <div class="bd-line"><span>Global target</span><b>${d.progress.toLocaleString()} / ${d.target.toLocaleString()}</b></div>
+      <div class="bd-line"><span>Qualified streams</span><b>${d.progress.toLocaleString()} / ${d.target.toLocaleString()}</b></div>
       ${deadline ? `<div class="bd-line"><span>Time left</span><b class="bd-clock" data-deadline="${esc(deadline)}">--:--:--</b></div>` : ''}
-      <div class="bd-line"><span>You've routed</span><b>${(d.yourStreams || 0).toLocaleString()}</b></div>
-      <div class="bd-line"><span>Reward</span><b>Red Zone badge</b></div>
+      <div class="bd-line"><span>Your minimum</span><b>${yours} / ${minimum}</b></div>
+      <div class="bd-line"><span>Qualified agents</span><b>${d.qualifiedAgents || 0}</b></div>
+      <div class="bd-line"><span>Shared reward</span><b>${d.rewardXp.toLocaleString()} XP pool</b></div>
     `
     sheet.appendChild(rz)
   } else {

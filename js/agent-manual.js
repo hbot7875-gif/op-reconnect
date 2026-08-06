@@ -14,6 +14,7 @@ const STEPS = [
 const XP_SOURCES = [
   ['🎵', 'Assigned goal streams', 'Only tracks listed in your active Track Goals and Album Goals count. Easy: 10 streams = 1 XP · Medium: 20 = 1 XP · Hard: 30 = 1 XP.'],
   ['🏙️', 'District restored', 'Finish its Track Goals, Album Goals, and Reconnect Goal to bring the district online and earn +50 XP.'],
+  ['🚨', 'Red Zone pool', 'Stream at least 7 times during the event to qualify. If the network defuses it, the displayed XP pool is divided among every qualified agent.'],
 ]
 
 function sectionTitle(text) {

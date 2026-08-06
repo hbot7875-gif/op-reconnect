@@ -349,18 +349,21 @@ function eraTracksSheet(e) {
 function redZoneCard(state) {
   const d = state.bomb.defuse
   const pct = Math.min(100, Math.round((d.progress / Math.max(1, d.target)) * 100))
+  const minimum = d.minimumStreams || 7
+  const yours = d.yourStreams || 0
+  const qualified = yours >= minimum
 
   const card = el('section', 'redzone')
   card.innerHTML = `
     <div class="rz-head"><span class="rz-dot"></span>Red Zone &middot; active</div>
     <div class="rz-title">${esc(d.title || 'Signal breach detected')}</div>
     <p class="rz-msg">${esc(d.message || 'Everyone stream. That\'s how we defuse it.')}</p>
-    <div class="rz-goal-top"><span>Global target</span><span class="rz-num">${d.progress.toLocaleString()}<i>/${d.target.toLocaleString()}</i></span></div>
+    <div class="rz-goal-top"><span>Qualified streams</span><span class="rz-num">${d.progress.toLocaleString()}<i>/${d.target.toLocaleString()}</i></span></div>
     <div class="rz-bar"><i style="width:${pct}%"></i></div>
     ${(d.activeUntil || d.active_until)
       ? `<div class="rz-timer">Time left <b data-deadline="${esc(d.activeUntil || d.active_until)}">--:--:--</b></div>`
       : ''}
-    <div class="rz-foot">You've routed ${(d.yourStreams || 0).toLocaleString()} &middot; contributors earn the Red Zone badge</div>
+    <div class="rz-foot">Your signal: ${yours}/${minimum} ${qualified ? '&middot; qualified' : `&middot; ${minimum - yours} more to qualify`}<br>${d.rewardXp.toLocaleString()} XP split among ${d.qualifiedAgents || 0} qualified agent${d.qualifiedAgents === 1 ? '' : 's'}</div>
   `
   const go = el('button', 'btn btn-alert', 'View Red Zone')
   go.onclick = () => showOverlay(bombSheet(state))

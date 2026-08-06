@@ -5,8 +5,8 @@
 // derive.ts's awardStreamsXp) once Personal Charge (agent-charge.ts) became
 // the thing that actually matters for a player's own XP and district
 // survival. What's left is display/atmosphere: a live "how busy is the
-// network" reading, plus the brownout state below, plus Red Zone's shared
-// target/contribution/reward — none of which touch personal XP.
+// network" reading plus the brownout state below. Red Zone is the explicit
+// exception: its editable XP pool is split across qualifying contributors.
 //
 // The window itself isn't fixed: chargeWindowDays() extends it by a day for
 // every Era Timeline era (era-timeline.ts) the network has fully unlocked —
@@ -19,9 +19,12 @@
 
 import type { SupabaseDB, GameContent } from './config.ts'
 import { xpRules, modeMultiplier, loadContent } from './config.ts'
-import { todayKst, addDaysStr } from './kst.ts'
+import { todayKst, addDaysStr, kstDateOf } from './kst.ts'
 import { countedStreams } from './derive.ts'
 import { getEraTimeline, completedEraCount } from './era-timeline.ts'
+
+const RED_ZONE_DEFAULT_XP_POOL = 500
+const RED_ZONE_MIN_STREAMS = 7
 
 export interface BombCfg {
   chargeWindowHours: number
@@ -63,6 +66,9 @@ export interface BombView {
     // rendered as "BREACH" with no timer. Keeping both names: endsAt is what
     // this file has always emitted, activeUntil is what the UI was built for.
     activeUntil: string
+    rewardXp: number
+    minimumStreams: number
+    qualifiedAgents: number
     yourStreams: number
   } | null
 }
@@ -155,6 +161,9 @@ export async function getBombView(
         id: ev.id, title: ev.title, message: ev.message,
         target: ev.target, progress: resolved.progress,
         endsAt: ev.active_until, activeUntil: ev.active_until,
+        rewardXp: ev.reward_xp || RED_ZONE_DEFAULT_XP_POOL,
+        minimumStreams: ev.minimum_streams || RED_ZONE_MIN_STREAMS,
+        qualifiedAgents: resolved.qualifiedAgents,
         yourStreams: mine?.streams || 0,
       }
     }
@@ -177,14 +186,16 @@ export async function getBombView(
  */
 async function refreshDefuse(
   supabase: SupabaseDB, content: GameContent, ev: any, caps: { map: Map<string, number>; base: number }, cfg: BombCfg,
-): Promise<{ stillActive: boolean; progress: number }> {
+): Promise<{ stillActive: boolean; progress: number; qualifiedAgents: number }> {
   const allow: string[] = content.config.bts_artists || []
-  const fromDate = new Date(ev.active_from).toISOString().slice(0, 10)
+  const fromDate = kstDateOf(Math.floor(new Date(ev.active_from).getTime() / 1000))
+  const minimumStreams = ev.minimum_streams || RED_ZONE_MIN_STREAMS
+  const baseline: Record<string, number> = ev.stream_baseline || {}
 
   // Per-agent counted streams inside the event window, from the daily rollups.
   const { data: rows } = await supabase
     .from('rc_daily_activity').select('agent_no, track_counts, kst_date')
-    .gte('kst_date', addDaysStr(fromDate, -1))
+    .gte('kst_date', fromDate)
   const perAgent = new Map<string, number>()
   for (const r of rows || []) {
     const cap = caps.map.get(r.agent_no) ?? caps.base
@@ -193,10 +204,15 @@ async function refreshDefuse(
   }
 
   let progress = 0
+  let qualifiedAgents = 0
   const contribRows: any[] = []
-  for (const [agent, n] of perAgent) {
-    progress += n
-    contribRows.push({ event_id: ev.id, agent_no: agent, streams: n, updated_at: new Date().toISOString() })
+  for (const [agent, total] of perAgent) {
+    const n = Math.max(0, total - (Number(baseline[agent]) || 0))
+    if (n >= minimumStreams) {
+      progress += n
+      qualifiedAgents++
+    }
+    if (n > 0) contribRows.push({ event_id: ev.id, agent_no: agent, streams: n, updated_at: new Date().toISOString() })
   }
   if (contribRows.length) {
     for (let i = 0; i < contribRows.length; i += 100) {
@@ -211,8 +227,8 @@ async function refreshDefuse(
     await supabase.from('rc_defuse_events')
       .update({ status: 'defused', progress, resolved_at: new Date().toISOString() })
       .eq('id', ev.id).eq('status', 'active')
-    await awardDefuseBadge(supabase, ev)
-    return { stillActive: false, progress }
+    await awardDefuseRewards(supabase, ev, minimumStreams)
+    return { stillActive: false, progress, qualifiedAgents }
   }
   if (expired) {
     await supabase.from('rc_defuse_events')
@@ -222,19 +238,34 @@ async function refreshDefuse(
     // already earned is removed.
     const until = new Date(Date.now() + cfg.brownoutHours * 3600_000).toISOString()
     await supabase.from('rc_bomb_state').update({ brownout_until: until, updated_at: new Date().toISOString() }).eq('id', 1)
-    return { stillActive: false, progress }
+    return { stillActive: false, progress, qualifiedAgents }
   }
 
   await supabase.from('rc_defuse_events').update({ progress }).eq('id', ev.id).eq('status', 'active')
-  return { stillActive: true, progress }
+  return { stillActive: true, progress, qualifiedAgents }
 }
 
-/** Everyone who contributed gets the participation badge. Red Zone protects
- *  the shared network but deliberately does not create a fourth XP source. */
-async function awardDefuseBadge(supabase: SupabaseDB, ev: any) {
+/** Split the configured pool exactly across qualified agents. Sorting makes
+ *  remainder assignment deterministic, so concurrent settlement calls
+ *  produce the same per-agent awards and ledger deduplication stays safe. */
+async function awardDefuseRewards(supabase: SupabaseDB, ev: any, minimumStreams: number) {
   const { data: contribs } = await supabase.from('rc_defuse_contrib')
-    .select('agent_no, streams').eq('event_id', ev.id).gt('streams', 0)
-  for (const c of contribs || []) {
+    .select('agent_no, streams').eq('event_id', ev.id).gte('streams', minimumStreams)
+  const qualified = [...(contribs || [])].sort((a: any, b: any) => String(a.agent_no).localeCompare(String(b.agent_no)))
+  if (qualified.length === 0) return
+  const pool = Math.max(0, Number(ev.reward_xp) || RED_ZONE_DEFAULT_XP_POOL)
+  const baseShare = Math.floor(pool / qualified.length)
+  const remainder = pool % qualified.length
+  for (let i = 0; i < qualified.length; i++) {
+    const c = qualified[i]
+    const amount = baseShare + (i < remainder ? 1 : 0)
+    if (amount > 0) {
+      await supabase.from('rc_xp_ledger').upsert({
+        agent_no: c.agent_no, amount, source: 'defuse',
+        dedup_key: `defuse:${c.agent_no}:${ev.id}`,
+        meta: { eventId: ev.id, streams: c.streams, pool, qualifiedAgents: qualified.length, minimumStreams },
+      }, { onConflict: 'dedup_key', ignoreDuplicates: true })
+    }
     await supabase.from('rc_badges').upsert(
       { agent_no: c.agent_no, badge_id: 'defuse:first' },
       { onConflict: 'agent_no, badge_id', ignoreDuplicates: true })
@@ -245,11 +276,24 @@ async function awardDefuseBadge(supabase: SupabaseDB, ev: any) {
 export async function launchDefuse(supabase: SupabaseDB, params: any) {
   const target = parseInt(params.target) || 2000
   const hours = Math.max(1, Math.min(72, parseInt(params.hours) || 24))
+  const rewardXp = Math.max(1, parseInt(params.rewardXp) || RED_ZONE_DEFAULT_XP_POOL)
+  const content = await loadContent(supabase)
+  const caps = await agentCapMap(supabase, content)
+  const allow: string[] = content.config.bts_artists || []
+  const { data: todayRows } = await supabase.from('rc_daily_activity')
+    .select('agent_no, track_counts').eq('kst_date', todayKst())
+  const streamBaseline: Record<string, number> = {}
+  for (const row of todayRows || []) {
+    const cap = caps.map.get(row.agent_no) ?? caps.base
+    streamBaseline[row.agent_no] = countedStreams(row.track_counts || {}, allow, cap)
+  }
   const { data, error } = await supabase.from('rc_defuse_events').insert({
     title: params.title || 'INCOMING: RED ZONE',
     message: params.message || 'The ARMY Bomb is under attack. Stream together to defuse it before the timer runs out.',
     target,
-    reward_xp: 0,
+    reward_xp: rewardXp,
+    minimum_streams: RED_ZONE_MIN_STREAMS,
+    stream_baseline: streamBaseline,
     active_until: new Date(Date.now() + hours * 3600_000).toISOString(),
   }).select().single()
   if (error) return { success: false, error: error.message }
@@ -272,7 +316,8 @@ export async function adminGetActiveDefuse(supabase: SupabaseDB) {
     defuse: bomb.defuse ? {
       id: bomb.defuse.id, title: bomb.defuse.title, message: bomb.defuse.message,
       target: bomb.defuse.target, progress: bomb.defuse.progress,
-      activeUntil: bomb.defuse.activeUntil,
+      activeUntil: bomb.defuse.activeUntil, rewardXp: bomb.defuse.rewardXp,
+      minimumStreams: bomb.defuse.minimumStreams, qualifiedAgents: bomb.defuse.qualifiedAgents,
     } : null,
     charge: bomb.charge,
     brownout: bomb.brownout,

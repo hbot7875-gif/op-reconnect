@@ -1,6 +1,6 @@
 # OP: RECONNECT — XP Goal Economy
 
-Status: implemented 2026-08-06
+Status: implemented and updated 2026-08-07
 
 This document is the source of truth for how XP is earned in OP: RECONNECT. The purpose of the rule is to keep progression tied to the game’s assigned missions. Listening to any random BTS track must not become an easy, passive XP shortcut.
 
@@ -13,7 +13,18 @@ XP comes from the active district’s assigned gameplay:
 3. **Reconnect Goal** — this must be completed to finish the district. It does not turn unrelated streams into XP.
 4. **District restoration** — completing the Track, Album, and Reconnect checklist restores the district and grants the district-completion reward. The current default is **+50 XP**.
 
-If a player has no active district, ordinary streams do not generate stream XP.
+If a player has no active district, ordinary streams do not generate stream XP. A successful Red Zone is the one explicit event-based exception described below.
+
+## Red Zone XP pool
+
+- A Red Zone starts with an admin-editable total XP pool. The default is **500 XP**.
+- Every agent must log at least **7 counted event streams** to qualify.
+- An agent below 7 does not add progress to the defuse target and does not share the reward.
+- When the target is reached, the complete pool is divided as evenly as possible across all qualified agents.
+- Whole-number rounding never creates or loses XP. Any remainder is distributed deterministically, one extra XP at a time.
+- Example: with a 500 XP pool and 3 qualified agents, the shares are 167, 167, and 166 XP.
+- Stream totals are snapshotted when the Red Zone launches, so activity from earlier that KST day cannot qualify retroactively.
+- Qualified agents also receive the Red Zone participation badge.
 
 ## Stream-to-XP rates
 
@@ -32,7 +43,7 @@ The day keeps the mode with which it was first recorded. Switching modes later c
 - BTS streams that do not match the active district’s Track or Album Goals.
 - Streams made before the player taps **Begin Restoration**.
 - The optional **Today / Daily Transmission** task. It no longer grants a separate +10 XP.
-- Red Zone participation. It protects the shared network and grants the Red Zone participation badge, but it is not a fourth XP source.
+- Red Zone activity below the 7-stream qualification minimum.
 - Charge Cells, lit eras, wings, streak freezes, merch, tickets, collectibles, or passive ARMY Bomb charge.
 
 XP can still be spent in the Magic Shop where the game explicitly allows it. Spending XP is not an XP reward.
@@ -71,7 +82,7 @@ These systems support survival, restoration, and resources without silently crea
 
 The Agent Manual, onboarding mode picker, HUD mode picker, Settings mode explanation, City Today tile, Red Zone sheet, and admin Red Zone panel must all use the same rule:
 
-> Only assigned goal streams generate stream XP. Complete Track, Album, and Reconnect goals to restore a district and receive its completion reward.
+> Assigned goal streams generate regular XP. During a Red Zone, reach 7 event streams to qualify for a share of its XP pool.
 
 ## Historical behavior
 
@@ -82,7 +93,8 @@ This change applies to new calculations. XP already earned and stored before thi
 - `supabase/functions/op-reconnect/lib/derive.ts` — eligible goal-stream counting and XP ledger calculation.
 - `supabase/functions/op-reconnect/lib/districts.ts` — frozen goal data and activation-day baseline.
 - `supabase/functions/op-reconnect/lib/handlers.ts` — active district XP scope and player-state totals.
-- `supabase/functions/op-reconnect/lib/bomb.ts` — Red Zone badge reward without XP.
+- `supabase/functions/op-reconnect/lib/bomb.ts` — Red Zone qualification, progress, exact pool division, XP ledger awards, and badge reward.
+- `migrations/045_rc_red_zone_xp_pool.sql` — Red Zone minimum and launch-time stream baseline.
 - `supabase/functions/op-reconnect/lib/config.ts` — active XP configuration fields.
 - `js/agent-manual.js` — short player explanation.
 - `js/screen-world.js` and `js/bomb-sheet.js` — Today and Red Zone reward wording.
@@ -98,6 +110,8 @@ This change applies to new calculations. XP already earned and stored before thi
 - [x] Overlapping goal assignments do not double-count XP.
 - [x] Pre-activation streams do not become XP.
 - [x] Today grants no bonus XP.
-- [x] Red Zone grants a badge rather than XP.
+- [x] Red Zone requires at least 7 event streams per qualifying agent.
+- [x] Red Zone divides its editable XP pool without creating or losing XP.
+- [x] Pre-launch same-day streams cannot qualify for Red Zone rewards.
 - [x] District completion still requires the Reconnect Goal.
 - [x] Frontend production build succeeds.

@@ -228,22 +228,16 @@ would be the first real currency-sink/storefront in the game.
   agent from going dark in the same request. Reuses `era-timeline.ts`'s `ERA_CATALOG`
   (now exported) for the track lists, but scores per-agent/per-week, not network-wide/
   all-time — genuinely a different question from that file's own rollup.
-- **Partially resolved on a later revisit.** `bomb.ts` itself is still untouched — the
-  shared `rc_bomb_state` charge, Red Zone's target/contribution/reward, and the Era
-  Timeline → `chargeWindowDays()` bonus are all still live, unchanged, computed exactly as
-  before. **But the community→XP multiplier half of decision 7 is now done**: `bomb.multiplier`
-  no longer reaches `derive.ts`'s `awardStreamsXp` at all (stopped being threaded through
-  `ensureDailyRollups`, which dropped the parameter entirely) — Personal Charge
-  (`agent-charge.ts`) is the only thing that decides a player's own XP and district
-  survival now. Every player-facing "×N Boost" claim that promised an XP benefit from the
-  shared Bomb was removed to match: the landing page ticker's boost chip, the World screen
-  status tile's "Boost ×N" line, and the Bomb detail sheet's "Boost" stat row and note text
-  — all gone or reworded, not left to advertise something that stopped happening.
-  `bomb.multiplier` is still computed and returned (display/atmosphere — a live "how busy
-  is the network" reading — plus it still feeds brownout, which still dims visuals), it's
-  just never multiplied into anyone's XP anymore. Red Zone's failure branch (brownout
-  consequence) was NOT touched — that half of decision 7 ("Red Zone hits personal charge
-  instead") remains its own future follow-up, not bundled into this pass.
+- **Updated through 2026-08-07.** The shared `rc_bomb_state` charge and the Era Timeline →
+  `chargeWindowDays()` bonus remain live. The community→XP multiplier is retired:
+  `bomb.multiplier` never reaches personal XP, and the old player-facing “×N Boost” claims
+  were removed. Regular stream XP now comes only from the active district's assigned Track
+  and Album Goals. Red Zone is the explicit event exception: it has an admin-editable XP
+  pool (500 by default), requires at least 7 event-window streams per agent, counts only
+  qualified agents toward the target, and divides the complete pool across those agents.
+  A launch-time baseline prevents earlier same-day streams from qualifying. Red Zone's
+  failure branch still causes the existing shared brownout; changing that consequence to
+  hit personal charge remains a separate future follow-up.
 - **✅ DONE, and later corrected.** Mode-based streams-per-XP (decision 5): `config.ts`'s
   `streamsPerXpFor()` (easy 10 / medium 20 / hard 30, admin-overridable) feeds `derive.ts`'s
   `awardStreamsXp` call and `handlers.ts`'s `xpToday` estimate — each day's rate is now
