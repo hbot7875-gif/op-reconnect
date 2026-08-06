@@ -5,6 +5,11 @@
 // gate: at zero charge the multiplier is 1.0, so a solo player is never
 // blocked by a quiet community — a busy community just makes everyone faster.
 //
+// The window itself isn't fixed: chargeWindowDays() extends it by a day for
+// every Era Timeline era (era-timeline.ts) the network has fully unlocked —
+// finishing an era is a lasting reward for the whole network's charge, not
+// just a one-time number.
+//
 // Red-zone attacks are admin-launched. Failing one browns the network out
 // (dimmer visuals, reduced multiplier, expires on its own) but never removes
 // XP, files or restored districts.
@@ -13,6 +18,7 @@ import type { SupabaseDB, GameContent } from './config.ts'
 import { xpRules, modeMultiplier, loadContent } from './config.ts'
 import { todayKst, addDaysStr } from './kst.ts'
 import { countedStreams } from './derive.ts'
+import { getEraTimeline, completedEraCount } from './era-timeline.ts'
 
 export interface BombCfg {
   chargeWindowHours: number
@@ -37,6 +43,11 @@ export interface BombView {
   multiplier: number      // applied to district progress
   brownout: boolean
   brownoutUntil: string | null
+  // How many KST days of activity are pooled into `charge` right now — base
+  // window plus one extra day per Era Timeline era the network has fully
+  // unlocked (see communityStreams()). Surfaced so "why is charge holding up
+  // longer than it used to" has a visible answer, not a silent backend effect.
+  chargeWindowDays: number
   defuse: {
     id: string
     title: string
@@ -70,10 +81,28 @@ async function agentCapMap(supabase: SupabaseDB, content: GameContent): Promise<
   return { map, base }
 }
 
-/** Community counted-streams over the charge window (today + yesterday KST). */
-async function communityStreams(supabase: SupabaseDB, content: GameContent, caps: { map: Map<string, number>; base: number }): Promise<number> {
+/**
+ * KST days of activity to pool into charge — base window (chargeWindowHours,
+ * rounded up to whole days since rc_daily_activity only has day-granularity
+ * buckets) plus one extra day per Era Timeline era the network has fully
+ * unlocked (era-timeline.ts). A network that's finished a whole era's worth
+ * of discography keeps its charge momentum longer, not just a bigger single
+ * pooled number. This is the one place chargeWindowHours actually gets
+ * read — it used to sit in BombCfg unused, the window hardcoded to 1 day
+ * back regardless of it.
+ */
+async function chargeWindowDays(supabase: SupabaseDB, content: GameContent, cfg: BombCfg): Promise<number> {
+  const timeline = await getEraTimeline(supabase, content)
+  const bonusDays = completedEraCount(timeline)
+  return Math.max(1, Math.ceil(cfg.chargeWindowHours / 24)) + bonusDays
+}
+
+/** Community counted-streams over the last `days` KST days. */
+async function communityStreams(
+  supabase: SupabaseDB, content: GameContent, caps: { map: Map<string, number>; base: number }, days: number,
+): Promise<number> {
   const today = todayKst()
-  const from = addDaysStr(today, -1)
+  const from = addDaysStr(today, -days)
   const allow: string[] = content.config.bts_artists || []
   const { data } = await supabase
     .from('rc_daily_activity')
@@ -98,7 +127,8 @@ export async function getBombView(
 ): Promise<BombView> {
   const cfg = bombCfg(content)
   const caps = await agentCapMap(supabase, content)
-  const pooled = await communityStreams(supabase, content, caps)
+  const days = await chargeWindowDays(supabase, content, cfg)
+  const pooled = await communityStreams(supabase, content, caps, days)
   const charge = Math.max(0, Math.min(1, pooled / Math.max(1, cfg.chargeFullAt)))
 
   const { data: state } = await supabase.from('rc_bomb_state').select('*').eq('id', 1).maybeSingle()
@@ -135,6 +165,7 @@ export async function getBombView(
     multiplier,
     brownout,
     brownoutUntil: brownout ? state.brownout_until : null,
+    chargeWindowDays: days,
     defuse,
   }
 }

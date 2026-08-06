@@ -67,6 +67,9 @@ export function bombSheet(state) {
   const stats = []
   if (Number.isFinite(b.multiplier)) stats.push(['Boost', `&times;${b.multiplier}`])
   if (Number.isFinite(b.communityStreams)) stats.push(['Streams today', b.communityStreams.toLocaleString()])
+  // Grows by a day per Era Timeline era the network has fully unlocked
+  // (bomb.ts's chargeWindowDays) — the visible payoff for finishing one.
+  if (Number.isFinite(b.chargeWindowDays)) stats.push(['Charge window', `${b.chargeWindowDays}d`])
   const totalD = wards.reduce((a, w) => a + (w.totalCount || 0), 0)
   const doneD = wards.reduce((a, w) => a + (w.restoredCount || 0), 0)
   if (totalD) stats.push(['City recovery', `${Math.round((doneD / totalD) * 100)}%`])

@@ -312,12 +312,8 @@ function eraTimelineStrip(timeline) {
   wrap.appendChild(el('div', 'era-strip-label', 'Era Timeline'))
   const row = el('div', 'era-row')
   for (const e of timeline.eras || []) {
-    const chip = el('div', 'era-chip' + (e.locked ? ' locked' : e.done >= e.total && e.total > 0 ? ' done' : ''))
-    chip.innerHTML = e.locked ? `
-      <span class="era-icon">🔒</span>
-      <span class="era-name">${esc(e.name)}</span>
-      <span class="era-count">soon</span>
-    ` : `
+    const chip = el('div', 'era-chip' + (e.done >= e.total && e.total > 0 ? ' done' : ''))
+    chip.innerHTML = `
       <span class="era-icon">${e.icon}</span>
       <span class="era-name">${esc(e.name)}</span>
       <span class="era-count">${e.done}/${e.total}</span>

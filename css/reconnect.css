@@ -827,8 +827,6 @@ body.red-zone .wtb.now { fill: var(--crimson); filter: drop-shadow(0 0 3px rgba(
 .era-chip.done .era-icon { opacity: 1; }
 .era-chip.done .era-name { color: var(--text); }
 .era-chip.done .era-count { color: var(--gold); }
-.era-chip.locked { opacity: 0.5; border-style: dashed; }
-
 /* every building is a district you can tap */
 .wt-hit { fill: transparent; cursor: pointer; }
 .wt-hit:hover { fill: rgba(255,255,255,0.07); }

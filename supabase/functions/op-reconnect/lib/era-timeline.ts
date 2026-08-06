@@ -7,9 +7,11 @@
 // rc_daily_activity, the same ground truth bomb.ts's communityStreams()
 // already trusts.
 //
-// Deliberately cumulative and all-time, unlike the ARMY Bomb's rolling 24h
+// Deliberately cumulative and all-time, unlike the ARMY Bomb's rolling
 // charge window — a discography completion tracker that reset every day
-// would defeat the point of it.
+// would defeat the point of it. The relationship actually runs the other
+// way now too: bomb.ts's chargeWindowDays() reads completedEraCount() below
+// to extend the Bomb's own window by a day per era the network finishes.
 //
 // A track "unlocks" once the community's combined counted plays for it
 // cross eraTrackThreshold. "Counted" means the same thing it means
@@ -33,18 +35,22 @@ const ERA_CATALOG: EraDef[] = [
   { id: 'ly', name: 'Love Yourself', icon: '💜', tracks: ['DNA', 'Fake Love', 'Idol'] },
   { id: 'mots', name: 'Map of the Soul', icon: '📖', tracks: ['Boy With Luv', 'ON', 'Black Swan'] },
   { id: 'anthology', name: 'The Anthology', icon: '💽', tracks: ['Dynamite', 'Butter', 'Life Goes On', 'Yet To Come'] },
+  // ARIRANG — this season's own comeback, now actually released. Tracklist
+  // sourced from the arirang-btsbackend project's own ARIRANG_TRACKS list
+  // (the canonical source for this album elsewhere in this game's universe),
+  // not guessed. A handful of the 14 for the same "pulse, not completionist
+  // grind" reason the rest of ERA_CATALOG only samples a few tracks each.
+  { id: 'arirang', name: 'ARIRANG', icon: '📡', tracks: ['Swim', 'Body to Body', 'Hooligan', 'Aliens', 'FYA', 'Merry Go Round'] },
 ]
 
-export interface EraProgress { id: string; name: string; icon: string; done: number; total: number; locked?: boolean }
+export interface EraProgress { id: string; name: string; icon: string; done: number; total: number }
 export interface EraTimeline { eras: EraProgress[] }
 
-/** Config-driven so an admin can raise/lower the bar (or seed this season's
- *  ARIRANG tracklist) without a deploy — mirrors bombCfg's
- *  spread-over-defaults pattern in bomb.ts. */
+/** Config-driven so an admin can raise/lower the unlock bar without a
+ *  deploy — mirrors bombCfg's spread-over-defaults pattern in bomb.ts. */
 function eraCfg(content: GameContent) {
   return {
     trackThreshold: 20,
-    arirangTracks: [] as string[],
     ...(content.config.era_timeline || {}),
   }
 }
@@ -85,13 +91,13 @@ export async function getEraTimeline(supabase: SupabaseDB, content: GameContent)
     id: e.id, name: e.name, icon: e.icon, total: e.tracks.length, done: eraDone(e.tracks),
   }))
 
-  // ARIRANG is this season's own comeback, not history — empty until an
-  // admin seeds era_timeline.arirangTracks in config. Reads as "commences
-  // later, stand by" rather than guessing at an unreleased tracklist.
-  eras.push(cfg.arirangTracks.length
-    ? { id: 'arirang', name: 'ARIRANG', icon: '📡', total: cfg.arirangTracks.length, done: eraDone(cfg.arirangTracks) }
-    : { id: 'arirang', name: 'ARIRANG', icon: '📡', total: 0, done: 0, locked: true })
-
   cache = { at: Date.now(), value: { eras } }
   return cache.value
+}
+
+/** How many eras the network has fully unlocked — bomb.ts reads this to
+ *  extend the charge window as a network-wide reward for collective
+ *  discography completion, not just per-track counting. */
+export function completedEraCount(timeline: EraTimeline): number {
+  return timeline.eras.filter((e) => e.total > 0 && e.done >= e.total).length
 }
