@@ -27,13 +27,11 @@
   <canvas id="crowd" class="crowd-strip" aria-hidden="true"></canvas>
   <div class="crowd-scrim" aria-hidden="true"></div>
 
-  <!-- ── Hero: the message, the button, and the city it's about ────
-       The map used to live in its own section far below the fold, which
-       left the first screen as text-on-a-photo and a long empty drop
-       before anything else happened. Showing the dark grid up here does
-       the job the headline was doing alone: you can SEE that there's a
-       city and that it's off. On desktop the two sit side by side, which
-       is also what stops that breakpoint reading as a stretched phone. -->
+  <!-- ── Hero: the message and the button ──────────────────────────
+       Text-on-a-photo only. The map moved back down next to the copy
+       that actually explains it (#brief) — up here it was competing
+       with the headline for a look before the reader knows what it
+       is a map OF. -->
   <header class="hero">
     <div class="hero-grid">
       <div class="hero-inner">
@@ -43,9 +41,6 @@
         <a href="game.html" id="ctaPrimary" class="btn btn-primary">Create your agent file</a>
         <span class="cta-hint">Free · takes about 30 seconds</span>
         <a href="game.html?mode=signin" id="ctaSecondary" class="quiet-link">I already have an agent file</a>
-      </div>
-      <div class="hero-map">
-        <div class="map" id="mapMount"></div>
       </div>
     </div>
     <a href="#brief" class="scroll-cue" aria-label="Read more">
@@ -58,14 +53,11 @@
 
     <section class="sec" id="brief">
       <p class="sec-lede">
-        Every district on this map belonged to an agent. The network went dark on the
-        same night, all at once.
+        Every district on this map went dark the same night — stream to bring it back, one piece at a time.
       </p>
-      <p class="sec-lede">
-        HT built a new one from scratch — BOTZ, powered by the ARMY Bomb. It's unstable.
-        Every stream you log restores a piece of it. As more comes back, districts and
-        missions unlock.
-      </p>
+      <div class="brief-map">
+        <div class="map" id="mapMount"></div>
+      </div>
     </section>
 
     <!-- One line, not a dashboard. A stranger doesn't need three labelled

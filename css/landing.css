@@ -118,26 +118,15 @@ body.landing {
   align-items: center; justify-content: center;
   text-align: center; padding: 72px 24px 96px;
 }
-/* One column on phones (text, then the grid under it — the map is the thing
-   that used to be a screen and a half away). Two columns from 900px, which
-   is the fix for desktop reading as a stretched phone: the width gets used
-   by a second real element instead of being padding. */
+/* Single column, text only — the map lives down in #brief now. */
 .hero-grid {
   width: 100%; max-width: 620px;
   display: flex; flex-direction: column; align-items: center;
 }
 .hero-inner { display: flex; flex-direction: column; align-items: center; }
-.hero-map { width: 100%; margin-top: 72px; }
 
 @media (min-width: 900px) {
   .hero { padding: 80px 40px 96px; }
-  .hero-grid {
-    max-width: 1120px; display: grid; grid-template-columns: 1fr 1fr;
-    gap: 56px; align-items: center; text-align: left;
-  }
-  .hero-inner { align-items: flex-start; }
-  .hero-inner .lede { max-width: 30ch; }
-  .hero-map { margin-top: 0; }
   .scroll-cue { display: none; }
 }
 
@@ -238,6 +227,8 @@ body.landing {
   margin-bottom: 30px;
 }
 .sec-lede { font-size: clamp(17px, 2.2vw, 21px); line-height: 1.7; color: var(--text); }
+
+.brief-map { width: 100%; margin-top: 44px; }
 
 /* ── the dark map ───────────────────────────────────────────────
    The actual illustrated city (map/city-dark.webp) — the same artwork and
@@ -372,13 +363,8 @@ body.landing {
 @media (max-width: 720px) {
   .hero { padding: 56px 20px 76px; }
   .sec { padding: 58px 20px; }
-  /* The hero is taller than a phone screen now that the grid is in it, and
-     that's the intent — the map's top edge peeking above the fold is what
-     makes the first scroll obvious. These just stop it starting so far down
-     that none of it shows. */
   .title { margin-top: 24px; }
   .hero .btn { margin-top: 30px; }
-  .hero-map { margin-top: 56px; }
   /* One line of terminal text doesn't fit 375px in one breath — let it wrap
      rather than shrink the font past legible. */
   .ticker { line-height: 1.9; }
