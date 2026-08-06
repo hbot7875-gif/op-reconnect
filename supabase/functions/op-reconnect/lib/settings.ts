@@ -88,6 +88,36 @@ export async function changePassword(supabase: SupabaseDB, params: Record<string
   return { success: true, sessionToken: res.sessionToken }
 }
 
+/** Retirement Protocol — a soft delete, password-gated same as changing a
+ *  password: this is the one action a stolen phone would use to grief an
+ *  account, so it asks for the one thing a thief with an unlocked phone
+ *  still doesn't have. Clears the session (kicks every device out, like
+ *  logoutAgent) but deliberately touches nothing outside rc_agents —
+ *  rc_players/rc_player_districts/badges/xp all survive untouched, since
+ *  districts are named after real agents with no team to fold their spot
+ *  into. auth.ts's verifySession/loginAgent both reject a retired_at agent
+ *  from here on. */
+export async function retireAccount(supabase: SupabaseDB, params: Record<string, unknown>) {
+  const agentNo = String(params.agentNo || '').trim().toUpperCase()
+  const password = String(params.password || '')
+
+  if (!await throttle(supabase, `retire:${agentNo}`, 5, 900)) {
+    return { success: false, error: 'rate_limited' }
+  }
+
+  const agent = await getRcAgent(supabase, agentNo)
+  if (!agent) return { success: false, error: 'agent_not_found' }
+  if (!await bcrypt.compare(password, agent.password_hash)) {
+    return { success: false, error: 'bad_credentials' }
+  }
+
+  const { error } = await supabase.from('rc_agents')
+    .update({ retired_at: new Date().toISOString(), session_token: null, session_expires_at: null })
+    .eq('agent_no', agentNo)
+  if (error) return { success: false, error: error.message }
+  return { success: true }
+}
+
 // ── Stream sources ────────────────────────────────────────────────
 // Direct-scrobble PIN — authenticates Web Scrobbler's webhook and the
 // ListenBrainz-like protocol (Pano Scrobbler). Same 8-char format as the old

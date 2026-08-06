@@ -17,6 +17,7 @@ import { call } from './api.js'
 import { el, esc, toast, setState, showOverlay, hideOverlay } from './state.js'
 import { getScreen, goWorld, goResources, goSettings, goCandyStar, goRanking } from './router.js'
 import { getAgentNo } from './session.js'
+import { BADGE_CATALOG } from './badges.js'
 
 /** { multiplier, minsLeft } while state.player.boost is live, else null. */
 function activeBoost(boost) {
@@ -34,10 +35,16 @@ export function renderHud(container, state) {
   const boost = activeBoost(p.boost)
   const streakLabel = p.streak.current > 0 ? `🔥 ${p.streak.current}-day streak` : 'No streak yet'
 
+  const invites = state.invites || []
+
   container.innerHTML = `
     <div class="hud-inner">
       <div class="hud-row">
         <div class="hud-code">${esc(p.codename)}</div>
+        <button class="hud-bell" id="bellBtn" type="button" title="Invites"
+          aria-label="${invites.length ? `${invites.length} pending invite${invites.length === 1 ? '' : 's'}` : 'No pending invites'}">
+          🔔${invites.length ? `<span class="hud-bell-count">${invites.length}</span>` : ''}
+        </button>
         <button class="hud-level" id="levelPill" type="button" title="View progress">
           <span class="hlv-lv">LV</span><span class="hlv-num">${lvl.level}</span>
         </button>
@@ -57,6 +64,7 @@ export function renderHud(container, state) {
     </div>
   `
   container.querySelector('#levelPill').onclick = () => showOverlay(progressSheet(state))
+  container.querySelector('#bellBtn').onclick = () => showOverlay(invitesSheet(state))
 }
 
 /** LEVEL {n}, XP progress, next-level rewards, active boost (if any), rank +
@@ -96,8 +104,60 @@ function progressSheet(state) {
     <div class="bd-block-head">Rank</div>
     <div class="bd-line"><span>Current</span><b>${esc(p.rank.title)}</b></div>
     ${p.rank.nextTitle ? `<div class="bd-line"><span>Next rank</span><b>${esc(p.rank.nextTitle)}</b></div>` : ''}
-    <div class="bd-line"><span>Badges earned</span><b>${(p.badges || []).length}</b></div>
+    <div class="bd-line"><span>Badges earned</span><b>${BADGE_CATALOG.filter((b) => b.earned(state)).length} / ${BADGE_CATALOG.length}</b></div>
   `))
+
+  const close = el('button', 'btn btn-ghost', 'Close')
+  close.onclick = hideOverlay
+  sheet.appendChild(close)
+  return sheet
+}
+
+/** Pending reconnect-mission invites — another agent already restoring a
+ *  district asked you to join them there. Backend resolves invited_by to a
+ *  codename before this ever reaches the client (reconnect-missions.ts's
+ *  getMyInvites), so there's no agent number to leak here. A full reload on
+ *  respond rather than a local state patch: accepting can change the
+ *  invitee's own district goals (the reconnect goal gets frozen in), and
+ *  that's exactly the kind of derived state not worth hand-patching. */
+function invitesSheet(state) {
+  const sheet = el('div', 'sheet')
+  sheet.appendChild(el('div', 'eyebrow', '🔔 INVITES'))
+  const invites = state.invites || []
+
+  if (!invites.length) {
+    sheet.appendChild(el('p', 'muted', "No pending invites. If another agent invites you to help restore their district, it shows up here."))
+  }
+
+  for (const inv of invites) {
+    const row = el('div', 'bd-block')
+    row.innerHTML = `
+      <div class="bd-block-head">${esc(inv.districtName)}</div>
+      <p class="muted invite-body">${esc(inv.fromCodename)} invited you to help restore this district.</p>
+    `
+    const actions = el('div', 'invite-actions')
+    const accept = el('button', 'btn btn-primary', 'Accept')
+    const decline = el('button', 'btn btn-ghost', 'Decline')
+    const respond = async (accepted) => {
+      accept.disabled = true
+      decline.disabled = true
+      const res = await call('respondReconnectInvite', { agentNo: getAgentNo(), districtId: inv.districtId, accept: accepted })
+      if (!res.success) {
+        toast(res.error || "Couldn't reach that invite")
+        accept.disabled = false
+        decline.disabled = false
+        return
+      }
+      hideOverlay()
+      toast(accepted ? 'Joined the mission' : 'Invite declined')
+      location.reload()
+    }
+    accept.onclick = () => respond(true)
+    decline.onclick = () => respond(false)
+    actions.append(accept, decline)
+    row.appendChild(actions)
+    sheet.appendChild(row)
+  }
 
   const close = el('button', 'btn btn-ghost', 'Close')
   close.onclick = hideOverlay
@@ -108,7 +168,8 @@ function progressSheet(state) {
 // Candy Star, BOTZ and Rankings used to be cards inside the Pack screen —
 // one tap to Pack, then a second to whichever tool you actually wanted. They
 // get their own tabs now, directly reachable from every screen; Pack keeps
-// Today's Queue plus the resource/merch view, which don't fit a tab (no icon
+// The 148 Protocol, the Badge Drawer, and the resource/merch view, which
+// don't fit a tab (no icon
 // alone says "what you're carrying"). BOTZ leaves the app entirely
 // (botz.html is its own page), so it's the one tab that's a real `<a href>`
 // rather than a router push — it can never show as "selected" the way the

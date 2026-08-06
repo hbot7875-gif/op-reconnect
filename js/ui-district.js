@@ -89,7 +89,7 @@ export function renderBoard(board, d) {
   // about to go stream.
   const left = remaining({ activeDistrict: d })
   if (left.length) {
-    const q = el('button', 'queue-btn', `🎧 Build today's queue <i>${left.reduce((a, x) => a + x.need, 0)} plays left</i>`)
+    const q = el('button', 'queue-btn', `🧠 Run the 148 Protocol <i>${left.reduce((a, x) => a + x.need, 0)} plays left</i>`)
     q.onclick = () => showOverlay(openPlaylist(getState() || { activeDistrict: d }))
     board.appendChild(q)
   }

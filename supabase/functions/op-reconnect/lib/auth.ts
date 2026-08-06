@@ -27,6 +27,10 @@ export interface RcAgentRow {
   musicat_public_id: string | null
   created_at: string
   last_login_at: string | null
+  // Retirement Protocol (migration 038) — a soft delete. Set once an agent
+  // retires; rc_players/rc_player_districts/badges are left untouched, this
+  // is purely a login gate. See settings.ts's retireAccount().
+  retired_at: string | null
 }
 
 // Matches ui-auth.js's own validation message exactly: "Handles are 3-30
@@ -93,6 +97,10 @@ export async function verifySession(supabase: SupabaseDB, agentNo: string, sessi
   const agent = await getRcAgent(supabase, agentNo)
   if (!agent || !agent.session_token || agent.session_token !== sessionToken) return false
   if (agent.session_expires_at && new Date(agent.session_expires_at).getTime() <= Date.now()) return false
+  // A retired agent's session_token is cleared the moment they retire (see
+  // retireAccount), so this almost never fires in practice — it's here as a
+  // second gate in case a token was already in flight the instant they did.
+  if (agent.retired_at) return false
   return true
 }
 
@@ -168,6 +176,7 @@ export async function loginAgent(supabase: SupabaseDB, params: Record<string, un
 
   const agent = await getRcAgent(supabase, agentNo)
   if (!agent) return { success: false, error: 'agent_not_found' }
+  if (agent.retired_at) return { success: false, error: 'agent_retired' }
 
   const ok = await bcrypt.compare(password, agent.password_hash)
   if (!ok) return { success: false, error: 'bad_credentials' }

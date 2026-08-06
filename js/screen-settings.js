@@ -140,6 +140,11 @@ function paintSections(body, state) {
       body: 'Ends this session everywhere. Your progress stays exactly where it is.',
       onClick: () => showOverlay(signOutSheet()),
     },
+    {
+      icon: '🪦', name: 'Retirement Protocol', value: '',
+      body: 'Permanently step down. Your district stays on the map, exactly as you left it.',
+      onClick: () => showOverlay(retireSheet()),
+    },
   ]))
 
   // ── Game ────────────────────────────────────────────────────────
@@ -305,6 +310,49 @@ function signOutSheet() {
   return sheet
 }
 
+/** Two-step confirm: retype the handle you're retiring AND the password,
+ *  before the one destructive action on this whole screen. Every other
+ *  sheet here (password, sign out) needed only one of those — this is the
+ *  only one that can't be undone, so it asks for both. */
+function retireSheet() {
+  const sheet = el('div', 'sheet set-sheet')
+  sheet.append(
+    el('div', 'eyebrow', 'RETIREMENT PROTOCOL'),
+    el('h3', '', 'Retire this agent file?'),
+    el('p', 'muted', `This locks ${esc(account?.agentNo || 'your agent number')} out of the network for good — it can't be undone. Your district, XP and badges stay exactly where they are on the map; they just stop being yours to touch.`),
+  )
+
+  const handle = el('input', 'ob-input')
+  handle.type = 'text'
+  handle.placeholder = account?.handle || 'your handle'
+  handle.autocomplete = 'off'
+  const pw = pwInput('Your password', 'current-password')
+  sheet.append(
+    field('Type your handle to confirm', `Type "${esc(account?.handle || '')}" exactly, case included.`, handle),
+    field('Password', '', pw),
+  )
+
+  const go = el('button', 'btn btn-alert', 'Retire this file')
+  go.onclick = async () => {
+    if (handle.value !== (account?.handle || '')) { toast("That doesn't match your handle"); return }
+    go.disabled = true
+    go.textContent = 'RETIRING…'
+    const res = await call('retireAccount', { agentNo: getAgentNo(), password: pw.value })
+    go.disabled = false
+    go.textContent = 'Retire this file'
+    if (!res.success) { toast(errText(res.error)); return }
+    clearSession()
+    hideOverlay()
+    toast('Agent file retired. Thank you for your service.')
+    location.reload()
+  }
+  sheet.appendChild(go)
+  const close = el('button', 'btn btn-ghost', 'Never mind')
+  close.onclick = hideOverlay
+  sheet.appendChild(close)
+  return sheet
+}
+
 /* ── bits ─────────────────────────────────────────────────────────────── */
 
 function pwInput(placeholder, autocomplete) {
@@ -331,5 +379,6 @@ export function errText(code) {
     password_short: 'Passwords need at least 6 characters.',
     rate_limited: 'Too many tries. Wait a minute and go again.',
     agent_not_found: 'Agent file not found.',
+    agent_retired: 'This agent file has already been retired.',
   }[code] || code || 'Something went wrong'
 }

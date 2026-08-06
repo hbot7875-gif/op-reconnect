@@ -1,4 +1,6 @@
-// Today's queue — a playlist built from what the district still needs.
+// The 148 Protocol — a strategic briefing built from what the district still
+// needs, framed as intel rather than a bare playlist (name and framing
+// borrowed from BTS Comeback Mission's "Namjoon's Brain").
 //
 // This is the Candy Star idea living inside the game instead of a link out:
 // the state already knows every remaining play (track goals) and every track
@@ -65,7 +67,8 @@ export function openPlaylist(state) {
   const d = state.activeDistrict
   const queue = buildQueue(state)
 
-  sheet.appendChild(el('div', 'eyebrow', 'TODAY\'S QUEUE'))
+  sheet.appendChild(el('div', 'eyebrow', '🧠 THE 148 PROTOCOL'))
+  sheet.appendChild(el('div', 'pl-sub', 'Strategic briefing'))
   sheet.appendChild(el('div', 'pl-title', d ? esc(districtDisplayName(d)) : 'No active district'))
 
   if (!d) {
@@ -90,10 +93,11 @@ export function openPlaylist(state) {
     `${queue.length} ${queue.length === 1 ? 'play' : 'plays'} &middot; ${tracks.size} ${tracks.size === 1 ? 'track' : 'tracks'} &middot; in this order`))
 
   const list = el('ol', 'pl-list')
-  queue.forEach((q) => {
+  queue.forEach((q, i) => {
     list.appendChild(el('li', 'pl-item' + (q.kind === 'album' ? ' album' : ''), `
       <span class="pl-name">${esc(q.label)}</span>
-      ${q.kind === 'album' ? '<span class="pl-tag">album pass</span>' : ''}
+      ${i === 0 ? '<span class="pl-tag priority">⚠ priority</span>'
+        : q.kind === 'album' ? '<span class="pl-tag">album pass</span>' : ''}
     `))
   })
   sheet.appendChild(list)

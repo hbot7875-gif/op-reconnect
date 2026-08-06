@@ -19,7 +19,7 @@
 // WHOLE district (solo goals + reconnect) completes, avoiding a double
 // payout from two separate reward pipelines.
 
-import type { SupabaseDB } from './config.ts'
+import type { SupabaseDB, GameContent } from './config.ts'
 import type { FrozenReconnectGoal } from './districts.ts'
 
 /** The caller's own active restoration attempt on this district (and
@@ -329,6 +329,43 @@ export async function respondReconnectInvite(supabase: SupabaseDB, content: unkn
   if (error) return { success: false, error: error.message }
   await refreshMission(supabase, mission, variant)
   return { success: true, joined: true }
+}
+
+/** Every pending invite this agent hasn't answered yet — the notification
+ *  bell's whole data source. Two plain queries + a JS merge rather than an
+ *  embedded relational select, matching how the rest of this codebase joins
+ *  (see communityStreams/awardStreakBadges) rather than depending on a
+ *  guessed FK-constraint name. invited_by resolves to a codename, never the
+ *  raw agent number — same "agent numbers never leave the caller's own
+ *  request" rule handlers.ts documents at the top of this file's sibling. */
+export async function getMyInvites(supabase: SupabaseDB, content: GameContent, agentNo: string) {
+  const { data: rows } = await supabase.from('rc_reconnect_participants')
+    .select('mission_id, invited_by').eq('agent_no', agentNo).eq('status', 'invited')
+  if (!rows || !rows.length) return { success: true, invites: [] }
+
+  const missionIds = [...new Set(rows.map((r: any) => r.mission_id))]
+  const { data: missions } = await supabase.from('rc_reconnect_missions')
+    .select('id, district_id').in('id', missionIds)
+  const districtByMission = new Map((missions || []).map((m: any) => [m.id, m.district_id]))
+
+  const inviterNos = [...new Set(rows.map((r: any) => r.invited_by))]
+  const { data: inviters } = await supabase.from('rc_players')
+    .select('agent_no, codename').in('agent_no', inviterNos)
+  const codenameByAgent = new Map((inviters || []).map((p: any) => [p.agent_no, p.codename]))
+
+  const invites = rows
+    .map((r: any) => {
+      const districtId = districtByMission.get(r.mission_id) || ''
+      const district = content.districts.find((d) => d.id === districtId)
+      return {
+        districtId,
+        districtName: district?.name || districtId,
+        fromCodename: codenameByAgent.get(r.invited_by) || 'an agent',
+      }
+    })
+    .filter((i: any) => i.districtId)
+
+  return { success: true, invites }
 }
 
 /* ── Admin ────────────────────────────────────────────────────────────── */

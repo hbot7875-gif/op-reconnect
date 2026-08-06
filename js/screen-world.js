@@ -43,6 +43,7 @@ export function renderWorld(container, state) {
   wrap.appendChild(opCard(state))
   wrap.appendChild(coreBlock(state))
   wrap.appendChild(coreFeed(state))
+  if (state.eraTimeline) wrap.appendChild(eraTimelineStrip(state.eraTimeline))
   wrap.appendChild(statusStrip(state))
   // The map's heading and its tiles travel together: on desktop the whole
   // group moves into the second column as ONE cell. Kept as two separate
@@ -214,14 +215,20 @@ function coreBlock(state) {
     <div class="core-glow"></div>
     <svg class="core-rings" viewBox="0 0 220 220" aria-hidden="true">
       <circle class="ring-outer" cx="110" cy="110" r="98"></circle>
+      <circle class="ring-inner" cx="110" cy="110" r="90"></circle>
       <circle class="ring-charge-bg" cx="110" cy="110" r="106"></circle>
       <circle class="ring-charge" cx="110" cy="110" r="106" transform="rotate(-90 110 110)"
         stroke-dasharray="${(CIRC * arcFrac).toFixed(1)} ${CIRC.toFixed(1)}"></circle>
     </svg>
     <div class="core-particles"><span></span><span></span><span></span><span></span><span></span><span></span></div>
     <div class="rc-bomb">
-      <div class="rc-sphere"><span class="rc-fill"></span><span class="rc-logo">⟭⟬</span></div>
-      <div class="rc-handle"></div>
+      <div class="rc-sphere">
+        <span class="rc-fill"></span>
+        <span class="rc-shine"></span>
+        <span class="rc-shine-2"></span>
+        <span class="rc-logo">⟭⟬</span>
+      </div>
+      <div class="rc-handle"><span class="rc-grip"></span><span class="rc-grip"></span></div>
     </div>
   `
   // The ring arc already carries real charge — the glow/sphere didn't, so the
@@ -290,6 +297,35 @@ function coreFeed(state) {
   const secs = (2.6 - Math.min(1, b.charge || 0) * 1.4).toFixed(2)
   for (const p of feed.querySelectorAll('.cf-pulse')) p.style.animationDuration = `${secs}s`
   return feed
+}
+
+/* ── Era Timeline ───────────────────────────────────────────────────────
+   How much of the whole discography the NETWORK has collectively streamed,
+   era by era — not per-district (districts are just agent names, nothing
+   to do with BTS eras) and not per-team (this game doesn't have teams).
+   One shared strip everyone sees the same numbers on, same framing as City
+   Recovery below it. Read-only: there's nothing to tap here, it's the
+   city's shared memory coming back online. */
+
+function eraTimelineStrip(timeline) {
+  const wrap = el('div', 'era-strip')
+  wrap.appendChild(el('div', 'era-strip-label', 'Era Timeline'))
+  const row = el('div', 'era-row')
+  for (const e of timeline.eras || []) {
+    const chip = el('div', 'era-chip' + (e.locked ? ' locked' : e.done >= e.total && e.total > 0 ? ' done' : ''))
+    chip.innerHTML = e.locked ? `
+      <span class="era-icon">🔒</span>
+      <span class="era-name">${esc(e.name)}</span>
+      <span class="era-count">soon</span>
+    ` : `
+      <span class="era-icon">${e.icon}</span>
+      <span class="era-name">${esc(e.name)}</span>
+      <span class="era-count">${e.done}/${e.total}</span>
+    `
+    row.appendChild(chip)
+  }
+  wrap.appendChild(row)
+  return wrap
 }
 
 /* ── Red Zone ───────────────────────────────────────────────────────────── */

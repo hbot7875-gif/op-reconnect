@@ -22,7 +22,7 @@
   --border-str: rgba(255, 255, 255, 0.18);
 
   --mono: 'Space Mono', monospace;
-  --disp: 'Rajdhani', sans-serif;
+  --disp: 'Orbitron', 'Rajdhani', sans-serif;
   --r: 12px;
 }
 
@@ -32,7 +32,7 @@ html { scroll-behavior: smooth; }
 body.landing {
   background: var(--bg);
   color: var(--text);
-  font-family: 'Inter', sans-serif;
+  font-family: 'Rajdhani', sans-serif;
   font-size: 16px;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;

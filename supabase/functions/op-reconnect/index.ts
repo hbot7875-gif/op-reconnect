@@ -5,7 +5,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0'
 import { getGameState, joinGame, startDistrict, setMode, adminLaunchDefuse } from './lib/handlers.ts'
 import { registerAgent, loginAgent, logoutAgent, checkHandle, verifySession } from './lib/auth.ts'
-import { getAccount, updateEmail, changePassword, generateScrobblePin, getWebhookPin, setStreamSource } from './lib/settings.ts'
+import { getAccount, updateEmail, changePassword, generateScrobblePin, getWebhookPin, setStreamSource, retireAccount } from './lib/settings.ts'
 import { requestPasswordReset, resetPassword } from './lib/recovery.ts'
 import { handleWebScrobblerWebhook, handleListenBrainzLike } from './lib/scrobble-inbound.ts'
 import { placeItem, useItem } from './lib/items.ts'
@@ -27,6 +27,7 @@ import { adminListGoals, adminAddGoal, adminUpdateGoal, adminDeleteGoal } from '
 import {
   getReconnectMission, openReconnectMission, joinReconnectMission,
   inviteReconnectMission, respondReconnectInvite, adminAutoAssignMissions,
+  getMyInvites,
 } from './lib/reconnect-missions.ts'
 import { submitReconnectPuzzleAnswer } from './lib/reconnect-puzzle.ts'
 import { getLeaderboard } from './lib/leaderboard.ts'
@@ -71,6 +72,7 @@ const ROUTES: Record<string, Route> = {
   getAccount: { auth: 'agent', handler: (sb, p) => getAccount(sb, p) },
   updateEmail: { auth: 'agent', handler: (sb, p) => updateEmail(sb, p) },
   changePassword: { auth: 'agent', handler: (sb, p) => changePassword(sb, p) },
+  retireAccount: { auth: 'agent', handler: (sb, p) => retireAccount(sb, p) },
   getGameState: { auth: 'agent', handler: (sb, p) => getGameState(sb, p) },
   joinGame: { auth: 'agent', handler: (sb, p) => joinGame(sb, p) },
   startDistrict: { auth: 'agent', handler: (sb, p) => startDistrict(sb, p) },
@@ -91,6 +93,7 @@ const ROUTES: Record<string, Route> = {
   joinReconnectMission: { auth: 'agent', handler: async (sb, p) => joinReconnectMission(sb, await loadContent(sb), p) },
   inviteReconnectMission: { auth: 'agent', handler: async (sb, p) => inviteReconnectMission(sb, await loadContent(sb), p) },
   respondReconnectInvite: { auth: 'agent', handler: async (sb, p) => respondReconnectInvite(sb, await loadContent(sb), p) },
+  getMyInvites: { auth: 'agent', handler: async (sb, p) => getMyInvites(sb, await loadContent(sb), String(p.agentNo || '').trim().toUpperCase()) },
   // Reconnect goal (sotd/cipher/memory puzzle variants).
   submitReconnectPuzzleAnswer: { auth: 'agent', handler: (sb, p) => submitReconnectPuzzleAnswer(sb, null, p) },
   // admin-gated inside the handler via SYNC_ADMIN_KEY

@@ -10,6 +10,8 @@ import { freezeGoals, computeBaseline, districtProgress, districtDeadline, files
 import { resolveReconnectStatus } from './reconnect-goal.ts'
 import { todayKst, nextKstMidnightUtc, kstDateOf } from './kst.ts'
 import { getBombView, launchDefuse } from './bomb.ts'
+import { getEraTimeline } from './era-timeline.ts'
+import { getMyInvites } from './reconnect-missions.ts'
 import { levelFor, applyLevelUpIfNeeded, nextLevelRewards } from './leveling.ts'
 import { getActiveBroadcasts } from './broadcasts.ts'
 
@@ -67,6 +69,11 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
   // Bomb view first — it reads the community's already-stored rollups, and
   // its multiplier feeds this agent's XP for today.
   const bomb = await getBombView(supabase, content, player.agent_no)
+  const eraTimeline = await getEraTimeline(supabase, content)
+  // Pending reconnect-mission invites — small, agent-scoped, cheap to
+  // recompute every poll (unlike eraTimeline's network-wide scan, this is
+  // just this one agent's own rc_reconnect_participants rows).
+  const { invites } = await getMyInvites(supabase, content, player.agent_no)
   const rollups = await ensureDailyRollups(supabase, agent, player, content, bomb.multiplier, personalBoostMult)
   const todayRow = rollups.find((r) => String(r.kst_date) === today) || null
 
@@ -307,6 +314,8 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     resources,
     items,
     bomb,
+    eraTimeline,
+    invites,
     broadcasts,
     transmission,
     today: {

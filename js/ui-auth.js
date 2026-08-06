@@ -19,6 +19,7 @@ const ERRORS = {
   password_short: 'Passwords need at least 6 characters.',
   bad_credentials: "That agent number and password don't match.",
   agent_not_found: "No agent with that number. Check it, or create a new file.",
+  agent_retired: 'This agent file was retired. It can\'t be reactivated.',
   rate_limited: 'Too many tries. Wait a minute and go again.',
   email_invalid: "That email doesn't look right.",
   email_taken: 'That email already has an agent file. Sign in, or recover it.',

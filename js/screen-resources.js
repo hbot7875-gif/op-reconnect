@@ -3,9 +3,9 @@
 // Candy Star, BOTZ and Rankings used to be cards in this list too — one tap
 // to get here, a second to actually reach the tool. They're bottom tabs now
 // (ui-hud.js), reachable directly from every screen instead of nested behind
-// Pack. Today's Queue stays: it's derived from state with no backend call,
-// which makes it feel more like part of what's in the pack than a
-// destination the way the other three are.
+// Pack. The 148 Protocol (formerly "Today's Queue") stays: it's derived from
+// state with no backend call, which makes it feel more like part of what's
+// in the pack than a destination the way the other three are.
 //
 // Every tap here stays inside this deployment. Nothing links out to the old
 // arirang site — that's a separate deployment with separate accounts, so a
@@ -13,16 +13,24 @@
 
 import { el, esc, showOverlay } from './state.js'
 import { openPlaylist } from './playlist.js'
+import { badgeDrawerSheet } from './badge-drawer.js'
 import { resourceRow, resourceSheet } from './resources.js'
 import { itemTile, itemSheet, itemsInPack } from './items.js'
 
 const TOOLS = [
   {
-    icon: '🎧',
-    name: "Today's Queue",
-    tag: 'In game · what to play',
-    body: 'Reads what this district still needs and lists the play order, spaced so no track runs back to back. Copy it and queue it yourself.',
+    icon: '🧠',
+    name: 'The 148 Protocol',
+    tag: 'Strategic briefing · what to stream today',
+    body: 'Reads what this district still needs and lays out the play order, spaced so no track runs back to back. Copy it and queue it yourself.',
     action: (state) => showOverlay(openPlaylist(state)),
+  },
+  {
+    icon: '🎖️',
+    name: 'Badge Drawer',
+    tag: 'Your collection',
+    body: "Every badge you've earned, and the ones still waiting to unlock.",
+    action: (state) => showOverlay(badgeDrawerSheet(state)),
   },
 ]
 
