@@ -2028,6 +2028,7 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .cs-actionbar .btn-red { width: auto; flex: 1; }
 .cs-actionbar-total { display: flex; flex-direction: column; gap: 1px; flex-shrink: 0; }
 .cs-actionbar-total span:first-child { font-size: 9px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.cs-cost-note { text-align: center; font-size: 11px; color: var(--dim); margin-top: 6px; }
 #cs-estimate-val { font-size: 15px; font-weight: 900; color: var(--purple-lt); line-height: 1.1; }
 
 .cs-skeleton { display: flex; flex-direction: column; gap: 10px; }

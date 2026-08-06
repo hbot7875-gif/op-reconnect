@@ -582,6 +582,7 @@ export async function renderCandyStar() {
         </label>` : ''}
         ${goalSongs.length ? `<div class="cs-quick-count" id="cs-quick-count"></div>` : ''}
         <button type="button" class="btn-red" id="cs-quick-btn" onclick="candyGenerate('quick')">🦙 Make me an alpaca</button>
+        <div class="cs-cost-note">🪽 Costs 1 Wing · up to 3 Alpacas a day</div>
       </div>
     </div>
 
@@ -669,6 +670,7 @@ export async function renderCandyStar() {
             </div>
 
             <button type="button" class="btn-red" onclick="candyGenerate('custom')">${candyIcon('music')} Generate in Spotify</button>
+            <div class="cs-cost-note">🪽 Costs 1 Wing · up to 3 Alpacas a day</div>
           </div>
         </aside>
       </div>

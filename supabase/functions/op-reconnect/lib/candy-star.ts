@@ -10,13 +10,17 @@
 // agents actually call — it resolves what to focus on, then defers to
 // generatePlaylist for the hard part.
 //
-// NOT ported: any daily-generation cap. arirang-btsbackend's own comment on
-// this section reads "No daily limit — an agent can generate as many as they
-// want", and grepping its ROUTES/generateAlpaca confirms no cap is actually
-// enforced anywhere — migrations/015_candy_star_agent_playlists.sql (the old
-// site) only adds `agent_no` for attribution, not a limit. Ported faithfully
-// as-is: `generated_playlists.agent_no` is recorded (migration 030) but
-// nothing reads it to block a request.
+// Originally ported with NO daily-generation cap — arirang-btsbackend's own
+// comment on this section read "No daily limit — an agent can generate as
+// many as they want", and neither it nor migrations/015_candy_star_agent_
+// playlists.sql (the old site) enforced one; `generated_playlists.agent_no`
+// was only ever recorded for attribution (migration 030). That's since been
+// reversed on explicit request as part of the BOTZ redesign (see
+// docs/botz-network-redesign.md): generateAlpaca now caps real generations
+// at ALPACA_DAILY_LIMIT/day per agent and spends a Wing per generation
+// (`js/magic-shop.js` sells Wings). previewAlpaca (dry runs, no DB write, no
+// Spotify write) stays completely free — the gate only applies to the real
+// thing, checked right before generatePlaylist() is called.
 
 // deno-lint-ignore-file no-explicit-any
 import type { SupabaseDB } from './spotify-shared.ts'
@@ -27,6 +31,7 @@ import {
 import { getUserAccessToken } from './spotify-oauth.ts'
 import { getBTSCatalog, getAlbumsMap } from './spotify-catalog.ts'
 import { getFillerLibrary } from './spotify-filler.ts'
+import { todayKst, kstDayBounds } from './kst.ts'
 import {
   analyzeTracklist, buildHumanPlaylistMeta, buildPlaylistOrder, buildPlaylistOrder2Focus,
   spreadFocusPlays, createUserPlaylist, uploadPlaylistCover,
@@ -326,8 +331,13 @@ async function alpacaQuickPlan(supabase: SupabaseDB): Promise<{ focus: any[]; al
   return { focus, album }
 }
 
+const ALPACA_DAILY_LIMIT = 3
+const ALPACA_WING_COST = 1
+
 /** Agent-facing wrapper around generatePlaylist — "so agents can build their
- *  own rule-compliant playlists." No daily limit, matching the source. */
+ *  own rule-compliant playlists." Capped at ALPACA_DAILY_LIMIT/day per agent
+ *  and costs ALPACA_WING_COST Wings per generation — see this file's header
+ *  comment for why that reverses the original ported behavior. */
 export async function generateAlpaca(supabase: SupabaseDB, params: any): Promise<any> {
   const agentNo = params.agentNo
   let focus = params.focus || []
@@ -355,8 +365,27 @@ export async function generateAlpaca(supabase: SupabaseDB, params: any): Promise
     return { success: true, dryRun: true, mode: params.mode || 'custom', targetMinutes, totalPlays, focus, albumTrackCount: album.length }
   }
 
+  // Daily cap — counts real generations only (generated_playlists rows are
+  // only ever inserted after a successful run), so a failed attempt never
+  // eats into the limit.
+  const { fromTs } = kstDayBounds(todayKst())
+  const { count: todayCount } = await supabase.from('generated_playlists')
+    .select('id', { count: 'exact', head: true })
+    .eq('agent_no', agentNo).gte('created_at', new Date(fromTs * 1000).toISOString())
+  if ((todayCount || 0) >= ALPACA_DAILY_LIMIT) {
+    return { success: false, error: `You've made ${ALPACA_DAILY_LIMIT} Alpacas today — come back tomorrow.` }
+  }
+
+  const { data: player } = await supabase.from('rc_players').select('wings').eq('agent_no', agentNo).maybeSingle()
+  if (!player || (player.wings || 0) < ALPACA_WING_COST) {
+    return { success: false, error: `Not enough Wings — this costs ${ALPACA_WING_COST}. The Magic Shop sells up to 3 a day.` }
+  }
+
   try {
     const res = await generatePlaylist(supabase, { focus, album, targetMinutes, agentNo, name: params.name || '' })
+    if (res.success) {
+      await supabase.from('rc_players').update({ wings: player.wings - ALPACA_WING_COST }).eq('agent_no', agentNo)
+    }
     return res
   } catch (e: any) {
     return { success: false, error: e?.message || 'Generation failed.' }

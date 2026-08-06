@@ -196,11 +196,14 @@ would be the first real currency-sink/storefront in the game.
   one-time Ticket (claimed once Level 7 / 3 restored districts / 50 XP is cleared — no
   separate cost specified, so eligibility is the price). BTS merch is a "coming soon"
   placeholder — no catalog or pricing exists to build against.
-- **Deliberately not done**: wiring Wings as an actual cost on the Candy Star Generator
-  (`generateAlpaca` in `candy-star.ts`). That function was ported with an explicit,
-  documented "no daily limit — an agent can generate as many as they want" design
-  decision; gating it behind Wings would reverse that on the spot. Wings exist and are
-  purchasable now, but spending them is still an open decision, not an oversight.
+- **Update: now done, on explicit request.** `generateAlpaca` (`candy-star.ts`) is capped
+  at 3 real generations/day per agent and costs 1 Wing each — this does reverse the
+  function's originally-ported "no daily limit" design decision, which is now recorded
+  purely as history in that file's header comment rather than as the current behavior.
+  `previewAlpaca` (dry runs — no DB write, no Spotify write) stays completely free; the
+  gate only applies right before the real `generatePlaylist()` call. The daily count reads
+  `generated_playlists` rows created today (KST), so a failed attempt never eats into the
+  limit — only successful generations are ever inserted there.
 
 **Phase 3 — Bomb charge model change**
 - New `rc_agent_charge`-style table: per-agent charge level, last-fed timestamp, fuel
