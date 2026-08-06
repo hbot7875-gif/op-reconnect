@@ -313,6 +313,7 @@ function eraTimelineStrip(timeline) {
   const row = el('div', 'era-row')
   for (const e of timeline.eras || []) {
     const chip = el('div', 'era-chip' + (e.done >= e.total && e.total > 0 ? ' done' : ''))
+    if (e.description) chip.title = e.description
     chip.innerHTML = `
       <span class="era-icon">${e.icon}</span>
       <span class="era-name">${esc(e.name)}</span>

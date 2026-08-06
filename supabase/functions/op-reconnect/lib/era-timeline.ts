@@ -21,29 +21,118 @@
 import type { SupabaseDB, GameContent } from './config.ts'
 import { normKeyFull, artistAllowed } from './text.ts'
 
-interface EraDef { id: string; name: string; icon: string; tracks: string[] }
+interface EraDef { id: string; name: string; icon: string; description: string; tracks: string[] }
 
-// Real BTS discography, grouped the way the fandom already talks about
-// eras — a handful of era-defining tracks each, not the full tracklist.
-// This is a "has the network touched this era" pulse, not a
-// completionist grind through every b-side.
+// Real BTS discography, grouped the way the arirang-btsbackend project's own
+// ERAS dict names/describes them — era names, icons and descriptions taken
+// from there verbatim. Its per-era neon colors were left out: this game's
+// CSS has a deliberate two-hue-only palette (see reconnect.css's top-of-file
+// discipline note), and giving every era its own color would break that on
+// purpose, not by oversight. Its dated SCHEDULE (a day-by-day reveal
+// countdown) was left out too — that's a different app's mechanic; this
+// Era Timeline is cumulative and undated by design (see below).
+//
+// Tracklists are full mainline discography (sourced from that same
+// project's ALBUM_TRACKS), deduplicated across an era's own repackages
+// (e.g. HYYH pt.1/pt.2/Young Forever share plenty of tracks) and with
+// Skit/Intro/Interlude/Outro fragments dropped, since those are ~30s
+// spoken pieces nobody meaningfully "streams" the way a song gets streamed.
+// Japanese-language repackages (Wake Up, Youth, Face Yourself, MOTS 7
+// ~The Journey~) contribute only their genuinely original exclusive tracks —
+// their SCHEDULE gives these their own phase, so they're real content here,
+// just not the re-sung Korean songs already counted under the mainline
+// album. Proof (2022's anthology compilation) only contributes the handful
+// of tracks actually exclusive to it, filed under The Anthology since
+// that's literally what the compilation is.
 const ERA_CATALOG: EraDef[] = [
-  { id: 'school', name: 'School Trilogy', icon: '📗', tracks: ['No More Dream', 'N.O', 'Boy In Luv'] },
-  { id: 'darkwild', name: 'Dark & Wild', icon: '🌙', tracks: ['Danger', 'War of Hormone', 'Rain'] },
-  { id: 'hyyh', name: 'HYYH', icon: '🌸', tracks: ['I Need U', 'Run', 'Fire', 'Save Me'] },
-  { id: 'wings', name: 'Wings / YNWA', icon: '🦋', tracks: ['Blood Sweat & Tears', 'Spring Day', 'Not Today'] },
-  { id: 'ly', name: 'Love Yourself', icon: '💜', tracks: ['DNA', 'Fake Love', 'Idol'] },
-  { id: 'mots', name: 'Map of the Soul', icon: '📖', tracks: ['Boy With Luv', 'ON', 'Black Swan'] },
-  { id: 'anthology', name: 'The Anthology', icon: '💽', tracks: ['Dynamite', 'Butter', 'Life Goes On', 'Yet To Come'] },
-  // ARIRANG — this season's own comeback, now actually released. Tracklist
-  // sourced from the arirang-btsbackend project's own ARIRANG_TRACKS list
-  // (the canonical source for this album elsewhere in this game's universe),
-  // not guessed. A handful of the 14 for the same "pulse, not completionist
-  // grind" reason the rest of ERA_CATALOG only samples a few tracks each.
-  { id: 'arirang', name: 'ARIRANG', icon: '📡', tracks: ['Swim', 'Body to Body', 'Hooligan', 'Aliens', 'FYA', 'Merry Go Round'] },
+  {
+    id: 'school', name: 'School Trilogy', icon: '📚',
+    description: 'The foundation: Dreams, rebellion, and social commentary.',
+    // 2 Cool 4 Skool + O!RUL8,2? + Skool Luv Affair
+    tracks: [
+      'We Are Bulletproof Pt.2', 'No More Dream', 'Like',
+      'N.O', 'We On', 'If I Ruled the World', 'Coffee', 'BTS Cypher Pt.1', 'Attack on Bangtan', 'Paldogangsan',
+      'Boy In Luv', 'Where You From', 'Just One Day', 'Tomorrow', 'BTS Cypher Pt.2: Triptych', 'Spine Breaker', 'Jump',
+    ],
+  },
+  {
+    id: 'darkwild', name: 'Dark & Wild / Bridge', icon: '🌙',
+    description: 'The transition into a deeper, more mature identity.',
+    // Dark & Wild + Wake Up's exclusive originals (its own tracklist is
+    // otherwise Japanese re-recordings of Dark & Wild/earlier singles)
+    tracks: [
+      'BTS Cypher PT.3: KILLER', 'Danger', 'Let Me Know', 'War Of Hormone', 'Look Here', 'Hip Hop Phile',
+      'So 4 More', 'Could You Turn Off Your Cell Phone', '24/7=heaven', 'Rain', 'Embarrassed',
+      'The Stars',
+    ],
+  },
+  {
+    id: 'hyyh', name: 'HYYH (The Youth Era)', icon: '🌸',
+    description: 'The Most Beautiful Moment in Life: Fragility and growth.',
+    // pt.1 + pt.2 + Young Forever, deduped
+    tracks: [
+      'I Need U', 'Hold Me Tight', 'Dope', 'Boyz With Fun', 'Converse High', 'Moving On',
+      'Run', 'Butterfly', 'Whalien 52', 'Ma City', 'Silver Spoon', 'Autumn Leaves',
+      'Save Me', 'Burning Up (Fire)', 'House Of Cards', 'Love Is Not Over',
+    ],
+  },
+  {
+    id: 'wings', name: 'Wings / YNWA', icon: '🦋',
+    description: 'Temptation, artistic high-concepts, and learning to fly.',
+    // Youth's exclusive originals + Wings + You Never Walk Alone
+    tracks: [
+      'Good Day', 'For You', 'Wishing On A Star',
+      'Blood Sweat & Tears', 'Begin', 'Lie', 'Stigma', 'First Love', 'Reflection', 'MAMA',
+      'Awake', 'Lost', 'BTS Cypher 4', 'Am I Wrong', '21st Century Girl', '2! 3!',
+      'Spring Day', 'Not Today', 'A Supplementary Story: You Never Walk Alone',
+    ],
+  },
+  {
+    id: 'ly', name: 'Love Yourself Series', icon: '💜',
+    description: 'The global message of self-love and acceptance.',
+    // Her + Face Yourself's exclusive originals + Tear + Answer, deduped
+    tracks: [
+      'DNA', 'Pied Piper', 'Best Of Me', 'Dimple', 'Go Go', 'MIC Drop',
+      "Don't Leave Me", 'Crystal Snow', 'Let Go',
+      'Fake Love', 'The Truth Untold', '134340', 'Paradise', 'Love Maze', 'Magic Shop', 'Airplane Pt.2', 'Anpanman', 'So What',
+      'Idol', 'Euphoria', 'Trivia 起 : Just Dance', 'Epiphany', 'Trivia 承 : Love',
+      'Tear', "I'm Fine", 'Answer : Love Myself', 'Her', 'Trivia 轉 : Seesaw', 'Singularity',
+    ],
+  },
+  {
+    id: 'mots', name: 'Map of the Soul', icon: '🗺️',
+    description: 'The psychological journey into the Shadow and the Ego.',
+    // Persona + 7 + 7 ~The Journey~'s exclusive originals, deduped
+    tracks: [
+      'Boy With Luv', 'Mikrokosmos', 'Make It Right', 'HOME', 'Jamais Vu', 'Dionysus',
+      'Black Swan', 'Filter', 'My Time', 'Louder Than Bombs', 'ON', 'UGH!',
+      "00:00 (Zero O'Clock)", 'Inner Child', 'Friends', 'Moon', 'Respect', 'We Are Bulletproof : The Eternal',
+      'Stay Gold', 'Lights', 'Your Eyes Tell',
+    ],
+  },
+  {
+    id: 'anthology', name: 'The Anthology (Chapter 1 Finale)', icon: '💎',
+    description: 'Retrospective of 9 years and comfort during the pandemic.',
+    // BE + the era's standalone singles + Proof's own exclusive additions
+    tracks: [
+      'Life Goes On', 'Fly To My Room', 'Blue & Grey', 'Telepathy', 'Dis-ease', 'Stay',
+      'Dynamite', 'Butter', 'Yet To Come',
+      'Born Singer', 'For Youth', 'Run BTS',
+    ],
+  },
+  {
+    id: 'arirang', name: 'ARIRANG', icon: '🎆',
+    description: 'The beginning of the New Era.',
+    // Full tracklist — this season's own comeback, now actually released.
+    tracks: [
+      'Normal', 'Merry Go Round', '2.0', 'Body To Body', 'FYA', 'Hooligan',
+      'Into The Sun', 'Like Animals', 'No. 29', 'One More Night', 'Please', 'Swim',
+      "They Don't Know 'Bout Us", 'Aliens',
+    ],
+  },
 ]
 
-export interface EraProgress { id: string; name: string; icon: string; done: number; total: number }
+export interface EraProgress { id: string; name: string; icon: string; description: string; done: number; total: number }
 export interface EraTimeline { eras: EraProgress[] }
 
 /** Config-driven so an admin can raise/lower the unlock bar without a
@@ -88,7 +177,8 @@ export async function getEraTimeline(supabase: SupabaseDB, content: GameContent)
     titles.reduce((n, t) => n + ((totals.get(normKeyFull(t)) || 0) >= cfg.trackThreshold ? 1 : 0), 0)
 
   const eras: EraProgress[] = ERA_CATALOG.map((e) => ({
-    id: e.id, name: e.name, icon: e.icon, total: e.tracks.length, done: eraDone(e.tracks),
+    id: e.id, name: e.name, icon: e.icon, description: e.description,
+    total: e.tracks.length, done: eraDone(e.tracks),
   }))
 
   cache = { at: Date.now(), value: { eras } }
