@@ -473,7 +473,6 @@ function statusStrip(state) {
         <span class="st-val">${pct}%</span>
       </div>
       <div class="st-bar"><div class="st-fill" style="width:${pct}%"></div></div>
-      ${Number.isFinite(b.multiplier) ? `<div class="st-sub">Boost &times;${b.multiplier}</div>` : ''}
     `
     tile.onclick = () => showOverlay(bombSheet(state))
     row.appendChild(tile)

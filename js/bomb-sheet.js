@@ -61,11 +61,12 @@ export function bombSheet(state) {
     ? 'This is how far the defuse has come. Everyone streaming right now pushes it up.'
     : b.brownout
       ? 'The grid took a hit. Power is down while it recovers — you didn\'t lose anything you earned.'
-      : 'Everyone streaming right now feeds this. The fuller it gets, the more every stream on the network is worth.'))
+      : "Everyone streaming right now feeds this — the network's shared vitality signal. It doesn't change your own XP or survival anymore; that's what your Personal Charge (Pack) runs on."))
 
   // ── what it's worth ──
+  // No "Boost ×N" line anymore — the shared multiplier was retired from XP
+  // (see derive.ts). This panel is network vitality + Red Zone status only.
   const stats = []
-  if (Number.isFinite(b.multiplier)) stats.push(['Boost', `&times;${b.multiplier}`])
   if (Number.isFinite(b.communityStreams)) stats.push(['Streams today', b.communityStreams.toLocaleString()])
   // Grows by a day per Era Timeline era the network has fully unlocked
   // (bomb.ts's chargeWindowDays) — the visible payoff for finishing one.

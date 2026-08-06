@@ -63,13 +63,11 @@ call('getPublicStats', {}).then((res) => {
   const total = document.getElementById('statDistrictsTotal')
   if (total && s.districtsTotal) total.textContent = `/${s.districtsTotal}`
 
-  // The bomb multiplier is the game's own "the network is busy right now"
-  // signal — worth surfacing only when it's actually doing something.
-  const boost = document.getElementById('chargeBoost')
-  if (boost && s.multiplier && s.multiplier > 1) {
-    boost.textContent = `· ×${s.multiplier} XP while charged`
-    boost.hidden = false
-  }
+  // The shared Bomb's multiplier no longer boosts anyone's XP (retired —
+  // Personal Charge is what actually matters now, see agent-charge.js).
+  // "charge N%" above still shows real network vitality; this line used to
+  // additionally claim an XP bonus that isn't true anymore, so it's gone
+  // rather than left to advertise something that no longer happens.
 }).catch(() => {
   for (const id of ['statAgents', 'statDistricts', 'statCharge']) setStat(id, null)
 })

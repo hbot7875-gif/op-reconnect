@@ -1,9 +1,12 @@
 // ARMY Bomb — the network's shared power source.
 //
-// Charge = every agent's counted streams over a rolling window, pooled. It
-// drives a community multiplier on district progress. Deliberately never a
-// gate: at zero charge the multiplier is 1.0, so a solo player is never
-// blocked by a quiet community — a busy community just makes everyone faster.
+// Charge = every agent's counted streams over a rolling window, pooled.
+// `multiplier` here USED to multiply personal XP directly — retired (see
+// derive.ts's awardStreamsXp) once Personal Charge (agent-charge.ts) became
+// the thing that actually matters for a player's own XP and district
+// survival. What's left is display/atmosphere: a live "how busy is the
+// network" reading, plus the brownout state below, plus Red Zone's shared
+// target/contribution/reward — none of which touch personal XP.
 //
 // The window itself isn't fixed: chargeWindowDays() extends it by a day for
 // every Era Timeline era (era-timeline.ts) the network has fully unlocked —
@@ -11,8 +14,8 @@
 // just a one-time number.
 //
 // Red-zone attacks are admin-launched. Failing one browns the network out
-// (dimmer visuals, reduced multiplier, expires on its own) but never removes
-// XP, files or restored districts.
+// (dimmer visuals, expires on its own) but never removes XP, files or
+// restored districts.
 
 import type { SupabaseDB, GameContent } from './config.ts'
 import { xpRules, modeMultiplier, loadContent } from './config.ts'
@@ -40,7 +43,7 @@ export function bombCfg(content: GameContent): BombCfg {
 export interface BombView {
   charge: number          // 0..1
   communityStreams: number
-  multiplier: number      // applied to district progress
+  multiplier: number      // display/atmosphere only now — no longer applied to XP, see header comment
   brownout: boolean
   brownoutUntil: string | null
   // How many KST days of activity are pooled into `charge` right now — base

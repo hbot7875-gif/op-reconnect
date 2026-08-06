@@ -308,7 +308,6 @@ body.landing {
   box-shadow: 0 0 3px rgba(167,139,250,0.6); animation: pulse 3.6s ease-in-out infinite;
 }
 .ticker-sep { margin: 0 9px; color: var(--border-str); }
-.ticker-boost { margin-left: 6px; color: var(--purple-lt); }
 
 .closing { text-align: center; }
 .closing-line {

@@ -20,7 +20,6 @@ export interface DailyRow {
   transmission: FrozenTransmission | null
   transmission_done: boolean
   finalized: boolean
-  bomb_mult?: number
   mode?: string
 }
 
@@ -55,15 +54,18 @@ function bucketRows(rows: { track_name: string; artist_name: string; listened_at
 
 async function awardStreamsXp(
   supabase: SupabaseDB, agentNo: string, date: string, counted: number,
-  perXp: number, finalizedAlready: boolean, bombMult: number, personalBoostMult = 1,
+  perXp: number, finalizedAlready: boolean, personalBoostMult = 1,
 ) {
-  // ARMY Bomb community charge boosts XP earning, and a level-up's timed
-  // personal boost stacks on top of it (today only — a finalized past day
-  // never gets its XP rewritten, so there's nothing to apply it to there).
-  const amount = Math.floor((counted / perXp) * bombMult * personalBoostMult)
+  // The shared ARMY Bomb's community charge USED to multiply XP here too —
+  // retired. XP is now purely personal: streams-per-Xp (mode-dependent, see
+  // streamsPerXpFor) and a level-up's own timed personal boost (today only —
+  // a finalized past day never gets its XP rewritten). The network Bomb
+  // still matters for Red Zone and for a player's own survival via Personal
+  // Charge (agent-charge.ts), just never for how much XP a stream is worth.
+  const amount = Math.floor((counted / perXp) * personalBoostMult)
   if (finalizedAlready) return
   await supabase.from('rc_xp_ledger').upsert(
-    { agent_no: agentNo, amount, source: 'streams', dedup_key: `streams:${agentNo}:${date}`, meta: { counted, bombMult } },
+    { agent_no: agentNo, amount, source: 'streams', dedup_key: `streams:${agentNo}:${date}`, meta: { counted } },
     { onConflict: 'dedup_key' },
   )
 }
@@ -85,7 +87,6 @@ export async function ensureDailyRollups(
   agent: AgentSourceRow,
   player: { agent_no: string; mode: string; joined_at: string },
   content: GameContent,
-  bombMult = 1,
   personalBoostMult = 1,
 ): Promise<DailyRow[]> {
   const lim = limits(content)
@@ -121,15 +122,12 @@ export async function ensureDailyRollups(
       // Frozen transmission survives refreshes; generate once per day.
       const transmission = existing?.transmission || generateTransmission(player.agent_no, date, content)
       const evald = transmission ? evaluateTransmission(transmission, dayData.bucket, allowlist) : { done: false, progress: 0 }
-      // Past days keep whatever multiplier they were finalized with; only
-      // today tracks the live community charge.
-      const dayMult = date === today ? bombMult : Number(existing?.bomb_mult ?? bombMult)
-      // Same rule for mode: whichever mode was live the first time THIS
-      // date's row was ever written is what that date's XP converts at,
-      // for good — a mode switch later in the day (or on any later poll)
-      // never rewrites a date that's already been touched once, today
-      // included. Prevents streaming on Hard then switching to Easy (or
-      // the reverse) before midnight from silently rewriting the day's XP.
+      // Whichever mode was live the first time THIS date's row was ever
+      // written is what that date's XP converts at, for good — a mode
+      // switch later in the day (or on any later poll) never rewrites a
+      // date that's already been touched once, today included. Prevents
+      // streaming on Hard then switching to Easy (or the reverse) before
+      // midnight from silently rewriting the day's XP.
       const dayMode = existing?.mode || player.mode
       const row: DailyRow = {
         agent_no: player.agent_no,
@@ -139,14 +137,13 @@ export async function ensureDailyRollups(
         transmission,
         transmission_done: evald.done || existing?.transmission_done || false,
         finalized: date < today,
-        bomb_mult: dayMult,
         mode: dayMode,
       }
       await supabase.from('rc_daily_activity').upsert(row, { onConflict: 'agent_no, kst_date' })
       byDate.set(date, row)
 
       const counted = countedStreams(dayData.bucket, allowlist, cap)
-      await awardStreamsXp(supabase, player.agent_no, date, counted, streamsPerXpFor(content, dayMode), !!existing?.finalized, dayMult, date === today ? personalBoostMult : 1)
+      await awardStreamsXp(supabase, player.agent_no, date, counted, streamsPerXpFor(content, dayMode), !!existing?.finalized, date === today ? personalBoostMult : 1)
       if (row.transmission_done) {
         await awardOnce(supabase, player.agent_no, rules.transmissionXp, 'transmission',
           `transmission:${player.agent_no}:${date}`, { templateId: transmission?.templateId })

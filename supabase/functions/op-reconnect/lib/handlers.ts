@@ -66,16 +66,18 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
   const allowlist: string[] = content.config.bts_artists || []
   const today = todayKst()
 
-  // A level-up's timed personal boost, if still active — stacks on top of
-  // the ARMY Bomb's community multiplier for today's XP only.
+  // A level-up's timed personal boost, if still active — the only
+  // multiplier real XP still gets (the ARMY Bomb's shared community
+  // multiplier was retired from XP entirely, see below).
   const personalBoostMult = player.boost_expires_at && new Date(player.boost_expires_at).getTime() > Date.now()
     ? Number(player.boost_multiplier) || 1
     : 1
 
   // Bomb view first — Red Zone (target/contribution/reward) is still
-  // network-wide, but its own charge/multiplier are retired (BOTZ redesign
-  // Phase 3 — see agent-charge.ts). personalBoostMult above is the only
-  // multiplier real XP still gets.
+  // network-wide, and the Bomb's charge still decides brownouts and (via
+  // Personal Charge, agent-charge.ts) a player's own district survival.
+  // Its charge no longer multiplies XP, though — bomb.multiplier is display-
+  // only from here on, not fed into ensureDailyRollups below.
   const bomb = await getBombView(supabase, content, player.agent_no)
   const agentCharge = await getAgentChargeView(supabase, content, player.agent_no)
   const eraTimeline = await getEraTimeline(supabase, content)
@@ -83,7 +85,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
   // recompute every poll (unlike eraTimeline's network-wide scan, this is
   // just this one agent's own rc_reconnect_participants rows).
   const { invites } = await getMyInvites(supabase, content, player.agent_no)
-  const rollups = await ensureDailyRollups(supabase, agent, player, content, bomb.multiplier, personalBoostMult)
+  const rollups = await ensureDailyRollups(supabase, agent, player, content, personalBoostMult)
   const todayRow = rollups.find((r) => String(r.kst_date) === today) || null
 
   const { data: pdRows } = await supabase.from('rc_player_districts').select('*')

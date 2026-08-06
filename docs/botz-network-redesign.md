@@ -228,23 +228,35 @@ would be the first real currency-sink/storefront in the game.
   agent from going dark in the same request. Reuses `era-timeline.ts`'s `ERA_CATALOG`
   (now exported) for the track lists, but scores per-agent/per-week, not network-wide/
   all-time — genuinely a different question from that file's own rollup.
-- **Deliberately deferred**: `bomb.ts` itself was NOT touched this pass. The shared
-  `rc_bomb_state` charge, its community→XP multiplier, Red Zone's brownout-multiplier
-  failure consequence, and the earlier Era Timeline → `chargeWindowDays()` bonus are all
-  still live and unchanged — they now run **alongside** the new per-agent system rather
-  than being replaced by it. Retiring them (decision 7's "shared multiplier goes away,
-  Red Zone hits personal charge instead") is real surgery on the currently-live XP-award
-  pipeline (`derive.ts`'s `awardStreamsXp`, fed by `bomb.multiplier`) and on Red Zone's
-  failure branch — riskier to bundle into the same pass as three brand-new tables, so it's
-  its own follow-up rather than a half-verified rewrite.
-- **✅ DONE.** Mode-based streams-per-XP (decision 5): `config.ts`'s new `streamsPerXpFor()`
-  (easy 10 / medium 20 / hard 30, admin-overridable) feeds `derive.ts`'s `awardStreamsXp`
-  call and `handlers.ts`'s `xpToday` estimate. `modeMultiplier`'s variety-cap role was
-  removed from both call sites (`derive.ts`, `handlers.ts` ×2) so the two levers don't
-  stack — `modeMultiplier` still scales goal *targets* via the frozen
-  `frozen.meta.multiplier` (`districts.ts`/`goals.ts`), that part is untouched, only its
-  variety-cap job went away. `bomb.ts`'s own separate per-agent cap (the still-deferred
-  shared-pool system) wasn't touched either.
+- **Partially resolved on a later revisit.** `bomb.ts` itself is still untouched — the
+  shared `rc_bomb_state` charge, Red Zone's target/contribution/reward, and the Era
+  Timeline → `chargeWindowDays()` bonus are all still live, unchanged, computed exactly as
+  before. **But the community→XP multiplier half of decision 7 is now done**: `bomb.multiplier`
+  no longer reaches `derive.ts`'s `awardStreamsXp` at all (stopped being threaded through
+  `ensureDailyRollups`, which dropped the parameter entirely) — Personal Charge
+  (`agent-charge.ts`) is the only thing that decides a player's own XP and district
+  survival now. Every player-facing "×N Boost" claim that promised an XP benefit from the
+  shared Bomb was removed to match: the landing page ticker's boost chip, the World screen
+  status tile's "Boost ×N" line, and the Bomb detail sheet's "Boost" stat row and note text
+  — all gone or reworded, not left to advertise something that stopped happening.
+  `bomb.multiplier` is still computed and returned (display/atmosphere — a live "how busy
+  is the network" reading — plus it still feeds brownout, which still dims visuals), it's
+  just never multiplied into anyone's XP anymore. Red Zone's failure branch (brownout
+  consequence) was NOT touched — that half of decision 7 ("Red Zone hits personal charge
+  instead") remains its own future follow-up, not bundled into this pass.
+- **✅ DONE, and later corrected.** Mode-based streams-per-XP (decision 5): `config.ts`'s
+  `streamsPerXpFor()` (easy 10 / medium 20 / hard 30, admin-overridable) feeds `derive.ts`'s
+  `awardStreamsXp` call and `handlers.ts`'s `xpToday` estimate — each day's rate is now
+  frozen to whichever mode was active the first time that day's `rc_daily_activity` row was
+  touched (new `mode` column), so switching mode mid-day can't retroactively rewrite
+  already-banked XP for that day. `modeMultiplier`'s variety-cap role was removed from
+  `derive.ts`/`handlers.ts` — but a first pass missed that `districts.ts`'s
+  `districtProgress()`/`albumGoalStreamTotal()` scaled their own cap by the same
+  `frozen.meta.multiplier`, contradicting the "goes away everywhere" claim; caught and fixed
+  on revisit. `modeMultiplier` still scales goal *targets* via `frozen.meta.multiplier`
+  (`districts.ts`/`goals.ts`), that part is untouched, only every variety-cap job is gone
+  now. `bomb.ts`'s own separate per-agent cap (the still-deferred shared-pool system) wasn't
+  touched either.
 
 **Phase 4 — Magic Shop polish + visuals**
 - Gate the existing Candy Star Generator behind spending Wings (decision 6) — no new
