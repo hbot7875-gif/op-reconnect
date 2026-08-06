@@ -17,10 +17,18 @@ import { badgeDrawerSheet } from './badge-drawer.js'
 import { missionBoardSheet } from './mission-board.js'
 import { magicShopSheet } from './magic-shop.js'
 import { agentChargeSheet } from './agent-charge.js'
+import { agentManualSheet } from './agent-manual.js'
 import { resourceRow, resourceSheet } from './resources.js'
 import { itemTile, itemSheet, itemsInPack } from './items.js'
 
 const TOOLS = [
+  {
+    icon: '📖',
+    name: 'Agent Manual',
+    tag: 'How everything works',
+    body: 'Plain-words explanations for every system in the game — start here if anything is unclear.',
+    action: () => showOverlay(agentManualSheet()),
+  },
   {
     icon: '🧠',
     name: 'The 148 Protocol',
