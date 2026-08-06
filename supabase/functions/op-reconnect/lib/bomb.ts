@@ -29,13 +29,12 @@ export interface BombCfg {
   maxMultiplier: number
   brownoutHours: number
   brownoutMultiplier: number
-  defuseRewardXp: number
 }
 
 export function bombCfg(content: GameContent): BombCfg {
   return {
     chargeWindowHours: 24, chargeFullAt: 1500, maxMultiplier: 1.5,
-    brownoutHours: 24, brownoutMultiplier: 0.75, defuseRewardXp: 50,
+    brownoutHours: 24, brownoutMultiplier: 0.75,
     ...(content.config.bomb || {}),
   }
 }
@@ -64,7 +63,6 @@ export interface BombView {
     // rendered as "BREACH" with no timer. Keeping both names: endsAt is what
     // this file has always emitted, activeUntil is what the UI was built for.
     activeUntil: string
-    rewardXp: number
     yourStreams: number
   } | null
 }
@@ -156,7 +154,7 @@ export async function getBombView(
       defuse = {
         id: ev.id, title: ev.title, message: ev.message,
         target: ev.target, progress: resolved.progress,
-        endsAt: ev.active_until, activeUntil: ev.active_until, rewardXp: ev.reward_xp,
+        endsAt: ev.active_until, activeUntil: ev.active_until,
         yourStreams: mine?.streams || 0,
       }
     }
@@ -213,7 +211,7 @@ async function refreshDefuse(
     await supabase.from('rc_defuse_events')
       .update({ status: 'defused', progress, resolved_at: new Date().toISOString() })
       .eq('id', ev.id).eq('status', 'active')
-    await awardDefuseXp(supabase, ev, cfg)
+    await awardDefuseBadge(supabase, ev)
     return { stillActive: false, progress }
   }
   if (expired) {
@@ -231,16 +229,12 @@ async function refreshDefuse(
   return { stillActive: true, progress }
 }
 
-/** Everyone who contributed gets the reward, once, via the dedup ledger. */
-async function awardDefuseXp(supabase: SupabaseDB, ev: any, cfg: BombCfg) {
+/** Everyone who contributed gets the participation badge. Red Zone protects
+ *  the shared network but deliberately does not create a fourth XP source. */
+async function awardDefuseBadge(supabase: SupabaseDB, ev: any) {
   const { data: contribs } = await supabase.from('rc_defuse_contrib')
     .select('agent_no, streams').eq('event_id', ev.id).gt('streams', 0)
-  const xp = ev.reward_xp || cfg.defuseRewardXp
   for (const c of contribs || []) {
-    await supabase.from('rc_xp_ledger').upsert({
-      agent_no: c.agent_no, amount: xp, source: 'defuse',
-      dedup_key: `defuse:${c.agent_no}:${ev.id}`, meta: { eventId: ev.id, streams: c.streams },
-    }, { onConflict: 'dedup_key', ignoreDuplicates: true })
     await supabase.from('rc_badges').upsert(
       { agent_no: c.agent_no, badge_id: 'defuse:first' },
       { onConflict: 'agent_no, badge_id', ignoreDuplicates: true })
@@ -255,7 +249,7 @@ export async function launchDefuse(supabase: SupabaseDB, params: any) {
     title: params.title || 'INCOMING: RED ZONE',
     message: params.message || 'The ARMY Bomb is under attack. Stream together to defuse it before the timer runs out.',
     target,
-    reward_xp: parseInt(params.rewardXp) || 50,
+    reward_xp: 0,
     active_until: new Date(Date.now() + hours * 3600_000).toISOString(),
   }).select().single()
   if (error) return { success: false, error: error.message }
@@ -278,7 +272,7 @@ export async function adminGetActiveDefuse(supabase: SupabaseDB) {
     defuse: bomb.defuse ? {
       id: bomb.defuse.id, title: bomb.defuse.title, message: bomb.defuse.message,
       target: bomb.defuse.target, progress: bomb.defuse.progress,
-      activeUntil: bomb.defuse.activeUntil, rewardXp: bomb.defuse.rewardXp,
+      activeUntil: bomb.defuse.activeUntil,
     } : null,
     charge: bomb.charge,
     brownout: bomb.brownout,

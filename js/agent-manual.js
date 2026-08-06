@@ -12,10 +12,8 @@ const STEPS = [
 ]
 
 const XP_SOURCES = [
-  ['🎵', 'Counted BTS streams', 'Easy: 10 streams = 1 XP · Medium: 20 = 1 XP · Hard: 30 = 1 XP. Rotate tracks when a song reaches its daily counting cap.'],
-  ['📡', "Today's transmission", 'Complete the Today target on the City screen for +10 XP.'],
-  ['🏙️', 'District restored', 'Bringing one district fully back online gives +50 XP.'],
-  ['🚨', 'Red Zone', 'Help during a network attack to earn the XP reward shown on the Red Zone alert.'],
+  ['🎵', 'Assigned goal streams', 'Only tracks listed in your active Track Goals and Album Goals count. Easy: 10 streams = 1 XP · Medium: 20 = 1 XP · Hard: 30 = 1 XP.'],
+  ['🏙️', 'District restored', 'Finish its Track Goals, Album Goals, and Reconnect Goal to bring the district online and earn +50 XP.'],
 ]
 
 function sectionTitle(text) {
@@ -25,7 +23,7 @@ function sectionTitle(text) {
 export function agentManualSheet() {
   const sheet = el('div', 'sheet agent-manual')
   sheet.appendChild(el('div', 'eyebrow', '📖 HOW TO PLAY'))
-  sheet.appendChild(el('p', 'am-intro', 'Keep your ARMY Bomb charged. Streaming earns its power, restores districts, and builds your XP.'))
+  sheet.appendChild(el('p', 'am-intro', 'Keep your ARMY Bomb charged. Complete assigned goals to restore districts and earn XP.'))
 
   const play = el('section', 'am-section')
   play.appendChild(sectionTitle('Keep the Bomb alive'))

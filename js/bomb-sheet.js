@@ -85,7 +85,7 @@ export function bombSheet(state) {
       <div class="bd-line"><span>Global target</span><b>${d.progress.toLocaleString()} / ${d.target.toLocaleString()}</b></div>
       ${deadline ? `<div class="bd-line"><span>Time left</span><b class="bd-clock" data-deadline="${esc(deadline)}">--:--:--</b></div>` : ''}
       <div class="bd-line"><span>You've routed</span><b>${(d.yourStreams || 0).toLocaleString()}</b></div>
-      <div class="bd-line"><span>Reward</span><b>+${d.rewardXp} XP</b></div>
+      <div class="bd-line"><span>Reward</span><b>Red Zone badge</b></div>
     `
     sheet.appendChild(rz)
   } else {

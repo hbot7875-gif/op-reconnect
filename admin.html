@@ -329,8 +329,7 @@
       <input id="rzTitle" class="ob-input" type="text" placeholder="INCOMING: RED ZONE"></label>
     <label class="adm-field"><span>Message</span>
       <textarea id="rzMessage" class="ob-input" placeholder="The ARMY Bomb is under attack. Stream together to defuse it before the timer runs out."></textarea></label>
-    <label class="adm-field"><span>Reward XP (per contributing agent)</span>
-      <input id="rzReward" class="ob-input" type="number" min="0" value="50"></label>
+    <p class="muted">Reward: Red Zone participation badge. XP remains exclusive to assigned district goals.</p>
     <button class="btn btn-alert adm-block adm-mutate-btn" id="btnLaunchRZ" type="button">🛡️ Launch Red Zone</button>
     <div id="rzOut" class="adm-out"></div>
   </section>
@@ -687,7 +686,7 @@ function paintRZStatus(res) {
       <div class="rz-goal-top"><span>Global target</span><span class="rz-num">${d.progress.toLocaleString()}<i>/${d.target.toLocaleString()}</i></span></div>
       <div class="rz-bar"><i style="width:${pct}%"></i></div>
       <div class="rz-timer"><span>Ends</span><b style="font-size:13px;letter-spacing:0;">${esc(ends)}</b></div>
-      <div class="rz-foot">Reward: +${d.rewardXp} XP per contributing agent</div>
+      <div class="rz-foot">Reward: Red Zone participation badge</div>
     </div>
   `
 }
@@ -721,7 +720,6 @@ $('btnLaunchRZ').onclick = async () => {
     hours: parseInt($('rzHours').value) || 24,
     title: $('rzTitle').value.trim() || undefined,
     message: $('rzMessage').value.trim() || undefined,
-    rewardXp: parseInt($('rzReward').value) || 50,
   })
   btn.disabled = sessionUnauthorized
   btn.textContent = '🛡️ Launch Red Zone'

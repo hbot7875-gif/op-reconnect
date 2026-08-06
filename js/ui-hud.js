@@ -215,9 +215,9 @@ export function renderTabbar(container, state) {
 }
 
 const MODES = {
-  easy: { title: 'Easy', sub: '1 device · normal targets · 10 streams = 1 XP' },
-  medium: { title: 'Medium', sub: '2–4 accounts · 2× targets · 20 streams = 1 XP' },
-  hard: { title: 'Hard', sub: '5–6 accounts · 4× targets · 30 streams = 1 XP' },
+  easy: { title: 'Easy', sub: '1 device · normal targets · 10 goal streams = 1 XP' },
+  medium: { title: 'Medium', sub: '2–4 accounts · 2× targets · 20 goal streams = 1 XP' },
+  hard: { title: 'Hard', sub: '5–6 accounts · 4× targets · 30 goal streams = 1 XP' },
 }
 
 /** Exported so the Settings screen's "Streaming mode" row opens the same
@@ -227,7 +227,7 @@ export function openModeSheet(state) {
   sheet.append(
     el('div', 'eyebrow', 'STREAMING MODE'),
     el('h3', '', 'How many accounts are you running?'),
-    el('p', 'muted', 'More accounts means bigger targets and slower XP per stream — 10/20/30 streams for 1 XP on easy/medium/hard. Takes effect tomorrow (KST); today keeps whatever mode you started it on.'),
+    el('p', 'muted', 'More accounts means bigger targets and slower XP from assigned goal streams — 10/20/30 for 1 XP on easy/medium/hard. Takes effect tomorrow (KST); today keeps whatever mode you started it on.'),
   )
   const grid = el('div', 'mode-grid')
   for (const key of ['easy', 'medium', 'hard']) {

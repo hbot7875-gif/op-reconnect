@@ -360,7 +360,7 @@ function redZoneCard(state) {
     ${(d.activeUntil || d.active_until)
       ? `<div class="rz-timer">Time left <b data-deadline="${esc(d.activeUntil || d.active_until)}">--:--:--</b></div>`
       : ''}
-    <div class="rz-foot">You've routed ${(d.yourStreams || 0).toLocaleString()} &middot; everyone who helps gets +${d.rewardXp} XP</div>
+    <div class="rz-foot">You've routed ${(d.yourStreams || 0).toLocaleString()} &middot; contributors earn the Red Zone badge</div>
   `
   const go = el('button', 'btn btn-alert', 'View Red Zone')
   go.onclick = () => showOverlay(bombSheet(state))
@@ -462,7 +462,7 @@ function statusStrip(state) {
         <span class="st-val">${t.done ? 'Done' : `${t.progress}/${t.required}`}</span>
       </div>
       <div class="st-bar"><div class="st-fill${t.done ? ' done' : ''}" style="width:${pct}%"></div></div>
-      <div class="st-sub">${t.done ? 'Done for today' : `+${t.xpOnComplete} XP`}</div>
+      <div class="st-sub">${t.done ? 'Done for today' : 'Optional daily assist'}</div>
     `
     tile.onclick = () => showOverlay(transmissionSheet(t))
     row.appendChild(tile)
@@ -481,8 +481,8 @@ function transmissionSheet(t) {
     <div class="pbar" style="flex:1"><div class="pfill${t.done ? ' done' : ''}" style="width:${pct}%"></div></div>
     <span class="count">${t.done ? 'complete' : `${t.progress} / ${t.required}`}</span>`))
   sheet.appendChild(el('div', 'dim', t.done
-    ? `+${t.xpOnComplete} XP banked &middot; new one tomorrow`
-    : `+${t.xpOnComplete} XP &middot; resets midnight KST`))
+    ? 'Daily assist complete &middot; new one tomorrow'
+    : 'No bonus XP &middot; resets midnight KST'))
   const close = el('button', 'btn btn-ghost', 'Close')
   close.onclick = hideOverlay
   sheet.appendChild(close)

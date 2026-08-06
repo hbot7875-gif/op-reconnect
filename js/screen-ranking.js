@@ -1,6 +1,6 @@
 // Rankings — codename, level and XP for every agent, split by streaming
 // mode. Modes scale both goal targets AND the streams-per-XP rate
-// (screen-settings.js: "bigger targets and slower XP per stream" — 10/20/30
+// (screen-settings.js: "bigger targets and slower XP per goal stream" — 10/20/30
 // streams per XP on easy/medium/hard), so a six-account hard-mode agent and
 // a one-device easy-mode agent are playing different games in two ways now,
 // not directly comparable. Each mode gets its own board; "All" is for

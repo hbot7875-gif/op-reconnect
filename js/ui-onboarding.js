@@ -69,7 +69,7 @@ export function renderOnboarding(container, payload, agentNo, onJoined) {
   for (const key of order) {
     if (!modes[key]) continue
     const opt = el('div', 'mode-opt' + (key === selectedMode ? ' sel' : ''),
-      `<div class="t">${esc(modes[key].label || key)}</div><div class="dim">Targets ×${esc(modes[key].multiplier)} · ${STREAMS_PER_XP[key]} streams = 1 XP</div>`)
+      `<div class="t">${esc(modes[key].label || key)}</div><div class="dim">Targets ×${esc(modes[key].multiplier)} · ${STREAMS_PER_XP[key]} goal streams = 1 XP</div>`)
     opt.onclick = () => {
       selectedMode = key
       modeGrid.querySelectorAll('.mode-opt').forEach((o) => o.classList.remove('sel'))
@@ -159,7 +159,7 @@ function renderUplinkPrompt(mount, account, onContinue) {
   mount.append(
     el('div', 'eyebrow', 'ONE THING FIRST'),
     el('h1', 'title-sm', 'Where do your streams come from?'),
-    el('p', 'muted', "Without this, nothing you stream gets counted — no XP, no restoration, no explanation why. Takes a few seconds."),
+    el('p', 'muted', "Without this, your assigned goal streams cannot be verified for XP or district restoration. Takes a few seconds."),
   )
   const go = el('button', 'btn btn-primary', 'Set it up')
   go.onclick = () => openStreamSource(account, onContinue)

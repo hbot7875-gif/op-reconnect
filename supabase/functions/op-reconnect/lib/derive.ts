@@ -11,6 +11,7 @@ import { generateTransmission, evaluateTransmission } from './transmission.ts'
 import type { DayBucket, FrozenTransmission } from './transmission.ts'
 import type { GameContent, SupabaseDB } from './config.ts'
 import { xpRules, limits, streamsPerXpFor } from './config.ts'
+import type { FrozenGoals } from './districts.ts'
 
 export interface DailyRow {
   agent_no: string
@@ -33,6 +34,64 @@ export function countedStreams(bucket: DayBucket, allowlist: string[], cap: numb
     total += Math.min(allowedN, cap)
   }
   return total
+}
+
+export interface GoalXpScope {
+  goals: FrozenGoals
+  baseline: Record<string, number>
+  activatedAt: string
+}
+
+/** Count only streams assigned to the district's frozen Track/Album goals.
+ *  A key shared by two goals is counted once, so overlapping assignments
+ *  cannot manufacture extra XP. Reconnect goals are completed through their
+ *  own mission resolver rather than by accepting arbitrary BTS streams. */
+export function countedGoalStreams(
+  bucket: DayBucket,
+  allowlist: string[],
+  cap: number,
+  goals: FrozenGoals | null | undefined,
+): number {
+  if (!goals) return 0
+  const keys = new Set<string>()
+  for (const goal of goals.trackGoals || []) for (const key of goal.keys || []) keys.add(key)
+  for (const album of goals.albumGoals || []) {
+    for (const track of album.tracks || []) for (const key of track.keys || []) keys.add(key)
+  }
+
+  let total = 0
+  for (const key of keys) {
+    const entry = bucket[key]
+    if (!entry) continue
+    const allowedN = Object.entries(entry.a).reduce(
+      (sum, [artist, count]) => sum + (artistAllowed(artist, allowlist) ? count : 0), 0)
+    total += Math.min(allowedN, cap)
+  }
+  return total
+}
+
+/** Apply the district activation window and activation-day baseline to the
+ *  goal-only stream count used by both the ledger and the HUD. */
+export function goalXpCountForDate(
+  bucket: DayBucket,
+  date: string,
+  allowlist: string[],
+  cap: number,
+  scope: GoalXpScope | null,
+): number {
+  if (!scope) return 0
+  const activationDate = kstDateOf(Math.floor(new Date(scope.activatedAt).getTime() / 1000))
+  if (date < activationDate) return 0
+  let counted = countedGoalStreams(bucket, allowlist, cap, scope.goals)
+  if (date === activationDate) {
+    const stored = scope.baseline?.['xp:goal-streams']
+    const legacy = Object.entries(scope.baseline || {})
+      .filter(([key]) => key.startsWith('t:') || key.startsWith('a:'))
+      .reduce((sum, [, value]) => sum + (Number(value) || 0), 0)
+    const activationBaseline = typeof stored === 'number' && Number.isFinite(stored) ? stored : legacy
+    counted = Math.max(0, counted - activationBaseline)
+  }
+  return counted
 }
 
 function bucketRows(rows: { track_name: string; artist_name: string; listened_at: number }[]): Map<string, { raw: number; bucket: DayBucket }> {
@@ -70,13 +129,6 @@ async function awardStreamsXp(
   )
 }
 
-async function awardOnce(supabase: SupabaseDB, agentNo: string, amount: number, source: string, dedupKey: string, meta: any) {
-  await supabase.from('rc_xp_ledger').upsert(
-    { agent_no: agentNo, amount, source, dedup_key: dedupKey, meta },
-    { onConflict: 'dedup_key', ignoreDuplicates: true },
-  )
-}
-
 /**
  * Ensure rc_daily_activity rows exist and are current for this player from
  * max(join date, today - backfillMaxDays) through today. Returns all rows in
@@ -88,6 +140,7 @@ export async function ensureDailyRollups(
   player: { agent_no: string; mode: string; joined_at: string },
   content: GameContent,
   personalBoostMult = 1,
+  goalXpScope: GoalXpScope | null = null,
 ): Promise<DailyRow[]> {
   const lim = limits(content)
   const rules = xpRules(content)
@@ -142,12 +195,11 @@ export async function ensureDailyRollups(
       await supabase.from('rc_daily_activity').upsert(row, { onConflict: 'agent_no, kst_date' })
       byDate.set(date, row)
 
-      const counted = countedStreams(dayData.bucket, allowlist, cap)
+      // Starting a district must never retroactively turn streams from
+      // earlier that day into XP. New activations persist the exact union
+      // baseline; goalXpCountForDate has a conservative legacy fallback.
+      const counted = goalXpCountForDate(dayData.bucket, date, allowlist, cap, goalXpScope)
       await awardStreamsXp(supabase, player.agent_no, date, counted, streamsPerXpFor(content, dayMode), !!existing?.finalized, date === today ? personalBoostMult : 1)
-      if (row.transmission_done) {
-        await awardOnce(supabase, player.agent_no, rules.transmissionXp, 'transmission',
-          `transmission:${player.agent_no}:${date}`, { templateId: transmission?.templateId })
-      }
     }
   }
   return [...byDate.values()].sort((a, b) => String(a.kst_date).localeCompare(String(b.kst_date)))

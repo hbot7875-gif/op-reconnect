@@ -113,6 +113,14 @@ export function computeBaseline(todayBucket: DayBucket, frozen: FrozenGoals, cap
       baseline[`a:${a.id}:${t.label}`] = Math.min(plays, cap)
     }
   }
+  // XP uses the union of all assigned track keys, not the sum of goals.
+  // Persisting that same union prevents overlapping goals from double-
+  // subtracting activation-day streams when XP is recalculated.
+  const xpKeys = new Set<string>()
+  for (const g of frozen.trackGoals) for (const key of g.keys) xpKeys.add(key)
+  for (const a of frozen.albumGoals) for (const t of a.tracks) for (const key of t.keys) xpKeys.add(key)
+  baseline['xp:goal-streams'] = [...xpKeys].reduce(
+    (sum, key) => sum + Math.min(todayBucket[key]?.n || 0, cap), 0)
   return baseline
 }
 

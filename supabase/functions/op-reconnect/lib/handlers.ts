@@ -4,7 +4,7 @@
 
 import type { GameContent, SupabaseDB, DistrictRow } from './config.ts'
 import { loadContent, rankFor, xpRules, restorationDays, streamsPerXpFor } from './config.ts'
-import { ensureDailyRollups, computeStreak, awardStreakBadges, totalXp, countedStreams } from './derive.ts'
+import { ensureDailyRollups, computeStreak, awardStreakBadges, totalXp, goalXpCountForDate } from './derive.ts'
 import { evaluateTransmission } from './transmission.ts'
 import { freezeGoals, computeBaseline, districtProgress, districtDeadline, filesRevealedCount } from './districts.ts'
 import { resolveReconnectStatus } from './reconnect-goal.ts'
@@ -85,13 +85,15 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
   // recompute every poll (unlike eraTimeline's network-wide scan, this is
   // just this one agent's own rc_reconnect_participants rows).
   const { invites } = await getMyInvites(supabase, content, player.agent_no)
-  const rollups = await ensureDailyRollups(supabase, agent, player, content, personalBoostMult)
-  const todayRow = rollups.find((r) => String(r.kst_date) === today) || null
-
   const { data: pdRows } = await supabase.from('rc_player_districts').select('*')
     .eq('agent_no', player.agent_no).order('activated_at')
   const restored = new Set<string>((pdRows || []).filter((r: any) => r.status === 'restored').map((r: any) => r.district_id))
   const activePd = (pdRows || []).find((r: any) => r.status === 'active') || null
+  const goalXpScope = activePd
+    ? { goals: activePd.goals, baseline: activePd.baseline || {}, activatedAt: activePd.activated_at }
+    : null
+  const rollups = await ensureDailyRollups(supabase, agent, player, content, personalBoostMult, goalXpScope)
+  const todayRow = rollups.find((r) => String(r.kst_date) === today) || null
 
   // ── Active district progress (+ completion latch) ──────────
   let activeDistrict: any = null
@@ -290,7 +292,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
   }))
 
   const bucket = todayRow?.track_counts || {}
-  const counted = countedStreams(bucket, allowlist, cap)
+  const counted = goalXpCountForDate(bucket, today, allowlist, cap, goalXpScope)
   let transmission: any = null
   if (todayRow?.transmission) {
     const evald = evaluateTransmission(todayRow.transmission, bucket, allowlist)
@@ -300,7 +302,6 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
       progress: evald.progress,
       required: todayRow.transmission.required,
       done: todayRow.transmission_done || evald.done,
-      xpOnComplete: rules.transmissionXp,
     }
   }
 
@@ -349,7 +350,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
       // Today's own frozen mode (see derive.ts's dayMode), not the player's
       // live mode — matches whatever rate today's XP actually got awarded
       // at, even if the player has since switched modes.
-      xpToday: Math.floor(counted / streamsPerXpFor(content, todayRow?.mode || player.mode)) + (transmission?.done ? rules.transmissionXp : 0),
+      xpToday: Math.floor(counted / streamsPerXpFor(content, todayRow?.mode || player.mode)),
       resetsAtUtc: nextKstMidnightUtc(),
     },
   }

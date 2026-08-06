@@ -72,8 +72,8 @@ export function modeMultiplier(content: GameContent, mode: string): number {
   return content.config.modes?.[mode]?.multiplier || 1
 }
 
-export function xpRules(content: GameContent): { streamsPerXp: number; transmissionXp: number; varietyCapBase: number; districtXp: number } {
-  return { streamsPerXp: 10, transmissionXp: 10, varietyCapBase: 15, districtXp: 50, ...(content.config.xp_rules || {}) }
+export function xpRules(content: GameContent): { streamsPerXp: number; varietyCapBase: number; districtXp: number } {
+  return { streamsPerXp: 10, varietyCapBase: 15, districtXp: 50, ...(content.config.xp_rules || {}) }
 }
 
 /** Streams needed per XP, by the player's own chosen mode — easy mode
