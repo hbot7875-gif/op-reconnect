@@ -416,7 +416,7 @@ function showNumber(agent, onAuthed) {
     el('p', 'muted', 'This is your agent number. You sign in with it — write it down somewhere safe.'),
     el('div', 'agent-id-box', esc(agent.agentNo || agent.agent_no)),
     el('div', 'warn-box',
-      '⚠️ <strong>Keep it to yourself</strong><br>Your number is how HT knows it\'s you. Never post it — not every signal on this grid is friendly.'),
+      '⚠️ <strong>Keep it to yourself</strong><br>Your number is how HT knows it\'s you. Never post it — BOTZ has infiltrators, and not every signal on this grid is friendly.'),
   )
   const btn = el('button', 'btn btn-primary auth-go', "Got it — let's go")
   btn.onclick = onAuthed

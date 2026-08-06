@@ -14,6 +14,7 @@
 import { el, esc, showOverlay } from './state.js'
 import { openPlaylist } from './playlist.js'
 import { badgeDrawerSheet } from './badge-drawer.js'
+import { missionBoardSheet } from './mission-board.js'
 import { resourceRow, resourceSheet } from './resources.js'
 import { itemTile, itemSheet, itemsInPack } from './items.js'
 
@@ -31,6 +32,13 @@ const TOOLS = [
     tag: 'Your collection',
     body: "Every badge you've earned, and the ones still waiting to unlock.",
     action: (state) => showOverlay(badgeDrawerSheet(state)),
+  },
+  {
+    icon: '📋',
+    name: 'Weekly Mission Board',
+    tag: 'All three district missions, together',
+    body: 'Track Goals, Album Goals, and this run\'s Reconnect Mission — one board instead of hunting for each inside the district itself.',
+    action: (state) => showOverlay(missionBoardSheet(state)),
   },
 ]
 

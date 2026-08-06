@@ -15,7 +15,7 @@ export function districtFraction(d) {
   return need === 0 ? 0 : Math.max(0, Math.min(1, got / need))
 }
 
-const RECONNECT_LABELS = {
+export const RECONNECT_LABELS = {
   sotd: '🎵 Song of the Day', cipher: '🔐 Cipher', memory: '📖 Memory Fragment',
   connect: '🤝 Connect', invite: '📡 Invite Backup',
 }
