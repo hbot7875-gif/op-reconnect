@@ -304,25 +304,57 @@ function coreFeed(state) {
    era by era — not per-district (districts are just agent names, nothing
    to do with BTS eras) and not per-team (this game doesn't have teams).
    One shared strip everyone sees the same numbers on, same framing as City
-   Recovery below it. Read-only: there's nothing to tap here, it's the
-   city's shared memory coming back online. */
+   Recovery below it.
+   Each chip used to be read-only — a count with nothing to tap. But
+   "12/16" doesn't tell you which 4 songs are still missing, and there was
+   nowhere in the whole game that named them. Tapping a chip now opens the
+   exact album/track list for that era, checkmarked against what the
+   network has already crossed the stream threshold on. */
 
 function eraTimelineStrip(timeline) {
   const wrap = el('div', 'era-strip')
   wrap.appendChild(el('div', 'era-strip-label', 'Era Timeline'))
   const row = el('div', 'era-row')
   for (const e of timeline.eras || []) {
-    const chip = el('div', 'era-chip' + (e.done >= e.total && e.total > 0 ? ' done' : ''))
+    const chip = el('button', 'era-chip' + (e.done >= e.total && e.total > 0 ? ' done' : ''))
     if (e.description) chip.title = e.description
+    chip.setAttribute('aria-label', `${e.name} — ${e.done} of ${e.total} streamed. Tap to see which songs.`)
     chip.innerHTML = `
       <span class="era-icon">${e.icon}</span>
       <span class="era-name">${esc(e.name)}</span>
       <span class="era-count">${e.done}/${e.total}</span>
     `
+    chip.onclick = () => showOverlay(eraTracksSheet(e))
     row.appendChild(chip)
   }
   wrap.appendChild(row)
   return wrap
+}
+
+function eraTracksSheet(e) {
+  const sheet = el('div', 'sheet era-tracks')
+  sheet.appendChild(el('div', 'eyebrow', `${e.icon} ${esc(e.name)}`))
+  if (e.description) sheet.appendChild(el('p', 'muted', esc(e.description)))
+  if (e.albums?.length) {
+    sheet.appendChild(el('div', 'et-albums', `From: ${esc(e.albums.join(', '))}`))
+  }
+  sheet.appendChild(el('div', 'goal-line', `
+    <div class="pbar" style="flex:1"><div class="pfill${e.done >= e.total && e.total > 0 ? ' done' : ''}" style="width:${e.total ? Math.round((e.done / e.total) * 100) : 0}%"></div></div>
+    <span class="count">${e.done} / ${e.total} streamed</span>`))
+  sheet.appendChild(el('div', 'dim', 'Stream a song enough for the whole network to cross its threshold, and it lights up here for everyone.'))
+
+  const list = el('div', 'et-list')
+  for (const t of e.tracks || []) {
+    const row = el('div', 'et-row' + (t.done ? ' done' : ''))
+    row.innerHTML = `<span class="et-mark">${t.done ? '✓' : '○'}</span><span class="et-title">${esc(t.title)}</span>`
+    list.appendChild(row)
+  }
+  sheet.appendChild(list)
+
+  const close = el('button', 'btn btn-ghost', 'Close')
+  close.onclick = hideOverlay
+  sheet.appendChild(close)
+  return sheet
 }
 
 /* ── Red Zone ───────────────────────────────────────────────────────────── */

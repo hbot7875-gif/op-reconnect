@@ -817,8 +817,10 @@ body.red-zone .wtb.now { fill: var(--crimson); filter: drop-shadow(0 0 3px rgba(
 .era-row { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 6px; scrollbar-width: none; }
 .era-row::-webkit-scrollbar { display: none; }
 .era-chip { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 3px;
-  min-width: 62px; padding: 8px 6px; border-radius: 10px;
-  background: var(--panel); border: 1px solid var(--border); }
+  min-width: 62px; padding: 8px 6px; border-radius: 10px; cursor: pointer;
+  background: var(--panel); border: 1px solid var(--border);
+  font: inherit; -webkit-tap-highlight-color: transparent; }
+.era-chip:hover { border-color: var(--border-str); }
 .era-chip .era-icon { font-size: 16px; opacity: 0.55; }
 .era-chip .era-name { font-family: var(--disp); font-size: 10px; font-weight: 700; color: var(--muted);
   text-align: center; line-height: 1.15; }
@@ -827,6 +829,15 @@ body.red-zone .wtb.now { fill: var(--crimson); filter: drop-shadow(0 0 3px rgba(
 .era-chip.done .era-icon { opacity: 1; }
 .era-chip.done .era-name { color: var(--text); }
 .era-chip.done .era-count { color: var(--gold); }
+
+/* era track sheet — which songs to stream for this card */
+.et-albums { font-family: var(--mono); font-size: 11px; color: var(--muted); margin: 10px 0; }
+.et-list { display: flex; flex-direction: column; margin-top: 4px; max-height: 40vh; overflow-y: auto; }
+.et-row { display: flex; align-items: center; gap: 10px; padding: 8px 2px; border-bottom: 1px solid var(--border); font-size: 13.5px; }
+.et-row:last-child { border-bottom: none; }
+.et-mark { flex: none; width: 18px; text-align: center; color: var(--dim); font-family: var(--mono); }
+.et-row.done .et-mark { color: var(--gold); }
+.et-row.done .et-title { color: var(--muted); }
 /* every building is a district you can tap */
 .wt-hit { fill: transparent; cursor: pointer; }
 .wt-hit:hover { fill: rgba(255,255,255,0.07); }

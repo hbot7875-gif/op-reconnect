@@ -21,7 +21,7 @@
 import type { SupabaseDB, GameContent } from './config.ts'
 import { normKeyFull, artistAllowed } from './text.ts'
 
-export interface EraDef { id: string; name: string; icon: string; description: string; tracks: string[] }
+export interface EraDef { id: string; name: string; icon: string; description: string; albums: string[]; tracks: string[] }
 
 // Real BTS discography, grouped the way the arirang-btsbackend project's own
 // ERAS dict names/describes them — era names, icons and descriptions taken
@@ -50,7 +50,7 @@ export const ERA_CATALOG: EraDef[] = [
   {
     id: 'school', name: 'School Trilogy', icon: '📚',
     description: 'The foundation: Dreams, rebellion, and social commentary.',
-    // 2 Cool 4 Skool + O!RUL8,2? + Skool Luv Affair
+    albums: ['2 Cool 4 Skool', 'O!RUL8,2?', 'Skool Luv Affair'],
     tracks: [
       'We Are Bulletproof Pt.2', 'No More Dream', 'Like',
       'N.O', 'We On', 'If I Ruled the World', 'Coffee', 'BTS Cypher Pt.1', 'Attack on Bangtan', 'Paldogangsan',
@@ -60,8 +60,10 @@ export const ERA_CATALOG: EraDef[] = [
   {
     id: 'darkwild', name: 'Dark & Wild / Bridge', icon: '🌙',
     description: 'The transition into a deeper, more mature identity.',
-    // Dark & Wild + Wake Up's exclusive originals (its own tracklist is
-    // otherwise Japanese re-recordings of Dark & Wild/earlier singles)
+    // Wake Up's own tracklist is otherwise Japanese re-recordings of Dark &
+    // Wild/earlier singles — only its exclusive original ("The Stars") is
+    // counted below, so it's still named here as a source.
+    albums: ['Dark & Wild', 'Wake Up'],
     tracks: [
       'BTS Cypher PT.3: KILLER', 'Danger', 'Let Me Know', 'War Of Hormone', 'Look Here', 'Hip Hop Phile',
       'So 4 More', 'Could You Turn Off Your Cell Phone', '24/7=heaven', 'Rain', 'Embarrassed',
@@ -72,6 +74,7 @@ export const ERA_CATALOG: EraDef[] = [
     id: 'hyyh', name: 'HYYH (The Youth Era)', icon: '🌸',
     description: 'The Most Beautiful Moment in Life: Fragility and growth.',
     // pt.1 + pt.2 + Young Forever, deduped
+    albums: ['The Most Beautiful Moment in Life Pt.1', 'The Most Beautiful Moment in Life Pt.2', 'The Most Beautiful Moment in Life: Young Forever'],
     tracks: [
       'I Need U', 'Hold Me Tight', 'Dope', 'Boyz With Fun', 'Converse High', 'Moving On',
       'Run', 'Butterfly', 'Whalien 52', 'Ma City', 'Silver Spoon', 'Autumn Leaves',
@@ -81,7 +84,8 @@ export const ERA_CATALOG: EraDef[] = [
   {
     id: 'wings', name: 'Wings / YNWA', icon: '🦋',
     description: 'Temptation, artistic high-concepts, and learning to fly.',
-    // Youth's exclusive originals + Wings + You Never Walk Alone
+    // Youth (Japanese) contributes only its exclusive originals below.
+    albums: ['Youth', 'Wings', 'You Never Walk Alone'],
     tracks: [
       'Good Day', 'For You', 'Wishing On A Star',
       'Blood Sweat & Tears', 'Begin', 'Lie', 'Stigma', 'First Love', 'Reflection', 'MAMA',
@@ -92,7 +96,8 @@ export const ERA_CATALOG: EraDef[] = [
   {
     id: 'ly', name: 'Love Yourself Series', icon: '💜',
     description: 'The global message of self-love and acceptance.',
-    // Her + Face Yourself's exclusive originals + Tear + Answer, deduped
+    // Face Yourself (Japanese) contributes only its exclusive originals below.
+    albums: ['Love Yourself: Her', 'Face Yourself', 'Love Yourself: Tear', 'Love Yourself: Answer'],
     tracks: [
       'DNA', 'Pied Piper', 'Best Of Me', 'Dimple', 'Go Go', 'MIC Drop',
       "Don't Leave Me", 'Crystal Snow', 'Let Go',
@@ -104,7 +109,8 @@ export const ERA_CATALOG: EraDef[] = [
   {
     id: 'mots', name: 'Map of the Soul', icon: '🗺️',
     description: 'The psychological journey into the Shadow and the Ego.',
-    // Persona + 7 + 7 ~The Journey~'s exclusive originals, deduped
+    // 7 ~The Journey~ (Japanese) contributes only its exclusive originals below.
+    albums: ['Map of the Soul: Persona', 'Map of the Soul: 7', 'Map of the Soul: 7 ~The Journey~'],
     tracks: [
       'Boy With Luv', 'Mikrokosmos', 'Make It Right', 'HOME', 'Jamais Vu', 'Dionysus',
       'Black Swan', 'Filter', 'My Time', 'Louder Than Bombs', 'ON', 'UGH!',
@@ -116,6 +122,7 @@ export const ERA_CATALOG: EraDef[] = [
     id: 'anthology', name: 'The Anthology (Chapter 1 Finale)', icon: '💎',
     description: 'Retrospective of 9 years and comfort during the pandemic.',
     // BE + the era's standalone singles + Proof's own exclusive additions
+    albums: ['BE', 'Proof'],
     tracks: [
       'Life Goes On', 'Fly To My Room', 'Blue & Grey', 'Telepathy', 'Dis-ease', 'Stay',
       'Dynamite', 'Butter', 'Yet To Come',
@@ -126,6 +133,7 @@ export const ERA_CATALOG: EraDef[] = [
     id: 'arirang', name: 'ARIRANG', icon: '🎆',
     description: 'The beginning of the New Era.',
     // Full tracklist — this season's own comeback, now actually released.
+    albums: ['Arirang'],
     tracks: [
       'Normal', 'Merry Go Round', '2.0', 'Body To Body', 'FYA', 'Hooligan',
       'Into The Sun', 'Like Animals', 'No. 29', 'One More Night', 'Please', 'Swim',
@@ -134,7 +142,11 @@ export const ERA_CATALOG: EraDef[] = [
   },
 ]
 
-export interface EraProgress { id: string; name: string; icon: string; description: string; done: number; total: number }
+export interface EraTrackStatus { title: string; done: boolean }
+export interface EraProgress {
+  id: string; name: string; icon: string; description: string
+  albums: string[]; done: number; total: number; tracks: EraTrackStatus[]
+}
 export interface EraTimeline { eras: EraProgress[] }
 
 /** Config-driven so an admin can raise/lower the unlock bar without a
@@ -175,13 +187,15 @@ export async function getEraTimeline(supabase: SupabaseDB, content: GameContent)
     }
   }
 
-  const eraDone = (titles: string[]) =>
-    titles.reduce((n, t) => n + ((totals.get(normKeyFull(t)) || 0) >= cfg.trackThreshold ? 1 : 0), 0)
+  const trackDone = (t: string) => (totals.get(normKeyFull(t)) || 0) >= cfg.trackThreshold
 
-  const eras: EraProgress[] = ERA_CATALOG.map((e) => ({
-    id: e.id, name: e.name, icon: e.icon, description: e.description,
-    total: e.tracks.length, done: eraDone(e.tracks),
-  }))
+  const eras: EraProgress[] = ERA_CATALOG.map((e) => {
+    const tracks = e.tracks.map((t) => ({ title: t, done: trackDone(t) }))
+    return {
+      id: e.id, name: e.name, icon: e.icon, description: e.description, albums: e.albums,
+      total: tracks.length, done: tracks.filter((t) => t.done).length, tracks,
+    }
+  })
 
   cache = { at: Date.now(), value: { eras } }
   return cache.value
