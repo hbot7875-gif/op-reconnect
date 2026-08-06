@@ -61,7 +61,7 @@ export function bombSheet(state) {
     ? 'This is how far the defuse has come. Everyone streaming right now pushes it up.'
     : b.brownout
       ? 'The grid took a hit. Power is down while it recovers — you didn\'t lose anything you earned.'
-      : "Everyone streaming right now feeds this — the network's shared vitality signal. It doesn't change your own XP or survival anymore; that's what your Personal Charge (Pack) runs on."))
+      : "Everyone streaming right now feeds this — the network's shared vitality signal. It doesn't change your own XP or survival anymore; tap the ARMY Bomb on the City screen for your personal charge."))
 
   // ── what it's worth ──
   // No "Boost ×N" line anymore — the shared multiplier was retired from XP

@@ -1,8 +1,8 @@
 // Candy Star Generator screen — thin host around candy-star.js's own
 // renderCandyStar(), which does everything from here down (it expects to own
 // a #candystarContent element and reaches out to window-scoped handlers the
-// way it always has). Reached from the Agent Pack's "Candy Star Generator"
-// tool card (screen-resources.js), same as Today's Queue and BOTZ.
+// way it always has). Reached from the persistent Candy Star tab; playlist
+// generation itself still costs Wings.
 
 import { el, esc } from './state.js'
 import { goResources } from './router.js'

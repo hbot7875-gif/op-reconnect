@@ -95,7 +95,21 @@
 
     const STATE = {
       success: true, joined: true,
-      player: { codename: 'AGENT VIOLET', xp: 412, rank: { title: 'Cipher', index: 4, nextAt: 700 }, streak: { current: 12 }, mode: 'medium' },
+      player: {
+        codename: 'AGENT VIOLET', xp: 412,
+        rank: { title: 'Cipher', index: 4, nextAt: 700, nextTitle: 'Vanguard' },
+        // renderHud() (ui-hud.js) reads player.level on every screen, not
+        // just Pack — this was missing entirely, which is why the whole
+        // preview harness crashed rather than just the Pack screen.
+        level: {
+          level: 9, name: 'Signal Runner', xpIntoLevel: 412, xpForNextLevel: 600,
+          nextRewards: { fuel: 5, streakFreeze: 1, boostMultiplier: 1.2, boostMinutes: 30 },
+        },
+        streak: { current: 12 }, mode: 'medium',
+        // Wallet balances the redesigned Pack screen (screen-resources.js)
+        // reads directly off state.player.
+        chargeCells: 12, wings: 3, streakFreezeCharges: 2, tickets: 0,
+      },
       bomb: { charge: 0.62, defuse: null, brownout: false, multiplier: 1.5, communityStreams: 184203 },
       // Lifetime totals — only ever go up. The edge function should send these.
       resources: { signal: 482, fuel: 17, intel: 41 },

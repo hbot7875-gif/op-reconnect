@@ -30,6 +30,7 @@ import { openFinder } from './search.js'
 import { openShare } from './share.js'
 import { tickCountdowns } from './countdown.js'
 import { bombSheet } from './bomb-sheet.js'
+import { agentChargeSheet } from './agent-charge.js'
 import { broadcastCards } from './broadcasts.js'
 
 export function renderWorld(container, state) {
@@ -198,11 +199,14 @@ function coreBlock(state) {
   const btn = el('button', 'army-core'
     + (underAttack ? ' is-attack' : b.brownout ? ' is-brownout' : '')
     + (firstReveal && !reducedMotion() ? ' core-intro' : ''))
-  // Worded as secondary status, not a call to action — the ARMY Bomb is the
-  // biggest, brightest thing on this screen, and a first-time agent's first
-  // instinct is to tap it. It's real data (community charge), but it isn't
-  // where missions are picked; that's the map below.
-  btn.setAttribute('aria-label', `Network power — ${pct}% charged. Tap for details.`)
+  // The sphere itself still visualises the shared network's charge (real
+  // data, real atmosphere) — but tapping it now opens Personal Charge, not
+  // the network sheet. That's deliberate: the network Bomb stopped
+  // affecting anyone's own XP or survival a few passes back, so the thing
+  // worth a tap from here is the Bomb that actually matters to THIS agent.
+  // The smaller "Network" status tile below (statusStrip) still opens the
+  // network sheet for anyone who wants Red Zone/community details.
+  btn.setAttribute('aria-label', `Network power — ${pct}% charged. Tap to check your own ARMY Bomb.`)
   // The lightstick is the Launch the Voyage bomb (the .cs-bomb build from
   // app.js's concert mode): glassy sphere, ⟭⟬ logo, dark handle, gentle sway.
   // The outer arc is live data: community charge (or, under attack, how far
@@ -237,7 +241,7 @@ function coreBlock(state) {
   // brightens as it actually charges, same intensity-follows-state language
   // the map and auth screen already use elsewhere.
   btn.style.setProperty('--charge', arcFrac.toFixed(3))
-  btn.onclick = () => showOverlay(bombSheet(state))
+  btn.onclick = () => showOverlay(agentChargeSheet())
   zone.appendChild(btn)
 
   const read = el('div', 'core-read' + (underAttack ? ' is-attack' : ''))
@@ -247,7 +251,7 @@ function coreBlock(state) {
     <div class="core-lbl">until detonation &middot; stream to defuse</div>
   ` : `
     <div class="core-pct">${pct}%</div>
-    <div class="core-lbl">network power &middot; tap for details</div>
+    <div class="core-lbl">network power &middot; tap for your charge</div>
   `
   zone.appendChild(read)
   if (deadline) tickCountdowns()

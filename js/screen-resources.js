@@ -1,70 +1,75 @@
-// Agent Pack — what you're carrying, and the one tool that lives here.
+// Agent Pack — currencies and things the agent owns. Nothing else.
 //
-// Candy Star, BOTZ and Rankings used to be cards in this list too — one tap
-// to get here, a second to actually reach the tool. They're bottom tabs now
-// (ui-hud.js), reachable directly from every screen instead of nested behind
-// Pack. The 148 Protocol (formerly "Today's Queue") stays: it's derived from
-// state with no backend call, which makes it feel more like part of what's
-// in the pack than a destination the way the other three are.
+// Used to read as a second navigation menu: six full-width cards (Agent
+// Manual, The 148 Protocol, Badge Drawer, Weekly Mission Board, Magic Shop,
+// Personal Charge) plus a top row of three passive lifetime counters. Every
+// tool moved to the screen where it's actually used instead of sitting
+// behind a second tap here:
+//   - Agent Manual → Settings ("How to Play", screen-settings.js)
+//   - Weekly Mission Board → the district screen (ui-district.js)
+//   - The 148 Protocol → the district screen, as "Build today's stream
+//     queue" (ui-district.js) — it's an action for finishing goals, not
+//     inventory
+//   - Personal Charge → tapping the ARMY Bomb itself on the World screen
+//     (screen-world.js's coreBlock)
+// Badge Drawer and Magic Shop are the two things that don't belong on any
+// other screen, so they stay here as Quick Access.
 //
-// Every tap here stays inside this deployment. Nothing links out to the old
-// arirang site — that's a separate deployment with separate accounts, so a
-// relative path to it resolves to nothing.
+// Signal/Fuel/Intel are gone too — three passive lifetime totals nobody
+// ever spent, whose own descriptions had drifted false: Fuel claimed to
+// power the ARMY Bomb (Charge Cells do that now), Signal claimed to
+// reconnect districts (goal completion does that directly), Intel mentioned
+// unlocking memories (removed from the game entirely). The underlying
+// numbers still exist server-side as history, but no longer compete for
+// space with an agent's actual inventory.
+//
+// What's left is exactly two things: a wallet of currencies that actually
+// get spent (Charge Cells, Wings, Streak Freezes), and the collectibles the
+// agent owns. Tickets are deliberately NOT in the wallet row — a claimed
+// ticket is a one-time unlock, not a currency earned repeatedly, so it
+// shows up as a usable object on the collection shelf instead (see items.js).
 
 import { el, esc, showOverlay } from './state.js'
-import { openPlaylist } from './playlist.js'
 import { badgeDrawerSheet } from './badge-drawer.js'
-import { missionBoardSheet } from './mission-board.js'
 import { magicShopSheet } from './magic-shop.js'
-import { agentChargeSheet } from './agent-charge.js'
-import { agentManualSheet } from './agent-manual.js'
-import { resourceRow, resourceSheet } from './resources.js'
-import { itemTile, itemSheet, itemsInPack } from './items.js'
+import { itemArt, itemSheet, RARITY } from './items.js'
 
-const TOOLS = [
-  {
-    icon: '📖',
-    name: 'Agent Manual',
-    tag: 'How everything works',
-    body: 'Plain-words explanations for every system in the game — start here if anything is unclear.',
-    action: () => showOverlay(agentManualSheet()),
-  },
-  {
-    icon: '🧠',
-    name: 'The 148 Protocol',
-    tag: 'Strategic briefing · what to stream today',
-    body: 'Reads what this district still needs and lays out the play order, spaced so no track runs back to back. Copy it and queue it yourself.',
-    action: (state) => showOverlay(openPlaylist(state)),
-  },
-  {
-    icon: '🎖️',
-    name: 'Badge Drawer',
-    tag: 'Your collection',
-    body: "Every badge you've earned, and the ones still waiting to unlock.",
-    action: (state) => showOverlay(badgeDrawerSheet(state)),
-  },
-  {
-    icon: '📋',
-    name: 'Weekly Mission Board',
-    tag: 'All three district missions, together',
-    body: 'Track Goals, Album Goals, and this run\'s Reconnect Mission — one board instead of hunting for each inside the district itself.',
-    action: (state) => showOverlay(missionBoardSheet(state)),
-  },
-  {
-    icon: '🏪',
-    name: 'Magic Shop',
-    tag: 'Charge Cells · Wings · Tickets',
-    body: 'Spend XP on Wings, track your Charge Cells, and claim a Ticket once you\'ve earned one.',
-    action: () => showOverlay(magicShopSheet()),
-  },
-  {
-    icon: '⚡',
-    name: 'Personal Charge',
-    tag: 'Feed the Bomb · keep your districts alive',
-    body: 'Your own ARMY Bomb charge — feed it Charge Cells, light up eras for a boost, or leave it on auto-feed.',
-    action: () => showOverlay(agentChargeSheet()),
-  },
+function walletTile(icon, value, label) {
+  return el('div', 'wallet-tile', `
+    <span class="wt-icon">${icon}</span>
+    <span class="wt-val">${value.toLocaleString()}</span>
+    <span class="wt-label">${esc(label)}</span>
+  `)
+}
+
+/** Pack-only shelf object. District shelves can keep their collectible-card
+ * treatment; the Agent Pack is a physical locker, so objects sit directly on
+ * a shelf with a small label instead of inside another rectangle. */
+function collectionObject(item) {
+  const rarity = RARITY[item.rarity] || RARITY.common
+  const button = el('button', `collection-object ${rarity.cls}${item.usedAt ? ' is-used' : ''}`)
+  const location = item.districtName ? `Kept at ${item.districtName}` : item.usedAt ? 'Used' : 'In Pack'
+  button.setAttribute('aria-label', `${item.name}. ${rarity.label}. ${location}.`)
+  button.innerHTML = `
+    <span class="co-art">${itemArt(item)}</span>
+    <span class="co-name">${esc(item.name)}</span>
+    <span class="co-meta"><i></i>${esc(rarity.label)}</span>
+    <span class="co-place">${esc(location)}</span>
+  `
+  button.onclick = () => showOverlay(itemSheet(item))
+  return button
+}
+
+const FILTERS = [
+  { key: 'all', label: 'All', test: () => true },
+  { key: 'pack', label: 'In Pack', test: (i) => !i.districtId },
+  { key: 'placed', label: 'Placed', test: (i) => !!i.districtId },
+  { key: 'used', label: 'Used', test: (i) => !!i.usedAt },
 ]
+// Module-level, same pattern screen-ranking.js's activeTab already uses —
+// survives the poll-driven re-render so the chosen filter doesn't reset
+// every 90s.
+let activeFilter = 'all'
 
 export function renderResources(container, state) {
   container.innerHTML = ''
@@ -75,44 +80,65 @@ export function renderResources(container, state) {
     <span class="pack-name">${esc(state?.player?.codename || 'Agent')}</span>
   `))
 
-  wrap.appendChild(resourceRow(state, (r, v) => showOverlay(resourceSheet(r, v))))
-  wrap.appendChild(el('div', 'pack-hint', 'Tap a resource to see what it does.'))
+  // ── Wallet — the only three balances actually spent ──
+  const p = state?.player || {}
+  const wallet = el('div', 'wallet-row')
+  wallet.append(
+    walletTile('⚡', p.chargeCells || 0, 'Charge Cells'),
+    walletTile('🪽', p.wings || 0, 'Wings'),
+    walletTile('🧊', p.streakFreezeCharges || 0, 'Streak Freezes'),
+  )
+  wrap.appendChild(wallet)
 
-  // Everything you're carrying but haven't put anywhere yet.
-  const spare = itemsInPack(state)
-  const total = (state.items || []).length
+  // ── Merch and one-time unlocks ──
+  const items = state.items || []
+  const inPack = items.filter((i) => !i.districtId).length
+  const placed = items.length - inPack
+
   wrap.appendChild(el('div', 'pack-section', `
-    <span class="ps-title">BTS Merch Earned</span>
-    <span class="ps-count">${spare.length} of ${total} unplaced</span>
+    <span class="ps-title">Merch &amp; Tickets</span>
+    <span class="ps-count">${inPack} in Pack &middot; ${placed} placed</span>
   `))
-  if (spare.length) {
-    const grid = el('div', 'shelf-grid')
-    for (const it of spare) grid.appendChild(itemTile(it, (item) => showOverlay(itemSheet(item))))
-    wrap.appendChild(grid)
-    wrap.appendChild(el('div', 'dim pack-hint', 'Open a restored district to keep something there.'))
+
+  if (!items.length) {
+    wrap.appendChild(el('div', 'dim pack-hint', 'Restore a district to find your first thing worth keeping.'))
   } else {
-    wrap.appendChild(el('div', 'dim pack-hint', total
-      ? 'Everything you own is placed. Nice house.'
-      : 'Restore a district to find your first thing worth keeping.'))
+    if (!inPack) wrap.appendChild(el('div', 'dim pack-hint', 'All collectibles are placed.'))
+
+    let visible = items
+    // Filter tabs only earn their keep once there's enough to actually sift
+    // through — under ~15 items the grid alone already answers everything
+    // these would ask.
+    if (items.length >= 15) {
+      const tabs = el('div', 'filter-tabs')
+      for (const f of FILTERS) {
+        const btn = el('button', 'filter-tab' + (f.key === activeFilter ? ' sel' : ''), f.label)
+        btn.onclick = () => { activeFilter = f.key; renderResources(container, state) }
+        tabs.appendChild(btn)
+      }
+      wrap.appendChild(tabs)
+      visible = items.filter((FILTERS.find((f) => f.key === activeFilter) || FILTERS[0]).test)
+    }
+
+    if (visible.length) {
+      const grid = el('div', 'collection-shelf')
+      for (const it of visible) grid.appendChild(collectionObject(it))
+      wrap.appendChild(grid)
+    } else {
+      wrap.appendChild(el('div', 'dim pack-hint', 'Nothing in this filter yet.'))
+    }
   }
 
-  const list = el('div', 'res-list')
-  for (const t of TOOLS) {
-    const card = el(t.href ? 'a' : 'button', 'res-card' + (t.action ? ' is-action' : ''))
-    if (t.href) card.href = t.href()
-    card.innerHTML = `
-      <span class="res-icon">${t.icon}</span>
-      <span class="res-main">
-        <span class="res-name">${esc(t.name)}</span>
-        <span class="res-tag">${esc(t.tag)}</span>
-        <span class="res-body">${esc(t.body)}</span>
-      </span>
-      <span class="res-go">${t.action ? '▸' : '→'}</span>
-    `
-    if (t.action) card.onclick = (e) => t.action(state, e)
-    list.appendChild(card)
-  }
-  wrap.appendChild(list)
+  // ── Quick access — the two things that don't live anywhere else ──
+  const quick = el('div', 'quick-links')
+  const shop = el('button', 'quick-link')
+  shop.innerHTML = '<span class="ql-icon">🏪</span><span class="ql-name">Magic Shop</span><span class="ql-go">›</span>'
+  shop.onclick = () => showOverlay(magicShopSheet())
+  const badges = el('button', 'quick-link')
+  badges.innerHTML = '<span class="ql-icon">🎖️</span><span class="ql-name">Badge Drawer</span><span class="ql-go">›</span>'
+  badges.onclick = () => showOverlay(badgeDrawerSheet(state))
+  quick.append(shop, badges)
+  wrap.appendChild(quick)
 
   container.appendChild(wrap)
 }

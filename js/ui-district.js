@@ -5,6 +5,7 @@
 
 import { el, esc, showOverlay, hideOverlay, getState } from './state.js'
 import { openPlaylist, remaining } from './playlist.js'
+import { missionBoardSheet } from './mission-board.js'
 
 /** Overall restoration fraction (0..1) driving the scene's lights. */
 export function districtFraction(d) {
@@ -86,13 +87,21 @@ export function renderBoard(board, d) {
   }
 
   // The queue belongs here too — this is the screen you're on when you're
-  // about to go stream.
+  // about to go stream. Renamed from "Run the 148 Protocol": this is an
+  // action for finishing goals, not a thing carried around in the Pack, so
+  // it reads as one now.
   const left = remaining({ activeDistrict: d })
   if (left.length) {
-    const q = el('button', 'queue-btn', `🧠 Run the 148 Protocol <i>${left.reduce((a, x) => a + x.need, 0)} plays left</i>`)
+    const q = el('button', 'queue-btn', `🧠 Build today's stream queue <i>${left.reduce((a, x) => a + x.need, 0)} plays left</i>`)
     q.onclick = () => showOverlay(openPlaylist(getState() || { activeDistrict: d }))
     board.appendChild(q)
   }
+
+  // Weekly Mission Board moved here too — players should see their missions
+  // on the screen where they perform them, not behind a tap in the Pack.
+  const mb = el('button', 'queue-btn is-quiet', '📋 Weekly Mission Board')
+  mb.onclick = () => showOverlay(missionBoardSheet(getState() || { activeDistrict: d }))
+  board.appendChild(mb)
 
   const card = el('div', 'card goal-card')
   for (const g of goals) {

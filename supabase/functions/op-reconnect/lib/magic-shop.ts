@@ -2,9 +2,8 @@
 // spends the balances charge-economy.ts and this file's own purchases add
 // to rc_players (charge_cells, wings, tickets).
 //
-// Charge Cells aren't spendable yet — Phase 3 is what lets them charge the
-// per-agent ARMY Bomb. This file only earns/displays them elsewhere; what it
-// actually SELLS today is Wings (bought with XP) and a Ticket (unlocked by
+// Charge Cells are spent on the per-agent ARMY Bomb. What this file actually
+// SELLS today is Wings (bought with XP) and a Ticket (unlocked by
 // reaching a level/district/XP bar, no separate cost). BTS merch is
 // deliberately not implemented here — no catalog or pricing was ever
 // specified, and inventing one would just be guessing.
@@ -56,7 +55,6 @@ export async function getMagicShop(supabase: SupabaseDB, content: GameContent, p
         requirement: TICKET_REQUIREMENT,
         progress: { level, districtsRestored, xp },
       },
-      merchComingSoon: true,
     },
   }
 }
@@ -117,7 +115,34 @@ export async function claimTicket(supabase: SupabaseDB, content: GameContent, pa
   const districtsRestored = await restoredDistrictCount(supabase, agentNo)
   if (!ticketEligibility(level, districtsRestored, xp)) return { success: false, error: 'not_eligible' }
 
-  const { error } = await supabase.from('rc_players').update({ tickets: (player.tickets || 0) + 1 }).eq('agent_no', agentNo)
+  // Resolve the real usable catalog item before changing the one-time claim
+  // latch. A missing migration must fail visibly, not consume the claim and
+  // leave the agent with a number they can never use.
+  const { data: ticketCatalog, error: catalogError } = await supabase
+    .from('rc_items').select('id').eq('kind', 'ticket').limit(1).maybeSingle()
+  if (catalogError || !ticketCatalog) return { success: false, error: catalogError?.message || 'ticket_not_configured' }
+
+  // Compare-and-set makes two simultaneous taps safe: only one request can
+  // move tickets from 0 to 1 and proceed to create the collectible.
+  const { data: claimed, error } = await supabase.from('rc_players')
+    .update({ tickets: 1 }).eq('agent_no', agentNo).eq('tickets', 0)
+    .select('tickets').maybeSingle()
   if (error) return { success: false, error: error.message }
-  return { success: true, tickets: (player.tickets || 0) + 1 }
+  if (!claimed) return { success: false, error: 'already_claimed' }
+
+  // rc_players.tickets above is what gates eligibility/"already claimed" —
+  // this is the actual usable thing: a real rc_player_items row with
+  // kind==='ticket', district_id null so it lands in the Pack, not placed
+  // anywhere. Without this a claimed ticket had nothing items.js's
+  // useTicket() could ever find or tap to launch the concert. Guarded by
+  // the compare-and-set above, so this only ever runs once per agent.
+  const { error: itemError } = await supabase.from('rc_player_items')
+    .insert({ agent_no: agentNo, item_id: ticketCatalog.id, district_id: null })
+  if (itemError) {
+    // Best-effort rollback keeps the claim available if item creation fails.
+    await supabase.from('rc_players').update({ tickets: 0 }).eq('agent_no', agentNo).eq('tickets', 1)
+    return { success: false, error: itemError.message }
+  }
+
+  return { success: true, tickets: 1 }
 }

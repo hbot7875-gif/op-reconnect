@@ -101,7 +101,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
   // player.charge_cells for the response, since `player` was already fetched
   // before the credit landed in the DB.
   let chargeCellsEarnedNow = 0
-  // "Only ever go up" (resources.js) — start from the baked-in lifetime
+  // Lifetime contribution totals only ever go up — start from the baked-in
   // total, add whatever's live below. A just-completed district's
   // contribution gets baked in this same pass, so it's added once, not
   // twice, whether or not restoredNow ends up true.

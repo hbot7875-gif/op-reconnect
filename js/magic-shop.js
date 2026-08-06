@@ -11,12 +11,17 @@
 // hands off to it instead of pretending there's nothing here.
 
 import { call } from './api.js'
-import { el, esc, toast, hideOverlay, showOverlay, getState } from './state.js'
+import { el, esc, toast, hideOverlay, showOverlay, getState, setState } from './state.js'
 import { getAgentNo } from './session.js'
 import { goResources } from './router.js'
 
 function statTile(icon, label, value) {
   return el('div', 'ms-stat', `<span class="ms-stat-icon">${icon}</span><span class="ms-stat-value">${value}</span><span class="ms-stat-label">${esc(label)}</span>`)
+}
+
+async function refreshGameState() {
+  const fresh = await call('getGameState', { agentNo: getAgentNo() })
+  if (fresh?.success) setState(fresh)
 }
 
 async function loadAndPaint(body) {
@@ -40,7 +45,7 @@ function paint(body, shop) {
     statTile('🎟️', 'Tickets', shop.tickets),
   )
   body.appendChild(stats)
-  body.appendChild(el('p', 'muted ms-note', 'Earned from album-goal streams — 20 streams = 1 Charge Cell. Spend them on your ARMY Bomb from Personal Charge (Pack).'))
+  body.appendChild(el('p', 'muted ms-note', 'Earned from album-goal streams — 20 streams = 1 Charge Cell. Tap the ARMY Bomb on the City screen to use them.'))
 
   // ── Wings ──
   const wingsCard = el('div', 'ms-card')
@@ -59,6 +64,7 @@ function paint(body, shop) {
       return
     }
     toast(`+${res.wingsGranted} Wings`)
+    await refreshGameState()
     loadAndPaint(body)
   }
   wingsCard.appendChild(buyBtn)
@@ -82,6 +88,7 @@ function paint(body, shop) {
       const res = await call('claimTicket', { agentNo: getAgentNo() })
       if (!res.success) { toast(res.error || "Couldn't claim it"); claimBtn.disabled = false; return }
       toast('Ticket claimed')
+      await refreshGameState()
       loadAndPaint(body)
     }
     ticketCard.appendChild(claimBtn)
@@ -92,7 +99,7 @@ function paint(body, shop) {
   // off live game state (already loaded for the rest of the app) rather
   // than a new backend field, since the Magic Shop just needs a number and
   // a way in, not the collection itself.
-  const merchCount = (getState().items || []).length
+  const merchCount = (getState()?.items || []).length
   const merchCard = el('div', 'ms-card')
   merchCard.innerHTML = `
     <div class="ms-card-head"><span class="ms-card-icon">🛍️</span><span class="ms-card-title">BTS Merch</span></div>

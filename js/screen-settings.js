@@ -16,6 +16,7 @@ import { el, esc, toast, showOverlay, hideOverlay, getState } from './state.js'
 import { getAgentNo, getSession, setSession, setToken, clearSession } from './session.js'
 import { openStreamSource, openPin, openSignalLog, sourceName, uplinkBroken } from './settings-streams.js'
 import { openModeSheet } from './ui-hud.js'
+import { agentManualSheet } from './agent-manual.js'
 
 let account = null
 
@@ -153,6 +154,16 @@ function paintSections(body, state) {
       icon: '🎚', name: 'Streaming mode', value: state?.player?.mode || 'easy',
       body: 'More accounts means bigger targets and slower XP per stream — 10/20/30 streams for 1 XP.',
       onClick: () => openModeSheet(getState() || state),
+    },
+  ]))
+
+  // ── Help — reference material, not inventory, so it lives here rather
+  // than the Pack (which used to carry it as one of six generic cards).
+  body.appendChild(section('Help', 'Reference, not inventory', [
+    {
+      icon: '📖', name: 'How to Play', value: '',
+      body: 'Plain-words explanations for every system in the game — start here if anything is unclear.',
+      onClick: () => showOverlay(agentManualSheet()),
     },
   ]))
 
