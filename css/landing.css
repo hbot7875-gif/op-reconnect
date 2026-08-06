@@ -100,9 +100,15 @@ body.landing {
 
 .crowd-scrim {
   position: fixed; inset: 0; height: 100vh; z-index: 2; pointer-events: none;
+  /* This gradient's dark centre used to sit almost exactly on top of
+     hero2.jpg's own background-position (45% 28%) — the one spot the photo
+     was picked to keep visible (member faces read clearly there). The title
+     text already carries its own text-shadow for legibility (see .title/
+     .lede below), so the scrim doesn't need to be this heavy to do its job;
+     lightened across the board so the photo actually shows through. */
   background:
-    radial-gradient(ellipse 62% 46% at 50% 30%, rgba(7,6,13,0.90) 0%, rgba(7,6,13,0.60) 55%, rgba(7,6,13,0.15) 100%),
-    linear-gradient(180deg, rgba(7,6,13,0.70) 0%, rgba(7,6,13,0.34) 34%, rgba(7,6,13,0.28) 60%, rgba(7,6,13,0.78) 100%);
+    radial-gradient(ellipse 62% 46% at 50% 30%, rgba(7,6,13,0.45) 0%, rgba(7,6,13,0.28) 55%, rgba(7,6,13,0.08) 100%),
+    linear-gradient(180deg, rgba(7,6,13,0.40) 0%, rgba(7,6,13,0.18) 34%, rgba(7,6,13,0.20) 60%, rgba(7,6,13,0.68) 100%);
 }
 
 /* ── hero ───────────────────────────────────────────────────────── */
@@ -397,12 +403,13 @@ body.landing {
   }
   /* The scrim's center ellipse was tuned against a photo filling the whole
      screen; on a letterboxed mobile band it lands squarely on the only part
-     of the photo that's visible and blacks it out. Ease it back so the
-     members actually read. */
+     of the photo that's visible and blacks it out. The first pass at easing
+     this back (0.55/0.38/0.12) still wasn't enough — members were still
+     reported as covered up — so this cuts it roughly in half again. */
   .crowd-scrim {
     background:
-      radial-gradient(ellipse 62% 46% at 50% 32%, rgba(7,6,13,0.55) 0%, rgba(7,6,13,0.38) 55%, rgba(7,6,13,0.12) 100%),
-      linear-gradient(180deg, rgba(7,6,13,0.55) 0%, rgba(7,6,13,0.30) 34%, rgba(7,6,13,0.30) 60%, rgba(7,6,13,0.78) 100%);
+      radial-gradient(ellipse 62% 46% at 50% 32%, rgba(7,6,13,0.25) 0%, rgba(7,6,13,0.16) 55%, rgba(7,6,13,0.05) 100%),
+      linear-gradient(180deg, rgba(7,6,13,0.25) 0%, rgba(7,6,13,0.14) 34%, rgba(7,6,13,0.16) 60%, rgba(7,6,13,0.55) 100%);
   }
 }
 
