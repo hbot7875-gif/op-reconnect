@@ -1015,6 +1015,23 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 .wp-bar { height: 5px; border-radius: 3px; background: rgba(255,255,255,0.08); overflow: hidden; margin-top: 8px; }
 .wp-bar i { display: block; height: 100%; border-radius: 3px; background: var(--gold); transition: width 0.6s; }
 
+/* The Old Grid is the parent ward; these are its four season-one quarters.
+   One quiet rail states that hierarchy without adding four more cards. */
+.oldgrid-quarters { display: grid; grid-template-columns: repeat(4, 1fr); margin: -2px 0 16px;
+  border-block: 1px solid var(--border); }
+.oldgrid-quarter { min-width: 0; padding: 10px 8px; text-align: center; position: relative; }
+.oldgrid-quarter + .oldgrid-quarter::before { content: ''; position: absolute; inset: 9px auto 9px 0;
+  width: 1px; background: var(--border); }
+.oldgrid-quarter span { display: block; font-family: var(--disp); font-size: 11px; font-weight: 800;
+  letter-spacing: .7px; color: var(--text); white-space: nowrap; }
+.oldgrid-quarter i { display: block; margin-top: 3px; font-family: var(--mono); font-size: 9px;
+  font-style: normal; letter-spacing: .5px; color: var(--dim); }
+
+@media (max-width: 430px) {
+  .oldgrid-quarter { padding-inline: 4px; }
+  .oldgrid-quarter span { font-size: 9.5px; letter-spacing: .25px; }
+}
+
 .district-list { display: flex; flex-direction: column; gap: 1px; background: var(--border);
   border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; }
 .d-row {

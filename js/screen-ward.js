@@ -14,7 +14,7 @@ import { districtDisplayName } from './ward-tiles.js'
 // scannable without reading a word.
 import { districtIcon as iconFor } from './landmarks.js'
 import { wardFilterBar } from './search.js'
-import { wardDisplayName } from './ward-tiles.js'
+import { OLD_GRID_QUARTERS, OLD_GRID_WARD, wardDisplayName } from './ward-tiles.js'
 
 const D_STATE = {
   locked:            { label: 'Sealed' },
@@ -61,6 +61,10 @@ export function renderWard(container, state, wardId) {
       <div class="wp-bar"><i style="width:${pct}%"></i></div>`))
   }
 
+  if (ward.id === OLD_GRID_WARD) {
+    wrap.appendChild(oldGridQuarterRail(districts))
+  }
+
   const list = districtList(state, ward, districts)
   // Search + filters only earn their space once the list is long enough to
   // be annoying; a five-district ward doesn't need them.
@@ -73,7 +77,7 @@ export function renderWard(container, state, wardId) {
     wrap.appendChild(list)
   }
 
-  // Almost always one centerpiece; Echo Quarter has four (one per season-one
+  // Almost always one centerpiece; The Old Grid has four (one per season-one
   // team), so this is written for a list rather than a single name — see
   // joinNames. "is/are" agrees with the count either way.
   if (ward.centerpieces?.length) {
@@ -86,6 +90,23 @@ export function renderWard(container, state, wardId) {
   }
 
   container.appendChild(wrap)
+}
+
+function oldGridQuarterRail(districts) {
+  const rail = el('div', 'oldgrid-quarters')
+  rail.setAttribute('aria-label', 'The Old Grid quarters')
+
+  for (const quarter of OLD_GRID_QUARTERS) {
+    const members = districts.filter((d) => d.sequence >= quarter.from && d.sequence <= quarter.to)
+    const online = members.filter((d) => d.status === 'restored').length
+    const segment = el('div', 'oldgrid-quarter')
+    segment.innerHTML = `
+      <span>${esc(quarter.label)}</span>
+      <i>${online}/${members.length}</i>`
+    rail.appendChild(segment)
+  }
+
+  return rail
 }
 
 function districtList(state, ward, districts) {

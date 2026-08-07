@@ -25,10 +25,23 @@ import { profileFor, drawCap, drawDecor, n, hashStr, rng } from './ward-profiles
 // the name, and everywhere that shows a ward name goes through the helper
 // below to keep the two in step.
 export const HOME_BASE_WARD = 'relay-zero'
+export const OLD_GRID_WARD = 'oldgrid'
+
+// The Old Grid is one ward containing the four season-one team quarters.
+// Keep these boundaries next to its display-name override so every surface
+// describes the same hierarchy while retaining the stable `oldgrid` id.
+export const OLD_GRID_QUARTERS = [
+  { id: 'echo',   label: 'Echo',   from: 1,  to: 22 },
+  { id: 'indigo', label: 'Indigo', from: 23, to: 41 },
+  { id: 'agustd', label: 'Agust D', from: 42, to: 63 },
+  { id: 'jitb',   label: 'JITB',   from: 64, to: 86 },
+]
 
 export function wardDisplayName(ward) {
   if (!ward) return ''
-  return ward.id === HOME_BASE_WARD ? 'Home Base' : (ward.name || '')
+  if (ward.id === HOME_BASE_WARD) return 'Home Base'
+  if (ward.id === OLD_GRID_WARD) return 'The Old Grid'
+  return ward.name || ''
 }
 
 /** Same "Home Base" promotion for the district itself — checked by wardId,
