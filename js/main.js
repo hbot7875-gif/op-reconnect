@@ -31,6 +31,15 @@ function showAuth() {
 }
 
 let lastScreenName = null
+let refreshRetry = null
+
+function retryRefresh() {
+  if (refreshRetry) return
+  refreshRetry = setTimeout(() => {
+    refreshRetry = null
+    refresh()
+  }, 3000)
+}
 
 function renderScreen(state) {
   const scr = getScreen()
@@ -129,12 +138,23 @@ async function refresh() {
   const agentNo = getAgentNo()
   if (!agentNo) { showAuth(); return }
   const res = await call('getGameState', { agentNo })
+  if (!res.success && res.error !== 'invalid_session' && res.error !== 'agent_not_found') {
+    // A deployment or short network interruption must not look like logout.
+    // Keep a rendered game in place (or its loader on first boot) and retry.
+    if (!getState()?.joined) show('loading')
+    retryRefresh()
+    return
+  }
   if (!res.success) {
     // A rejected or expired token means the stored session is no good — drop
     // it so the player gets the sign-in screen instead of a silent dead end.
     if (res.error === 'invalid_session' || res.error === 'agent_not_found') clearSession()
     showAuth()
     return
+  }
+  if (refreshRetry) {
+    clearTimeout(refreshRetry)
+    refreshRetry = null
   }
   if (!res.joined) {
     show('onboarding')

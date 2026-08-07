@@ -293,8 +293,8 @@ body {
   .world-screen { display: flex; }
 }
 @media (max-width: 759px) {
-  .command-scene { min-height: 805px; border-radius: 20px; }
-  .command-scene > .city-plan { inset: 218px 4px 220px; }
+  .command-scene { min-height: 825px; border-radius: 20px; }
+  .command-scene > .city-plan { inset: 238px 4px 220px; }
   .command-scene > .city-plan > * { width: auto; height: 100%; max-width: 100%; }
   /* On phones the Bomb gets its own hero band above the city map. It remains
      the primary survival object without covering Home Base or any ward. */
