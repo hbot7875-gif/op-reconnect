@@ -229,8 +229,16 @@ function cityPlan(state) {
   const wards = state.map?.wards || []
   if (!wards.length) return el('div')
   const box = el('div', 'city-plan')
+  // The core ring is solo progress, not the shared network Bomb — see
+  // renderCityMap's homeFraction doc comment. Live districtFraction while
+  // you're actually restoring Home Base; once you've moved on, the ward's
+  // own status says whether it ended up finished.
+  const activeD = state.activeDistrict
+  const homeFraction = activeD?.wardId === HOME_BASE_WARD
+    ? districtFraction(activeD)
+    : wards.find((w) => w.id === HOME_BASE_WARD)?.status === 'restored' ? 1 : 0
   box.appendChild(renderCityMap(wards, state.map?.districts || [],
-    (w, origin) => goWard(w.id, origin), state.bomb,
+    (w, origin) => goWard(w.id, origin), homeFraction,
     (origin) => goCandyStar(origin)))
   return box
 }

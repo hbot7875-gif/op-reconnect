@@ -322,12 +322,18 @@ function toolMarker(angle, icon, label, onClick) {
  *                   empty array and it falls back to lighting `restoredCount`
  *                   blocks per ward.
  * @param onSelect   (ward, {x,y}) => void
- * @param bomb       state.bomb — the core's charge drives the glow at the
- *                   centre, so the map shows the thing keeping it alive.
+ * @param homeFraction  0..1 — how far YOUR OWN Home Base restoration has
+ *                      gotten, driving the ring at the centre. Deliberately
+ *                      not state.bomb.charge: that's the network-wide pooled
+ *                      charge every agent shares, and showing it here read as
+ *                      personal progress when it wasn't — an agent with zero
+ *                      streams saw a lit ring because other agents had been
+ *                      streaming. This ring is solo, same number as the
+ *                      "NOW RESTORING" card's own percentage.
  * @param onCandyStar  ({x,y}) => void — optional. Draws the Candy Star tool
  *                     marker (see toolMarker above) when passed.
  */
-export function renderCityMap(wards, districts, onSelect, bomb, onCandyStar) {
+export function renderCityMap(wards, districts, onSelect, homeFraction, onCandyStar) {
   const PAD = 5
   const svg = n('svg', {
     class: 'city-map', 'aria-hidden': 'true',
@@ -455,7 +461,7 @@ export function renderCityMap(wards, districts, onSelect, bomb, onCandyStar) {
   svg.appendChild(bloom)
 
   /* ── the core: Home Base, with the ARMY Bomb inside it ─────────────── */
-  const charge = Math.max(0, Math.min(1, bomb?.charge || 0))
+  const progress = Math.max(0, Math.min(1, homeFraction || 0))
   // Every other ward is sealed at the start, so the core is the only thing
   // on the map actually worth tapping — is-open drives a slow pulse and a
   // "START HERE" tag so that's obvious without reading the hint line above
@@ -466,7 +472,8 @@ export function renderCityMap(wards, districts, onSelect, bomb, onCandyStar) {
   coreG.appendChild(n('circle', { cx: CX, cy: CY, r: CORE_R + 2.2, class: 'cm-core-halo' }))
   coreG.appendChild(n('circle', { cx: CX, cy: CY, r: CORE_R, class: 'cm-core-land' }))
   coreG.appendChild(n('circle', { cx: CX, cy: CY, r: CORE_R, class: 'cm-core-edge' }))
-  // charge ring — real data, same as the bomb on the world screen
+  // progress ring — YOUR OWN Home Base restoration, not the shared network
+  // charge (see homeFraction's doc comment above).
   const CIRC = 2 * Math.PI * (CORE_R - 2.2)
   coreG.appendChild(n('circle', {
     cx: CX, cy: CY, r: CORE_R - 2.2, class: 'cm-core-ring-bg',
@@ -474,7 +481,7 @@ export function renderCityMap(wards, districts, onSelect, bomb, onCandyStar) {
   coreG.appendChild(n('circle', {
     cx: CX, cy: CY, r: CORE_R - 2.2, class: 'cm-core-ring',
     transform: `rotate(-90 ${CX} ${CY})`,
-    'stroke-dasharray': `${(CIRC * charge).toFixed(2)} ${CIRC.toFixed(2)}`,
+    'stroke-dasharray': `${(CIRC * progress).toFixed(2)} ${CIRC.toFixed(2)}`,
   }))
   coreG.appendChild(n('circle', { cx: CX, cy: CY, r: 3.4, class: 'cm-core-bomb' }))
   coreG.appendChild(n('text', { x: CX, y: CY + 7.4, class: 'cm-core-name' }, 'HOME BASE'))
