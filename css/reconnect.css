@@ -293,18 +293,18 @@ body {
   .world-screen { display: flex; }
 }
 @media (max-width: 759px) {
-  .command-scene { min-height: 825px; border-radius: 20px; }
-  .command-scene > .city-plan { inset: 238px 4px 220px; }
+  .command-scene { min-height: 845px; border-radius: 20px; }
+  .command-scene > .city-plan { inset: 258px 4px 220px; }
   .command-scene > .city-plan > * { width: auto; height: 100%; max-width: 100%; }
   /* On phones the Bomb gets its own hero band above the city map. It remains
      the primary survival object without covering Home Base or any ward. */
   .command-core { left: 50%; right: auto; top: 52px; width: 150px; transform: translateX(-50%); }
-  .command-scene .command-core .core-block { min-height: 162px; padding: 0; justify-content: center;
+  .command-scene .command-core .core-block { min-height: 182px; padding: 0; justify-content: center;
     border: 0; border-radius: 50%; background: radial-gradient(circle, rgba(8,6,16,.88) 0 34%, rgba(8,6,16,.58) 52%, transparent 72%);
     backdrop-filter: none; }
   .command-scene .command-core .core-eyebrow { display: none; }
   .command-scene .command-core .core-title { display: block; margin: 0; font-size: 13px; letter-spacing: 1.2px; }
-  .command-scene .command-core .army-core { width: 95px; height: 108px; margin: 10px 0 8px; overflow: visible;
+  .command-scene .command-core .army-core { width: 95px; height: 108px; margin: 10px 0 28px; overflow: visible;
     transform: scale(1.35); transform-origin: center; }
   .command-scene .command-core .army-core > * { display: block; }
   .command-scene .command-core .army-core > .rc-bomb { display: flex; }
