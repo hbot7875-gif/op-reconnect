@@ -50,11 +50,11 @@ export function missionBoardSheet(state) {
 
   const r = d.reconnect
   if (r) {
-    const label = RECONNECT_LABELS[r.variant] || 'Reconnect'
-    board.appendChild(missionRow('🤝', 'Mission 3 — Reconnect Mission', label,
+    const label = RECONNECT_LABELS[r.variant] || 'ReConnect'
+    board.appendChild(missionRow('🤝', 'Mission 3 — ReConnect Mission', label,
       r.done ? 1 : 0, 1, r.done ? 'Done' : 'In progress'))
   } else {
-    board.appendChild(missionRow('🤝', 'Mission 3 — Reconnect Mission', 'No reconnect goal assigned this run', 0, 0, 'None here'))
+    board.appendChild(missionRow('🤝', 'Mission 3 — ReConnect Mission', 'No ReConnect goal assigned this run', 0, 0, 'None here'))
   }
 
   sheet.appendChild(board)

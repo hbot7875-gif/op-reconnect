@@ -225,7 +225,7 @@ const PUZZLE_EYEBROW = { sotd: 'SONG OF THE DAY', cipher: 'CIPHER', memory: 'MEM
 
 function paintPuzzlePanel(box, d, r) {
   box.innerHTML = ''
-  box.appendChild(el('div', 'eyebrow', PUZZLE_EYEBROW[r.variant] || 'RECONNECT SIGNAL'))
+  box.appendChild(el('div', 'eyebrow', PUZZLE_EYEBROW[r.variant] || 'ReConnect SIGNAL'))
   box.appendChild(el('p', 'muted', r.prompt || ''))
 
   if (r.done) {

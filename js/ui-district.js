@@ -26,7 +26,7 @@ export const RECONNECT_LABELS = {
  *  a mission, inviting someone) lives in screen-district.js's active-board
  *  panel; this is just "where do things stand" for the checklist glance. */
 function reconnectRow(r) {
-  const label = RECONNECT_LABELS[r.variant] || 'Reconnect'
+  const label = RECONNECT_LABELS[r.variant] || 'ReConnect'
   const row = el('div', 'goal-row reconnect-row' + (r.done ? ' done' : ''))
   const status = r.done ? '✓ done'
     : r.mission ? `${r.mission.participants.filter((p) => p.status === 'joined').length}<i>/${r.mission.requiredAgents}</i>`

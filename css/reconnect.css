@@ -1828,24 +1828,46 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 
 /* ── onboarding / misc ── */
 .ob-wrap { width: 100%; max-width: 520px; margin: auto; padding: 48px 20px; }
-.ob-body { color: var(--muted); line-height: 1.75; font-size: 15px; margin: 20px 0; }
-.ob-lore { text-align: center; }
-.ob-lore-group { margin: 0 0 22px; }
-.ob-lore-group:last-child { margin-bottom: 0; }
+.ob-body { color: var(--muted); line-height: 1.7; font-size: 15px; margin: 18px 0 20px; }
+.ob-lore { text-align: center; max-width: 470px; margin: 0 auto; }
+.ob-signal { position: relative; width: 48px; height: 48px; margin: 0 auto 20px; }
+.ob-signal-core {
+  position: absolute; inset: 14px; border-radius: 50%; background: var(--purple-lt);
+  box-shadow: 0 0 10px rgba(167,139,250,0.5);
+  animation: obSignalCore 7.8s ease-in-out both;
+}
+.ob-signal-ring {
+  position: absolute; inset: 5px; border: 1px solid rgba(167,139,250,0.45); border-radius: 50%;
+  animation: obSignalRing 2.1s ease-out 3;
+}
 .ob-beat {
-  margin: 0 0 11px; opacity: 0; transform: translateY(12px) scale(0.985);
-  filter: blur(7px); animation: obBeatReveal 0.9s cubic-bezier(0.2, 0.75, 0.25, 1) forwards;
+  margin: 0 0 17px; opacity: 0; transform: translateY(9px);
+  animation: obBeatReveal 0.65s cubic-bezier(0.2, 0.75, 0.25, 1) forwards;
 }
 .ob-beat:last-child { margin-bottom: 0; }
+.ob-beat-2 { color: var(--text); }
+.ob-beat-3, .ob-beat-5 { color: var(--purple-lt); }
+.ob-beat-6 { font-weight: 700; color: var(--text); line-height: 1.85; }
+.ob-beat-7 { font-family: var(--disp); font-weight: 800; color: var(--text); font-size: 18px; }
 @keyframes obBeatReveal {
-  0% { opacity: 0; transform: translateY(12px) scale(0.985); filter: blur(7px); }
-  45% { opacity: 0.7; filter: blur(2px); }
-  100% { opacity: 1; transform: none; filter: blur(0); }
+  from { opacity: 0; transform: translateY(9px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes obSignalCore {
+  0%, 18% { opacity: 0.28; transform: scale(0.72); box-shadow: 0 0 5px rgba(167,139,250,0.25); }
+  25% { opacity: 0.85; transform: scale(1); }
+  31%, 36% { opacity: 0.35; }
+  42% { opacity: 0.9; }
+  100% { opacity: 1; transform: scale(1.18); box-shadow: 0 0 20px rgba(167,139,250,0.8); }
+}
+@keyframes obSignalRing {
+  from { opacity: 0.8; transform: scale(0.5); }
+  to { opacity: 0; transform: scale(1.25); }
 }
 .ob-continue { opacity: 0; visibility: hidden; animation: obContinueIn 0.5s ease forwards; }
 @keyframes obContinueIn { to { opacity: 1; visibility: visible; } }
 @media (prefers-reduced-motion: reduce) {
-  .ob-beat, .ob-continue { animation: none; opacity: 1; visibility: visible; transform: none; filter: none; }
+  .ob-beat, .ob-continue, .ob-signal-core, .ob-signal-ring { animation: none; opacity: 1; visibility: visible; transform: none; filter: none; }
 }
 .ob-voiceover { margin-top: 0; }
 .ob-voiceover.is-playing { border-color: var(--purple); color: var(--purple-lt); }

@@ -14,6 +14,22 @@ const ERRORS = {
 }
 
 const MISSION_SOUNDTRACK = 'https://youtu.be/WyXcTOW8iPE'
+const DEFAULT_LORE = `After the old tracking network collapsed, HT lost contact with hundreds of agents worldwide.
+
+To ReConnect them, HT built a new intelligence network called BOTZ, powered by ARMY Bombs. But its signal is unstable.
+
+Every stream you log restores a piece of the network.
+
+When your ARMY Bomb loses power, parts of the city go dark again.
+
+Stream to earn Charge Cells.
+Use them to keep your ARMY Bomb glowing.
+
+Restore the city.
+Find the missing agents.
+ReConnect the network.
+
+Welcome to Operation ReConnect.`
 
 export function renderOnboarding(container, payload, agentNo, onJoined) {
   const intro = payload.intro || {}
@@ -30,7 +46,10 @@ export function renderOnboarding(container, payload, agentNo, onJoined) {
   const soundtrack = ambientToggle(MISSION_SOUNDTRACK)
   step1.appendChild(soundtrack)
   const body = el('div', 'ob-body')
-  const lore = cinematicLore(intro.body || '')
+  const signal = el('div', 'ob-signal', '<span class="ob-signal-ring"></span><span class="ob-signal-core"></span>')
+  signal.setAttribute('aria-hidden', 'true')
+  const lore = cinematicLore(intro.body || DEFAULT_LORE)
+  body.appendChild(signal)
   body.appendChild(lore.node)
   step1.append(
     el('div', 'eyebrow', esc(intro.title || 'TRANSMISSION')),
@@ -193,8 +212,8 @@ function renderFirstMove(mount, joinedState, proceed) {
     el('p', 'muted', activeDistrict
       // Home Base's district and ward share the same display name — skip
       // the redundant "in X" clause whenever they'd repeat.
-      ? `${esc(districtName)}${wardName && wardName !== districtName ? ` in ${esc(wardName)}` : ''} is already open. Enter it to see your assigned Track, Album, and Reconnect goals. Only assigned goal streams earn regular XP.`
-      : 'One district is already open on the map. Enter it to see your assigned Track, Album, and Reconnect goals. Only assigned goal streams earn regular XP.'),
+      ? `${esc(districtName)}${wardName && wardName !== districtName ? ` in ${esc(wardName)}` : ''} is already open. Enter it to see your assigned Track, Album, and ReConnect goals. Only assigned goal streams earn regular XP.`
+      : 'One district is already open on the map. Enter it to see your assigned Track, Album, and ReConnect goals. Only assigned goal streams earn regular XP.'),
     el('p', 'dim', 'Keep your ARMY Bomb charged: every 20 counted Album Goal streams earns a Charge Cell, and one Cell adds 4 hours.'),
   )
   const btn = el('button', 'btn btn-primary', 'Show me my first district')
@@ -204,28 +223,20 @@ function renderFirstMove(mount, joinedState, proceed) {
 
 /* ── cinematic transmission ──────────────────────────────────────────── */
 
-/** Reveal complete thoughts instead of typing individual words. Each sentence
- *  arrives as one cinematic beat, with paragraph breaks preserved and enough
- *  silence between beats for the soundtrack and premise to breathe. */
+/** Reveal the story in a few complete, readable beats. Each paragraph arrives
+ *  together, so this feels like a game opening rather than a typing demo. */
 function cinematicLore(text) {
   const node = el('div', 'ob-lore')
   const paragraphs = String(text).trim().split(/\n\s*\n/).filter(Boolean)
-  let beat = 0
+  paragraphs.forEach((paragraph, beat) => {
+    const line = el('p', `ob-beat ob-beat-${Math.min(beat + 1, 7)}`,
+      esc(paragraph.trim()).replace(/\n/g, '<br>'))
+    line.style.animationDelay = `${(0.35 + beat * 1.05).toFixed(2)}s`
+    node.appendChild(line)
+  })
 
-  for (const paragraph of paragraphs) {
-    const group = el('div', 'ob-lore-group')
-    const sentences = paragraph.trim().split(/(?<=[.!?…])\s+/).filter(Boolean)
-    for (const sentence of sentences) {
-      const line = el('p', 'ob-beat', esc(sentence))
-      line.style.animationDelay = `${(0.45 + beat * 1.15).toFixed(2)}s`
-      group.appendChild(line)
-      beat++
-    }
-    node.appendChild(group)
-  }
-
-  if (!beat) node.appendChild(el('p', 'ob-beat', 'TRANSMISSION LOST. STAND BY.'))
-  return { node, duration: 0.45 + Math.max(beat, 1) * 1.15 }
+  if (!paragraphs.length) node.appendChild(el('p', 'ob-beat', 'TRANSMISSION LOST. STAND BY.'))
+  return { node, duration: 0.35 + Math.max(paragraphs.length, 1) * 1.05 }
 }
 
 /* ── voice-over ───────────────────────────────────────────────────────── */

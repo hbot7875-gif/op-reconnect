@@ -39,7 +39,7 @@ export function buildShareText(state) {
   // secret half), so it's safe to sign the card with — and it's how agents
   // recognise each other's posts.
   const codename = state.player?.codename
-  const lines = [codename ? `OP: RECONNECT — ${codename}` : 'OP: RECONNECT', '']
+  const lines = [codename ? `OP: ReConnect — ${codename}` : 'OP: ReConnect', '']
 
   // Prefer the ward being worked on; fall back to the furthest one along.
   const ward = wards.find((w) => w.status === 'active')

@@ -7,13 +7,13 @@ import { el, hideOverlay } from './state.js'
 const STEPS = [
   ['1', 'Check your ARMY Bomb', 'Your remaining charge is shown on City. Tap the Bomb whenever you need to feed it.'],
   ['2', 'Earn Charge Cells', 'Stream Album Goal tracks. Every 20 counted album streams earns 1 Charge Cell, and each Cell adds 4 hours.'],
-  ['3', 'Restore districts', 'Enter your active district and complete its Track Goals, Album Goal, and Reconnect Mission before the 7-day timer ends.'],
+  ['3', 'Restore districts', 'Enter your active district and complete its Track Goals, Album Goal, and ReConnect Mission before the 7-day timer ends.'],
   ['4', 'Build backup power', 'Stream every track in an era during the week to add 10 hours. Auto-feed can spend stored Charge Cells when your Bomb runs out.'],
 ]
 
 const XP_SOURCES = [
   ['🎵', 'Assigned goal streams', 'Only tracks listed in your active Track Goals and Album Goals count. Easy: 10 streams = 1 XP · Medium: 20 = 1 XP · Hard: 30 = 1 XP.'],
-  ['🏙️', 'District restored', 'Finish its Track Goals, Album Goals, and Reconnect Goal to bring the district online and earn +50 XP.'],
+  ['🏙️', 'District restored', 'Finish its Track Goals, Album Goals, and ReConnect Goal to bring the district online and earn +50 XP.'],
   ['🚨', 'Red Zone pool', 'Stream at least 7 times during the event to qualify. If the network defuses it, the displayed XP pool is divided among every qualified agent.'],
 ]
 

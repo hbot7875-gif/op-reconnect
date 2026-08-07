@@ -40,7 +40,7 @@ export function renderAuth(container, onAuthed) {
   // inputs sitting on top of it. Plain page background instead.
   wrap.appendChild(ambientToggle('audio/weather-ambient.mp3'))
 
-  wrap.appendChild(el('div', 'eyebrow', 'OP: RECONNECT'))
+  wrap.appendChild(el('div', 'eyebrow', 'OP: ReConnect'))
   wrap.appendChild(el('h1', 'title-sm', 'The network needs agents'))
   wrap.appendChild(el('p', 'muted auth-lede',
     'This is a new season with new agent files. Old numbers from the last mission don\'t work here — make a fresh one.'))

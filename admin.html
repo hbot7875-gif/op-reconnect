@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Op: Reconnect — Admin</title>
+<title>OP: ReConnect — Admin</title>
 <meta name="robots" content="noindex, nofollow">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -268,7 +268,7 @@
 <div class="adm-nav"><a href="game.html">← Back to the game</a> <span>&middot;</span> <a href="candy-star-admin.html">Candy Star admin →</a></div>
 
 <div class="adm-head">
-  <span class="eyebrow">OP: RECONNECT — ADMIN</span>
+  <span class="eyebrow">OP: ReConnect — ADMIN</span>
   <h1>🛰️ Command Panel</h1>
   <p class="muted">Site-owner tools: launch and monitor Red Zone events, broadcast announcements straight into
     every agent's World screen, and look up an account for support. Not part of the player-facing game —
@@ -415,8 +415,8 @@
       </section>
 
       <section class="adm-card">
-        <h3 style="margin:0 0 4px;">Reconnect goals <span class="muted" id="goalsReconnectListDistrict" style="font-weight:400;"></span></h3>
-        <p class="muted" style="margin-bottom:12px;">The 3rd restoration goal. A district can carry several flavors at once — each agent who starts it gets ONE picked at random, so two agents restoring the same district can land on different reconnect missions.</p>
+        <h3 style="margin:0 0 4px;">ReConnect goals <span class="muted" id="goalsReconnectListDistrict" style="font-weight:400;"></span></h3>
+        <p class="muted" style="margin-bottom:12px;">The 3rd restoration goal. A district can carry several flavors at once — each agent who starts it gets ONE picked at random, so two agents restoring the same district can land on different ReConnect Missions.</p>
         <p class="adm-callout" id="goalNoTrackWarning" hidden style="border-color:rgba(229,56,79,0.4);">⚠️ This district has no track goal yet — it can't be started until it has at least one.</p>
         <div id="goalsReconnectList" class="adm-list"><div class="adm-empty">Not loaded yet.</div></div>
       </section>
@@ -458,7 +458,7 @@
       </section>
 
       <section class="adm-card">
-        <h3 style="margin:0 0 10px;">Add a reconnect goal</h3>
+        <h3 style="margin:0 0 10px;">Add a ReConnect goal</h3>
         <p class="muted" id="goalReconnectDistrictNote" style="margin-bottom:10px;"></p>
         <label class="adm-field"><span>Flavor</span>
           <select id="goalReconnectVariant" class="ob-input">
@@ -489,7 +489,7 @@
           <label class="adm-field"><span>Agents required</span>
             <input id="goalReconnectRequired" class="ob-input" type="number" min="2" value="2"></label>
         </div>
-        <button class="btn btn-primary adm-block adm-mutate-btn" id="btnAddReconnectGoal" type="button" style="margin-top:10px;">+ Add reconnect goal</button>
+        <button class="btn btn-primary adm-block adm-mutate-btn" id="btnAddReconnectGoal" type="button" style="margin-top:10px;">+ Add ReConnect goal</button>
       </section>
 
       <div id="goalsOut" class="adm-out"></div>
@@ -970,8 +970,8 @@ function renderGoalLists() {
     ? goalSectionHtml(albums, 'album', albumInactiveOpen, 'No active album goals for this district.')
     : `<div class="adm-empty">No album goals assigned to this district yet.</div>`
   $('goalsReconnectList').innerHTML = reconnects.length
-    ? goalSectionHtml(reconnects, 'reconnect', reconnectInactiveOpen, 'No active reconnect goals for this district.')
-    : `<div class="adm-empty">No reconnect goals assigned to this district yet.</div>`
+    ? goalSectionHtml(reconnects, 'reconnect', reconnectInactiveOpen, 'No active ReConnect goals for this district.')
+    : `<div class="adm-empty">No ReConnect goals assigned to this district yet.</div>`
   // A district with reconnect/album goals but no track goal can never be
   // started (startDistrict requires at least one track goal) — surface
   // that before it's a live surprise, matching handlers.ts's own check.
