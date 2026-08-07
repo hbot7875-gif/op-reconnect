@@ -822,6 +822,71 @@
       letter-spacing: 2px;
       color: var(--text-ghost);
     }
+
+    /* ── MOON STATION — police-check terminal ── */
+    .botz-moon-toggle {
+      width: 100%;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      color: var(--text-ghost);
+      font-family: var(--font-mono);
+      font-size: 0.575rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      padding: 10px 12px;
+      cursor: pointer;
+      text-align: left;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .botz-moon-toggle:hover { border-color: var(--red-border); color: var(--text-secondary); }
+    .botz-moon-section { margin-top: 8px; }
+    .botz-moon-error {
+      font-family: var(--font-mono); font-size: 0.55rem; letter-spacing: 0.5px;
+      color: var(--fail); padding: 8px 0 0;
+    }
+    .botz-moon-summary {
+      font-family: var(--font-mono); font-size: 0.6rem; letter-spacing: 0.5px;
+      color: var(--text-secondary); line-height: 1.7; margin-bottom: 8px;
+    }
+    .botz-moon-summary b { color: var(--text-primary); }
+    .botz-moon-flag-count { color: var(--fail); font-weight: 700; }
+    .botz-moon-verdict { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+    .botz-moon-verdict button { padding: 6px 12px; font-size: 0.55rem; }
+    .botz-moon-verdict-active-pass { background: var(--green-soft); border-color: var(--green-border) !important; color: var(--green) !important; }
+    .botz-moon-verdict-active-fail { background: rgba(255,59,92,0.1); border-color: rgba(255,59,92,0.3) !important; color: var(--fail) !important; }
+    .botz-moon-verdict-note {
+      font-family: var(--font-mono); font-size: 0.48rem; letter-spacing: 0.5px;
+      color: var(--text-ghost); text-transform: uppercase;
+    }
+    /* A flagged row gets the same red accenting as everything else that
+       needs attention (Red Zone breach, sync errors) — never a color used
+       for anything routine, so it reads as "look at this" on sight. */
+    .botz-recent-row.botz-moon-flagged { border-color: rgba(255,59,92,0.3); background: rgba(255,59,92,0.04); }
+    .botz-moon-flag {
+      font-family: var(--font-mono); font-size: 0.45rem; font-weight: 800;
+      letter-spacing: 1px; text-transform: uppercase; padding: 2px 6px;
+      border-radius: 20px; background: rgba(255,59,92,0.12); color: var(--fail);
+      border: 1px solid rgba(255,59,92,0.25);
+    }
+    /* Alt-account warning — same red family as a flagged track row, but its
+       own block since it's about the ACCOUNT, not any one stream. */
+    .botz-moon-alt-warn {
+      margin-bottom: 10px; padding: 10px 12px;
+      background: rgba(255,59,92,0.06); border: 1px solid rgba(255,59,92,0.25);
+      border-radius: var(--radius-md);
+      font-family: var(--font-mono); font-size: 0.58rem; letter-spacing: 0.5px;
+      color: var(--text-secondary); line-height: 1.7;
+    }
+    .botz-moon-alt-warn b { color: var(--fail); }
+    .botz-moon-scan-group {
+      margin-top: 8px; padding: 10px 12px;
+      background: rgba(255,59,92,0.04); border: 1px solid rgba(255,59,92,0.2);
+      border-radius: var(--radius-md);
+      font-family: var(--font-mono); font-size: 0.58rem; letter-spacing: 0.5px;
+      color: var(--text-secondary); line-height: 1.7;
+    }
+    .botz-moon-scan-group b { color: var(--fail); }
   </style>
   <script>
     // Apply the saved theme before first paint — avoids a flash of the wrong
@@ -951,6 +1016,47 @@
     <div class="botz-section-label">Recent Jams (Last 24h)</div>
     <div class="botz-row-list" id="recentList">
       <div class="botz-loading"><div class="botz-spinner"></div>Loading...</div>
+    </div>
+  </div>
+
+  <!-- MOON STATION — admin police-check terminal. Gated behind the same
+       admin key admin.html/candy-star-admin.html already use (rc_admin_key
+       in localStorage), so unlocking one unlocks this too. Reads an
+       agent's real recent tracks straight off this project's own backend —
+       BOTZ's answer to the old site's Police Terminal, which only ever
+       linked out to a public Last.fm page for someone to read by hand. -->
+  <div style="margin:16px 16px 0;">
+    <button type="button" class="botz-moon-toggle" id="moonToggle" onclick="moonToggleOpen()">🌙 Moon Station — Police Check</button>
+    <div class="botz-moon-section" id="moonStation" style="display:none;">
+      <div id="moonLocked">
+        <div style="display:flex; gap:6px; margin-top:8px;">
+          <input id="moonAdminKey" class="botz-date-input" type="password" placeholder="Admin key (SYNC_ADMIN_KEY)" autocomplete="off" onkeydown="if(event.key==='Enter') moonUnlock()">
+          <button type="button" class="btn-outline" id="moonUnlockBtn" onclick="moonUnlock()">Unlock</button>
+        </div>
+        <div class="botz-moon-error" id="moonKeyError" style="display:none;"></div>
+      </div>
+      <div id="moonUnlocked" style="display:none;">
+        <div style="display:flex; gap:6px; margin:10px 0;">
+          <input id="moonQuery" class="botz-date-input" placeholder="Agent number or handle" onkeydown="if(event.key==='Enter') moonCheck()">
+          <select id="moonDays" class="botz-date-input" style="flex:none; width:70px;">
+            <option value="1">1d</option>
+            <option value="3">3d</option>
+            <option value="7" selected>7d</option>
+            <option value="14">14d</option>
+            <option value="30">30d</option>
+          </select>
+          <button type="button" class="btn-outline" onclick="moonCheck()">Check</button>
+        </div>
+        <div id="moonResult"></div>
+
+        <!-- Alt-account scan — every group of 2+ agents sharing one
+             ListenBrainz/stats.fm/Musicat identity, roster-wide. The
+             per-agent check above already flags this for whoever you look
+             up; this finds it proactively, before you'd know to suspect
+             anyone. -->
+        <button type="button" class="btn-ghost" style="width:100%; margin-top:14px;" onclick="moonScanAlts()">🔗 Scan for shared accounts</button>
+        <div id="moonScanResult"></div>
+      </div>
     </div>
   </div>
 

@@ -18,6 +18,7 @@ import { el, esc, toast, setState, showOverlay, hideOverlay } from './state.js'
 import { getScreen, goWorld, goResources, goSettings, goCandyStar, goRanking } from './router.js'
 import { getAgentNo } from './session.js'
 import { BADGE_CATALOG, equippedBadge } from './badges.js'
+import { openMoonStation } from './settings-streams.js'
 
 /** { multiplier, minsLeft } while state.player.boost is live, else null. */
 function activeBoost(boost) {
@@ -238,6 +239,11 @@ const TABS = [
     sel: (here) => here === 'candystar' },
   { key: 'botz', icon: '📻', label: 'BOTZ',
     href: () => 'botz.html' + (getAgentNo() ? `?agent=${encodeURIComponent(getAgentNo())}` : '') },
+  // A sheet, not a screen — nothing to navigate to, so onClick opens it
+  // straight over whichever screen is already up rather than pushing a
+  // router state that has nowhere real to point. Never shows as .sel for
+  // the same reason BOTZ's <a> never does: there's no "here" for it to be.
+  { key: 'moonstation', icon: '🚨', label: 'Moon', onClick: () => openMoonStation() },
   { key: 'ranking', icon: '🏆', label: 'Ranks', go: goRanking,
     sel: (here) => here === 'ranking' },
   { key: 'settings', icon: '⚙️', label: 'Settings', go: goSettings,
@@ -255,17 +261,22 @@ export function renderTabbar(container, state) {
     const isSel = t.sel ? t.sel(here) : false
     const tag = t.href ? 'a' : 'button'
     const attrs = t.href ? ` href="${esc(t.href())}"` : ' type="button"'
+    // The police beacon spins regardless of whether anything's actually
+    // flagged (see moonStationSheet's own comment) — it's what tells you
+    // this tab is different from the rest, not a live status readout.
+    const icoClass = t.key === 'moonstation' ? 'hud-tab-ico hud-tab-beacon' : 'hud-tab-ico'
     return `<${tag} class="hud-tab${isSel ? ' sel' : ''}" data-tab="${t.key}" title="${esc(t.label)}"${attrs}>
-      <span class="hud-tab-ico" aria-hidden="true">${t.icon}</span>
+      <span class="${icoClass}" aria-hidden="true">${t.icon}</span>
       <span class="hud-tab-lbl">${esc(t.label)}</span>
     </${tag}>`
   }).join('')
   container.innerHTML = `<div class="hud-tabs">${tabsHtml}</div>`
 
   for (const t of TABS) {
-    if (!t.go) continue
+    if (!t.go && !t.onClick) continue
     const node = container.querySelector(`[data-tab="${t.key}"]`)
-    if (!node.classList.contains('sel')) node.onclick = (e) => t.go({ x: e.clientX, y: e.clientY })
+    if (node.classList.contains('sel')) continue
+    node.onclick = t.go ? (e) => t.go({ x: e.clientX, y: e.clientY }) : () => t.onClick()
   }
 }
 

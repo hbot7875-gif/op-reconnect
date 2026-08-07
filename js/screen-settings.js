@@ -14,7 +14,7 @@
 import { call } from './api.js'
 import { el, esc, toast, showOverlay, hideOverlay, getState, setState } from './state.js'
 import { getAgentNo, getSession, setSession, setToken, clearSession } from './session.js'
-import { openStreamSource, openPin, openSignalLog, sourceName, uplinkBroken } from './settings-streams.js'
+import { openStreamSource, openPin, openSignalLog, openMoonStation, sourceName, uplinkBroken } from './settings-streams.js'
 import { openModeSheet } from './ui-hud.js'
 import { agentManualSheet } from './agent-manual.js'
 
@@ -140,6 +140,11 @@ function paintSections(body, state) {
       icon: '🔒', name: 'Change password', value: '',
       body: 'Signs out every other device.',
       onClick: () => showOverlay(passwordSheet()),
+    },
+    {
+      icon: '🚨', name: 'Moon Station', value: '',
+      body: 'The same repeat/too-fast check HT runs, and whether your linked identity shows up on another agent file. Also on the tab bar.',
+      onClick: () => openMoonStation(),
     },
     {
       icon: '⏻', name: 'Sign out', value: '',

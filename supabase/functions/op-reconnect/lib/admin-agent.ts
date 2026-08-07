@@ -5,9 +5,11 @@
 // trusting a caller's own session.
 
 import type { SupabaseDB } from './config.ts'
-import { loadContent, rankFor } from './config.ts'
+import { loadContent, rankFor, limits } from './config.ts'
 import { totalXp } from './derive.ts'
 import { levelFor } from './leveling.ts'
+import { fetchStreamRows } from './streams.ts'
+import { flagStreamRows, findPossibleAlts, modesByAgentNo, IDENTITY_FIELDS } from './police-check.ts'
 
 /** j***@gmail.com — enough to confirm "yes that's their address" without
  *  displaying it in full. This is sensitive, support-only data. */
@@ -36,6 +38,20 @@ function uplinkBroken(agent: any): boolean {
   return true
 }
 
+/** Shared by every admin tool that looks an agent up by whatever an admin
+ *  happens to have on hand — an AGENT### number or a handle. Pulled out of
+ *  adminGetAgent so adminGetAgentTracks doesn't duplicate it. */
+async function findAgentByQuery(supabase: SupabaseDB, rawQuery: string): Promise<any | null> {
+  const q = rawQuery.trim()
+  if (!q) return null
+  if (/^AGENT\d+$/i.test(q)) {
+    const { data } = await supabase.from('rc_agents').select('*').eq('agent_no', q.toUpperCase()).maybeSingle()
+    if (data) return data
+  }
+  const { data } = await supabase.from('rc_agents').select('*').ilike('handle', q).maybeSingle()
+  return data || null
+}
+
 /** Admin: look up one agent by handle or agent number for support purposes.
  *  Returns enough to actually diagnose "why isn't this working for them" —
  *  account basics, level/XP/rank, which stream source is configured (or
@@ -44,15 +60,7 @@ export async function adminGetAgent(supabase: SupabaseDB, params: any) {
   const q = String(params.query || params.handle || params.agentNo || '').trim()
   if (!q) return { success: false, error: 'query_required' }
 
-  let agent: any = null
-  if (/^AGENT\d+$/i.test(q)) {
-    const { data } = await supabase.from('rc_agents').select('*').eq('agent_no', q.toUpperCase()).maybeSingle()
-    agent = data
-  }
-  if (!agent) {
-    const { data } = await supabase.from('rc_agents').select('*').ilike('handle', q).maybeSingle()
-    agent = data
-  }
+  const agent = await findAgentByQuery(supabase, q)
   if (!agent) return { success: false, error: 'agent_not_found' }
 
   const { data: player } = await supabase.from('rc_players').select('*').eq('agent_no', agent.agent_no).maybeSingle()
@@ -109,6 +117,107 @@ export async function adminGetAgent(supabase: SupabaseDB, params: any) {
       uplinkBroken: uplinkBroken(agent),
       progress,
     },
+  }
+}
+
+/** Admin: every group of 2+ agents sharing one external listening identity,
+ *  across the whole roster — the proactive counterpart to findPossibleAlts
+ *  above, for "who's worth a closer look" instead of "check this one agent
+ *  I already suspect." One full-table read of the three identity columns,
+ *  grouped in memory — fine at this game's scale, and avoids needing a raw
+ *  SQL GROUP BY/HAVING through the client. */
+export async function adminScanAltAccounts(supabase: SupabaseDB, _params: any) {
+  const { data: agents, error } = await supabase.from('rc_agents')
+    .select('agent_no, handle, lb_username, statsfm_username, musicat_public_id')
+  if (error) return { success: false, error: error.message }
+
+  const groups: { via: string; value: string; agents: { agentNo: string; handle: string }[] }[] = []
+  for (const f of IDENTITY_FIELDS) {
+    const byValue = new Map<string, { agentNo: string; handle: string }[]>()
+    for (const a of agents || []) {
+      const raw = (a as any)[f.col]
+      const key = raw ? String(raw).trim().toLowerCase() : ''
+      if (!key) continue
+      const list = byValue.get(key) || []
+      list.push({ agentNo: a.agent_no, handle: a.handle })
+      byValue.set(key, list)
+    }
+    for (const [value, list] of byValue) {
+      if (list.length > 1) groups.push({ via: f.label, value, agents: list })
+    }
+  }
+
+  // Same corroborating-evidence use as findPossibleAlts's mode — one query
+  // for every agent across every group instead of one per group.
+  const allAgentNos = [...new Set(groups.flatMap((g) => g.agents.map((a) => a.agentNo)))]
+  const modes = await modesByAgentNo(supabase, allAgentNos)
+  const groupsWithMode = groups.map((g) => ({
+    ...g,
+    agents: g.agents.map((a) => ({ ...a, mode: modes.get(a.agentNo) || null })),
+  }))
+
+  return { success: true, groupCount: groupsWithMode.length, groups: groupsWithMode }
+}
+
+/** Admin: one agent's recent listening history, straight off whichever
+ *  source they're configured on — the same fetchStreamRows derive.ts's
+ *  daily rollup already uses, just called for an arbitrary agent instead of
+ *  the caller's own. This is the "Moon Station" police-check tool's raw
+ *  material — BOTZ's answer to the old site's Police Terminal, which only
+ *  ever linked out to an agent's public Last.fm page for a human to read.
+ *  op-reconnect's streams already live server-side, so this shows them
+ *  directly instead of sending a reviewer somewhere else to look.
+ *
+ *  Two lightweight, timing-only flags get attached per row, since a
+ *  scrobble carries no play-duration or skip data to check against:
+ *  `repeat` (the same track immediately again) and `too_fast` (a gap to the
+ *  previous play too short for any real, un-skipped listen). Neither one
+ *  decides pass/fail — that stays a human call. This just makes the
+ *  obvious violations easy to spot instead of reading a bare timeline.
+ *
+ *  Also runs findPossibleAlts alongside the track fetch — one timing-based
+ *  check (is THIS agent's own history clean) and one identity-based check
+ *  (is this agent secretly the same person as another one) covering two
+ *  different ways "PL rules" get broken, in the one call a reviewer makes. */
+export async function adminGetAgentTracks(supabase: SupabaseDB, params: any) {
+  const q = String(params.query || params.handle || params.agentNo || '').trim()
+  if (!q) return { success: false, error: 'query_required' }
+
+  const agent = await findAgentByQuery(supabase, q)
+  if (!agent) return { success: false, error: 'agent_not_found' }
+
+  const days = Math.max(1, Math.min(30, Number(params.days) || 7))
+  const toTs = Math.floor(Date.now() / 1000)
+  const fromTs = toTs - days * 86400
+
+  const content = await loadContent(supabase)
+  const lim = limits(content)
+  const [rows, possibleAlts, playerRow] = await Promise.all([
+    fetchStreamRows(supabase, {
+      agent_no: agent.agent_no,
+      lb_username: agent.lb_username,
+      stream_source_preference: agent.stream_source_preference,
+      statsfm_username: agent.statsfm_username,
+      musicat_public_id: agent.musicat_public_id,
+    }, fromTs, toTs, lim.lbMaxPages),
+    findPossibleAlts(supabase, agent),
+    // This agent's own mode, so a reviewer can compare it against each
+    // alt's mode inline instead of cross-referencing two separate lookups.
+    supabase.from('rc_players').select('mode').eq('agent_no', agent.agent_no).maybeSingle(),
+  ])
+
+  const tracks = flagStreamRows(rows)
+
+  return {
+    success: true,
+    agent: { agentNo: agent.agent_no, handle: agent.handle, mode: playerRow?.data?.mode || null },
+    windowDays: days,
+    fromDate: new Date(fromTs * 1000).toISOString(),
+    toDate: new Date(toTs * 1000).toISOString(),
+    trackCount: tracks.length,
+    flaggedCount: tracks.filter((t) => t.flags.length > 0).length,
+    tracks,
+    possibleAlts,
   }
 }
 

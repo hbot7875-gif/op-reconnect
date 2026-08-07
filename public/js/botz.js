@@ -757,4 +757,181 @@ async function shareBotzSnapshot() {
 }
 window.shareBotzSnapshot = shareBotzSnapshot
 
+// ==================== MOON STATION (police check) ====================
+// BOTZ's answer to the old site's Police Terminal, which only ever linked
+// out to an agent's public Last.fm page for a human to read by hand.
+// op-reconnect's counted streams already live server-side (see
+// adminGetAgentTracks in supabase/functions/op-reconnect/lib/admin-agent.ts),
+// so this shows them directly instead of sending a reviewer somewhere else.
+//
+// Gate is the same shared admin key admin.html/candy-star-admin.html use
+// (rc_admin_key in localStorage) — unlocking one unlocks this too, one less
+// password for HT to juggle. Verifying it works the same way admin.html's
+// own gate does: no separate login action exists, so "checking the key"
+// just means making one real admin call and seeing whether it comes back
+// Unauthorized.
+const MOON_KEY_STORAGE = 'rc_admin_key' // shared with admin.html/candy-star-admin.html on purpose
+let moonLastResult = null   // last successful adminGetAgentTracks payload, so a verdict click can redraw without refetching
+const moonVerdicts = {}     // agentNo -> 'pass' | 'fail' — this session only, never sent anywhere (see the Persistence decision: lookup tool, not a scoring system)
+let moonTriedStoredKey = false
+
+function moonToggleOpen() {
+  const box = document.getElementById('moonStation')
+  const opening = box.style.display === 'none'
+  box.style.display = opening ? 'block' : 'none'
+  if (opening && !moonTriedStoredKey) {
+    moonTriedStoredKey = true
+    let saved = ''
+    try { saved = localStorage.getItem(MOON_KEY_STORAGE) || '' } catch (e) { /* unavailable */ }
+    // Silent try — a stale/rotated key just leaves the gate up, no alarming
+    // "rejected" flash for something the agent didn't just do (same call as
+    // admin.html's own tryStoredKey).
+    if (saved) {
+      document.getElementById('moonAdminKey').value = saved
+      moonUnlock({ silent: true })
+    }
+  }
+}
+
+async function moonUnlock(opts) {
+  const silent = !!(opts && opts.silent)
+  const key = document.getElementById('moonAdminKey').value.trim()
+  const errEl = document.getElementById('moonKeyError')
+  errEl.style.display = 'none'
+  if (!key) {
+    if (!silent) { errEl.textContent = 'Enter the admin key first.'; errEl.style.display = 'block' }
+    return
+  }
+  const btn = document.getElementById('moonUnlockBtn')
+  if (!silent) { btn.disabled = true; btn.textContent = 'CHECKING…' }
+  const res = await window.RCBotz.callAction('adminGetAgentTracks', { adminKey: key, query: 'AGENT000', days: 1 })
+  if (!silent) { btn.disabled = false; btn.textContent = 'Unlock' }
+  if (!res || !res.success) {
+    if (!silent) {
+      errEl.textContent = res && res.error === 'Unauthorized' ? 'Admin key rejected.' : ((res && res.error) || "Couldn't reach the backend — try again.")
+      errEl.style.display = 'block'
+    }
+    return
+  }
+  try { localStorage.setItem(MOON_KEY_STORAGE, key) } catch (e) { /* unavailable */ }
+  document.getElementById('moonLocked').style.display = 'none'
+  document.getElementById('moonUnlocked').style.display = 'block'
+}
+
+async function moonCheck() {
+  const query = document.getElementById('moonQuery').value.trim()
+  const days = document.getElementById('moonDays').value
+  const resultEl = document.getElementById('moonResult')
+  if (!query) { resultEl.innerHTML = '<div class="botz-empty">Enter an agent number or handle</div>'; return }
+  resultEl.innerHTML = '<div class="botz-loading"><div class="botz-spinner"></div>Pulling tracks…</div>'
+  let key = ''
+  try { key = localStorage.getItem(MOON_KEY_STORAGE) || '' } catch (e) { /* unavailable */ }
+  const res = await window.RCBotz.callAction('adminGetAgentTracks', { adminKey: key, query, days })
+  if (!res || !res.success) {
+    resultEl.innerHTML = `<div class="botz-empty">${esc((res && res.error) || 'Lookup failed')}</div>`
+    return
+  }
+  moonLastResult = res
+  moonRenderResult()
+}
+
+const MOON_FLAG_LABEL = { repeat: '🔁 repeat', too_fast: '⚡ too fast' }
+// Purely corroborating — matching modes prove nothing on their own, but
+// read as one more "these were set up the same way" alongside an already-
+// confirmed shared identity. Null means the agent registered but never
+// finished onboarding, so there's no mode to compare yet.
+function moonModeLabel(mode) {
+  return mode ? `mode: ${esc(mode)}` : 'mode: —'
+}
+
+function moonRenderResult() {
+  const res = moonLastResult
+  const resultEl = document.getElementById('moonResult')
+  if (!res) return
+  const agentNo = res.agent.agentNo
+  const verdict = moonVerdicts[agentNo] || null
+  const fromLabel = new Date(res.fromDate).toLocaleDateString()
+  const toLabel = new Date(res.toDate).toLocaleDateString()
+
+  const rows = res.tracks.length
+    ? res.tracks.map(t => {
+        const d = new Date(t.at)
+        const badges = (t.flags || []).map(f => `<span class="botz-moon-flag">${MOON_FLAG_LABEL[f] || esc(f)}</span>`).join('')
+        return `
+          <div class="botz-recent-row${(t.flags || []).length ? ' botz-moon-flagged' : ''}">
+            <div class="botz-recent-dot"></div>
+            <div class="botz-recent-info">
+              <div class="botz-recent-name">${esc(t.track || '—')}</div>
+              <div class="botz-recent-meta">${esc(t.artist || '')}</div>
+            </div>
+            <div class="botz-recent-right">
+              <div class="botz-recent-time">${d.toLocaleString()}</div>
+              ${badges}
+            </div>
+          </div>`
+      }).join('')
+    : '<div class="botz-empty">No streams in this window</div>'
+
+  const alts = res.possibleAlts || []
+  const altWarning = alts.length
+    ? `<div class="botz-moon-alt-warn">
+        <b>⚠ Possible alt account${alts.length === 1 ? '' : 's'}</b><br>
+        ${alts.map(a => `Same ${esc(a.via)} identity as <b>${esc(a.handle || a.agentNo)}</b> (${esc(a.agentNo)}) &middot; ${moonModeLabel(a.mode)}`).join('<br>')}
+      </div>`
+    : ''
+
+  resultEl.innerHTML = `
+    <div class="botz-moon-summary">
+      <b>${esc(res.agent.handle || agentNo)}</b> (${esc(agentNo)}) &middot; ${esc(fromLabel)} → ${esc(toLabel)}<br>
+      ${res.trackCount} track${res.trackCount === 1 ? '' : 's'} &middot;
+      <span class="${res.flaggedCount ? 'botz-moon-flag-count' : ''}">${res.flaggedCount} flagged</span> &middot;
+      ${moonModeLabel(res.agent.mode)}
+    </div>
+    ${altWarning}
+    <div class="botz-moon-verdict">
+      <button type="button" class="btn-outline${verdict === 'pass' ? ' botz-moon-verdict-active-pass' : ''}" onclick="moonSetVerdict('${esc(agentNo)}','pass')">✓ Pass</button>
+      <button type="button" class="btn-outline${verdict === 'fail' ? ' botz-moon-verdict-active-fail' : ''}" onclick="moonSetVerdict('${esc(agentNo)}','fail')">✗ Fail</button>
+      <span class="botz-moon-verdict-note">This session only — nothing is saved</span>
+    </div>
+    <div class="botz-row-list">${rows}</div>
+  `
+}
+
+function moonSetVerdict(agentNo, v) {
+  // A second click on the same verdict clears it, so "Pass" isn't a one-way door.
+  moonVerdicts[agentNo] = moonVerdicts[agentNo] === v ? null : v
+  moonRenderResult()
+}
+
+/** Roster-wide alt-account scan — every group of 2+ agents sharing one
+ *  ListenBrainz/stats.fm/Musicat identity, not just whoever's already been
+ *  checked individually. See adminScanAltAccounts in admin-agent.ts. */
+async function moonScanAlts() {
+  const el = document.getElementById('moonScanResult')
+  el.innerHTML = '<div class="botz-loading"><div class="botz-spinner"></div>Scanning roster…</div>'
+  let key = ''
+  try { key = localStorage.getItem(MOON_KEY_STORAGE) || '' } catch (e) { /* unavailable */ }
+  const res = await window.RCBotz.callAction('adminScanAltAccounts', { adminKey: key })
+  if (!res || !res.success) {
+    el.innerHTML = `<div class="botz-empty">${esc((res && res.error) || 'Scan failed')}</div>`
+    return
+  }
+  if (!res.groups.length) {
+    el.innerHTML = '<div class="botz-empty">No shared identities found</div>'
+    return
+  }
+  el.innerHTML = res.groups.map(g => `
+    <div class="botz-moon-scan-group">
+      <b>${esc(g.agents.length)} agents</b> share one ${esc(g.via)} identity:<br>
+      ${g.agents.map(a => `${esc(a.handle || a.agentNo)} (${esc(a.agentNo)}) &middot; ${moonModeLabel(a.mode)}`).join('<br>')}
+    </div>
+  `).join('')
+}
+
+window.moonToggleOpen = moonToggleOpen
+window.moonUnlock = moonUnlock
+window.moonCheck = moonCheck
+window.moonSetVerdict = moonSetVerdict
+window.moonScanAlts = moonScanAlts
+
 init()
