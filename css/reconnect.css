@@ -153,6 +153,17 @@ body {
   font-weight: 700; display: flex; align-items: center; justify-content: center; }
 .hud-streak { flex-shrink: 0; padding: 5px 8px; border-bottom: 1px solid rgba(217,173,95,.38);
   color: var(--gold); font-family: var(--mono); font-size: 10px; letter-spacing: .8px; }
+/* Manual "sync now" — same shape as the bell, purple instead of neutral so
+   it reads as an action, not a status indicator. */
+.hud-sync { flex-shrink: 0; width: 34px; height: 34px; display: flex; align-items: center;
+  justify-content: center; background: var(--panel); border: 1px solid var(--border); border-radius: 50%;
+  font-size: 14px; cursor: pointer; transition: transform 0.15s, border-color 0.15s, opacity 0.15s; }
+.hud-sync:hover:not(:disabled) { border-color: var(--purple-lt); transform: scale(1.05); }
+.hud-sync:active:not(:disabled) { transform: scale(0.95); }
+.hud-sync:disabled { opacity: 0.45; cursor: default; }
+.hud-sync.is-syncing { color: var(--purple-lt); border-color: var(--purple-lt); animation: hud-sync-spin 0.8s linear infinite; }
+@keyframes hud-sync-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .hud-sync.is-syncing { animation: none; } }
 
 .hud-xp { max-width: 620px; margin: 0 auto; padding: 7px var(--gut) 9px; display: flex; align-items: center; gap: 9px; }
 .xp-bar { flex: 1; height: 5px; border-radius: 3px; background: rgba(255,255,255,0.09); overflow: hidden; }
@@ -1232,6 +1243,12 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
    not competing with the primary "build the queue" action above it. */
 .queue-btn.is-quiet { background: var(--surface); border-color: var(--border); }
 .queue-btn.is-quiet:hover { background: var(--surface-2); border-color: var(--border-str); }
+/* Two days or fewer left on the district's deadline — same crimson signal
+   as .board-deadline.is-urgent, so the button and the banner above it never
+   disagree about how much trouble you're in. */
+.queue-btn.is-urgent { background: var(--crimson-soft); border-color: rgba(229,56,79,0.4); }
+.queue-btn.is-urgent:hover { border-color: var(--crimson); }
+.queue-btn.is-urgent i { color: var(--crimson); }
 
 .pl-sub { font-family: var(--mono); font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase;
   color: var(--purple-lt); margin-top: 6px; }
@@ -1254,6 +1271,21 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
    discipline note at the top of this file). Bolder gold + the icon alone
    carries "pay attention to this one first". */
 .pl-tag.priority { font-weight: 700; }
+
+/* ── daily pace (the part the old standalone 148 Protocol did that a plain
+   "what's owed" queue doesn't: turn daysLeft into a per-track rate) ── */
+.pl-pace { padding: 11px 13px; margin: 2px 0 14px; border-radius: var(--r);
+  background: var(--surface); border: 1px solid var(--border); }
+.pl-pace.is-urgent { background: var(--crimson-soft); border-color: rgba(229,56,79,0.4); }
+.pl-pace-head { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.5px;
+  text-transform: uppercase; color: var(--dim); }
+.pl-pace.is-urgent .pl-pace-head { color: var(--crimson); }
+.pl-pace-head b { color: var(--text); }
+.pl-pace.is-urgent .pl-pace-head b { color: var(--crimson); }
+.pl-pace-rows { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.pl-pace-row { display: flex; justify-content: space-between; gap: 10px;
+  font-size: 12.5px; color: var(--text); }
+.pl-pace-row b { font-family: var(--mono); font-size: 11px; color: var(--purple-lt); flex-shrink: 0; }
 
 .invite-body { margin: 4px 0 10px; }
 .invite-actions { display: flex; gap: 8px; }
@@ -1505,29 +1537,6 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 .stage-meter { flex: 1; height: 4px; background: rgba(255,255,255,0.14); border-radius: 3px; overflow: hidden; }
 .stage-meter-fill { height: 100%; border-radius: 3px; width: 0; background: var(--gold); transition: width 0.8s ease; }
 .stage.is-dark .stage-name { color: #bdb6cf; }
-
-/* "See it restored" — the scene runs at full power while the real numbers
-   below stay put, so the preview has to announce itself. */
-.stage-preview {
-  position: absolute; top: 12px; right: 12px;
-  pointer-events: auto;
-  padding: 6px 10px;
-  font-family: var(--mono); font-size: 9.5px; letter-spacing: 1.2px; text-transform: uppercase;
-  color: var(--purple-lt);
-  background: rgba(10, 8, 20, 0.66);
-  border: 1px solid rgba(139, 92, 246, 0.4);
-  border-radius: 999px;
-  cursor: pointer;
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
-}
-.stage-preview:hover { background: rgba(139, 92, 246, 0.22); color: #fff; }
-.stage-preview:focus-visible { outline: 2px solid var(--purple-lt); outline-offset: 2px; }
-.stage-preview[hidden] { display: none; }
-.stage.is-preview { box-shadow: inset 0 0 0 1px rgba(139, 92, 246, 0.45); }
-.stage.is-preview .stage-eyebrow { color: var(--gold); }
-.stage.is-preview .stage-preview { background: rgba(139, 92, 246, 0.3); border-color: var(--purple-lt); color: #fff; }
 
 /* ── mission board: one row per thing to stream ── */
 .board-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 20px 0 10px; }

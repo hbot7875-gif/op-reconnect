@@ -67,7 +67,7 @@ export function renderLandingMap(mount) {
     class: 'lm-art', viewBox: `0 0 ${CITY_W} ${CITY_H_ART}`, 'aria-hidden': 'true',
   })
   svg.appendChild(n('image', {
-    href: '../map/city-dark.webp', x: 0, y: 0,
+    href: 'map/city-dark.webp', x: 0, y: 0,
     width: CITY_W, height: CITY_H_ART, preserveAspectRatio: 'none',
   }))
   // ISLANDS[4] is the leafy park in the middle of the west bank, not a ward

@@ -8,7 +8,7 @@ import { openStreamSource, uplinkBroken } from './settings-streams.js'
 import { wardDisplayName, districtDisplayName } from './ward-tiles.js'
 
 const ERRORS = {
-  codename_invalid: 'Codenames are 3-24 letters or numbers — and can\'t be your agent number.',
+  codename_invalid: 'Codenames are 3-24 letters or numbers — and can\'t be your agent number or Instagram handle.',
   codename_taken: 'That one\'s taken. Try another.',
   already_joined: 'You\'re already in — reloading…',
 }
@@ -75,7 +75,7 @@ export function renderOnboarding(container, payload, agentNo, onJoined) {
   step2.append(
     el('div', 'eyebrow', 'IDENTITY SETUP'),
     el('h1', 'title-sm', esc(intro.welcome || 'Welcome, Agent.')),
-    el('p', 'muted', 'Pick a codename. Everyone sees this one, so don\'t use your agent number.'),
+    el('p', 'muted', 'Pick a codename. Everyone sees this one, so don\'t use your agent number or Instagram handle.'),
   )
   const input = el('input', 'ob-input')
   input.placeholder = 'Your codename'
