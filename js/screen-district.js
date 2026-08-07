@@ -20,10 +20,6 @@ let sceneFor = null
 // district already got its moment and never replay it.
 let celebratedFor = null
 let celebratedCellAward = null
-// "See it restored" — the scene runs at full power without touching the real
-// numbers. Module-level so the scene's progress getter, made once per mount,
-// reads the live value.
-let previewOn = false
 
 export function renderDistrictScreen(container, state, wardId, districtId) {
   const mapD = (state.map?.districts || []).find((d) => d.id === districtId)
@@ -33,7 +29,6 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
 
   if (sceneFor !== districtId) {
     if (teardown) { teardown(); teardown = null }
-    previewOn = false        // a new place starts on what's actually there
     container.innerHTML = ''
 
     const wrap = el('div', 'district-screen')
@@ -55,8 +50,7 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
       <div class="stage-bottom">
         <div class="stage-power"><span class="pw-val">0%</span><span class="pw-lbl">POWER</span></div>
         <div class="stage-meter"><div class="stage-meter-fill"></div></div>
-      </div>
-      <button type="button" class="stage-preview" hidden></button>`
+      </div>`
     stage.appendChild(ov)
     wrap.appendChild(stage)
     wrap.appendChild(el('div', 'board'))
@@ -67,7 +61,7 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
     teardown = mountScene(
       stage.querySelector('.stage-canvas'),
       districtId,
-      () => previewOn ? 1 : (isLiveActive ? districtFraction(window.__rcState?.activeDistrict) : (fixedFraction[mapD.status] ?? 0)),
+      () => isLiveActive ? districtFraction(window.__rcState?.activeDistrict) : (fixedFraction[mapD.status] ?? 0),
       () => window.__rcState?.bomb?.charge || 0,
       mapD.name,
       () => itemsAt(window.__rcState || state, districtId),
@@ -84,17 +78,7 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
   // The agent this place is named for, on the hero — not hidden until you finish.
   container.querySelector('.stage-echo').textContent = mapD.echoOf ? `👤 ${mapD.echoOf}` : ''
 
-  // Preview — see the place at full power, with whatever you've kept there,
-  // before you've finished it. The real numbers below never move; only the
-  // scene does, and the eyebrow says so.
-  const alreadyLit = mapD.status === 'restored' || mapD.status === 'centerpiece_lit'
-  if (alreadyLit) previewOn = false
-  const previewBtn = container.querySelector('.stage-preview')
-  previewBtn.hidden = alreadyLit
-  previewBtn.textContent = previewOn ? '← Back to now' : '✨ See it restored'
-  previewBtn.onclick = () => { previewOn = !previewOn; renderDistrictScreen(container, state, wardId, districtId) }
-  container.querySelector('.stage').classList.toggle('is-preview', previewOn)
-  container.querySelector('.stage-eyebrow').textContent = previewOn ? 'PREVIEW' : eyebrowText
+  container.querySelector('.stage-eyebrow').textContent = eyebrowText
 
   const board = container.querySelector('.board')
 
@@ -104,7 +88,7 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
     const pct = Math.round(frac * 100)
     container.querySelector('.pw-val').textContent = pct + '%'
     container.querySelector('.stage-meter-fill').style.width = pct + '%'
-    container.querySelector('.stage').classList.toggle('is-dark', pct < 34 && !previewOn)
+    container.querySelector('.stage').classList.toggle('is-dark', pct < 34)
     renderBoard(board, d)
     const cellAward = d.chargeCellProgress?.earnedNow || 0
     const cellAwardKey = `${d.id}:${d.chargeCellProgress?.earnedThisDistrict || 0}`
@@ -142,7 +126,7 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
   const pct = Math.round((mapD.status === 'restored' || mapD.status === 'centerpiece_lit' ? 100 : 0))
   container.querySelector('.pw-val').textContent = pct + '%'
   container.querySelector('.stage-meter-fill').style.width = pct + '%'
-  container.querySelector('.stage').classList.toggle('is-dark', pct < 34 && !previewOn)
+  container.querySelector('.stage').classList.toggle('is-dark', pct < 34)
 
   board.innerHTML = ''
   const card = el('div', 'card board-card')
