@@ -73,10 +73,10 @@ function sideMissionsPanel(mission) {
   const section = el('section', 'side-missions' + (mission.todayDone ? ' is-cleared' : ''))
   section.innerHTML = `
     <div class="side-mission-head">
-      <div><span class="side-mission-kicker">Daily survival protocol</span><h3>Side Missions</h3></div>
+      <div><span class="side-mission-kicker">Stabilize the BOTZ signal</span><h3>Signal Sweep</h3></div>
       <span class="side-mission-today">${mission.todayDone ? 'SECURED' : `${done}/${total} TODAY`}</span>
     </div>
-    <p class="side-mission-rule">Stream each track once today. Reach 20 each this week.</p>
+    <p class="side-mission-rule">Recover all four signals today. Stream each track once to protect the city.</p>
     <div class="side-mission-tracks"></div>
     <div class="side-mission-reward">${mission.todayDone
       ? `+${mission.xpOnComplete} XP secured today`
@@ -102,9 +102,9 @@ function sideMissionsPanel(mission) {
 function sideMissionSheet(mission, selectedId = null) {
   const sheet = el('div', 'sheet side-mission-sheet')
   sheet.append(
-    el('div', 'eyebrow', 'SIDE MISSIONS'),
-    el('h3', '', mission.todayDone ? 'Today is secured' : `${mission.todayDoneCount}/${mission.tracks.length} tracks secured`),
-    el('p', 'muted', `Play every survival track at least once each KST day. Each track also needs ${mission.weeklyRequired} streams this week.`),
+    el('div', 'eyebrow', 'SIGNAL SWEEP'),
+    el('h3', '', mission.todayDone ? 'BOTZ signal stabilized' : `${mission.todayDoneCount}/${mission.tracks.length} signals recovered`),
+    el('p', 'muted', `Stream each track once before midnight KST to protect the city signal. Each track also needs ${mission.weeklyRequired} streams this week.`),
   )
   const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
   for (const track of mission.tracks || []) {

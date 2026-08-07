@@ -13,7 +13,7 @@ const STEPS = [
 
 const XP_SOURCES = [
   ['🎵', 'Assigned goal streams', 'Only tracks listed in your active Track Goals and Album Goals count. Easy: 10 streams = 1 XP · Medium: 20 = 1 XP · Hard: 30 = 1 XP.'],
-  ['🛡️', 'Side Missions', "Stream Wild Flower, Don't Say You Love Me, Haegeum, and Killin' It Girl at least once each before midnight KST. Clearing all four earns +10 XP once that day; each also needs 20 streams for the week."],
+  ['📡', 'Signal Sweep', "BOTZ needs four signals to stay stable. Stream Wild Flower, Don't Say You Love Me, Haegeum, and Killin' It Girl once each before midnight KST. Recovering all four protects the city signal and earns +10 XP once that day; each track also needs 20 streams for the week."],
   ['🏙️', 'District restored', 'Finish its Track Goals, Album Goals, and ReConnect Goal to bring the district online and earn +50 XP.'],
   ['🚨', 'Red Zone pool', 'Stream at least 7 times during the event to qualify. If the network defuses it, the displayed XP pool is divided among every qualified agent.'],
 ]

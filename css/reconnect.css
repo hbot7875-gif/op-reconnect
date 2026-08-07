@@ -265,7 +265,7 @@ body {
    identical whether this is a plain block (phone) or a grid cell (desktop). */
 .world-map { display: flex; flex-direction: column; gap: 20px; }
 
-/* Side Missions are a survival checklist, not another dashboard card. The
+/* Signal Sweep is a mission checklist, not another dashboard card. The
    section uses dividers and live marks so it reads like a mission console. */
 .side-missions { padding: 18px 4px 16px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 .side-mission-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; }

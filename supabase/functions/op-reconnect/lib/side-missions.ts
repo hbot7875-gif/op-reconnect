@@ -1,5 +1,5 @@
-// Side Missions — the four-track daily survival loop carried forward from
-// Arirang Mission. One play of every track secures the day; each track also
+// Signal Sweep — the four-track daily signal-recovery loop carried forward
+// from Arirang Mission. One play of every track secures the day; each track also
 // has a 20-play weekly target. The daily clear replaces the retired Daily
 // Transmission reward and pays +10 XP once through the shared XP ledger.
 
