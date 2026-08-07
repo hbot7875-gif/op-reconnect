@@ -31,6 +31,7 @@ import {
 } from './lib/reconnect-missions.ts'
 import { submitReconnectPuzzleAnswer } from './lib/reconnect-puzzle.ts'
 import { getLeaderboard } from './lib/leaderboard.ts'
+import { setEquippedBadge } from './lib/badge-profile.ts'
 import { getMagicShop, buyWings, claimTicket } from './lib/magic-shop.ts'
 import { feedCharge, setAutoFeed, getAgentCharge } from './lib/agent-charge.ts'
 import { loadContent } from './lib/config.ts'
@@ -86,6 +87,7 @@ const ROUTES: Record<string, Route> = {
   useItem: { auth: 'agent', handler: (sb, p) => useItem(sb, p) },
   getSignalLog: { auth: 'agent', handler: (sb, p) => getSignalLog(sb, p) },
   getLeaderboard: { auth: 'agent', handler: (sb, p) => getLeaderboard(sb, p) },
+  setEquippedBadge: { auth: 'agent', handler: async (sb, p) => setEquippedBadge(sb, await loadContent(sb), p) },
   // BOTZ redesign Phase 2 — see lib/magic-shop.ts.
   getMagicShop: { auth: 'agent', handler: async (sb, p) => getMagicShop(sb, await loadContent(sb), p) },
   buyWings: { auth: 'agent', handler: async (sb, p) => buyWings(sb, await loadContent(sb), p) },

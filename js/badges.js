@@ -26,3 +26,13 @@ export const BADGE_CATALOG = [
   { id: 'xp:1000', icon: '💎', name: 'Signal Booster', desc: 'Earned 1,000 lifetime XP.', earned: (s) => (s.player?.xp || 0) >= 1000 },
   { id: 'xp:10000', icon: '👑', name: 'Network Legend', desc: 'Earned 10,000 lifetime XP.', earned: (s) => (s.player?.xp || 0) >= 10000 },
 ]
+
+export function badgeById(id) {
+  return BADGE_CATALOG.find((b) => b.id === id) || null
+}
+
+export function equippedBadge(state) {
+  const chosen = badgeById(state?.player?.equippedBadgeId)
+  if (chosen?.earned(state)) return chosen
+  return [...BADGE_CATALOG].reverse().find((b) => b.earned(state)) || null
+}

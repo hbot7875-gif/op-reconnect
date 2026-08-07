@@ -9,6 +9,7 @@
 import { call } from './api.js'
 import { el, esc } from './state.js'
 import { getAgentNo } from './session.js'
+import { badgeById } from './badges.js'
 
 const TABS = [
   { key: 'all', label: 'All' },
@@ -70,11 +71,13 @@ function paintList(body, agents, state) {
   const list = el('div', 'rank-list')
   rows.forEach((a, i) => {
     const place = i + 1
+    const badge = badgeById(a.equippedBadgeId)
     const row = el('div', 'rank-row'
       + (a.codename === mine ? ' is-me' : '')
       + (place <= 3 ? ' is-top' : ''))
     row.innerHTML = `
       <span class="rank-place">${place <= 3 ? MEDAL[place] : place}</span>
+      <span class="rank-agent-icon">${badge ? badge.icon : '⟭⟬'}</span>
       <span class="rank-main">
         <span class="rank-name">${esc(a.codename)}</span>
         <span class="rank-sub">Level ${a.level}${activeTab === 'all' ? ` · ${esc(MODE_LABEL[a.mode] || a.mode)}` : ''}</span>

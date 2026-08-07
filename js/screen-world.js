@@ -40,29 +40,54 @@ export function renderWorld(container, state) {
   const bc = broadcastCards(state)
   if (bc.children.length) wrap.appendChild(bc)
   if (b.defuse) wrap.appendChild(redZoneCard(state))
-  wrap.appendChild(opCard(state))
-  wrap.appendChild(coreBlock(state))
-  wrap.appendChild(coreFeed(state))
-  if (state.eraTimeline) wrap.appendChild(eraTimelineStrip(state.eraTimeline))
-  wrap.appendChild(statusStrip(state))
-  // The map's heading and its tiles travel together: on desktop the whole
-  // group moves into the second column as ONE cell. Kept as two separate
-  // children, each landed in its own grid row, and the row heights are set by
-  // the much taller core block on the left — which opened a dead gap between
-  // "Operations map" and the first tile.
-  const map = el('div', 'world-map')
-  map.appendChild(mapHead(state))
-  // City Recovery used to sit after the map (inside mapField, as the first
-  // thing in the ward-tile stack) — reads backward: you'd inspect the whole
-  // map before finding out what it's a map OF. It's the map's own header
-  // stat now, above the plan itself.
-  const wards = state.map?.wards || []
-  if (wards.length) map.appendChild(glanceStrip(wards, state.map?.districts || []))
-  map.appendChild(cityPlan(state))
-  map.appendChild(mapField(state))
-  wrap.appendChild(map)
+
+  // One playable command scene instead of a dashboard stack. The map is the
+  // world; personal charge, recovery and the current mission sit on its edge
+  // as HUD prompts. Ward tiles, status cards and the Era strip were duplicate
+  // summaries of information already reachable by tapping the map/Bomb.
+  const command = el('section', 'command-scene')
+  command.appendChild(cityPlan(state))
+  command.appendChild(recoverySignal(state))
+  const core = el('div', 'command-core')
+  core.appendChild(coreBlock(state))
+  command.appendChild(core)
+  const mission = opCard(state)
+  mission.classList.add('mission-beacon')
+  command.appendChild(mission)
+  command.appendChild(commandTools(state))
+  wrap.appendChild(command)
 
   container.appendChild(wrap)
+}
+
+function recoverySignal(state) {
+  const wards = state.map?.wards || []
+  const total = wards.reduce((sum, w) => sum + (w.totalCount || 0), 0)
+  const done = wards.reduce((sum, w) => sum + (w.restoredCount || 0), 0)
+  const pct = total ? Math.round((done / total) * 100) : 0
+  return el('div', 'recovery-signal', `
+    <span class="recovery-orbit" style="--recovery:${pct * 3.6}deg"><b>${pct}%</b></span>
+    <span class="recovery-copy"><b>City recovery</b><i>${done}/${total} online</i></span>
+  `)
+}
+
+function commandTools(state) {
+  const button = el('button', 'command-tools', '•••')
+  button.type = 'button'
+  button.setAttribute('aria-label', 'City tools')
+  button.onclick = () => {
+    const sheet = el('div', 'sheet command-tool-sheet')
+    sheet.append(el('div', 'eyebrow', 'CITY TOOLS'), el('h3', '', 'What do you need?'))
+    const share = el('button', 'btn btn-ghost', '📤 Share city progress')
+    share.onclick = () => showOverlay(openShare(state))
+    const find = el('button', 'btn btn-ghost', '🔍 Find an agent or district')
+    find.onclick = () => { hideOverlay(); openFinder(state) }
+    const close = el('button', 'btn btn-ghost', 'Close')
+    close.onclick = hideOverlay
+    sheet.append(share, find, close)
+    showOverlay(sheet)
+  }
+  return button
 }
 
 /* ── The map ────────────────────────────────────────────────────────────
@@ -406,28 +431,22 @@ function opCard(state) {
     // so drop the "where" line whenever it would only repeat the title back
     // (kept general: any ward whose centrepiece shares its name hits the
     // same thing).
-    const wardName = wardDisplayName(ward)
     const name = districtDisplayName(active)
-    const echo = active.echoOf ? `kept by ${esc(active.echoOf)}` : ''
-    const where = wardName === name ? echo
-      : [esc(wardName), echo].filter(Boolean).join(' &middot; ')
 
     card.classList.add('is-live')
     card.innerHTML = `
-      <div class="op-top">
-        <span class="op-eyebrow">Now restoring</span>
-        <span class="op-badge">${pct}%</span>
-      </div>
+      <div class="op-top"><span class="op-eyebrow">Now restoring</span></div>
       <div class="op-name">${esc(name)}</div>
-      ${where ? `<div class="op-where">${where}</div>` : ''}
       <div class="op-meter"><div class="op-meter-fill" style="width:${pct}%"></div></div>
-      <div class="op-note">${left === null ? 'Loading&hellip;'
-        : left === 0 ? "All done — go switch the lights on"
-        : `${left} more to go and it's back online`}</div>
+      <div class="op-foot">
+        <span class="op-status">${left === null ? 'Loading&hellip;'
+          : left === 0 ? 'Ready to restore'
+          : `${pct}% &middot; ${left} goal${left === 1 ? '' : 's'} left`}</span>
+        <button class="op-enter" type="button">${left === 0 ? 'Finish' : 'Enter'} <i>→</i></button>
+      </div>
     `
-    const go = el('button', 'btn btn-primary op-go', left === 0 ? 'Finish it' : `Enter ${esc(name)}`)
+    const go = card.querySelector('.op-enter')
     go.onclick = (e) => goDistrict(active.wardId, active.id, { x: e.clientX, y: e.clientY })
-    card.appendChild(go)
     return card
   }
 

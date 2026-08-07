@@ -108,7 +108,7 @@
         streak: { current: 12 }, mode: 'medium',
         // Wallet balances the redesigned Pack screen (screen-resources.js)
         // reads directly off state.player.
-        chargeCells: 12, wings: 3, streakFreezeCharges: 2, tickets: 0,
+        chargeCells: 12, wings: 3, streakFreezeCharges: 2, tickets: 0, equippedBadgeId: 'level:5',
       },
       bomb: { charge: 0.62, defuse: null, brownout: false, multiplier: 1.5, communityStreams: 184203 },
       // Lifetime totals — only ever go up. The edge function should send these.
@@ -245,6 +245,10 @@
         if (body.action === 'setAutoFeed') {
           AGENT_CHARGE.autoFeed = !!body.on
           return { json: async () => ({ success: true, autoFeed: AGENT_CHARGE.autoFeed }) }
+        }
+        if (body.action === 'setEquippedBadge') {
+          STATE.player.equippedBadgeId = body.badgeId
+          return { json: async () => ({ success: true, equippedBadgeId: body.badgeId }) }
         }
         // Collectibles: persist against the mock STATE so moves survive a re-render.
         if (body.action === 'placeItem') {

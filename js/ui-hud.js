@@ -17,7 +17,7 @@ import { call } from './api.js'
 import { el, esc, toast, setState, showOverlay, hideOverlay } from './state.js'
 import { getScreen, goWorld, goResources, goSettings, goCandyStar, goRanking } from './router.js'
 import { getAgentNo } from './session.js'
-import { BADGE_CATALOG } from './badges.js'
+import { BADGE_CATALOG, equippedBadge } from './badges.js'
 
 /** { multiplier, minsLeft } while state.player.boost is live, else null. */
 function activeBoost(boost) {
@@ -33,33 +33,31 @@ export function renderHud(container, state) {
   const pct = Math.max(0, Math.min(100, Math.round((lvl.xpIntoLevel / Math.max(1, lvl.xpForNextLevel)) * 100)))
   const xpLeft = Math.max(0, lvl.xpForNextLevel - lvl.xpIntoLevel)
   const boost = activeBoost(p.boost)
-  const streakLabel = p.streak.current > 0 ? `🔥 ${p.streak.current}-day streak` : 'No streak yet'
+  const agentBadge = equippedBadge(state)
+  const streakLabel = p.streak.current > 0 ? `🔥 ${p.streak.current}D` : '○ 0D'
 
   const invites = state.invites || []
 
   container.innerHTML = `
     <div class="hud-inner">
       <div class="hud-row">
-        <div class="hud-code">${esc(p.codename)}</div>
+        <button class="hud-identity" id="levelPill" type="button" title="Open Agent Dossier">
+          <span class="hud-crest${agentBadge ? ' has-badge' : ''}" aria-hidden="true"><i></i><b>${agentBadge ? agentBadge.icon : '⟭⟬'}</b></span>
+          <span class="hud-who">
+            <span class="hud-code">${esc(p.codename)}</span>
+            <span class="hud-meta"><em>${esc(p.rank.title)}</em><i>·</i><b>LV ${lvl.level}</b></span>
+          </span>
+        </button>
+        <div class="hud-streak" title="${p.streak.current} days in a row">${streakLabel}</div>
         <button class="hud-bell" id="bellBtn" type="button" title="Invites"
           aria-label="${invites.length ? `${invites.length} pending invite${invites.length === 1 ? '' : 's'}` : 'No pending invites'}">
           🔔${invites.length ? `<span class="hud-bell-count">${invites.length}</span>` : ''}
         </button>
-        <button class="hud-level" id="levelPill" type="button" title="View progress">
-          <span class="hlv-lv">LV</span><span class="hlv-num">${lvl.level}</span>
-        </button>
-      </div>
-      <div class="hud-row hud-row-sub">
-        <div class="hud-rank">${esc(p.rank.title)}</div>
-        <div class="hud-streak" title="${p.streak.current} days in a row">${streakLabel}</div>
       </div>
     </div>
     <div class="hud-xp">
+      <span class="hud-xp-note">${xpLeft} XP to LV ${lvl.level + 1}</span>
       <div class="xp-bar"><div class="xp-fill" style="width:${pct}%"></div></div>
-      <span class="xp-label">${lvl.xpIntoLevel} / ${lvl.xpForNextLevel} XP</span>
-    </div>
-    <div class="hud-xp-sub">
-      <span class="hud-xp-note">${xpLeft} XP until Level ${lvl.level + 1}</span>
       ${boost ? `<span class="hud-boost">${boost.multiplier}&times; BOOST &middot; ${boost.minsLeft}m</span>` : ''}
     </div>
   `
