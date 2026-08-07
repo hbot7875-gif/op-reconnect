@@ -6,13 +6,13 @@ import type { GameContent, SupabaseDB, DistrictRow } from './config.ts'
 import { loadContent, rankFor, xpRules, restorationDays, streamsPerXpFor } from './config.ts'
 import { ensureDailyRollups, computeStreak, awardStreakBadges, totalXp, goalXpCountForDate } from './derive.ts'
 import { evaluateTransmission } from './transmission.ts'
-import { freezeGoals, computeBaseline, districtProgress, districtDeadline, filesRevealedCount } from './districts.ts'
+import { freezeGoals, computeBaseline, districtProgress, districtDeadline, filesRevealedCount, albumGoalStreamTotal } from './districts.ts'
 import { resolveReconnectStatus } from './reconnect-goal.ts'
 import { todayKst, nextKstMidnightUtc, kstDateOf } from './kst.ts'
 import { getBombView, launchDefuse } from './bomb.ts'
 import { getEraTimeline } from './era-timeline.ts'
 import { getMyInvites } from './reconnect-missions.ts'
-import { creditChargeCells } from './charge-economy.ts'
+import { creditChargeCells, STREAMS_PER_CHARGE_CELL } from './charge-economy.ts'
 import { getAgentChargeView } from './agent-charge.ts'
 import { levelFor, applyLevelUpIfNeeded, nextLevelRewards } from './leveling.ts'
 import { getActiveBroadcasts } from './broadcasts.ts'
@@ -117,6 +117,8 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     // Charge Cells (BOTZ redesign Phase 2) — same album-goal stream data this
     // request already fetched for districtProgress, no extra query.
     chargeCellsEarnedNow = await creditChargeCells(supabase, content, player.agent_no, activePd, windowRollups || [])
+    const albumGoalStreams = albumGoalStreamTotal(activePd.goals, activePd.baseline || {}, windowRollups || [], activePd.activated_at, content)
+    const chargeCellStreams = albumGoalStreams % STREAMS_PER_CHARGE_CELL
     const progress = districtProgress(activePd.goals, activePd.baseline || {}, windowRollups || [], activePd.activated_at, content)
     const deadline = districtDeadline(activePd.activated_at, restorationDays(content))
     // districtProgress().complete only covers solo track+album goals — the
@@ -216,6 +218,14 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
       itemDropped,
       trackGoals: progress.trackGoals,
       albums: progress.albums,
+      chargeCellProgress: {
+        streams: chargeCellStreams,
+        required: STREAMS_PER_CHARGE_CELL,
+        remaining: STREAMS_PER_CHARGE_CELL - chargeCellStreams,
+        totalAlbumStreams: albumGoalStreams,
+        earnedThisDistrict: Math.floor(albumGoalStreams / STREAMS_PER_CHARGE_CELL),
+        earnedNow: chargeCellsEarnedNow,
+      },
       reconnect,
       files: files.map((f: any, i: number) => i < revealed
         ? { slot: f.slot, title: f.title, body: f.body, revealed: true }

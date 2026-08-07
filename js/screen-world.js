@@ -186,6 +186,7 @@ const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)'
 
 function coreBlock(state) {
   const charge = state.agentCharge || { hoursRemaining: 0, isDark: false }
+  const cells = Number(state.player?.chargeCells) || 0
   const hours = Math.max(0, Number(charge.hoursRemaining) || 0)
   const neverFed = !charge.isDark && hours <= 0
   // Same 48-hour visual ceiling as the full Personal Charge sheet: one Cell
@@ -244,6 +245,12 @@ function coreBlock(state) {
       : neverFed ? 'tap to start charging' : 'charge remaining &middot; tap to feed'}</div>
   `
   zone.appendChild(read)
+
+  if ((charge.isDark || hours <= 4) && cells > 0) {
+    const low = el('button', 'core-low-cta', 'LOW POWER · FEED 1 CELL → +4 HOURS')
+    low.onclick = () => showOverlay(agentChargeSheet())
+    zone.appendChild(low)
+  }
 
   const litPorts = chargeFrac > 0 ? Math.max(1, Math.ceil(chargeFrac * 4)) : 0
   const ports = el('div', 'core-ports' + (charge.isDark || neverFed ? ' is-brownout' : ''))

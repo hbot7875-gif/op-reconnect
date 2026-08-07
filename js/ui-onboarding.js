@@ -216,6 +216,9 @@ function renderFirstMove(mount, joinedState, proceed) {
       : 'One district is already open on the map. Enter it to see your assigned Track, Album, and ReConnect goals. Only assigned goal streams earn regular XP.'),
     el('p', 'dim', 'Keep your ARMY Bomb charged: every 20 counted Album Goal streams earns a Charge Cell, and one Cell adds 4 hours.'),
   )
+  mount.appendChild(el('div', 'ob-charge-loop', `
+    <span>STREAM</span><i>→</i><span>EARN ⚡</span><i>→</i><span>CHARGE</span><i>→</i><span>KEEP THE CITY LIT</span>
+  `))
   const btn = el('button', 'btn btn-primary', 'Show me my first district')
   btn.onclick = proceed
   mount.appendChild(btn)

@@ -19,6 +19,7 @@ let sceneFor = null
 // The 90s poll re-renders with restoredNow still true, so remember which
 // district already got its moment and never replay it.
 let celebratedFor = null
+let celebratedCellAward = null
 // "See it restored" — the scene runs at full power without touching the real
 // numbers. Module-level so the scene's progress getter, made once per mount,
 // reads the live value.
@@ -105,6 +106,27 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
     container.querySelector('.stage-meter-fill').style.width = pct + '%'
     container.querySelector('.stage').classList.toggle('is-dark', pct < 34 && !previewOn)
     renderBoard(board, d)
+    const cellAward = d.chargeCellProgress?.earnedNow || 0
+    const cellAwardKey = `${d.id}:${d.chargeCellProgress?.earnedThisDistrict || 0}`
+    if (cellAward > 0 && celebratedCellAward !== cellAwardKey) {
+      celebratedCellAward = cellAwardKey
+      toast(`Charge Cell earned — tap your ARMY Bomb to add ${cellAward * 4} hours.`)
+      const source = board.querySelector('.cell-progress')
+      const target = document.querySelector('#tabbar [data-tab="resources"]')
+      if (source && target && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        const from = source.getBoundingClientRect()
+        const to = target.getBoundingClientRect()
+        const spark = el('div', 'cell-award-fly', '⚡')
+        spark.style.left = `${from.left + from.width / 2}px`
+        spark.style.top = `${from.top + from.height / 2}px`
+        document.body.appendChild(spark)
+        spark.animate([
+          { transform: 'translate(-50%, -50%) scale(.65)', opacity: 0 },
+          { transform: 'translate(-50%, -70%) scale(1.35)', opacity: 1, offset: .22 },
+          { transform: `translate(calc(-50% + ${to.left + to.width / 2 - (from.left + from.width / 2)}px), calc(-50% + ${to.top + to.height / 2 - (from.top + from.height / 2)}px)) scale(.55)`, opacity: .9 },
+        ], { duration: 1100, easing: 'cubic-bezier(.22,.8,.25,1)' }).finished.finally(() => spark.remove())
+      }
+    }
     if (d.reconnect) board.appendChild(reconnectPanel(d))
     board.appendChild(shelf(state, mapD))
     // Fires once, on the refresh that reports the district finished.

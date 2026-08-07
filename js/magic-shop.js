@@ -13,7 +13,7 @@
 import { call } from './api.js'
 import { el, esc, toast, hideOverlay, showOverlay, getState, setState } from './state.js'
 import { getAgentNo } from './session.js'
-import { goResources } from './router.js'
+import { goResources, goDistrict } from './router.js'
 
 function statTile(icon, label, value) {
   return el('div', 'ms-stat', `<span class="ms-stat-icon">${icon}</span><span class="ms-stat-value">${value}</span><span class="ms-stat-label">${esc(label)}</span>`)
@@ -45,7 +45,12 @@ function paint(body, shop) {
     statTile('🎟️', 'Tickets', shop.tickets),
   )
   body.appendChild(stats)
-  body.appendChild(el('p', 'muted ms-note', 'Earned from album-goal streams — 20 streams = 1 Charge Cell. Tap the ARMY Bomb on the City screen to use them.'))
+  body.appendChild(el('p', 'muted ms-note', 'Charge Cells are not sold here. Earn one for every 20 Album Goal streams. Those streams still count toward your Album Goal.'))
+  const active = getState()?.activeDistrict
+  const albumBtn = el('button', 'btn btn-ghost ms-album-go', 'Go to Album Goal')
+  albumBtn.disabled = !active
+  albumBtn.onclick = () => { hideOverlay(); goDistrict(active.wardId, active.id) }
+  body.appendChild(albumBtn)
 
   // ── Wings ──
   const wingsCard = el('div', 'ms-card')

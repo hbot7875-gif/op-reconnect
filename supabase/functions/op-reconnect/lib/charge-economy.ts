@@ -16,7 +16,7 @@ import type { SupabaseDB, GameContent } from './config.ts'
 import { albumGoalStreamTotal } from './districts.ts'
 import type { RollupRow } from './districts.ts'
 
-const STREAMS_PER_CHARGE_CELL = 20
+export const STREAMS_PER_CHARGE_CELL = 20
 
 /**
  * Credits new Charge Cells earned since last checked, for the agent's

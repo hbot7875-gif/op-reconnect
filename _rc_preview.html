@@ -150,7 +150,8 @@
           { label: "Don't Say You Love Me",progress: 3,  target: 10, done: false },
           { label: 'Wild Flower',          progress: 0,  target: 10, done: false },
         ],
-        album: { label: 'Arirang', passesDone: 1, target: 2, done: false, nextPassTracks: [{ label: 'Intro', need: 1 }, { label: 'Arirang', need: 1 }, { label: 'Homecoming', need: 2 }] },
+        albums: [{ label: 'Arirang', passesDone: 1, target: 2, done: false, nextPassTracks: [{ label: 'Intro', need: 1 }, { label: 'Arirang', need: 1 }, { label: 'Homecoming', need: 2 }] }],
+        chargeCellProgress: { streams: 12, required: 20, remaining: 8, totalAlbumStreams: 32, earnedThisDistrict: 1, earnedNow: 0 },
         files: [
           { title: 'Transmission 04', body: 'They kept the lights on in shifts. Nobody told them to.', revealed: true },
           { title: 'Encrypted', body: '', revealed: false },
@@ -164,7 +165,7 @@
     // mutates it so the full launch/impact/repaint animation can be tested
     // repeatedly in this harness instead of stopping at an empty overlay.
     const AGENT_CHARGE = {
-      hoursRemaining: 6,
+      hoursRemaining: 3,
       isDark: false,
       autoFeed: false,
       chargeCells: STATE.player.chargeCells,
@@ -181,7 +182,7 @@
       STATE.activeDistrict.xpAwarded = 40
       STATE.activeDistrict.itemDropped = { itemId: 'lightstick-v3', name: 'ARMY Bomb Ver.3', kind: 'lightstick', era: 'Tour', rarity: 'rare', blurb: 'The one that survived three tours.' }
       STATE.activeDistrict.trackGoals = STATE.activeDistrict.trackGoals.map(g => ({ ...g, progress: g.target, done: true }))
-      STATE.activeDistrict.album = { ...STATE.activeDistrict.album, passesDone: 2, done: true }
+      STATE.activeDistrict.albums = STATE.activeDistrict.albums.map(a => ({ ...a, passesDone: 2, done: true }))
       if (location.hash.includes('wardwhole')) {
         WARDS[0].restoredCount = WARDS[0].totalCount
         WARDS[0].centerpiece = { name: 'The Silent Observatory', lit: true }

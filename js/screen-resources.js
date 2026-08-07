@@ -89,6 +89,14 @@ export function renderResources(container, state) {
     walletTile('🧊', p.streakFreezeCharges || 0, 'Streak Freezes'),
   )
   wrap.appendChild(wallet)
+  const cellProgress = state?.activeDistrict?.chargeCellProgress
+  if (cellProgress) {
+    wrap.appendChild(el('div', 'pack-cell-progress', `
+      <span>Next Cell</span>
+      <b>${cellProgress.streams}/${cellProgress.required}</b>
+      <i>${cellProgress.remaining} more Album Goal stream${cellProgress.remaining === 1 ? '' : 's'}</i>
+    `))
+  }
 
   // ── Merch and one-time unlocks ──
   const items = state.items || []

@@ -112,6 +112,18 @@ export function renderBoard(board, d) {
       : `Still need ${a.nextPassTracks.slice(0, 3).map((t) => `${esc(t.label)} ×${t.need}`).join(' · ')}`
     card.appendChild(goalRow(`💿 ${a.label}`, sub, a.passesDone, a.target, a.done, 'passes'))
   }
+  if (albums.length && d.chargeCellProgress) {
+    const c = d.chargeCellProgress
+    const pct = Math.min(100, Math.round((c.streams / Math.max(1, c.required)) * 100))
+    card.appendChild(el('div', 'cell-progress', `
+      <div class="cell-progress-head">
+        <span>⚡ Next Charge Cell</span>
+        <b>${c.streams}/${c.required}</b>
+      </div>
+      <div class="cell-progress-bar"><i style="width:${pct}%"></i></div>
+      <div class="cell-progress-left">${c.remaining} more Album Goal stream${c.remaining === 1 ? '' : 's'} · your goal total stays counted</div>
+    `))
+  }
   if (reconnect) card.appendChild(reconnectRow(reconnect))
   board.appendChild(card)
 
