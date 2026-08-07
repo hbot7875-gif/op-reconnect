@@ -291,6 +291,107 @@ export function signalLogSheet() {
   return sheet
 }
 
+function formatGapSeconds(s) {
+  if (s < 60) return `${Math.round(s)}s`
+  const m = Math.floor(s / 60)
+  const rem = Math.round(s % 60)
+  return rem ? `${m}m ${rem}s` : `${m}m`
+}
+
+/* ── Streaming integrity self-check ───────────────────────────────────────
+   The same "PL rules" checks Moon Station (BOTZ, admin-only) runs on any
+   agent, here scoped to your own account: getMySelfCheck is `auth: 'agent'`,
+   verified against your own session, so this can only ever answer "is MY
+   account clean" — it can't look anyone else up. It CAN tell you that your
+   own linked ListenBrainz/stats.fm/Musicat identity is also on another
+   agent number, which does reveal that other agent's number/handle; that's
+   a deliberate choice (an agent should be able to notice "oh, I forgot I
+   made a second file"), not an oversight.
+   Named and lit the same as BOTZ's admin tool (Moon Station) on purpose —
+   one name for one mechanic, whether HT is running it on you or you're
+   running it on yourself. The spinning red beacon is flavor, not a status
+   readout — it's on regardless of whether anything's actually flagged,
+   same as a real police light doesn't dim itself when there's no one to
+   pull over. */
+function moonStationSheet() {
+  const sheet = el('div', 'sheet set-sheet')
+  sheet.append(
+    el('div', 'ms-beacon-row', '<span class="ms-beacon" aria-hidden="true">🚨</span><span class="eyebrow">MOON STATION</span>'),
+    el('h3', '', 'Your own police check'),
+    el('p', 'muted', "The same repeat/too-fast timing check HT runs on any agent, and whether your linked identity shows up on another agent file — just for your own account."),
+  )
+  const body = el('div', 'sig-body', '<p class="muted">Checking…</p>')
+  sheet.appendChild(body)
+
+  const close = el('button', 'btn btn-ghost', 'Close')
+  close.onclick = hideOverlay
+  sheet.appendChild(close)
+
+  call('getMySelfCheck', { agentNo: getAgentNo(), days: 7 }).then((res) => {
+    body.innerHTML = ''
+    if (!res.success) {
+      body.appendChild(el('p', 'muted', esc(res.error || "Couldn't run the check")))
+      return
+    }
+
+    body.appendChild(el('div', 'sig-summary', `
+      <span><b>${res.trackCount}</b> streams &middot; last ${res.windowDays}d</span>
+      <span class="${res.flaggedCount ? 'is-flagged' : ''}"><b>${res.flaggedCount}</b> flagged</span>
+    `))
+
+    const alts = res.possibleAlts || []
+    if (alts.length) {
+      const lines = alts.map((a) =>
+        `Same ${esc(a.via)} identity as <b>${esc(a.handle || a.agentNo)}</b> (${esc(a.agentNo)})`).join('<br>')
+      body.appendChild(el('div', 'sig-alt-warn', `<b>⚠ Possible alt account${alts.length === 1 ? '' : 's'}</b><br>${lines}`))
+    }
+
+    if (!res.tracks?.length) {
+      body.appendChild(el('p', 'muted', 'Nothing in the last 7 days to check yet.'))
+      return
+    }
+    // The full sequence, not just the flagged tracks — same report shape as
+    // the Candy Star playlist validator (candy-star-admin.html's Validate a
+    // playlist: numbered rows, a pass/fail icon, one detail line each), so
+    // "why was this flagged" reads the same way "why did this rule fail"
+    // already does elsewhere in the game. Backend hands tracks back
+    // newest-first (an activity log); reversed here to oldest-first because
+    // a SEQUENCE — "first you played this, then this, then this" — has to
+    // read top-to-bottom in the order it actually happened, not backwards.
+    const sequence = res.tracks.slice(0, 25).slice().reverse()
+    const list = el('div', 'ms-list')
+    sequence.forEach((t, i) => {
+      const flagged = (t.flags || []).length > 0
+      const badges = (t.flags || []).map((f) =>
+        `<span class="sig-badge">${f === 'repeat' ? '🔁 repeat' : f === 'too_fast' ? '⚡ too fast' : esc(f)}</span>`).join('')
+      const when = new Date(t.at).toLocaleString(undefined, {
+        month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+      })
+      const gapText = typeof t.gapSeconds === 'number'
+        ? `${formatGapSeconds(t.gapSeconds)} after the previous play`
+        : 'first play in this window'
+      list.appendChild(el('div', 'ms-row' + (flagged ? ' is-flagged' : ''), `
+        <span class="ms-seq">${i + 1}</span>
+        <span class="ms-ico">${flagged ? '⚠' : '✓'}</span>
+        <div class="ms-row-body">
+          <div class="ms-row-top">
+            <span class="ms-track">${esc(t.track)}</span>
+            <span class="ms-artist">${esc(t.artist || '—')}</span>
+          </div>
+          <div class="ms-row-bottom">
+            <span class="ms-time">${esc(when)} &middot; ${esc(gapText)}</span>
+            <span class="ms-flags">${badges}</span>
+          </div>
+        </div>
+      `))
+    })
+    body.appendChild(list)
+  })
+
+  return sheet
+}
+
 export function openStreamSource(account, onSaved) { showOverlay(streamSourceSheet(account, onSaved)) }
 export function openPin(account, onChanged) { showOverlay(pinSheet(account, onChanged)) }
 export function openSignalLog() { showOverlay(signalLogSheet()) }
+export function openMoonStation() { showOverlay(moonStationSheet()) }

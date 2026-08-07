@@ -9,7 +9,7 @@ import { getAccount, updateEmail, changePassword, generateScrobblePin, getWebhoo
 import { requestPasswordReset, resetPassword } from './lib/recovery.ts'
 import { handleWebScrobblerWebhook, handleListenBrainzLike } from './lib/scrobble-inbound.ts'
 import { placeItem, useItem } from './lib/items.ts'
-import { getSignalLog } from './lib/signal-log.ts'
+import { getSignalLog, getMySelfCheck } from './lib/signal-log.ts'
 import { getPublicStats } from './lib/public.ts'
 import { isAdminAuthorized } from './lib/spotify-shared.ts'
 import { spotifyAuthUrl, spotifyExchangeCode, getSpotifyConnection, disconnectSpotify } from './lib/spotify-oauth.ts'
@@ -22,7 +22,7 @@ import { importFillerPlaylist, addFillerManual, getFillerLibrary, removeFiller }
 import { generatePlaylist, validatePlaylist, validatePlaylistFromTracks, getAlpacaOptions, generateAlpaca, previewAlpaca } from './lib/candy-star.ts'
 import { adminGetActiveDefuse } from './lib/bomb.ts'
 import { adminCreateBroadcast, adminListBroadcasts, adminDeleteBroadcast } from './lib/broadcasts.ts'
-import { adminDeleteAgent, adminGetAgent, adminResetAgentXp } from './lib/admin-agent.ts'
+import { adminDeleteAgent, adminGetAgent, adminGetAgentTracks, adminScanAltAccounts, adminResetAgentXp } from './lib/admin-agent.ts'
 import { adminListGoals, adminAddGoal, adminUpdateGoal, adminDeleteGoal } from './lib/goals.ts'
 import {
   getReconnectMission, openReconnectMission, joinReconnectMission,
@@ -87,6 +87,7 @@ const ROUTES: Record<string, Route> = {
   placeItem: { auth: 'agent', handler: (sb, p) => placeItem(sb, p) },
   useItem: { auth: 'agent', handler: (sb, p) => useItem(sb, p) },
   getSignalLog: { auth: 'agent', handler: (sb, p) => getSignalLog(sb, p) },
+  getMySelfCheck: { auth: 'agent', handler: (sb, p) => getMySelfCheck(sb, p) },
   getLeaderboard: { auth: 'agent', handler: (sb, p) => getLeaderboard(sb, p) },
   setEquippedBadge: { auth: 'agent', handler: async (sb, p) => setEquippedBadge(sb, await loadContent(sb), p) },
   // BOTZ redesign Phase 2 — see lib/magic-shop.ts.
@@ -154,6 +155,8 @@ const ROUTES: Record<string, Route> = {
   adminListBroadcasts: { auth: 'admin', handler: (sb) => adminListBroadcasts(sb) },
   adminDeleteBroadcast: { auth: 'admin', handler: (sb, p) => adminDeleteBroadcast(sb, p) },
   adminGetAgent: { auth: 'admin', handler: (sb, p) => adminGetAgent(sb, p) },
+  adminGetAgentTracks: { auth: 'admin', handler: (sb, p) => adminGetAgentTracks(sb, p) },
+  adminScanAltAccounts: { auth: 'admin', handler: (sb, p) => adminScanAltAccounts(sb, p) },
   adminDeleteAgent: { auth: 'admin', handler: (sb, p) => adminDeleteAgent(sb, p) },
   adminResetAgentXp: { auth: 'admin', handler: (sb, p) => adminResetAgentXp(sb, p) },
 

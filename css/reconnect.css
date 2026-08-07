@@ -220,6 +220,17 @@ body {
 .hud-tab.sel { color: var(--text); opacity: 1; background: var(--purple-soft); cursor: default; }
 .hud-tab.sel .hud-tab-ico { filter: grayscale(0); opacity: 1; }
 
+/* Moon Station's tab never carries .sel (it opens a sheet, not a screen —
+   see TABS' own comment in ui-hud.js), so without this it would sit
+   permanently dimmed like every other never-selected tab. The beacon is
+   the opposite of that on purpose: full color, always animating, so it
+   reads as "this one's different" rather than blending into the row. */
+.hud-tab-beacon { filter: none; opacity: 1; animation: hudBeaconPulse 1.8s ease-in-out infinite; }
+@keyframes hudBeaconPulse {
+  0%, 100% { text-shadow: 0 0 4px rgba(229,56,79,0.5); transform: scale(1); }
+  50% { text-shadow: 0 0 14px rgba(229,56,79,0.95), 0 0 22px rgba(229,56,79,0.5); transform: scale(1.08); }
+}
+
 /* Six labeled tabs (Settings' 8 characters especially) don't all fit
    without truncating below ~380px — confirmed live at 375px, "Settings"
    clipped to "Settin…" even after shortening every other label. Rather
@@ -2242,6 +2253,59 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sig-flag { font-family: var(--mono); font-size: 10px; color: var(--gold); }
 .sig-row.skip .sig-flag { color: var(--dim); }
+
+/* ── streaming integrity self-check — same "PL rules" flags/alt-identity
+   check Moon Station (BOTZ) gives an admin, scoped to your own account.
+   Crimson throughout, same "something needs a look" language as the
+   district deadline banner and the daily-pace card — never used for
+   anything routine. ── */
+.sig-summary { display: flex; gap: 14px; margin: 14px 0 12px; font-family: var(--mono);
+  font-size: 11.5px; color: var(--muted); flex-wrap: wrap; }
+.sig-summary b { color: var(--text); }
+.sig-summary .is-flagged { color: var(--crimson); font-weight: 700; }
+.sig-alt-warn { padding: 11px 13px; margin-bottom: 12px; border-radius: var(--r);
+  background: var(--crimson-soft); border: 1px solid rgba(229,56,79,0.4);
+  font-size: 12.5px; color: var(--text); line-height: 1.7; }
+.sig-alt-warn b { color: var(--crimson); }
+.sig-row.is-flagged { background: rgba(229,56,79,0.06); }
+.sig-badge { font-family: var(--mono); font-size: 9px; font-weight: 700; letter-spacing: 0.5px;
+  color: var(--crimson); text-transform: uppercase; padding: 2px 6px; border-radius: 999px;
+  background: rgba(229,56,79,0.12); border: 1px solid rgba(229,56,79,0.25); margin-left: 6px; }
+/* Same beacon as the tab bar's, just bigger — the sheet's own "you're in
+   Moon Station" marker. Reuses .eyebrow's own type styling, just no
+   longer a block on its own since the siren needs to sit next to it. */
+.ms-beacon-row { display: flex; align-items: center; gap: 8px; }
+.ms-beacon-row .eyebrow { margin: 0; }
+.ms-beacon { font-size: 18px; line-height: 1; animation: hudBeaconPulse 1.8s ease-in-out infinite; }
+
+/* Own list/row, not a reuse of .sig-list/.sig-row — those are
+   signalLogSheet's single-line layout (track/artist/counted), shared class
+   names would either cramp a timestamp in beside them or change that
+   other sheet's layout by accident. A flag with no "when" attached to it
+   is nothing an agent can actually check against their own memory, so
+   every row carries what played, then when and how far apart from the
+   play before it — the exact question "why was this flagged".
+   Laid out as a numbered sequence with a pass/fail icon, same report shape
+   as the Candy Star playlist validator (candy-star-admin.html's .cs-report-
+   row: icon, title, detail) — one existing pattern for "here's every item
+   in order, and whether it's clean," reused instead of inventing a second
+   one that looks different for no reason. */
+.ms-list { display: flex; flex-direction: column; gap: 6px; }
+.ms-row { display: flex; align-items: flex-start; gap: 10px;
+  padding: 9px 12px; border-radius: var(--r); background: var(--surface); border: 1px solid var(--border); }
+.ms-row.is-flagged { background: var(--crimson-soft); border-color: rgba(229,56,79,0.35); }
+.ms-seq { font-family: var(--mono); font-size: 10px; color: var(--dim); flex-shrink: 0;
+  min-width: 16px; text-align: right; padding-top: 2px; }
+.ms-ico { flex-shrink: 0; font-weight: 900; color: var(--gold); padding-top: 1px; }
+.ms-row.is-flagged .ms-ico { color: var(--crimson); }
+.ms-row-body { flex: 1; min-width: 0; }
+.ms-row-top { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+.ms-track { font-weight: 600; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ms-artist { font-size: 11.5px; color: var(--dim); flex-shrink: 0; }
+.ms-row-bottom { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 3px; }
+.ms-time { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+.ms-row.is-flagged .ms-time { color: var(--text); }
+.ms-flags { display: flex; gap: 4px; flex-shrink: 0; }
 
 /* auth additions: handle availability + the recovery link */
 .ob-input.is-good { border-color: rgba(217,173,95,0.65); }
