@@ -12,7 +12,7 @@
 // settings screen that pushes content around as you tap it feels cheap.
 
 import { call } from './api.js'
-import { el, esc, toast, showOverlay, hideOverlay, getState } from './state.js'
+import { el, esc, toast, showOverlay, hideOverlay, getState, setState } from './state.js'
 import { getAgentNo, getSession, setSession, setToken, clearSession } from './session.js'
 import { openStreamSource, openPin, openSignalLog, sourceName, uplinkBroken } from './settings-streams.js'
 import { openModeSheet } from './ui-hud.js'
@@ -122,6 +122,11 @@ function paintSections(body, state) {
       },
     },
     { icon: '@', name: 'Handle', value: account.handle, body: 'Public — this is your district on the map.', muted: true },
+    {
+      icon: '🏷', name: 'Codename', value: state?.player?.codename || '',
+      body: "What other agents see. Can't be your agent number or Instagram handle.",
+      onClick: () => showOverlay(codenameSheet(state, refresh)),
+    },
     {
       icon: '✉', name: 'Recovery email', value: account.email || 'Not set',
       body: 'The only way back in if you lose your number or password.',
@@ -250,6 +255,49 @@ function emailSheet(acct, onSaved) {
     if (!res.success) { toast(errText(res.error)); return }
     hideOverlay()
     toast('Recovery email saved')
+    onSaved?.()
+  }
+  sheet.appendChild(save)
+  const close = el('button', 'btn btn-ghost', 'Cancel')
+  close.onclick = hideOverlay
+  sheet.appendChild(close)
+  return sheet
+}
+
+/** Same rule joinGame enforces at onboarding (see handlers.ts's shared
+ *  validateCodename) — can't be blank-ish, agent-number-shaped, or match the
+ *  agent number/Instagram handle on file. This sheet just gives a way back
+ *  in after that one-time onboarding pick, for anyone who wants a different
+ *  public name later. */
+function codenameSheet(state, onSaved) {
+  const sheet = el('div', 'sheet set-sheet')
+  const current = state?.player?.codename || ''
+  sheet.append(
+    el('div', 'eyebrow', 'CODENAME'),
+    el('h3', '', 'Change your codename'),
+    el('p', 'muted', "Everyone sees this one. It can't be your agent number or Instagram handle."),
+  )
+  const name = el('input', 'ob-input')
+  name.placeholder = 'Your codename'
+  name.maxLength = 24
+  name.value = current
+  name.autocomplete = 'off'
+  sheet.appendChild(field('Codename', '3-24 letters, numbers, spaces, dots, underscores or hyphens.', name))
+
+  const save = el('button', 'btn btn-primary', 'Save codename')
+  save.onclick = async () => {
+    const next = name.value.trim()
+    if (next.length < 3) { toast('Needs at least 3 characters'); return }
+    if (next === current) { hideOverlay(); return }
+    save.disabled = true
+    save.textContent = 'SAVING…'
+    const res = await call('updateCodename', { agentNo: getAgentNo(), codename: next })
+    save.disabled = false
+    save.textContent = 'Save codename'
+    if (!res.success) { toast(errText(res.error)); return }
+    setState(res)
+    hideOverlay()
+    toast(`Codename set — ${next}`)
     onSaved?.()
   }
   sheet.appendChild(save)
@@ -391,5 +439,7 @@ export function errText(code) {
     rate_limited: 'Too many tries. Wait a minute and go again.',
     agent_not_found: 'Agent file not found.',
     agent_retired: 'This agent file has already been retired.',
+    codename_invalid: 'Codenames are 3-24 letters or numbers — and can\'t be your agent number or Instagram handle.',
+    codename_taken: 'That one\'s taken. Try another.',
   }[code] || code || 'Something went wrong'
 }

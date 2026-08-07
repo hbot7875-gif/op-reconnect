@@ -25,17 +25,42 @@ import { getActiveBroadcasts } from './broadcasts.ts'
 async function getAgent(supabase: SupabaseDB, agentNo: string) {
   const { data } = await supabase
     .from('rc_agents')
-    .select('agent_no, lb_username, stream_source_preference, statsfm_username, musicat_public_id')
+    .select('agent_no, handle, lb_username, stream_source_preference, statsfm_username, musicat_public_id')
     .eq('agent_no', String(agentNo).trim().toUpperCase())
     .maybeSingle()
   if (!data) return null
   return {
     agent_no: data.agent_no,
+    handle: data.handle,
     lb_username: data.lb_username,
     stream_source_preference: data.stream_source_preference,
     statsfm_username: data.statsfm_username,
     musicat_public_id: data.musicat_public_id,
   }
+}
+
+// Letters/digits only, lowercased — so "Jane.Doe_23" and "janedoe23" read as
+// the same identity for the codename-can't-match-your-other-names check
+// below, the same way a human eyeballing the two would call them a match.
+const bareIdentity = (s: string) => String(s || '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '')
+
+// Shared by joinGame (set once, onboarding) and updateCodename (Settings,
+// any time after) — one place for what makes a codename acceptable, so the
+// two entry points can never quietly drift apart on the rule. Returns an
+// error code, or null if `codename` is fine.
+function validateCodename(codename: string, agentNo: string, handle: string | null): string | null {
+  if (!/^[\p{L}\p{N} ._-]{3,24}$/u.test(codename)) return 'codename_invalid'
+  if (/^\d+$/.test(codename) || /^agent\s*\d+$/i.test(codename)) return 'codename_invalid'
+  // The codename is public — every other agent sees it. The agent number and
+  // the Instagram handle on file are the two identifiers this game promises
+  // to keep out of that spotlight (see ui-auth.js's "keep it to yourself"
+  // warning and settings copy), so letting either through as the codename
+  // itself would undo that promise the moment someone picks it.
+  const bareCodename = bareIdentity(codename)
+  if (bareCodename && (bareCodename === bareIdentity(agentNo) || bareCodename === bareIdentity(handle || ''))) {
+    return 'codename_invalid'
+  }
+  return null
 }
 
 async function getPlayer(supabase: SupabaseDB, agentNo: string) {
@@ -381,8 +406,8 @@ export async function joinGame(supabase: SupabaseDB, params: any) {
   if (await getPlayer(supabase, agentNo)) return { success: false, error: 'already_joined' }
 
   const codename = String(params.codename || '').trim()
-  if (!/^[\p{L}\p{N} ._-]{3,24}$/u.test(codename)) return { success: false, error: 'codename_invalid' }
-  if (/^\d+$/.test(codename) || /^agent\s*\d+$/i.test(codename)) return { success: false, error: 'codename_invalid' }
+  const codenameErr = validateCodename(codename, agentNo, agent.handle)
+  if (codenameErr) return { success: false, error: codenameErr }
   const mode = ['easy', 'medium', 'hard'].includes(params.mode) ? params.mode : 'easy'
 
   const { error: insErr } = await supabase.from('rc_players')
@@ -463,5 +488,33 @@ export async function setMode(supabase: SupabaseDB, params: any) {
   await supabase.from('rc_players').update({ mode: params.mode, updated_at: new Date().toISOString() })
     .eq('agent_no', agentNo)
   player.mode = params.mode
+  return buildState(supabase, content, agent, player)
+}
+
+// Settings screen — the codename onboarding sets once turns out not to be
+// forever. Same validateCodename() rule as joinGame (can't be numbers-only,
+// can't be your own agent number or Instagram handle), plus the DB's unique
+// index on rc_players.codename still catches a collision with someone
+// else's — same 23505-to-codename_taken mapping joinGame already relies on.
+export async function updateCodename(supabase: SupabaseDB, params: any) {
+  const content = await loadContent(supabase)
+  const agentNo = String(params.agentNo || '').trim().toUpperCase()
+  const agent = await getAgent(supabase, agentNo)
+  const player = await getPlayer(supabase, agentNo)
+  if (!agent || !player) return { success: false, error: 'Not joined' }
+
+  const codename = String(params.codename || '').trim()
+  const codenameErr = validateCodename(codename, agentNo, agent.handle)
+  if (codenameErr) return { success: false, error: codenameErr }
+
+  if (codename !== player.codename) {
+    const { error: updErr } = await supabase.from('rc_players')
+      .update({ codename, updated_at: new Date().toISOString() })
+      .eq('agent_no', agentNo)
+    if (updErr) {
+      return { success: false, error: String(updErr.code) === '23505' ? 'codename_taken' : updErr.message }
+    }
+    player.codename = codename
+  }
   return buildState(supabase, content, agent, player)
 }

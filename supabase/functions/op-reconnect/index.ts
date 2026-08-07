@@ -3,7 +3,7 @@
 // stays small and modular (every file under ~300 lines).
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0'
-import { getGameState, joinGame, startDistrict, setMode, adminLaunchDefuse } from './lib/handlers.ts'
+import { getGameState, joinGame, startDistrict, setMode, updateCodename, adminLaunchDefuse } from './lib/handlers.ts'
 import { registerAgent, loginAgent, logoutAgent, checkHandle, verifySession } from './lib/auth.ts'
 import { getAccount, updateEmail, changePassword, generateScrobblePin, getWebhookPin, setStreamSource, retireAccount } from './lib/settings.ts'
 import { requestPasswordReset, resetPassword } from './lib/recovery.ts'
@@ -80,6 +80,7 @@ const ROUTES: Record<string, Route> = {
   joinGame: { auth: 'agent', handler: (sb, p) => joinGame(sb, p) },
   startDistrict: { auth: 'agent', handler: (sb, p) => startDistrict(sb, p) },
   setMode: { auth: 'agent', handler: (sb, p) => setMode(sb, p) },
+  updateCodename: { auth: 'agent', handler: (sb, p) => updateCodename(sb, p) },
   generateScrobblePin: { auth: 'agent', handler: (sb, p) => generateScrobblePin(sb, p) },
   getWebhookPin: { auth: 'agent', handler: (sb, p) => getWebhookPin(sb, p) },
   setStreamSource: { auth: 'agent', handler: (sb, p) => setStreamSource(sb, p) },
