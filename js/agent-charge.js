@@ -121,8 +121,15 @@ function paint(body, ac, focusEraId = null) {
     }
 
     if (reducedMotion()) {
+      // No motion (translate/scale/rotate all skip here), but the landed
+      // state — "charged", the new hour count, the "+N HOURS" reward text —
+      // still needs a moment on screen before loadAndPaint below wipes and
+      // rebuilds the sheet. Without this pause the whole thing repaints on
+      // the very next tick, so nothing ever actually gets painted: the toast
+      // ends up being the only feedback a reduced-motion agent ever sees.
       land()
       toast(`+${hoursAdded}h charge`)
+      await wait(900)
       await loadAndPaint(body)
       return
     }
