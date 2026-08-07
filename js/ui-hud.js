@@ -27,6 +27,60 @@ function activeBoost(boost) {
   return { multiplier: boost.multiplier, minsLeft: Math.max(1, Math.round(msLeft / 60000)) }
 }
 
+/* ── Manual sync ────────────────────────────────────────────────────────
+   getGameState already re-pulls ListenBrainz/stats.fm/etc. live on every
+   call (see derive.ts's ensureDailyRollups — "today" is always in the
+   refetch window), so a manual sync is just refresh() on demand instead of
+   waiting for the 90s poll or a tab refocus. Module-level, not component
+   state, because the button gets torn down and rebuilt by every renderHud
+   call (each poll, each setState) and the in-flight/cooldown status has to
+   survive that. The cooldown exists to stop someone mashing the button
+   from hammering the upstream scrobble APIs — fetchListenBrainz already
+   backs off on a 429, this just makes that rare in the first place. */
+let syncInFlight = false
+let lastSyncAt = 0
+const SYNC_COOLDOWN_MS = 15_000
+
+/** Sum of counted progress this agent can see change — good enough to tell
+ *  "something new landed" from "nothing new yet" without pretending to be
+ *  the server's own stream count. */
+function countedTotal(state) {
+  const d = state?.activeDistrict
+  if (!d) return 0
+  const t = (d.trackGoals || []).reduce((s, g) => s + Math.min(g.progress, g.target), 0)
+  const a = (d.albums || []).reduce((s, x) => s + Math.min(x.passesDone, x.target), 0)
+  return t + a
+}
+
+async function syncNow(state) {
+  if (syncInFlight || Date.now() - lastSyncAt < SYNC_COOLDOWN_MS) return
+  syncInFlight = true
+  paintSyncButton()
+  const before = countedTotal(state)
+  const res = await call('getGameState', { agentNo: getAgentNo() })
+  syncInFlight = false
+  lastSyncAt = Date.now()
+  if (!res.success) {
+    toast("Couldn't reach the network — try again in a moment.")
+    paintSyncButton()
+    return
+  }
+  setState(res)
+  const gained = countedTotal(res) - before
+  toast(gained > 0 ? `🔄 Synced — ${gained} new play${gained === 1 ? '' : 's'} counted` : "🔄 Synced — you're all caught up")
+}
+
+/** Repaint just the sync button in place, without a full renderHud — used
+ *  while a sync is in flight so the spin/disabled state shows up instantly
+ *  instead of waiting on the request it's spinning for. */
+function paintSyncButton() {
+  const btn = document.getElementById('syncBtn')
+  if (!btn) return
+  const onCooldown = syncInFlight || Date.now() - lastSyncAt < SYNC_COOLDOWN_MS
+  btn.disabled = onCooldown
+  btn.classList.toggle('is-syncing', syncInFlight)
+}
+
 export function renderHud(container, state) {
   const p = state.player
   const lvl = p.level
@@ -49,6 +103,7 @@ export function renderHud(container, state) {
           </span>
         </button>
         <div class="hud-streak" title="${p.streak.current} days in a row">${streakLabel}</div>
+        <button class="hud-sync" id="syncBtn" type="button" title="Sync streams now">🔄</button>
         <button class="hud-bell" id="bellBtn" type="button" title="Invites"
           aria-label="${invites.length ? `${invites.length} pending invite${invites.length === 1 ? '' : 's'}` : 'No pending invites'}">
           🔔${invites.length ? `<span class="hud-bell-count">${invites.length}</span>` : ''}
@@ -63,6 +118,8 @@ export function renderHud(container, state) {
   `
   container.querySelector('#levelPill').onclick = () => showOverlay(progressSheet(state))
   container.querySelector('#bellBtn').onclick = () => showOverlay(invitesSheet(state))
+  container.querySelector('#syncBtn').onclick = () => syncNow(state)
+  paintSyncButton()
 }
 
 /** LEVEL {n}, XP progress, next-level rewards, active boost (if any), rank +

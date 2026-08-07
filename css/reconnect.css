@@ -153,6 +153,17 @@ body {
   font-weight: 700; display: flex; align-items: center; justify-content: center; }
 .hud-streak { flex-shrink: 0; padding: 5px 8px; border-bottom: 1px solid rgba(217,173,95,.38);
   color: var(--gold); font-family: var(--mono); font-size: 10px; letter-spacing: .8px; }
+/* Manual "sync now" — same shape as the bell, purple instead of neutral so
+   it reads as an action, not a status indicator. */
+.hud-sync { flex-shrink: 0; width: 34px; height: 34px; display: flex; align-items: center;
+  justify-content: center; background: var(--panel); border: 1px solid var(--border); border-radius: 50%;
+  font-size: 14px; cursor: pointer; transition: transform 0.15s, border-color 0.15s, opacity 0.15s; }
+.hud-sync:hover:not(:disabled) { border-color: var(--purple-lt); transform: scale(1.05); }
+.hud-sync:active:not(:disabled) { transform: scale(0.95); }
+.hud-sync:disabled { opacity: 0.45; cursor: default; }
+.hud-sync.is-syncing { color: var(--purple-lt); border-color: var(--purple-lt); animation: hud-sync-spin 0.8s linear infinite; }
+@keyframes hud-sync-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .hud-sync.is-syncing { animation: none; } }
 
 .hud-xp { max-width: 620px; margin: 0 auto; padding: 7px var(--gut) 9px; display: flex; align-items: center; gap: 9px; }
 .xp-bar { flex: 1; height: 5px; border-radius: 3px; background: rgba(255,255,255,0.09); overflow: hidden; }

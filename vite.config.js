@@ -23,6 +23,12 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   root: __dirname,
   base: './',
+  server: {
+    // Respect an assigned PORT (e.g. the harness's autoPort) instead of
+    // always claiming 5173 — otherwise two dev servers can't run side by
+    // side on the same machine.
+    port: Number(process.env.PORT) || 5173,
+  },
   build: {
     sourcemap: false,
     outDir: resolve(__dirname, 'dist'),
