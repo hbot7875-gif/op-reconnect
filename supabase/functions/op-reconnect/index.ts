@@ -22,7 +22,7 @@ import { importFillerPlaylist, addFillerManual, getFillerLibrary, removeFiller }
 import { generatePlaylist, validatePlaylist, validatePlaylistFromTracks, getAlpacaOptions, generateAlpaca, previewAlpaca } from './lib/candy-star.ts'
 import { adminGetActiveDefuse } from './lib/bomb.ts'
 import { adminCreateBroadcast, adminListBroadcasts, adminDeleteBroadcast } from './lib/broadcasts.ts'
-import { adminGetAgent } from './lib/admin-agent.ts'
+import { adminDeleteAgent, adminGetAgent, adminResetAgentXp } from './lib/admin-agent.ts'
 import { adminListGoals, adminAddGoal, adminUpdateGoal, adminDeleteGoal } from './lib/goals.ts'
 import {
   getReconnectMission, openReconnectMission, joinReconnectMission,
@@ -153,6 +153,8 @@ const ROUTES: Record<string, Route> = {
   adminListBroadcasts: { auth: 'admin', handler: (sb) => adminListBroadcasts(sb) },
   adminDeleteBroadcast: { auth: 'admin', handler: (sb, p) => adminDeleteBroadcast(sb, p) },
   adminGetAgent: { auth: 'admin', handler: (sb, p) => adminGetAgent(sb, p) },
+  adminDeleteAgent: { auth: 'admin', handler: (sb, p) => adminDeleteAgent(sb, p) },
+  adminResetAgentXp: { auth: 'admin', handler: (sb, p) => adminResetAgentXp(sb, p) },
 
   // Batch-assign a series of connect/invite missions for one reconnect goal
   // at once — the rest of that system's admin config now lives on the goal

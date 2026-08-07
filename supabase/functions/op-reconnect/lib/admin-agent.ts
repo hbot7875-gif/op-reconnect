@@ -111,3 +111,71 @@ export async function adminGetAgent(supabase: SupabaseDB, params: any) {
     },
   }
 }
+
+/** Delete one test account and all agent-scoped game rows that predate the
+ * rc_agents foreign key. Kept admin-only by index.ts's central route gate. */
+export async function adminDeleteAgent(supabase: SupabaseDB, params: any) {
+  const agentNo = String(params.agentNo || '').trim().toUpperCase()
+  if (!/^AGENT\d{3,}$/.test(agentNo)) return { success: false, error: 'agent_no_invalid' }
+
+  const { data: agent } = await supabase.from('rc_agents')
+    .select('agent_no, handle').eq('agent_no', agentNo).maybeSingle()
+  if (!agent) return { success: false, error: 'agent_not_found' }
+
+  // Remove references with no FK cascade first. Missions created by this test
+  // account disappear too; their participant rows cascade from the mission.
+  const deletes: [string, string][] = [
+    ['rc_reconnect_puzzle_attempts', 'agent_no'],
+    ['rc_reconnect_participants', 'agent_no'],
+    ['rc_reconnect_missions', 'created_by'],
+    ['rc_defuse_contrib', 'agent_no'],
+    ['rc_player_items', 'agent_no'],
+    ['rc_streak_freeze_log', 'agent_no'],
+    ['rc_badges', 'agent_no'],
+    ['rc_xp_ledger', 'agent_no'],
+    ['rc_daily_activity', 'agent_no'],
+    ['rc_player_districts', 'agent_no'],
+    ['rc_agent_lit_eras', 'agent_no'],
+    ['rc_agent_charge', 'agent_no'],
+    ['generated_playlists', 'agent_no'],
+    ['rc_scrobbles', 'agent_no'],
+    ['rc_password_resets', 'agent_no'],
+    ['rc_players', 'agent_no'],
+  ]
+  for (const [table, column] of deletes) {
+    const { error } = await supabase.from(table).delete().eq(column, agentNo)
+    if (error) return { success: false, error: `delete_failed:${table}:${error.message}` }
+  }
+
+  // Invites sent by the deleted tester should no longer name a missing agent.
+  await supabase.from('rc_reconnect_participants').update({ invited_by: null }).eq('invited_by', agentNo)
+  const { error } = await supabase.from('rc_agents').delete().eq('agent_no', agentNo)
+  if (error) return { success: false, error: `delete_failed:rc_agents:${error.message}` }
+  return { success: true, deleted: { agentNo, handle: agent.handle } }
+}
+
+/** Reset visible XP without deleting historical reward rows. A compensating
+ * ledger entry prevents the next stream sync from recreating old XP. */
+export async function adminResetAgentXp(supabase: SupabaseDB, params: any) {
+  const agentNo = String(params.agentNo || '').trim().toUpperCase()
+  if (!/^AGENT\d{3,}$/.test(agentNo)) return { success: false, error: 'agent_no_invalid' }
+  const { data: agent } = await supabase.from('rc_agents')
+    .select('agent_no').eq('agent_no', agentNo).maybeSingle()
+  if (!agent) return { success: false, error: 'agent_not_found' }
+
+  const previousXp = await totalXp(supabase, agentNo)
+  if (previousXp !== 0) {
+    const { error } = await supabase.from('rc_xp_ledger').insert({
+      agent_no: agentNo,
+      amount: -previousXp,
+      source: 'admin_reset',
+      dedup_key: `admin-xp-reset:${agentNo}:${Date.now()}`,
+      meta: { previousXp },
+    })
+    if (error) return { success: false, error: `xp_reset_failed:${error.message}` }
+  }
+  await supabase.from('rc_players').update({
+    last_level: 1, boost_multiplier: 1, boost_expires_at: null,
+  }).eq('agent_no', agentNo)
+  return { success: true, agentNo, previousXp, xp: 0, level: 1 }
+}
