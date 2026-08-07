@@ -75,6 +75,12 @@ export function streamSourceSheet(account, onSaved) {
   const inputs = {}
   const grid = el('div', 'mode-grid')
 
+  const selectSource = (key, opt) => {
+    selected = key
+    for (const node of grid.children) node.classList.remove('sel')
+    opt.classList.add('sel')
+  }
+
   for (const s of SOURCES) {
     const opt = el('button', 'mode-opt src-opt' + (selected === s.key ? ' sel' : ''), `
       <div class="t">${esc(s.name)}</div>
@@ -87,7 +93,14 @@ export function streamSourceSheet(account, onSaved) {
       input.placeholder = s.field.placeholder
       input.value = account[s.field.prop] || ''
       input.autocomplete = 'off'
-      input.onclick = (e) => e.stopPropagation()
+      // Typing into a source field is an explicit choice of that source.
+      // Previously the stopped click left ListenBrainz selected, so filling
+      // Musicat and pressing Save incorrectly asked for an LB username.
+      input.onclick = (e) => {
+        e.stopPropagation()
+        selectSource(s.key, opt)
+      }
+      input.onfocus = () => selectSource(s.key, opt)
       inputs[s.key] = input
       opt.appendChild(input)
     }
@@ -98,11 +111,7 @@ export function streamSourceSheet(account, onSaved) {
       opt.appendChild(note)
     }
 
-    opt.onclick = () => {
-      selected = s.key
-      for (const node of grid.children) node.classList.remove('sel')
-      opt.classList.add('sel')
-    }
+    opt.onclick = () => selectSource(s.key, opt)
     grid.appendChild(opt)
   }
   sheet.appendChild(grid)
@@ -112,8 +121,9 @@ export function streamSourceSheet(account, onSaved) {
     save.disabled = true
     save.textContent = 'SAVING…'
     const payload = { agentNo: getAgentNo(), preference: selected }
-    for (const s of SOURCES) {
-      if (s.field && inputs[s.key]) payload[s.field.param] = inputs[s.key].value.trim()
+    const source = SOURCES.find((s) => s.key === selected)
+    if (source?.field && inputs[selected]) {
+      payload[source.field.param] = inputs[selected].value.trim()
     }
     const res = await call('setStreamSource', payload)
     save.disabled = false
