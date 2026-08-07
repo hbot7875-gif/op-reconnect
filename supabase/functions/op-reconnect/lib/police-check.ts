@@ -8,8 +8,26 @@
 
 import type { SupabaseDB } from './config.ts'
 import type { StreamRow } from './streams.ts'
+import { MIN_GAP_MS } from './spotify-shared.ts'
 
-export const POLICE_MIN_GAP_SECONDS = 45
+// The `repeat` flag below used to run on a made-up 45-second gap — nowhere
+// near the game's actual rule. candy-star-rules.ts's analyzeTracklist (the
+// engine behind "Validate a playlist" in candy-star-admin.html) already
+// defines the real one: MIN_GAP_MS, 8 minutes, "matches the real observed
+// floor" per spotify-shared.ts's own comment. That's the canonical answer
+// to "how soon is too soon to repeat a song" in this codebase, so it's the
+// one used here too — a repeat flagged by Moon Station and a repeat
+// flagged by the playlist validator now mean the same thing.
+export const REPEAT_MIN_GAP_SECONDS = MIN_GAP_MS / 1000
+
+// A second, genuinely different check: not "the same song too soon" but
+// "ANY play too soon after the one before it to have been a real, un-
+// skipped listen." The playlist validator has no equivalent — it checks
+// gaps between repeats of one song within a submitted tracklist, never
+// between two different consecutive tracks — so this threshold isn't
+// ported from anywhere; it's Moon Station's own, much shorter than
+// REPEAT_MIN_GAP_SECONDS on purpose (most songs run well over a minute).
+export const TOO_FAST_MAX_GAP_SECONDS = 45
 
 export interface FlaggedTrack {
   track: string
@@ -19,12 +37,12 @@ export interface FlaggedTrack {
   flags: string[]
 }
 
-/** Two lightweight, timing-only flags per row, since a scrobble carries no
- *  play-duration or skip data to check against: `repeat` (the same track
- *  immediately again) and `too_fast` (a gap to the previous play too short
- *  for any real, un-skipped listen). Neither decides pass/fail — that
- *  stays a human call (or, for the self-check, the agent's own judgment).
- *  Output is newest-first, same as any activity log. */
+/** Two timing-only flags per row, since a scrobble carries no play-duration
+ *  or skip data to check against: `repeat` (the same track again inside the
+ *  game's actual minimum-gap rule) and `too_fast` (a gap to the previous
+ *  play — any track — too short for any real, un-skipped listen). Neither
+ *  decides pass/fail — that stays a human call (or, for the self-check, the
+ *  agent's own judgment). Output is newest-first, same as any activity log. */
 export function flagStreamRows(rows: StreamRow[]): FlaggedTrack[] {
   const oldestFirst = [...rows].sort((a, b) => a.listened_at - b.listened_at)
   const withFlags = oldestFirst.map((r, i) => {
@@ -32,8 +50,9 @@ export function flagStreamRows(rows: StreamRow[]): FlaggedTrack[] {
     const gapSeconds = prev ? r.listened_at - prev.listened_at : null
     const flags: string[] = []
     if (prev) {
-      if (gapSeconds! < POLICE_MIN_GAP_SECONDS) flags.push('too_fast')
-      if (prev.track_name.trim().toLowerCase() === r.track_name.trim().toLowerCase()) flags.push('repeat')
+      if (gapSeconds! < TOO_FAST_MAX_GAP_SECONDS) flags.push('too_fast')
+      if (gapSeconds! < REPEAT_MIN_GAP_SECONDS
+        && prev.track_name.trim().toLowerCase() === r.track_name.trim().toLowerCase()) flags.push('repeat')
     }
     return {
       track: r.track_name,
