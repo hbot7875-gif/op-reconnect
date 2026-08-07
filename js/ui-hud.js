@@ -243,7 +243,7 @@ const TABS = [
   // straight over whichever screen is already up rather than pushing a
   // router state that has nowhere real to point. Never shows as .sel for
   // the same reason BOTZ's <a> never does: there's no "here" for it to be.
-  { key: 'moonstation', icon: '🚨', label: 'Moon', onClick: () => openMoonStation() },
+  { key: 'moonstation', icon: '🚨', label: 'Moon', title: 'Moon Station (under test)', onClick: () => openMoonStation() },
   { key: 'ranking', icon: '🏆', label: 'Ranks', go: goRanking,
     sel: (here) => here === 'ranking' },
   { key: 'settings', icon: '⚙️', label: 'Settings', go: goSettings,
@@ -265,7 +265,7 @@ export function renderTabbar(container, state) {
     // flagged (see moonStationSheet's own comment) — it's what tells you
     // this tab is different from the rest, not a live status readout.
     const icoClass = t.key === 'moonstation' ? 'hud-tab-ico hud-tab-beacon' : 'hud-tab-ico'
-    return `<${tag} class="hud-tab${isSel ? ' sel' : ''}" data-tab="${t.key}" title="${esc(t.label)}"${attrs}>
+    return `<${tag} class="hud-tab${isSel ? ' sel' : ''}" data-tab="${t.key}" title="${esc(t.title || t.label)}"${attrs}>
       <span class="${icoClass}" aria-hidden="true">${t.icon}</span>
       <span class="hud-tab-lbl">${esc(t.label)}</span>
     </${tag}>`
