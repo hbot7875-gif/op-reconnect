@@ -49,12 +49,21 @@ const Api = {
 // ==================== CANDY STAR GENERATOR (agent-facing alpaca maker) ====================
 window._candyStar = window._candyStar || { songByLabel: {}, albums: [], remaining: null, cap: 3 };
 
-const CANDY_GOALS = ["Swim", "Wild Flower", "DSYLM", "Haegeum", "Killin' It Girl", "Arirang"];
-// Exact catalog names for the current goal tracks — used to seed the search
-// dropdown's "This week's goals" quick-picks. Resolved defensively at render
-// time (candyResolveSongKey), so a name that doesn't match the live catalog
-// exactly just gets skipped rather than showing a broken entry.
-const CANDY_FREQUENT_SONG_NAMES = ["Swim", "Wild Flower (with youjeen)", "Don’t Say You Love Me", "Haegeum", "Killin' It Girl (feat. GloRilla)"];
+// Ported straight from the old site (see file header) with its goal names
+// hardcoded — "Wild Flower", "Killin' It Girl" — none of which are even in
+// THIS game's current Home Base goal set (DSYLM, Haegeum, DNA, Permission to
+// Dance, Swim, Normal, Come Over, plus the Arirang/Keep Swimming/Echo/Indigo
+// album goals). Read live instead, off the same activeDistrict main.js
+// stashes on window.__rcState for every screen that needs the current run
+// of goals without threading state through every function (screen-district's
+// mountScene callbacks do the same).
+function candyCurrentGoalNames() {
+  const d = window.__rcState?.activeDistrict;
+  if (!d) return [];
+  const tracks = (d.trackGoals || []).map(g => g.label).filter(Boolean);
+  const albums = (d.albums || []).map(a => a.label).filter(Boolean);
+  return [...tracks, ...albums];
+}
 
 /**
  * Resolves a song field to a catalog key. Accepts either the input ELEMENT
@@ -532,17 +541,15 @@ export async function renderCandyStar() {
   Object.entries(nameGroups).forEach(([nameLower, keys]) => {
     if (keys.length === 1) window._candyStar.songByNameLower[nameLower] = keys[0];
   });
-  window._candyStar.frequentSongs = CANDY_FREQUENT_SONG_NAMES
+  // This week's actual goal names, resolved against the live catalog —
+  // a name the catalog doesn't have yet (see file header: bts_song_catalog
+  // starts empty until an admin runs the refresh) just gets skipped rather
+  // than showing a broken pick.
+  const currentGoalNames = candyCurrentGoalNames();
+  const goalSongs = currentGoalNames
     .map(name => { const key = candyResolveSongKey(name); return key ? songByKey[key] : null; })
     .filter(Boolean);
-
-  // Quick picks come from the goal tracks whose exact catalog names we know,
-  // plus any CANDY_GOALS entry that resolves on its own (a bare "Arirang").
-  const goalSongs = [...window._candyStar.frequentSongs];
-  CANDY_GOALS.forEach(g => {
-    const key = candyResolveSongKey(g);
-    if (key && songByKey[key] && !goalSongs.some(s => s.key === key)) goalSongs.push(songByKey[key]);
-  });
+  window._candyStar.frequentSongs = goalSongs;
   window._candyStar.goalSongs = goalSongs;
   window._candyStar.quickPicks = [];
   window._candyStar.quickAlbum = false;
@@ -552,7 +559,12 @@ export async function renderCandyStar() {
   // them, so Quick offers the same songs as choices with a hard cap.
   const goalChips = goalSongs.length
     ? goalSongs.map(s => `<button type="button" class="cs-goal-chip cs-goal-pick" data-key="${sanitize(s.key)}" aria-pressed="false" onclick="candyQuickToggle(this)">${sanitize(s.name)}</button>`).join('')
-    : CANDY_GOALS.map(g => `<span class="cs-goal-chip">${sanitize(g)}</span>`).join('');
+    : currentGoalNames.length
+      // The goal names exist, they just aren't in the (possibly still-empty)
+      // catalog yet — show them anyway so "current goals" isn't a lie, just
+      // not clickable since there's no catalog key to build a playlist entry from.
+      ? currentGoalNames.map(g => `<span class="cs-goal-chip">${sanitize(g)}</span>`).join('')
+      : `<span class="cs-goal-chip is-empty">No active goals right now</span>`;
 
   container.innerHTML = `
   <div class="cs-wrap">
