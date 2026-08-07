@@ -307,6 +307,7 @@ body {
   .command-scene .command-core .army-core { width: 95px; height: 108px; margin: 10px 0 8px; overflow: visible;
     transform: scale(1.35); transform-origin: center; }
   .command-scene .command-core .army-core > * { display: block; }
+  .command-scene .command-core .army-core > .rc-bomb { display: flex; }
   .command-scene .command-core .core-read { margin: 0; text-align: center; }
   .command-scene .command-core .core-pct { min-width: 38px; font-size: 19px; letter-spacing: 1px; }
   .command-scene .command-core .core-lbl { display: none; }
