@@ -206,6 +206,16 @@
     color: var(--text); font: inherit; font-size: 13px; padding: 9px 12px; cursor: pointer; border-radius: 0; }
   .adm-goal-move-select:hover { background: var(--surface-3, rgba(255,255,255,.04)); }
 
+  /* ── Agent lookup: danger zone ── kept in its own bordered-off section at
+     the bottom of the card, same "don't let it sit next to a harmless
+     button" reasoning as the goals overflow menu above — this one deletes
+     across every table admin-agent.ts's adminDeleteAgent touches, not just
+     one row. */
+  .adm-agent-danger-btn { background: none; border: 1px solid rgba(229,56,79,0.4); border-radius: var(--r);
+    color: var(--crimson); font: inherit; font-size: 13px; font-weight: 600; padding: 9px 14px; cursor: pointer; }
+  .adm-agent-danger-btn:hover { background: var(--crimson-soft); }
+  .adm-agent-danger-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
   /* ── Weekly window ── */
   .adm-week-box { display: flex; align-items: center; justify-content: space-between; gap: 10px;
     border: 1px solid var(--border); border-radius: var(--r); padding: 10px 12px; margin-bottom: 14px; flex-wrap: wrap; }
@@ -1242,8 +1252,35 @@ function renderAgent(a) {
         <div class="adm-agent-stat" style="margin-top:10px;"><div class="k">Direct scrobble PIN</div><div class="v">${a.hasPin ? 'Generated' : 'Not generated'}</div></div>
         ${!uplinkOk ? `<p class="muted" style="margin-top:10px;color:var(--crimson);">This agent's counted-source is unset or missing its username/ID — they will earn zero XP from streaming until it's fixed in Settings.</p>` : ''}
       </div>
+
+      <div class="adm-agent-section">
+        <h3>Danger zone</h3>
+        <p class="muted" style="font-size:13px;margin-bottom:10px;">Permanently deletes this account and every
+          row tied to it — progress, badges, XP, stream history, everything. Cannot be undone.</p>
+        <button class="adm-agent-danger-btn adm-mutate-btn" type="button" data-act="delete-agent">Delete agent…</button>
+        <div class="adm-out" id="lkAgentOut"></div>
+      </div>
     </div>
   `
+}
+function wireAgentDangerButton(container, agent) {
+  const btn = container.querySelector('[data-act="delete-agent"]')
+  if (!btn) return
+  btn.onclick = async () => {
+    if (!confirm(`Permanently delete ${agent.handle} (${agent.agentNo})? This removes the account and every ` +
+      `row of game data tied to it across the database — progress, badges, XP, stream history, everything. ` +
+      `This cannot be undone.`)) return
+    btn.disabled = true
+    btn.textContent = 'Deleting…'
+    const res = await call('adminDeleteAgent', { agentNo: agent.agentNo })
+    if (res?.success) {
+      container.innerHTML = `<div class="adm-empty">Deleted ${esc(res.deleted?.handle || agent.handle)} (${esc(res.deleted?.agentNo || agent.agentNo)}).</div>`
+    } else {
+      showOut('lkAgentOut', res, 'error')
+      btn.disabled = sessionUnauthorized
+      btn.textContent = 'Delete agent…'
+    }
+  }
 }
 $('btnLookup').onclick = async () => {
   const q = $('lkQuery').value.trim()
@@ -1256,6 +1293,8 @@ $('btnLookup').onclick = async () => {
     return
   }
   out.innerHTML = renderAgent(res.agent)
+  wireAgentDangerButton(out, res.agent)
+  if (sessionUnauthorized) setMutationButtonsDisabled(true)
 }
 $('lkQuery').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btnLookup').click() })
 
