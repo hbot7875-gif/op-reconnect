@@ -316,7 +316,7 @@ function formatGapSeconds(s) {
 function moonStationSheet() {
   const sheet = el('div', 'sheet set-sheet')
   sheet.append(
-    el('div', 'ms-beacon-row', '<span class="ms-beacon" aria-hidden="true">🚨</span><span class="eyebrow">MOON STATION</span>'),
+    el('div', 'ms-beacon-row', '<span class="ms-beacon" aria-hidden="true">🚨</span><span class="eyebrow">MOON STATION (UNDER TEST)</span>'),
     el('h3', '', 'Your own police check'),
     el('p', 'muted', "The same repeat/too-fast timing check HT runs on any agent, and whether your linked identity shows up on another agent file — just for your own account."),
   )
