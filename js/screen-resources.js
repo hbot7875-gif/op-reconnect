@@ -33,6 +33,7 @@ import { el, esc, showOverlay } from './state.js'
 import { badgeDrawerSheet } from './badge-drawer.js'
 import { magicShopSheet } from './magic-shop.js'
 import { itemArt, itemSheet, RARITY } from './items.js'
+import { agentChargeSheet } from './agent-charge.js'
 
 function walletTile(icon, value, label) {
   return el('div', 'wallet-tile', `
@@ -96,6 +97,38 @@ export function renderResources(container, state) {
       <b>${cellProgress.streams}/${cellProgress.required}</b>
       <i>${cellProgress.remaining} more Album Goal stream${cellProgress.remaining === 1 ? '' : 's'}</i>
     `))
+  }
+
+  // Weekly emergency power is inventory, not a passive stat. Lit cards wait
+  // here until deliberately used; dark cards show the shortest route to the
+  // next activation, and spent cards stay visible until Monday's reset.
+  const eraCards = state?.agentCharge?.eraCards || []
+  if (eraCards.length) {
+    const ready = eraCards.filter((e) => e.status === 'lit').length
+    const newlyLit = new Set(state?.agentCharge?.newlyLitEraIds || [])
+    wrap.appendChild(el('div', 'pack-section era-pack-head', `
+      <span class="ps-title">Lit Era Cards</span>
+      <span class="ps-count">${ready} ready · reset Monday</span>
+    `))
+    const rack = el('div', 'era-pack-rack')
+    for (const card of eraCards) {
+      const button = el('button', `era-pack-card era-${card.status}${newlyLit.has(card.id) ? ' just-lit' : ''}`)
+      button.type = 'button'
+      const status = card.status === 'lit' ? '+10H READY'
+        : card.status === 'used' ? 'USED'
+        : `${card.done}/${card.total}`
+      button.setAttribute('aria-label', `${card.name}. ${status}.`)
+      button.innerHTML = `
+        <span class="epc-icon">${card.icon}</span>
+        <span class="epc-name">${esc(card.name)}</span>
+        <span class="epc-status">${status}</span>
+        ${card.status === 'lit' ? '<i>USE</i>' : ''}
+      `
+      button.onclick = () => showOverlay(agentChargeSheet(card.id))
+      rack.appendChild(button)
+    }
+    wrap.appendChild(rack)
+    wrap.appendChild(el('p', 'era-pack-note', 'Complete every track in an era this week to activate its card. Use only when your ARMY Bomb needs emergency power.'))
   }
 
   // ── Merch and one-time unlocks ──

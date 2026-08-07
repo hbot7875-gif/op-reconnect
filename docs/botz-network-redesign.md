@@ -210,10 +210,10 @@ would be the first real currency-sink/storefront in the game.
   charge is an absolute expiry computed at read time, not a decaying counter, matching
   derive.ts's "interpret at read time, nothing decrements in the background" philosophy.
   `lib/agent-charge.ts`'s `getAgentChargeView()` is the one function handlers.ts calls each
-  poll: it catches up auto-feed retroactively, checks Lit-up Eras, then evaluates the
+  poll: it catches up auto-feed retroactively, activates completed Era Cards, then evaluates the
   blackout consequences. New client screen `js/agent-charge.js` (Pack → Personal Charge):
   shows hours remaining, feeds Charge Cells (4h each, `feedCharge`), toggles auto-feed
-  (`setAutoFeed`), and lists this week's lit eras.
+  (`setAutoFeed`), and lists this week's Era Card progress and inventory.
 - **Two-tier blackout, exactly as specified in the follow-up clarification** (not just the
   original 7-day figure): 7 continuous days dark abandons the active district back to
   available (same shape as the existing restoration-deadline lapse); **14 days triggers a
@@ -222,10 +222,10 @@ would be the first real currency-sink/storefront in the game.
   moment a threshold would otherwise trip, not spent proactively. Both consequences are
   idempotent (nothing left to re-wipe once applied) and clear automatically the moment the
   agent charges again.
-- Lit-up Eras: `rc_agent_lit_eras` (agent, era, week). Streaming every track in a whole era
-  during the current KST week (Monday-keyed) lights it for +10h, once per era per week,
-  checked BEFORE the blackout evaluation each poll so a freshly-lit era can rescue an
-  agent from going dark in the same request. Reuses `era-timeline.ts`'s `ERA_CATALOG`
+- Lit-up Eras: `rc_agent_lit_eras` (agent, era, week, used time). Streaming every track in a whole era
+  during the current KST week (Monday-keyed) activates one +10h emergency card. The card stays
+  in Pack until the agent manually uses it; used cards remain spent until Monday so the same
+  streams cannot mint the reward repeatedly. Reuses `era-timeline.ts`'s `ERA_CATALOG`
   (now exported) for the track lists, but scores per-agent/per-week, not network-wide/
   all-time — genuinely a different question from that file's own rollup.
 - **Updated through 2026-08-07.** The shared `rc_bomb_state` charge and the Era Timeline →

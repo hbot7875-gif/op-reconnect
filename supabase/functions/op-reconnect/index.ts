@@ -33,7 +33,7 @@ import { submitReconnectPuzzleAnswer } from './lib/reconnect-puzzle.ts'
 import { getLeaderboard } from './lib/leaderboard.ts'
 import { setEquippedBadge } from './lib/badge-profile.ts'
 import { getMagicShop, buyWings, claimTicket } from './lib/magic-shop.ts'
-import { feedCharge, setAutoFeed, getAgentCharge } from './lib/agent-charge.ts'
+import { feedCharge, setAutoFeed, getAgentCharge, useLitEra } from './lib/agent-charge.ts'
 import { loadContent } from './lib/config.ts'
 
 const CORS_HEADERS: Record<string, string> = {
@@ -96,6 +96,7 @@ const ROUTES: Record<string, Route> = {
   feedCharge: { auth: 'agent', handler: (sb, p) => feedCharge(sb, String(p.agentNo || '').trim().toUpperCase(), Number(p.cells) || 0) },
   setAutoFeed: { auth: 'agent', handler: (sb, p) => setAutoFeed(sb, String(p.agentNo || '').trim().toUpperCase(), !!p.on) },
   getAgentCharge: { auth: 'agent', handler: async (sb, p) => getAgentCharge(sb, await loadContent(sb), String(p.agentNo || '').trim().toUpperCase()) },
+  useLitEra: { auth: 'agent', handler: async (sb, p) => useLitEra(sb, await loadContent(sb), String(p.agentNo || '').trim().toUpperCase(), String(p.eraId || '')) },
   // Reconnect goal (connect/invite co-op variants) — gates restoration now,
   // not a post-restoration bonus. All agent-scoped since eligibility is
   // always checked against the caller's own active district+frozen goal

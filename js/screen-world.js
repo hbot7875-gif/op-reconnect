@@ -57,7 +57,45 @@ export function renderWorld(container, state) {
   command.appendChild(commandTools(state))
   wrap.appendChild(command)
 
+  // Personal weekly Era Cards are the Bomb's emergency reserve. This is not
+  // the community/all-time Era Timeline: every count here belongs to this
+  // agent, resets Monday, and a lit card waits in Pack until they spend it.
+  if (state.agentCharge?.eraCards?.length) wrap.appendChild(weeklyEraCards(state))
+
   container.appendChild(wrap)
+}
+
+function weeklyEraCards(state) {
+  const charge = state.agentCharge || {}
+  const newly = new Set(charge.newlyLitEraIds || [])
+  const ready = (charge.eraCards || []).filter((e) => e.status === 'lit').length
+  const wrap = el('section', 'era-strip command-era-strip')
+  wrap.innerHTML = `
+    <div class="era-strip-head">
+      <span class="era-strip-label">Lit Era Cards · this week</span>
+      <span class="era-ready-count">${ready} ready · +10h each</span>
+    </div>`
+  const row = el('div', 'era-row')
+  for (const e of charge.eraCards || []) {
+    const chip = el('button', `era-chip era-${e.status}${newly.has(e.id) ? ' just-lit' : ''}`)
+    chip.type = 'button'
+    const status = e.status === 'lit' ? 'READY · +10H'
+      : e.status === 'used' ? 'USED THIS WEEK'
+      : `${e.done}/${e.total} · ${e.remaining} LEFT`
+    chip.setAttribute('aria-label', `${e.name}. ${status}.`)
+    chip.innerHTML = `
+      <span class="era-icon">${e.icon}</span>
+      <span class="era-name">${esc(e.name)}</span>
+      <span class="era-count">${status}</span>
+      ${newly.has(e.id) ? '<i>CARD ACTIVATED</i>' : ''}
+    `
+    chip.onclick = () => e.status === 'lit'
+      ? showOverlay(agentChargeSheet(e.id))
+      : showOverlay(eraTracksSheet(e, true))
+    row.appendChild(chip)
+  }
+  wrap.appendChild(row)
+  return wrap
 }
 
 function recoverySignal(state) {
@@ -350,7 +388,7 @@ function eraTimelineStrip(timeline) {
   return wrap
 }
 
-function eraTracksSheet(e) {
+function eraTracksSheet(e, personal = false) {
   const sheet = el('div', 'sheet era-tracks')
   sheet.appendChild(el('div', 'eyebrow', `${e.icon} ${esc(e.name)}`))
   if (e.description) sheet.appendChild(el('p', 'muted', esc(e.description)))
@@ -360,7 +398,11 @@ function eraTracksSheet(e) {
   sheet.appendChild(el('div', 'goal-line', `
     <div class="pbar" style="flex:1"><div class="pfill${e.done >= e.total && e.total > 0 ? ' done' : ''}" style="width:${e.total ? Math.round((e.done / e.total) * 100) : 0}%"></div></div>
     <span class="count">${e.done} / ${e.total} streamed</span>`))
-  sheet.appendChild(el('div', 'dim', 'Stream a song enough for the whole network to cross its threshold, and it lights up here for everyone.'))
+  sheet.appendChild(el('div', 'dim', personal
+    ? (e.status === 'used'
+      ? 'This card has powered your ARMY Bomb and resets Monday.'
+      : 'Stream every track once this week to activate this +10h emergency card.')
+    : 'Stream a song enough for the whole network to cross its threshold, and it lights up here for everyone.'))
 
   const list = el('div', 'et-list')
   for (const t of e.tracks || []) {

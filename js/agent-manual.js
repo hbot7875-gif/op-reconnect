@@ -8,7 +8,7 @@ const STEPS = [
   ['1', 'Check your ARMY Bomb', 'Your remaining charge is shown on City. Tap the Bomb whenever you need to feed it.'],
   ['2', 'Earn Charge Cells', 'Stream Album Goal tracks. Every 20 counted album streams earns 1 Charge Cell, and each Cell adds 4 hours.'],
   ['3', 'Restore districts', 'Enter your active district and complete its Track Goals, Album Goal, and ReConnect Mission before the 7-day timer ends.'],
-  ['4', 'Build backup power', 'Stream every track in an era during the week to add 10 hours. Auto-feed can spend stored Charge Cells when your Bomb runs out.'],
+  ['4', 'Build backup power', 'Stream every track in an era during the week to activate its card. It stays in Pack until you use it for 10 emergency hours, then resets Monday.'],
 ]
 
 const XP_SOURCES = [

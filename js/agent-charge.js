@@ -20,7 +20,7 @@ function fmtHours(h) {
   return `${Math.round(h)}h`
 }
 
-async function loadAndPaint(body) {
+async function loadAndPaint(body, focusEraId = null) {
   body.innerHTML = '<p class="muted">Reading the core…</p>'
   const res = await call('getAgentCharge', { agentNo: getAgentNo() })
   if (!res.success) {
@@ -28,10 +28,10 @@ async function loadAndPaint(body) {
     body.appendChild(el('p', 'muted', "Couldn't read your charge"))
     return
   }
-  paint(body, res.charge)
+  paint(body, res.charge, focusEraId)
 }
 
-function paint(body, ac) {
+function paint(body, ac, focusEraId = null) {
   body.innerHTML = ''
 
   // A brand-new agent who's never fed the Bomb reads as isDark:false with
@@ -61,6 +61,7 @@ function paint(body, ac) {
       <div class="ac-bomb-handle"><span class="ac-handle-energy"></span><i></i></div>
     </div>
     <div class="ac-cell-flight" aria-hidden="true"><span>⚡</span></div>
+    <div class="ac-era-flight" aria-hidden="true"><span>💜</span><b>ERA</b></div>
     <div class="ac-impact-sparks" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
     <div class="ac-reward" role="status" aria-live="polite"></div>
     <div class="ac-readout">
@@ -150,22 +151,94 @@ function paint(body, ac) {
   autoCard.appendChild(autoBtn)
   body.appendChild(autoCard)
 
-  const litCard = el('div', 'ms-card')
-  litCard.innerHTML = `<div class="ms-card-head"><span class="ms-card-icon">🕯️</span><span class="ms-card-title">Lit-up Eras this week</span></div>`
-  if (ac.litEras.length) {
-    litCard.appendChild(el('p', 'ms-card-body', `${ac.litEras.length} era${ac.litEras.length === 1 ? '' : 's'} lit — each one already banked +10h charge.`))
-  } else {
-    litCard.appendChild(el('p', 'ms-card-body', "Stream every track in a whole era this week to light it up for +10h. Doesn't carry over — resets Monday."))
+  const eraCards = [...(ac.eraCards || [])].sort((a, b) =>
+    a.id === focusEraId ? -1 : b.id === focusEraId ? 1 : 0)
+  const ready = eraCards.filter((e) => e.status === 'lit').length
+  const litCard = el('div', 'ms-card ac-era-inventory')
+  litCard.innerHTML = `
+    <div class="ms-card-head"><span class="ms-card-icon">🕯️</span><span class="ms-card-title">Weekly Era Cards</span></div>
+    <p class="ms-card-body">${ready
+      ? `${ready} emergency card${ready === 1 ? '' : 's'} ready. Each adds 10 hours.`
+      : "Stream every track in an era this week to activate a +10h card. Cards reset Monday."}</p>
+  `
+  const rack = el('div', 'ac-era-rack')
+  for (const card of eraCards) {
+    const item = el('div', `ac-era-card era-${card.status}${card.id === focusEraId ? ' is-focused' : ''}`)
+    item.innerHTML = `
+      <span class="aec-icon">${card.icon}</span>
+      <span class="aec-copy"><b>${esc(card.name)}</b><small>${card.status === 'lit' ? 'LIT · READY'
+        : card.status === 'used' ? 'USED · RESETS MONDAY'
+        : `${card.done}/${card.total} TRACKS · ${card.remaining} LEFT`}</small></span>
+    `
+    if (card.status === 'lit') {
+      const use = el('button', 'aec-use', 'USE +10H')
+      use.type = 'button'
+      use.onclick = async () => {
+        use.disabled = true
+        const res = await call('useLitEra', { agentNo: getAgentNo(), eraId: card.id })
+        if (!res.success) { toast(res.error === 'era_card_not_ready' ? 'That Era Card is no longer ready' : (res.error || "Couldn't use that card")); use.disabled = false; return }
+        for (const button of body.querySelectorAll('button')) button.disabled = true
+
+        const nextHours = Math.max(0, (new Date(res.chargedUntil).getTime() - Date.now()) / 3_600_000)
+        const flight = stage.querySelector('.ac-era-flight')
+        flight.querySelector('span').textContent = card.icon
+        flight.querySelector('b').textContent = card.name
+        item.classList.add('is-spending')
+
+        const landEra = () => {
+          stage.classList.add('has-landed')
+          stage.classList.remove('is-dark', 'is-new')
+          stage.style.setProperty('--fuel', Math.max(0, Math.min(1, nextHours / 48)).toFixed(3))
+          stage.querySelector('.ac-hours').textContent = fmtHours(nextHours)
+          stage.querySelector('.ac-label').textContent = 'charged'
+          stage.querySelector('.ac-reward').textContent = '+10 HOURS'
+          item.classList.remove('era-lit', 'is-spending')
+          item.classList.add('era-used')
+          item.querySelector('small').textContent = 'USED · RESETS MONDAY'
+          use.remove()
+
+          const state = getState()
+          if (state?.agentCharge) setState({
+            ...state,
+            agentCharge: {
+              ...state.agentCharge,
+              hoursRemaining: nextHours,
+              isDark: false,
+              litEras: (state.agentCharge.litEras || []).filter((id) => id !== card.id),
+              eraCards: (state.agentCharge.eraCards || []).map((e) => e.id === card.id ? { ...e, status: 'used' } : e),
+            },
+          })
+        }
+
+        if (reducedMotion()) {
+          landEra()
+          toast(`${card.name} powered the Bomb · +10h`)
+          await loadAndPaint(body)
+          return
+        }
+
+        stage.classList.add('is-era-feeding')
+        await wait(760)
+        landEra()
+        toast(`${card.name} powered the Bomb · +10h`)
+        await wait(720)
+        await loadAndPaint(body)
+      }
+      item.appendChild(use)
+    }
+    rack.appendChild(item)
   }
-  body.appendChild(litCard)
+  litCard.appendChild(rack)
+  if (focusEraId) body.insertBefore(litCard, feedCard)
+  else body.appendChild(litCard)
 }
 
-export function agentChargeSheet() {
+export function agentChargeSheet(focusEraId = null) {
   const sheet = el('div', 'sheet agent-charge')
   sheet.appendChild(el('div', 'eyebrow', '⚡ PERSONAL CHARGE'))
   const body = el('div', 'ac-body')
   sheet.appendChild(body)
-  loadAndPaint(body)
+  loadAndPaint(body, focusEraId)
 
   const close = el('button', 'btn btn-ghost', 'Close')
   close.onclick = hideOverlay

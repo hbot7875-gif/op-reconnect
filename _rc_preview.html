@@ -136,6 +136,16 @@
       ],
       transmission: { text: 'HQ intercepted chatter: Haegeum is 163M from 1B. Route 3 passes today.', progress: 2, required: 3, done: false, xpOnComplete: 10 },
       map: { wards: WARDS, districts },
+      eraTimeline: { eras: [
+        { id: 'school', name: 'School Trilogy', icon: '📚', done: 17, total: 17, albums: ['2 Cool 4 Skool', 'O!RUL8,2?', 'Skool Luv Affair'], tracks: [] },
+        { id: 'darkwild', name: 'Dark & Wild / Bridge', icon: '🌙', done: 10, total: 12, albums: ['Dark & Wild', 'Wake Up'], tracks: [] },
+        { id: 'hyyh', name: 'HYYH', icon: '🌸', done: 16, total: 16, albums: ['The Most Beautiful Moment in Life'], tracks: [] },
+        { id: 'wings', name: 'Wings / YNWA', icon: '🦋', done: 14, total: 19, albums: ['Wings', 'You Never Walk Alone'], tracks: [] },
+        { id: 'ly', name: 'Love Yourself', icon: '💜', done: 29, total: 29, albums: ['Love Yourself Series'], tracks: [] },
+        { id: 'mots', name: 'Map of the Soul', icon: '🗺️', done: 18, total: 21, albums: ['Map of the Soul'], tracks: [] },
+        { id: 'anthology', name: 'The Anthology', icon: '💎', done: 9, total: 9, albums: ['BE', 'Proof'], tracks: [] },
+        { id: 'arirang', name: 'ARIRANG', icon: '🎆', done: 11, total: 14, albums: ['Arirang'], tracks: [] },
+      ] },
       activeDistrict: {
         id: 'mono-7', name: 'Zeal Arcade',
         missions: [
@@ -169,7 +179,13 @@
       isDark: false,
       autoFeed: false,
       chargeCells: STATE.player.chargeCells,
-      litEras: [],
+      litEras: ['hyyh', 'ly'],
+      newlyLitEraIds: ['hyyh'],
+      eraCards: STATE.eraTimeline.eras.map((era, i) => ({
+        ...era,
+        remaining: era.total - era.done,
+        status: i === 0 || i === 6 ? 'used' : i === 2 || i === 4 ? 'lit' : 'dark',
+      })),
     }
     STATE.agentCharge = AGENT_CHARGE
 
@@ -245,6 +261,18 @@
         if (body.action === 'setAutoFeed') {
           AGENT_CHARGE.autoFeed = !!body.on
           return { json: async () => ({ success: true, autoFeed: AGENT_CHARGE.autoFeed }) }
+        }
+        if (body.action === 'useLitEra') {
+          const card = AGENT_CHARGE.eraCards.find(x => x.id === body.eraId)
+          if (!card || card.status !== 'lit') return { json: async () => ({ success: false, error: 'era_card_not_ready' }) }
+          card.status = 'used'
+          AGENT_CHARGE.litEras = AGENT_CHARGE.litEras.filter(id => id !== card.id)
+          AGENT_CHARGE.newlyLitEraIds = []
+          AGENT_CHARGE.hoursRemaining += 10
+          return { json: async () => ({
+            success: true, eraId: card.id, hoursAdded: 10,
+            chargedUntil: new Date(Date.now() + AGENT_CHARGE.hoursRemaining * 3_600_000).toISOString(),
+          }) }
         }
         if (body.action === 'setEquippedBadge') {
           STATE.player.equippedBadgeId = body.badgeId

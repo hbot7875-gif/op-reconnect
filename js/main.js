@@ -88,6 +88,7 @@ function renderScreen(state) {
 // current state, which could otherwise carry a stale levelUp along for the
 // ride and replay the celebration on an unrelated action.
 let celebratedLevel = null
+const celebratedEraCards = new Set()
 
 subscribe((state) => {
   if (!state || !state.joined) return
@@ -99,6 +100,12 @@ subscribe((state) => {
   if (state.levelUp && state.levelUp.level !== celebratedLevel) {
     celebratedLevel = state.levelUp.level
     playLevelUp(state)
+  }
+  for (const eraId of state.agentCharge?.newlyLitEraIds || []) {
+    if (celebratedEraCards.has(eraId)) continue
+    celebratedEraCards.add(eraId)
+    const era = (state.agentCharge?.eraCards || []).find((e) => e.id === eraId)
+    toast(`${era?.icon || '✨'} ${era?.name || 'Era'} Card activated — stored in Pack`, 4800)
   }
   // Inherently one-shot, unlike levelUp — the backend deletes the lapsed
   // rc_player_districts row in the same request that reports it, so it
