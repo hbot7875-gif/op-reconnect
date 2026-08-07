@@ -296,7 +296,25 @@ body {
   .command-scene { min-height: 620px; border-radius: 20px; }
   .command-scene > .city-plan { inset: 52px 4px 220px; }
   .command-scene > .city-plan > * { width: auto; height: 100%; max-width: 100%; }
-  .command-core { left: 10px; top: 84px; transform: scale(.86); transform-origin: top left; }
+  /* Keep the survival control beside the map controls, not on top of the
+     Old Grid wedge. Tapping this compact Bomb still opens the full charging
+     scene; only its always-on map presence is reduced. */
+  .command-core { left: auto; right: 56px; top: 9px; width: auto; transform: none; }
+  .command-scene .command-core .core-block { min-height: 36px; flex-direction: row; gap: 6px; padding: 3px 8px 3px 6px;
+    border: 1px solid var(--border); border-radius: 999px; background: rgba(10,8,18,.78); backdrop-filter: blur(8px); }
+  .command-scene .command-core .army-core { order: 1; width: 30px; height: 34px; margin: 0; overflow: visible; }
+  .command-scene .command-core .army-core > * { display: none; }
+  .command-scene .command-core .army-core::before { content: '⟭⟬'; position: absolute; left: 1px; top: 0;
+    width: 27px; height: 27px; display: grid; place-items: center; border-radius: 50%;
+    border: 1px solid rgba(139,92,246,.55); color: var(--text); font-family: var(--disp); font-size: 9px;
+    background: radial-gradient(circle at 38% 30%, rgba(255,255,255,.24), rgba(139,92,246,.42) 45%, #161222 76%);
+    box-shadow: 0 0 calc(4px + var(--charge) * 10px) rgba(139,92,246,.5); }
+  .command-scene .command-core .army-core::after { content: ''; position: absolute; left: 11px; top: 25px;
+    width: 8px; height: 9px; border-radius: 0 0 4px 4px; background: #08070b; border: 1px solid rgba(255,255,255,.14); }
+  .command-scene .command-core .army-core.is-brownout::before { filter: grayscale(1); opacity: .6; box-shadow: none; }
+  .command-scene .command-core .core-read { order: 2; margin: 0; }
+  .command-scene .command-core .core-pct { min-width: 30px; font-size: 11px; letter-spacing: .4px; }
+  .command-scene .command-core .core-low-cta { display: none; }
   .recovery-signal { top: 14px; left: 14px; }
   .command-tools { top: 13px; right: 13px; }
   .mission-beacon { left: 14px; bottom: 74px; width: calc(100% - 28px); }
@@ -1807,6 +1825,7 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 /* ── overlay / sheets ── */
 #overlay { position: fixed; inset: 0; z-index: 50; background: rgba(5, 4, 10, 0.86);
   backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; padding: 20px; }
+body.overlay-open { overflow: hidden; }
 #overlay[hidden], [hidden] { display: none !important; }
 .sheet { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
   padding: 22px; max-width: 420px; width: 100%; max-height: 82vh; overflow-y: auto; }
@@ -1850,7 +1869,8 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
   padding: 5px 0; font-size: 13.5px; color: var(--muted); }
 
 /* Agent Manual — plain reading flow, not a stack of reference cards. */
-.agent-manual { max-width: 500px; }
+.agent-manual { max-width: 500px; padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+.am-scroll { min-height: 0; overflow-y: auto; padding: 22px 22px 8px; }
 .am-intro { margin: 9px 0 2px; font-size: 14px; line-height: 1.5; color: var(--muted); }
 .am-section { padding: 18px 0; border-bottom: 1px solid var(--border); }
 .am-section-title { margin-bottom: 9px; font-family: var(--disp); font-size: 17px;
@@ -1861,13 +1881,14 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
   background: var(--purple-soft); border: 1px solid rgba(139,92,246,0.45); color: var(--purple-lt);
   font-family: var(--mono); font-size: 10px; font-weight: 800; }
 .am-step b, .am-xp-row b { display: block; font-size: 14px; color: var(--text); }
-.am-step small, .am-xp-row small { display: block; margin-top: 2px; font-size: 12.5px;
-  line-height: 1.45; color: var(--muted); }
+.am-step small, .am-xp-row small { display: block; margin-top: 2px; font-size: 13.5px;
+  line-height: 1.5; color: var(--muted); }
 .am-xp-icon { width: 23px; text-align: center; font-size: 17px; line-height: 1.3; }
 .am-footnote { margin: 10px 0 0 38px; font-size: 11.5px; line-height: 1.5; color: var(--dim); }
 .am-charge-note { border-bottom: 0; }
-.am-charge-note p { margin: 7px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
-.agent-manual > .btn { width: 100%; margin-top: 4px; }
+.am-charge-note p { margin: 7px 0 0; font-size: 13.5px; line-height: 1.5; color: var(--muted); }
+.agent-manual > .btn { flex: none; width: 100%; margin: 0; padding-block: 14px; border-radius: 0;
+  border-inline: 0; border-bottom: 0; background: var(--surface-2); }
 .bd-line b { font-family: var(--mono); font-size: 13px; font-weight: 400; color: var(--text); }
 .bd-clock { color: var(--crimson) !important; letter-spacing: 1.5px; }
 .bomb-dash .btn-ghost { margin-top: 16px; }

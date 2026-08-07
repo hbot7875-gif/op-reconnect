@@ -11,6 +11,7 @@ import { getAgentNo } from './session.js'
 
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+const CHARGE_CELL_HOURS = 2
 
 function fmtHours(h) {
   if (h <= 0) return '0h'
@@ -81,7 +82,7 @@ function paint(body, ac, focusEraId = null) {
   const feedCard = el('div', 'ms-card')
   feedCard.innerHTML = `
     <div class="ms-card-head"><span class="ms-card-icon">⚡</span><span class="ms-card-title">Feed the Bomb</span></div>
-    <p class="ms-card-body ac-feed-copy">You have ${ac.chargeCells} Charge Cell${ac.chargeCells === 1 ? '' : 's'}. Each one buys 4 hours.</p>
+    <p class="ms-card-body ac-feed-copy">You have ${ac.chargeCells} Charge Cell${ac.chargeCells === 1 ? '' : 's'}. Each one adds ${CHARGE_CELL_HOURS} hours.</p>
   `
   const feedBtn = el('button', 'btn btn-primary', 'Feed 1 Charge Cell')
   feedBtn.disabled = ac.chargeCells < 1
@@ -91,6 +92,7 @@ function paint(body, ac, focusEraId = null) {
     if (!res.success) { toast(res.error || "Couldn't feed it"); feedBtn.disabled = false; return }
     for (const button of body.querySelectorAll('button')) button.disabled = true
 
+    const hoursAdded = Number(res.hoursAdded) || CHARGE_CELL_HOURS
     const nextHours = Math.max(0, (new Date(res.chargedUntil).getTime() - Date.now()) / 3_600_000)
     const land = () => {
       stage.classList.add('has-landed')
@@ -99,9 +101,9 @@ function paint(body, ac, focusEraId = null) {
       stage.querySelector('.ac-hours').textContent = fmtHours(nextHours)
       stage.querySelector('.ac-label').textContent = 'charged'
       stage.querySelector('.ac-cell-count').textContent = Math.max(0, ac.chargeCells - 1)
-      stage.querySelector('.ac-reward').textContent = '+4 HOURS'
+      stage.querySelector('.ac-reward').textContent = `+${hoursAdded} HOURS`
       const remainingCells = Math.max(0, ac.chargeCells - 1)
-      body.querySelector('.ac-feed-copy').textContent = `You have ${remainingCells} Charge Cell${remainingCells === 1 ? '' : 's'}. Each one buys 4 hours.`
+      body.querySelector('.ac-feed-copy').textContent = `You have ${remainingCells} Charge Cell${remainingCells === 1 ? '' : 's'}. Each one adds ${hoursAdded} hours.`
 
       // Keep the Pack wallet honest immediately instead of waiting for the
       // next 90-second game-state poll.
@@ -120,7 +122,7 @@ function paint(body, ac, focusEraId = null) {
 
     if (reducedMotion()) {
       land()
-      toast('+4h charge')
+      toast(`+${hoursAdded}h charge`)
       await loadAndPaint(body)
       return
     }
@@ -128,7 +130,7 @@ function paint(body, ac, focusEraId = null) {
     stage.classList.add('is-feeding')
     await wait(720) // Cell reaches the handle: commit the visible state here.
     land()
-    toast('+4h charge')
+    toast(`+${hoursAdded}h charge`)
     await wait(680) // Let the globe flare and reward text finish before repaint.
     await loadAndPaint(body)
   }

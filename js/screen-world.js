@@ -253,7 +253,7 @@ function coreBlock(state) {
   const hours = Math.max(0, Number(charge.hoursRemaining) || 0)
   const neverFed = !charge.isDark && hours <= 0
   // Same 48-hour visual ceiling as the full Personal Charge sheet: one Cell
-  // visibly helps without making a 4-hour feed look completely full.
+  // visibly helps without making a 2-hour feed look completely full.
   const chargeFrac = Math.max(0, Math.min(1, hours / 48))
   const chargeText = charge.isDark ? 'DARK' : neverFed ? 'EMPTY' : `${Math.round(hours)}H`
   const firstReveal = !bombIntroPlayed
@@ -309,8 +309,8 @@ function coreBlock(state) {
   `
   zone.appendChild(read)
 
-  if ((charge.isDark || hours <= 4) && cells > 0) {
-    const low = el('button', 'core-low-cta', 'LOW POWER · FEED 1 CELL → +4 HOURS')
+  if ((charge.isDark || hours <= 2) && cells > 0) {
+    const low = el('button', 'core-low-cta', 'LOW POWER · FEED 1 CELL → +2 HOURS')
     low.onclick = () => showOverlay(agentChargeSheet())
     zone.appendChild(low)
   }

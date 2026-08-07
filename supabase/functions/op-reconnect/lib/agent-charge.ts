@@ -15,7 +15,7 @@ import { todayKst, kstWeekKey } from './kst.ts'
 import { artistAllowed, normKeyFull } from './text.ts'
 import { ERA_CATALOG } from './era-timeline.ts'
 
-export const HOURS_PER_CHARGE_CELL = 4
+export const HOURS_PER_CHARGE_CELL = 2
 export const HOURS_PER_LIT_ERA = 10
 const SOFT_RESET_DAYS = 7   // dark this long → abandon the active district, back to Home Base
 const FULL_RESET_DAYS = 14  // dark this long → every restored district reverts (XP stays banked)
@@ -277,7 +277,7 @@ export async function feedCharge(supabase: SupabaseDB, agentNo: string, cellsToS
   await supabase.from('rc_agent_charge')
     .update({ charged_until: newChargedUntil, blackout_started_at: null, soft_reset_at: null, full_reset_at: null, updated_at: new Date().toISOString() })
     .eq('agent_no', agentNo)
-  return { success: true, chargedUntil: newChargedUntil }
+  return { success: true, hoursAdded: cellsToSpend * HOURS_PER_CHARGE_CELL, chargedUntil: newChargedUntil }
 }
 
 export async function setAutoFeed(supabase: SupabaseDB, agentNo: string, on: boolean) {

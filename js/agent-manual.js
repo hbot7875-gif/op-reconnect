@@ -5,9 +5,9 @@
 import { el, hideOverlay } from './state.js'
 
 const STEPS = [
-  ['1', 'Check your ARMY Bomb', 'Your remaining charge is shown on City. Tap the Bomb whenever you need to feed it.'],
-  ['2', 'Earn Charge Cells', 'Stream Album Goal tracks. Every 20 counted album streams earns 1 Charge Cell, and each Cell adds 4 hours.'],
-  ['3', 'Restore districts', 'Enter your active district and complete its Track Goals, Album Goal, and ReConnect Mission before the 7-day timer ends.'],
+  ['1', 'Check your ARMY Bomb', 'Your remaining charge is shown on City. Tap the Bomb to feed it, or turn on Auto Feed to use Cells when its power runs out.'],
+  ['2', 'Earn Charge Cells', 'Every 20 counted Album Goal streams automatically earns 1 Charge Cell. Your Album Goal progress does not drop, and each Cell adds 2 hours.'],
+  ['3', 'Restore districts', 'Complete the active Track, Album, and ReConnect goals before the 7-day timer ends. Some ReConnect Missions ask other agents to join and stream with you.'],
   ['4', 'Build backup power', 'Stream every track in an era during the week to activate its card. It stays in Pack until you use it for 10 emergency hours, then resets Monday.'],
 ]
 
@@ -23,8 +23,9 @@ function sectionTitle(text) {
 
 export function agentManualSheet() {
   const sheet = el('div', 'sheet agent-manual')
-  sheet.appendChild(el('div', 'eyebrow', '📖 HOW TO PLAY'))
-  sheet.appendChild(el('p', 'am-intro', 'Keep your ARMY Bomb charged. Complete assigned goals to restore districts and earn XP.'))
+  const content = el('div', 'am-scroll')
+  content.appendChild(el('div', 'eyebrow', '📖 HOW TO PLAY'))
+  content.appendChild(el('p', 'am-intro', 'Keep your ARMY Bomb charged. Complete assigned goals to restore districts and earn XP.'))
 
   const play = el('section', 'am-section')
   play.appendChild(sectionTitle('Keep the Bomb alive'))
@@ -34,7 +35,7 @@ export function agentManualSheet() {
       <span><b>${title}</b><small>${body}</small></span>
     `))
   }
-  sheet.appendChild(play)
+  content.appendChild(play)
 
   const xp = el('section', 'am-section')
   xp.appendChild(sectionTitle('How to earn XP'))
@@ -45,13 +46,15 @@ export function agentManualSheet() {
     `))
   }
   xp.appendChild(el('p', 'am-footnote', 'XP raises your Level and Rank. Your current progress is always shown at the top of the screen.'))
-  sheet.appendChild(xp)
+  content.appendChild(xp)
 
   const dark = el('section', 'am-section am-charge-note')
   dark.appendChild(sectionTitle('If the Bomb goes dark'))
   dark.appendChild(el('p', '', 'A short blackout is a warning. If it stays dark for 7 days, your active district resets. At 14 days, restored districts reset.'))
-  dark.appendChild(el('p', '', 'Your XP, Level, Rank, badges, and merch remain safe. Streak Freezes protect missed days automatically when available.'))
-  sheet.appendChild(dark)
+  dark.appendChild(el('p', '', 'Your XP, Level, Rank, badges, and merch remain safe. Each Streak Freeze is used automatically to cover one missed day and can delay a blackout reset.'))
+  content.appendChild(dark)
+
+  sheet.appendChild(content)
 
   const close = el('button', 'btn btn-ghost', 'Got it')
   close.onclick = hideOverlay

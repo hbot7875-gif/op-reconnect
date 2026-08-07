@@ -55,6 +55,7 @@ export function showOverlay(contentNode) {
   overlay.innerHTML = ''
   overlay.appendChild(contentNode)
   overlay.hidden = false
+  document.body.classList.add('overlay-open')
   overlay.onclick = (e) => { if (e.target === overlay) hideOverlay() }
 }
 
@@ -62,4 +63,5 @@ export function hideOverlay() {
   const overlay = document.getElementById('overlay')
   overlay.hidden = true
   overlay.innerHTML = ''
+  document.body.classList.remove('overlay-open')
 }

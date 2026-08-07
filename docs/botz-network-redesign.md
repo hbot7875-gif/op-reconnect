@@ -54,7 +54,7 @@ work). No per-agent inventory, nothing to "run out of," nobody's account resets.
 The new proposal, as I understand it:
 - The Bomb should always be charging, and **drains** when there's no fuel.
 - **Fuel / Botz**: a per-agent consumable. Earned from album-goal streams — 20 streams = 1
-  fuel/botz. 1 fuel/botz keeps the Bomb charged for up to 4 hours.
+  fuel/botz. 1 fuel/botz keeps the Bomb charged for up to 2 hours.
 - **Lit-up Eras**: stream an era's tracks one by one to "light up" that era for the week.
   While lit, it keeps the Bomb charged for 24 hours. **Doesn't carry over** — resets every
   week, unlike the Era Timeline's own cumulative, all-time, never-reset design (see
@@ -212,7 +212,7 @@ would be the first real currency-sink/storefront in the game.
   `lib/agent-charge.ts`'s `getAgentChargeView()` is the one function handlers.ts calls each
   poll: it catches up auto-feed retroactively, activates completed Era Cards, then evaluates the
   blackout consequences. New client screen `js/agent-charge.js` (Pack → Personal Charge):
-  shows hours remaining, feeds Charge Cells (4h each, `feedCharge`), toggles auto-feed
+  shows hours remaining, feeds Charge Cells (2h each, `feedCharge`), toggles auto-feed
   (`setAutoFeed`), and lists this week's Era Card progress and inventory.
 - **Two-tier blackout, exactly as specified in the follow-up clarification** (not just the
   original 7-day figure): 7 continuous days dark abandons the active district back to

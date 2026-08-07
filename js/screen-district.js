@@ -110,7 +110,7 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
     const cellAwardKey = `${d.id}:${d.chargeCellProgress?.earnedThisDistrict || 0}`
     if (cellAward > 0 && celebratedCellAward !== cellAwardKey) {
       celebratedCellAward = cellAwardKey
-      toast(`Charge Cell earned — tap your ARMY Bomb to add ${cellAward * 4} hours.`)
+      toast(`Charge Cell earned — tap your ARMY Bomb to add ${cellAward * 2} hours.`)
       const source = board.querySelector('.cell-progress')
       const target = document.querySelector('#tabbar [data-tab="resources"]')
       if (source && target && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
