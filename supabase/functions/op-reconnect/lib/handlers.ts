@@ -398,8 +398,9 @@ export async function joinGame(supabase: SupabaseDB, params: any) {
     const rollups = await ensureDailyRollups(supabase, agent, player, content)
     const todayRow = rollups.find((r) => String(r.kst_date) === todayKst())
     const frozen = freezeGoals(content, mode, tutorial)
-    const cap = xpRules(content).varietyCapBase // tutorial ignores multiplier
-    const baseline = computeBaseline(todayRow?.track_counts || {}, frozen, cap)
+    const xpCap = xpRules(content).varietyCapBase
+    const goalCap = xpCap * Math.max(1, frozen.meta.multiplier || 1)
+    const baseline = computeBaseline(todayRow?.track_counts || {}, frozen, goalCap, xpCap)
     await supabase.from('rc_player_districts').upsert(
       { agent_no: agentNo, district_id: tutorial.id, status: 'active', goals: frozen, baseline },
       { onConflict: 'agent_no, district_id', ignoreDuplicates: true })
@@ -435,8 +436,9 @@ export async function startDistrict(supabase: SupabaseDB, params: any) {
   const rollups = await ensureDailyRollups(supabase, agent, player, content)
   const todayRow = rollups.find((r) => String(r.kst_date) === todayKst())
   const frozen = freezeGoals(content, player.mode, district)
-  const cap = xpRules(content).varietyCapBase
-  const baseline = computeBaseline(todayRow?.track_counts || {}, frozen, cap)
+  const xpCap = xpRules(content).varietyCapBase
+  const goalCap = xpCap * Math.max(1, frozen.meta.multiplier || 1)
+  const baseline = computeBaseline(todayRow?.track_counts || {}, frozen, goalCap, xpCap)
   const { error: insErr } = await supabase.from('rc_player_districts')
     .insert({ agent_no: agentNo, district_id: district.id, status: 'active', goals: frozen, baseline })
   if (insErr) return { success: false, error: 'district_already_started' }

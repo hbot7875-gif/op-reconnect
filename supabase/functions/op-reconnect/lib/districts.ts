@@ -36,7 +36,12 @@ export interface RollupRow {
 export function freezeGoals(content: GameContent, mode: string, district: DistrictRow): FrozenGoals {
   const multiplier = modeMultiplier(content, mode)
 
-  if (district.is_tutorial) {
+  const assignedTracks = content.goals.filter((g) => g.kind === 'track' && g.district_id === district.id)
+  const assignedAlbums = content.goals.filter((g) => g.kind === 'album' && g.district_id === district.id && g.tracks)
+
+  // Keep the original three-play tutorial only as a safe fallback for an
+  // unconfigured Home Base. Assigned goals make it a real weekly district.
+  if (district.is_tutorial && assignedTracks.length === 0 && assignedAlbums.length === 0) {
     const tut = content.config.tutorial || { trackGoalId: null, plays: 3 }
     const goal = content.goals.find((g) => g.id === tut.trackGoalId) || content.goals.find((g) => g.kind === 'track')
     return {
@@ -55,12 +60,10 @@ export function freezeGoals(content: GameContent, mode: string, district: Distri
   // the admin assigns it in the Goals tab. Album goals work the same as
   // track goals now — a district can carry more than one (each is its own
   // full-album-pass checklist), not just a single one.
-  const trackGoals = content.goals
-    .filter((g) => g.kind === 'track' && g.district_id === district.id)
+  const trackGoals = assignedTracks
     .map((g) => ({ id: g.id, label: g.label, artist: g.artist, target: g.target * multiplier, keys: goalKeys(g) }))
 
-  const albumGoals = content.goals
-    .filter((g) => g.kind === 'album' && g.district_id === district.id && g.tracks)
+  const albumGoals = assignedAlbums
     .map((g) => ({
       id: g.id,
       label: g.label,
@@ -96,21 +99,27 @@ export function freezeGoals(content: GameContent, mode: string, district: Distri
     reconnect = { id: picked.id, variant, config }
   }
 
-  return { trackGoals, albumGoals, reconnect, meta: { mode, multiplier } }
+  const tutorialMeta = district.is_tutorial ? { tutorial: true } : {}
+  return { trackGoals, albumGoals, reconnect, meta: { mode, multiplier, ...tutorialMeta } }
 }
 
 /** Capped plays already accrued today — so activation-day streams from before
  *  the "Begin Restoration" tap never count toward the new district. */
-export function computeBaseline(todayBucket: DayBucket, frozen: FrozenGoals, cap: number): Record<string, number> {
+export function computeBaseline(
+  todayBucket: DayBucket,
+  frozen: FrozenGoals,
+  goalCap: number,
+  xpCap = goalCap,
+): Record<string, number> {
   const baseline: Record<string, number> = {}
   for (const g of frozen.trackGoals) {
     const plays = g.keys.reduce((s, k) => s + (todayBucket[k]?.n || 0), 0)
-    baseline[`t:${g.id}`] = Math.min(plays, cap)
+    baseline[`t:${g.id}`] = Math.min(plays, goalCap)
   }
   for (const a of frozen.albumGoals) {
     for (const t of a.tracks) {
       const plays = t.keys.reduce((s, k) => s + (todayBucket[k]?.n || 0), 0)
-      baseline[`a:${a.id}:${t.label}`] = Math.min(plays, cap)
+      baseline[`a:${a.id}:${t.label}`] = Math.min(plays, goalCap)
     }
   }
   // XP uses the union of all assigned track keys, not the sum of goals.
@@ -120,7 +129,7 @@ export function computeBaseline(todayBucket: DayBucket, frozen: FrozenGoals, cap
   for (const g of frozen.trackGoals) for (const key of g.keys) xpKeys.add(key)
   for (const a of frozen.albumGoals) for (const t of a.tracks) for (const key of t.keys) xpKeys.add(key)
   baseline['xp:goal-streams'] = [...xpKeys].reduce(
-    (sum, key) => sum + Math.min(todayBucket[key]?.n || 0, cap), 0)
+    (sum, key) => sum + Math.min(todayBucket[key]?.n || 0, xpCap), 0)
   return baseline
 }
 
@@ -157,13 +166,10 @@ export function districtProgress(
   activatedAt: string,
   content: GameContent,
 ): DistrictProgress {
-  // varietyCapBase is flat, not scaled by frozen.meta.multiplier — that
-  // multiplier still sizes goal *targets* (below), but its old variety-cap
-  // job was retired game-wide when streams-per-XP went mode-dependent (see
-  // config.ts's streamsPerXpFor and the matching fix in handlers.ts/
-  // derive.ts). Left scaling here would have been half-finished: the
-  // top-level daily cap already stopped scaling by mode, this one hadn't.
-  const cap = xpRules(content).varietyCapBase
+  // XP keeps a flat anti-farming cap, but district progress scales its cap
+  // with the account mode. Otherwise Hard's 200-stream track target could
+  // never fit inside a seven-day window capped at 15 per day (105 maximum).
+  const cap = xpRules(content).varietyCapBase * Math.max(1, frozen.meta.multiplier || 1)
   const activationDate = kstDateOf(Math.floor(new Date(activatedAt).getTime() / 1000))
   const inWindow = rollups.filter((r) => r.kst_date >= activationDate)
 
@@ -204,8 +210,8 @@ export function districtProgress(
 export function albumGoalStreamTotal(
   frozen: FrozenGoals, baseline: Record<string, number>, rollups: RollupRow[], activatedAt: string, content: GameContent,
 ): number {
-  // Same flat-cap fix as districtProgress() above — see its comment.
-  const cap = xpRules(content).varietyCapBase
+  // Goal progress uses the same mode-scaled cap as districtProgress().
+  const cap = xpRules(content).varietyCapBase * Math.max(1, frozen.meta.multiplier || 1)
   const activationDate = kstDateOf(Math.floor(new Date(activatedAt).getTime() / 1000))
   const inWindow = rollups.filter((r) => r.kst_date >= activationDate)
   let total = 0

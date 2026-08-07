@@ -16,6 +16,15 @@ XP comes from the active district’s assigned gameplay:
 
 If a player has no active district, ordinary streams do not generate stream XP. A successful Red Zone is the one explicit event-based exception described below.
 
+## Home Base — seven-day goal set
+
+Home Base is a full first restoration with a seven-day deadline. Its base Easy-mode checklist is:
+
+- **Track Goals:** Don't Say You Love Me, Haegeum, DNA, Permission to Dance, Swim, Normal, and Come Over — 20 streams each.
+- **Album Goals:** Arirang, Keep Swimming, Echo, and Indigo — 2 complete passes each.
+
+Medium and Hard scale these targets through the configured mode multiplier. Goal-progress daily caps scale by the same multiplier so consolidated multi-account activity can reach the larger weekly targets; the separate XP anti-farming cap remains flat.
+
 ## Red Zone XP pool
 
 - A Red Zone starts with an admin-editable total XP pool. The default is **500 XP**.
