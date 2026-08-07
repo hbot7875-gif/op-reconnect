@@ -4,7 +4,7 @@
 // its own full screen there.
 
 import { el, esc, showOverlay, hideOverlay, getState } from './state.js'
-import { openPlaylist, remaining } from './playlist.js'
+import { openPlaylist, remaining, dailyPace } from './playlist.js'
 import { missionBoardSheet } from './mission-board.js'
 
 /** Overall restoration fraction (0..1) driving the scene's lights. */
@@ -92,7 +92,12 @@ export function renderBoard(board, d) {
   // it reads as one now.
   const left = remaining({ activeDistrict: d })
   if (left.length) {
-    const q = el('button', 'queue-btn', `🧠 Build today's stream queue <i>${left.reduce((a, x) => a + x.need, 0)} plays left</i>`)
+    const totalNeed = left.reduce((a, x) => a + x.need, 0)
+    const pace = dailyPace({ activeDistrict: d })
+    const paceText = pace.perTrack.length ? ` &middot; ${pace.totalPerDay}/day to finish in time` : ''
+    const urgent = typeof pace.daysLeft === 'number' && pace.daysLeft <= 2
+    const q = el('button', 'queue-btn' + (urgent ? ' is-urgent' : ''),
+      `🧠 Build today's stream queue <i>${totalNeed} plays left${paceText}</i>`)
     q.onclick = () => showOverlay(openPlaylist(getState() || { activeDistrict: d }))
     board.appendChild(q)
   }

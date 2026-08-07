@@ -41,6 +41,22 @@ export function remaining(state) {
   return out.sort((a2, b2) => b2.need - a2.need)
 }
 
+/** Today's per-track quota to finish this district by its deadline — the
+ *  one thing the plain "what's owed" queue above doesn't tell you: how fast.
+ *  daysLeft comes pre-ceil'd from the server (see districtDeadline in
+ *  districts.ts), so day 0 ("last day") still spreads the remaining debt
+ *  across one day rather than dividing by zero. */
+export function dailyPace(state) {
+  const d = state.activeDistrict
+  const debts = remaining(state)
+  const daysLeft = typeof d?.daysLeft === 'number' ? d.daysLeft : null
+  if (!debts.length || daysLeft === null) return { daysLeft, perTrack: [], totalPerDay: 0 }
+  const days = Math.max(1, daysLeft)
+  const perTrack = debts.map((x) => ({ ...x, perDay: Math.ceil(x.need / days) }))
+  const totalPerDay = perTrack.reduce((s, x) => s + x.perDay, 0)
+  return { daysLeft, perTrack, totalPerDay }
+}
+
 /** Round-robin the debts into a play order. */
 export function buildQueue(state, cap = 60) {
   const pool = remaining(state).map((x) => ({ ...x }))
@@ -91,6 +107,18 @@ export function openPlaylist(state) {
   const tracks = new Set(queue.map((q) => q.label))
   sheet.appendChild(el('div', 'pl-sum',
     `${queue.length} ${queue.length === 1 ? 'play' : 'plays'} &middot; ${tracks.size} ${tracks.size === 1 ? 'track' : 'tracks'} &middot; in this order`))
+
+  const pace = dailyPace(state)
+  if (pace.perTrack.length) {
+    const urgent = pace.daysLeft <= 2
+    const left = pace.daysLeft <= 0 ? 'Last day' : pace.daysLeft === 1 ? '1 day left' : `${pace.daysLeft} days left`
+    sheet.appendChild(el('div', 'pl-pace' + (urgent ? ' is-urgent' : ''), `
+      <div class="pl-pace-head">⏳ ${left} &middot; <b>${pace.totalPerDay}/day</b> to finish on time</div>
+      <div class="pl-pace-rows">
+        ${pace.perTrack.slice(0, 6).map((x) => `<span class="pl-pace-row"><span>${esc(x.label)}</span><b>${x.perDay}/day</b></span>`).join('')}
+      </div>
+    `))
+  }
 
   const list = el('ol', 'pl-list')
   queue.forEach((q, i) => {
