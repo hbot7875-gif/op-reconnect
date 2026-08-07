@@ -12,6 +12,7 @@ XP comes from the active district’s assigned gameplay:
 2. **Album Goals** — streams matching a listed Album Goal track can earn stream XP.
 3. **Reconnect Goal** — this must be completed to finish the district. It does not turn unrelated streams into XP.
 4. **District restoration** — completing the Track, Album, and Reconnect checklist restores the district and grants the district-completion reward. The current default is **+50 XP**.
+5. **Side Missions** — stream Wild Flower, Don't Say You Love Me, Haegeum, and Killin' It Girl at least once each in a KST day. Clearing all four grants **+10 XP once that day**. Each track also has a 20-stream weekly survival target.
 
 If a player has no active district, ordinary streams do not generate stream XP. A successful Red Zone is the one explicit event-based exception described below.
 
@@ -42,7 +43,7 @@ The day keeps the mode with which it was first recorded. Switching modes later c
 
 - BTS streams that do not match the active district’s Track or Album Goals.
 - Streams made before the player taps **Begin Restoration**.
-- The optional **Today / Daily Transmission** task. It no longer grants a separate +10 XP.
+- Daily Transmission has been retired and cannot award XP.
 - Red Zone activity below the 7-stream qualification minimum.
 - Charge Cells, lit eras, wings, streak freezes, merch, tickets, collectibles, or passive ARMY Bomb charge.
 

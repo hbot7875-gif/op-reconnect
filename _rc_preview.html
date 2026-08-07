@@ -134,7 +134,20 @@
         { id: 'pi17', itemId: 'magnet-set', name: 'Magnet set', kind: 'magnet', era: 'Dalmajung', rarity: 'common', blurb: 'Holds the fridge together, mostly.', districtId: null, usedAt: null },
         { id: 'pi18', itemId: 'tray-mirror', name: 'Mirror tray', kind: 'tray', era: 'Arirang', rarity: 'common', blurb: 'Keys, rings, whatever is in your pocket.', districtId: null, usedAt: null },
       ],
-      transmission: { text: 'HQ intercepted chatter: Haegeum is 163M from 1B. Route 3 passes today.', progress: 2, required: 3, done: false, xpOnComplete: 10 },
+      sideMissions: {
+        weekKey: '2026-08-03', dailyRequired: 1, weeklyRequired: 20,
+        xpOnComplete: 10, todayDoneCount: 2, todayDone: false, weekDone: false,
+        tracks: [
+          { id: 'wild-flower', name: 'Wild Flower', artist: 'RM', todayCount: 1, todayDone: true, weeklyTotal: 7, weeklyRequired: 20, weeklyDone: false,
+            days: [{count:1,done:true},{count:1,done:true},{count:2,done:true},{count:1,done:true},{count:1,done:true},{count:1,done:true},{count:0,done:false,future:true}] },
+          { id: 'dont-say-you-love-me', name: "Don't Say You Love Me", artist: 'Jin', todayCount: 0, todayDone: false, weeklyTotal: 5, weeklyRequired: 20, weeklyDone: false,
+            days: [{count:1,done:true},{count:1,done:true},{count:1,done:true},{count:1,done:true},{count:1,done:true},{count:0,done:false},{count:0,done:false,future:true}] },
+          { id: 'haegeum', name: 'Haegeum', artist: 'Agust D', todayCount: 1, todayDone: true, weeklyTotal: 8, weeklyRequired: 20, weeklyDone: false,
+            days: [{count:1,done:true},{count:2,done:true},{count:1,done:true},{count:2,done:true},{count:1,done:true},{count:1,done:true},{count:0,done:false,future:true}] },
+          { id: 'killin-it-girl', name: "Killin' It Girl", artist: 'j-hope', todayCount: 0, todayDone: false, weeklyTotal: 4, weeklyRequired: 20, weeklyDone: false,
+            days: [{count:1,done:true},{count:1,done:true},{count:0,done:false},{count:1,done:true},{count:1,done:true},{count:0,done:false},{count:0,done:false,future:true}] },
+        ],
+      },
       map: { wards: WARDS, districts },
       eraTimeline: { eras: [
         { id: 'school', name: 'School Trilogy', icon: '📚', done: 17, total: 17, albums: ['2 Cool 4 Skool', 'O!RUL8,2?', 'Skool Luv Affair'], tracks: [] },

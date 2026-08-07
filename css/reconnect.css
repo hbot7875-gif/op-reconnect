@@ -265,6 +265,47 @@ body {
    identical whether this is a plain block (phone) or a grid cell (desktop). */
 .world-map { display: flex; flex-direction: column; gap: 20px; }
 
+/* Side Missions are a survival checklist, not another dashboard card. The
+   section uses dividers and live marks so it reads like a mission console. */
+.side-missions { padding: 18px 4px 16px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.side-mission-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; }
+.side-mission-kicker { display: block; color: var(--purple-lt); font-family: var(--mono); font-size: 9px;
+  letter-spacing: 1.8px; text-transform: uppercase; }
+.side-mission-head h3 { margin: 3px 0 0; font-family: var(--disp); font-size: 18px; letter-spacing: .8px; }
+.side-mission-today { color: var(--gold); font-family: var(--mono); font-size: 10px; letter-spacing: 1px; white-space: nowrap; }
+.side-missions.is-cleared .side-mission-today { color: #64e6a5; }
+.side-mission-rule { margin: 7px 0 12px; color: var(--muted); font-size: 12px; }
+.side-mission-tracks { border-top: 1px solid rgba(255,255,255,.07); }
+.side-mission-track { position: relative; width: 100%; min-height: 49px; display: grid;
+  grid-template-columns: 24px minmax(0,1fr) auto; align-items: center; gap: 8px; padding: 8px 4px 11px;
+  border: 0; border-bottom: 1px solid rgba(255,255,255,.07); background: transparent; color: var(--text);
+  text-align: left; cursor: pointer; }
+.side-track-check { width: 20px; height: 20px; display: grid; place-items: center; border: 1px solid var(--border-str);
+  border-radius: 50%; color: var(--dim); font-family: var(--mono); font-size: 11px; }
+.side-mission-track.is-done .side-track-check { border-color: rgba(100,230,165,.55); color: #64e6a5; background: rgba(100,230,165,.08); }
+.side-track-copy { min-width: 0; display: flex; flex-direction: column; }
+.side-track-copy b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.side-track-copy i { color: var(--dim); font-family: var(--mono); font-size: 8px; font-style: normal; letter-spacing: .5px; text-transform: uppercase; }
+.side-track-week { color: var(--muted); font-family: var(--mono); font-size: 10px; }
+.side-track-bar { position: absolute; left: 36px; right: 4px; bottom: 6px; height: 2px; overflow: hidden; background: rgba(255,255,255,.06); }
+.side-track-bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--purple), var(--gold)); }
+.side-mission-reward { padding-top: 10px; color: var(--gold); font-family: var(--mono); font-size: 9px; letter-spacing: .8px; text-align: right; text-transform: uppercase; }
+.side-missions.is-cleared .side-mission-reward { color: #64e6a5; }
+
+.side-mission-sheet { max-width: 520px; }
+.side-sheet-track { padding: 11px 0; border-top: 1px solid var(--border); }
+.side-sheet-track.is-selected { margin-inline: -10px; padding-inline: 10px; background: rgba(139,92,246,.07); }
+.side-sheet-title { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.side-sheet-title b { font-size: 12px; }
+.side-sheet-title span { color: var(--gold); font-family: var(--mono); font-size: 10px; }
+.side-sheet-days { display: grid; grid-template-columns: repeat(7,1fr); gap: 5px; }
+.side-sheet-days > span { min-width: 0; padding: 6px 2px; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  border: 1px solid var(--border); border-radius: 7px; color: var(--dim); }
+.side-sheet-days > span.done { border-color: rgba(100,230,165,.38); color: #64e6a5; background: rgba(100,230,165,.06); }
+.side-sheet-days > span.miss { border-color: rgba(217,173,95,.25); color: var(--gold); }
+.side-sheet-days i { font-family: var(--mono); font-size: 7px; font-style: normal; }
+.side-sheet-days b { font-family: var(--mono); font-size: 9px; }
+
 /* ── desktop ────────────────────────────────────────────────────────
    This is a phone game and the 620px column is the right default. But on a
    laptop that column left two-thirds of the window as empty gutter, which

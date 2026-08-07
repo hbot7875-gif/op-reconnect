@@ -57,12 +57,71 @@ export function renderWorld(container, state) {
   command.appendChild(commandTools(state))
   wrap.appendChild(command)
 
+  if (state.sideMissions) wrap.appendChild(sideMissionsPanel(state.sideMissions))
+
   // Personal weekly Era Cards are the Bomb's emergency reserve. This is not
   // the community/all-time Era Timeline: every count here belongs to this
   // agent, resets Monday, and a lit card waits in Pack until they spend it.
   if (state.agentCharge?.eraCards?.length) wrap.appendChild(weeklyEraCards(state))
 
   container.appendChild(wrap)
+}
+
+function sideMissionsPanel(mission) {
+  const done = Number(mission.todayDoneCount) || 0
+  const total = mission.tracks?.length || 4
+  const section = el('section', 'side-missions' + (mission.todayDone ? ' is-cleared' : ''))
+  section.innerHTML = `
+    <div class="side-mission-head">
+      <div><span class="side-mission-kicker">Daily survival protocol</span><h3>Side Missions</h3></div>
+      <span class="side-mission-today">${mission.todayDone ? 'SECURED' : `${done}/${total} TODAY`}</span>
+    </div>
+    <p class="side-mission-rule">Stream each track once today. Reach 20 each this week.</p>
+    <div class="side-mission-tracks"></div>
+    <div class="side-mission-reward">${mission.todayDone
+      ? `+${mission.xpOnComplete} XP secured today`
+      : `Complete all four today · +${mission.xpOnComplete} XP`}</div>`
+
+  const list = section.querySelector('.side-mission-tracks')
+  for (const track of mission.tracks || []) {
+    const pct = Math.min(100, Math.round((track.weeklyTotal / Math.max(1, track.weeklyRequired)) * 100))
+    const row = el('button', 'side-mission-track' + (track.todayDone ? ' is-done' : ''))
+    row.type = 'button'
+    row.setAttribute('aria-label', `${track.name} by ${track.artist}. ${track.todayDone ? 'Done today' : 'Not streamed today'}. ${track.weeklyTotal} of ${track.weeklyRequired} this week.`)
+    row.innerHTML = `
+      <span class="side-track-check">${track.todayDone ? '✓' : '○'}</span>
+      <span class="side-track-copy"><b>${esc(track.name)}</b><i>${esc(track.artist)}</i></span>
+      <span class="side-track-week">${track.weeklyTotal}/${track.weeklyRequired}</span>
+      <span class="side-track-bar"><i style="width:${pct}%"></i></span>`
+    row.onclick = () => showOverlay(sideMissionSheet(mission, track.id))
+    list.appendChild(row)
+  }
+  return section
+}
+
+function sideMissionSheet(mission, selectedId = null) {
+  const sheet = el('div', 'sheet side-mission-sheet')
+  sheet.append(
+    el('div', 'eyebrow', 'SIDE MISSIONS'),
+    el('h3', '', mission.todayDone ? 'Today is secured' : `${mission.todayDoneCount}/${mission.tracks.length} tracks secured`),
+    el('p', 'muted', `Play every survival track at least once each KST day. Each track also needs ${mission.weeklyRequired} streams this week.`),
+  )
+  const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
+  for (const track of mission.tracks || []) {
+    const row = el('div', 'side-sheet-track' + (track.id === selectedId ? ' is-selected' : ''))
+    row.innerHTML = `
+      <div class="side-sheet-title"><b>${esc(track.name)}</b><span>${track.weeklyTotal}/${track.weeklyRequired}</span></div>
+      <div class="side-sheet-days">${(track.days || []).map((day, index) => `
+        <span class="${day.future ? 'future' : day.done ? 'done' : 'miss'}"><i>${days[index]}</i><b>${day.future ? '·' : day.count}</b></span>`).join('')}</div>`
+    sheet.appendChild(row)
+  }
+  sheet.appendChild(el('div', 'dim', mission.todayDone
+    ? `Daily clear complete · +${mission.xpOnComplete} XP awarded once`
+    : `Finish all four before midnight KST · +${mission.xpOnComplete} XP`))
+  const close = el('button', 'btn btn-ghost', 'Close')
+  close.onclick = hideOverlay
+  sheet.appendChild(close)
+  return sheet
 }
 
 function weeklyEraCards(state) {
@@ -513,51 +572,6 @@ function opCard(state) {
     card.appendChild(go)
   }
   return card
-}
-
-/* ── Daily transmission ─────────────────────────────────────────────────── */
-
-function statusStrip(state) {
-  const row = el('div', 'status-strip')
-
-  const t = state.transmission
-  if (t) {
-    const pct = Math.min(100, Math.round((t.progress / Math.max(1, t.required)) * 100))
-    const tile = el('button', 'status-tile' + (t.done ? ' done' : ''))
-    tile.setAttribute('aria-label', t.done
-      ? "Today's transmission complete"
-      : `Today's transmission — ${t.progress} of ${t.required}`)
-    tile.innerHTML = `
-      <div class="st-head">
-        <span class="st-label">Today</span>
-        <span class="st-val">${t.done ? 'Done' : `${t.progress}/${t.required}`}</span>
-      </div>
-      <div class="st-bar"><div class="st-fill${t.done ? ' done' : ''}" style="width:${pct}%"></div></div>
-      <div class="st-sub">${t.done ? 'Done for today' : 'Optional daily assist'}</div>
-    `
-    tile.onclick = () => showOverlay(transmissionSheet(t))
-    row.appendChild(tile)
-  }
-  return row
-}
-
-/* ── Sheets ─────────────────────────────────────────────────────────────── */
-
-function transmissionSheet(t) {
-  const sheet = el('div', 'sheet')
-  sheet.appendChild(el('div', 'eyebrow', 'Daily transmission'))
-  sheet.appendChild(el('p', 'muted', esc(t.text)))
-  const pct = Math.min(100, Math.round((t.progress / Math.max(1, t.required)) * 100))
-  sheet.appendChild(el('div', 'goal-line', `
-    <div class="pbar" style="flex:1"><div class="pfill${t.done ? ' done' : ''}" style="width:${pct}%"></div></div>
-    <span class="count">${t.done ? 'complete' : `${t.progress} / ${t.required}`}</span>`))
-  sheet.appendChild(el('div', 'dim', t.done
-    ? 'Daily assist complete &middot; new one tomorrow'
-    : 'No bonus XP &middot; resets midnight KST'))
-  const close = el('button', 'btn btn-ghost', 'Close')
-  close.onclick = hideOverlay
-  sheet.appendChild(close)
-  return sheet
 }
 
 // The bomb's panel lives in bomb-sheet.js — it grew into a real dashboard.

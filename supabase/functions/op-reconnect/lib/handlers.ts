@@ -5,7 +5,7 @@
 import type { GameContent, SupabaseDB, DistrictRow } from './config.ts'
 import { loadContent, rankFor, xpRules, restorationDays, streamsPerXpFor } from './config.ts'
 import { ensureDailyRollups, computeStreak, awardStreakBadges, totalXp, goalXpCountForDate } from './derive.ts'
-import { evaluateTransmission } from './transmission.ts'
+import { awardDailySideMissionXp, buildSideMissions } from './side-missions.ts'
 import { freezeGoals, computeBaseline, districtProgress, districtDeadline, filesRevealedCount, albumGoalStreamTotal } from './districts.ts'
 import { resolveReconnectStatus } from './reconnect-goal.ts'
 import { todayKst, nextKstMidnightUtc, kstDateOf } from './kst.ts'
@@ -94,6 +94,8 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     : null
   const rollups = await ensureDailyRollups(supabase, agent, player, content, personalBoostMult, goalXpScope)
   const todayRow = rollups.find((r) => String(r.kst_date) === today) || null
+  const sideMissions = buildSideMissions(rollups, today)
+  await awardDailySideMissionXp(supabase, player.agent_no, today, sideMissions)
 
   // ── Active district progress (+ completion latch) ──────────
   let activeDistrict: any = null
@@ -303,18 +305,6 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
 
   const bucket = todayRow?.track_counts || {}
   const counted = goalXpCountForDate(bucket, today, allowlist, cap, goalXpScope)
-  let transmission: any = null
-  if (todayRow?.transmission) {
-    const evald = evaluateTransmission(todayRow.transmission, bucket, allowlist)
-    transmission = {
-      text: todayRow.transmission.text,
-      templateId: todayRow.transmission.templateId,
-      progress: evald.progress,
-      required: todayRow.transmission.required,
-      done: todayRow.transmission_done || evald.done,
-    }
-  }
-
   // Site-owner announcements — folded into the response every screen's poll
   // already fetches (main.js, every 90s) rather than a separate mechanism.
   // See lib/broadcasts.ts / migrations/031_rc_broadcasts.sql.
@@ -352,7 +342,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     eraTimeline,
     invites,
     broadcasts,
-    transmission,
+    sideMissions,
     today: {
       kstDate: today,
       countedStreams: counted,

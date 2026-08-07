@@ -7,7 +7,6 @@ import { normKeyFull, normalizeKey, artistAllowed } from './text.ts'
 import { kstDateOf, todayKst, kstDayBounds, addDaysStr, kstDatesBetween } from './kst.ts'
 import { fetchStreamRows } from './streams.ts'
 import type { AgentSourceRow } from './streams.ts'
-import { generateTransmission, evaluateTransmission } from './transmission.ts'
 import type { DayBucket, FrozenTransmission } from './transmission.ts'
 import type { GameContent, SupabaseDB } from './config.ts'
 import { xpRules, limits, streamsPerXpFor } from './config.ts'
@@ -172,9 +171,9 @@ export async function ensureDailyRollups(
     for (const date of needed) {
       const dayData = byDay.get(date) || { raw: 0, bucket: {} }
       const existing = byDate.get(date)
-      // Frozen transmission survives refreshes; generate once per day.
-      const transmission = existing?.transmission || generateTransmission(player.agent_no, date, content)
-      const evald = transmission ? evaluateTransmission(transmission, dayData.bucket, allowlist) : { done: false, progress: 0 }
+      // Daily Transmission was replaced by the fixed four-track Side Mission.
+      // Keep the legacy columns null/false so old rows stop surfacing it.
+      const transmission = null
       // Whichever mode was live the first time THIS date's row was ever
       // written is what that date's XP converts at, for good — a mode
       // switch later in the day (or on any later poll) never rewrites a
@@ -188,7 +187,7 @@ export async function ensureDailyRollups(
         raw_streams: dayData.raw,
         track_counts: dayData.bucket,
         transmission,
-        transmission_done: evald.done || existing?.transmission_done || false,
+        transmission_done: false,
         finalized: date < today,
         mode: dayMode,
       }
