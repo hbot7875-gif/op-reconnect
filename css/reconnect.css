@@ -294,28 +294,30 @@ body {
 }
 @media (max-width: 759px) {
   .command-scene { min-height: 620px; border-radius: 20px; }
-  .command-scene > .city-plan { inset: 52px 4px 220px; }
+  .command-scene > .city-plan { inset: 62px 4px 220px; }
   .command-scene > .city-plan > * { width: auto; height: 100%; max-width: 100%; }
   /* Keep the survival control beside the map controls, not on top of the
      Old Grid wedge. Tapping this compact Bomb still opens the full charging
      scene; only its always-on map presence is reduced. */
-  .command-core { left: auto; right: 56px; top: 9px; width: auto; transform: none; }
-  .command-scene .command-core .core-block { min-height: 36px; flex-direction: row; gap: 6px; padding: 3px 8px 3px 6px;
+  .command-core { left: auto; right: 56px; top: 4px; width: auto; transform: none; }
+  .command-scene .command-core .core-block { min-height: 50px; flex-direction: row; gap: 7px; padding: 3px 9px 3px 6px;
     border: 1px solid var(--border); border-radius: 999px; background: rgba(10,8,18,.78); backdrop-filter: blur(8px); }
-  .command-scene .command-core .army-core { order: 1; width: 30px; height: 34px; margin: 0; overflow: visible; }
+  .command-scene .command-core .army-core { order: 1; width: 44px; height: 50px; margin: 0; overflow: visible; }
   .command-scene .command-core .army-core > * { display: none; }
   .command-scene .command-core .army-core::before { content: '⟭⟬'; position: absolute; left: 1px; top: 0;
-    width: 27px; height: 27px; display: grid; place-items: center; border-radius: 50%;
-    border: 1px solid rgba(139,92,246,.55); color: var(--text); font-family: var(--disp); font-size: 9px;
+    width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%;
+    border: 1px solid rgba(139,92,246,.6); color: var(--text); font-family: var(--disp); font-size: 12px;
     background: radial-gradient(circle at 38% 30%, rgba(255,255,255,.24), rgba(139,92,246,.42) 45%, #161222 76%);
-    box-shadow: 0 0 calc(4px + var(--charge) * 10px) rgba(139,92,246,.5); }
-  .command-scene .command-core .army-core::after { content: ''; position: absolute; left: 11px; top: 25px;
-    width: 8px; height: 9px; border-radius: 0 0 4px 4px; background: #08070b; border: 1px solid rgba(255,255,255,.14); }
+    box-shadow: 0 0 calc(6px + var(--charge) * 14px) rgba(139,92,246,.55); }
+  .command-scene .command-core .army-core::after { content: ''; position: absolute; left: 16px; top: 37px;
+    width: 10px; height: 12px; border-radius: 0 0 5px 5px; background: #08070b; border: 1px solid rgba(255,255,255,.14); }
   .command-scene .command-core .army-core.is-brownout::before { filter: grayscale(1); opacity: .6; box-shadow: none; }
   .command-scene .command-core .core-read { order: 2; margin: 0; }
-  .command-scene .command-core .core-pct { min-width: 30px; font-size: 11px; letter-spacing: .4px; }
+  .command-scene .command-core .core-read::before { content: 'ARMY BOMB'; display: block; margin-bottom: 2px;
+    color: var(--dim); font-family: var(--mono); font-size: 6.5px; letter-spacing: .8px; white-space: nowrap; }
+  .command-scene .command-core .core-pct { min-width: 34px; font-size: 13px; letter-spacing: .5px; }
   .command-scene .command-core .core-low-cta { display: none; }
-  .recovery-signal { top: 14px; left: 14px; }
+  .recovery-signal { top: 10px; left: 14px; }
   .command-tools { top: 13px; right: 13px; }
   .mission-beacon { left: 14px; bottom: 74px; width: calc(100% - 28px); }
 }
