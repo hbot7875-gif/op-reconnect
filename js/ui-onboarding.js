@@ -13,6 +13,8 @@ const ERRORS = {
   already_joined: 'You\'re already in — reloading…',
 }
 
+const MISSION_SOUNDTRACK = 'https://youtu.be/WyXcTOW8iPE'
+
 export function renderOnboarding(container, payload, agentNo, onJoined) {
   const intro = payload.intro || {}
   const modes = payload.modes || {}
@@ -25,9 +27,11 @@ export function renderOnboarding(container, payload, agentNo, onJoined) {
   // auth screen uses (reconnect.css's .mist), just over the plain dark
   // background here since this screen has no photo of its own.
   step1.appendChild(el('div', 'mist'))
-  step1.appendChild(ambientToggle('audio/weather-ambient.mp3'))
+  const soundtrack = ambientToggle(MISSION_SOUNDTRACK)
+  step1.appendChild(soundtrack)
   const body = el('div', 'ob-body')
-  body.appendChild(typewriterWords(intro.body || ''))
+  const lore = cinematicLore(intro.body || '')
+  body.appendChild(lore.node)
   step1.append(
     el('div', 'eyebrow', esc(intro.title || 'TRANSMISSION')),
     el('h1', 'title-sm', esc(intro.chapter || 'Operation: ReConnect')),
@@ -41,6 +45,8 @@ export function renderOnboarding(container, payload, agentNo, onJoined) {
   if (intro.audioUrl) step1.appendChild(voiceoverButton(intro.audioUrl))
 
   const btn1 = el('button', 'btn btn-primary', "I'm in")
+  btn1.classList.add('ob-continue')
+  btn1.style.animationDelay = `${Math.min(lore.duration, 8).toFixed(2)}s`
   step1.appendChild(btn1)
   container.appendChild(step1)
 
@@ -116,7 +122,10 @@ export function renderOnboarding(container, payload, agentNo, onJoined) {
       el('p', 'muted', 'This is the name other agents see. Your agent number stays private.'),
     )
     const btn3 = el('button', 'btn btn-primary', "Let's go")
-    btn3.onclick = () => showFirstRun(container, agentNo, joinedState, onJoined)
+    btn3.onclick = () => {
+      soundtrack.stopPlayback?.()
+      showFirstRun(container, agentNo, joinedState, onJoined)
+    }
     step3.appendChild(btn3)
     step3.hidden = false
   }
@@ -184,40 +193,39 @@ function renderFirstMove(mount, joinedState, proceed) {
     el('p', 'muted', activeDistrict
       // Home Base's district and ward share the same display name — skip
       // the redundant "in X" clause whenever they'd repeat.
-      ? `${esc(districtName)}${wardName && wardName !== districtName ? ` in ${esc(wardName)}` : ''} is already open and waiting. Stream any BTS track to start restoring it.`
-      : 'One district is already open on the map. Stream any BTS track to start restoring it.'),
-    el('p', 'dim', "The ARMY Bomb charges as the network heals — watch it above the map."),
+      ? `${esc(districtName)}${wardName && wardName !== districtName ? ` in ${esc(wardName)}` : ''} is already open. Enter it to see your assigned Track, Album, and Reconnect goals. Only assigned goal streams earn regular XP.`
+      : 'One district is already open on the map. Enter it to see your assigned Track, Album, and Reconnect goals. Only assigned goal streams earn regular XP.'),
+    el('p', 'dim', 'Keep your ARMY Bomb charged: every 20 counted Album Goal streams earns a Charge Cell, and one Cell adds 4 hours.'),
   )
   const btn = el('button', 'btn btn-primary', 'Show me my first district')
   btn.onclick = proceed
   mount.appendChild(btn)
 }
 
-/* ── typewriter ───────────────────────────────────────────────────────── */
+/* ── cinematic transmission ──────────────────────────────────────────── */
 
-/** The lore reads as a transmission arriving, not a wall of text dumped on
- *  screen — each word fades/rises in on its own staggered CSS delay (.ob-body
- *  .tw-word in reconnect.css). Pure CSS animation-delay rather than a JS
- *  setTimeout chain: it can't drift or desync, and prefers-reduced-motion
- *  turns it off with one rule instead of branching this function.
- *  Splits on whitespace and keeps every whitespace run as a plain text node
- *  (not wrapped), so \n\n paragraph breaks survive for .ob-body's own
- *  white-space: pre-line to render. */
-function typewriterWords(text) {
-  const frag = document.createDocumentFragment()
-  const tokens = String(text).split(/(\s+)/)
-  let i = 0
-  for (const tok of tokens) {
-    if (!tok) continue
-    if (/^\s+$/.test(tok)) { frag.appendChild(document.createTextNode(tok)); continue }
-    const span = document.createElement('span')
-    span.className = 'tw-word'
-    span.textContent = tok
-    span.style.animationDelay = `${(i * 0.035).toFixed(3)}s`
-    i++
-    frag.appendChild(span)
+/** Reveal complete thoughts instead of typing individual words. Each sentence
+ *  arrives as one cinematic beat, with paragraph breaks preserved and enough
+ *  silence between beats for the soundtrack and premise to breathe. */
+function cinematicLore(text) {
+  const node = el('div', 'ob-lore')
+  const paragraphs = String(text).trim().split(/\n\s*\n/).filter(Boolean)
+  let beat = 0
+
+  for (const paragraph of paragraphs) {
+    const group = el('div', 'ob-lore-group')
+    const sentences = paragraph.trim().split(/(?<=[.!?…])\s+/).filter(Boolean)
+    for (const sentence of sentences) {
+      const line = el('p', 'ob-beat', esc(sentence))
+      line.style.animationDelay = `${(0.45 + beat * 1.15).toFixed(2)}s`
+      group.appendChild(line)
+      beat++
+    }
+    node.appendChild(group)
   }
-  return frag
+
+  if (!beat) node.appendChild(el('p', 'ob-beat', 'TRANSMISSION LOST. STAND BY.'))
+  return { node, duration: 0.45 + Math.max(beat, 1) * 1.15 }
 }
 
 /* ── voice-over ───────────────────────────────────────────────────────── */

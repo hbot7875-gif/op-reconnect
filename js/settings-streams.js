@@ -41,8 +41,8 @@ const SOURCES = [
   {
     key: 'musicat',
     name: 'musicat.fm',
-    sub: 'Apple Music listeners',
-    body: 'Reads your musicat.fm listening history. Your public user ID is in your musicat profile URL.',
+    sub: 'Spotify + Apple Music listeners',
+    body: 'Reads the Spotify or Apple Music listening history connected to your musicat.fm profile. Your public user ID is in the profile URL.',
     field: { prop: 'musicatPublicId', param: 'musicatPublicId', label: 'musicat public ID', placeholder: 'public user id' },
   },
 ]

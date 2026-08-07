@@ -119,9 +119,9 @@ export function renderAuth(container, onAuthed) {
 function authSteps() {
   const wrap = el('div', 'auth-steps')
   const steps = [
-    'Connect a listening service',
-    'Stream BTS',
-    'Restore districts and unlock rewards',
+    'Create your private agent file',
+    'Connect Spotify or Apple Music tracking',
+    'Keep your ARMY Bomb charged and restore districts',
   ]
   steps.forEach((text, i) => {
     const step = el('div', 'auth-step')
@@ -156,7 +156,7 @@ function buildRegister(onAuthed) {
   email.placeholder = 'you@example.com'
   email.autocomplete = 'email'
 
-  const handleField = field('Handle', 'Everyone sees this. It becomes your district on the map.', handle)
+  const handleField = field('Handle', 'Your account name. Other agents see your codename after identity setup.', handle)
   const emailField = field('Email', 'Only ever used to get you back in if you lose your number or password.', email)
   const pwField = field('Password', 'At least 6 characters — a couple of words works well.', pwWrap, pw)
   const pw2Field = field('', '', pw2Wrap, pw2)
