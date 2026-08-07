@@ -293,30 +293,25 @@ body {
   .world-screen { display: flex; }
 }
 @media (max-width: 759px) {
-  .command-scene { min-height: 620px; border-radius: 20px; }
+  .command-scene { min-height: 650px; border-radius: 20px; }
   .command-scene > .city-plan { inset: 62px 4px 220px; }
   .command-scene > .city-plan > * { width: auto; height: 100%; max-width: 100%; }
-  /* Keep the survival control beside the map controls, not on top of the
-     Old Grid wedge. Tapping this compact Bomb still opens the full charging
-     scene; only its always-on map presence is reduced. */
-  .command-core { left: auto; right: 56px; top: 4px; width: auto; transform: none; }
-  .command-scene .command-core .core-block { min-height: 50px; flex-direction: row; gap: 7px; padding: 3px 9px 3px 6px;
-    border: 1px solid var(--border); border-radius: 999px; background: rgba(10,8,18,.78); backdrop-filter: blur(8px); }
-  .command-scene .command-core .army-core { order: 1; width: 44px; height: 50px; margin: 0; overflow: visible; }
-  .command-scene .command-core .army-core > * { display: none; }
-  .command-scene .command-core .army-core::before { content: '⟭⟬'; position: absolute; left: 1px; top: 0;
-    width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%;
-    border: 1px solid rgba(139,92,246,.6); color: var(--text); font-family: var(--disp); font-size: 12px;
-    background: radial-gradient(circle at 38% 30%, rgba(255,255,255,.24), rgba(139,92,246,.42) 45%, #161222 76%);
-    box-shadow: 0 0 calc(6px + var(--charge) * 14px) rgba(139,92,246,.55); }
-  .command-scene .command-core .army-core::after { content: ''; position: absolute; left: 16px; top: 37px;
-    width: 10px; height: 12px; border-radius: 0 0 5px 5px; background: #08070b; border: 1px solid rgba(255,255,255,.14); }
-  .command-scene .command-core .army-core.is-brownout::before { filter: grayscale(1); opacity: .6; box-shadow: none; }
-  .command-scene .command-core .core-read { order: 2; margin: 0; }
-  .command-scene .command-core .core-read::before { content: 'ARMY BOMB'; display: block; margin-bottom: 2px;
-    color: var(--dim); font-family: var(--mono); font-size: 6.5px; letter-spacing: .8px; white-space: nowrap; }
-  .command-scene .command-core .core-pct { min-width: 34px; font-size: 13px; letter-spacing: .5px; }
+  /* On phones the Bomb is the city core, not a corner status chip. The full
+     animated lightstick sits over Home Base and visually powers the map. */
+  .command-core { left: 50%; right: auto; top: 268px; width: 150px; transform: translate(-50%, -50%); }
+  .command-scene .command-core .core-block { min-height: 172px; padding: 0; justify-content: center;
+    border: 0; border-radius: 50%; background: radial-gradient(circle, rgba(8,6,16,.88) 0 34%, rgba(8,6,16,.58) 52%, transparent 72%);
+    backdrop-filter: none; }
+  .command-scene .command-core .core-eyebrow { display: none; }
+  .command-scene .command-core .core-title { display: block; margin: 0; font-size: 13px; letter-spacing: 1.2px; }
+  .command-scene .command-core .army-core { width: 95px; height: 108px; margin: 10px 0 8px; overflow: visible;
+    transform: scale(1.35); transform-origin: center; }
+  .command-scene .command-core .army-core > * { display: block; }
+  .command-scene .command-core .core-read { margin: 0; text-align: center; }
+  .command-scene .command-core .core-pct { min-width: 38px; font-size: 19px; letter-spacing: 1px; }
+  .command-scene .command-core .core-lbl { display: none; }
   .command-scene .command-core .core-low-cta { display: none; }
+  .command-scene .command-core .core-ports { display: none; }
   .recovery-signal { top: 10px; left: 14px; }
   .command-tools { top: 13px; right: 13px; }
   .mission-beacon { left: 14px; bottom: 74px; width: calc(100% - 28px); }
