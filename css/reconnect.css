@@ -293,13 +293,13 @@ body {
   .world-screen { display: flex; }
 }
 @media (max-width: 759px) {
-  .command-scene { min-height: 650px; border-radius: 20px; }
-  .command-scene > .city-plan { inset: 62px 4px 220px; }
+  .command-scene { min-height: 805px; border-radius: 20px; }
+  .command-scene > .city-plan { inset: 218px 4px 220px; }
   .command-scene > .city-plan > * { width: auto; height: 100%; max-width: 100%; }
-  /* On phones the Bomb is the city core, not a corner status chip. The full
-     animated lightstick sits over Home Base and visually powers the map. */
-  .command-core { left: 50%; right: auto; top: 268px; width: 150px; transform: translate(-50%, -50%); }
-  .command-scene .command-core .core-block { min-height: 172px; padding: 0; justify-content: center;
+  /* On phones the Bomb gets its own hero band above the city map. It remains
+     the primary survival object without covering Home Base or any ward. */
+  .command-core { left: 50%; right: auto; top: 52px; width: 150px; transform: translateX(-50%); }
+  .command-scene .command-core .core-block { min-height: 162px; padding: 0; justify-content: center;
     border: 0; border-radius: 50%; background: radial-gradient(circle, rgba(8,6,16,.88) 0 34%, rgba(8,6,16,.58) 52%, transparent 72%);
     backdrop-filter: none; }
   .command-scene .command-core .core-eyebrow { display: none; }
