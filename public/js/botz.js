@@ -68,7 +68,21 @@ async function init() {
   document.getElementById('mainContent').style.display = 'flex'
   initPullToRefresh()
   initNowPlaying()
+  initJamsAutoRefresh()
   await loadJams()
+}
+
+// The jams total only ever refreshed on page load, a filter change, or a
+// pull-to-refresh someone had to already know to try — real agents in the
+// wild reported it looking "stuck" while they streamed and watched the
+// number sit still. Same 90s-poll + refresh-on-refocus pattern main.js
+// already uses for the real game, so this behaves the way the rest of the
+// app does instead of looking uniquely broken.
+function initJamsAutoRefresh() {
+  setInterval(() => { if (!document.hidden && currentAgentNo) loadJams(true) }, 90_000)
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && currentAgentNo) loadJams(true)
+  })
 }
 
 // Current date range (epoch secs) shared with the album breakdown so it
@@ -76,9 +90,14 @@ async function init() {
 let currentFromEpoch = null
 let currentToEpoch = null
 
-async function loadJams() {
+// silent=true (the 90s auto-refresh, tab refocus) repaints the numbers in
+// place without the skeleton-loading flash setLoading() causes — otherwise
+// every background refresh would wipe the hero total to "—" and flicker
+// the recent list, which reads as more broken than the "stuck" number this
+// auto-refresh exists to fix in the first place.
+async function loadJams(silent = false) {
   if (!currentAgentNo) return
-  setLoading(true)
+  if (!silent) setLoading(true)
 
   const from = document.getElementById('filterFrom').value
   const to   = document.getElementById('filterTo').value
