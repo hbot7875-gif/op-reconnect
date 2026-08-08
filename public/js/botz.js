@@ -835,7 +835,7 @@ async function moonCheck() {
   moonRenderResult()
 }
 
-const MOON_FLAG_LABEL = { repeat: '🔁 repeat', too_fast: '⚡ too fast' }
+const MOON_FLAG_LABEL = { repeat: '🔁 repeat' }
 // Purely corroborating — matching modes prove nothing on their own, but
 // read as one more "these were set up the same way" alongside an already-
 // confirmed shared identity. Null means the agent registered but never

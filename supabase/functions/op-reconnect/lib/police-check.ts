@@ -20,15 +20,6 @@ import { MIN_GAP_MS } from './spotify-shared.ts'
 // flagged by the playlist validator now mean the same thing.
 export const REPEAT_MIN_GAP_SECONDS = MIN_GAP_MS / 1000
 
-// A second, genuinely different check: not "the same song too soon" but
-// "ANY play too soon after the one before it to have been a real, un-
-// skipped listen." The playlist validator has no equivalent — it checks
-// gaps between repeats of one song within a submitted tracklist, never
-// between two different consecutive tracks — so this threshold isn't
-// ported from anywhere; it's Moon Station's own, much shorter than
-// REPEAT_MIN_GAP_SECONDS on purpose (most songs run well over a minute).
-export const TOO_FAST_MAX_GAP_SECONDS = 45
-
 export interface FlaggedTrack {
   track: string
   artist: string
@@ -37,12 +28,17 @@ export interface FlaggedTrack {
   flags: string[]
 }
 
-/** Two timing-only flags per row, since a scrobble carries no play-duration
+/** One timing-only flag per row, since a scrobble carries no play-duration
  *  or skip data to check against: `repeat` (the same track again inside the
- *  game's actual minimum-gap rule) and `too_fast` (a gap to the previous
- *  play — any track — too short for any real, un-skipped listen). Neither
- *  decides pass/fail — that stays a human call (or, for the self-check, the
- *  agent's own judgment). Output is newest-first, same as any activity log. */
+ *  game's actual minimum-gap rule). Doesn't decide pass/fail — that stays a
+ *  human call (or, for the self-check, the agent's own judgment). Output is
+ *  newest-first, same as any activity log.
+ *
+ *  Used to also flag `too_fast` — any two consecutive plays, same track or
+ *  not, under 45s apart — but that threshold was never ported from
+ *  anywhere real (the playlist validator has no equivalent check between
+ *  different tracks); removed rather than keep an unofficial heuristic
+ *  sitting next to the one rule that actually is canonical. */
 export function flagStreamRows(rows: StreamRow[]): FlaggedTrack[] {
   const oldestFirst = [...rows].sort((a, b) => a.listened_at - b.listened_at)
   const withFlags = oldestFirst.map((r, i) => {
@@ -50,7 +46,6 @@ export function flagStreamRows(rows: StreamRow[]): FlaggedTrack[] {
     const gapSeconds = prev ? r.listened_at - prev.listened_at : null
     const flags: string[] = []
     if (prev) {
-      if (gapSeconds! < TOO_FAST_MAX_GAP_SECONDS) flags.push('too_fast')
       if (gapSeconds! < REPEAT_MIN_GAP_SECONDS
         && prev.track_name.trim().toLowerCase() === r.track_name.trim().toLowerCase()) flags.push('repeat')
     }

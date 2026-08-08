@@ -168,12 +168,11 @@ export async function adminScanAltAccounts(supabase: SupabaseDB, _params: any) {
  *  op-reconnect's streams already live server-side, so this shows them
  *  directly instead of sending a reviewer somewhere else to look.
  *
- *  Two lightweight, timing-only flags get attached per row, since a
- *  scrobble carries no play-duration or skip data to check against:
- *  `repeat` (the same track immediately again) and `too_fast` (a gap to the
- *  previous play too short for any real, un-skipped listen). Neither one
- *  decides pass/fail — that stays a human call. This just makes the
- *  obvious violations easy to spot instead of reading a bare timeline.
+ *  A `repeat` flag gets attached per row where the same track lands again
+ *  inside the game's real minimum-gap rule (police-check.ts's
+ *  REPEAT_MIN_GAP_SECONDS). Doesn't decide pass/fail — that stays a human
+ *  call. This just makes the obvious violations easy to spot instead of
+ *  reading a bare timeline.
  *
  *  Also runs findPossibleAlts alongside the track fetch — one timing-based
  *  check (is THIS agent's own history clean) and one identity-based check
