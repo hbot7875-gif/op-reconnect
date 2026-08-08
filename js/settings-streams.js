@@ -148,6 +148,10 @@ function sourceError(code) {
     musicat_id_required: 'Add your musicat public ID first.',
     musicat_user_not_found: "Couldn't find that musicat.fm user — check the spelling.",
     musicat_unreachable: "Couldn't reach musicat.fm — try again in a moment.",
+    lb_user_not_found: "Couldn't find that ListenBrainz user — check the spelling.",
+    lb_unreachable: "Couldn't reach ListenBrainz — try again in a moment.",
+    statsfm_user_not_found: "Couldn't find that stats.fm user — check the spelling.",
+    statsfm_unreachable: "Couldn't reach stats.fm — try again in a moment.",
     pin_required: 'Generate a PIN before switching to a scrobbler app.',
     invalid_preference: 'Pick one of the listed sources.',
   }[code] || code || "Couldn't save that"

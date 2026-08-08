@@ -171,6 +171,38 @@ async function resolveMusicatId(input: string): Promise<{ publicId: string } | {
   return { publicId: user.publicId }
 }
 
+// Same trap as musicat, seen in the wild for LB and stats.fm too: someone
+// pastes their profile URL (or, once, this very API's own webhook URL)
+// instead of the bare name, and it 404s forever with nobody ever told.
+// Strips a leading '@' and, when the input parses as a URL, keeps only its
+// last non-empty path segment — "https://listenbrainz.org/user/foo/" and
+// "@foo" both become "foo". Not a validity check by itself; the live lookup
+// below is what actually catches something this can't reduce to a name.
+function stripWrapper(input: string): string {
+  let s = input.trim().replace(/^@/, '')
+  try {
+    if (/^https?:\/\//i.test(s)) {
+      const segments = new URL(s).pathname.split('/').filter(Boolean)
+      if (segments.length > 0) s = decodeURIComponent(segments[segments.length - 1])
+    }
+  } catch { /* not a URL — use as-is */ }
+  return s.trim()
+}
+
+async function verifyListenBrainzUser(username: string): Promise<{ error: string } | null> {
+  const res = await fetch(`https://api.listenbrainz.org/1/user/${encodeURIComponent(username)}/listens?count=1`, {
+    headers: { 'User-Agent': 'HopeTracker/1.0' },
+  }).catch(() => null)
+  if (!res || !res.ok) return { error: res?.status === 404 ? 'lb_user_not_found' : 'lb_unreachable' }
+  return null
+}
+
+async function verifyStatsFmUser(username: string): Promise<{ error: string } | null> {
+  const res = await fetch(`https://api.stats.fm/api/v1/users/${encodeURIComponent(username)}/streams/recent?limit=1`).catch(() => null)
+  if (!res || !res.ok) return { error: res?.status === 404 ? 'statsfm_user_not_found' : 'statsfm_unreachable' }
+  return null
+}
+
 /**
  * Pick where counted streams come from. Validates that the source actually
  * has something to read before switching: silently accepting `statsfm` with
@@ -186,9 +218,19 @@ export async function setStreamSource(supabase: SupabaseDB, params: Record<strin
   if (!agent) return { success: false, error: 'agent_not_found' }
 
   const patch: Record<string, unknown> = { stream_source_preference: pref }
-  const lb = params.lbUsername !== undefined ? String(params.lbUsername || '').trim() : null
-  const sfm = params.statsfmUsername !== undefined ? String(params.statsfmUsername || '').trim() : null
+  let lb = params.lbUsername !== undefined ? String(params.lbUsername || '').trim() : null
+  let sfm = params.statsfmUsername !== undefined ? String(params.statsfmUsername || '').trim() : null
   let mus = params.musicatPublicId !== undefined ? String(params.musicatPublicId || '').trim() : null
+  if (lb) {
+    lb = stripWrapper(lb)
+    const lbErr = await verifyListenBrainzUser(lb)
+    if (lbErr) return { success: false, error: lbErr.error }
+  }
+  if (sfm) {
+    sfm = stripWrapper(sfm)
+    const sfmErr = await verifyStatsFmUser(sfm)
+    if (sfmErr) return { success: false, error: sfmErr.error }
+  }
   if (lb !== null) patch.lb_username = lb || null
   if (sfm !== null) patch.statsfm_username = sfm || null
   if (mus) {
