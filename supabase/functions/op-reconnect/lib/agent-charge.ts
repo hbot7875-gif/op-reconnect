@@ -43,10 +43,6 @@ async function getOrCreateRow(supabase: SupabaseDB, agentNo: string): Promise<Ch
   return fresh
 }
 
-function extend(baselineMs: number, hours: number): number {
-  return baselineMs + hours * HOUR_MS
-}
-
 /** Spend `freezesAvailable` streak-freeze charges (1 day covered each) only
  *  down to just under `thresholdDays` — a reactive rescue at the moment an
  *  agent's blackout would otherwise trip a consequence, not a proactive
@@ -183,16 +179,20 @@ export async function getAgentChargeView(supabase: SupabaseDB, content: GameCont
   // cell silently spent — Math.ceil(0 / X) || 1 still charges a full cell
   // for a zero-length gap — with no feed animation or toast, before they
   // were ever actually dark.
+  // rc_auto_feed_charge (migrations/…_rc_atomic_charge_feed.sql) does the
+  // gap math and the charge_cells/charged_until writes as one locked unit —
+  // same "prevent double spends from two taps or devices" reasoning
+  // rc_use_lit_era already gets below. This JS-side condition is just a
+  // cheap early-exit so a poll that clearly has nothing to do skips the RPC
+  // round-trip; the RPC re-checks all of it itself and is the real guard.
   if (row.auto_feed && cells > 0 && chargedUntilMs !== null && chargedUntilMs <= now) {
-    const baseline = chargedUntilMs
-    const gapMs = Math.max(0, now - baseline)
-    const cellsNeeded = Math.ceil(gapMs / (HOURS_PER_CHARGE_CELL * HOUR_MS)) || 1
-    const use = Math.min(cellsNeeded, cells)
-    if (use > 0) {
-      chargedUntilMs = extend(baseline, use * HOURS_PER_CHARGE_CELL)
-      cells -= use
-      await supabase.from('rc_players').update({ charge_cells: cells }).eq('agent_no', agentNo)
-      await supabase.from('rc_agent_charge').update({ charged_until: new Date(chargedUntilMs).toISOString() }).eq('agent_no', agentNo)
+    const { data, error } = await supabase.rpc('rc_auto_feed_charge', {
+      p_agent_no: agentNo, p_hours_per_cell: HOURS_PER_CHARGE_CELL,
+    })
+    const result = !error && Array.isArray(data) ? data[0] : null
+    if (result?.did_feed) {
+      chargedUntilMs = new Date(result.charged_until).getTime()
+      cells = result.cells_remaining
     }
   }
 
@@ -269,25 +269,23 @@ export async function useLitEra(supabase: SupabaseDB, content: GameContent, agen
 
 /** Spends Charge Cells to extend charged_until — stacks forward from
  *  whichever is later, current expiry or now, same "adding wood extends the
- *  fire further, doesn't reset it" logic as feeding an actual fire. */
+ *  fire further, doesn't reset it" logic as feeding an actual fire.
+ *  rc_feed_charge does the check-and-spend atomically (same "prevent double
+ *  spends from two taps or devices" reasoning as rc_use_lit_era) — a plain
+ *  JS read-then-write here could otherwise lose a deduction to a
+ *  concurrent auto-feed check landing at the same instant. */
 export async function feedCharge(supabase: SupabaseDB, agentNo: string, cellsToSpend: number) {
   cellsToSpend = Math.max(0, Math.floor(cellsToSpend))
   if (!cellsToSpend) return { success: false, error: 'invalid_amount' }
 
-  const { data: player } = await supabase.from('rc_players').select('charge_cells').eq('agent_no', agentNo).maybeSingle()
-  if (!player || (player.charge_cells || 0) < cellsToSpend) return { success: false, error: 'not_enough_charge_cells' }
-
-  const row = await getOrCreateRow(supabase, agentNo)
-  const now = Date.now()
-  const baseline = Math.max(row.charged_until ? new Date(row.charged_until).getTime() : now, now)
-  const newChargedUntilMs = extend(baseline, cellsToSpend * HOURS_PER_CHARGE_CELL)
-  const newChargedUntil = new Date(newChargedUntilMs).toISOString()
-
-  await supabase.from('rc_players').update({ charge_cells: player.charge_cells - cellsToSpend }).eq('agent_no', agentNo)
-  await supabase.from('rc_agent_charge')
-    .update({ charged_until: newChargedUntil, blackout_started_at: null, soft_reset_at: null, full_reset_at: null, updated_at: new Date().toISOString() })
-    .eq('agent_no', agentNo)
-  return { success: true, hoursAdded: cellsToSpend * HOURS_PER_CHARGE_CELL, chargedUntil: newChargedUntil }
+  await getOrCreateRow(supabase, agentNo) // ensures a row exists for the RPC's upsert to find/update
+  const { data, error } = await supabase.rpc('rc_feed_charge', {
+    p_agent_no: agentNo, p_cells_to_spend: cellsToSpend, p_hours_per_cell: HOURS_PER_CHARGE_CELL,
+  })
+  if (error) return { success: false, error: error.message }
+  const row = Array.isArray(data) ? data[0] : null
+  if (!row) return { success: false, error: 'not_enough_charge_cells' }
+  return { success: true, hoursAdded: cellsToSpend * HOURS_PER_CHARGE_CELL, chargedUntil: row.charged_until }
 }
 
 export async function setAutoFeed(supabase: SupabaseDB, agentNo: string, on: boolean) {
