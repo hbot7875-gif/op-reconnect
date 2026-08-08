@@ -1,0 +1,42 @@
+name: Hourly stream sync
+
+# Calls adminSyncAllStreams (supabase/functions/op-reconnect/lib/sync-all.ts)
+# once an hour so every agent's counted streams stay current even if they
+# never open the app that day — the endpoint itself just does what
+# ensureDailyRollups already does on every getGameState call, on a timer
+# instead of waiting for someone to be online.
+#
+# Requires one repo secret: SYNC_ADMIN_KEY, the same key admin.html and
+# botz.html already use — Settings → Secrets and variables → Actions →
+# New repository secret. Never put the key itself in this file.
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch: {} # manual "Run workflow" button, for a one-off test
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger adminSyncAllStreams
+        env:
+          SYNC_ADMIN_KEY: ${{ secrets.SYNC_ADMIN_KEY }}
+        run: |
+          if [ -z "$SYNC_ADMIN_KEY" ]; then
+            echo "::error::SYNC_ADMIN_KEY repo secret is not set — see this workflow's header comment."
+            exit 1
+          fi
+          resp=$(curl -sS -w '\n%{http_code}' -X POST \
+            "https://lcvmwlioqpyaprxicdfl.supabase.co/functions/v1/op-reconnect" \
+            -H "Content-Type: application/json" \
+            -d "{\"action\":\"adminSyncAllStreams\",\"adminKey\":\"$SYNC_ADMIN_KEY\"}")
+          status="${resp##*$'\n'}"
+          body="${resp%$'\n'*}"
+          echo "$body"
+          if [ "$status" != "200" ]; then
+            echo "::error::HTTP $status from op-reconnect"
+            exit 1
+          fi
+          echo "$body" | jq -e '.success == true' > /dev/null || { echo "::error::success:false in response"; exit 1; }
+          echo "$body" | jq -r '"Synced \(.synced)/\(.total) agents, \(.failed) failed"'

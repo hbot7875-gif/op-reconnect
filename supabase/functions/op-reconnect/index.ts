@@ -23,6 +23,7 @@ import { generatePlaylist, validatePlaylist, validatePlaylistFromTracks, getAlpa
 import { adminGetActiveDefuse } from './lib/bomb.ts'
 import { adminCreateBroadcast, adminListBroadcasts, adminDeleteBroadcast } from './lib/broadcasts.ts'
 import { adminDeleteAgent, adminGetAgent, adminGetAgentTracks, adminScanAltAccounts, adminResetAgentXp } from './lib/admin-agent.ts'
+import { adminSyncAllStreams } from './lib/sync-all.ts'
 import { adminListGoals, adminAddGoal, adminUpdateGoal, adminDeleteGoal } from './lib/goals.ts'
 import {
   getReconnectMission, openReconnectMission, joinReconnectMission,
@@ -159,6 +160,7 @@ const ROUTES: Record<string, Route> = {
   adminScanAltAccounts: { auth: 'admin', handler: (sb, p) => adminScanAltAccounts(sb, p) },
   adminDeleteAgent: { auth: 'admin', handler: (sb, p) => adminDeleteAgent(sb, p) },
   adminResetAgentXp: { auth: 'admin', handler: (sb, p) => adminResetAgentXp(sb, p) },
+  adminSyncAllStreams: { auth: 'admin', handler: (sb, p) => adminSyncAllStreams(sb, p) },
 
   // Batch-assign a series of connect/invite missions for one reconnect goal
   // at once — the rest of that system's admin config now lives on the goal
