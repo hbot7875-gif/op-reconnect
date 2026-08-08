@@ -173,8 +173,18 @@ export async function getAgentChargeView(supabase: SupabaseDB, content: GameCont
   // Auto-feed: retroactively bridge the gap since it last ran dark, as if
   // it had been checked continuously — same "compute at read time" shape
   // as everything else here, not a live background process.
-  if (row.auto_feed && cells > 0 && (chargedUntilMs === null || chargedUntilMs <= now)) {
-    const baseline = chargedUntilMs ?? now
+  //
+  // chargedUntilMs === null means never fed even once, not "ran dark" —
+  // this file's own header comment says so, and the UI promises auto-feed
+  // only spends "the moment it runs dark." Requiring chargedUntilMs !== null
+  // here (rather than treating null the same as expired) is what makes that
+  // true: without it, a brand-new agent who has auto-feed on and earns
+  // their first Charge Cell before ever manually feeding would have that
+  // cell silently spent — Math.ceil(0 / X) || 1 still charges a full cell
+  // for a zero-length gap — with no feed animation or toast, before they
+  // were ever actually dark.
+  if (row.auto_feed && cells > 0 && chargedUntilMs !== null && chargedUntilMs <= now) {
+    const baseline = chargedUntilMs
     const gapMs = Math.max(0, now - baseline)
     const cellsNeeded = Math.ceil(gapMs / (HOURS_PER_CHARGE_CELL * HOUR_MS)) || 1
     const use = Math.min(cellsNeeded, cells)
