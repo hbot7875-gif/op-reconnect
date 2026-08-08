@@ -151,6 +151,26 @@ export async function getWebhookPin(supabase: SupabaseDB, params: Record<string,
   return { success: true, pin: agent.scrobble_pin }
 }
 
+// Musicat's own listening-history endpoint takes only the stable publicId
+// (a UUID) — it 422s on anything else, including the handle shown on a
+// profile URL (e.g. "soty_swim"). This lookup is how arirang-btsbackend's
+// linkMusicat resolves either one to that UUID before it's ever stored, so
+// a player pasting their handle (the natural thing to copy) doesn't end up
+// with an ID that silently fetches nothing forever. Ported verbatim —
+// same endpoint, same header shape.
+async function resolveMusicatId(input: string): Promise<{ publicId: string } | { error: string }> {
+  const res = await fetch(`https://api.musicat.fm/v1/users?user=${encodeURIComponent(input)}`, {
+    headers: { Authorization: 'Bearer empty', 'User-Agent': 'HopeTracker/1.0', Accept: 'application/json' },
+  }).catch(() => null)
+  if (!res || !res.ok) {
+    if (res?.status === 404) return { error: 'musicat_user_not_found' }
+    return { error: 'musicat_unreachable' }
+  }
+  const user = await res.json().catch(() => null)
+  if (!user?.publicId) return { error: 'musicat_user_not_found' }
+  return { publicId: user.publicId }
+}
+
 /**
  * Pick where counted streams come from. Validates that the source actually
  * has something to read before switching: silently accepting `statsfm` with
@@ -168,9 +188,14 @@ export async function setStreamSource(supabase: SupabaseDB, params: Record<strin
   const patch: Record<string, unknown> = { stream_source_preference: pref }
   const lb = params.lbUsername !== undefined ? String(params.lbUsername || '').trim() : null
   const sfm = params.statsfmUsername !== undefined ? String(params.statsfmUsername || '').trim() : null
-  const mus = params.musicatPublicId !== undefined ? String(params.musicatPublicId || '').trim() : null
+  let mus = params.musicatPublicId !== undefined ? String(params.musicatPublicId || '').trim() : null
   if (lb !== null) patch.lb_username = lb || null
   if (sfm !== null) patch.statsfm_username = sfm || null
+  if (mus) {
+    const resolvedMus = await resolveMusicatId(mus)
+    if ('error' in resolvedMus) return { success: false, error: resolvedMus.error }
+    mus = resolvedMus.publicId
+  }
   if (mus !== null) patch.musicat_public_id = mus || null
 
   const resolved = {

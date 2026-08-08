@@ -42,8 +42,8 @@ const SOURCES = [
     key: 'musicat',
     name: 'musicat.fm',
     sub: 'Spotify + Apple Music listeners',
-    body: 'Reads the Spotify or Apple Music listening history connected to your musicat.fm profile. Your public user ID is in the profile URL.',
-    field: { prop: 'musicatPublicId', param: 'musicatPublicId', label: 'musicat public ID', placeholder: 'public user id' },
+    body: 'Reads the Spotify or Apple Music listening history connected to your musicat.fm profile. Enter your musicat username (or the ID from your profile URL) — either works.',
+    field: { prop: 'musicatPublicId', param: 'musicatPublicId', label: 'musicat username or ID', placeholder: 'your musicat username' },
   },
 ]
 
@@ -146,6 +146,8 @@ function sourceError(code) {
     lb_username_required: 'Add your ListenBrainz username first.',
     statsfm_username_required: 'Add your stats.fm username first.',
     musicat_id_required: 'Add your musicat public ID first.',
+    musicat_user_not_found: "Couldn't find that musicat.fm user — check the spelling.",
+    musicat_unreachable: "Couldn't reach musicat.fm — try again in a moment.",
     pin_required: 'Generate a PIN before switching to a scrobbler app.',
     invalid_preference: 'Pick one of the listed sources.',
   }[code] || code || "Couldn't save that"
@@ -363,7 +365,7 @@ function moonStationSheet() {
     sequence.forEach((t, i) => {
       const flagged = (t.flags || []).length > 0
       const badges = (t.flags || []).map((f) =>
-        `<span class="sig-badge">${f === 'repeat' ? '🔁 repeat' : f === 'too_fast' ? '⚡ too fast' : esc(f)}</span>`).join('')
+        `<span class="sig-badge">${f === 'repeat' ? '🔁 repeat' : esc(f)}</span>`).join('')
       const when = new Date(t.at).toLocaleString(undefined, {
         month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
       })
