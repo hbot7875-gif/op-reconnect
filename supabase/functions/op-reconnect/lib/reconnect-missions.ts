@@ -249,9 +249,16 @@ export async function joinReconnectMission(supabase: SupabaseDB, content: unknow
   mission = await refreshMission(supabase, mission, reconnect.variant)
   if (mission.status !== 'open') return { success: false, error: 'mission_' + mission.status }
 
-  const { error } = await supabase.from('rc_reconnect_participants')
-    .insert({ mission_id: mission.id, agent_no: agentNo, status: 'joined' })
-  if (error) return { success: false, error: error.message }
+  // rc_reconnect_join_open (migrations/…_rc_fix_activation_and_mission_races.sql)
+  // re-checks capacity and inserts as one row-locked unit — the
+  // joinableMission/refreshMission checks above are just a cheap
+  // pre-filter. Two agents racing this mission's last open slot used to
+  // both pass the old (separate count-then-insert) check here.
+  const { data: rpcData, error: rpcError } = await supabase.rpc('rc_reconnect_join_open', {
+    p_mission_id: mission.id, p_agent_no: agentNo,
+  })
+  const result = !rpcError && Array.isArray(rpcData) ? rpcData[0] : null
+  if (rpcError || !result?.joined) return { success: false, error: result?.error || rpcError?.message || 'join_failed' }
 
   const fresh = await refreshMission(supabase, mission, reconnect.variant)
   const { data: freshParticipants } = await supabase.from('rc_reconnect_participants').select('*').eq('mission_id', mission.id)
@@ -319,14 +326,15 @@ export async function respondReconnectInvite(supabase: SupabaseDB, content: unkn
     return { success: true, joined: false }
   }
 
-  const { data: participants } = await supabase.from('rc_reconnect_participants').select('*').eq('mission_id', mission.id)
-  const joinedCount = (participants || []).filter((p: any) => p.status === 'joined').length
-  if (joinedCount >= mission.required_agents) return { success: false, error: 'mission_full' }
-
-  const { error } = await supabase.from('rc_reconnect_participants')
-    .update({ status: 'joined', joined_at: new Date().toISOString() })
-    .eq('mission_id', mission.id).eq('agent_no', agentNo)
-  if (error) return { success: false, error: error.message }
+  // rc_reconnect_accept_invite re-checks the invite and capacity, and
+  // flips the status, all as one row-locked unit — the old separate
+  // count-then-update here let two invitees accepting a mission's last
+  // slot within milliseconds of each other both land as 'joined'.
+  const { data: rpcData, error: rpcError } = await supabase.rpc('rc_reconnect_accept_invite', {
+    p_mission_id: mission.id, p_agent_no: agentNo,
+  })
+  const result = !rpcError && Array.isArray(rpcData) ? rpcData[0] : null
+  if (rpcError || !result?.joined) return { success: false, error: result?.error || rpcError?.message || 'join_failed' }
   await refreshMission(supabase, mission, variant)
   return { success: true, joined: true }
 }

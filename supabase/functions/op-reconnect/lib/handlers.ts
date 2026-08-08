@@ -466,7 +466,15 @@ export async function startDistrict(supabase: SupabaseDB, params: any) {
   const baseline = computeBaseline(todayRow?.track_counts || {}, frozen, goalCap, xpCap)
   const { error: insErr } = await supabase.from('rc_player_districts')
     .insert({ agent_no: agentNo, district_id: district.id, status: 'active', goals: frozen, baseline })
-  if (insErr) return { success: false, error: 'district_already_started' }
+  if (insErr) {
+    // 23505 = unique_violation. Two shapes land here: this exact district
+    // row already exists (agent_no, district_id PK), or — the race this
+    // function's own pre-check above can't fully close — a DIFFERENT
+    // district's insert won that race first and rc_player_districts_one_
+    // active_per_agent (migrations/…_rc_fix_activation_and_mission_races.sql)
+    // caught this one. Both are honestly "you already have something active."
+    return { success: false, error: insErr.code === '23505' ? 'district_already_active' : 'district_already_started' }
+  }
 
   return buildState(supabase, content, agent, player)
 }
