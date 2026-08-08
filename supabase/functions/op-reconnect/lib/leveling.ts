@@ -71,9 +71,19 @@ export interface LevelUpResult {
 /** Compares the freshly-computed level against rc_players.last_level (the
  *  same completion-latch pattern used elsewhere) and, on a crossing, grants
  *  rewards once — a multi-level jump in one request still only refreshes
- *  the timed boost once, not stacked to some absurd duration. */
+ *  the timed boost once, not stacked to some absurd duration.
+ *
+ *  `currentFreezeCharges` must be the real, current streak_freeze_charges
+ *  count, not player.streak_freeze_charges — handlers.ts's buildState calls
+ *  getAgentChargeView (which can spend from that same pooled counter via a
+ *  blackout rescue) before this runs, so the `player` object's own snapshot
+ *  can already be stale by the time this writes. Passing the stale count
+ *  here would silently erase whatever the rescue just spent — and unlike
+ *  computeStreak (derive.ts), which only overwrites the column when it
+ *  actually spends a charge, this writes unconditionally on every level-up,
+ *  so there'd be no later write to correct it. */
 export async function applyLevelUpIfNeeded(
-  supabase: SupabaseDB, content: GameContent, player: any, xp: number,
+  supabase: SupabaseDB, content: GameContent, player: any, xp: number, currentFreezeCharges: number,
 ): Promise<LevelUpResult | null> {
   const { level } = levelFor(content, xp)
   const lastLevel = player.last_level || 1
@@ -88,7 +98,7 @@ export async function applyLevelUpIfNeeded(
 
   await supabase.from('rc_players').update({
     last_level: level,
-    streak_freeze_charges: (player.streak_freeze_charges || 0) + streakFreezeGranted,
+    streak_freeze_charges: currentFreezeCharges + streakFreezeGranted,
     boost_multiplier: rewards.boostMultiplier || 1,
     boost_expires_at: boostExpiresAt,
   }).eq('agent_no', player.agent_no)

@@ -304,8 +304,16 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
   // ── Player / today ─────────────────────────────────────────
   const xp = await totalXp(supabase, player.agent_no)
   const level = levelFor(content, xp)
-  const levelUp = await applyLevelUpIfNeeded(supabase, content, player, xp)
-  const freezeChargesAvailable = (player.streak_freeze_charges || 0) + (levelUp?.streakFreezeGranted || 0)
+  // agentCharge.freezeChargesRemaining (agent-charge.ts), not
+  // player.streak_freeze_charges — the latter is a snapshot from before
+  // getAgentChargeView ran above and may have already spent from this same
+  // pooled counter via a blackout rescue. Both applyLevelUpIfNeeded and
+  // computeStreak below spend from it too (the former unconditionally
+  // overwrites the column on every level-up); starting either from the
+  // stale pre-request count would silently erase whatever the rescue just
+  // spent.
+  const levelUp = await applyLevelUpIfNeeded(supabase, content, player, xp, agentCharge.freezeChargesRemaining)
+  const freezeChargesAvailable = agentCharge.freezeChargesRemaining + (levelUp?.streakFreezeGranted || 0)
   const joinedDate = kstDateOf(Math.floor(new Date(player.joined_at).getTime() / 1000))
   const streak = await computeStreak(supabase, player.agent_no, content, cap, freezeChargesAvailable, joinedDate)
   await awardStreakBadges(supabase, player.agent_no, streak.current)

@@ -149,6 +149,15 @@ export interface AgentChargeView {
   litEras: string[] // ready card ids; retained for older clients
   eraCards: EraCardView[]
   newlyLitEraIds: string[]
+  // The real, current streak_freeze_charges count — after any blackout
+  // rescue this same call already spent. handlers.ts's buildState reads
+  // this instead of its own stale pre-request player.streak_freeze_charges
+  // snapshot before calling computeStreak, which spends from (and blindly
+  // overwrites) the same pooled counter: without it, a blackout rescue and
+  // a streak-gap freeze landing in the same request would have one spend
+  // silently erase the other, handing back a charge that was legitimately
+  // spent moments earlier in the very same call.
+  freezeChargesRemaining: number
 }
 
 /**
@@ -245,6 +254,7 @@ export async function getAgentChargeView(supabase: SupabaseDB, content: GameCont
     litEras: weekly.eraCards.filter((e) => e.status === 'lit').map((e) => e.id),
     eraCards: weekly.eraCards,
     newlyLitEraIds: weekly.newlyLitEraIds,
+    freezeChargesRemaining: freezes,
   }
 }
 
