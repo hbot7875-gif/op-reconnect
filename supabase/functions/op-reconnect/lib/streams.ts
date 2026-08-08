@@ -114,28 +114,45 @@ async function fetchStatsFm(username: string, fromTs: number, toTs: number): Pro
   return rows
 }
 
-// Musicat has no date-range filter on listening-history either — page 0,
-// unfiltered, then trimmed to the window client-side, same shape as stats.fm.
-// playedAt strings carry no timezone suffix; the API returns UTC, so a bare
-// 'Z' has to be appended before Date can parse it correctly.
+// Musicat has no date-range filter on listening-history — pages of 50,
+// newest first, trimmed to the window client-side. This used to read only
+// page 0: fine for "what's new since a poll a minute ago," but a daily
+// rollup asking for a whole KST day can need much more than the newest 50
+// plays to reach that day at all for anyone reasonably active — it would
+// silently undercount rather than error, indistinguishable from "didn't
+// stream." Paginates like arirang-btsbackend's own fetch does, stopping at
+// whichever comes first: a page already older than fromTs (sorting is DESC,
+// so nothing further back matters), a short page (no more history), or the
+// page cap. playedAt strings carry no timezone suffix; the API returns UTC,
+// so a bare 'Z' has to be appended before Date can parse it correctly.
+const MUSICAT_PAGE_SIZE = 50
+const MUSICAT_MAX_PAGES = 20
 async function fetchMusicat(publicId: string, fromTs: number, toTs: number): Promise<StreamRow[]> {
-  const res = await fetch('https://api.musicat.fm/v1/users/listening-history', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer empty' },
-    body: JSON.stringify({ publicUserId: publicId, range: { start: null, end: null }, sorting: 'DESC', page: 0 }),
-  }).catch(() => null)
-  if (!res || !res.ok) return []
-  const items = await res.json().catch(() => null)
-  if (!Array.isArray(items)) return []
   const rows: StreamRow[] = []
-  for (const it of items) {
-    const trackName = (it.name || '').trim()
-    const raw = String(it.playedAt || '')
-    if (!trackName || !raw) continue
-    const iso = /[Zz]|[+-]\d\d:\d\d$/.test(raw) ? raw : raw + 'Z'
-    const ts = Math.floor(new Date(iso).getTime() / 1000)
-    if (!Number.isFinite(ts) || ts < fromTs || ts > toTs) continue
-    rows.push({ track_name: trackName, artist_name: it.artists || '', listened_at: ts })
+  for (let page = 0; page < MUSICAT_MAX_PAGES; page++) {
+    if (page > 0) await delay(150)
+    const res = await fetch('https://api.musicat.fm/v1/users/listening-history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer empty' },
+      body: JSON.stringify({ publicUserId: publicId, range: { start: null, end: null }, sorting: 'DESC', page }),
+    }).catch(() => null)
+    if (!res || !res.ok) break
+    const items = await res.json().catch(() => null)
+    if (!Array.isArray(items) || items.length === 0) break
+
+    let reachedOlder = false
+    for (const it of items) {
+      const trackName = (it.name || '').trim()
+      const raw = String(it.playedAt || '')
+      if (!trackName || !raw) continue
+      const iso = /[Zz]|[+-]\d\d:\d\d$/.test(raw) ? raw : raw + 'Z'
+      const ts = Math.floor(new Date(iso).getTime() / 1000)
+      if (!Number.isFinite(ts)) continue
+      if (ts < fromTs) { reachedOlder = true; continue }
+      if (ts > toTs) continue
+      rows.push({ track_name: trackName, artist_name: it.artists || '', listened_at: ts })
+    }
+    if (reachedOlder || items.length < MUSICAT_PAGE_SIZE) break
   }
   return rows
 }

@@ -14,6 +14,7 @@
 import type { SupabaseDB } from './config.ts'
 import { loadContent } from './config.ts'
 import { ensureDailyRollups } from './derive.ts'
+import type { GoalXpScope } from './derive.ts'
 import type { AgentSourceRow } from './streams.ts'
 
 // Small concurrent batches, not all-at-once — this fans out to whatever
@@ -30,17 +31,29 @@ export async function adminSyncAllStreams(supabase: SupabaseDB, _params: Record<
   const content = await loadContent(supabase)
 
   const { data: players, error: playersErr } = await supabase
-    .from('rc_players').select('agent_no, mode, joined_at')
+    .from('rc_players').select('agent_no, mode, joined_at, boost_expires_at, boost_multiplier')
   if (playersErr) return { success: false, error: playersErr.message }
   if (!players || players.length === 0) return { success: true, total: 0, synced: 0, failed: 0, errors: [] }
 
   const agentNos = players.map((p: any) => p.agent_no)
-  const { data: agentRows, error: agentsErr } = await supabase
-    .from('rc_agents')
-    .select('agent_no, lb_username, stream_source_preference, statsfm_username, musicat_public_id')
-    .in('agent_no', agentNos)
+  const [{ data: agentRows, error: agentsErr }, { data: activeDistricts, error: pdErr }] = await Promise.all([
+    supabase.from('rc_agents')
+      .select('agent_no, lb_username, stream_source_preference, statsfm_username, musicat_public_id')
+      .in('agent_no', agentNos),
+    // Only the currently-active row per agent — same thing buildState reads
+    // to build goalXpScope on a real app-open. Without this, goalXpCountForDate
+    // has nothing to count against and silently returns 0 for every agent,
+    // every time: rc_daily_activity's raw_streams still fills in correctly
+    // (it's scope-free), so this failure mode looks like "syncing fine" right
+    // up until someone checks whether any XP actually landed.
+    supabase.from('rc_player_districts').select('agent_no, goals, baseline, activated_at')
+      .eq('status', 'active').in('agent_no', agentNos),
+  ])
   if (agentsErr) return { success: false, error: agentsErr.message }
+  if (pdErr) return { success: false, error: pdErr.message }
   const agentByNo = new Map<string, AgentSourceRow>((agentRows || []).map((a: any) => [a.agent_no, a]))
+  const scopeByNo = new Map<string, GoalXpScope>((activeDistricts || []).map((r: any) =>
+    [r.agent_no, { goals: r.goals, baseline: r.baseline || {}, activatedAt: r.activated_at }]))
 
   let synced = 0
   const errors: { agentNo: string; error: string }[] = []
@@ -51,7 +64,11 @@ export async function adminSyncAllStreams(supabase: SupabaseDB, _params: Record<
       const agent = agentByNo.get(player.agent_no)
       if (!agent) { errors.push({ agentNo: player.agent_no, error: 'agent_row_missing' }); return }
       try {
-        await ensureDailyRollups(supabase, agent, player, content)
+        const personalBoostMult = player.boost_expires_at && new Date(player.boost_expires_at).getTime() > Date.now()
+          ? Number(player.boost_multiplier) || 1
+          : 1
+        const goalXpScope = scopeByNo.get(player.agent_no) || null
+        await ensureDailyRollups(supabase, agent, player, content, personalBoostMult, goalXpScope)
         synced++
       } catch (e) {
         errors.push({ agentNo: player.agent_no, error: e instanceof Error ? e.message : String(e) })
