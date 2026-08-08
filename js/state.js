@@ -65,3 +65,15 @@ export function hideOverlay() {
   overlay.innerHTML = ''
   document.body.classList.remove('overlay-open')
 }
+
+// Every sheet in the game (Settings, Personal Charge, Candy Star pickers,
+// invites, everything showOverlay ever opens) shares this one overlay, so
+// one listener covers all of them. Clicking the backdrop already closed it
+// (the onclick above); Escape is the other half of that same expectation —
+// keyboard-only and screen-reader users had no way to back out of a sheet
+// at all without this.
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return
+  const overlay = document.getElementById('overlay')
+  if (overlay && !overlay.hidden) hideOverlay()
+})

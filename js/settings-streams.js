@@ -324,7 +324,7 @@ function moonStationSheet() {
   sheet.append(
     el('div', 'ms-beacon-row', '<span class="ms-beacon" aria-hidden="true">🚨</span><span class="eyebrow">MOON STATION (UNDER TEST)</span>'),
     el('h3', '', 'Your own police check'),
-    el('p', 'muted', "The same repeat/too-fast timing check HT runs on any agent, and whether your linked identity shows up on another agent file — just for your own account."),
+    el('p', 'muted', "The same repeat timing check HT runs on any agent, and whether your linked identity shows up on another agent file — just for your own account."),
   )
   const body = el('div', 'sig-body', '<p class="muted">Checking…</p>')
   sheet.appendChild(body)

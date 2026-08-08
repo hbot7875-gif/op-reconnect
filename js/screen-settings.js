@@ -143,7 +143,7 @@ function paintSections(body, state) {
     },
     {
       icon: '🚨', name: 'Moon Station (under test)', value: '',
-      body: 'The same repeat/too-fast check HT runs, and whether your linked identity shows up on another agent file. Also on the tab bar.',
+      body: 'The same repeat check HT runs, and whether your linked identity shows up on another agent file. Also on the tab bar.',
       onClick: () => openMoonStation(),
     },
     {
