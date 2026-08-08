@@ -434,9 +434,22 @@ export async function joinGame(supabase: SupabaseDB, params: any) {
     const xpCap = xpRules(content).varietyCapBase
     const goalCap = xpCap * Math.max(1, frozen.meta.multiplier || 1)
     const baseline = computeBaseline(todayRow?.track_counts || {}, frozen, goalCap, xpCap)
-    await supabase.from('rc_player_districts').upsert(
-      { agent_no: agentNo, district_id: tutorial.id, status: 'active', goals: frozen, baseline },
-      { onConflict: 'agent_no, district_id', ignoreDuplicates: true })
+    // Plain insert, not an ignoreDuplicates upsert: the already_joined guard
+    // above means joinGame can only ever run once per agent_no, so a
+    // conflicting row here can't be a legitimate retry — it can only be a
+    // leftover row from a DIFFERENT, deleted account that happened to reuse
+    // this agent_no (several agent-scoped tables predate a real FK to
+    // rc_agents — see admin-agent.ts's adminDeleteAgent — so a manual row
+    // delete in the Supabase dashboard doesn't cascade the way it would if
+    // they did). ignoreDuplicates:true used to silently swallow exactly
+    // that: a brand-new agent invisibly inherited a stranger's stale
+    // district — wrong goals, wrong progress, sometimes already 'restored'
+    // — with no error and nothing to show anything had gone wrong. This
+    // should never happen; if it does, it needs a human, not a silent,
+    // wrong success.
+    const { error: tutorialErr } = await supabase.from('rc_player_districts')
+      .insert({ agent_no: agentNo, district_id: tutorial.id, status: 'active', goals: frozen, baseline })
+    if (tutorialErr) return { success: false, error: `tutorial_activation_conflict: ${tutorialErr.message}` }
   }
   return buildState(supabase, content, agent, player)
 }
