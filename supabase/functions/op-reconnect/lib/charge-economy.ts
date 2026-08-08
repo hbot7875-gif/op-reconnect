@@ -25,6 +25,16 @@ export const STREAMS_PER_CHARGE_CELL = 20
  * delta past what's already been credited" shape every other per-activation
  * reward in this game uses (see handlers.ts's lifetime_fuel baking). No-ops
  * with no active district or no album goals on it.
+ *
+ * The baseline check/update and the actual grant are one FOR UPDATE-locked
+ * unit (rc_credit_charge_cells, migrations/…_rc_atomic_charge_cell_credit.sql)
+ * — this runs on every buildState call, i.e. every poll, not just an
+ * occasional user action, so two overlapping calls for the same agent
+ * (two open tabs, a poll landing mid-refresh) are a real, frequent
+ * possibility, not a rare edge case. Reading the baseline and granting the
+ * delta as two separate non-transactional writes let that double-credit —
+ * both calls read the same stale baseline, both computed the same delta,
+ * both granted it.
  */
 export async function creditChargeCells(
   supabase: SupabaseDB,
@@ -39,13 +49,11 @@ export async function creditChargeCells(
 
   const total = albumGoalStreamTotal(frozen, activePd.baseline || {}, rollups, activePd.activated_at, content)
   const earned = Math.floor(total / STREAMS_PER_CHARGE_CELL)
-  const already = activePd.charge_cells_awarded || 0
-  if (earned <= already) return 0
+  if (earned <= (activePd.charge_cells_awarded || 0)) return 0
 
-  const delta = earned - already
-  await supabase.from('rc_player_districts')
-    .update({ charge_cells_awarded: earned })
-    .eq('agent_no', agentNo).eq('district_id', activePd.district_id).eq('status', 'active')
-  await supabase.rpc('rc_add_charge_cells', { p_agent_no: agentNo, p_amount: delta })
-  return delta
+  const { data, error } = await supabase.rpc('rc_credit_charge_cells', {
+    p_agent_no: agentNo, p_district_id: activePd.district_id, p_earned: earned,
+  })
+  if (error) return 0
+  return typeof data === 'number' ? data : 0
 }
