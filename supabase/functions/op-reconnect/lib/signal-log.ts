@@ -24,7 +24,14 @@ export async function getSignalLog(supabase: SupabaseDB, params: Record<string, 
   const rows = await fetchStreamRows(supabase, agentRow, from, now, 5)
   rows.sort((a, b) => b.listened_at - a.listened_at)
 
-  const streams = rows.slice(0, 50).map((r) => {
+  // Every row in the window gets flagged and counted here — the 50-row
+  // slice below is a DISPLAY limit (nobody wants a 500-row feed rendered),
+  // not a counting one. It used to be both at once: totals were derived
+  // from the already-sliced list, so anyone who actually streamed past 50
+  // tracks in a day had their "Jams (Last 24h)" number silently frozen at
+  // whatever the top 50 happened to add up to, no matter how much more
+  // they streamed afterward — reported live as "why is this stuck at 49."
+  const allStreams = rows.map((r) => {
     const counted = artistAllowed(normalizeKey(r.artist_name || ''), allowlist)
     return {
       track: r.track_name,
@@ -34,12 +41,13 @@ export async function getSignalLog(supabase: SupabaseDB, params: Record<string, 
       reason: counted ? null : 'not_bts',
     }
   })
+  const streams = allStreams.slice(0, 50)
 
   return {
     success: true,
-    nowPlaying: streams[0] ? { track: streams[0].track, artist: streams[0].artist, at: streams[0].at } : null,
+    nowPlaying: allStreams[0] ? { track: allStreams[0].track, artist: allStreams[0].artist, at: allStreams[0].at } : null,
     streams,
-    totals: { streams24h: streams.length, counted24h: streams.filter((s) => s.counted).length },
+    totals: { streams24h: allStreams.length, counted24h: allStreams.filter((s) => s.counted).length },
   }
 }
 
