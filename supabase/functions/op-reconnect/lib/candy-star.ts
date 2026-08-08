@@ -262,7 +262,7 @@ export async function getAlpacaOptions(supabase: SupabaseDB, _params: any): Prom
     .sort((a: any, b: any) => a.name.localeCompare(b.name))
 
   const albums = Object.values(albumsMap || {})
-    .filter((a: any) => a?.name && (a.trackKeys || []).length > 0)
+    .filter((a: any) => a?.name && (a.trackKeys || []).length > 0 && !BANNED_ALBUM_NAMES.has(normalizeKey(a.name)))
     .map((a: any) => ({ name: a.name, trackKeys: a.trackKeys, count: a.trackKeys.length }))
     .sort((a: any, b: any) => a.name.localeCompare(b.name))
 
@@ -334,17 +334,65 @@ async function alpacaQuickPlan(supabase: SupabaseDB): Promise<{ focus: any[]; al
 const ALPACA_DAILY_LIMIT = 3
 const ALPACA_WING_COST = 1
 
+// Custom-tab combo lock: an agent picking their own focus songs/albums may
+// only land on one of these three shapes — nothing else. Quick mode is
+// exempt (checked separately, mode !== 'quick' below): it pulls every
+// active goal for the week in one go, which routinely adds up to far more
+// than 2 songs or 2 albums, and that's by design, not something a player
+// chose. "song"/"album" counts here mean distinct picks, not play counts —
+// picking one song ×10 is still 1 song.
+const ALLOWED_CUSTOM_COMBOS = new Set(['2:1', '1:2', '1:1'])
+
+// Never eligible for a generated playlist, in any mode — full-length
+// live/anthology/compilation releases that either re-use previously
+// released masters or run far longer than a normal era album, neither of
+// which the PL ruleset wants counted through the generator. Matched by
+// normalized name against the album catalog (bts_song_catalog.albums),
+// covering the likely spellings an admin would use if one of these is ever
+// added there — none are in the catalog today, so this is a standing
+// guard against it happening later, not a fix for a live problem.
+const BANNED_ALBUM_NAMES = new Set([
+  'proof',
+  'permission to dance on stage',
+  'permission to dance on stage live',
+  'ptd on stage',
+  'ptd live',
+  'love yourself answer',
+  'the most beautiful moment in life young forever',
+  'the most beautiful moment in life pt 2 young forever',
+  'hyyh young forever',
+  'young forever',
+].map((n) => normalizeKey(n)))
+
+/** Every catalog album whose full tracklist is present in `trackKeys` — the
+ *  Custom builder's album checkboxes each contribute one whole album's
+ *  worth of keys, never a partial pick (js/candy-star.js's
+ *  candyCollectCustom), so this recovers "which albums were selected" and
+ *  "how many" straight from the flattened list the client actually sends,
+ *  rather than trusting a second, separately-suppliable field that could
+ *  drift out of sync with the tracks themselves. */
+function detectSelectedAlbums(albumsMap: Record<string, any>, trackKeys: string[]): { id: string; name: string }[] {
+  const set = new Set(trackKeys)
+  const out: { id: string; name: string }[] = []
+  for (const a of Object.values(albumsMap || {})) {
+    const keys: string[] = (a as any)?.trackKeys || []
+    if (keys.length > 0 && keys.every((k) => set.has(k))) out.push({ id: (a as any).id, name: (a as any).name })
+  }
+  return out
+}
+
 /** Agent-facing wrapper around generatePlaylist — "so agents can build their
  *  own rule-compliant playlists." Capped at ALPACA_DAILY_LIMIT/day per agent
  *  and costs ALPACA_WING_COST Wings per generation — see this file's header
  *  comment for why that reverses the original ported behavior. */
 export async function generateAlpaca(supabase: SupabaseDB, params: any): Promise<any> {
   const agentNo = params.agentNo
+  const isQuick = params.mode === 'quick'
   let focus = params.focus || []
   let album = params.album || []
   let targetMinutes = 180
 
-  if (params.mode === 'quick') {
+  if (isQuick) {
     const plan = await alpacaQuickPlan(supabase)
     focus = plan.focus
     album = plan.album
@@ -355,6 +403,29 @@ export async function generateAlpaca(supabase: SupabaseDB, params: any): Promise
   }
 
   if (!focus.length) return { success: false, error: 'Pick at least one song with a count.' }
+
+  // Valid, deduped picks only — a raw params.focus from a direct API call
+  // could carry a duplicate key or a zero multiplier that candyCollectCustom
+  // would never have produced; counting those against the combo cap would
+  // make it gameable in exactly the way this check exists to prevent.
+  const validFocusKeys = new Set<string>(
+    focus.filter((f: any) => (f.key || f.isrc) && parseInt(f.multiplier) > 0).map((f: any) => f.key || f.isrc),
+  )
+
+  const albumsMap = await getAlbumsMap(supabase)
+  const selectedAlbums = detectSelectedAlbums(albumsMap, album)
+
+  const banned = selectedAlbums.find((a) => BANNED_ALBUM_NAMES.has(normalizeKey(a.name)))
+  if (banned) {
+    return { success: false, error: `${banned.name} can't be used for generated playlists — pick a different album.` }
+  }
+
+  if (!isQuick) {
+    const comboKey = `${validFocusKeys.size}:${selectedAlbums.length}`
+    if (!ALLOWED_CUSTOM_COMBOS.has(comboKey)) {
+      return { success: false, error: 'Pick exactly one of: 2 songs + 1 album, 1 song + 2 albums, or 1 song + 1 album.' }
+    }
+  }
 
   const totalPlays = focus.reduce((n: number, f: any) => n + (parseInt(f.multiplier) || 0), 0)
   if (totalPlays > ALPACA_MAX_TOTAL_PLAYS) {
@@ -412,6 +483,23 @@ export async function previewAlpaca(supabase: SupabaseDB, params: any): Promise<
     .filter((f: any) => (f.key || f.isrc) && f.multiplier > 0)
     .map((f: any) => ({ ...f, isrc: f.key || f.isrc }))
   if (!focusInput.length) return { success: false, error: 'Pick at least one song with a count.' }
+
+  // Same combo/banned-album gate generateAlpaca enforces — checked here too
+  // so the builder can show the real rejection reason live, while typing,
+  // instead of only at the final "Generate" tap.
+  const albumsMapForCheck = await getAlbumsMap(supabase)
+  const selectedAlbumsForCheck = detectSelectedAlbums(albumsMapForCheck, album)
+  const bannedPreview = selectedAlbumsForCheck.find((a) => BANNED_ALBUM_NAMES.has(normalizeKey(a.name)))
+  if (bannedPreview) {
+    return { success: false, error: `${bannedPreview.name} can't be used for generated playlists — pick a different album.` }
+  }
+  if (params.mode !== 'quick') {
+    const distinctFocusKeys = new Set<string>(focusInput.map((f: any) => f.isrc))
+    const comboKey = `${distinctFocusKeys.size}:${selectedAlbumsForCheck.length}`
+    if (!ALLOWED_CUSTOM_COMBOS.has(comboKey)) {
+      return { success: false, error: 'Pick exactly one of: 2 songs + 1 album, 1 song + 2 albums, or 1 song + 1 album.' }
+    }
+  }
 
   const targetMs = 180 * 60000
   const fillerEvery = 20

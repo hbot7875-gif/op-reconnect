@@ -246,15 +246,31 @@ export function candyRowKeydown(e) {
   if (next) next.querySelector('.cs-focus-sel')?.focus();
   else candyAddFocusRow();
 }
+// Custom builder is locked to the same combo the backend enforces
+// (generateAlpaca/previewAlpaca in candy-star.ts) — 2 songs max, 2 albums
+// max, never both maxed at once. Capping the inputs here means a player
+// finds out from a disabled button, not from a rejection after they've
+// already filled the whole thing in.
+const CS_MAX_FOCUS_ROWS = 2;
+const CS_MAX_ALBUMS = 2;
+
 export function candyAddFocusRow() {
   const wrap = $('cs-focus-rows');
-  if (!wrap) return;
+  if (!wrap || wrap.children.length >= CS_MAX_FOCUS_ROWS) return;
   wrap.insertAdjacentHTML('beforeend', candyFocusRow(4));
   wrap.lastElementChild?.querySelector('.cs-focus-sel')?.focus();
+  candySyncRowControls();
 }
 export function candyRemoveRow(btn) {
   btn.closest('.cs-focus-row')?.remove();
+  candySyncRowControls();
   candyUpdateEstimate();
+}
+/** Shows/hides "+ Add another song" depending on whether the cap is reached. */
+function candySyncRowControls() {
+  const wrap = $('cs-focus-rows');
+  const addBtn = document.querySelector('.cs-add-row');
+  if (wrap && addBtn) addBtn.style.display = wrap.children.length >= CS_MAX_FOCUS_ROWS ? 'none' : '';
 }
 export function candyValidateRow(el) {
   const row = el.closest('.cs-focus-row');
@@ -326,12 +342,6 @@ export function candyUpdateEstimate() {
     albumCountEl.textContent = checkedAlbums.length ? `${checkedAlbums.length} selected` : '';
   }
 
-  const allBoxes = document.querySelectorAll('.cs-album-check');
-  const toggleAllEl = $('cs-album-toggle-all');
-  if (toggleAllEl && allBoxes.length) {
-    toggleAllEl.textContent = checkedAlbums.length === allBoxes.length ? 'Clear all' : 'Select all';
-  }
-
   candyQueuePreview();
 }
 
@@ -392,7 +402,13 @@ async function candyRunPreview() {
   if (seq !== candyPreviewToken) return; // a newer request already superseded this one
 
   if (!res || !res.success) {
-    candySetHTML('cs-preview-list', `<div class="cs-preview-empty">Preview unavailable right now — generate to see the real order.</div>`);
+    // A rule rejection (banned album, wrong song/album combo) is something
+    // the agent can act on right now — show it in place of the generic
+    // fallback so they don't have to hit Generate just to find out why.
+    const msg = res?.error && /^(Pick exactly one of|.+ can't be used for generated playlists)/.test(res.error)
+      ? res.error
+      : 'Preview unavailable right now — generate to see the real order.';
+    candySetHTML('cs-preview-list', `<div class="cs-preview-empty">${sanitize(msg)}</div>`);
     candySetText('cs-stat-filler', '—');
     candySetText('cs-stat-duration', '—');
     return;
@@ -430,10 +446,16 @@ function candyAlbumHue(name) {
   for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
   return hash % 360;
 }
-export function candyToggleAllAlbums() {
-  const boxes = document.querySelectorAll('.cs-album-check');
-  const selectAll = document.querySelectorAll('.cs-album-check:checked').length !== boxes.length;
-  boxes.forEach(b => { b.checked = selectAll; });
+/** Enforces the CS_MAX_ALBUMS cap on the checkbox itself — checking a 3rd
+ *  box reverts immediately instead of building an over-the-cap combo that
+ *  only gets caught once the preview/generate round-trips to the backend. */
+export function candyAlbumCheckChanged(el) {
+  const checkedCount = document.querySelectorAll('.cs-album-check:checked').length;
+  if (el.checked && checkedCount > CS_MAX_ALBUMS) {
+    el.checked = false;
+    showToast(`Only ${CS_MAX_ALBUMS} albums max per playlist — uncheck one first.`);
+    return;
+  }
   candyUpdateEstimate();
 }
 export function candySwitchTab(tab) {
@@ -605,24 +627,24 @@ export async function renderCandyStar() {
           <div class="archive-card">
             <div style="font-size:13px; font-weight:900; color:var(--red-core); letter-spacing:0.04em; margin-bottom:6px; text-transform:uppercase;">${candyIcon('disc')} What do you want on repeat?</div>
             <div style="font-size:11px; color:var(--text-muted); margin-bottom:14px; line-height:1.5;">
-              Pick a song and how many times you want to hear it (e.g. 12× Swim · 6× Come Over · 5× Haegeum) — we'll weave in enough extra tracks so it still plays like a real playlist.
+              Pick a song and how many times you want to hear it (e.g. 12× Swim · 6× Come Over) — we'll weave in enough extra tracks so it still plays like a real playlist.
+              Every playlist needs exactly <b>2 songs + 1 album</b>, <b>1 song + 2 albums</b>, or <b>1 song + 1 album</b> — nothing else.
             </div>
 
             <div class="cs-col-headers"><span>Song</span><span>Times</span><span></span></div>
-            <div id="cs-focus-rows">${candyFocusRow(10)}${candyFocusRow(5)}${candyFocusRow(4)}</div>
+            <div id="cs-focus-rows">${candyFocusRow(10)}${candyFocusRow(5)}</div>
             <button type="button" class="cs-add-row" onclick="candyAddFocusRow()">+ Add another song</button>
 
             ${(opt.albums || []).length ? `
             <div class="cs-album-label-row">
-              <label class="cs-field-label">Want a full album woven in too? · ${opt.albums.length} available</label>
+              <label class="cs-field-label">Want a full album woven in too? · ${opt.albums.length} available, ${CS_MAX_ALBUMS} max</label>
               <div class="cs-album-actions">
                 <span class="cs-album-selected-count" id="cs-album-selected-count"></span>
-                <button type="button" class="cs-link-btn" id="cs-album-toggle-all" onclick="candyToggleAllAlbums()">Select all</button>
               </div>
             </div>
             <div id="cs-album-checks" class="cs-album-grid">
               ${opt.albums.map((a, i) => `<label class="cs-album-card" title="${sanitize(a.name)}" style="--art-hue:${candyAlbumHue(a.name)}deg;">
-                <input type="checkbox" class="cs-album-check" id="cs-album-${i}" value='${sanitize(JSON.stringify(a.trackKeys))}' onchange="candyUpdateEstimate()">
+                <input type="checkbox" class="cs-album-check" id="cs-album-${i}" value='${sanitize(JSON.stringify(a.trackKeys))}' onchange="candyAlbumCheckChanged(this)">
                 <span class="cs-album-card-art">${candyIcon('disc', 16)}</span>
                 <span class="cs-album-meta">
                   <span class="cs-album-name">${sanitize(a.name)}</span>
@@ -699,6 +721,7 @@ export async function renderCandyStar() {
     <div id="cs-status" class="cs-status-card"></div>
   </div>`;
 
+  candySyncRowControls();
   candyQuickRefresh();
   candyUpdateEstimate();
 }
