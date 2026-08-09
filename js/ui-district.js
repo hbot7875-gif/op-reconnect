@@ -27,7 +27,11 @@ export const RECONNECT_LABELS = {
 function reconnectRow(r) {
   const label = RECONNECT_LABELS[r.variant] || 'ReConnect'
   const row = el('div', 'goal-row reconnect-row' + (r.done ? ' done' : ''))
+  // A mission's own joined-count (2/2) reads as "done" at a glance once
+  // everyone's in — misleading for a sharedTrack mission where joining is
+  // just step one. Lead with the real target when there is one.
   const status = r.done ? '✓ done'
+    : r.mission?.sharedTrack ? `${r.mission.sharedTrack.progress}<i>/${r.mission.sharedTrack.target} ${esc(r.mission.sharedTrack.label)}</i>`
     : r.mission ? `${r.mission.participants.filter((p) => p.status === 'joined').length}<i>/${r.mission.requiredAgents}</i>`
     : typeof r.attemptsLeft === 'number' ? `${r.attemptsLeft} <i>${r.attemptsLeft === 1 ? 'try' : 'tries'} left</i>`
     : ''

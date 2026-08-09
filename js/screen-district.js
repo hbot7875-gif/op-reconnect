@@ -277,7 +277,10 @@ function paintMissionPanel(box, d, res) {
   const me = getAgentNo()
 
   if (m?.status === 'complete') {
-    box.appendChild(el('p', 'muted', "Done — everyone's in. Reward lands once the district finishes."))
+    const done = m.sharedTrack
+      ? `Done — ${esc(m.sharedTrack.label)} hit ${m.sharedTrack.target} between you. Reward lands once the district finishes.`
+      : "Done — everyone's in. Reward lands once the district finishes."
+    box.appendChild(el('p', 'muted', done))
     return
   }
 
