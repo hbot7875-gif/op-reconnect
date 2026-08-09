@@ -1,8 +1,14 @@
-// Co-op variants of the `reconnect` goal kind — 'connect' (open matchmaking;
-// each participant must contribute to their OWN frozen track/album goals
-// while paired — "any goal", not one fixed shared track) and 'invite'
-// (direct ask to a specific agent who's also actively restoring this
-// district; satisfied on acceptance alone, no streaming required).
+// Co-op variants of the `reconnect` goal kind — 'connect' (invite a specific
+// agent who's also restoring this district; once they accept, everyone
+// contributes toward their own frozen track/album goals, or a shared track
+// target if the goal carries one — see refreshMission) and 'invite' (same
+// direct-ask shape, satisfied on acceptance alone, no streaming required).
+// Both variants pair up the same way now: one person invites, the other
+// accepts. There used to be an open-matchmaking shortcut for 'connect'
+// (tap "join" and get paired with whoever else tapped it) — removed per
+// the site owner: two strangers ending up 'joined' with no invite ever
+// sent between them looked like (and functionally was) an unrequested
+// auto-accept.
 //
 // Folded in from the old post-restoration "Reconnect Mission" bonus stage —
 // same underlying rc_reconnect_missions/rc_reconnect_participants tables,
@@ -60,21 +66,6 @@ async function findMyMission(
 
   const { data: mission } = await supabase.from('rc_reconnect_missions').select('*').eq('id', row.mission_id).maybeSingle()
   return mission
-}
-
-/** An open mission for this exact goal with a free slot — 'connect' only
- *  (invite has no open matchmaking pool). Oldest first: fill the mission
- *  that's been waiting longest before starting a new one. */
-async function joinableMission(supabase: SupabaseDB, districtId: string, goalId: string, requiredAgents: number) {
-  const { data: missions } = await supabase.from('rc_reconnect_missions')
-    .select('*').eq('district_id', districtId).eq('goal_id', goalId).eq('status', 'open')
-    .order('created_at', { ascending: true })
-  for (const m of missions || []) {
-    const { count } = await supabase.from('rc_reconnect_participants')
-      .select('agent_no', { count: 'exact', head: true }).eq('mission_id', m.id).eq('status', 'joined')
-    if ((count || 0) < (m.required_agents ?? requiredAgents)) return m
-  }
-  return null
 }
 
 /** Every key from a participant's OWN frozen track/album goals — this is
@@ -253,8 +244,12 @@ export async function getMissionStatus(supabase: SupabaseDB, agentNo: string, di
 }
 
 /** Read-only, richer than getMissionStatus: for the interactive player
- *  panel — includes a joinable-mission preview when the agent hasn't
- *  opened/joined one yet. */
+ *  panel. No more open-matchmaking preview here — pairing up now always
+ *  means one specific person invites another (see getInviteCandidates),
+ *  never "whoever taps join first gets paired with a stranger." Per the
+ *  site owner: strangers ending up 'joined' together with no invite ever
+ *  sent between them read as an unrequested auto-accept, which it
+ *  effectively was from either player's point of view. */
 export async function getReconnectMission(supabase: SupabaseDB, content: unknown, params: any) {
   const districtId = String(params.districtId || '')
   const agentNo = String(params.agentNo || '').trim().toUpperCase()
@@ -266,9 +261,6 @@ export async function getReconnectMission(supabase: SupabaseDB, content: unknown
   if (!reconnect) return { success: true, available: false }
 
   let mission = await findMyMission(supabase, agentNo, districtId, { goalId: reconnect.id })
-  if (!mission && reconnect.variant === 'connect') {
-    mission = await joinableMission(supabase, districtId, reconnect.id, reconnect.config.requiredAgents)
-  }
   if (mission) mission = await refreshMission(supabase, mission, reconnect.variant, reconnect.config)
 
   const { data: participants } = mission
@@ -358,38 +350,9 @@ export async function openReconnectMission(supabase: SupabaseDB, content: unknow
   return { success: true, mission: await shape(supabase, fresh, participants || [], agentNo) }
 }
 
-/** Open-matchmaking join — 'connect' variant only; 'invite' has no open
- *  pool to join, only direct invites. */
-export async function joinReconnectMission(supabase: SupabaseDB, content: unknown, params: any) {
-  const districtId = String(params.districtId || '')
-  const agentNo = String(params.agentNo || '').trim().toUpperCase()
-
-  const pd = await myActivePd(supabase, agentNo, districtId)
-  if (pd?.status !== 'active') return { success: false, error: 'not_eligible' }
-  const reconnect = myReconnectGoal(pd)
-  if (!reconnect || reconnect.variant !== 'connect') return { success: false, error: 'not_available' }
-  if (await findMyMission(supabase, agentNo, districtId)) return { success: false, error: 'already_in_mission' }
-
-  let mission = await joinableMission(supabase, districtId, reconnect.id, reconnect.config.requiredAgents)
-  if (!mission) return { success: false, error: 'no_open_mission' }
-  mission = await refreshMission(supabase, mission, reconnect.variant, reconnect.config)
-  if (mission.status !== 'open') return { success: false, error: 'mission_' + mission.status }
-
-  // rc_reconnect_join_open (migrations/…_rc_fix_activation_and_mission_races.sql)
-  // re-checks capacity and inserts as one row-locked unit — the
-  // joinableMission/refreshMission checks above are just a cheap
-  // pre-filter. Two agents racing this mission's last open slot used to
-  // both pass the old (separate count-then-insert) check here.
-  const { data: rpcData, error: rpcError } = await supabase.rpc('rc_reconnect_join_open', {
-    p_mission_id: mission.id, p_agent_no: agentNo,
-  })
-  const result = !rpcError && Array.isArray(rpcData) ? rpcData[0] : null
-  if (rpcError || !result?.joined) return { success: false, error: result?.error || rpcError?.message || 'join_failed' }
-
-  const fresh = await refreshMission(supabase, mission, reconnect.variant, reconnect.config)
-  const { data: freshParticipants } = await supabase.from('rc_reconnect_participants').select('*').eq('mission_id', mission.id)
-  return { success: true, mission: await shape(supabase, fresh, freshParticipants || [], agentNo) }
-}
+// Open-matchmaking join (joinReconnectMission / rc_reconnect_join_open)
+// removed — pairing up now always goes through invite + accept, never a
+// tap-to-join-a-stranger shortcut. See getReconnectMission's comment.
 
 /** An agent already in their own open mission invites someone else who is
  *  also actively restoring this district (any reconnect variant, or none —

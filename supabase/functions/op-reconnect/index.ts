@@ -26,7 +26,7 @@ import { adminDeleteAgent, adminGetAgent, adminGetAgentTracks, adminScanAltAccou
 import { adminSyncAllStreams } from './lib/sync-all.ts'
 import { adminListGoals, adminAddGoal, adminUpdateGoal, adminDeleteGoal } from './lib/goals.ts'
 import {
-  getReconnectMission, getInviteCandidates, openReconnectMission, joinReconnectMission,
+  getReconnectMission, getInviteCandidates, openReconnectMission,
   inviteReconnectMission, respondReconnectInvite, adminAutoAssignMissions,
   getMyInvites,
 } from './lib/reconnect-missions.ts'
@@ -107,7 +107,6 @@ const ROUTES: Record<string, Route> = {
   getReconnectMission: { auth: 'agent', handler: async (sb, p) => getReconnectMission(sb, await loadContent(sb), p) },
   getInviteCandidates: { auth: 'agent', handler: async (sb, p) => getInviteCandidates(sb, await loadContent(sb), p) },
   openReconnectMission: { auth: 'agent', handler: async (sb, p) => openReconnectMission(sb, await loadContent(sb), p) },
-  joinReconnectMission: { auth: 'agent', handler: async (sb, p) => joinReconnectMission(sb, await loadContent(sb), p) },
   inviteReconnectMission: { auth: 'agent', handler: async (sb, p) => inviteReconnectMission(sb, await loadContent(sb), p) },
   respondReconnectInvite: { auth: 'agent', handler: async (sb, p) => respondReconnectInvite(sb, await loadContent(sb), p) },
   getMyInvites: { auth: 'agent', handler: async (sb, p) => getMyInvites(sb, await loadContent(sb), String(p.agentNo || '').trim().toUpperCase()) },

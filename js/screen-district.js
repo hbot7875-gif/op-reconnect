@@ -291,8 +291,8 @@ function paintMissionPanel(box, d, res) {
     box.appendChild(el('p', 'muted', res.variant === 'invite'
       ? `Invite ${res.config.requiredAgents} agents who are also restoring ${esc(districtDisplayName(d))} to help out — no streaming needed from them, just a yes.`
       : st
-        ? `Team up with ${res.config.requiredAgents} agents also restoring ${esc(districtDisplayName(d))}. Open a mission to get matched with whoever else is looking, or open one and invite someone specific by agent number. Once everyone's joined, stream ${esc(st.label)} — everyone's own plays add up together until you hit ${st.target}.`
-        : `Team up with ${res.config.requiredAgents} agents also restoring ${esc(districtDisplayName(d))} — everyone needs to keep streaming toward their own goals here.`))
+        ? `Team up with ${res.config.requiredAgents} agents also restoring ${esc(districtDisplayName(d))}. Open a mission, then invite someone specific — once they accept, stream ${esc(st.label)} — everyone's own plays add up together until you hit ${st.target}.`
+        : `Team up with ${res.config.requiredAgents} agents also restoring ${esc(districtDisplayName(d))} — open a mission, then invite someone specific. Once they accept, everyone needs to keep streaming toward their own goals here.`))
     const openBtn = el('button', 'btn btn-primary', res.variant === 'invite' ? 'Start inviting' : 'Open a mission')
     openBtn.onclick = async () => {
       openBtn.disabled = true
@@ -392,15 +392,11 @@ function paintMissionPanel(box, d, res) {
         else toast(reconnectError(r.error))
       }
     }
-  } else if (res.variant === 'connect' && joined.length < m.requiredAgents) {
-    const joinBtn = el('button', 'btn btn-primary', 'Join this mission')
-    joinBtn.onclick = async () => {
-      joinBtn.disabled = true
-      const r = await call('joinReconnectMission', { agentNo: me, districtId: d.id })
-      if (r.success) refresh(); else { toast(reconnectError(r.error)); joinBtn.disabled = false }
-    }
-    box.appendChild(joinBtn)
   }
+  // No third branch here anymore — getReconnectMission only ever returns a
+  // mission the caller already participates in (invited or joined), so
+  // reaching this panel with an open mission and no row of your own is no
+  // longer possible. That was the "Join this mission" matchmaking button.
 }
 
 /* ── The shelf ──────────────────────────────────────────────────────────
