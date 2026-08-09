@@ -12,7 +12,7 @@
 // variety cap, and it's a better listen — which is the point of handing
 // someone a queue instead of a checklist.
 
-import { el, esc, hideOverlay, toast } from './state.js'
+import { el, esc, hideOverlay } from './state.js'
 import { districtDisplayName } from './ward-tiles.js'
 
 /** [{ label, need }] — everything still owed, biggest debt first. */
@@ -129,19 +129,6 @@ export function openPlaylist(state) {
     `))
   })
   sheet.appendChild(list)
-
-  const copy = el('button', 'btn btn-primary', '📋 Copy the order')
-  copy.onclick = async () => {
-    const text = `OP: ReConnect — ${districtDisplayName(d)}\n\n`
-      + queue.map((q, i) => `${i + 1}. ${q.label}`).join('\n')
-    try {
-      await navigator.clipboard.writeText(text)
-      toast('Copied — paste it wherever you queue up')
-    } catch {
-      toast('Couldn\'t copy — long-press the list to select it')
-    }
-  }
-  sheet.appendChild(copy)
 
   const close = el('button', 'btn btn-ghost', 'Close')
   close.onclick = hideOverlay
