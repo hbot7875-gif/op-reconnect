@@ -9,7 +9,7 @@ import { fetchStreamRows } from './streams.ts'
 import type { AgentSourceRow } from './streams.ts'
 import type { DayBucket, FrozenTransmission } from './transmission.ts'
 import type { GameContent, SupabaseDB } from './config.ts'
-import { xpRules, limits, streamsPerXpFor } from './config.ts'
+import { limits, streamsPerXpFor, PERSONAL_COUNT_CAP } from './config.ts'
 import type { FrozenGoals } from './districts.ts'
 
 export interface DailyRow {
@@ -154,10 +154,9 @@ export async function ensureDailyRollups(
   goalXpScope: GoalXpScope | null = null,
 ): Promise<DailyRow[]> {
   const lim = limits(content)
-  const rules = xpRules(content)
   const allowlist: string[] = content.config.bts_artists || []
-  // modeMultiplier no longer scales the variety cap — see decision 5 note in handlers.ts.
-  const cap = rules.varietyCapBase
+  // Personal XP counting is uncapped — see config.ts's PERSONAL_COUNT_CAP.
+  const cap = PERSONAL_COUNT_CAP
   const today = todayKst()
   const joinedDate = kstDateOf(Math.floor(new Date(player.joined_at).getTime() / 1000))
   const windowStart = joinedDate > addDaysStr(today, -lim.backfillMaxDays) ? joinedDate : addDaysStr(today, -lim.backfillMaxDays)

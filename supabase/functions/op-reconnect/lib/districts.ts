@@ -6,7 +6,7 @@
 import { goalKeys } from './transmission.ts'
 import type { DayBucket } from './transmission.ts'
 import type { GameContent, DistrictRow } from './config.ts'
-import { modeMultiplier, xpRules } from './config.ts'
+import { modeMultiplier, PERSONAL_COUNT_CAP } from './config.ts'
 import { kstDateOf } from './kst.ts'
 
 export interface FrozenReconnectGoal {
@@ -166,10 +166,10 @@ export function districtProgress(
   activatedAt: string,
   content: GameContent,
 ): DistrictProgress {
-  // XP keeps a flat anti-farming cap, but district progress scales its cap
-  // with the account mode. Otherwise Hard's 200-stream track target could
-  // never fit inside a seven-day window capped at 15 per day (105 maximum).
-  const cap = xpRules(content).varietyCapBase * Math.max(1, frozen.meta.multiplier || 1)
+  // District/album goal progress is uncapped — every real counted stream
+  // moves the goal, same as the arirang mission. See config.ts's
+  // PERSONAL_COUNT_CAP for what still keeps a real cap (the shared Bomb).
+  const cap = PERSONAL_COUNT_CAP
   const activationDate = kstDateOf(Math.floor(new Date(activatedAt).getTime() / 1000))
   const inWindow = rollups.filter((r) => r.kst_date >= activationDate)
 
@@ -210,8 +210,8 @@ export function districtProgress(
 export function albumGoalStreamTotal(
   frozen: FrozenGoals, baseline: Record<string, number>, rollups: RollupRow[], activatedAt: string, content: GameContent,
 ): number {
-  // Goal progress uses the same mode-scaled cap as districtProgress().
-  const cap = xpRules(content).varietyCapBase * Math.max(1, frozen.meta.multiplier || 1)
+  // Goal progress is uncapped — same as districtProgress().
+  const cap = PERSONAL_COUNT_CAP
   const activationDate = kstDateOf(Math.floor(new Date(activatedAt).getTime() / 1000))
   const inWindow = rollups.filter((r) => r.kst_date >= activationDate)
   let total = 0

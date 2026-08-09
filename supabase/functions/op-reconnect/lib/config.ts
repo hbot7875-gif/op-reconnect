@@ -76,6 +76,17 @@ export function xpRules(content: GameContent): { streamsPerXp: number; varietyCa
   return { streamsPerXp: 10, varietyCapBase: 15, districtXp: 50, ...(content.config.xp_rules || {}) }
 }
 
+/** Personal counting (district/album goal progress, activation baselines,
+ *  and a day's own XP) no longer caps same-track repeats per day — every
+ *  real counted stream moves the goal, matching how the arirang mission
+ *  counts. varietyCapBase stays alive for exactly one thing: the shared
+ *  ARMY Bomb's network-wide charge (bomb.ts), a collectively-owned resource
+ *  where one player looping a song still shouldn't be able to single-
+ *  handedly swing everyone's charge. This is a plain large constant rather
+ *  than Infinity so it stays a normal JSON number wherever it's echoed back
+ *  to the client (today.varietyCap) instead of serializing to null. */
+export const PERSONAL_COUNT_CAP = 1_000_000
+
 /** Streams needed per XP, by the player's own chosen mode — easy mode
  *  converts streams to XP fastest, hard mode slowest, so a harder mode is
  *  a real tradeoff and not just bigger goal targets for the same XP.

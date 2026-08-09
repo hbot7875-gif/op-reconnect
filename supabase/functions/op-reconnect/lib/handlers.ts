@@ -3,7 +3,7 @@
 // numbers never appear in responses beyond echoing the caller's own request.
 
 import type { GameContent, SupabaseDB, DistrictRow } from './config.ts'
-import { loadContent, rankFor, xpRules, restorationDays, streamsPerXpFor } from './config.ts'
+import { loadContent, rankFor, xpRules, restorationDays, streamsPerXpFor, PERSONAL_COUNT_CAP } from './config.ts'
 import { ensureDailyRollups, computeStreak, awardStreakBadges, totalXp, goalXpCountForDate } from './derive.ts'
 import { awardDailySideMissionXp, buildSideMissions } from './side-missions.ts'
 import { freezeGoals, computeBaseline, districtProgress, districtDeadline, filesRevealedCount, albumGoalStreamTotal } from './districts.ts'
@@ -83,11 +83,8 @@ function wardStates(content: GameContent, restored: Set<string>) {
 
 async function buildState(supabase: SupabaseDB, content: GameContent, agent: any, player: any) {
   const rules = xpRules(content)
-  // modeMultiplier no longer scales the variety cap — mode-based streams-per-XP
-  // (streamsPerXpFor, above) is the one difficulty lever now; stacking both would
-  // punish harder modes twice for the same choice. See docs/botz-network-redesign.md
-  // decision 5.
-  const cap = rules.varietyCapBase
+  // Personal counting is uncapped — see config.ts's PERSONAL_COUNT_CAP.
+  const cap = PERSONAL_COUNT_CAP
   const allowlist: string[] = content.config.bts_artists || []
   const today = todayKst()
 
@@ -431,8 +428,10 @@ export async function joinGame(supabase: SupabaseDB, params: any) {
     const rollups = await ensureDailyRollups(supabase, agent, player, content)
     const todayRow = rollups.find((r) => String(r.kst_date) === todayKst())
     const frozen = freezeGoals(content, mode, tutorial)
-    const xpCap = xpRules(content).varietyCapBase
-    const goalCap = xpCap * Math.max(1, frozen.meta.multiplier || 1)
+    // Baselines are uncapped too, same as ongoing goal progress — see
+    // config.ts's PERSONAL_COUNT_CAP.
+    const xpCap = PERSONAL_COUNT_CAP
+    const goalCap = PERSONAL_COUNT_CAP
     const baseline = computeBaseline(todayRow?.track_counts || {}, frozen, goalCap, xpCap)
     // Plain insert, not an ignoreDuplicates upsert: the already_joined guard
     // above means joinGame can only ever run once per agent_no, so a
@@ -482,8 +481,10 @@ export async function startDistrict(supabase: SupabaseDB, params: any) {
   const rollups = await ensureDailyRollups(supabase, agent, player, content)
   const todayRow = rollups.find((r) => String(r.kst_date) === todayKst())
   const frozen = freezeGoals(content, player.mode, district)
-  const xpCap = xpRules(content).varietyCapBase
-  const goalCap = xpCap * Math.max(1, frozen.meta.multiplier || 1)
+  // Baselines are uncapped too, same as ongoing goal progress — see
+  // config.ts's PERSONAL_COUNT_CAP.
+  const xpCap = PERSONAL_COUNT_CAP
+  const goalCap = PERSONAL_COUNT_CAP
   const baseline = computeBaseline(todayRow?.track_counts || {}, frozen, goalCap, xpCap)
   const { error: insErr } = await supabase.from('rc_player_districts')
     .insert({ agent_no: agentNo, district_id: district.id, status: 'active', goals: frozen, baseline })
