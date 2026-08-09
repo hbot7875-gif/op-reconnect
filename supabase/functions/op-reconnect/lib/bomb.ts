@@ -18,7 +18,7 @@
 // restored districts.
 
 import type { SupabaseDB, GameContent } from './config.ts'
-import { xpRules, modeMultiplier, loadContent } from './config.ts'
+import { modeMultiplier, loadContent, PERSONAL_COUNT_CAP } from './config.ts'
 import { todayKst, addDaysStr, kstDateOf } from './kst.ts'
 import { countedStreams } from './derive.ts'
 import { getEraTimeline, completedEraCount } from './era-timeline.ts'
@@ -74,14 +74,16 @@ export interface BombView {
 }
 
 /**
- * Every player's own variety cap, keyed by agent_no — each agent's mode
- * determines THEIR cap, never the cap of whoever happens to be viewing the
- * bomb. Falls back to the unmultiplied base cap for any agent not found
- * (shouldn't happen, since every rc_daily_activity row belongs to a joined
- * player, but a stream shouldn't just get dropped from the pool if it does).
+ * Every player's own variety cap, keyed by agent_no. Uncapped now, same as
+ * personal goal/XP counting (config.ts's PERSONAL_COUNT_CAP) — the site
+ * owner wants the shared Bomb to count real streams exactly like the
+ * arirang mission does too, not hold back one player's contribution because
+ * they favor a single track. The map/per-mode shape stays only because
+ * communityStreams/refreshDefuse below already key off it; every agent
+ * effectively gets the same uncapped ceiling now regardless of mode.
  */
 async function agentCapMap(supabase: SupabaseDB, content: GameContent): Promise<{ map: Map<string, number>; base: number }> {
-  const base = xpRules(content).varietyCapBase
+  const base = PERSONAL_COUNT_CAP
   const { data } = await supabase.from('rc_players').select('agent_no, mode')
   const map = new Map<string, number>()
   for (const p of data || []) map.set(p.agent_no, base * modeMultiplier(content, p.mode))
