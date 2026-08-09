@@ -5,7 +5,6 @@
 
 import { el, esc, showOverlay, hideOverlay, getState } from './state.js'
 import { openPlaylist, remaining, dailyPace } from './playlist.js'
-import { missionBoardSheet } from './mission-board.js'
 
 /** Overall restoration fraction (0..1) driving the scene's lights. */
 export function districtFraction(d) {
@@ -60,6 +59,20 @@ function goalRow(label, sub, progress, target, done, unit) {
   return row
 }
 
+/** A mission-group header inline in the checklist itself — "Track Mission",
+ *  "Album Mission", "ReConnect Mission" — so the grouping that used to live
+ *  behind a separate Weekly Mission Board tap (now removed: it only ever
+ *  repeated the same three counts a scroll down already shows) is visible
+ *  in the one place a player is actually looking. */
+function missionSection(icon, label, done, total) {
+  const head = el('div', 'board-head mission-section')
+  head.innerHTML = `
+    <span class="board-title">${icon} ${esc(label)}</span>
+    <span class="board-count${total > 0 && done === total ? ' all' : ''}">${done}/${total} done</span>
+  `
+  return head
+}
+
 export function renderBoard(board, d) {
   board.innerHTML = ''
 
@@ -102,26 +115,26 @@ export function renderBoard(board, d) {
     board.appendChild(q)
   }
 
-  // Weekly Mission Board moved here too — players should see their missions
-  // on the screen where they perform them, not behind a tap in the Pack.
-  const mb = el('button', 'queue-btn is-quiet', '📋 Weekly Mission Board')
-  mb.onclick = () => showOverlay(missionBoardSheet(getState() || { activeDistrict: d }))
-  board.appendChild(mb)
-
   const card = el('div', 'card goal-card')
-  for (const g of goals) {
-    card.appendChild(goalRow(g.label, '', g.progress, g.target, g.done, 'plays'))
-  }
-  for (const a of albums) {
-    const sub = a.done || !a.nextPassTracks?.length ? ''
-      : `Still need ${a.nextPassTracks.slice(0, 3).map((t) => `${esc(t.label)} ×${t.need}`).join(' · ')}`
-    const row = goalRow(`💿 ${a.label}`, sub, a.passesDone, a.target, a.done, 'passes')
-    // Tap to see every track in the album, not just the couple flagged above.
-    if (a.tracks?.length) {
-      row.classList.add('clickable')
-      row.onclick = () => showOverlay(albumDetailSheet(a))
+  if (goals.length) {
+    card.appendChild(missionSection('🎵', 'Track Mission', goals.filter((g) => g.done).length, goals.length))
+    for (const g of goals) {
+      card.appendChild(goalRow(g.label, '', g.progress, g.target, g.done, 'plays'))
     }
-    card.appendChild(row)
+  }
+  if (albums.length) {
+    card.appendChild(missionSection('💿', 'Album Mission', albums.filter((a) => a.done).length, albums.length))
+    for (const a of albums) {
+      const sub = a.done || !a.nextPassTracks?.length ? ''
+        : `Still need ${a.nextPassTracks.slice(0, 3).map((t) => `${esc(t.label)} ×${t.need}`).join(' · ')}`
+      const row = goalRow(`💿 ${a.label}`, sub, a.passesDone, a.target, a.done, 'passes')
+      // Tap to see every track in the album, not just the couple flagged above.
+      if (a.tracks?.length) {
+        row.classList.add('clickable')
+        row.onclick = () => showOverlay(albumDetailSheet(a))
+      }
+      card.appendChild(row)
+    }
   }
   if (albums.length && d.chargeCellProgress) {
     const c = d.chargeCellProgress
@@ -135,7 +148,10 @@ export function renderBoard(board, d) {
       <div class="cell-progress-left">${c.remaining} more Album Goal stream${c.remaining === 1 ? '' : 's'} · your goal total stays counted</div>
     `))
   }
-  if (reconnect) card.appendChild(reconnectRow(reconnect))
+  if (reconnect) {
+    card.appendChild(missionSection('🤝', 'ReConnect Mission', reconnect.done ? 1 : 0, 1))
+    card.appendChild(reconnectRow(reconnect))
+  }
   board.appendChild(card)
 
   if (d.files?.length) {
