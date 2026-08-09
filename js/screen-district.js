@@ -361,7 +361,7 @@ function paintMissionPanel(box, d, res) {
         inviteBtn.disabled = true
         const r = await call('inviteReconnectMission', { agentNo: me, districtId: d.id, inviteeAgentNo })
         inviteBtn.disabled = false
-        if (r.success) { toast(`Invited ${inviteeAgentNo}`); input.value = ''; refresh() }
+        if (r.success) { toast(`Invited ${r.inviteeCodename || inviteeAgentNo}`); input.value = ''; refresh() }
         else toast(reconnectError(r.error))
       }
       inviteRow.append(input, inviteBtn)

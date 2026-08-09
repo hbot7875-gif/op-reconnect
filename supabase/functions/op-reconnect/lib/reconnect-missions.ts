@@ -21,6 +21,7 @@
 
 import type { SupabaseDB, GameContent } from './config.ts'
 import type { FrozenReconnectGoal } from './districts.ts'
+import { kstDateOf } from './kst.ts'
 
 /** The caller's own active restoration attempt on this district (and
  *  whatever reconnect goal was frozen into it, if any) — the only source of
@@ -86,9 +87,20 @@ function ownGoalKeys(pd: any): string[] {
   return keys
 }
 
+/** rc_daily_activity buckets by KST calendar day, not UTC — a plain
+ *  isoString.slice(0, 10) reads the UTC date instead, which is one day
+ *  EARLY for any joined_at between 15:00 and 23:59 UTC (that whole window
+ *  is already tomorrow in KST). That's not a rare edge case — it's over a
+ *  third of the day — and the effect is real: a participant joining then
+ *  would get their "since I joined" window silently backdated a full KST
+ *  day, crediting hours of streams from before they ever joined. */
+function kstDateOfIso(iso: string): string {
+  return kstDateOf(Math.floor(new Date(iso).getTime() / 1000))
+}
+
 async function hasStreamedAny(supabase: SupabaseDB, agentNo: string, sinceIso: string, keys: string[]): Promise<boolean> {
   if (!keys.length) return false
-  const sinceDate = sinceIso.slice(0, 10)
+  const sinceDate = kstDateOfIso(sinceIso)
   const { data } = await supabase.from('rc_daily_activity')
     .select('track_counts').eq('agent_no', agentNo).gte('kst_date', sinceDate)
   for (const row of data || []) {
@@ -104,7 +116,7 @@ async function hasStreamedAny(supabase: SupabaseDB, agentNo: string, sinceIso: s
  *  other personal count works now (see config.ts's PERSONAL_COUNT_CAP). */
 async function contributionSince(supabase: SupabaseDB, agentNo: string, sinceIso: string, keys: string[]): Promise<number> {
   if (!keys.length) return 0
-  const sinceDate = sinceIso.slice(0, 10)
+  const sinceDate = kstDateOfIso(sinceIso)
   const { data } = await supabase.from('rc_daily_activity')
     .select('track_counts').eq('agent_no', agentNo).gte('kst_date', sinceDate)
   let total = 0
@@ -365,7 +377,11 @@ export async function inviteReconnectMission(supabase: SupabaseDB, content: unkn
   const { error } = await supabase.from('rc_reconnect_participants')
     .insert({ mission_id: mission.id, agent_no: inviteeAgentNo, status: 'invited', invited_by: agentNo })
   if (error) return { success: false, error: error.message }
-  return { success: true }
+  // Codename, not the agent number the inviter just typed — same
+  // agent-numbers-stay-server-side rule as everywhere else in this file,
+  // and a friendlier confirmation ("Invited Euphoria") than an echo.
+  const { data: inviteePlayer } = await supabase.from('rc_players').select('codename').eq('agent_no', inviteeAgentNo).maybeSingle()
+  return { success: true, inviteeCodename: inviteePlayer?.codename || inviteeAgentNo }
 }
 
 /** The invited agent accepts (joins a real slot) or declines (row removed
