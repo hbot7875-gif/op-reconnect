@@ -93,10 +93,16 @@ async function fetchDirectScrobbles(supabase: SupabaseDB, agentNo: string, fromT
 }
 
 // stats.fm's public API has no date-range filter on /streams/recent — it's
-// always "the last 50," client-filtered to the window here. No separate
-// sync job (unlike the old site): this fetches live on every rollup, same
-// as ListenBrainz does.
-async function fetchStatsFm(username: string, fromTs: number, toTs: number): Promise<StreamRow[]> {
+// always "the last 50," full stop, with no way to page further back. Fetched
+// unfiltered (no window here — see fetchStreamRows, which persists whatever
+// this returns into rc_scrobbles before ever windowing it). Filtering to
+// [fromTs, toTs] at THIS layer used to be the bug: a live day recompute would
+// re-derive a day's whole track_counts bucket from just this 50-item snapshot,
+// so any track that scrolled out of "last 50" (trivial once someone streams
+// more than 50 times in a day) silently vanished from already-counted
+// history on the next poll — completed goals un-completing, XP dropping
+// mid-day, counts going backwards. See derive.ts ensureDailyRollups.
+async function fetchStatsFm(username: string): Promise<StreamRow[]> {
   const url = `https://api.stats.fm/api/v1/users/${encodeURIComponent(username)}/streams/recent?limit=50`
   const res = await fetch(url).catch(() => null)
   if (!res || !res.ok) return []
@@ -108,7 +114,7 @@ async function fetchStatsFm(username: string, fromTs: number, toTs: number): Pro
     const trackName = (t.name || '').trim()
     if (!trackName || !it.endTime) continue
     const ts = Math.floor(new Date(it.endTime).getTime() / 1000)
-    if (!Number.isFinite(ts) || ts < fromTs || ts > toTs) continue
+    if (!Number.isFinite(ts)) continue
     rows.push({ track_name: trackName, artist_name: t.artists?.[0]?.name || '', listened_at: ts })
   }
   return rows
@@ -123,8 +129,10 @@ async function fetchStatsFm(username: string, fromTs: number, toTs: number): Pro
 // stream." Paginates like arirang-btsbackend's own fetch does, stopping at
 // whichever comes first: a page already older than fromTs (sorting is DESC,
 // so nothing further back matters), a short page (no more history), or the
-// page cap. playedAt strings carry no timezone suffix; the API returns UTC,
-// so a bare 'Z' has to be appended before Date can parse it correctly.
+// page cap (1000 plays/day — still bounded, so this too gets persisted by
+// fetchStreamRows rather than trusted as the full picture on every poll).
+// playedAt strings carry no timezone suffix; the API returns UTC, so a bare
+// 'Z' has to be appended before Date can parse it correctly.
 const MUSICAT_PAGE_SIZE = 50
 const MUSICAT_MAX_PAGES = 20
 async function fetchMusicat(publicId: string, fromTs: number, toTs: number): Promise<StreamRow[]> {
@@ -157,6 +165,30 @@ async function fetchMusicat(publicId: string, fromTs: number, toTs: number): Pro
   return rows
 }
 
+// stats.fm and musicat are both bounded "recent window" APIs (50 items hard
+// cap; 1000 items/page-cap respectively) — neither can be trusted as the
+// full picture of a day on every poll, only as a live delta. Every row they
+// return gets persisted here into rc_scrobbles (same table/dedup key the
+// webhook sources already use), so once a play has been SEEN once it can
+// never be lost again just because it scrolled out of the provider's
+// shrinking "recent" window on a later poll. ignoreDuplicates makes repeated
+// polls of the same overlapping window a no-op rather than a double-count.
+async function persistScrobbles(supabase: SupabaseDB, agentNo: string, rows: StreamRow[], source: string) {
+  if (rows.length === 0) return
+  const payload = rows
+    .filter((r) => r.track_name && r.listened_at && !isAdScrobble(r.track_name, r.artist_name))
+    .map((r) => ({
+      agent_no: agentNo,
+      track_name: r.track_name,
+      artist_name: r.artist_name || null,
+      album_name: null,
+      listened_at: r.listened_at,
+      source,
+    }))
+  if (payload.length === 0) return
+  await supabase.from('rc_scrobbles').upsert(payload, { onConflict: 'agent_no,listened_at,track_name', ignoreDuplicates: true })
+}
+
 /**
  * Unified per-agent stream rows for [fromTs, toTs], deduped and ad-filtered.
  * Source resolution mirrors the platform: ListenBrainz when pref is lb/unset
@@ -178,9 +210,14 @@ export async function fetchStreamRows(
   } else {
     const source = resolveNonLbSource(pref, !!agent.statsfm_username, !!agent.musicat_public_id)
     if (source === 'statsfm' && agent.statsfm_username) {
-      rows = await fetchStatsFm(agent.statsfm_username, fromTs, toTs)
+      // Persist the live snapshot, then read the return value back from the
+      // accumulated table windowed to what was actually asked for — never
+      // hand the caller the raw, possibly-truncated live fetch directly.
+      await persistScrobbles(supabase, agent.agent_no, await fetchStatsFm(agent.statsfm_username), 'statsfm')
+      rows = await fetchDirectScrobbles(supabase, agent.agent_no, fromTs, toTs)
     } else if (source === 'musicat' && agent.musicat_public_id) {
-      rows = await fetchMusicat(agent.musicat_public_id, fromTs, toTs)
+      await persistScrobbles(supabase, agent.agent_no, await fetchMusicat(agent.musicat_public_id, fromTs, toTs), 'musicat')
+      rows = await fetchDirectScrobbles(supabase, agent.agent_no, fromTs, toTs)
     } else {
       rows = await fetchDirectScrobbles(supabase, agent.agent_no, fromTs, toTs)
     }
