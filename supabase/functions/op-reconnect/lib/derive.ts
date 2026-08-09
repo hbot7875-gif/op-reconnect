@@ -122,8 +122,20 @@ async function awardStreamsXp(
   // Charge (agent-charge.ts), just never for how much XP a stream is worth.
   const amount = Math.floor((counted / perXp) * personalBoostMult)
   if (finalizedAlready) return
+  // This dedup_key is a full REPLACE of the whole day's XP on every poll, not
+  // an incremental add — so a level-up's timed boost, which is only "on" for
+  // personalBoostMult's own window, would otherwise get silently clawed back
+  // the moment it expires: the exact same day's already-counted streams get
+  // rewritten at the now-lower multiplier, erasing XP a player watched land
+  // in their total while the boost was live. A day's XP for a given amount of
+  // counted streams should never go DOWN — floor it at whatever's already
+  // stored so an expiring boost can only stop adding more, never take back
+  // what it already gave.
+  const { data: existing } = await supabase.from('rc_xp_ledger')
+    .select('amount').eq('dedup_key', `streams:${agentNo}:${date}`).maybeSingle()
+  const finalAmount = Math.max(amount, existing?.amount || 0)
   await supabase.from('rc_xp_ledger').upsert(
-    { agent_no: agentNo, amount, source: 'streams', dedup_key: `streams:${agentNo}:${date}`, meta: { counted } },
+    { agent_no: agentNo, amount: finalAmount, source: 'streams', dedup_key: `streams:${agentNo}:${date}`, meta: { counted } },
     { onConflict: 'dedup_key' },
   )
 }
