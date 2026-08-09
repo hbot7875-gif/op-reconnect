@@ -356,22 +356,41 @@ function paintMissionPanel(box, d, res) {
     box.appendChild(row)
   } else if (myRow?.status === 'joined') {
     if (joined.length < m.requiredAgents) {
-      box.appendChild(el('div', 'dim', "Know who else is restoring this district? Invite them by agent number — they'll get a notification to accept."))
+      box.appendChild(el('div', 'dim', "Invite someone else already restoring this district — pick from who's currently free below. They'll get a notification to accept."))
       const inviteRow = el('div', 'reconnect-invite-row')
-      const input = el('input', 'ob-input')
-      input.placeholder = 'Invite by agent number'
+      // Agent numbers are never shown to players (see the roster above) —
+      // there's no way to "invite by agent number" if you'd never know
+      // anyone's number in the first place. Pick a codename instead; the
+      // agent number rides along as the option's value, never displayed.
+      const select = el('select', 'ob-input')
+      select.innerHTML = `<option value="">Loading…</option>`
+      select.disabled = true
       const inviteBtn = el('button', 'btn btn-ghost', 'Invite')
+      inviteBtn.disabled = true
+      inviteRow.append(select, inviteBtn)
+      box.appendChild(inviteRow)
+
+      call('getInviteCandidates', { agentNo: me, districtId: d.id }).then((res2) => {
+        if (!res2?.success) { select.innerHTML = `<option value="">Couldn't load — try again</option>`; return }
+        if (!res2.candidates?.length) {
+          select.innerHTML = `<option value="">No one else free to invite right now</option>`
+          return
+        }
+        select.innerHTML = `<option value="">Choose an agent…</option>`
+          + res2.candidates.map((c) => `<option value="${esc(c.agentNo)}">${esc(c.codename)}</option>`).join('')
+        select.disabled = false
+        inviteBtn.disabled = false
+      })
+
       inviteBtn.onclick = async () => {
-        const inviteeAgentNo = input.value.trim()
+        const inviteeAgentNo = select.value
         if (!inviteeAgentNo) { toast(reconnectError('invitee_required')); return }
         inviteBtn.disabled = true
         const r = await call('inviteReconnectMission', { agentNo: me, districtId: d.id, inviteeAgentNo })
         inviteBtn.disabled = false
-        if (r.success) { toast(`Invited ${r.inviteeCodename || inviteeAgentNo}`); input.value = ''; refresh() }
+        if (r.success) { toast(`Invited ${r.inviteeCodename || 'them'}`); refresh() }
         else toast(reconnectError(r.error))
       }
-      inviteRow.append(input, inviteBtn)
-      box.appendChild(inviteRow)
     }
   } else if (res.variant === 'connect' && joined.length < m.requiredAgents) {
     const joinBtn = el('button', 'btn btn-primary', 'Join this mission')

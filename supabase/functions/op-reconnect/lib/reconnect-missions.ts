@@ -282,6 +282,52 @@ export async function getReconnectMission(supabase: SupabaseDB, content: unknown
   }
 }
 
+/** Who the caller can actually invite — since agent numbers are never
+ *  shown to players anymore (see shape()'s codename resolution), "invite
+ *  by agent number" was a dead end: nothing in the game ever tells you
+ *  anyone else's number. This is the fix — everyone else actively
+ *  restoring the same district with the same frozen reconnect goal, who
+ *  isn't already teamed up (joined or invited) somewhere for it, so the
+ *  player picks a codename instead of typing a number they can't know.
+ *  agentNo still rides along per candidate (the invite call needs it) but
+ *  is never meant to be displayed — same as shape()'s participants. */
+export async function getInviteCandidates(supabase: SupabaseDB, content: unknown, params: any) {
+  const districtId = String(params.districtId || '')
+  const agentNo = String(params.agentNo || '').trim().toUpperCase()
+  if (!districtId) return { success: false, error: 'district_required' }
+
+  const pd = await myActivePd(supabase, agentNo, districtId)
+  if (pd?.status !== 'active') return { success: true, candidates: [] }
+  const reconnect = myReconnectGoal(pd)
+  if (!reconnect) return { success: true, candidates: [] }
+
+  const { data: activeRows } = await supabase.from('rc_player_districts')
+    .select('agent_no, goals').eq('district_id', districtId).eq('status', 'active')
+  const eligible = (activeRows || [])
+    .filter((r: any) => r.agent_no !== agentNo && r.goals?.reconnect?.id === reconnect.id)
+    .map((r: any) => r.agent_no as string)
+  if (!eligible.length) return { success: true, candidates: [] }
+
+  const { data: openMissions } = await supabase.from('rc_reconnect_missions')
+    .select('id').eq('goal_id', reconnect.id).eq('status', 'open')
+  const openMissionIds = (openMissions || []).map((m: any) => m.id)
+  const alreadyIn = new Set<string>()
+  if (openMissionIds.length) {
+    const { data: rows } = await supabase.from('rc_reconnect_participants')
+      .select('agent_no').in('mission_id', openMissionIds)
+    for (const r of rows || []) alreadyIn.add(r.agent_no)
+  }
+
+  const free = eligible.filter((a) => !alreadyIn.has(a))
+  if (!free.length) return { success: true, candidates: [] }
+
+  const names = await codenameMap(supabase, free)
+  const candidates = free
+    .map((a) => ({ agentNo: a, codename: names.get(a) || a }))
+    .sort((a, b) => a.codename.localeCompare(b.codename))
+  return { success: true, candidates }
+}
+
 /** Opens a fresh mission for the caller's own frozen reconnect goal and
  *  auto-joins them as its first participant. */
 export async function openReconnectMission(supabase: SupabaseDB, content: unknown, params: any) {

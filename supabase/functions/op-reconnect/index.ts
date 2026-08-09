@@ -26,7 +26,7 @@ import { adminDeleteAgent, adminGetAgent, adminGetAgentTracks, adminScanAltAccou
 import { adminSyncAllStreams } from './lib/sync-all.ts'
 import { adminListGoals, adminAddGoal, adminUpdateGoal, adminDeleteGoal } from './lib/goals.ts'
 import {
-  getReconnectMission, openReconnectMission, joinReconnectMission,
+  getReconnectMission, getInviteCandidates, openReconnectMission, joinReconnectMission,
   inviteReconnectMission, respondReconnectInvite, adminAutoAssignMissions,
   getMyInvites,
 } from './lib/reconnect-missions.ts'
@@ -105,6 +105,7 @@ const ROUTES: Record<string, Route> = {
   // always checked against the caller's own active district+frozen goal
   // (rc_player_districts), never anyone else's.
   getReconnectMission: { auth: 'agent', handler: async (sb, p) => getReconnectMission(sb, await loadContent(sb), p) },
+  getInviteCandidates: { auth: 'agent', handler: async (sb, p) => getInviteCandidates(sb, await loadContent(sb), p) },
   openReconnectMission: { auth: 'agent', handler: async (sb, p) => openReconnectMission(sb, await loadContent(sb), p) },
   joinReconnectMission: { auth: 'agent', handler: async (sb, p) => joinReconnectMission(sb, await loadContent(sb), p) },
   inviteReconnectMission: { auth: 'agent', handler: async (sb, p) => inviteReconnectMission(sb, await loadContent(sb), p) },
