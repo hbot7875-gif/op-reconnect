@@ -40,12 +40,12 @@ export function missionBoardSheet(state) {
 
   const tracks = d.trackGoals || []
   const tracksDone = tracks.filter((g) => g.done).length
-  board.appendChild(missionRow('🎵', 'Mission 1 — Track Goals', 'Complete every track goal in this district',
+  board.appendChild(missionRow('🎵', 'Mission 1 — Track Mission', 'Complete every track goal in this district',
     tracksDone, tracks.length, tracks.length ? null : 'None here'))
 
   const albums = d.albums || []
   const albumsDone = albums.filter((a) => a.done).length
-  board.appendChild(missionRow('💿', 'Mission 2 — Album Goals', 'Complete every album pass in this district',
+  board.appendChild(missionRow('💿', 'Mission 2 — Album Mission', 'Complete every album pass in this district',
     albumsDone, albums.length, albums.length ? null : 'None here'))
 
   const r = d.reconnect

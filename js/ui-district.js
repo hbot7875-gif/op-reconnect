@@ -157,7 +157,7 @@ export function renderBoard(board, d) {
  *  wants the whole checklist, not just a sample of it. */
 function albumDetailSheet(a) {
   const sheet = el('div', 'sheet')
-  sheet.appendChild(el('div', 'eyebrow', '💿 ALBUM GOAL'))
+  sheet.appendChild(el('div', 'eyebrow', '💿 ALBUM MISSION'))
   sheet.appendChild(el('div', 'pl-title', esc(a.label)))
   sheet.appendChild(el('p', 'muted', `${a.passesDone}/${a.target} passes — every track needs ${a.target} plays each to count toward a pass.`))
 
