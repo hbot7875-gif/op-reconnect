@@ -284,9 +284,12 @@ function paintMissionPanel(box, d, res) {
   const myRow = m?.participants?.find((p) => p.agentNo === me)
 
   if (!m || m.status !== 'open') {
+    const st = res.config.sharedTrack
     box.appendChild(el('p', 'muted', res.variant === 'invite'
       ? `Invite ${res.config.requiredAgents} agents who are also restoring ${esc(districtDisplayName(d))} to help out — no streaming needed from them, just a yes.`
-      : `Team up with ${res.config.requiredAgents} agents also restoring ${esc(districtDisplayName(d))} — everyone needs to keep streaming toward their own goals here.`))
+      : st
+        ? `Team up with ${res.config.requiredAgents} agents also restoring ${esc(districtDisplayName(d))} — together, stream ${esc(st.label)} ${st.target} times total. Everyone's plays count toward the same total.`
+        : `Team up with ${res.config.requiredAgents} agents also restoring ${esc(districtDisplayName(d))} — everyone needs to keep streaming toward their own goals here.`))
     const openBtn = el('button', 'btn btn-primary', res.variant === 'invite' ? 'Start inviting' : 'Open a mission')
     openBtn.onclick = async () => {
       openBtn.disabled = true
@@ -305,7 +308,15 @@ function paintMissionPanel(box, d, res) {
     <div class="pbar" style="flex:1"><div class="pfill${joined.length === m.requiredAgents ? ' done' : ''}" style="width:${Math.round((joined.length / m.requiredAgents) * 100)}%"></div></div>
     <span class="count">${joined.length}/${m.requiredAgents} joined</span>
   `))
-  if (res.variant === 'connect') {
+  if (res.variant === 'connect' && m.sharedTrack) {
+    const st = m.sharedTrack
+    const pct = Math.min(100, Math.round((st.progress / Math.max(1, st.target)) * 100))
+    box.appendChild(el('div', 'goal-line', `
+      <div class="pbar" style="flex:1"><div class="pfill${st.progress >= st.target ? ' done' : ''}" style="width:${pct}%"></div></div>
+      <span class="count">${st.progress}/${st.target}</span>
+    `))
+    box.appendChild(el('div', 'dim', `${esc(st.label)} — everyone's own plays since joining, added together`))
+  } else if (res.variant === 'connect') {
     box.appendChild(el('div', 'dim', `${streamedCount}/${joined.length} have streamed toward their own goals since joining`))
   }
 

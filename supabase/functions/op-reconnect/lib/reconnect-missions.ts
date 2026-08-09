@@ -98,6 +98,23 @@ async function hasStreamedAny(supabase: SupabaseDB, agentNo: string, sinceIso: s
   return false
 }
 
+/** Real play count of a specific track's keys, from the day this participant
+ *  joined onward — day-granularity, same as hasStreamedAny above, since
+ *  rc_daily_activity only ever buckets by day. Uncapped, matching how every
+ *  other personal count works now (see config.ts's PERSONAL_COUNT_CAP). */
+async function contributionSince(supabase: SupabaseDB, agentNo: string, sinceIso: string, keys: string[]): Promise<number> {
+  if (!keys.length) return 0
+  const sinceDate = sinceIso.slice(0, 10)
+  const { data } = await supabase.from('rc_daily_activity')
+    .select('track_counts').eq('agent_no', agentNo).gte('kst_date', sinceDate)
+  let total = 0
+  for (const row of data || []) {
+    const bucket = row.track_counts || {}
+    for (const k of keys) total += bucket[k]?.n || 0
+  }
+  return total
+}
+
 function shape(m: any, participants: any[]) {
   return {
     id: m.id,
@@ -109,6 +126,10 @@ function shape(m: any, participants: any[]) {
     createdAt: m.created_at,
     completedAt: m.completed_at,
     expiresAt: m.expires_at,
+    // Only present when the frozen goal carries a sharedTrack — see
+    // refreshMission. Pooled progress toward one specific track, everyone's
+    // own plays (since they personally joined) counted together.
+    sharedTrack: m.sharedTrackProgress || null,
     participants: participants.map((p) => ({
       agentNo: p.agent_no, status: p.status, invitedBy: p.invited_by,
       joinedAt: p.joined_at, streamed: !!p.streamed_at,
@@ -117,12 +138,23 @@ function shape(m: any, participants: any[]) {
 }
 
 /** Re-derives a mission's real state from source data: expire it if time's
- *  up, and for 'connect' check each joined participant's own frozen
- *  track/album goal keys against rc_daily_activity since they joined.
- *  'invite' has no streaming check — acceptance alone qualifies. Settles
- *  (marks 'complete') the moment everyone required has qualified; does NOT
- *  award anything itself (see module comment). */
-async function refreshMission(supabase: SupabaseDB, mission: any, variant: 'connect' | 'invite') {
+ *  up, and for 'connect' check every joined participant's contribution
+ *  since it's their own frozen goal config (config.sharedTrack, when set)
+ *  that decides what "qualified" means:
+ *   - sharedTrack set: pooled mode — every joined participant's own plays
+ *     of that one track, counted from when THEY joined, add together;
+ *     qualifies once the pool hits sharedTrack.target. One person could
+ *     carry it alone, or it could be split any way — "combined," not "each."
+ *   - sharedTrack unset: the original per-person rule — each joined
+ *     participant just needs ANY stream of their own frozen track/album
+ *     goals since joining.
+ *  'invite' has no streaming check either way — acceptance alone qualifies.
+ *  Settles (marks 'complete') the moment the required condition is met;
+ *  does NOT award anything itself (see module comment). */
+async function refreshMission(
+  supabase: SupabaseDB, mission: any, variant: 'connect' | 'invite',
+  config?: { requiredAgents?: number; sharedTrack?: { label: string; keys: string[]; target: number } | null },
+) {
   if (mission.status !== 'open') return mission
 
   if (new Date(mission.expires_at).getTime() <= Date.now()) {
@@ -135,7 +167,21 @@ async function refreshMission(supabase: SupabaseDB, mission: any, variant: 'conn
     .select('*').eq('mission_id', mission.id)
   const joined = (participants || []).filter((p: any) => p.status === 'joined')
 
-  if (variant === 'connect') {
+  const sharedTrack = config?.sharedTrack
+  let sharedTotal = 0
+  if (variant === 'connect' && sharedTrack?.keys?.length && sharedTrack.target > 0) {
+    for (const p of joined) {
+      const contributed = await contributionSince(supabase, p.agent_no, p.joined_at, sharedTrack.keys)
+      sharedTotal += contributed
+      if (contributed > 0 && !p.streamed_at) {
+        await supabase.from('rc_reconnect_participants')
+          .update({ streamed_at: new Date().toISOString() })
+          .eq('mission_id', mission.id).eq('agent_no', p.agent_no)
+        p.streamed_at = new Date().toISOString()
+      }
+    }
+    mission.sharedTrackProgress = { label: sharedTrack.label, target: sharedTrack.target, progress: Math.min(sharedTotal, sharedTrack.target) }
+  } else if (variant === 'connect') {
     for (const p of joined) {
       if (p.streamed_at) continue
       const pd = await myActivePd(supabase, p.agent_no, mission.district_id)
@@ -152,7 +198,9 @@ async function refreshMission(supabase: SupabaseDB, mission: any, variant: 'conn
 
   const qualified = variant === 'invite'
     ? joined.length >= mission.required_agents
-    : joined.length >= mission.required_agents && joined.every((p: any) => p.streamed_at)
+    : sharedTrack?.keys?.length
+      ? joined.length >= mission.required_agents && sharedTotal >= sharedTrack.target
+      : joined.length >= mission.required_agents && joined.every((p: any) => p.streamed_at)
 
   if (qualified) {
     const { error } = await supabase.from('rc_reconnect_missions')
@@ -169,7 +217,7 @@ async function refreshMission(supabase: SupabaseDB, mission: any, variant: 'conn
 export async function getMissionStatus(supabase: SupabaseDB, agentNo: string, districtId: string, frozenReconnect: FrozenReconnectGoal) {
   const variant = frozenReconnect.variant as 'connect' | 'invite'
   let mission = await findMyMission(supabase, agentNo, districtId, { goalId: frozenReconnect.id })
-  if (mission) mission = await refreshMission(supabase, mission, variant)
+  if (mission) mission = await refreshMission(supabase, mission, variant, frozenReconnect.config)
   const participants = mission
     ? (await supabase.from('rc_reconnect_participants').select('*').eq('mission_id', mission.id)).data || []
     : []
@@ -193,7 +241,7 @@ export async function getReconnectMission(supabase: SupabaseDB, content: unknown
   if (!mission && reconnect.variant === 'connect') {
     mission = await joinableMission(supabase, districtId, reconnect.id, reconnect.config.requiredAgents)
   }
-  if (mission) mission = await refreshMission(supabase, mission, reconnect.variant)
+  if (mission) mission = await refreshMission(supabase, mission, reconnect.variant, reconnect.config)
 
   const { data: participants } = mission
     ? await supabase.from('rc_reconnect_participants').select('*').eq('mission_id', mission.id)
@@ -201,7 +249,7 @@ export async function getReconnectMission(supabase: SupabaseDB, content: unknown
 
   return {
     success: true, available: true, variant: reconnect.variant,
-    config: { requiredAgents: reconnect.config.requiredAgents },
+    config: { requiredAgents: reconnect.config.requiredAgents, sharedTrack: reconnect.config.sharedTrack || null },
     mission: mission ? shape(mission, participants || []) : null,
   }
 }
@@ -228,8 +276,12 @@ export async function openReconnectMission(supabase: SupabaseDB, content: unknow
   if (error) return { success: false, error: error.message }
 
   await supabase.from('rc_reconnect_participants').insert({ mission_id: mission.id, agent_no: agentNo, status: 'joined' })
+  // Refresh once even though nothing can have qualified yet — for
+  // sharedTrack missions this is what puts the 0/target shape on the very
+  // first response, instead of the caller having to poll again to see it.
+  const fresh = await refreshMission(supabase, mission, reconnect.variant, reconnect.config)
   const { data: participants } = await supabase.from('rc_reconnect_participants').select('*').eq('mission_id', mission.id)
-  return { success: true, mission: shape(mission, participants || []) }
+  return { success: true, mission: shape(fresh, participants || []) }
 }
 
 /** Open-matchmaking join — 'connect' variant only; 'invite' has no open
@@ -246,7 +298,7 @@ export async function joinReconnectMission(supabase: SupabaseDB, content: unknow
 
   let mission = await joinableMission(supabase, districtId, reconnect.id, reconnect.config.requiredAgents)
   if (!mission) return { success: false, error: 'no_open_mission' }
-  mission = await refreshMission(supabase, mission, reconnect.variant)
+  mission = await refreshMission(supabase, mission, reconnect.variant, reconnect.config)
   if (mission.status !== 'open') return { success: false, error: 'mission_' + mission.status }
 
   // rc_reconnect_join_open (migrations/…_rc_fix_activation_and_mission_races.sql)
@@ -260,7 +312,7 @@ export async function joinReconnectMission(supabase: SupabaseDB, content: unknow
   const result = !rpcError && Array.isArray(rpcData) ? rpcData[0] : null
   if (rpcError || !result?.joined) return { success: false, error: result?.error || rpcError?.message || 'join_failed' }
 
-  const fresh = await refreshMission(supabase, mission, reconnect.variant)
+  const fresh = await refreshMission(supabase, mission, reconnect.variant, reconnect.config)
   const { data: freshParticipants } = await supabase.from('rc_reconnect_participants').select('*').eq('mission_id', mission.id)
   return { success: true, mission: shape(fresh, freshParticipants || []) }
 }
@@ -283,7 +335,7 @@ export async function inviteReconnectMission(supabase: SupabaseDB, content: unkn
 
   let mission = await findMyMission(supabase, agentNo, districtId, { goalId: reconnect.id })
   if (!mission) return { success: false, error: 'not_in_mission' }
-  mission = await refreshMission(supabase, mission, reconnect.variant)
+  mission = await refreshMission(supabase, mission, reconnect.variant, reconnect.config)
   if (mission.status !== 'open') return { success: false, error: 'mission_' + mission.status }
   if (await findMyMission(supabase, inviteeAgentNo, districtId)) return { success: false, error: 'already_in_mission' }
 
@@ -311,10 +363,10 @@ export async function respondReconnectInvite(supabase: SupabaseDB, content: unkn
   let mission = await findMyMission(supabase, agentNo, districtId, { status: 'invited' })
   if (!mission) return { success: false, error: 'no_pending_invite' }
 
-  const { data: goal } = await supabase.from('rc_goals').select('variant').eq('id', mission.goal_id).maybeSingle()
+  const { data: goal } = await supabase.from('rc_goals').select('variant, config').eq('id', mission.goal_id).maybeSingle()
   const variant = goal?.variant === 'connect' || goal?.variant === 'invite' ? goal.variant : null
   if (!variant) return { success: false, error: 'no_pending_invite' }
-  mission = await refreshMission(supabase, mission, variant)
+  mission = await refreshMission(supabase, mission, variant, goal?.config)
   if (mission.status !== 'open') return { success: false, error: 'mission_' + mission.status }
 
   const { data: invite } = await supabase.from('rc_reconnect_participants')
@@ -335,7 +387,7 @@ export async function respondReconnectInvite(supabase: SupabaseDB, content: unkn
   })
   const result = !rpcError && Array.isArray(rpcData) ? rpcData[0] : null
   if (rpcError || !result?.joined) return { success: false, error: result?.error || rpcError?.message || 'join_failed' }
-  await refreshMission(supabase, mission, variant)
+  await refreshMission(supabase, mission, variant, goal?.config)
   return { success: true, joined: true }
 }
 
