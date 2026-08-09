@@ -291,7 +291,7 @@ function paintMissionPanel(box, d, res) {
     box.appendChild(el('p', 'muted', res.variant === 'invite'
       ? `Invite ${res.config.requiredAgents} agents who are also restoring ${esc(districtDisplayName(d))} to help out — no streaming needed from them, just a yes.`
       : st
-        ? `Team up with ${res.config.requiredAgents} agents also restoring ${esc(districtDisplayName(d))} — together, stream ${esc(st.label)} ${st.target} times total. Everyone's plays count toward the same total.`
+        ? `Team up with ${res.config.requiredAgents} agents also restoring ${esc(districtDisplayName(d))}. Open a mission to get matched with whoever else is looking, or open one and invite someone specific by agent number. Once everyone's joined, stream ${esc(st.label)} — everyone's own plays add up together until you hit ${st.target}.`
         : `Team up with ${res.config.requiredAgents} agents also restoring ${esc(districtDisplayName(d))} — everyone needs to keep streaming toward their own goals here.`))
     const openBtn = el('button', 'btn btn-primary', res.variant === 'invite' ? 'Start inviting' : 'Open a mission')
     openBtn.onclick = async () => {
@@ -334,6 +334,11 @@ function paintMissionPanel(box, d, res) {
   box.appendChild(list)
 
   if (myRow?.status === 'invited') {
+    box.appendChild(el('p', 'muted', res.variant === 'invite'
+      ? "You've been invited to team up here — accepting alone completes your part, no streaming needed."
+      : m.sharedTrack
+        ? `You've been invited to team up here. Accept to join — once you do, stream ${esc(m.sharedTrack.label)} along with everyone else here until you've hit ${m.sharedTrack.target} between you.`
+        : "You've been invited to team up here. Accept to join — once you do, stream toward your own goals here at least once."))
     const row = el('div', 'reconnect-invite-actions')
     const accept = el('button', 'btn btn-primary', 'Accept')
     accept.onclick = async () => {
@@ -351,6 +356,7 @@ function paintMissionPanel(box, d, res) {
     box.appendChild(row)
   } else if (myRow?.status === 'joined') {
     if (joined.length < m.requiredAgents) {
+      box.appendChild(el('div', 'dim', "Know who else is restoring this district? Invite them by agent number — they'll get a notification to accept."))
       const inviteRow = el('div', 'reconnect-invite-row')
       const input = el('input', 'ob-input')
       input.placeholder = 'Invite by agent number'
