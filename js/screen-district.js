@@ -284,7 +284,7 @@ function paintMissionPanel(box, d, res) {
     return
   }
 
-  const myRow = m?.participants?.find((p) => p.agentNo === me)
+  const myRow = m?.participants?.find((p) => p.isMe)
 
   if (!m || m.status !== 'open') {
     const st = res.config.sharedTrack
@@ -327,7 +327,7 @@ function paintMissionPanel(box, d, res) {
   for (const p of m.participants) {
     const statusText = p.status === 'invited' ? 'invited' : res.variant === 'connect' ? (p.streamed ? '✓ streamed' : 'waiting') : '✓ joined'
     list.appendChild(el('div', 'reconnect-agent' + (p.status === 'invited' ? ' is-pending' : ''), `
-      <span>${esc(p.agentNo)}${p.agentNo === me ? ' (you)' : ''}</span>
+      <span>${esc(p.codename)}${p.isMe ? ' (you)' : ''}</span>
       <span>${statusText}</span>
     `))
   }

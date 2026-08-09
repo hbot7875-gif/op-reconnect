@@ -115,14 +115,29 @@ async function contributionSince(supabase: SupabaseDB, agentNo: string, sinceIso
   return total
 }
 
-function shape(m: any, participants: any[]) {
+/** codename lookup for a set of agent numbers — same "agent numbers never
+ *  leave the caller's own request" rule getMyInvites already follows below,
+ *  now applied to the mission roster too: another participant's raw
+ *  agent_no has no reason to reach the client, only their codename does. */
+async function codenameMap(supabase: SupabaseDB, agentNos: string[]): Promise<Map<string, string>> {
+  if (!agentNos.length) return new Map()
+  const { data } = await supabase.from('rc_players').select('agent_no, codename').in('agent_no', agentNos)
+  return new Map((data || []).map((p: any) => [p.agent_no, p.codename]))
+}
+
+/** meAgentNo is the CALLER's own agent number, used only to flag their own
+ *  row (isMe) — never echoed back for anyone else. createdBy/invitedBy are
+ *  dropped from the response outright: nothing client-side reads them (the
+ *  invite flow takes a typed-in agent number, not a roster selection), so
+ *  there's no reason to resolve or ship them at all. */
+async function shape(supabase: SupabaseDB, m: any, participants: any[], meAgentNo: string) {
+  const names = await codenameMap(supabase, participants.map((p) => p.agent_no))
   return {
     id: m.id,
     districtId: m.district_id,
     goalId: m.goal_id,
     requiredAgents: m.required_agents,
     status: m.status,
-    createdBy: m.created_by,
     createdAt: m.created_at,
     completedAt: m.completed_at,
     expiresAt: m.expires_at,
@@ -131,8 +146,9 @@ function shape(m: any, participants: any[]) {
     // own plays (since they personally joined) counted together.
     sharedTrack: m.sharedTrackProgress || null,
     participants: participants.map((p) => ({
-      agentNo: p.agent_no, status: p.status, invitedBy: p.invited_by,
-      joinedAt: p.joined_at, streamed: !!p.streamed_at,
+      codename: names.get(p.agent_no) || p.agent_no, // fallback: retired/missing rc_players row
+      isMe: p.agent_no === meAgentNo,
+      status: p.status, joinedAt: p.joined_at, streamed: !!p.streamed_at,
     })),
   }
 }
@@ -221,7 +237,7 @@ export async function getMissionStatus(supabase: SupabaseDB, agentNo: string, di
   const participants = mission
     ? (await supabase.from('rc_reconnect_participants').select('*').eq('mission_id', mission.id)).data || []
     : []
-  return { variant, done: mission?.status === 'complete', mission: mission ? shape(mission, participants) : null }
+  return { variant, done: mission?.status === 'complete', mission: mission ? await shape(supabase, mission, participants, agentNo) : null }
 }
 
 /** Read-only, richer than getMissionStatus: for the interactive player
@@ -250,7 +266,7 @@ export async function getReconnectMission(supabase: SupabaseDB, content: unknown
   return {
     success: true, available: true, variant: reconnect.variant,
     config: { requiredAgents: reconnect.config.requiredAgents, sharedTrack: reconnect.config.sharedTrack || null },
-    mission: mission ? shape(mission, participants || []) : null,
+    mission: mission ? await shape(supabase, mission, participants || [], agentNo) : null,
   }
 }
 
@@ -281,7 +297,7 @@ export async function openReconnectMission(supabase: SupabaseDB, content: unknow
   // first response, instead of the caller having to poll again to see it.
   const fresh = await refreshMission(supabase, mission, reconnect.variant, reconnect.config)
   const { data: participants } = await supabase.from('rc_reconnect_participants').select('*').eq('mission_id', mission.id)
-  return { success: true, mission: shape(fresh, participants || []) }
+  return { success: true, mission: await shape(supabase, fresh, participants || [], agentNo) }
 }
 
 /** Open-matchmaking join — 'connect' variant only; 'invite' has no open
@@ -314,7 +330,7 @@ export async function joinReconnectMission(supabase: SupabaseDB, content: unknow
 
   const fresh = await refreshMission(supabase, mission, reconnect.variant, reconnect.config)
   const { data: freshParticipants } = await supabase.from('rc_reconnect_participants').select('*').eq('mission_id', mission.id)
-  return { success: true, mission: shape(fresh, freshParticipants || []) }
+  return { success: true, mission: await shape(supabase, fresh, freshParticipants || [], agentNo) }
 }
 
 /** An agent already in their own open mission invites someone else who is
