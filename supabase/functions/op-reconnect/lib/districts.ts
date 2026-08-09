@@ -135,7 +135,11 @@ export function computeBaseline(
 
 export interface DistrictProgress {
   trackGoals: { id: string; label: string; artist: string | null; progress: number; target: number; done: boolean }[]
-  albums: { id: string; label: string; passesDone: number; target: number; signalPct: number; done: boolean; nextPassTracks: { label: string; have: number; need: number }[] }[]
+  albums: {
+    id: string; label: string; passesDone: number; target: number; signalPct: number; done: boolean
+    nextPassTracks: { label: string; have: number; need: number }[]
+    tracks: { label: string; have: number; target: number; done: boolean }[]
+  }[]
   allTracksDone: boolean
   complete: boolean
 }
@@ -188,12 +192,21 @@ export function districtProgress(
     const passesDone = Math.min(perTrack.reduce((m, t) => Math.min(m, t.total), Infinity), target)
     const capped = perTrack.reduce((s, t) => s + Math.min(t.total, target), 0)
     const signalPct = Math.min(100, Math.round((capped / (perTrack.length * target)) * 100))
+    // Unsliced now — the 148 Protocol playlist builder (playlist.js's
+    // remaining()) reads every entry here to know what to queue, so a
+    // 5-item cap used to silently under-queue any album with more than 5
+    // tracks still short of its next pass, not just truncate a display.
     const nextPassTracks = perTrack
       .filter((t) => t.total < target)
       .sort((a2, b2) => a2.total - b2.total)
-      .slice(0, 5)
       .map((t) => ({ label: t.label, have: t.total, need: target - t.total }))
-    return { id: a.id, label: a.label, passesDone: Number.isFinite(passesDone) ? passesDone : 0, target, signalPct, done: passesDone >= target, nextPassTracks }
+    // Full roster, done tracks included — lets the UI expand an album's
+    // "X passes" summary into every track's own progress, not just the
+    // ones still short (site owner: "expanded to all tracks in that album").
+    const tracks = perTrack
+      .map((t) => ({ label: t.label, have: Math.min(t.total, target), target, done: t.total >= target }))
+      .sort((a2, b2) => Number(a2.done) - Number(b2.done) || a2.have - b2.have)
+    return { id: a.id, label: a.label, passesDone: Number.isFinite(passesDone) ? passesDone : 0, target, signalPct, done: passesDone >= target, nextPassTracks, tracks }
   })
 
   const complete = allTracksDone && albums.every((a) => a.done)

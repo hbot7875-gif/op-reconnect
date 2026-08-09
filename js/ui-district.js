@@ -115,7 +115,13 @@ export function renderBoard(board, d) {
   for (const a of albums) {
     const sub = a.done || !a.nextPassTracks?.length ? ''
       : `Still need ${a.nextPassTracks.slice(0, 3).map((t) => `${esc(t.label)} ×${t.need}`).join(' · ')}`
-    card.appendChild(goalRow(`💿 ${a.label}`, sub, a.passesDone, a.target, a.done, 'passes'))
+    const row = goalRow(`💿 ${a.label}`, sub, a.passesDone, a.target, a.done, 'passes')
+    // Tap to see every track in the album, not just the couple flagged above.
+    if (a.tracks?.length) {
+      row.classList.add('clickable')
+      row.onclick = () => showOverlay(albumDetailSheet(a))
+    }
+    card.appendChild(row)
   }
   if (albums.length && d.chargeCellProgress) {
     const c = d.chargeCellProgress
@@ -143,6 +149,33 @@ export function renderBoard(board, d) {
     }
     board.appendChild(filesRow)
   }
+}
+
+/** Every track in an album goal, tapped open from its "X passes" summary
+ *  row — the summary alone can't show more than a couple of struggling
+ *  tracks without turning into a wall of text, but a player who's stuck
+ *  wants the whole checklist, not just a sample of it. */
+function albumDetailSheet(a) {
+  const sheet = el('div', 'sheet')
+  sheet.appendChild(el('div', 'eyebrow', '💿 ALBUM GOAL'))
+  sheet.appendChild(el('div', 'pl-title', esc(a.label)))
+  sheet.appendChild(el('p', 'muted', `${a.passesDone}/${a.target} passes — every track needs ${a.target} plays each to count toward a pass.`))
+
+  const list = el('div', 'card')
+  for (const t of a.tracks || []) {
+    const row = el('div', 'album-track-row' + (t.done ? ' done' : ''))
+    row.innerHTML = `
+      <span>${t.done ? '✓ ' : ''}${esc(t.label)}</span>
+      <span class="atr-count">${t.have}<i>/${t.target}</i></span>
+    `
+    list.appendChild(row)
+  }
+  sheet.appendChild(list)
+
+  const close = el('button', 'btn btn-ghost', 'Close')
+  close.onclick = hideOverlay
+  sheet.appendChild(close)
+  return sheet
 }
 
 function openFile(f) {
