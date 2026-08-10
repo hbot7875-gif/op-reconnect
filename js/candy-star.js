@@ -647,7 +647,7 @@ export async function renderCandyStar() {
             </div>
             <div id="cs-album-checks" class="cs-album-grid">
               ${opt.albums.map((a, i) => `<label class="cs-album-card" title="${sanitize(a.name)}" style="--art-hue:${candyAlbumHue(a.name)}deg;">
-                <input type="checkbox" class="cs-album-check" id="cs-album-${i}" data-album-id="${sanitize(a.id)}" value='${sanitize(JSON.stringify(a.trackKeys))}' onchange="candyAlbumCheckChanged(this)">
+                <input type="checkbox" class="cs-album-check" id="cs-album-${i}" data-album-id="${sanitize(a.id)}" value="${sanitize(JSON.stringify(a.trackKeys))}" onchange="candyAlbumCheckChanged(this)">
                 <span class="cs-album-card-art">${candyIcon('disc', 16)}</span>
                 <span class="cs-album-meta">
                   <span class="cs-album-name">${sanitize(a.name)}</span>
