@@ -117,26 +117,37 @@ async function awardStreamsXp(
   supabase: SupabaseDB, agentNo: string, date: string, counted: number,
   perXp: number, finalizedAlready: boolean, personalBoostMult = 1,
 ) {
-  // The shared ARMY Bomb's community charge USED to multiply XP here too —
-  // retired. XP is now purely personal: streams-per-Xp (mode-dependent, see
-  // streamsPerXpFor) and a level-up's own timed personal boost (today only —
-  // a finalized past day never gets its XP rewritten). The network Bomb
-  // still matters for Red Zone and for a player's own survival via Personal
-  // Charge (agent-charge.ts), just never for how much XP a stream is worth.
-  const amount = Math.floor((counted / perXp) * personalBoostMult)
   if (finalizedAlready) return
-  // This dedup_key is a full REPLACE of the whole day's XP on every poll, not
-  // an incremental add — so a level-up's timed boost, which is only "on" for
-  // personalBoostMult's own window, would otherwise get silently clawed back
-  // the moment it expires: the exact same day's already-counted streams get
-  // rewritten at the now-lower multiplier, erasing XP a player watched land
-  // in their total while the boost was live. A day's XP for a given amount of
-  // counted streams should never go DOWN — floor it at whatever's already
-  // stored so an expiring boost can only stop adding more, never take back
-  // what it already gave.
+  // Incremental, not a recompute-the-whole-day-and-replace: only the
+  // streams counted SINCE the last time this day's XP was touched
+  // (meta.counted, from the previous call) get today's current boost
+  // multiplier, and their XP is ADDED to whatever's already stored — never
+  // recomputed from the day's full total.
+  //
+  // The original design multiplied the WHOLE day's counted total by
+  // whatever multiplier happened to be active at calculation time, replaced
+  // outright on every poll — so a level-up boost expiring mid-day silently
+  // clawed back XP already earned while it was live (the same streams,
+  // recomputed at the now-lower rate). Flooring the replacement at the
+  // higher of old/new (this file's previous fix) stopped the clawback, but
+  // created a different problem: once a boost pushed a day's XP ahead of
+  // what plain unboosted streaming would give, every REAL stream after the
+  // boost expired had to out-earn that inflated number before the display
+  // moved again — a player could keep streaming for a while and see
+  // nothing happen. Segmenting by delta fixes both: streams made during a
+  // boost keep their boosted rate forever (nothing to claw back, they were
+  // never recomputed), and every stream after that adds its own XP
+  // immediately, on top, at whatever rate applies right now.
   const { data: existing } = await supabase.from('rc_xp_ledger')
-    .select('amount').eq('dedup_key', `streams:${agentNo}:${date}`).maybeSingle()
-  const finalAmount = Math.max(amount, existing?.amount || 0)
+    .select('amount, meta').eq('dedup_key', `streams:${agentNo}:${date}`).maybeSingle()
+  const lastCounted = existing?.meta?.counted || 0
+  const priorAmount = existing?.amount || 0
+  // Real counted-goal-streams only grows within a day (accumulate-and-dedup,
+  // never re-derived smaller) — this floor is just a defensive guard against
+  // a stale/out-of-order read, not something normal operation should hit.
+  const deltaCounted = Math.max(0, counted - lastCounted)
+  const deltaXp = Math.floor((deltaCounted / perXp) * personalBoostMult)
+  const finalAmount = priorAmount + deltaXp
   await supabase.from('rc_xp_ledger').upsert(
     { agent_no: agentNo, amount: finalAmount, source: 'streams', dedup_key: `streams:${agentNo}:${date}`, meta: { counted } },
     { onConflict: 'dedup_key' },
