@@ -18,7 +18,7 @@
 // restored districts.
 
 import type { SupabaseDB, GameContent } from './config.ts'
-import { modeMultiplier, loadContent, PERSONAL_COUNT_CAP } from './config.ts'
+import { modeMultiplier, loadContent, PERSONAL_COUNT_CAP, trackArtistOverrides } from './config.ts'
 import { todayKst, addDaysStr, kstDateOf } from './kst.ts'
 import { countedStreams } from './derive.ts'
 import { getEraTimeline, completedEraCount } from './era-timeline.ts'
@@ -113,6 +113,7 @@ async function communityStreams(
   const today = todayKst()
   const from = addDaysStr(today, -days)
   const allow: string[] = content.config.bts_artists || []
+  const overrides = trackArtistOverrides(content)
   const { data } = await supabase
     .from('rc_daily_activity')
     .select('agent_no, track_counts')
@@ -120,7 +121,7 @@ async function communityStreams(
   let total = 0
   for (const row of data || []) {
     const cap = caps.map.get(row.agent_no) ?? caps.base
-    total += countedStreams(row.track_counts || {}, allow, cap)
+    total += countedStreams(row.track_counts || {}, allow, cap, overrides)
   }
   return total
 }
@@ -190,6 +191,7 @@ async function refreshDefuse(
   supabase: SupabaseDB, content: GameContent, ev: any, caps: { map: Map<string, number>; base: number }, cfg: BombCfg,
 ): Promise<{ stillActive: boolean; progress: number; qualifiedAgents: number }> {
   const allow: string[] = content.config.bts_artists || []
+  const overrides = trackArtistOverrides(content)
   const fromDate = kstDateOf(Math.floor(new Date(ev.active_from).getTime() / 1000))
   const minimumStreams = ev.minimum_streams || RED_ZONE_MIN_STREAMS
   const baseline: Record<string, number> = ev.stream_baseline || {}
@@ -201,7 +203,7 @@ async function refreshDefuse(
   const perAgent = new Map<string, number>()
   for (const r of rows || []) {
     const cap = caps.map.get(r.agent_no) ?? caps.base
-    const n = countedStreams(r.track_counts || {}, allow, cap)
+    const n = countedStreams(r.track_counts || {}, allow, cap, overrides)
     if (n > 0) perAgent.set(r.agent_no, (perAgent.get(r.agent_no) || 0) + n)
   }
 
@@ -282,12 +284,13 @@ export async function launchDefuse(supabase: SupabaseDB, params: any) {
   const content = await loadContent(supabase)
   const caps = await agentCapMap(supabase, content)
   const allow: string[] = content.config.bts_artists || []
+  const overrides = trackArtistOverrides(content)
   const { data: todayRows } = await supabase.from('rc_daily_activity')
     .select('agent_no, track_counts').eq('kst_date', todayKst())
   const streamBaseline: Record<string, number> = {}
   for (const row of todayRows || []) {
     const cap = caps.map.get(row.agent_no) ?? caps.base
-    streamBaseline[row.agent_no] = countedStreams(row.track_counts || {}, allow, cap)
+    streamBaseline[row.agent_no] = countedStreams(row.track_counts || {}, allow, cap, overrides)
   }
   const { data, error } = await supabase.from('rc_defuse_events').insert({
     title: params.title || 'INCOMING: RED ZONE',

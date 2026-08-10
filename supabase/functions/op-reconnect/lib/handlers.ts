@@ -3,7 +3,7 @@
 // numbers never appear in responses beyond echoing the caller's own request.
 
 import type { GameContent, SupabaseDB, DistrictRow } from './config.ts'
-import { loadContent, rankFor, xpRules, restorationDays, streamsPerXpFor, PERSONAL_COUNT_CAP } from './config.ts'
+import { loadContent, rankFor, xpRules, restorationDays, streamsPerXpFor, PERSONAL_COUNT_CAP, trackArtistOverrides } from './config.ts'
 import { ensureDailyRollups, computeStreak, awardStreakBadges, totalXp, goalXpCountForDate } from './derive.ts'
 import { awardDailySideMissionXp, buildSideMissions } from './side-missions.ts'
 import { freezeGoals, computeBaseline, districtProgress, districtDeadline, filesRevealedCount, albumGoalStreamTotal } from './districts.ts'
@@ -334,7 +334,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
   }))
 
   const bucket = todayRow?.track_counts || {}
-  const counted = goalXpCountForDate(bucket, today, allowlist, cap, goalXpScope)
+  const counted = goalXpCountForDate(bucket, today, allowlist, cap, goalXpScope, trackArtistOverrides(content))
   // Site-owner announcements — folded into the response every screen's poll
   // already fetches (main.js, every 90s) rather than a separate mechanism.
   // See lib/broadcasts.ts / migrations/031_rc_broadcasts.sql.

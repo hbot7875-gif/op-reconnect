@@ -3,13 +3,13 @@
 // happens at read time. Deleting a rollup row and re-calling getGameState
 // reproduces it exactly; the XP ledger's unique dedup keys absorb recomputes.
 
-import { normKeyFull, normalizeKey, artistAllowed } from './text.ts'
+import { normKeyFull, normalizeKey, countedArtistPlays } from './text.ts'
 import { kstDateOf, todayKst, kstDayBounds, addDaysStr, kstDatesBetween } from './kst.ts'
 import { fetchStreamRows } from './streams.ts'
 import type { AgentSourceRow } from './streams.ts'
 import type { DayBucket, FrozenTransmission } from './transmission.ts'
 import type { GameContent, SupabaseDB } from './config.ts'
-import { limits, streamsPerXpFor, PERSONAL_COUNT_CAP } from './config.ts'
+import { limits, streamsPerXpFor, PERSONAL_COUNT_CAP, trackArtistOverrides } from './config.ts'
 import type { FrozenGoals } from './districts.ts'
 
 export interface DailyRow {
@@ -24,12 +24,14 @@ export interface DailyRow {
 }
 
 /** Counted (BTS-allowlisted, variety-capped) streams for one day's bucket. */
-export function countedStreams(bucket: DayBucket, allowlist: string[], cap: number): number {
+export function countedStreams(
+  bucket: DayBucket, allowlist: string[], cap: number,
+  overrides?: Record<string, string[]>,
+): number {
   let total = 0
   for (const key of Object.keys(bucket)) {
     const entry = bucket[key]
-    const allowedN = Object.entries(entry.a).reduce(
-      (s, [artist, cnt]) => s + (artistAllowed(artist, allowlist) ? cnt : 0), 0)
+    const allowedN = countedArtistPlays(entry.a, allowlist, key, overrides)
     total += Math.min(allowedN, cap)
   }
   return total
@@ -50,6 +52,7 @@ export function countedGoalStreams(
   allowlist: string[],
   cap: number,
   goals: FrozenGoals | null | undefined,
+  overrides?: Record<string, string[]>,
 ): number {
   if (!goals) return 0
   const keys = new Set<string>()
@@ -62,8 +65,7 @@ export function countedGoalStreams(
   for (const key of keys) {
     const entry = bucket[key]
     if (!entry) continue
-    const allowedN = Object.entries(entry.a).reduce(
-      (sum, [artist, count]) => sum + (artistAllowed(artist, allowlist) ? count : 0), 0)
+    const allowedN = countedArtistPlays(entry.a, allowlist, key, overrides)
     total += Math.min(allowedN, cap)
   }
   return total
@@ -77,11 +79,12 @@ export function goalXpCountForDate(
   allowlist: string[],
   cap: number,
   scope: GoalXpScope | null,
+  overrides?: Record<string, string[]>,
 ): number {
   if (!scope) return 0
   const activationDate = kstDateOf(Math.floor(new Date(scope.activatedAt).getTime() / 1000))
   if (date < activationDate) return 0
-  let counted = countedGoalStreams(bucket, allowlist, cap, scope.goals)
+  let counted = countedGoalStreams(bucket, allowlist, cap, scope.goals, overrides)
   if (date === activationDate) {
     const stored = scope.baseline?.['xp:goal-streams']
     const legacy = Object.entries(scope.baseline || {})
@@ -155,6 +158,7 @@ export async function ensureDailyRollups(
 ): Promise<DailyRow[]> {
   const lim = limits(content)
   const allowlist: string[] = content.config.bts_artists || []
+  const overrides = trackArtistOverrides(content)
   // Personal XP counting is uncapped — see config.ts's PERSONAL_COUNT_CAP.
   const cap = PERSONAL_COUNT_CAP
   const today = todayKst()
@@ -208,7 +212,7 @@ export async function ensureDailyRollups(
       // Starting a district must never retroactively turn streams from
       // earlier that day into XP. New activations persist the exact union
       // baseline; goalXpCountForDate has a conservative legacy fallback.
-      const counted = goalXpCountForDate(dayData.bucket, date, allowlist, cap, goalXpScope)
+      const counted = goalXpCountForDate(dayData.bucket, date, allowlist, cap, goalXpScope, overrides)
       await awardStreamsXp(supabase, player.agent_no, date, counted, streamsPerXpFor(content, dayMode), !!existing?.finalized, date === today ? personalBoostMult : 1)
     }
   }
@@ -232,6 +236,7 @@ export async function computeStreak(
 ): Promise<{ current: number; todayCounted: boolean; freezesUsed: number; freezeChargesRemaining: number }> {
   const lim = limits(content)
   const allowlist: string[] = content.config.bts_artists || []
+  const overrides = trackArtistOverrides(content)
   const today = todayKst()
   const { data } = await supabase
     .from('rc_daily_activity').select('kst_date, track_counts')
@@ -240,7 +245,7 @@ export async function computeStreak(
     .order('kst_date', { ascending: false })
   const activeDays = new Set<string>()
   for (const r of data || []) {
-    if (countedStreams(r.track_counts || {}, allowlist, capForPlayer) > 0) activeDays.add(String(r.kst_date))
+    if (countedStreams(r.track_counts || {}, allowlist, capForPlayer, overrides) > 0) activeDays.add(String(r.kst_date))
   }
 
   const { data: freezeRows } = await supabase.from('rc_streak_freeze_log').select('freeze_date').eq('agent_no', agentNo)

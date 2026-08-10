@@ -76,6 +76,16 @@ export function xpRules(content: GameContent): { streamsPerXp: number; varietyCa
   return { streamsPerXp: 10, varietyCapBase: 15, districtXp: 50, ...(content.config.xp_rules || {}) }
 }
 
+/** normKeyFull(track title) -> extra artist names trusted for THAT song
+ *  only — see text.ts's countedArtistPlays for why this exists instead of
+ *  just adding a collaborator to bts_artists globally. Admin-editable
+ *  (rc_config, no deploy needed) same as every other config-driven knob
+ *  here; each entry should be one song's own real, official featured
+ *  artist(s), not a general "trust this person" rule. */
+export function trackArtistOverrides(content: GameContent): Record<string, string[]> {
+  return content.config.track_artist_overrides || {}
+}
+
 /** Nothing caps same-track repeats per day anymore — district/album goal
  *  progress, activation baselines, a day's own XP, and the shared ARMY
  *  Bomb's community charge (bomb.ts) all count every real counted stream,

@@ -48,6 +48,32 @@ export function artistAllowed(artistNorm: string, allowlist: string[]): boolean 
   return allowlist.some((entry) => padded.includes(` ${entry} `))
 }
 
+/** Sums only the allowed-artist plays within one track's per-day artist
+ *  breakdown — the same reduction countedStreams/countedGoalStreams/
+ *  getEraTimeline/computeWeeklyEraCards/communityStreams/etc. each repeat
+ *  inline. trackKey + overrides (config.ts's trackArtistOverrides) let a
+ *  specific song's own real featured collaborator count toward THAT song
+ *  only, without adding them to the global BTS-artist allowlist — a
+ *  collaborator's own unrelated solo catalog can otherwise coincidentally
+ *  share a title with a completely different BTS/member song (real
+ *  example: Tablo features on RM's "All Day," but also has his own,
+ *  unrelated songs called "Home" and "Tomorrow" — titles two other BTS
+ *  tracks happen to use). Scrobble sources sometimes attribute an official
+ *  BTS collab solely to the featured artist (no "BTS" token at all in the
+ *  reported artist string) rather than combining both names — without this,
+ *  every play of that collab silently counts as zero. */
+export function countedArtistPlays(
+  artistBreakdown: Record<string, number> | undefined,
+  allowlist: string[],
+  trackKey?: string,
+  overrides?: Record<string, string[]>,
+): number {
+  const extra = trackKey ? overrides?.[trackKey] : undefined
+  const effective = extra?.length ? [...allowlist, ...extra] : allowlist
+  return Object.entries(artistBreakdown || {}).reduce(
+    (s, [artist, cnt]) => s + (artistAllowed(artist, effective) ? Number(cnt) || 0 : 0), 0)
+}
+
 /** Pull the 11-char video ID out of any common YouTube URL shape, or accept
  *  a bare ID pasted directly. Used both when an admin sets a Song of the Day
  *  answer and when a player submits a guess — same extraction either side,

@@ -11,8 +11,9 @@
 // blackout clock only starts once there's been a real charge to lose.
 
 import type { SupabaseDB, GameContent } from './config.ts'
+import { trackArtistOverrides } from './config.ts'
 import { todayKst, kstWeekKey } from './kst.ts'
-import { artistAllowed, normKeyFull } from './text.ts'
+import { countedArtistPlays, normKeyFull } from './text.ts'
 import { ERA_CATALOG } from './era-timeline.ts'
 
 export const HOURS_PER_CHARGE_CELL = 2
@@ -104,13 +105,12 @@ async function computeWeeklyEraCards(
   const { data: rows } = await supabase.from('rc_daily_activity')
     .select('track_counts').eq('agent_no', agentNo).gte('kst_date', weekKey)
   const allow: string[] = content.config.bts_artists || []
+  const overrides = trackArtistOverrides(content)
   const totals = new Map<string, number>()
   for (const row of rows || []) {
     const bucket = row.track_counts || {}
     for (const key of Object.keys(bucket)) {
-      const entry = bucket[key]
-      const counted = Object.entries(entry?.a || {}).reduce(
-        (s: number, [artist, cnt]) => s + (artistAllowed(artist, allow) ? (cnt as number) : 0), 0)
+      const counted = countedArtistPlays(bucket[key]?.a, allow, key, overrides)
       if (counted) totals.set(key, (totals.get(key) || 0) + counted)
     }
   }

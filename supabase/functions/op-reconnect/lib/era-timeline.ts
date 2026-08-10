@@ -19,7 +19,8 @@
 // doesn't apply here, since this measures reach, not something farmable.
 
 import type { SupabaseDB, GameContent } from './config.ts'
-import { normKeyFull, artistAllowed } from './text.ts'
+import { trackArtistOverrides } from './config.ts'
+import { normKeyFull, countedArtistPlays } from './text.ts'
 
 export interface EraDef { id: string; name: string; icon: string; description: string; albums: string[]; tracks: string[] }
 
@@ -171,6 +172,7 @@ export async function getEraTimeline(supabase: SupabaseDB, content: GameContent)
 
   const cfg = eraCfg(content)
   const allow: string[] = content.config.bts_artists || []
+  const overrides = trackArtistOverrides(content)
 
   const { data } = await supabase.from('rc_daily_activity').select('track_counts')
 
@@ -180,9 +182,7 @@ export async function getEraTimeline(supabase: SupabaseDB, content: GameContent)
   for (const row of data || []) {
     const bucket = row.track_counts || {}
     for (const key of Object.keys(bucket)) {
-      const entry = bucket[key]
-      const counted = Object.entries(entry?.a || {}).reduce(
-        (s: number, [artist, cnt]) => s + (artistAllowed(artist, allow) ? (cnt as number) : 0), 0)
+      const counted = countedArtistPlays(bucket[key]?.a, allow, key, overrides)
       if (counted) totals.set(key, (totals.get(key) || 0) + counted)
     }
   }
