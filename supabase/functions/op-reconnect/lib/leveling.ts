@@ -34,6 +34,22 @@ export function nextLevelRewards(content: GameContent): LevelRewardsPreview {
   }
 }
 
+/** base * growth^n, rounded to the nearest whole XP — split out from
+ *  levelFor because the naive `Math.round(base * Math.pow(growth, n))`
+ *  silently rounds the wrong way on values that land exactly (or should
+ *  land exactly) on a .5 boundary: 50 * 1.15 is mathematically exactly
+ *  57.5, but floating-point represents 1.15 slightly short, so the raw
+ *  product comes out 57.49999999999999 and rounds down to 57 instead of
+ *  58. A tiny nudge before rounding costs nothing on every other level
+ *  (their true values sit nowhere near a .5 boundary, so it changes
+ *  nothing there) but corrects exactly this class of representation error.
+ *  1e-9 is comfortably larger than the ~1e-14 error double-precision
+ *  math actually produces here, and comfortably smaller than any gap that
+ *  should legitimately affect which way a real (non-artifact) value rounds. */
+function levelCost(base: number, growth: number, n: number): number {
+  return Math.round(base * Math.pow(growth, n) + 1e-9)
+}
+
 /** Level from lifetime XP, via an escalating-cost curve read from rc_config
  *  ('level_curve': base + growth) so it retunes with zero redeploys. */
 export function levelFor(content: GameContent, xp: number): LevelInfo {
@@ -44,7 +60,7 @@ export function levelFor(content: GameContent, xp: number): LevelInfo {
   while (xp >= cum + need) {
     cum += need
     level++
-    need = Math.round(cfg.base * Math.pow(cfg.growth, level - 1))
+    need = levelCost(cfg.base, cfg.growth, level - 1)
   }
   return { level, name: levelName(content, level), xpIntoLevel: xp - cum, xpForNextLevel: need }
 }
