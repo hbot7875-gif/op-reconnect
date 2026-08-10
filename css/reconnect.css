@@ -1267,24 +1267,24 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 .pl-sum { font-family: var(--mono); font-size: 10.5px; letter-spacing: 1px;
   text-transform: uppercase; color: var(--dim); margin: 10px 0 12px; }
 .pl-done { font-size: 34px; color: var(--gold); text-align: center; margin: 14px 0 6px; }
-.pl-list { list-style: none; counter-reset: pl; max-height: 46vh; overflow-y: auto;
+/* Per-track summary — each remaining track once, with how many more plays
+   it needs. Replaced an earlier round-robin numbered play-by-play queue
+   (repeated entries, a single "priority" tag) that the site owner found
+   not useful once targets got bigger; this is the plain "what's left"
+   glance instead. */
+.pl-list { list-style: none; max-height: 46vh; overflow-y: auto;
   margin: 0 -4px; padding: 0 4px; }
-.pl-item { counter-increment: pl; display: flex; align-items: center; gap: 11px;
+.pl-item { display: flex; align-items: center; justify-content: space-between; gap: 11px;
   padding: 10px 12px; border-radius: var(--r); background: var(--panel);
   margin-bottom: 4px; font-size: 14px; }
-.pl-item::before { content: counter(pl); font-family: var(--mono); font-size: 11px;
-  color: var(--dim); min-width: 18px; text-align: right; flex-shrink: 0; }
 .pl-item.album { background: rgba(217,173,95,0.07); }
 .pl-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-need { font-family: var(--mono); font-size: 11px; color: var(--purple-lt); flex-shrink: 0; white-space: nowrap; }
 .pl-tag { font-family: var(--mono); font-size: 9px; letter-spacing: 1px;
   text-transform: uppercase; color: var(--gold); flex-shrink: 0; }
-/* Not crimson — that's reserved for Red Zone breaches (see palette
-   discipline note at the top of this file). Bolder gold + the icon alone
-   carries "pay attention to this one first". */
-.pl-tag.priority { font-weight: 700; }
 
-/* ── daily pace (the part the old standalone 148 Protocol did that a plain
-   "what's owed" queue doesn't: turn daysLeft into a per-track rate) ── */
+/* ── daily pace headline (turns daysLeft into a total/day figure; the
+   per-track pace now lives inline in .pl-need above, not a second list) ── */
 .pl-pace { padding: 11px 13px; margin: 2px 0 14px; border-radius: var(--r);
   background: var(--surface); border: 1px solid var(--border); }
 .pl-pace.is-urgent { background: var(--crimson-soft); border-color: rgba(229,56,79,0.4); }
@@ -1293,10 +1293,6 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 .pl-pace.is-urgent .pl-pace-head { color: var(--crimson); }
 .pl-pace-head b { color: var(--text); }
 .pl-pace.is-urgent .pl-pace-head b { color: var(--crimson); }
-.pl-pace-rows { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
-.pl-pace-row { display: flex; justify-content: space-between; gap: 10px;
-  font-size: 12.5px; color: var(--text); }
-.pl-pace-row b { font-family: var(--mono); font-size: 11px; color: var(--purple-lt); flex-shrink: 0; }
 
 .invite-body { margin: 4px 0 10px; }
 .invite-actions { display: flex; gap: 8px; }
