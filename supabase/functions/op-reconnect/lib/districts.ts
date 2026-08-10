@@ -60,14 +60,17 @@ export function freezeGoals(content: GameContent, mode: string, district: Distri
   // the admin assigns it in the Goals tab. Album goals work the same as
   // track goals now — a district can carry more than one (each is its own
   // full-album-pass checklist), not just a single one.
+  // config.flatTarget opts a specific goal out of mode scaling entirely —
+  // same target on easy/medium/hard. Everything else still scales by
+  // multiplier as usual; this is the exception, not a new default.
   const trackGoals = assignedTracks
-    .map((g) => ({ id: g.id, label: g.label, artist: g.artist, target: g.target * multiplier, keys: goalKeys(g) }))
+    .map((g) => ({ id: g.id, label: g.label, artist: g.artist, target: g.config?.flatTarget ? g.target : g.target * multiplier, keys: goalKeys(g) }))
 
   const albumGoals = assignedAlbums
     .map((g) => ({
       id: g.id,
       label: g.label,
-      target: g.target * multiplier,
+      target: g.config?.flatTarget ? g.target : g.target * multiplier,
       tracks: (g.tracks || []).map((t) => ({ label: t.label, keys: goalKeys({ label: t.label, aliases: t.aliases || [] }) })),
     }))
 
