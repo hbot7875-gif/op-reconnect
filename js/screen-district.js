@@ -204,6 +204,10 @@ const RECONNECT_ERRORS = {
   cannot_invite_self: "You can't invite yourself.",
   not_in_mission: 'Open or join a mission before inviting someone.',
   no_pending_invite: "You don't have a pending invite here.",
+  target_required: 'Something went wrong picking who to remove.',
+  cannot_remove_self: "You can't remove yourself — decline or leave isn't available here.",
+  not_mission_creator: 'Only whoever opened this mission can remove someone from it.',
+  already_contributed: "They've already streamed toward this — can't remove them now.",
   no_active_puzzle: 'Nothing to answer here right now.',
   already_solved: "You've already cracked this one.",
   no_attempts_left: "You're out of attempts on this one.",
@@ -326,10 +330,24 @@ function paintMissionPanel(box, d, res) {
   const list = el('div', 'reconnect-roster')
   for (const p of m.participants) {
     const statusText = p.status === 'invited' ? 'invited' : res.variant === 'connect' ? (p.streamed ? '✓ streamed' : 'waiting') : '✓ joined'
-    list.appendChild(el('div', 'reconnect-agent' + (p.status === 'invited' ? ' is-pending' : ''), `
+    const row = el('div', 'reconnect-agent' + (p.status === 'invited' ? ' is-pending' : ''), `
       <span>${esc(p.codename)}${p.isMe ? ' (you)' : ''}</span>
       <span>${statusText}</span>
-    `))
+    `)
+    // Only the mission creator sees this, and only next to someone who
+    // hasn't contributed anything yet — server already enforces both, this
+    // is just not offering a button that would only come back as an error.
+    if (m.isCreator && p.removable) {
+      const removeBtn = el('button', 'reconnect-remove', 'Remove')
+      removeBtn.onclick = async () => {
+        removeBtn.disabled = true
+        const r = await call('removeReconnectParticipant', { agentNo: me, districtId: d.id, targetAgentNo: p.agentNo })
+        if (r.success) { toast(`Removed ${p.codename}`); refresh() }
+        else { toast(reconnectError(r.error)); removeBtn.disabled = false }
+      }
+      row.appendChild(removeBtn)
+    }
+    list.appendChild(row)
   }
   box.appendChild(list)
 

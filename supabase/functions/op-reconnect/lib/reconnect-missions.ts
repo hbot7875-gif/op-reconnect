@@ -129,10 +129,12 @@ async function codenameMap(supabase: SupabaseDB, agentNos: string[]): Promise<Ma
 }
 
 /** meAgentNo is the CALLER's own agent number, used only to flag their own
- *  row (isMe) — never echoed back for anyone else. createdBy/invitedBy are
- *  dropped from the response outright: nothing client-side reads them (the
- *  invite flow takes a typed-in agent number, not a roster selection), so
- *  there's no reason to resolve or ship them at all. */
+ *  row (isMe) and whether they're the creator (isCreator) — never echoed
+ *  back for anyone else. invitedBy is dropped from the response outright:
+ *  nothing client-side reads it. agentNo IS included per participant again
+ *  (it briefly wasn't) because removeReconnectParticipant needs to target
+ *  someone specific — same "travels as data, never rendered as text" rule
+ *  getInviteCandidates already follows for exactly the same reason. */
 async function shape(supabase: SupabaseDB, m: any, participants: any[], meAgentNo: string) {
   const names = await codenameMap(supabase, participants.map((p) => p.agent_no))
   return {
@@ -144,14 +146,21 @@ async function shape(supabase: SupabaseDB, m: any, participants: any[], meAgentN
     createdAt: m.created_at,
     completedAt: m.completed_at,
     expiresAt: m.expires_at,
+    isCreator: m.created_by === meAgentNo,
     // Only present when the frozen goal carries a sharedTrack — see
     // refreshMission. Pooled progress toward one specific track, everyone's
     // own plays (since they personally joined) counted together.
     sharedTrack: m.sharedTrackProgress || null,
     participants: participants.map((p) => ({
+      agentNo: p.agent_no, // not for display — see doc comment above
       codename: names.get(p.agent_no) || p.agent_no, // fallback: retired/missing rc_players row
       isMe: p.agent_no === meAgentNo,
       status: p.status, joinedAt: p.joined_at, streamed: !!p.streamed_at,
+      // Only meaningful alongside mission.isCreator — a participant who
+      // hasn't contributed anything yet (still invited, or joined but never
+      // streamed) can be removed to free their slot; one who's already
+      // helped can't be unfairly bumped.
+      removable: p.agent_no !== meAgentNo && (p.status === 'invited' || (p.status === 'joined' && !p.streamed_at)),
     })),
   }
 }
@@ -391,6 +400,42 @@ export async function inviteReconnectMission(supabase: SupabaseDB, content: unkn
   // and a friendlier confirmation ("Invited Euphoria") than an echo.
   const { data: inviteePlayer } = await supabase.from('rc_players').select('codename').eq('agent_no', inviteeAgentNo).maybeSingle()
   return { success: true, inviteeCodename: inviteePlayer?.codename || inviteeAgentNo }
+}
+
+/** The mission creator frees up a slot occupied by someone who hasn't
+ *  contributed anything yet — still 'invited' (never accepted) or 'joined'
+ *  but never streamed. Confirmed with the site owner: creator-only, and
+ *  only against zero-contribution participants, so nobody who's actually
+ *  helped can be unfairly bumped right before (or after) they contribute. */
+export async function removeReconnectParticipant(supabase: SupabaseDB, content: unknown, params: any) {
+  const districtId = String(params.districtId || '')
+  const agentNo = String(params.agentNo || '').trim().toUpperCase()
+  const targetAgentNo = String(params.targetAgentNo || '').trim().toUpperCase()
+  if (!targetAgentNo) return { success: false, error: 'target_required' }
+  if (targetAgentNo === agentNo) return { success: false, error: 'cannot_remove_self' }
+
+  const pd = await myActivePd(supabase, agentNo, districtId)
+  if (pd?.status !== 'active') return { success: false, error: 'not_eligible' }
+  const reconnect = myReconnectGoal(pd)
+  if (!reconnect) return { success: false, error: 'not_available' }
+
+  let mission = await findMyMission(supabase, agentNo, districtId, { goalId: reconnect.id })
+  if (!mission) return { success: false, error: 'not_in_mission' }
+  if (mission.created_by !== agentNo) return { success: false, error: 'not_mission_creator' }
+  mission = await refreshMission(supabase, mission, reconnect.variant, reconnect.config)
+  if (mission.status !== 'open') return { success: false, error: 'mission_' + mission.status }
+
+  const { data: target } = await supabase.from('rc_reconnect_participants')
+    .select('*').eq('mission_id', mission.id).eq('agent_no', targetAgentNo).maybeSingle()
+  if (!target) return { success: false, error: 'not_in_mission' }
+  if (target.status === 'joined' && target.streamed_at) return { success: false, error: 'already_contributed' }
+
+  const { error } = await supabase.from('rc_reconnect_participants')
+    .delete().eq('mission_id', mission.id).eq('agent_no', targetAgentNo)
+  if (error) return { success: false, error: error.message }
+
+  const { data: freshParticipants } = await supabase.from('rc_reconnect_participants').select('*').eq('mission_id', mission.id)
+  return { success: true, mission: await shape(supabase, mission, freshParticipants || [], agentNo) }
 }
 
 /** The invited agent accepts (joins a real slot) or declines (row removed
