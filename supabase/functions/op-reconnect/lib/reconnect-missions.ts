@@ -612,10 +612,22 @@ export async function respondReconnectInvite(supabase: SupabaseDB, content: unkn
  *  away the moment they land somewhere real instead. Scoped to the same
  *  goal_id and to missions where they're still the ONLY joined
  *  participant — a mission they're genuinely paired up in elsewhere is
- *  none of this call's business. */
+ *  none of this call's business.
+ *
+ *  Deleting that old mission outright would silently erase real progress:
+ *  contribution counts run off joined_at (see contributionSince), and
+ *  rc_reconnect_accept_invite just stamped a brand-new joined_at = now()
+ *  on this agent's row in the mission they're landing in. Anyone who'd
+ *  been streaming for days while sitting alone waiting for a partner would
+ *  have that entire history zeroed out the moment someone finally invited
+ *  them — punishing exactly the agent who did the most to get here. So
+ *  this backdates the new row to the EARLIEST joined_at among whatever
+ *  solo missions it's folding away, instead of leaving today's acceptance
+ *  moment stand as if nothing happened before it. */
 async function foldAwayDanglingMissions(supabase: SupabaseDB, agentNo: string, exceptMissionId: string, goalId: string) {
   const { data: myOtherRows } = await supabase.from('rc_reconnect_participants')
-    .select('mission_id').eq('agent_no', agentNo).eq('status', 'joined').neq('mission_id', exceptMissionId)
+    .select('mission_id, joined_at').eq('agent_no', agentNo).eq('status', 'joined').neq('mission_id', exceptMissionId)
+  let earliestJoinedAt: string | null = null
   for (const row of myOtherRows || []) {
     const { data: otherMission } = await supabase.from('rc_reconnect_missions')
       .select('id, goal_id, status').eq('id', row.mission_id).maybeSingle()
@@ -623,9 +635,17 @@ async function foldAwayDanglingMissions(supabase: SupabaseDB, agentNo: string, e
     const { count } = await supabase.from('rc_reconnect_participants')
       .select('agent_no', { count: 'exact', head: true }).eq('mission_id', row.mission_id).eq('status', 'joined')
     if ((count || 0) <= 1) {
+      if (!earliestJoinedAt || new Date(row.joined_at).getTime() < new Date(earliestJoinedAt).getTime()) {
+        earliestJoinedAt = row.joined_at
+      }
       await supabase.from('rc_reconnect_participants').delete().eq('mission_id', row.mission_id)
       await supabase.from('rc_reconnect_missions').delete().eq('id', row.mission_id)
     }
+  }
+  if (earliestJoinedAt) {
+    await supabase.from('rc_reconnect_participants')
+      .update({ joined_at: earliestJoinedAt })
+      .eq('mission_id', exceptMissionId).eq('agent_no', agentNo)
   }
 }
 
