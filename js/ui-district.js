@@ -80,8 +80,9 @@ function renderMissionGroup(card, icon, label, items, rowFn) {
 
 /** opts.reconnectBox — the interactive panel screen-district.js already
  *  built for this district's reconnect goal (open/invite/accept/decline),
- *  handed in so it can be slotted right after Track Mission instead of
- *  dead last on the page. It starts empty and paints itself in once its own
+ *  handed in so it can be slotted into the checklist's own Track → Album →
+ *  ReConnect order instead of appended after the shelf, dead last on the
+ *  whole page. It starts empty and paints itself in once its own
  *  getReconnectMission call resolves, so it's safe to insert synchronously. */
 export function renderBoard(board, d, opts = {}) {
   board.innerHTML = ''
@@ -140,21 +141,6 @@ export function renderBoard(board, d, opts = {}) {
     board.appendChild(trackCard)
   }
 
-  // Right after Track Mission — not buried below every Album Mission bar —
-  // because this is usually the one thing standing between "restoring" and
-  // "done" once the track/album grind is under control.
-  if (reconnect) {
-    if (reconnect.done) {
-      const doneCard = el('div', 'card goal-card')
-      doneCard.appendChild(missionSection('🤝', 'ReConnect Mission', 1, 1))
-      doneCard.appendChild(goalRow('🤝 ReConnect Mission', '', 1, 1, true))
-      board.appendChild(doneCard)
-    } else if (opts.reconnectBox) {
-      board.appendChild(missionSection('🤝', 'ReConnect Mission', 0, 1))
-      board.appendChild(opts.reconnectBox)
-    }
-  }
-
   if (albums.length) {
     const albumCard = el('div', 'card goal-card')
     renderMissionGroup(albumCard, '💿', 'Album Mission', albums, (a) => {
@@ -181,6 +167,21 @@ export function renderBoard(board, d, opts = {}) {
       `))
     }
     board.appendChild(albumCard)
+  }
+
+  // Last, after both Track and Album Mission — not sandwiched between them.
+  // It's still its own clearly-labeled section, just following the same
+  // Track → Album → ReConnect reading order as the rest of the checklist.
+  if (reconnect) {
+    if (reconnect.done) {
+      const doneCard = el('div', 'card goal-card')
+      doneCard.appendChild(missionSection('🤝', 'ReConnect Mission', 1, 1))
+      doneCard.appendChild(goalRow('🤝 ReConnect Mission', '', 1, 1, true))
+      board.appendChild(doneCard)
+    } else if (opts.reconnectBox) {
+      board.appendChild(missionSection('🤝', 'ReConnect Mission', 0, 1))
+      board.appendChild(opts.reconnectBox)
+    }
   }
 
   if (d.files?.length) {
