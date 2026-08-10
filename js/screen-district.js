@@ -219,6 +219,7 @@ const RECONNECT_ERRORS = {
   no_attempts_left: "You're out of attempts on this one.",
   answer_required: 'Type an answer first.',
   youtube_url_required: "That doesn't look like a YouTube link — paste the full URL.",
+  message_required: 'Type something first.',
 }
 function reconnectError(code) { return RECONNECT_ERRORS[code] || code || 'Something went wrong' }
 
@@ -426,6 +427,13 @@ function paintMissionPanel(box, d, res) {
       inviteBtn.disabled = true
       inviteRow.append(select, inviteBtn)
       box.appendChild(inviteRow)
+      // Optional — becomes the first line of the mission's shared thread
+      // (see the chat section below), so "hey, let's team up!" and
+      // whatever comes after it are one continuous conversation.
+      const noteInput = el('input', 'ob-input')
+      noteInput.placeholder = 'Add a message (optional)'
+      noteInput.maxLength = 240
+      box.appendChild(noteInput)
       const inviteMsg = el('div', 'reconnect-row-msg')
       box.appendChild(inviteMsg)
 
@@ -438,6 +446,7 @@ function paintMissionPanel(box, d, res) {
           // or not actively restoring this district — an empty list means
           // there's genuinely nobody free right now, not a filter mistake.
           inviteRow.remove()
+          noteInput.remove()
           box.appendChild(el('p', 'muted', 'No free agents right now—check again soon.'))
           return
         }
@@ -452,7 +461,7 @@ function paintMissionPanel(box, d, res) {
         inviteBtn.disabled = true
         inviteMsg.textContent = ''
         inviteMsg.classList.remove('is-error')
-        const r = await call('inviteReconnectMission', { agentNo: me, districtId: d.id, inviteeAgentNo })
+        const r = await call('inviteReconnectMission', { agentNo: me, districtId: d.id, inviteeAgentNo, message: noteInput.value.trim() })
         if (r.success) { toast(`Invited ${r.inviteeCodename || 'them'}`); refresh() }
         else {
           inviteMsg.textContent = reconnectError(r.error)
@@ -466,6 +475,52 @@ function paintMissionPanel(box, d, res) {
   // mission the caller already participates in (invited or joined), so
   // reaching this panel with an open mission and no row of your own is no
   // longer possible. That was the "Join this mission" matchmaking button.
+
+  box.appendChild(chatPanel(d, m, refresh))
+}
+
+/** The mission's shared thread — an invite's optional note and the ongoing
+ *  coordination chat once paired up are the same feature (see the
+ *  migration's own comment), so this renders for anyone currently invited
+ *  OR joined here, not just after both sides have accepted. Kept simple on
+ *  purpose: plain text, oldest first, no read receipts or typing
+ *  indicators — this is "leave your teammate a note," not a full DM inbox. */
+function chatPanel(d, m, refresh) {
+  const wrap = el('div', 'reconnect-chat')
+  wrap.appendChild(el('div', 'eyebrow', '💬 TEAM CHAT'))
+  const list = el('div', 'reconnect-chat-list')
+  if (!m.messages?.length) {
+    list.appendChild(el('div', 'muted', 'No messages yet — say hi to your team.'))
+  } else {
+    for (const msg of m.messages) {
+      const row = el('div', 'reconnect-chat-msg' + (msg.isMe ? ' is-me' : ''))
+      row.innerHTML = `<b>${esc(msg.isMe ? 'You' : msg.codename)}</b><span>${esc(msg.body)}</span>`
+      list.appendChild(row)
+    }
+  }
+  wrap.appendChild(list)
+
+  const composer = el('div', 'reconnect-invite-row')
+  const input = el('input', 'ob-input')
+  input.placeholder = 'Message your team…'
+  input.maxLength = 240
+  const sendBtn = el('button', 'btn btn-ghost', 'Send')
+  const send = async () => {
+    const body = input.value.trim()
+    if (!body) return
+    input.disabled = true
+    sendBtn.disabled = true
+    const r = await call('sendReconnectMessage', { agentNo: getAgentNo(), districtId: d.id, message: body })
+    input.disabled = false
+    sendBtn.disabled = false
+    if (r.success) { input.value = ''; refresh() }
+    else toast(reconnectError(r.error))
+  }
+  sendBtn.onclick = send
+  input.onkeydown = (e) => { if (e.key === 'Enter') send() }
+  composer.append(input, sendBtn)
+  wrap.appendChild(composer)
+  return wrap
 }
 
 /** A progress bar with its own label directly above it ("Team members —

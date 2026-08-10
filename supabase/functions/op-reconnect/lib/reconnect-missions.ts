@@ -118,6 +118,30 @@ async function codenameMap(supabase: SupabaseDB, agentNos: string[]): Promise<Ma
   return new Map((data || []).map((p: any) => [p.agent_no, p.codename]))
 }
 
+const MAX_MESSAGE_LEN = 240
+
+/** A mission's shared thread, oldest first — an invite's optional note and
+ *  the ongoing "team chat" once paired up are the same feature (see the
+ *  migration's own comment): the note is just message #1. Capped at the
+ *  most recent 50 so a long-running mission's thread can't grow unbounded;
+ *  nobody's realistically scrolling past that on a phone screen anyway.
+ *  Only called for the interactive panel (getReconnectMission,
+ *  openReconnectMission, removeReconnectParticipant) — getMissionStatus's
+ *  hot polling path has no use for message history, so it skips this. */
+async function missionMessages(supabase: SupabaseDB, missionId: string, meAgentNo: string) {
+  const { data } = await supabase.from('rc_reconnect_messages')
+    .select('agent_no, body, created_at').eq('mission_id', missionId)
+    .order('created_at', { ascending: true }).limit(50)
+  const rows = data || []
+  const names = await codenameMap(supabase, [...new Set(rows.map((r: any) => r.agent_no))])
+  return rows.map((r: any) => ({
+    codename: names.get(r.agent_no) || r.agent_no,
+    isMe: r.agent_no === meAgentNo,
+    body: r.body,
+    at: r.created_at,
+  }))
+}
+
 /** Prefers the rows refreshMission already fetched and annotated with
  *  .contribution (see its doc comment) over a second identical select —
  *  only re-queries when there's no mission, or it was never refreshed this
@@ -172,6 +196,18 @@ async function shape(supabase: SupabaseDB, m: any, participants: any[], meAgentN
       removable: p.agent_no !== meAgentNo && (p.status === 'invited' || (p.status === 'joined' && !p.streamed_at)),
     })),
   }
+}
+
+/** shape() plus the mission's message thread — split out from shape()
+ *  itself because getMissionStatus's hot polling path calls shape() far
+ *  more often than anyone's actually looking at the panel, and has no use
+ *  for message history. Every caller that feeds the interactive panel
+ *  (getReconnectMission, openReconnectMission, removeReconnectParticipant)
+ *  uses this instead. */
+async function shapeWithMessages(supabase: SupabaseDB, m: any, participants: any[], meAgentNo: string) {
+  const shaped: any = await shape(supabase, m, participants, meAgentNo)
+  shaped.messages = await missionMessages(supabase, m.id, meAgentNo)
+  return shaped
 }
 
 /** Re-derives a mission's real state from source data: expire it if time's
@@ -295,7 +331,7 @@ export async function getReconnectMission(supabase: SupabaseDB, content: unknown
   return {
     success: true, available: true, variant: reconnect.variant,
     config: { requiredAgents: reconnect.config.requiredAgents, sharedTrack: reconnect.config.sharedTrack || null },
-    mission: mission ? await shape(supabase, mission, participants || [], agentNo) : null,
+    mission: mission ? await shapeWithMessages(supabase, mission, participants || [], agentNo) : null,
   }
 }
 
@@ -406,7 +442,7 @@ export async function openReconnectMission(supabase: SupabaseDB, content: unknow
   // first response, instead of the caller having to poll again to see it.
   const fresh = await refreshMission(supabase, mission, reconnect.variant, reconnect.config)
   const participants = await participantsFor(supabase, fresh)
-  return { success: true, mission: await shape(supabase, fresh, participants, agentNo) }
+  return { success: true, mission: await shapeWithMessages(supabase, fresh, participants, agentNo) }
 }
 
 // Open-matchmaking join (joinReconnectMission / rc_reconnect_join_open)
@@ -416,7 +452,10 @@ export async function openReconnectMission(supabase: SupabaseDB, content: unknow
 /** An agent already in their own open mission invites someone else who is
  *  also actively restoring this district (any reconnect variant, or none —
  *  confirmed with the user this is "recruit a real co-restorer," not an
- *  open invite to anyone registered). Sits as 'invited' until accepted. */
+ *  open invite to anyone registered). Sits as 'invited' until accepted. An
+ *  optional params.message becomes the first line of the mission's shared
+ *  thread — see the migration's own comment on why an invite note and the
+ *  ongoing team chat are one feature, not two. */
 export async function inviteReconnectMission(supabase: SupabaseDB, content: unknown, params: any) {
   const districtId = String(params.districtId || '')
   const agentNo = String(params.agentNo || '').trim().toUpperCase()
@@ -450,11 +489,42 @@ export async function inviteReconnectMission(supabase: SupabaseDB, content: unkn
   const { error } = await supabase.from('rc_reconnect_participants')
     .insert({ mission_id: mission.id, agent_no: inviteeAgentNo, status: 'invited', invited_by: agentNo })
   if (error) return { success: false, error: error.message }
+
+  const note = String(params.message || '').trim().slice(0, MAX_MESSAGE_LEN)
+  if (note) await supabase.from('rc_reconnect_messages').insert({ mission_id: mission.id, agent_no: agentNo, body: note })
+
   // Codename, not the agent number the inviter just typed — same
   // agent-numbers-stay-server-side rule as everywhere else in this file,
   // and a friendlier confirmation ("Invited Euphoria") than an echo.
   const { data: inviteePlayer } = await supabase.from('rc_players').select('codename').eq('agent_no', inviteeAgentNo).maybeSingle()
   return { success: true, inviteeCodename: inviteePlayer?.codename || inviteeAgentNo }
+}
+
+/** Post a line to the caller's own mission's shared thread — open to
+ *  anyone currently 'invited' OR 'joined' there, not just the pair who've
+ *  actually accepted, so someone can ask a question before deciding.
+ *  Doesn't reshape/return the mission itself; the frontend already calls
+ *  getReconnectMission right after (same pattern as invite/accept/remove),
+ *  which picks up the new line via shapeWithMessages. */
+export async function sendReconnectMessage(supabase: SupabaseDB, content: unknown, params: any) {
+  const districtId = String(params.districtId || '')
+  const agentNo = String(params.agentNo || '').trim().toUpperCase()
+  const body = String(params.message || '').trim().slice(0, MAX_MESSAGE_LEN)
+  if (!body) return { success: false, error: 'message_required' }
+
+  const pd = await myActivePd(supabase, agentNo, districtId)
+  if (pd?.status !== 'active') return { success: false, error: 'not_eligible' }
+  const reconnect = myReconnectGoal(pd)
+  if (!reconnect) return { success: false, error: 'not_available' }
+
+  const mission = await findMyMission(supabase, agentNo, districtId, { goalId: reconnect.id })
+  if (!mission) return { success: false, error: 'not_in_mission' }
+  if (mission.status !== 'open') return { success: false, error: 'mission_' + mission.status }
+
+  const { error } = await supabase.from('rc_reconnect_messages')
+    .insert({ mission_id: mission.id, agent_no: agentNo, body })
+  if (error) return { success: false, error: error.message }
+  return { success: true }
 }
 
 /** The mission creator frees up a slot occupied by someone who hasn't
@@ -490,7 +560,7 @@ export async function removeReconnectParticipant(supabase: SupabaseDB, content: 
   if (error) return { success: false, error: error.message }
 
   const { data: freshParticipants } = await supabase.from('rc_reconnect_participants').select('*').eq('mission_id', mission.id)
-  return { success: true, mission: await shape(supabase, mission, freshParticipants || [], agentNo) }
+  return { success: true, mission: await shapeWithMessages(supabase, mission, freshParticipants || [], agentNo) }
 }
 
 /** The invited agent accepts (joins a real slot) or declines (row removed

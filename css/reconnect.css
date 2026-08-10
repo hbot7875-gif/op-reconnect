@@ -1817,6 +1817,24 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 .reconnect-invite-actions { display: flex; gap: 8px; margin-top: 12px; }
 .reconnect-invite-actions .btn { flex: 1; margin-top: 0; }
 
+/* An invite's optional note and the ongoing team chat once paired up are
+   one continuous thread (see reconnect-missions.ts's own comment) — this
+   is that thread, shown to anyone currently invited or joined, not just
+   after both sides have accepted. */
+.reconnect-chat { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
+.reconnect-chat-list { display: flex; flex-direction: column; gap: 7px; margin: 10px 0 12px;
+  max-height: 220px; overflow-y: auto; }
+.reconnect-chat-msg { max-width: 86%; padding: 8px 11px; border-radius: var(--r);
+  background: var(--panel); border: 1px solid var(--border); }
+.reconnect-chat-msg b { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.4px;
+  text-transform: uppercase; color: var(--purple-lt); margin-bottom: 2px; }
+.reconnect-chat-msg span { font-size: 13.5px; line-height: 1.4; word-break: break-word; }
+/* Your own messages align right and pick up the gold accent, same "mine
+   vs. theirs" split every other bubble-chat UI uses. */
+.reconnect-chat-msg.is-me { margin-left: auto; background: var(--gold-soft); border-color: rgba(217,173,95,0.35); }
+.reconnect-chat-msg.is-me b { color: var(--gold); text-align: right; }
+.reconnect-chat-msg.is-me span { text-align: right; display: block; }
+
 .shelf { margin-top: 22px; }
 .shelf-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
 .shelf-title { font-family: var(--disp); font-weight: 800; font-size: 15px; letter-spacing: 0.5px; }
