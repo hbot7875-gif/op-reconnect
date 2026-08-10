@@ -376,17 +376,20 @@ function candyCollectCustom({ flagInvalid = false } = {}) {
     if (!seen.has(key)) { seen.add(key); focus.push({ key, multiplier: mult }); }
   });
   const album = [];
+  const albumIds = [];
   document.querySelectorAll('.cs-album-check:checked').forEach(chk => {
     try { (JSON.parse(chk.value) || []).forEach(k => { if (!album.includes(k)) album.push(k); }); } catch (_) {}
+    const id = chk.dataset.albumId;
+    if (id && !albumIds.includes(id)) albumIds.push(id);
   });
-  return { focus, album, unmatched };
+  return { focus, album, albumIds, unmatched };
 }
 
 async function candyRunPreview() {
   const listEl = $('cs-preview-list');
   if (!listEl) return;
 
-  const { focus, album } = candyCollectCustom();
+  const { focus, album, albumIds } = candyCollectCustom();
 
   if (!focus.length) {
     candySetHTML('cs-preview-list', `<div class="cs-preview-empty">Add a song to see the track order.</div>`);
@@ -398,7 +401,7 @@ async function candyRunPreview() {
   const seq = ++candyPreviewToken;
   candySetHTML('cs-preview-list', `<div class="cs-preview-loading"><span class="cs-spinner"></span> Building preview…</div>`);
 
-  const res = await Api.call('previewAlpaca', { action: 'previewAlpaca', agentNo: STATE.agentNo, mode: 'custom', focus, album }, { dedupe: false, cache: false, timeout: 20000 });
+  const res = await Api.call('previewAlpaca', { action: 'previewAlpaca', agentNo: STATE.agentNo, mode: 'custom', focus, album, albumIds }, { dedupe: false, cache: false, timeout: 20000 });
   if (seq !== candyPreviewToken) return; // a newer request already superseded this one
 
   if (!res || !res.success) {
@@ -644,7 +647,7 @@ export async function renderCandyStar() {
             </div>
             <div id="cs-album-checks" class="cs-album-grid">
               ${opt.albums.map((a, i) => `<label class="cs-album-card" title="${sanitize(a.name)}" style="--art-hue:${candyAlbumHue(a.name)}deg;">
-                <input type="checkbox" class="cs-album-check" id="cs-album-${i}" value='${sanitize(JSON.stringify(a.trackKeys))}' onchange="candyAlbumCheckChanged(this)">
+                <input type="checkbox" class="cs-album-check" id="cs-album-${i}" data-album-id="${sanitize(a.id)}" value='${sanitize(JSON.stringify(a.trackKeys))}' onchange="candyAlbumCheckChanged(this)">
                 <span class="cs-album-card-art">${candyIcon('disc', 16)}</span>
                 <span class="cs-album-meta">
                   <span class="cs-album-name">${sanitize(a.name)}</span>
@@ -745,7 +748,7 @@ export async function candyGenerate(mode) {
   }
 
   if (mode === 'custom') {
-    const { focus, album, unmatched } = candyCollectCustom({ flagInvalid: true });
+    const { focus, album, albumIds, unmatched } = candyCollectCustom({ flagInvalid: true });
     if (unmatched.length) {
       candySetStatus('error', `⚠️ Couldn't match <b>${sanitize(unmatched.slice(0, 3).join(', '))}</b> to a song — start typing and pick from the dropdown that appears, or check the spelling.`);
       return;
@@ -756,6 +759,7 @@ export async function candyGenerate(mode) {
     }
     payload.focus = focus;
     payload.album = album;
+    payload.albumIds = albumIds;
     payload.name = $('cs-name')?.value?.trim() || '';
   }
 

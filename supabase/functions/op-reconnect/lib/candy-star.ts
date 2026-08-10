@@ -371,7 +371,28 @@ const BANNED_ALBUM_NAMES = new Set([
  *  "how many" straight from the flattened list the client actually sends,
  *  rather than trusting a second, separately-suppliable field that could
  *  drift out of sync with the tracks themselves. */
-function detectSelectedAlbums(albumsMap: Record<string, any>, trackKeys: string[]): { id: string; name: string }[] {
+function detectSelectedAlbums(albumsMap: Record<string, any>, trackKeys: string[], albumIds?: string[]): { id: string; name: string }[] {
+  // Explicit album IDs from the checkboxes take precedence — checking full
+  // tracklist containment alone is ambiguous when one catalog album's tracks
+  // are wholly contained in another's (e.g. a single reused on a later
+  // release), which would silently count an album the user never checked.
+  // Still verified against trackKeys so a forged/stale ID can't slip through.
+  if (Array.isArray(albumIds)) {
+    const set = new Set(trackKeys)
+    const out: { id: string; name: string }[] = []
+    const seen = new Set<string>()
+    for (const id of albumIds) {
+      if (seen.has(id)) continue
+      const a = (albumsMap || {})[id]
+      const keys: string[] = a?.trackKeys || []
+      if (a && keys.length > 0 && keys.every((k) => set.has(k))) {
+        seen.add(id)
+        out.push({ id: a.id, name: a.name })
+      }
+    }
+    return out
+  }
+
   const set = new Set(trackKeys)
   const out: { id: string; name: string }[] = []
   for (const a of Object.values(albumsMap || {})) {
@@ -413,7 +434,7 @@ export async function generateAlpaca(supabase: SupabaseDB, params: any): Promise
   )
 
   const albumsMap = await getAlbumsMap(supabase)
-  const selectedAlbums = detectSelectedAlbums(albumsMap, album)
+  const selectedAlbums = detectSelectedAlbums(albumsMap, album, params.albumIds)
 
   const banned = selectedAlbums.find((a) => BANNED_ALBUM_NAMES.has(normalizeKey(a.name)))
   if (banned) {
@@ -488,7 +509,7 @@ export async function previewAlpaca(supabase: SupabaseDB, params: any): Promise<
   // so the builder can show the real rejection reason live, while typing,
   // instead of only at the final "Generate" tap.
   const albumsMapForCheck = await getAlbumsMap(supabase)
-  const selectedAlbumsForCheck = detectSelectedAlbums(albumsMapForCheck, album)
+  const selectedAlbumsForCheck = detectSelectedAlbums(albumsMapForCheck, album, params.albumIds)
   const bannedPreview = selectedAlbumsForCheck.find((a) => BANNED_ALBUM_NAMES.has(normalizeKey(a.name)))
   if (bannedPreview) {
     return { success: false, error: `${bannedPreview.name} can't be used for generated playlists — pick a different album.` }
