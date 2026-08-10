@@ -76,6 +76,35 @@ async function findMyMission(
   return mission
 }
 
+/** A mission this agent has ALREADY completed for this specific goal, if
+ *  any. findMyMission only ever looks at 'open' missions — correct for
+ *  every WRITE path here (you can't invite into, get removed from, or
+ *  respond to an invite on a mission that's already resolved), but wrong
+ *  for "what's my current status," which is exactly what getMissionStatus
+ *  and getReconnectMission use findMyMission for. Without this fallback, a
+ *  genuinely finished reconnect goal disappeared the instant its mission
+ *  left 'open': the very next poll found nothing, sent the agent back to
+ *  "team up," and let them re-open a mission and redo the whole
+ *  shared-track grind — with a brand-new joined_at, so none of their
+ *  already-earned contribution carried over either. Some agents did this
+ *  three, four, even six times over, and could never actually finish the
+ *  district unless their solo goals happened to already be done on the
+ *  exact poll their mission completed. */
+async function findMyCompletedMission(supabase: SupabaseDB, agentNo: string, districtId: string, goalId: string) {
+  const { data: completeMissions } = await supabase.from('rc_reconnect_missions')
+    .select('id').eq('district_id', districtId).eq('goal_id', goalId).eq('status', 'complete')
+  const missionIds = (completeMissions || []).map((m: any) => m.id)
+  if (!missionIds.length) return null
+
+  const { data: rows } = await supabase.from('rc_reconnect_participants')
+    .select('mission_id').eq('agent_no', agentNo).eq('status', 'joined').in('mission_id', missionIds).limit(1)
+  const row: any = (rows || [])[0]
+  if (!row) return null
+
+  const { data: mission } = await supabase.from('rc_reconnect_missions').select('*').eq('id', row.mission_id).maybeSingle()
+  return mission
+}
+
 /** Every key from a participant's OWN frozen track/album goals — this is
  *  what "connect" checks against, not one fixed shared track. */
 function ownGoalKeys(pd: any): string[] {
@@ -239,14 +268,21 @@ async function shapeWithMessages(supabase: SupabaseDB, m: any, participants: any
  *  and it's cheap to re-derive), just carried on the in-memory object so
  *  shape()'s caller can show "GunJ — Ready · 22 streams" without a second
  *  round of the same per-agent counting. Callers should prefer
- *  mission._participants over a fresh select when it's present. */
+ *  mission._participants over a fresh select when it's present.
+ *
+ *  Still computes sharedTrackProgress/contribution for an already-'complete'
+ *  mission (just skips the expiry check and the settle-to-complete write,
+ *  both meaningless once it's done) — findMyCompletedMission's callers
+ *  need a populated mission to actually show "Haegeum hit 100 between you,"
+ *  not a bare status flag. 'expired'/'cancelled' missions skip everything;
+ *  there's nothing live left to compute for those. */
 async function refreshMission(
   supabase: SupabaseDB, mission: any, variant: 'connect' | 'invite',
   config?: { requiredAgents?: number; sharedTrack?: { label: string; keys: string[]; target: number } | null },
 ) {
-  if (mission.status !== 'open') return mission
+  if (mission.status !== 'open' && mission.status !== 'complete') return mission
 
-  if (new Date(mission.expires_at).getTime() <= Date.now()) {
+  if (mission.status === 'open' && new Date(mission.expires_at).getTime() <= Date.now()) {
     await supabase.from('rc_reconnect_missions').update({ status: 'expired' }).eq('id', mission.id).eq('status', 'open')
     mission.status = 'expired'
     return mission
@@ -288,17 +324,19 @@ async function refreshMission(
     }
   }
 
-  const qualified = variant === 'invite'
-    ? joined.length >= mission.required_agents
-    : sharedTrack?.keys?.length
-      ? joined.length >= mission.required_agents && sharedTotal >= sharedTrack.target
-      : joined.length >= mission.required_agents && joined.every((p: any) => p.streamed_at)
+  if (mission.status === 'open') {
+    const qualified = variant === 'invite'
+      ? joined.length >= mission.required_agents
+      : sharedTrack?.keys?.length
+        ? joined.length >= mission.required_agents && sharedTotal >= sharedTrack.target
+        : joined.length >= mission.required_agents && joined.every((p: any) => p.streamed_at)
 
-  if (qualified) {
-    const { error } = await supabase.from('rc_reconnect_missions')
-      .update({ status: 'complete', completed_at: new Date().toISOString() })
-      .eq('id', mission.id).eq('status', 'open')
-    if (!error) mission.status = 'complete'
+    if (qualified) {
+      const { error } = await supabase.from('rc_reconnect_missions')
+        .update({ status: 'complete', completed_at: new Date().toISOString() })
+        .eq('id', mission.id).eq('status', 'open')
+      if (!error) mission.status = 'complete'
+    }
   }
   return mission
 }
@@ -309,6 +347,7 @@ async function refreshMission(
 export async function getMissionStatus(supabase: SupabaseDB, agentNo: string, districtId: string, frozenReconnect: FrozenReconnectGoal) {
   const variant = frozenReconnect.variant as 'connect' | 'invite'
   let mission = await findMyMission(supabase, agentNo, districtId, { goalId: frozenReconnect.id })
+    || await findMyCompletedMission(supabase, agentNo, districtId, frozenReconnect.id)
   if (mission) mission = await refreshMission(supabase, mission, variant, frozenReconnect.config)
   const participants = await participantsFor(supabase, mission)
   return { variant, done: mission?.status === 'complete', mission: mission ? await shape(supabase, mission, participants, agentNo) : null }
@@ -332,6 +371,7 @@ export async function getReconnectMission(supabase: SupabaseDB, content: unknown
   if (!reconnect) return { success: true, available: false }
 
   let mission = await findMyMission(supabase, agentNo, districtId, { goalId: reconnect.id })
+    || await findMyCompletedMission(supabase, agentNo, districtId, reconnect.id)
   if (mission) mission = await refreshMission(supabase, mission, reconnect.variant, reconnect.config)
 
   const participants = await participantsFor(supabase, mission)
@@ -434,6 +474,11 @@ export async function openReconnectMission(supabase: SupabaseDB, content: unknow
   const reconnect = myReconnectGoal(pd)
   if (!reconnect) return { success: false, error: 'not_available' }
   if (await findMyMission(supabase, agentNo, districtId)) return { success: false, error: 'already_in_mission' }
+  // Belt and suspenders alongside the getReconnectMission fallback above —
+  // once a mission's genuinely complete, opening a new one is pointless
+  // (the goal's already satisfied) and is exactly the "redo it from
+  // scratch" trap this whole fix exists to close.
+  if (await findMyCompletedMission(supabase, agentNo, districtId, reconnect.id)) return { success: false, error: 'already_completed' }
 
   const { data: mission, error } = await supabase.from('rc_reconnect_missions').insert({
     district_id: districtId, goal_id: reconnect.id, required_agents: reconnect.config.requiredAgents,
