@@ -7,7 +7,7 @@ import { goalKeys } from './transmission.ts'
 import type { DayBucket } from './transmission.ts'
 import type { GameContent, DistrictRow } from './config.ts'
 import { modeMultiplier, PERSONAL_COUNT_CAP } from './config.ts'
-import { kstDateOf } from './kst.ts'
+import { kstDateOf, todayKst } from './kst.ts'
 
 export interface FrozenReconnectGoal {
   id: string
@@ -143,10 +143,10 @@ export function computeBaseline(
 }
 
 export interface DistrictProgress {
-  trackGoals: { id: string; label: string; artist: string | null; progress: number; target: number; done: boolean }[]
+  trackGoals: { id: string; label: string; artist: string | null; progress: number; target: number; done: boolean; today: number }[]
   albums: {
     id: string; label: string; passesDone: number; target: number; signalPct: number; done: boolean
-    nextPassTracks: { label: string; have: number; need: number }[]
+    nextPassTracks: { label: string; have: number; need: number; today: number }[]
     tracks: { label: string; have: number; target: number; done: boolean }[]
   }[]
   allTracksDone: boolean
@@ -172,6 +172,15 @@ function windowedPlays(
   return total
 }
 
+/** Real (uncapped) plays of a track's keys today specifically — the 148
+ *  Protocol's "have you already hit today's pace" checkbox needs this, not
+ *  the windowed cumulative total. */
+function todayCountFor(keys: string[], rollups: RollupRow[], todayDate: string): number {
+  const row = rollups.find((r) => r.kst_date === todayDate)
+  if (!row) return 0
+  return keys.reduce((s, k) => s + (row.track_counts[k]?.n || 0), 0)
+}
+
 export function districtProgress(
   frozen: FrozenGoals,
   baseline: Record<string, number>,
@@ -185,16 +194,19 @@ export function districtProgress(
   const cap = PERSONAL_COUNT_CAP
   const activationDate = kstDateOf(Math.floor(new Date(activatedAt).getTime() / 1000))
   const inWindow = rollups.filter((r) => r.kst_date >= activationDate)
+  const todayDate = todayKst()
 
   const trackGoals = frozen.trackGoals.map((g) => {
     const total = windowedPlays(g.keys, inWindow, activationDate, baseline[`t:${g.id}`] || 0, cap, false)
-    return { id: g.id, label: g.label, artist: g.artist, progress: Math.min(total, g.target), target: g.target, done: total >= g.target }
+    const today = todayCountFor(g.keys, inWindow, todayDate)
+    return { id: g.id, label: g.label, artist: g.artist, progress: Math.min(total, g.target), target: g.target, done: total >= g.target, today }
   })
   const allTracksDone = trackGoals.length > 0 && trackGoals.every((g) => g.done)
 
   const albums = frozen.albumGoals.map((a) => {
     const perTrack = a.tracks.map((t) => ({
       label: t.label,
+      keys: t.keys,
       total: windowedPlays(t.keys, inWindow, activationDate, baseline[`a:${a.id}:${t.label}`] || 0, cap, true),
     }))
     const target = a.target
@@ -208,7 +220,7 @@ export function districtProgress(
     const nextPassTracks = perTrack
       .filter((t) => t.total < target)
       .sort((a2, b2) => a2.total - b2.total)
-      .map((t) => ({ label: t.label, have: t.total, need: target - t.total }))
+      .map((t) => ({ label: t.label, have: t.total, need: target - t.total, today: todayCountFor(t.keys, inWindow, todayDate) }))
     // Full roster, done tracks included — lets the UI expand an album's
     // "X passes" summary into every track's own progress, not just the
     // ones still short (site owner: "expanded to all tracks in that album").

@@ -16,7 +16,10 @@
 import { el, esc, hideOverlay } from './state.js'
 import { districtDisplayName } from './ward-tiles.js'
 
-/** [{ label, need }] — everything still owed, biggest debt first. */
+/** [{ label, need, today }] — everything still owed, biggest debt first.
+ *  today is how many real plays of that track already landed today (server-
+ *  computed, districts.ts), for the 148 Protocol's "already hit today's
+ *  pace" checkbox — same idea as arirang mission's auto-ticked daily box. */
 export function remaining(state) {
   const d = state.activeDistrict
   const out = []
@@ -24,7 +27,7 @@ export function remaining(state) {
 
   for (const g of d.trackGoals || []) {
     const need = Math.max(0, (g.target || 0) - (g.progress || 0))
-    if (need > 0) out.push({ label: g.label, need, kind: 'track' })
+    if (need > 0) out.push({ label: g.label, need, today: g.today || 0, kind: 'track' })
   }
 
   // Each album only contributes the tracks its *next* pass is missing.
@@ -34,8 +37,8 @@ export function remaining(state) {
       const need = Math.max(0, t.need || 0)
       if (!need) continue
       const hit = out.find((x) => x.label === t.label)
-      if (hit) hit.need = Math.max(hit.need, need)
-      else out.push({ label: t.label, need, kind: 'album' })
+      if (hit) { hit.need = Math.max(hit.need, need); hit.today = Math.max(hit.today, t.today || 0) }
+      else out.push({ label: t.label, need, today: t.today || 0, kind: 'album' })
     }
   }
 
@@ -97,15 +100,20 @@ export function openPlaylist(state) {
   }
 
   // One row per remaining track, how many more plays it needs — no repeated
-  // entries, no round-robin ordering, no single "priority" pick.
+  // entries, no round-robin ordering, no single "priority" pick. Ticks
+  // itself off once today's real plays reach that track's daily pace —
+  // same auto-check idea as arirang mission's 148 Protocol.
   const perTrack = pace.perTrack.length ? pace.perTrack : debts
   const list = el('div', 'pl-list')
   for (const x of perTrack) {
-    list.appendChild(el('div', 'pl-item' + (x.kind === 'album' ? ' album' : ''), `
+    const hitToday = typeof x.perDay === 'number' && x.today >= x.perDay
+    const row = el('div', 'pl-item' + (x.kind === 'album' ? ' album' : '') + (hitToday ? ' is-done-today' : ''), `
+      <span class="pl-check">${hitToday ? '✓' : ''}</span>
       <span class="pl-name">${esc(x.label)}</span>
-      <span class="pl-need">${x.need} left${x.perDay ? ` &middot; ${x.perDay}/day` : ''}</span>
+      <span class="pl-need">${x.need} left${x.perDay ? ` &middot; ${x.today}/${x.perDay} today` : ''}</span>
       ${x.kind === 'album' ? '<span class="pl-tag">album</span>' : ''}
-    `))
+    `)
+    list.appendChild(row)
   }
   sheet.appendChild(list)
 
