@@ -299,15 +299,58 @@ export async function getReconnectMission(supabase: SupabaseDB, content: unknown
   }
 }
 
+/** Every open-mission participant row for this reconnect goal, grouped by
+ *  mission id — the shared data both getInviteCandidates and
+ *  inviteReconnectMission need to tell "genuinely paired up already" apart
+ *  from "opened their own still-empty mission" (see isSpokenFor). */
+async function openMissionRosters(supabase: SupabaseDB, districtId: string, goalId: string) {
+  const { data: openMissions } = await supabase.from('rc_reconnect_missions')
+    .select('id').eq('district_id', districtId).eq('goal_id', goalId).eq('status', 'open')
+  const missionIds = (openMissions || []).map((m: any) => m.id)
+  const byMission = new Map<string, any[]>()
+  if (!missionIds.length) return byMission
+  const { data: rows } = await supabase.from('rc_reconnect_participants')
+    .select('mission_id, agent_no, status').in('mission_id', missionIds)
+  for (const r of rows || []) {
+    if (!byMission.has(r.mission_id)) byMission.set(r.mission_id, [])
+    byMission.get(r.mission_id)!.push(r)
+  }
+  return byMission
+}
+
+/** True only when genuinely unavailable for a NEW invite on this goal:
+ *  pending someone else's invite, or already paired with someone in an
+ *  open mission. Being the sole, still-empty opener of your OWN mission
+ *  does NOT count — accepting an invite elsewhere quietly folds that
+ *  mission away (see respondReconnectInvite's cleanup).
+ *
+ *  Without this distinction every agent who took the obvious first step —
+ *  "Open a mission" is the only button shown before you've teamed up —
+ *  became invisible to every OTHER agent who'd done the same, since each
+ *  one's own solo mission counted as "already in a mission." After the
+ *  matchmaking-removal reset knocked ~140 formerly-2-person missions down
+ *  to one participant each, that was most of the active population:
+ *  dozens of agents each sitting in their own dead-end mission, mutually
+ *  invisible, with nothing in the UI explaining why. */
+function isSpokenFor(rosters: Map<string, any[]>, agentNo: string): boolean {
+  for (const participants of rosters.values()) {
+    const mine = participants.find((p) => p.agent_no === agentNo)
+    if (!mine) continue
+    if (mine.status === 'invited') return true
+    if (mine.status === 'joined' && participants.some((p) => p.agent_no !== agentNo && p.status === 'joined')) return true
+  }
+  return false
+}
+
 /** Who the caller can actually invite — since agent numbers are never
  *  shown to players anymore (see shape()'s codename resolution), "invite
  *  by agent number" was a dead end: nothing in the game ever tells you
  *  anyone else's number. This is the fix — everyone else actively
  *  restoring the same district with the same frozen reconnect goal, who
- *  isn't already teamed up (joined or invited) somewhere for it, so the
- *  player picks a codename instead of typing a number they can't know.
- *  agentNo still rides along per candidate (the invite call needs it) but
- *  is never meant to be displayed — same as shape()'s participants. */
+ *  isn't genuinely spoken for elsewhere, so the player picks a codename
+ *  instead of typing a number they can't know. agentNo still rides along
+ *  per candidate (the invite call needs it) but is never meant to be
+ *  displayed — same as shape()'s participants. */
 export async function getInviteCandidates(supabase: SupabaseDB, content: unknown, params: any) {
   const districtId = String(params.districtId || '')
   const agentNo = String(params.agentNo || '').trim().toUpperCase()
@@ -325,17 +368,8 @@ export async function getInviteCandidates(supabase: SupabaseDB, content: unknown
     .map((r: any) => r.agent_no as string)
   if (!eligible.length) return { success: true, candidates: [] }
 
-  const { data: openMissions } = await supabase.from('rc_reconnect_missions')
-    .select('id').eq('goal_id', reconnect.id).eq('status', 'open')
-  const openMissionIds = (openMissions || []).map((m: any) => m.id)
-  const alreadyIn = new Set<string>()
-  if (openMissionIds.length) {
-    const { data: rows } = await supabase.from('rc_reconnect_participants')
-      .select('agent_no').in('mission_id', openMissionIds)
-    for (const r of rows || []) alreadyIn.add(r.agent_no)
-  }
-
-  const free = eligible.filter((a) => !alreadyIn.has(a))
+  const rosters = await openMissionRosters(supabase, districtId, reconnect.id)
+  const free = eligible.filter((a) => !isSpokenFor(rosters, a))
   if (!free.length) return { success: true, candidates: [] }
 
   const names = await codenameMap(supabase, free)
@@ -399,7 +433,12 @@ export async function inviteReconnectMission(supabase: SupabaseDB, content: unkn
   if (!mission) return { success: false, error: 'not_in_mission' }
   mission = await refreshMission(supabase, mission, reconnect.variant, reconnect.config)
   if (mission.status !== 'open') return { success: false, error: 'mission_' + mission.status }
-  if (await findMyMission(supabase, inviteeAgentNo, districtId)) return { success: false, error: 'already_in_mission' }
+  // Same relaxed check getInviteCandidates uses — a lone opener sitting
+  // alone in their own still-empty mission isn't "already in a mission" in
+  // any sense that should block this invite; only genuinely being spoken
+  // for (pending elsewhere, or already paired with someone) does.
+  const rosters = await openMissionRosters(supabase, districtId, reconnect.id)
+  if (isSpokenFor(rosters, inviteeAgentNo)) return { success: false, error: 'already_in_mission' }
 
   const { data: participants } = await supabase.from('rc_reconnect_participants').select('*').eq('mission_id', mission.id)
   const joinedCount = (participants || []).filter((p: any) => p.status === 'joined').length
@@ -489,8 +528,35 @@ export async function respondReconnectInvite(supabase: SupabaseDB, content: unkn
   })
   const result = !rpcError && Array.isArray(rpcData) ? rpcData[0] : null
   if (rpcError || !result?.joined) return { success: false, error: result?.error || rpcError?.message || 'join_failed' }
+  await foldAwayDanglingMissions(supabase, agentNo, mission.id, mission.goal_id)
   await refreshMission(supabase, mission, variant, goal?.config)
   return { success: true, joined: true }
+}
+
+/** Accepting an invite can leave a DIFFERENT mission this same agent opened
+ *  earlier — back when they had no better option — sitting around with
+ *  them as its only participant. Nobody could ever join it now: they're
+ *  the reason it existed, and isSpokenFor above already treats "joined
+ *  here" as unavailable everywhere else once someone else joins THIS
+ *  mission with them. Left alone it's just permanent clutter, so fold it
+ *  away the moment they land somewhere real instead. Scoped to the same
+ *  goal_id and to missions where they're still the ONLY joined
+ *  participant — a mission they're genuinely paired up in elsewhere is
+ *  none of this call's business. */
+async function foldAwayDanglingMissions(supabase: SupabaseDB, agentNo: string, exceptMissionId: string, goalId: string) {
+  const { data: myOtherRows } = await supabase.from('rc_reconnect_participants')
+    .select('mission_id').eq('agent_no', agentNo).eq('status', 'joined').neq('mission_id', exceptMissionId)
+  for (const row of myOtherRows || []) {
+    const { data: otherMission } = await supabase.from('rc_reconnect_missions')
+      .select('id, goal_id, status').eq('id', row.mission_id).maybeSingle()
+    if (!otherMission || otherMission.goal_id !== goalId || otherMission.status !== 'open') continue
+    const { count } = await supabase.from('rc_reconnect_participants')
+      .select('agent_no', { count: 'exact', head: true }).eq('mission_id', row.mission_id).eq('status', 'joined')
+    if ((count || 0) <= 1) {
+      await supabase.from('rc_reconnect_participants').delete().eq('mission_id', row.mission_id)
+      await supabase.from('rc_reconnect_missions').delete().eq('id', row.mission_id)
+    }
+  }
 }
 
 /** Every pending invite this agent hasn't answered yet — the notification
