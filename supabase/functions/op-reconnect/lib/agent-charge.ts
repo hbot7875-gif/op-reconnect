@@ -13,8 +13,8 @@
 import type { SupabaseDB, GameContent } from './config.ts'
 import { trackArtistOverrides } from './config.ts'
 import { todayKst, kstWeekKey } from './kst.ts'
-import { countedArtistPlays, normKeyFull } from './text.ts'
-import { ERA_CATALOG } from './era-timeline.ts'
+import { countedArtistPlays } from './text.ts'
+import { ERA_CATALOG, eraTrackKeys, eraTrackTitle } from './era-timeline.ts'
 
 export const HOURS_PER_CHARGE_CELL = 2
 export const HOURS_PER_LIT_ERA = 10
@@ -115,9 +115,11 @@ async function computeWeeklyEraCards(
     }
   }
 
+  const trackCounted = (t: any) => eraTrackKeys(t).reduce((s, k) => s + (totals.get(k) || 0), 0) > 0
+
   const newlyLitEraIds: string[] = []
   for (const era of ERA_CATALOG) {
-    const done = era.tracks.filter((t: string) => (totals.get(normKeyFull(t)) || 0) > 0).length
+    const done = era.tracks.filter((t) => trackCounted(t)).length
     if (done < era.tracks.length || stored.has(era.id)) continue
     const { data: inserted, error } = await supabase.from('rc_agent_lit_eras')
       .insert({ agent_no: agentNo, era_id: era.id, week_key: weekKey })
@@ -129,7 +131,7 @@ async function computeWeeklyEraCards(
   }
 
   const eraCards: EraCardView[] = ERA_CATALOG.map((era) => {
-    const tracks = era.tracks.map((title: string) => ({ title, done: (totals.get(normKeyFull(title)) || 0) > 0 }))
+    const tracks = era.tracks.map((t) => ({ title: eraTrackTitle(t), done: trackCounted(t) }))
     const done = tracks.filter((t) => t.done).length
     const row: any = stored.get(era.id)
     return {

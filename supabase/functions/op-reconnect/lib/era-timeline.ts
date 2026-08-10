@@ -22,7 +22,31 @@ import type { SupabaseDB, GameContent } from './config.ts'
 import { trackArtistOverrides } from './config.ts'
 import { normKeyFull, countedArtistPlays } from './text.ts'
 
-export interface EraDef { id: string; name: string; icon: string; description: string; albums: string[]; tracks: string[] }
+/** A plain string is the common case (one real title, normalizes cleanly).
+ *  {title, aliases} is for the rare case where different scrobble sources
+ *  report the exact same song under genuinely different title strings —
+ *  confirmed for "BTS Cypher, Pt. 3: KILLER (feat. Supreme Boi)" vs the
+ *  plain "BTS Cypher Pt.3: Killer" this catalog otherwise uses — same
+ *  "keys, not just one string" idea rc_goals' own tracks already use for
+ *  exactly this reason. */
+export interface EraTrackAliased { title: string; aliases: string[] }
+export type EraTrackEntry = string | EraTrackAliased
+export interface EraDef { id: string; name: string; icon: string; description: string; albums: string[]; tracks: EraTrackEntry[] }
+
+export function eraTrackTitle(t: EraTrackEntry): string {
+  return typeof t === 'string' ? t : t.title
+}
+
+/** Every normalized key that should count as a play of this track. */
+export function eraTrackKeys(t: EraTrackEntry): string[] {
+  if (typeof t === 'string') return [normKeyFull(t)]
+  const keys = new Set<string>([normKeyFull(t.title)])
+  for (const a of t.aliases || []) {
+    const k = normKeyFull(a)
+    if (k) keys.add(k)
+  }
+  return [...keys]
+}
 
 // Real BTS discography, grouped the way the arirang-btsbackend project's own
 // ERAS dict names/describes them — era names, icons and descriptions taken
@@ -66,7 +90,12 @@ export const ERA_CATALOG: EraDef[] = [
     // counted below, so it's still named here as a source.
     albums: ['Dark & Wild', 'Wake Up'],
     tracks: [
-      'BTS Cypher PT.3: KILLER', 'Danger', 'Let Me Know', 'War Of Hormone', 'Look Here', 'Hip Hop Phile',
+      // Two genuinely different metadata variants exist for this one in the
+      // wild — some sources report the plain title, others the "feat.
+      // Supreme Boi" comma-punctuated one — confirmed via a real agent's
+      // scrobbles that never matched the plain-string form alone.
+      { title: 'BTS Cypher PT.3: KILLER', aliases: ['BTS Cypher, Pt. 3: KILLER (feat. Supreme Boi)'] },
+      'Danger', 'Let Me Know', 'War Of Hormone', 'Look Here', 'Hip Hop Phile',
       'So 4 More', 'Could You Turn Off Your Cell Phone', '24/7=heaven', 'Rain', 'Embarrassed',
       'The Stars',
     ],
@@ -187,10 +216,11 @@ export async function getEraTimeline(supabase: SupabaseDB, content: GameContent)
     }
   }
 
-  const trackDone = (t: string) => (totals.get(normKeyFull(t)) || 0) >= cfg.trackThreshold
+  const trackTotal = (t: EraTrackEntry) => eraTrackKeys(t).reduce((s, k) => s + (totals.get(k) || 0), 0)
+  const trackDone = (t: EraTrackEntry) => trackTotal(t) >= cfg.trackThreshold
 
   const eras: EraProgress[] = ERA_CATALOG.map((e) => {
-    const tracks = e.tracks.map((t) => ({ title: t, done: trackDone(t) }))
+    const tracks = e.tracks.map((t) => ({ title: eraTrackTitle(t), done: trackDone(t) }))
     return {
       id: e.id, name: e.name, icon: e.icon, description: e.description, albums: e.albums,
       total: tracks.length, done: tracks.filter((t) => t.done).length, tracks,
