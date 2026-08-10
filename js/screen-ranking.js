@@ -82,7 +82,7 @@ function paintList(body, agents, state) {
         <span class="rank-name">${esc(a.codename)}</span>
         <span class="rank-sub">Level ${a.level}${activeTab === 'all' ? ` · ${esc(MODE_LABEL[a.mode] || a.mode)}` : ''}</span>
       </span>
-      <span class="rank-xp">${a.xp.toLocaleString()} <span class="rank-xp-unit">XP</span></span>
+      <span class="rank-xp">${a.xp.toLocaleString()} <span class="rank-xp-unit">total XP</span></span>
     `
     list.appendChild(row)
   })
