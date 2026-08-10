@@ -206,6 +206,7 @@ const RECONNECT_ERRORS = {
   mission_expired: 'That mission timed out — open a new one.',
   already_in_mission: "You're already in this mission.",
   already_completed: "You've already finished this together — refreshing…",
+  already_paired_elsewhere: "You're already teamed up with someone else here — decline this invite first if you want to switch.",
   invitee_not_eligible: "That agent isn't actively restoring this district.",
   invitee_required: 'Enter an agent number to invite.',
   cannot_invite_self: "You can't invite yourself.",

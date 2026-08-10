@@ -55,7 +55,23 @@ function myReconnectGoal(pd: any): FrozenReconnectGoal | null {
  *  specific goal_id and/or participant status. Scoped by goal_id when
  *  looking up "my own" mission (an agent's frozen goal_id is singular per
  *  district); left district-wide when checking an INVITEE, since they may
- *  have a different reconnect goal (or none) of their own. */
+ *  have a different reconnect goal (or none) of their own.
+ *
+ *  An agent is only ever SUPPOSED to hold one open-mission membership per
+ *  goal, but nothing before this actually enforced that — accepting a new
+ *  invite never checked whether the invitee already had a real one going
+ *  (see respondReconnectInvite's own new guard for the fix), and years of
+ *  that gap left dozens of agents sitting in half a dozen or more open
+ *  memberships each for the same goal at once. When that happens, always
+ *  picking the most-recently-joined one (the old, only rule here) could
+ *  land on a stray solo mission instead of the real, active, jointly-
+ *  progressing one — which is exactly what happened to one half of a pair
+ *  who could see each other's shared progress from one side but not the
+ *  other. Now: prefer whichever candidate this agent is genuinely PAIRED
+ *  in (someone else also 'joined' there) over one where they're sitting
+ *  alone; only fall back to "most recent" among ties or when none are
+ *  paired. Doesn't clean up the extra rows — see foldAwayDanglingMissions
+ *  for that — just makes sure the right one is ever seen. */
 async function findMyMission(
   supabase: SupabaseDB, agentNo: string, districtId: string,
   opts: { goalId?: string; status?: 'invited' | 'joined' } = {},
@@ -68,11 +84,23 @@ async function findMyMission(
 
   let pq = supabase.from('rc_reconnect_participants').select('mission_id').eq('agent_no', agentNo).in('mission_id', missionIds)
   if (opts.status) pq = pq.eq('status', opts.status)
-  const { data: rows } = await pq.order('joined_at', { ascending: false }).limit(1)
-  const row: any = (rows || [])[0]
-  if (!row) return null
+  const { data: rows } = await pq.order('joined_at', { ascending: false })
+  if (!rows || !rows.length) return null
 
-  const { data: mission } = await supabase.from('rc_reconnect_missions').select('*').eq('id', row.mission_id).maybeSingle()
+  let bestMissionId = rows[0].mission_id
+  if (rows.length > 1) {
+    const { data: allParticipants } = await supabase.from('rc_reconnect_participants')
+      .select('mission_id, status').in('mission_id', rows.map((r: any) => r.mission_id))
+    const joinedCount = new Map<string, number>()
+    for (const p of allParticipants || []) {
+      if (p.status !== 'joined') continue
+      joinedCount.set(p.mission_id, (joinedCount.get(p.mission_id) || 0) + 1)
+    }
+    const paired = rows.find((r: any) => (joinedCount.get(r.mission_id) || 0) > 1)
+    if (paired) bestMissionId = paired.mission_id
+  }
+
+  const { data: mission } = await supabase.from('rc_reconnect_missions').select('*').eq('id', bestMissionId).maybeSingle()
   return mission
 }
 
@@ -641,6 +669,21 @@ export async function respondReconnectInvite(supabase: SupabaseDB, content: unkn
     await supabase.from('rc_reconnect_participants').delete().eq('mission_id', mission.id).eq('agent_no', agentNo)
     return { success: true, joined: false }
   }
+
+  // Nothing used to stop an agent from accepting a brand-new invite while
+  // already genuinely paired in a DIFFERENT open mission for this exact
+  // goal — years of that gap left dozens of agents holding half a dozen or
+  // more simultaneous open memberships each, which could shadow their real,
+  // actively-progressing pairing behind a stray one findMyMission happened
+  // to resolve to instead (see its own doc comment). Block it here instead:
+  // decline (or just ignore) the invite and stay with the team you're
+  // already on rather than quietly duplicating yourself across missions.
+  // Excludes THIS mission from the check — the agent's own pending invite
+  // row here would otherwise always read as "spoken for" and block every
+  // accept, including the legitimate first one.
+  const rostersForGuard = await openMissionRosters(supabase, districtId, mission.goal_id)
+  rostersForGuard.delete(mission.id)
+  if (isSpokenFor(rostersForGuard, agentNo)) return { success: false, error: 'already_paired_elsewhere' }
 
   // rc_reconnect_accept_invite re-checks the invite and capacity, and
   // flips the status, all as one row-locked unit — the old separate
