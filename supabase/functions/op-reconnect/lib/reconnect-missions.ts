@@ -23,7 +23,15 @@
 // Reward is NOT awarded here — completion just flips mission status to
 // 'complete'; handlers.ts's buildState() awards XP/Fuel once, when the
 // WHOLE district (solo goals + reconnect) completes, avoiding a double
-// payout from two separate reward pipelines.
+// payout from two separate reward pipelines. That district-completion
+// reward is a flat amount (config.ts's xpRules().districtXp) — the same
+// for every district whether or not it happens to carry a reconnect goal.
+// There used to be a separate rc_config 'reconnect_rewards' row (xp/fuel)
+// from back when reconnect was its own post-restoration bonus stage; it
+// went unread the moment this became a gate instead, and was deleted
+// outright (not just left dormant) after confirming with the site owner
+// that reconnect should stay a pure requirement — no bonus on top of the
+// district's own reward, same as any other goal here.
 
 import type { SupabaseDB, GameContent } from './config.ts'
 import type { FrozenReconnectGoal } from './districts.ts'
