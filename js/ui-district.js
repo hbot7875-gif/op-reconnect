@@ -15,39 +15,12 @@ export function districtFraction(d) {
   return need === 0 ? 0 : Math.max(0, Math.min(1, got / need))
 }
 
-export const RECONNECT_LABELS = {
-  sotd: '🎵 Song of the Day', cipher: '🔐 Cipher', memory: '📖 Memory Fragment',
-  connect: '🤝 Connect', invite: '📡 Invite Backup',
-}
-
-/** Compact status tile for the district's reconnect goal, if it has one —
- *  display only. The interactive part (submitting a guess, opening/joining
- *  a mission, inviting someone) lives in screen-district.js's active-board
- *  panel; this is just "where do things stand" for the checklist glance. */
-function reconnectRow(r) {
-  const label = RECONNECT_LABELS[r.variant] || 'ReConnect'
-  const row = el('div', 'goal-row reconnect-row' + (r.done ? ' done' : ''))
-  // A mission's own joined-count (2/2) reads as "done" at a glance once
-  // everyone's in — misleading for a sharedTrack mission where joining is
-  // just step one. Lead with the real target when there is one.
-  const status = r.done ? '✓ done'
-    : r.mission?.sharedTrack ? `${r.mission.sharedTrack.progress}<i>/${r.mission.sharedTrack.target} ${esc(r.mission.sharedTrack.label)}</i>`
-    : r.mission ? `${r.mission.participants.filter((p) => p.status === 'joined').length}<i>/${r.mission.requiredAgents}</i>`
-    : typeof r.attemptsLeft === 'number' ? `${r.attemptsLeft} <i>${r.attemptsLeft === 1 ? 'try' : 'tries'} left</i>`
-    : ''
-  row.innerHTML = `
-    <div class="gr-top">
-      <span class="gr-name">${esc(label)}</span>
-      <span class="gr-count">${status}</span>
-    </div>
-  `
-  return row
-}
-
 /** One "stream this, n of m times" row — the whole game's core loop in a
  *  single component. Flat and identical for tracks and album passes, because
  *  that's the one thing a player checks every day and it should never take
- *  more than a glance. */
+ *  more than a glance. A finished row drops its bar and sub-line entirely —
+ *  a full 100% bar says nothing a checkmark doesn't already say, and it was
+ *  most of what made completed rows as visually loud as unfinished ones. */
 function goalRow(label, sub, progress, target, done, unit) {
   const pct = Math.min(100, Math.round((progress / Math.max(1, target)) * 100))
   const row = el('div', 'goal-row' + (done ? ' done' : ''))
@@ -56,8 +29,8 @@ function goalRow(label, sub, progress, target, done, unit) {
       <span class="gr-name">${esc(label)}</span>
       <span class="gr-count">${done ? '✓ done' : `${progress}<i>/${target}</i>`}</span>
     </div>
-    <div class="gr-bar"><div class="gr-fill${done ? ' done' : ''}" style="width:${pct}%"></div></div>
-    ${sub ? `<div class="gr-sub">${sub}</div>` : ''}
+    ${done ? '' : `<div class="gr-bar"><div class="gr-fill" style="width:${pct}%"></div></div>`}
+    ${!done && sub ? `<div class="gr-sub">${sub}</div>` : ''}
   `
   if (unit && !done) row.querySelector('.gr-count').insertAdjacentHTML('beforeend', ` <i>${unit}</i>`)
   return row
@@ -77,7 +50,40 @@ function missionSection(icon, label, done, total) {
   return head
 }
 
-export function renderBoard(board, d) {
+/** A track/album group, laid out so unfinished work is what you actually
+ *  see: once every item in the group is done it collapses into one closed
+ *  <details> line ("Album Mission — 4/4 complete ✓ — tap to expand")
+ *  instead of four already-finished bars nobody needs to scroll past.
+ *  Partially-done groups stay open with the header still showing the count,
+ *  unfinished items first — done ones sink to the bottom, already quiet
+ *  (goalRow drops their bar). rowFn builds each item's own row so this stays
+ *  usable for both the plain track rows and the clickable album ones. */
+function renderMissionGroup(card, icon, label, items, rowFn) {
+  if (!items.length) return
+  const done = items.filter((x) => x.done).length
+  const total = items.length
+  if (done === total) {
+    const fold = el('details', 'mission-fold')
+    const summary = el('summary', '', `
+      <span class="board-title">${icon} ${esc(label)}</span>
+      <span class="board-count all">${done}/${total} complete ✓</span>
+    `)
+    fold.appendChild(summary)
+    for (const it of items) fold.appendChild(rowFn(it))
+    card.appendChild(fold)
+    return
+  }
+  card.appendChild(missionSection(icon, label, done, total))
+  const ordered = [...items].sort((a, b) => (a.done === b.done ? 0 : a.done ? 1 : -1))
+  for (const it of ordered) card.appendChild(rowFn(it))
+}
+
+/** opts.reconnectBox — the interactive panel screen-district.js already
+ *  built for this district's reconnect goal (open/invite/accept/decline),
+ *  handed in so it can be slotted right after Track Mission instead of
+ *  dead last on the page. It starts empty and paints itself in once its own
+ *  getReconnectMission call resolves, so it's safe to insert synchronously. */
+export function renderBoard(board, d, opts = {}) {
   board.innerHTML = ''
 
   const goals = [...(d.trackGoals || [])]
@@ -93,9 +99,33 @@ export function renderBoard(board, d) {
   `
   board.appendChild(head)
 
-  // One week from activation, per district — see districtDeadline in
-  // districts.ts. daysLeft is already ceil'd server-side.
-  if (typeof d.daysLeft === 'number') {
+  // The queue belongs here too — this is the screen you're on when you're
+  // about to go stream. Renamed from "Run the 148 Protocol": this is an
+  // action for finishing goals, not a thing carried around in the Pack, so
+  // it reads as one now. It's also the strongest thing on the screen: the
+  // one card whose whole job is "what do I do right now", so it carries the
+  // deadline/pace line itself instead of splitting that into a banner above
+  // it — one status block, not two that have to be read together.
+  const left = remaining({ activeDistrict: d })
+  const pace = dailyPace({ activeDistrict: d })
+  if (left.length) {
+    const totalNeed = left.reduce((a, x) => a + x.need, 0)
+    const bits = [`${totalNeed} play${totalNeed === 1 ? '' : 's'} remaining`]
+    if (pace.perTrack.length) bits.push(`Aim for ${pace.totalPerDay}/day`)
+    if (typeof d.daysLeft === 'number') {
+      bits.push(d.daysLeft <= 0 ? 'last day' : d.daysLeft === 1 ? '1 day left' : `${d.daysLeft} days left`)
+    }
+    const urgent = typeof pace.daysLeft === 'number' && pace.daysLeft <= 2
+    const q = el('button', 'queue-btn' + (urgent ? ' is-urgent' : ''), `
+      <span class="qb-title">🧠 Build today's queue</span>
+      <span class="qb-meta">${bits.join(' &middot; ')}</span>
+    `)
+    q.onclick = () => showOverlay(openPlaylist(getState() || { activeDistrict: d }))
+    board.appendChild(q)
+  } else if (typeof d.daysLeft === 'number') {
+    // Nothing left to queue (goals met, waiting on something else, e.g. the
+    // reconnect goal) — the deadline still matters, just with no CTA to ride
+    // along with.
     const urgent = d.daysLeft <= 2
     const text = d.daysLeft <= 0 ? 'Last day to restore this district'
       : d.daysLeft === 1 ? '<b>1 day</b> left to restore this district'
@@ -103,32 +133,31 @@ export function renderBoard(board, d) {
     board.appendChild(el('div', 'board-deadline' + (urgent ? ' is-urgent' : ''), `⏳ ${text}`))
   }
 
-  // The queue belongs here too — this is the screen you're on when you're
-  // about to go stream. Renamed from "Run the 148 Protocol": this is an
-  // action for finishing goals, not a thing carried around in the Pack, so
-  // it reads as one now.
-  const left = remaining({ activeDistrict: d })
-  if (left.length) {
-    const totalNeed = left.reduce((a, x) => a + x.need, 0)
-    const pace = dailyPace({ activeDistrict: d })
-    const paceText = pace.perTrack.length ? ` &middot; ${pace.totalPerDay}/day to finish in time` : ''
-    const urgent = typeof pace.daysLeft === 'number' && pace.daysLeft <= 2
-    const q = el('button', 'queue-btn' + (urgent ? ' is-urgent' : ''),
-      `🧠 Build today's stream queue <i>${totalNeed} plays left${paceText}</i>`)
-    q.onclick = () => showOverlay(openPlaylist(getState() || { activeDistrict: d }))
-    board.appendChild(q)
+  if (goals.length) {
+    const trackCard = el('div', 'card goal-card')
+    renderMissionGroup(trackCard, '🎵', 'Track Mission', goals,
+      (g) => goalRow(g.label, '', g.progress, g.target, g.done, 'plays'))
+    board.appendChild(trackCard)
   }
 
-  const card = el('div', 'card goal-card')
-  if (goals.length) {
-    card.appendChild(missionSection('🎵', 'Track Mission', goals.filter((g) => g.done).length, goals.length))
-    for (const g of goals) {
-      card.appendChild(goalRow(g.label, '', g.progress, g.target, g.done, 'plays'))
+  // Right after Track Mission — not buried below every Album Mission bar —
+  // because this is usually the one thing standing between "restoring" and
+  // "done" once the track/album grind is under control.
+  if (reconnect) {
+    if (reconnect.done) {
+      const doneCard = el('div', 'card goal-card')
+      doneCard.appendChild(missionSection('🤝', 'ReConnect Mission', 1, 1))
+      doneCard.appendChild(goalRow('🤝 ReConnect Mission', '', 1, 1, true))
+      board.appendChild(doneCard)
+    } else if (opts.reconnectBox) {
+      board.appendChild(missionSection('🤝', 'ReConnect Mission', 0, 1))
+      board.appendChild(opts.reconnectBox)
     }
   }
+
   if (albums.length) {
-    card.appendChild(missionSection('💿', 'Album Mission', albums.filter((a) => a.done).length, albums.length))
-    for (const a of albums) {
+    const albumCard = el('div', 'card goal-card')
+    renderMissionGroup(albumCard, '💿', 'Album Mission', albums, (a) => {
       const sub = a.done || !a.nextPassTracks?.length ? ''
         : `Still need ${a.nextPassTracks.slice(0, 3).map((t) => `${esc(t.label)} ×${t.need}`).join(' · ')}`
       const row = goalRow(`💿 ${a.label}`, sub, a.passesDone, a.target, a.done, 'passes')
@@ -137,26 +166,22 @@ export function renderBoard(board, d) {
         row.classList.add('clickable')
         row.onclick = () => showOverlay(albumDetailSheet(a))
       }
-      card.appendChild(row)
+      return row
+    })
+    if (d.chargeCellProgress) {
+      const c = d.chargeCellProgress
+      const pct = Math.min(100, Math.round((c.streams / Math.max(1, c.required)) * 100))
+      albumCard.appendChild(el('div', 'cell-progress', `
+        <div class="cell-progress-head">
+          <span>⚡ Next Charge Cell</span>
+          <b>${c.streams}/${c.required}</b>
+        </div>
+        <div class="cell-progress-bar"><i style="width:${pct}%"></i></div>
+        <div class="cell-progress-left">${c.remaining} more Album Goal stream${c.remaining === 1 ? '' : 's'} · your goal total stays counted</div>
+      `))
     }
+    board.appendChild(albumCard)
   }
-  if (albums.length && d.chargeCellProgress) {
-    const c = d.chargeCellProgress
-    const pct = Math.min(100, Math.round((c.streams / Math.max(1, c.required)) * 100))
-    card.appendChild(el('div', 'cell-progress', `
-      <div class="cell-progress-head">
-        <span>⚡ Next Charge Cell</span>
-        <b>${c.streams}/${c.required}</b>
-      </div>
-      <div class="cell-progress-bar"><i style="width:${pct}%"></i></div>
-      <div class="cell-progress-left">${c.remaining} more Album Goal stream${c.remaining === 1 ? '' : 's'} · your goal total stays counted</div>
-    `))
-  }
-  if (reconnect) {
-    card.appendChild(missionSection('🤝', 'ReConnect Mission', reconnect.done ? 1 : 0, 1))
-    card.appendChild(reconnectRow(reconnect))
-  }
-  board.appendChild(card)
 
   if (d.files?.length) {
     const filesRow = el('div', 'files-row')

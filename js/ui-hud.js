@@ -82,6 +82,28 @@ function paintSyncButton() {
   btn.classList.toggle('is-syncing', syncInFlight)
 }
 
+/* ── collapse-on-scroll ──
+   The sticky header eats a real chunk of a phone screen at full height —
+   fine at rest, wasteful once you're scrolled into the mission list and it's
+   just sitting there unchanged at the top. Past a small scroll threshold it
+   shrinks to a compact row (CSS only, via #hud.is-collapsed — see
+   reconnect.css) that keeps exactly what the reviewer asked to keep: avatar,
+   level progress, streak, sync. Installed once, lazily, from renderHud
+   itself rather than a separate main.js wire-up — #hud's own node is stable
+   across re-renders (only its innerHTML gets replaced each render), so one
+   listener attached to it outlives every repaint. */
+let hudScrollWired = false
+function wireHudScrollCollapse() {
+  if (hudScrollWired) return
+  const hud = document.getElementById('hud')
+  if (!hud) return
+  hudScrollWired = true
+  const COLLAPSE_AT = 36
+  const onScroll = () => hud.classList.toggle('is-collapsed', window.scrollY > COLLAPSE_AT)
+  window.addEventListener('scroll', onScroll, { passive: true })
+  onScroll()
+}
+
 export function renderHud(container, state) {
   const p = state.player
   const lvl = p.level
@@ -121,6 +143,7 @@ export function renderHud(container, state) {
   container.querySelector('#bellBtn').onclick = () => showOverlay(invitesSheet(state))
   container.querySelector('#syncBtn').onclick = () => syncNow(state)
   paintSyncButton()
+  wireHudScrollCollapse()
 }
 
 /** LEVEL {n}, XP progress, next-level rewards, active boost (if any), rank +

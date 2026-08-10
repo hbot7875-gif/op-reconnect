@@ -89,22 +89,12 @@ function kstDateOfIso(iso: string): string {
   return kstDateOf(Math.floor(new Date(iso).getTime() / 1000))
 }
 
-async function hasStreamedAny(supabase: SupabaseDB, agentNo: string, sinceIso: string, keys: string[]): Promise<boolean> {
-  if (!keys.length) return false
-  const sinceDate = kstDateOfIso(sinceIso)
-  const { data } = await supabase.from('rc_daily_activity')
-    .select('track_counts').eq('agent_no', agentNo).gte('kst_date', sinceDate)
-  for (const row of data || []) {
-    const bucket = row.track_counts || {}
-    if (keys.some((k) => (bucket[k]?.n || 0) > 0)) return true
-  }
-  return false
-}
-
 /** Real play count of a specific track's keys, from the day this participant
- *  joined onward — day-granularity, same as hasStreamedAny above, since
- *  rc_daily_activity only ever buckets by day. Uncapped, matching how every
- *  other personal count works now (see config.ts's PERSONAL_COUNT_CAP). */
+ *  joined onward — day-granularity, since rc_daily_activity only ever
+ *  buckets by day. Uncapped, matching how every other personal count works
+ *  now (see config.ts's PERSONAL_COUNT_CAP). Both refreshMission's shared
+ *  and per-agent qualify checks run off this, and its return value is what
+ *  ends up as each roster row's "N streams" (see shape()). */
 async function contributionSince(supabase: SupabaseDB, agentNo: string, sinceIso: string, keys: string[]): Promise<number> {
   if (!keys.length) return 0
   const sinceDate = kstDateOfIso(sinceIso)
@@ -126,6 +116,18 @@ async function codenameMap(supabase: SupabaseDB, agentNos: string[]): Promise<Ma
   if (!agentNos.length) return new Map()
   const { data } = await supabase.from('rc_players').select('agent_no, codename').in('agent_no', agentNos)
   return new Map((data || []).map((p: any) => [p.agent_no, p.codename]))
+}
+
+/** Prefers the rows refreshMission already fetched and annotated with
+ *  .contribution (see its doc comment) over a second identical select —
+ *  only re-queries when there's no mission, or it was never refreshed this
+ *  call (already 'complete'/'expired' at entry, so refreshMission returned
+ *  before fetching anything). */
+async function participantsFor(supabase: SupabaseDB, mission: any) {
+  if (!mission) return []
+  if (mission._participants) return mission._participants
+  const { data } = await supabase.from('rc_reconnect_participants').select('*').eq('mission_id', mission.id)
+  return data || []
 }
 
 /** meAgentNo is the CALLER's own agent number, used only to flag their own
@@ -156,6 +158,13 @@ async function shape(supabase: SupabaseDB, m: any, participants: any[], meAgentN
       codename: names.get(p.agent_no) || p.agent_no, // fallback: retired/missing rc_players row
       isMe: p.agent_no === meAgentNo,
       status: p.status, joinedAt: p.joined_at, streamed: !!p.streamed_at,
+      // Real contribution count, 'invite' variant. Only set once
+      // refreshMission has actually computed one this call (see its own doc
+      // comment) — null rather than 0 for "not counted this pass" (an
+      // 'invited' row, or an 'invite'-variant mission with no streaming
+      // requirement at all) so the client can tell "zero streams" apart
+      // from "not applicable" instead of guessing from variant alone.
+      streams: typeof p.contribution === 'number' ? p.contribution : null,
       // Only meaningful alongside mission.isCreator — a participant who
       // hasn't contributed anything yet (still invited, or joined but never
       // streamed) can be removed to free their slot; one who's already
@@ -178,7 +187,15 @@ async function shape(supabase: SupabaseDB, m: any, participants: any[], meAgentN
  *     goals since joining.
  *  'invite' has no streaming check either way — acceptance alone qualifies.
  *  Settles (marks 'complete') the moment the required condition is met;
- *  does NOT award anything itself (see module comment). */
+ *  does NOT award anything itself (see module comment).
+ *
+ *  Also stamps mission._participants with each joined row's own real
+ *  contribution count (p.contribution) while it's already computing one for
+ *  the qualify check — not persisted to the DB (there's no column for it,
+ *  and it's cheap to re-derive), just carried on the in-memory object so
+ *  shape()'s caller can show "GunJ — Ready · 22 streams" without a second
+ *  round of the same per-agent counting. Callers should prefer
+ *  mission._participants over a fresh select when it's present. */
 async function refreshMission(
   supabase: SupabaseDB, mission: any, variant: 'connect' | 'invite',
   config?: { requiredAgents?: number; sharedTrack?: { label: string; keys: string[]; target: number } | null },
@@ -193,6 +210,7 @@ async function refreshMission(
 
   const { data: participants } = await supabase.from('rc_reconnect_participants')
     .select('*').eq('mission_id', mission.id)
+  mission._participants = participants || []
   const joined = (participants || []).filter((p: any) => p.status === 'joined')
 
   const sharedTrack = config?.sharedTrack
@@ -200,6 +218,7 @@ async function refreshMission(
   if (variant === 'connect' && sharedTrack?.keys?.length && sharedTrack.target > 0) {
     for (const p of joined) {
       const contributed = await contributionSince(supabase, p.agent_no, p.joined_at, sharedTrack.keys)
+      p.contribution = contributed
       sharedTotal += contributed
       if (contributed > 0 && !p.streamed_at) {
         await supabase.from('rc_reconnect_participants')
@@ -211,11 +230,12 @@ async function refreshMission(
     mission.sharedTrackProgress = { label: sharedTrack.label, target: sharedTrack.target, progress: Math.min(sharedTotal, sharedTrack.target) }
   } else if (variant === 'connect') {
     for (const p of joined) {
-      if (p.streamed_at) continue
       const pd = await myActivePd(supabase, p.agent_no, mission.district_id)
-      if (!pd || pd.status !== 'active') continue // dropped the district — not counted until back
+      if (!pd || pd.status !== 'active') { p.contribution = 0; continue } // dropped the district — not counted until back
       const keys = ownGoalKeys(pd)
-      if (await hasStreamedAny(supabase, p.agent_no, p.joined_at, keys)) {
+      const contributed = await contributionSince(supabase, p.agent_no, p.joined_at, keys)
+      p.contribution = contributed
+      if (contributed > 0 && !p.streamed_at) {
         await supabase.from('rc_reconnect_participants')
           .update({ streamed_at: new Date().toISOString() })
           .eq('mission_id', mission.id).eq('agent_no', p.agent_no)
@@ -246,9 +266,7 @@ export async function getMissionStatus(supabase: SupabaseDB, agentNo: string, di
   const variant = frozenReconnect.variant as 'connect' | 'invite'
   let mission = await findMyMission(supabase, agentNo, districtId, { goalId: frozenReconnect.id })
   if (mission) mission = await refreshMission(supabase, mission, variant, frozenReconnect.config)
-  const participants = mission
-    ? (await supabase.from('rc_reconnect_participants').select('*').eq('mission_id', mission.id)).data || []
-    : []
+  const participants = await participantsFor(supabase, mission)
   return { variant, done: mission?.status === 'complete', mission: mission ? await shape(supabase, mission, participants, agentNo) : null }
 }
 
@@ -272,9 +290,7 @@ export async function getReconnectMission(supabase: SupabaseDB, content: unknown
   let mission = await findMyMission(supabase, agentNo, districtId, { goalId: reconnect.id })
   if (mission) mission = await refreshMission(supabase, mission, reconnect.variant, reconnect.config)
 
-  const { data: participants } = mission
-    ? await supabase.from('rc_reconnect_participants').select('*').eq('mission_id', mission.id)
-    : { data: [] }
+  const participants = await participantsFor(supabase, mission)
 
   return {
     success: true, available: true, variant: reconnect.variant,
@@ -355,8 +371,8 @@ export async function openReconnectMission(supabase: SupabaseDB, content: unknow
   // sharedTrack missions this is what puts the 0/target shape on the very
   // first response, instead of the caller having to poll again to see it.
   const fresh = await refreshMission(supabase, mission, reconnect.variant, reconnect.config)
-  const { data: participants } = await supabase.from('rc_reconnect_participants').select('*').eq('mission_id', mission.id)
-  return { success: true, mission: await shape(supabase, fresh, participants || [], agentNo) }
+  const participants = await participantsFor(supabase, fresh)
+  return { success: true, mission: await shape(supabase, fresh, participants, agentNo) }
 }
 
 // Open-matchmaking join (joinReconnectMission / rc_reconnect_join_open)

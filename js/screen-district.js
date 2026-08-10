@@ -89,7 +89,14 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
     container.querySelector('.pw-val').textContent = pct + '%'
     container.querySelector('.stage-meter-fill').style.width = pct + '%'
     container.querySelector('.stage').classList.toggle('is-dark', pct < 34)
-    renderBoard(board, d)
+    // Built here (screen-district.js owns the interactive open/invite/accept
+    // flow) but handed to renderBoard so it can be positioned right after
+    // Track Mission instead of tacked on after every other card — see
+    // renderBoard's own comment. Only when there's an unfinished reconnect
+    // goal to actually show; a finished one gets a quiet compact row from
+    // renderBoard itself with nothing left to interact with.
+    const reconnectBox = d.reconnect && !d.reconnect.done ? reconnectPanel(d) : null
+    renderBoard(board, d, { reconnectBox })
     const cellAward = d.chargeCellProgress?.earnedNow || 0
     const cellAwardKey = `${d.id}:${d.chargeCellProgress?.earnedThisDistrict || 0}`
     if (cellAward > 0 && celebratedCellAward !== cellAwardKey) {
@@ -111,7 +118,6 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
         ], { duration: 1100, easing: 'cubic-bezier(.22,.8,.25,1)' }).finished.finally(() => spark.remove())
       }
     }
-    if (d.reconnect) board.appendChild(reconnectPanel(d))
     board.appendChild(shelf(state, mapD))
     // Fires once, on the refresh that reports the district finished.
     if (d.restoredNow && celebratedFor !== d.id) {
@@ -308,46 +314,77 @@ function paintMissionPanel(box, d, res) {
     return
   }
 
-  // A mission is open — show live progress either way.
+  // A mission is open — show live progress either way. "Ready" (joined) is
+  // its own state, separate from "streamed" — a joined agent who hasn't
+  // streamed yet is still fully counted toward the team, just with nothing
+  // to show on the shared total yet. Leading with a plain-language status
+  // line before the bars, because "1/2 joined" reads as a fraction to parse,
+  // not a sentence to understand at a glance.
   const joined = m.participants.filter((p) => p.status === 'joined')
-  const streamedCount = joined.filter((p) => p.streamed).length
-  box.appendChild(el('div', 'goal-line', `
-    <div class="pbar" style="flex:1"><div class="pfill${joined.length === m.requiredAgents ? ' done' : ''}" style="width:${Math.round((joined.length / m.requiredAgents) * 100)}%"></div></div>
-    <span class="count">${joined.length}/${m.requiredAgents} joined</span>
+  const pending = m.participants.filter((p) => p.status === 'invited')
+  const need = Math.max(0, m.requiredAgents - joined.length)
+
+  box.appendChild(el('div', 'team-status', `
+    <b>Team: ${joined.length} of ${m.requiredAgents} ready</b>
+    ${need > 0 ? `<span> &middot; Need ${need} more agent${need === 1 ? '' : 's'}</span>` : ''}
   `))
+  box.appendChild(labeledBar('Team members', `${joined.length}/${m.requiredAgents}`,
+    Math.round((joined.length / m.requiredAgents) * 100), need === 0))
+
   if (res.variant === 'connect' && m.sharedTrack) {
     const st = m.sharedTrack
     const pct = Math.min(100, Math.round((st.progress / Math.max(1, st.target)) * 100))
-    box.appendChild(el('div', 'goal-line', `
-      <div class="pbar" style="flex:1"><div class="pfill${st.progress >= st.target ? ' done' : ''}" style="width:${pct}%"></div></div>
-      <span class="count">${st.progress}/${st.target}</span>
-    `))
-    box.appendChild(el('div', 'dim', `${esc(st.label)} — everyone's own plays since joining, added together`))
+    box.appendChild(labeledBar(`Combined ${esc(st.label)} streams`, `${st.progress}/${st.target}`,
+      pct, st.progress >= st.target))
+    box.appendChild(el('p', 'muted', `Everyone's own plays of ${esc(st.label)} since they personally joined, added together.`))
   } else if (res.variant === 'connect') {
-    box.appendChild(el('div', 'dim', `${streamedCount}/${joined.length} have streamed toward their own goals since joining`))
+    const streamedCount = joined.filter((p) => p.streamed).length
+    box.appendChild(el('p', 'muted', `${streamedCount}/${joined.length} have streamed toward their own goals here since joining.`))
+  }
+
+  // Only relevant while a slot is still open — once the team's full, extra
+  // pending invites can't do anything either way.
+  if (pending.length && need > 0) {
+    box.appendChild(el('p', 'muted',
+      `Only ${need} more acceptance${need === 1 ? '' : 's'} needed to fill the team — any other pending invites can stay pending or expire on their own.`))
   }
 
   const list = el('div', 'reconnect-roster')
   for (const p of m.participants) {
-    const statusText = p.status === 'invited' ? 'invited' : res.variant === 'connect' ? (p.streamed ? '✓ streamed' : 'waiting') : '✓ joined'
+    // Three separate states, not one blended one: still-pending, ready
+    // (joined) with nothing counted yet, and ready with a real number.
+    const statusText = p.status === 'invited' ? 'Invite pending'
+      : res.variant === 'invite' ? '✓ Ready'
+      : `Ready &middot; ${p.streams ?? 0} stream${(p.streams ?? 0) === 1 ? '' : 's'}`
     const row = el('div', 'reconnect-agent' + (p.status === 'invited' ? ' is-pending' : ''), `
       <span>${esc(p.codename)}${p.isMe ? ' (you)' : ''}</span>
       <span>${statusText}</span>
     `)
+    const msg = el('div', 'reconnect-row-msg')
     // Only the mission creator sees this, and only next to someone who
     // hasn't contributed anything yet — server already enforces both, this
     // is just not offering a button that would only come back as an error.
+    // Still-pending vs. already-joined reads as two different actions even
+    // though the server call is the same one either way.
     if (m.isCreator && p.removable) {
-      const removeBtn = el('button', 'reconnect-remove', 'Remove')
+      const removeBtn = el('button', 'reconnect-remove', p.status === 'invited' ? 'Cancel invite' : 'Remove')
       removeBtn.onclick = async () => {
         removeBtn.disabled = true
+        msg.textContent = ''
+        msg.classList.remove('is-error')
         const r = await call('removeReconnectParticipant', { agentNo: me, districtId: d.id, targetAgentNo: p.agentNo })
-        if (r.success) { toast(`Removed ${p.codename}`); refresh() }
-        else { toast(reconnectError(r.error)); removeBtn.disabled = false }
+        if (r.success) {
+          toast(p.status === 'invited' ? `Cancelled the invite to ${p.codename}` : `Removed ${p.codename}`)
+          refresh()
+        } else {
+          msg.textContent = reconnectError(r.error)
+          msg.classList.add('is-error')
+          removeBtn.disabled = false
+        }
       }
       row.appendChild(removeBtn)
     }
-    list.appendChild(row)
+    list.append(row, msg)
   }
   box.appendChild(list)
 
@@ -373,8 +410,8 @@ function paintMissionPanel(box, d, res) {
     row.append(accept, decline)
     box.appendChild(row)
   } else if (myRow?.status === 'joined') {
-    if (joined.length < m.requiredAgents) {
-      box.appendChild(el('div', 'dim', "Invite someone else already restoring this district — pick from who's currently free below. They'll get a notification to accept."))
+    if (need > 0) {
+      box.appendChild(el('p', 'muted', "Invite someone else already restoring this district — pick from who's currently free below. They'll get a notification to accept."))
       const inviteRow = el('div', 'reconnect-invite-row')
       // Agent numbers are never shown to players (see the roster above) —
       // there's no way to "invite by agent number" if you'd never know
@@ -383,31 +420,45 @@ function paintMissionPanel(box, d, res) {
       const select = el('select', 'ob-input')
       select.innerHTML = `<option value="">Loading…</option>`
       select.disabled = true
+      // Stays disabled until an actual agent is picked, not just once the
+      // list finishes loading — nothing to invite with an empty selection.
       const inviteBtn = el('button', 'btn btn-ghost', 'Invite')
       inviteBtn.disabled = true
       inviteRow.append(select, inviteBtn)
       box.appendChild(inviteRow)
+      const inviteMsg = el('div', 'reconnect-row-msg')
+      box.appendChild(inviteMsg)
+
+      select.onchange = () => { inviteBtn.disabled = !select.value }
 
       call('getInviteCandidates', { agentNo: me, districtId: d.id }).then((res2) => {
         if (!res2?.success) { select.innerHTML = `<option value="">Couldn't load — try again</option>`; return }
         if (!res2.candidates?.length) {
-          select.innerHTML = `<option value="">No one else free to invite right now</option>`
+          // The dropdown already excludes anyone already invited, joined,
+          // or not actively restoring this district — an empty list means
+          // there's genuinely nobody free right now, not a filter mistake.
+          inviteRow.remove()
+          box.appendChild(el('p', 'muted', 'No free agents right now—check again soon.'))
           return
         }
         select.innerHTML = `<option value="">Choose an agent…</option>`
           + res2.candidates.map((c) => `<option value="${esc(c.agentNo)}">${esc(c.codename)}</option>`).join('')
         select.disabled = false
-        inviteBtn.disabled = false
       })
 
       inviteBtn.onclick = async () => {
         const inviteeAgentNo = select.value
-        if (!inviteeAgentNo) { toast(reconnectError('invitee_required')); return }
+        if (!inviteeAgentNo) return // button is disabled in this state — belt and suspenders
         inviteBtn.disabled = true
+        inviteMsg.textContent = ''
+        inviteMsg.classList.remove('is-error')
         const r = await call('inviteReconnectMission', { agentNo: me, districtId: d.id, inviteeAgentNo })
-        inviteBtn.disabled = false
         if (r.success) { toast(`Invited ${r.inviteeCodename || 'them'}`); refresh() }
-        else toast(reconnectError(r.error))
+        else {
+          inviteMsg.textContent = reconnectError(r.error)
+          inviteMsg.classList.add('is-error')
+          inviteBtn.disabled = false
+        }
       }
     }
   }
@@ -415,6 +466,18 @@ function paintMissionPanel(box, d, res) {
   // mission the caller already participates in (invited or joined), so
   // reaching this panel with an open mission and no row of your own is no
   // longer possible. That was the "Join this mission" matchmaking button.
+}
+
+/** A progress bar with its own label directly above it ("Team members —
+ *  1/2", "Combined Haegeum streams — 22/100") instead of leaning on the
+ *  number at the right alone to say what's being measured. */
+function labeledBar(label, countText, pct, done) {
+  const wrap = el('div', 'lbar')
+  wrap.innerHTML = `
+    <div class="lbar-head"><span>${esc(label)}</span><b>${esc(countText)}</b></div>
+    <div class="pbar"><div class="pfill${done ? ' done' : ''}" style="width:${Math.max(0, Math.min(100, pct))}%"></div></div>
+  `
+  return wrap
 }
 
 /* ── The shelf ──────────────────────────────────────────────────────────
