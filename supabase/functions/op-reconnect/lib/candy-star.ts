@@ -263,7 +263,7 @@ export async function getAlpacaOptions(supabase: SupabaseDB, _params: any): Prom
 
   const albums = Object.values(albumsMap || {})
     .filter((a: any) => a?.name && (a.trackKeys || []).length > 0 && !BANNED_ALBUM_NAMES.has(normalizeKey(a.name)))
-    .map((a: any) => ({ name: a.name, trackKeys: a.trackKeys, count: a.trackKeys.length }))
+    .map((a: any) => ({ id: a.id, name: a.name, trackKeys: a.trackKeys, count: a.trackKeys.length }))
     .sort((a: any, b: any) => a.name.localeCompare(b.name))
 
   return { success: true, songs, albums }
