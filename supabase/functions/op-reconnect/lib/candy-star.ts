@@ -331,7 +331,7 @@ async function alpacaQuickPlan(supabase: SupabaseDB): Promise<{ focus: any[]; al
   return { focus, album }
 }
 
-const ALPACA_DAILY_LIMIT = 3
+const ALPACA_DAILY_LIMIT = 5
 const ALPACA_WING_COST = 1
 
 // Custom-tab combo lock: an agent picking their own focus songs/albums may
