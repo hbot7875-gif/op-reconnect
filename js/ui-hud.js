@@ -42,6 +42,19 @@ let syncInFlight = false
 let lastSyncAt = 0
 const SYNC_COOLDOWN_MS = 15_000
 
+/* ── codename privacy toggle ──
+   Streaming/screenshotting agents don't always want their codename visible
+   on screen — the eye button swaps the HUD label for the generic "Agent"
+   placeholder. Persisted in localStorage (not module state) so it survives
+   a reload instead of quietly resetting mid-stream. */
+const HUD_CODE_HIDDEN_KEY = 'rc_hud_codename_hidden'
+function isCodenameHidden() {
+  try { return localStorage.getItem(HUD_CODE_HIDDEN_KEY) === '1' } catch (_) { return false }
+}
+function setCodenameHidden(hidden) {
+  try { localStorage.setItem(HUD_CODE_HIDDEN_KEY, hidden ? '1' : '0') } catch (_) {}
+}
+
 /** Sum of counted progress this agent can see change — good enough to tell
  *  "something new landed" from "nothing new yet" without pretending to be
  *  the server's own stream count. */
@@ -114,17 +127,22 @@ export function renderHud(container, state) {
   const streakLabel = p.streak.current > 0 ? `🔥 ${p.streak.current}D` : '○ 0D'
 
   const invites = state.invites || []
+  const codenameHidden = isCodenameHidden()
+  const displayCode = codenameHidden ? 'Agent' : esc(p.codename)
 
   container.innerHTML = `
     <div class="hud-inner">
       <div class="hud-row">
-        <button class="hud-identity" id="levelPill" type="button" title="Open Agent Dossier">
+        <div class="hud-identity" id="levelPill" role="button" tabindex="0" title="Open Agent Dossier">
           <span class="hud-crest${agentBadge ? ' has-badge' : ''}" aria-hidden="true"><i></i><b>${agentBadge ? agentBadge.icon : '⟭⟬'}</b></span>
           <span class="hud-who">
-            <span class="hud-code">${esc(p.codename)}</span>
+            <span class="hud-code-row">
+              <span class="hud-code">${displayCode}</span>
+              <button class="hud-eye" id="hudEyeBtn" type="button" title="${codenameHidden ? 'Show codename' : 'Hide codename'}" aria-label="${codenameHidden ? 'Show codename' : 'Hide codename'}">${codenameHidden ? '🙈' : '👁'}</button>
+            </span>
             <span class="hud-meta"><em>${esc(p.rank.title)}</em><i>·</i><b>LV ${lvl.level}</b></span>
           </span>
-        </button>
+        </div>
         <div class="hud-streak" title="${p.streak.current} days in a row">${streakLabel}</div>
         <button class="hud-sync" id="syncBtn" type="button" title="Sync streams now">🔄</button>
         <button class="hud-bell" id="bellBtn" type="button" title="Invites"
@@ -139,7 +157,16 @@ export function renderHud(container, state) {
       ${boost ? `<span class="hud-boost">${boost.multiplier}&times; BOOST &middot; ${boost.minsLeft}m</span>` : ''}
     </div>
   `
-  container.querySelector('#levelPill').onclick = () => showOverlay(progressSheet(state))
+  const levelPill = container.querySelector('#levelPill')
+  levelPill.onclick = () => showOverlay(progressSheet(state))
+  levelPill.onkeydown = (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showOverlay(progressSheet(state)) }
+  }
+  container.querySelector('#hudEyeBtn').onclick = (e) => {
+    e.stopPropagation()
+    setCodenameHidden(!codenameHidden)
+    renderHud(container, state)
+  }
   container.querySelector('#bellBtn').onclick = () => showOverlay(invitesSheet(state))
   container.querySelector('#syncBtn').onclick = () => syncNow(state)
   paintSyncButton()

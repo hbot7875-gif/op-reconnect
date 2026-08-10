@@ -26,7 +26,6 @@ export function renderSettings(container, state) {
 
   wrap.appendChild(el('div', 'pack-head', `
     <span class="pack-eyebrow">⚙ Settings</span>
-    <span class="pack-name">${esc(state?.player?.codename || 'Agent')}</span>
   `))
 
   const body = el('div', 'set-body')

@@ -21,7 +21,6 @@ export async function renderCandyStar(container, state) {
 
   wrap.appendChild(el('div', 'pack-head', `
     <span class="pack-eyebrow">🍬 Candy Star Generator</span>
-    <span class="pack-name">${esc(state?.player?.codename || 'Agent')}</span>
   `))
   wrap.appendChild(el('div', 'cs-screen-sub',
     'Make an alpaca 🦙 — a real Spotify playlist built around the current goals, woven with enough variety to play like a real playlist.'))

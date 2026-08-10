@@ -78,7 +78,6 @@ export function renderResources(container, state) {
 
   wrap.appendChild(el('div', 'pack-head', `
     <span class="pack-eyebrow">🎒 Agent Pack</span>
-    <span class="pack-name">${esc(state?.player?.codename || 'Agent')}</span>
   `))
 
   // ── Wallet — the only three balances actually spent ──
