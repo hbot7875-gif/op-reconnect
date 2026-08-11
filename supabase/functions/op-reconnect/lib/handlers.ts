@@ -16,6 +16,7 @@ import { creditChargeCells, STREAMS_PER_CHARGE_CELL } from './charge-economy.ts'
 import { getAgentChargeView } from './agent-charge.ts'
 import { levelFor, applyLevelUpIfNeeded, nextLevelRewards } from './leveling.ts'
 import { getActiveBroadcasts } from './broadcasts.ts'
+import { logFeedEvent, getCityFeed } from './feed.ts'
 
 // rc_agents (migration 016) is this season's own account table — a clean
 // break from the old site's `agents`. Migrations 019/020 added the columns
@@ -183,10 +184,30 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
       restoredNow = true
       // Ward badge when every non-centerpiece district in the ward is restored
       const ward = content.districts.filter((d) => d.ward_id === districtRow?.ward_id && !d.is_centerpiece)
-      if (ward.length > 0 && ward.every((d) => restored.has(d.id))) {
+      const wardJustCompleted = ward.length > 0 && ward.every((d) => restored.has(d.id))
+      if (wardJustCompleted) {
         await supabase.from('rc_badges').upsert(
           { agent_no: player.agent_no, badge_id: `ward:${districtRow?.ward_id}` },
           { onConflict: 'agent_no, badge_id', ignoreDuplicates: true })
+        // Bigger, rarer than the per-district ward_progress line below —
+        // dedup'd on the same badge identity so it can only ever log once.
+        await logFeedEvent(supabase, player.agent_no, 'ward_completed',
+          { wardName: content.wards.find((w) => w.id === districtRow?.ward_id)?.name || null },
+          `ward-badge:${player.agent_no}:${districtRow?.ward_id}`)
+      }
+
+      // A ReConnect goal completing is the one moment two DIFFERENT agents
+      // achieve something together — the whole point of this feed. Both
+      // partners independently reach districtComplete on their own poll, so
+      // this can log once per side (each naming the other), dedup'd the
+      // same as the district-restore event so neither side repeats it.
+      if (reconnect?.done && reconnect.mission?.participants) {
+        const partner = reconnect.mission.participants.find((p: any) => !p.isMe)
+        if (partner) {
+          await logFeedEvent(supabase, player.agent_no, 'reconnect_completed',
+            { partnerCodename: partner.codename },
+            `reconnect:${player.agent_no}:${activePd.district_id}`)
+        }
       }
 
       // District-completion XP, once — dedup_key means a re-poll of this
@@ -197,6 +218,19 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
         { agent_no: player.agent_no, amount: xpAwarded, source: 'district',
           dedup_key: `district:${player.agent_no}:${activePd.district_id}`, meta: { districtId: activePd.district_id } },
         { onConflict: 'dedup_key', ignoreDuplicates: true })
+
+      // Live City Feed — no district name, no guardian handle, no memory,
+      // just "someone restored an area" plus the ward's now-current
+      // percentage. Piggybacks the same district dedup_key as the XP award
+      // above, so this can never double-log on a re-poll.
+      await logFeedEvent(supabase, player.agent_no, 'district_restored', {},
+        `district:${player.agent_no}:${activePd.district_id}`)
+      if (ward.length > 0) {
+        await logFeedEvent(supabase, player.agent_no, 'ward_progress',
+          { wardName: content.wards.find((w) => w.id === districtRow?.ward_id)?.name || null,
+            restoredCount: ward.filter((d) => restored.has(d.id)).length, totalCount: ward.length },
+          `ward:${player.agent_no}:${activePd.district_id}`)
+      }
 
       // The drop — one item, once per district. Guarded on an existing row
       // rather than a ledger dedup_key since rc_player_items has no unique
@@ -211,6 +245,10 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
           if (itemRow) {
             await supabase.from('rc_player_items').insert({ agent_no: player.agent_no, item_id: rolledId, district_id: activePd.district_id })
             itemDropped = { itemId: itemRow.id, name: itemRow.name, kind: itemRow.kind, era: itemRow.era, rarity: itemRow.rarity, blurb: itemRow.blurb }
+            // Rarity only, never the item's name — same "don't spoil it"
+            // reasoning as everything else the feed omits.
+            await logFeedEvent(supabase, player.agent_no, 'item_dropped',
+              { rarity: itemRow.rarity || null }, `item:${player.agent_no}:${activePd.district_id}`)
           }
         }
       }
@@ -311,6 +349,10 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
   // stale pre-request count would silently erase whatever the rescue just
   // spent.
   const levelUp = await applyLevelUpIfNeeded(supabase, content, player, xp, agentCharge.freezeChargesRemaining)
+  if (levelUp) {
+    await logFeedEvent(supabase, player.agent_no, 'level_up', { level: levelUp.level, name: levelUp.name },
+      `level:${player.agent_no}:${levelUp.level}`)
+  }
   const freezeChargesAvailable = agentCharge.freezeChargesRemaining + (levelUp?.streakFreezeGranted || 0)
   const joinedDate = kstDateOf(Math.floor(new Date(player.joined_at).getTime() / 1000))
   const streak = await computeStreak(supabase, player.agent_no, content, cap, freezeChargesAvailable, joinedDate)
@@ -340,6 +382,10 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
   // already fetches (main.js, every 90s) rather than a separate mechanism.
   // See lib/broadcasts.ts / migrations/031_rc_broadcasts.sql.
   const broadcasts = await getActiveBroadcasts(supabase)
+  // Live City Feed — same "folded into the normal poll" shape as broadcasts
+  // above, so the World screen's activity card refreshes on the existing
+  // ~90s cycle with no extra client request. See feed.ts / migrations/048.
+  const cityFeed = await getCityFeed(supabase)
 
   return {
     success: true,
@@ -373,6 +419,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     eraTimeline,
     invites,
     broadcasts,
+    cityFeed,
     sideMissions,
     today: {
       kstDate: today,

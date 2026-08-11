@@ -9,6 +9,7 @@ import { normKeyFull } from './text.ts'
 import { addDaysStr, kstDatesBetween, kstWeekKey } from './kst.ts'
 import type { SupabaseDB } from './config.ts'
 import type { DayBucket } from './transmission.ts'
+import { logFeedEvent } from './feed.ts'
 
 const DAILY_REQUIRED = 1
 const WEEKLY_REQUIRED = 20
@@ -133,6 +134,7 @@ export async function awardDailySideMissionXp(
     dedup_key: `side-mission:${agentNo}:${today}`,
     meta: { tracks: mission.tracks.map((track) => track.id) },
   }, { onConflict: 'dedup_key', ignoreDuplicates: true })
+  await logFeedEvent(supabase, agentNo, 'side_mission_daily', {}, `side-mission:${agentNo}:${today}`)
 }
 
 /** The week-level counterpart to awardDailySideMissionXp above — same
@@ -155,4 +157,5 @@ export async function awardWeeklySideMissionXp(
     dedup_key: `side-mission-week:${agentNo}:${mission.weekKey}`,
     meta: { tracks: mission.tracks.map((track) => track.id) },
   }, { onConflict: 'dedup_key', ignoreDuplicates: true })
+  await logFeedEvent(supabase, agentNo, 'side_mission_weekly', {}, `side-mission-week:${agentNo}:${mission.weekKey}`)
 }

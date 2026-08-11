@@ -31,6 +31,7 @@ import { openShare } from './share.js'
 import { bombSheet } from './bomb-sheet.js'
 import { agentChargeSheet } from './agent-charge.js'
 import { broadcastCards } from './broadcasts.js'
+import { cityFeedCard } from './city-feed.js'
 
 export function renderWorld(container, state) {
   container.innerHTML = ''
@@ -56,6 +57,14 @@ export function renderWorld(container, state) {
   command.appendChild(mission)
   command.appendChild(commandTools(state))
   wrap.appendChild(command)
+
+  // "Other agents are here right now" — right under the map/Bomb scene,
+  // high enough that it doesn't need scrolling to notice. command-scene
+  // above is an absolutely-positioned overlay layout (map + Bomb dial
+  // composited on a background), not normal flow, so this has to sit
+  // outside it as a normal sibling rather than another absolute child.
+  // See city-feed.js's header comment.
+  wrap.appendChild(cityFeedCard(state))
 
   if (state.sideMissions) wrap.appendChild(sideMissionsPanel(state.sideMissions))
 

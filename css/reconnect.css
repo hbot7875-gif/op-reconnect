@@ -2743,6 +2743,27 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .bcast-title { font-family: var(--disp); font-weight: 800; font-size: 15px; margin-top: 8px; }
 .bcast-msg { color: var(--muted); font-size: 13.5px; line-height: 1.55; margin-top: 5px; }
 
+/* Live City Feed / "City News" — a single rotating headline, not a growing
+   list: one sentence, fades out, replaced by the next. No avatars, no big
+   icons, no "View all". The point is just "other agents are here." */
+.feed-card:empty { display: none; }
+.feed-card {
+  background: var(--surface); border: 1px solid rgba(255,255,255,0.08);
+  border-radius: var(--r-lg); padding: 12px 16px;
+}
+.feed-eyebrow {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 1.6px; text-transform: uppercase;
+  color: var(--dim); margin-bottom: 8px;
+}
+.feed-ticker {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  font-size: 13px; min-height: 1.4em;
+  transition: opacity 0.35s ease;
+}
+.feed-ticker.is-fading { opacity: 0; }
+.feed-text { color: var(--muted); }
+.feed-time { color: var(--dim); font-family: var(--mono); font-size: 11px; flex-shrink: 0; }
+
 /* ── Rankings ───────────────────────────────────────────────────────────
    Reached from the persistent navigation. Gold marks the
    player's own row and the top-3 medal slots — the same "good news" gold

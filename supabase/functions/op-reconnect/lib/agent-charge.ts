@@ -15,6 +15,7 @@ import { trackArtistOverrides } from './config.ts'
 import { todayKst, kstWeekKey } from './kst.ts'
 import { countedArtistPlays } from './text.ts'
 import { ERA_CATALOG, eraTrackKeys, eraTrackTitle } from './era-timeline.ts'
+import { logFeedEvent } from './feed.ts'
 
 export const HOURS_PER_CHARGE_CELL = 2
 export const HOURS_PER_LIT_ERA = 10
@@ -127,6 +128,10 @@ async function computeWeeklyEraCards(
     if (!error && inserted) {
       stored.set(era.id, inserted)
       newlyLitEraIds.push(era.id)
+      // The insert above only ever succeeds once per agent/era/week (see
+      // the `stored.has(era.id)` skip guard just above), so this can't
+      // double-log on a repoll either.
+      await logFeedEvent(supabase, agentNo, 'era_lit', { eraName: era.name }, `era-lit:${agentNo}:${weekKey}:${era.id}`)
     }
   }
 
@@ -325,7 +330,14 @@ export async function feedCharge(supabase: SupabaseDB, agentNo: string, cellsToS
   if (error) return { success: false, error: error.message }
   const row = Array.isArray(data) ? data[0] : null
   if (!row) return { success: false, error: 'not_enough_charge_cells' }
-  return { success: true, hoursAdded: cellsToSpend * HOURS_PER_CHARGE_CELL, chargedUntil: row.charged_until }
+  const hoursAdded = cellsToSpend * HOURS_PER_CHARGE_CELL
+  // Unlike the feed's other event types, feeding is a real, repeatable
+  // action (not a one-time completion) — rc_feed_charge's own atomicity is
+  // what prevents a double-spend, so this dedup_key just needs to be unique
+  // per call, not tied to a natural "only once ever" identity.
+  await logFeedEvent(supabase, agentNo, 'bomb_fed', { hoursAdded },
+    `bomb-fed:${agentNo}:${Date.now()}`)
+  return { success: true, hoursAdded, chargedUntil: row.charged_until }
 }
 
 export async function setAutoFeed(supabase: SupabaseDB, agentNo: string, on: boolean) {

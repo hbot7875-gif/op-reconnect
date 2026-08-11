@@ -12,6 +12,7 @@ import type { SupabaseDB, GameContent } from './config.ts'
 import { todayKst } from './kst.ts'
 import { totalXp } from './derive.ts'
 import { levelFor } from './leveling.ts'
+import { logFeedEvent } from './feed.ts'
 
 const WINGS_PER_DAY = 3
 const WINGS_COST_XP = 1
@@ -143,6 +144,9 @@ export async function claimTicket(supabase: SupabaseDB, content: GameContent, pa
     await supabase.from('rc_players').update({ tickets: 0 }).eq('agent_no', agentNo).eq('tickets', 1)
     return { success: false, error: itemError.message }
   }
+
+  // Guarded by the compare-and-set above, so this only ever fires once.
+  await logFeedEvent(supabase, agentNo, 'ticket_claimed', {}, `ticket:${agentNo}`)
 
   return { success: true, tickets: 1 }
 }

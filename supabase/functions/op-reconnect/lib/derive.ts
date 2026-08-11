@@ -11,6 +11,7 @@ import type { DayBucket, FrozenTransmission } from './transmission.ts'
 import type { GameContent, SupabaseDB } from './config.ts'
 import { limits, streamsPerXpFor, PERSONAL_COUNT_CAP, trackArtistOverrides } from './config.ts'
 import type { FrozenGoals } from './districts.ts'
+import { logFeedEvent } from './feed.ts'
 
 export interface DailyRow {
   agent_no: string
@@ -309,10 +310,17 @@ export async function computeStreak(
 export async function awardStreakBadges(supabase: SupabaseDB, agentNo: string, streak: number) {
   for (const t of [7, 30, 100]) {
     if (streak >= t) {
-      await supabase.from('rc_badges').upsert(
+      // .select() on an ignoreDuplicates upsert returns the row only when
+      // this call was the one that actually inserted it (a real ON CONFLICT
+      // DO NOTHING skip returns nothing) — that's the "did this just happen"
+      // signal the feed needs, with no extra latch column.
+      const { data } = await supabase.from('rc_badges').upsert(
         { agent_no: agentNo, badge_id: `streak:${t}` },
         { onConflict: 'agent_no, badge_id', ignoreDuplicates: true },
-      )
+      ).select('badge_id')
+      if (data && data.length > 0) {
+        await logFeedEvent(supabase, agentNo, 'streak_badge', { days: t }, `streak-badge:${agentNo}:${t}`)
+      }
     }
   }
 }
