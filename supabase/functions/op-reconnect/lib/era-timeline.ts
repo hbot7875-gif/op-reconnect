@@ -77,9 +77,24 @@ export const ERA_CATALOG: EraDef[] = [
     description: 'The foundation: Dreams, rebellion, and social commentary.',
     albums: ['2 Cool 4 Skool', 'O!RUL8,2?', 'Skool Luv Affair'],
     tracks: [
-      'We Are Bulletproof Pt.2', 'No More Dream', 'Like',
-      'N.O', 'We On', 'If I Ruled the World', 'Coffee', 'BTS Cypher Pt.1', 'Attack on Bangtan', 'Paldogangsan',
-      'Boy In Luv', 'Where You From', 'Just One Day', 'Tomorrow', 'BTS Cypher Pt.2: Triptych', 'Spine Breaker', 'Jump',
+      // Same comma-vs-period "Pt." punctuation split as Dark & Wild's Cypher
+      // Pt.3 below — AGENT039's own scrobbles were 100% the comma form
+      // ("We Are Bulletproof, Pt. 2"), so this track never crossed the
+      // threshold for them at all despite real, repeated plays. Confirmed
+      // via a network-wide audit (docs/bug-resolution-log.md) that Cypher
+      // Pt.1 and Pt.2: Triptych below have the exact same split.
+      { title: 'We Are Bulletproof Pt.2', aliases: ['We Are Bulletproof, Pt. 2'] },
+      'No More Dream', 'Like',
+      'N.O', 'We On', 'If I Ruled the World', 'Coffee',
+      { title: 'BTS Cypher Pt.1', aliases: ['BTS Cypher, Pt. 1'] },
+      'Attack on Bangtan',
+      // "Paldogangsan" (one word) vs "Paldo Gangsan" (two) — not a
+      // punctuation split, but the same "real metadata disagrees on the
+      // title" root cause, so it gets the same alias treatment.
+      { title: 'Paldogangsan', aliases: ['Paldo Gangsan'] },
+      'Boy In Luv', 'Where You From', 'Just One Day', 'Tomorrow',
+      { title: 'BTS Cypher Pt.2: Triptych', aliases: ['BTS Cypher, Pt. 2: Triptych'] },
+      'Spine Breaker', 'Jump',
     ],
   },
   {
@@ -131,7 +146,9 @@ export const ERA_CATALOG: EraDef[] = [
     tracks: [
       'DNA', 'Pied Piper', 'Best Of Me', 'Dimple', 'Go Go', 'MIC Drop',
       "Don't Leave Me", 'Crystal Snow', 'Let Go',
-      'Fake Love', 'The Truth Untold', '134340', 'Paradise', 'Love Maze', 'Magic Shop', 'Airplane Pt.2', 'Anpanman', 'So What',
+      'Fake Love', 'The Truth Untold', '134340', 'Paradise', 'Love Maze', 'Magic Shop',
+      { title: 'Airplane Pt.2', aliases: ['Airplane, Pt. 2'] },
+      'Anpanman', 'So What',
       'Idol', 'Euphoria', 'Trivia 起 : Just Dance', 'Epiphany', 'Trivia 承 : Love',
       'Tear', "I'm Fine", 'Answer : Love Myself', 'Her', 'Trivia 轉 : Seesaw', 'Singularity',
     ],
