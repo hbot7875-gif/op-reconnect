@@ -399,7 +399,7 @@ each patch and only ever raised (never lowered), so a real-time poll from an
 active player mid-repair couldn't get clobbered. AGENT044's stream XP for
 2026-08-10 went 14→16; 2026-08-11 (mid-day at repair time) went 4→14; her
 lifetime total XP went 32→54.
-Commit: `<pending>`.
+Commit: `d48478f`.
 
 **Follow-up: "keep xp same value in level like in ranking page."**
 The leaderboard relabel above fixed the leaderboard side but left the
