@@ -377,6 +377,43 @@ Commit: `9b7111d`.
 
 ---
 
+## Symptom: "My Charge Cells aren't increasing"
+
+**AGENT055 and AGENT018, independently. Not a bug either time — same
+root confusion twice in a row.**
+Method: rather than trust the stored `charge_cells_awarded` counter,
+replicated `creditChargeCells`'s exact math (`albumGoalStreamTotal` /
+`windowedPlays`, districts.ts) in a throwaway Node script against each
+agent's real `rc_daily_activity` rows and frozen album goals.
+- AGENT055: 306 real counted album-goal-track streams since activating
+  → `floor(306/20) = 15` → stored `charge_cells_awarded` is exactly
+  `15`. Matches.
+- AGENT018: a district activated only hours earlier, 21 streams so far
+  → `floor(21/20) = 1` → stored value is exactly `1`. Matches.
+Both agents' WALLET balance (`rc_players.charge_cells`) read `0` —
+that's what "not increasing" actually meant. Root cause: each cell was
+being spent (auto-feed for AGENT018, whose Bomb had already gone dark;
+manual feeding for AGENT055) within moments of being earned, so the
+wallet number never sat above 0 long enough to visibly move, even
+though the crediting pipeline was working exactly as designed both
+times.
+Fix: `chargeCellsEarned` (lifetime sum of `charge_cells_awarded` across
+every district the agent has ever activated — restored ones included,
+since that counter only ever grows) and `chargeCellsSpent` (a pure
+`earned - onHand` subtraction; feeding is the only spend path and
+there's no refund path, so no separate ledger was needed) added to
+`getAgentChargeView`. Surfaced as "N earned all-time · N fed so far"
+under the existing wallet line in the Personal Charge sheet, so earning
+stays visible even when the wallet itself reads 0.
+Lesson: **when a stat legitimately spends as fast as it's earned, the
+"current balance" view alone will always look broken to the player** —
+this needs the same "show both sides" treatment the XP mismatch fixes
+above needed, just for a resource that has a real spend path instead of
+two different reference frames.
+Commit: `c7c51c6`.
+
+---
+
 ## Symptom: UI doesn't do what it visually promises
 
 **Candy Star Custom builder: a clearly-valid "2 songs + 1 album" combo
