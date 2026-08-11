@@ -146,10 +146,25 @@ async function awardStreamsXp(
   // never re-derived smaller) — this floor is just a defensive guard against
   // a stale/out-of-order read, not something normal operation should hit.
   const deltaCounted = Math.max(0, counted - lastCounted)
-  const deltaXp = Math.floor((deltaCounted / perXp) * personalBoostMult)
+  // deltaCounted alone is almost never an exact multiple of perXp (a poll
+  // can land after just 1-2 new streams), and flooring EACH delta on its
+  // own throws away that remainder for good — floor(a/n)+floor(b/n) is
+  // routinely less than floor((a+b)/n), so a player who polls often (every
+  // action re-triggers this) can lose the majority of a day's earned XP to
+  // repeated fractional truncation, even though counted itself is correct.
+  // Carrying the leftover, not-yet-converted streams forward in
+  // meta.remainder (instead of resetting to 0 every call) means every
+  // stream is only ever "spent" once it and its carried-over siblings
+  // reach a full perXp chunk — nothing is silently dropped, just deferred
+  // to the next poll that pushes the total over the next chunk boundary.
+  const priorRemainder = existing?.meta?.remainder || 0
+  const available = priorRemainder + deltaCounted
+  const wholeChunks = Math.floor(available / perXp)
+  const deltaXp = Math.floor(wholeChunks * personalBoostMult)
+  const remainder = available - wholeChunks * perXp
   const finalAmount = priorAmount + deltaXp
   await supabase.from('rc_xp_ledger').upsert(
-    { agent_no: agentNo, amount: finalAmount, source: 'streams', dedup_key: `streams:${agentNo}:${date}`, meta: { counted } },
+    { agent_no: agentNo, amount: finalAmount, source: 'streams', dedup_key: `streams:${agentNo}:${date}`, meta: { counted, remainder } },
     { onConflict: 'dedup_key' },
   )
 }

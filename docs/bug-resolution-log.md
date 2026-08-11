@@ -363,6 +363,44 @@ number is *lifetime total* XP. Nothing distinguished them visually.
 Fix: relabeled the leaderboard's unit from "XP" to "total XP".
 Commit: `1144ea1`.
 
+**"XP is stuck" — AGENT044, plus a network-wide audit finding 68 more agents
+losing XP the same way.**
+Root cause: DIFFERENT from the expired-boost bug above, and specific to the
+incremental-delta design that fixed it. `awardStreamsXp` (derive.ts) only
+converts the *delta* of counted goal-streams since the last poll, and used
+to `Math.floor()` each individual delta on its own — but
+`floor(a/perXp) + floor(b/perXp) + ...` is routinely LESS than
+`floor((a+b+...)/perXp)`, since every delta's own sub-`perXp` remainder gets
+thrown away instead of carried to the next poll. A player who polls often
+(every in-app action re-triggers this) can lose most of a day's earned XP
+to repeated fractional truncation even though the underlying counted-streams
+number is completely correct — confirmed for AGENT044 by independently
+recomputing her real scrobbles against her frozen district goals
+(`countedGoalStreams`), which matched her stored `meta.counted` exactly
+(161 and 145 for the two affected days) while her actual awarded `amount`
+was only 14 and 4 — nowhere near `floor(counted/perXp)` (16 and 14).
+Scope check: audited all 407 `rc_xp_ledger` rows with `source='streams'`
+against the guaranteed-safe lower bound `floor(meta.counted/perXp)` (true
+expected is always `≥` this since the boost multiplier is always `≥1`, so
+this check can't produce false positives). **69 of ~91 actively-streaming
+agents affected, 95 day-rows, 307+ XP minimum shortfall network-wide** —
+this was never AGENT044-specific, just the first one reported.
+Fix: `meta.remainder` now carries the unconverted leftover streams forward
+across polls instead of resetting to 0 every call, so a stream is only ever
+"spent" once it (plus whatever was carried over) completes a full `perXp`
+chunk — nothing is silently dropped, only deferred to the poll that
+crosses the next chunk boundary.
+Repair: the code fix only stops *future* truncation — it can't retroactively
+recompute a finalized past day (never touched again by any code path) or
+the portion of "today" that already elapsed before the fix deployed. Backfilled
+all 95 affected rows by raising `amount` to the guaranteed-safe
+`floor(meta.counted/perXp)` floor — read-verified fresh immediately before
+each patch and only ever raised (never lowered), so a real-time poll from an
+active player mid-repair couldn't get clobbered. AGENT044's stream XP for
+2026-08-10 went 14→16; 2026-08-11 (mid-day at repair time) went 4→14; her
+lifetime total XP went 32→54.
+Commit: `<pending>`.
+
 **Follow-up: "keep xp same value in level like in ranking page."**
 The leaderboard relabel above fixed the leaderboard side but left the
 Level detail sheet showing only the in-level number with no qualifier —
