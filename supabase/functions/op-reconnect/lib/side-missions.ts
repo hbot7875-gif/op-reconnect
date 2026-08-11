@@ -3,7 +3,7 @@
 // has a 20-play weekly target. The daily clear replaces the retired Daily
 // Transmission reward and pays +10 XP once through the shared XP ledger.
 
-import { artistAllowed, normKeyFull, normalizeKey } from './text.ts'
+import { normKeyFull } from './text.ts'
 import { addDaysStr, kstDatesBetween, kstWeekKey } from './kst.ts'
 import type { SupabaseDB } from './config.ts'
 import type { DayBucket } from './transmission.ts'
@@ -17,29 +17,24 @@ type SideTrackDefinition = {
   name: string
   artist: string
   aliases: string[]
-  artistAliases: string[]
 }
 
 const TRACKS: SideTrackDefinition[] = [
   {
     id: 'wild-flower', name: 'Wild Flower', artist: 'RM',
     aliases: ['Wild Flower', 'Wild Flower (with Youjeen)', 'Wild Flower (feat. Youjeen)', '야생화', '야생화 Wild Flower'],
-    artistAliases: ['RM', 'Rap Monster'],
   },
   {
     id: 'dont-say-you-love-me', name: "Don't Say You Love Me", artist: 'Jin',
     aliases: ["Don't Say You Love Me", 'Dont Say You Love Me', 'DSYLM'],
-    artistAliases: ['Jin'],
   },
   {
     id: 'haegeum', name: 'Haegeum', artist: 'Agust D',
     aliases: ['Haegeum', '해금', '해금 Haegeum'],
-    artistAliases: ['Agust D', 'Suga'],
   },
   {
     id: 'killin-it-girl', name: "Killin' It Girl", artist: 'j-hope',
     aliases: ["Killin' It Girl", 'Killin It Girl', 'Killing It Girl', "Killin' It Girl (feat. GloRilla)", "Killin' It Girl (Solo Version)"],
-    artistAliases: ['j-hope', 'j hope', 'J-Hope'],
   },
 ]
 
@@ -47,15 +42,23 @@ function trackKeys(track: SideTrackDefinition): string[] {
   return [...new Set(track.aliases.map(normKeyFull).filter(Boolean))]
 }
 
+// Title match only, no artist filter — matching Arirang Mission's own
+// findDailyTrackScrobbles/findTrackScrobbles (the reference this loop was
+// carried forward from) and this file's sibling transmission.ts, whose
+// equivalent per-key tally (frozen.keys' `bucket[k]?.n`) also trusts the
+// track key alone. This used to additionally require the play's own artist
+// tag to word-match a narrow per-track allowlist (just 'RM'/'Rap Monster'
+// for Wild Flower, etc.) — stricter than every other counting path in this
+// codebase, and it silently dropped real plays: plenty of scrobble sources
+// attribute a member's solo track to 'BTS' rather than the member's own
+// name, and that combination never matched. These four titles (Wild
+// Flower, Don't Say You Love Me, Haegeum, Killin' It Girl) don't collide
+// with any other artist's differently-named catalog, so there's no
+// collision risk an artist filter would actually be protecting against —
+// only lost plays for no benefit.
 function countTrack(bucket: DayBucket, track: SideTrackDefinition): number {
-  const artists = track.artistAliases.map(normalizeKey).filter(Boolean)
   let total = 0
-  for (const key of trackKeys(track)) {
-    const entry = bucket[key]
-    if (!entry) continue
-    total += Object.entries(entry.a || {}).reduce(
-      (sum, [artist, count]) => sum + (artistAllowed(artist, artists) ? Number(count) || 0 : 0), 0)
-  }
+  for (const key of trackKeys(track)) total += bucket[key]?.n || 0
   return total
 }
 

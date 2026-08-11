@@ -187,8 +187,15 @@ function progressSheet(state) {
   if (lvl.name) sheet.appendChild(el('h3', '', esc(lvl.name)))
   sheet.appendChild(el('div', 'goal-line', `
     <div class="pbar" style="flex:1"><div class="pfill" style="width:${pct}%"></div></div>
-    <span class="count">${lvl.xpIntoLevel} / ${lvl.xpForNextLevel} XP</span>
+    <span class="count">${lvl.xpIntoLevel} / ${lvl.xpForNextLevel} this level</span>
   `))
+  // Same number, same "total XP" wording as the Ranking board (see
+  // screen-ranking.js) — the in-level count above resets every level-up and
+  // the lifetime total on Ranking never does, so showing only one of them
+  // here (as this sheet used to, bare "XP" with no qualifier on either
+  // screen) reads as a mismatch/bug the moment a player checks both. Both
+  // numbers are real; they're just answering different questions.
+  sheet.appendChild(el('div', 'dim', `${p.xp.toLocaleString()} total XP`))
 
   const rewardLines = []
   if (rewards.fuel) rewardLines.push(`<div class="bd-line"><span>Fuel</span><b>+${rewards.fuel}</b></div>`)
