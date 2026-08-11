@@ -2,6 +2,8 @@
 // from Arirang Mission. One play of every track secures the day; each track also
 // has a 20-play weekly target. The daily clear replaces the retired Daily
 // Transmission reward and pays +10 XP once through the shared XP ledger.
+// Clearing the weekly 20x target on all four tracks pays a separate,
+// one-time weekly bonus the same way — see awardWeeklySideMissionXp.
 
 import { normKeyFull } from './text.ts'
 import { addDaysStr, kstDatesBetween, kstWeekKey } from './kst.ts'
@@ -11,6 +13,16 @@ import type { DayBucket } from './transmission.ts'
 const DAILY_REQUIRED = 1
 const WEEKLY_REQUIRED = 20
 export const SIDE_MISSION_XP = 10
+// Paid once per calendar week, the moment all 4 tracks cross their 20×
+// target — previously nothing rewarded this at all (see
+// docs/bug-resolution-log.md): the weekly grid was tracked and displayed,
+// but only the daily 1× clear ever paid out. Arirang Mission's own
+// equivalent (SIDE_MISSION_TEAM_XP) pays a team bonus for the same
+// milestone; this game has no team structure to hang that off of (see
+// era-timeline.ts's own note on why), so it's a personal bonus instead —
+// same shared XP ledger, same dedup-on-conflict pattern as the daily one,
+// just keyed to the week instead of the day.
+export const SIDE_MISSION_WEEKLY_XP = 30
 
 type SideTrackDefinition = {
   id: string
@@ -99,6 +111,7 @@ export function buildSideMissions(
     dailyRequired: DAILY_REQUIRED,
     weeklyRequired: WEEKLY_REQUIRED,
     xpOnComplete: SIDE_MISSION_XP,
+    weeklyXpOnComplete: SIDE_MISSION_WEEKLY_XP,
     todayDoneCount,
     todayDone: todayDoneCount === tracks.length,
     weekDone: tracks.every((track) => track.weeklyDone),
@@ -118,6 +131,28 @@ export async function awardDailySideMissionXp(
     amount: SIDE_MISSION_XP,
     source: 'side_mission',
     dedup_key: `side-mission:${agentNo}:${today}`,
+    meta: { tracks: mission.tracks.map((track) => track.id) },
+  }, { onConflict: 'dedup_key', ignoreDuplicates: true })
+}
+
+/** The week-level counterpart to awardDailySideMissionXp above — same
+ *  upsert-with-dedup shape, just keyed to mission.weekKey (the week's own
+ *  Monday date, stable all week) instead of a single day, so it only ever
+ *  pays once no matter how many times this poll runs after the 4th track
+ *  crosses 20×. Safe to call on every poll same as the daily one: the
+ *  dedup_key already existing is what makes every call after the first a
+ *  no-op, not a caller-side "did I already pay this" check. */
+export async function awardWeeklySideMissionXp(
+  supabase: SupabaseDB,
+  agentNo: string,
+  mission: SideMissionView,
+) {
+  if (!mission.weekDone) return
+  await supabase.from('rc_xp_ledger').upsert({
+    agent_no: agentNo,
+    amount: SIDE_MISSION_WEEKLY_XP,
+    source: 'side_mission_week',
+    dedup_key: `side-mission-week:${agentNo}:${mission.weekKey}`,
     meta: { tracks: mission.tracks.map((track) => track.id) },
   }, { onConflict: 'dedup_key', ignoreDuplicates: true })
 }

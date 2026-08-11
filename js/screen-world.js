@@ -104,7 +104,10 @@ function sideMissionsPanel(mission) {
     <div class="side-mission-tracks"></div>
     <div class="side-mission-reward">${mission.todayDone
       ? `+${mission.xpOnComplete} XP secured today`
-      : `Complete all four today · +${mission.xpOnComplete} XP`}</div>`
+      : `Complete all four today · +${mission.xpOnComplete} XP`}</div>
+    <div class="side-mission-week-reward${mission.weekDone ? ' is-done' : ''}">${mission.weekDone
+      ? `+${mission.weeklyXpOnComplete} XP secured this week`
+      : `Clear all four at ${mission.weeklyRequired}× this week · +${mission.weeklyXpOnComplete} XP`}</div>`
 
   const list = section.querySelector('.side-mission-tracks')
   for (const track of mission.tracks || []) {
@@ -157,6 +160,9 @@ function sideMissionSheet(mission, selectedId = null) {
   sheet.appendChild(el('div', 'dim', mission.todayDone
     ? `Daily clear complete · +${mission.xpOnComplete} XP awarded once`
     : `Finish all four before midnight KST · +${mission.xpOnComplete} XP`))
+  sheet.appendChild(el('div', 'dim', mission.weekDone
+    ? `Weekly clear complete · +${mission.weeklyXpOnComplete} XP awarded once`
+    : `Hit ${mission.weeklyRequired}× on all four before Monday · +${mission.weeklyXpOnComplete} XP`))
   const close = el('button', 'btn btn-ghost', 'Close')
   close.onclick = hideOverlay
   sheet.appendChild(close)

@@ -5,7 +5,7 @@
 import type { GameContent, SupabaseDB, DistrictRow } from './config.ts'
 import { loadContent, rankFor, xpRules, restorationDays, streamsPerXpFor, PERSONAL_COUNT_CAP, trackArtistOverrides } from './config.ts'
 import { ensureDailyRollups, computeStreak, awardStreakBadges, totalXp, goalXpCountForDate } from './derive.ts'
-import { awardDailySideMissionXp, buildSideMissions } from './side-missions.ts'
+import { awardDailySideMissionXp, awardWeeklySideMissionXp, buildSideMissions } from './side-missions.ts'
 import { freezeGoals, computeBaseline, districtProgress, districtDeadline, filesRevealedCount, albumGoalStreamTotal } from './districts.ts'
 import { resolveReconnectStatus } from './reconnect-goal.ts'
 import { todayKst, nextKstMidnightUtc, kstDateOf } from './kst.ts'
@@ -118,6 +118,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
   const todayRow = rollups.find((r) => String(r.kst_date) === today) || null
   const sideMissions = buildSideMissions(rollups, today)
   await awardDailySideMissionXp(supabase, player.agent_no, today, sideMissions)
+  await awardWeeklySideMissionXp(supabase, player.agent_no, sideMissions)
 
   // ── Active district progress (+ completion latch) ──────────
   let activeDistrict: any = null

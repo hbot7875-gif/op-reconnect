@@ -358,6 +358,9 @@ body {
 .side-track-bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--purple), var(--gold)); }
 .side-mission-reward { padding-top: 10px; color: var(--gold); font-family: var(--mono); font-size: 9px; letter-spacing: .8px; text-align: right; text-transform: uppercase; }
 .side-missions.is-cleared .side-mission-reward { color: #64e6a5; }
+.side-mission-week-reward { padding-top: 4px; color: var(--dim); font-family: var(--mono); font-size: 9px;
+  letter-spacing: .8px; text-align: right; text-transform: uppercase; }
+.side-mission-week-reward.is-done { color: #64e6a5; }
 
 .side-mission-sheet { max-width: 520px; }
 .side-sheet-status { display: flex; gap: 10px; margin: 10px 0 4px; }
