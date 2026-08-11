@@ -67,16 +67,40 @@ export function renderWorld(container, state) {
   container.appendChild(wrap)
 }
 
+// Two clocks run this loop, and neither one is visible anywhere else in the
+// UI — the daily 1× requirement resets at KST midnight (a track streamed at
+// 11:59pm KST and again at 12:01am KST is two separate clears), and the
+// weekly 20× total resets Monday KST regardless of how the daily streak
+// went. Without saying so anywhere, "why did my streak/count just drop to
+// zero" reads as a bug instead of the schedule working as designed — this
+// panel and its detail sheet now both say it in plain words, plus the
+// actual week's date range, instead of leaving it implied by a UI that
+// resets silently overnight.
+function weekRangeLabel(weekDates) {
+  if (!weekDates?.length) return ''
+  const fmt = (iso) => {
+    const [y, m, d] = String(iso).split('-').map(Number)
+    return `${MONTH_SHORT[(m || 1) - 1]} ${d}`
+  }
+  return `${fmt(weekDates[0])}–${fmt(weekDates[weekDates.length - 1])}`
+}
+const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
 function sideMissionsPanel(mission) {
   const done = Number(mission.todayDoneCount) || 0
   const total = mission.tracks?.length || 4
+  const weekGaps = (mission.tracks || []).filter((t) => !t.weeklyDone).length
   const section = el('section', 'side-missions' + (mission.todayDone ? ' is-cleared' : ''))
   section.innerHTML = `
     <div class="side-mission-head">
       <div><span class="side-mission-kicker">Stabilize the BOTZ signal</span><h3>Signal Sweep</h3></div>
-      <span class="side-mission-today">${mission.todayDone ? 'SECURED' : `${done}/${total} TODAY`}</span>
+      <div class="side-mission-status">
+        <span class="side-mission-today">${mission.todayDone ? 'SECURED' : `${done}/${total} TODAY`}</span>
+        <span class="side-mission-week-tag${mission.weekDone ? ' is-done' : ''}">${mission.weekDone ? 'WEEK CLEAR' : `${weekGaps} behind this week`}</span>
+      </div>
     </div>
-    <p class="side-mission-rule">Recover all four signals today. Stream each track once to protect the city.</p>
+    <p class="side-mission-rule">Stream each track <b>1×</b> today <em>and</em> <b>${mission.weeklyRequired}×</b> total this week.</p>
+    <p class="side-mission-reset">Daily resets at midnight KST &middot; week resets Monday KST &middot; this week: ${weekRangeLabel(mission.weekDates)}</p>
     <div class="side-mission-tracks"></div>
     <div class="side-mission-reward">${mission.todayDone
       ? `+${mission.xpOnComplete} XP secured today`
@@ -87,10 +111,11 @@ function sideMissionsPanel(mission) {
     const pct = Math.min(100, Math.round((track.weeklyTotal / Math.max(1, track.weeklyRequired)) * 100))
     const row = el('button', 'side-mission-track' + (track.todayDone ? ' is-done' : ''))
     row.type = 'button'
-    row.setAttribute('aria-label', `${track.name} by ${track.artist}. ${track.todayDone ? 'Done today' : 'Not streamed today'}. ${track.weeklyTotal} of ${track.weeklyRequired} this week.`)
+    const todayLabel = track.todayDone ? 'Done today' : 'Not streamed today'
+    row.setAttribute('aria-label', `${track.name} by ${track.artist}. ${todayLabel}. ${track.weeklyTotal} of ${track.weeklyRequired} this week.`)
     row.innerHTML = `
       <span class="side-track-check">${track.todayDone ? '✓' : '○'}</span>
-      <span class="side-track-copy"><b>${esc(track.name)}</b><i>${esc(track.artist)}</i></span>
+      <span class="side-track-copy"><b>${esc(track.name)}</b><i>${esc(track.artist)} &middot; ${esc(todayLabel)}</i></span>
       <span class="side-track-week">${track.weeklyTotal}/${track.weeklyRequired}</span>
       <span class="side-track-bar"><i style="width:${pct}%"></i></span>`
     row.onclick = () => showOverlay(sideMissionSheet(mission, track.id))
@@ -100,17 +125,31 @@ function sideMissionsPanel(mission) {
 }
 
 function sideMissionSheet(mission, selectedId = null) {
+  const weekGaps = (mission.tracks || []).filter((t) => !t.weeklyDone).length
   const sheet = el('div', 'sheet side-mission-sheet')
   sheet.append(
     el('div', 'eyebrow', 'SIGNAL SWEEP'),
     el('h3', '', mission.todayDone ? 'BOTZ signal stabilized' : `${mission.todayDoneCount}/${mission.tracks.length} signals recovered`),
-    el('p', 'muted', `Stream each track once before midnight KST to protect the city signal. Each track also needs ${mission.weeklyRequired} streams this week.`),
   )
+  // Same "what's actually required, and when does it clear" question this
+  // whole redesign is answering, just spelled out in full sentences for the
+  // detail view: two separate requirements (1× today, 20× this week), two
+  // separate clocks (midnight KST, Monday KST), and — since "today" alone
+  // doesn't say which today — the actual calendar week this progress
+  // belongs to.
+  sheet.appendChild(el('div', 'side-sheet-status'))
+  const statusRow = sheet.querySelector('.side-sheet-status')
+  statusRow.innerHTML = `
+    <div class="side-sheet-stat"><span>Today</span><b class="${mission.todayDone ? 'ok' : 'warn'}">${mission.todayDone ? 'SECURED' : 'PENDING'}</b></div>
+    <div class="side-sheet-stat"><span>This week</span><b class="${mission.weekDone ? 'ok' : 'warn'}">${mission.weekDone ? 'CLEAR' : `${weekGaps} GAP${weekGaps === 1 ? '' : 'S'}`}</b></div>`
+  sheet.appendChild(el('p', 'muted', `Each track needs 1+ stream today <b>and</b> ${mission.weeklyRequired}+ this week — separate requirements, separate clocks. Daily resets at midnight KST; the week (${weekRangeLabel(mission.weekDates)}) resets Monday KST regardless of today's progress.`))
   const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
   for (const track of mission.tracks || []) {
     const row = el('div', 'side-sheet-track' + (track.id === selectedId ? ' is-selected' : ''))
+    const todayLabel = track.todayDone ? `✓ Done today (${track.todayCount}×)` : 'Not streamed today yet'
     row.innerHTML = `
-      <div class="side-sheet-title"><b>${esc(track.name)}</b><span>${track.weeklyTotal}/${track.weeklyRequired}</span></div>
+      <div class="side-sheet-title"><b>${esc(track.name)}</b><span>${track.weeklyTotal}/${track.weeklyRequired} this week</span></div>
+      <div class="side-sheet-today ${track.todayDone ? 'ok' : 'warn'}">${esc(todayLabel)}</div>
       <div class="side-sheet-days">${(track.days || []).map((day, index) => `
         <span class="${day.future ? 'future' : day.done ? 'done' : 'miss'}"><i>${days[index]}</i><b>${day.future ? '·' : day.count}</b></span>`).join('')}</div>`
     sheet.appendChild(row)
