@@ -131,6 +131,34 @@ different artist's differently-named catalog — there was no real
 collision risk the filter was protecting against.
 Commit: `9b7111d`.
 
+**"We Are Bulletproof Pt.2" never lighting up on the School Trilogy era
+card — AGENT039, plus a network-wide audit finding 4 more of the same
+class.**
+Root cause: identical bug shape to BTS Cypher Pt.3 above. AGENT039's
+scrobbles were 100% the comma-punctuated `"We Are Bulletproof, Pt. 2"`,
+which normalizes to `"we are bulletproof pt 2"` (space before the
+digit) — the catalog's plain `"We Are Bulletproof Pt.2"` normalizes to
+`"we are bulletproof pt2"` (no space, since there's no space in the raw
+title either). Two different keys for one song; none of their plays
+were ever visible to the per-agent weekly era-card check.
+Since this was reported as "this is the 2nd issue with era card," did a
+full network-wide audit instead of a one-track patch: pulled every
+distinct real `track_counts` key against every `ERA_CATALOG` track's
+expected key(s), and flagged pairs that become IDENTICAL once
+whitespace is stripped — precise enough to separate "same song, comma
+vs. period spacing" from two genuinely different songs that happen to
+share a word (a looser word-overlap pass tried first threw ~70 false
+positives: "Like" vs "Like Animals", "Stay" vs "Stay Gold", "Run" vs
+"Run BTS" — all real, correctly-distinct songs).
+Found 4 more real ones this way, all sharing the comma-before-"Pt."
+split: BTS Cypher Pt.1, BTS Cypher Pt.2: Triptych, and Airplane Pt.2 —
+plus Paldogangsan, which has a genuine two-word "Paldo Gangsan" variant
+in the wild (not punctuation, but the same "real metadata disagrees on
+the title" root cause). All 5 given the same `{title, aliases}`
+treatment. Every OTHER catalog track came back clean — nonzero,
+correctly-pooled — confirming this wasn't a wider systemic gap.
+Commit: `b0ed814`.
+
 **"So 4 More" not counting — AGENT027. Not a bug.**
 Checked her entire scrobble history under every spelling variant —
 zero plays, ever, of this specific track, while every OTHER Dark & Wild
@@ -389,6 +417,16 @@ Commit: `5a509e5`.
   because one state should always beat another (complete beats open,
   here), check the higher-priority state FIRST — don't wire it in as a
   last resort for when the primary lookup finds literally nothing.
+- **When auditing title-normalization mismatches network-wide, compare
+  keys with whitespace stripped, not word-overlap.** Word-overlap
+  (Jaccard on the space-split tokens) sounds like the right tool but
+  actually punishes the exact bug being hunted — "pt2" (merged) vs. "pt
+  2" (split) share only 3 of their ~5 "words" — while over-matching
+  genuinely different songs that share one real word ("Like" vs "Like
+  Animals"). Stripping whitespace and checking for exact equality is
+  the precise test for "same song, comma/period spacing disagreement"
+  and produced zero false positives across the whole `ERA_CATALOG` (see
+  the Bulletproof Pt.2 incident above) where the looser pass had ~70.
 - **The `testarirang` repo (github.com/hbot7875-gif/testarirang) is a
   working reference for anything carried forward from Arirang Mission**
   (Signal Sweep, the 148 Protocol, era/album tracking) — when a ported
