@@ -148,6 +148,16 @@ export interface AgentChargeView {
   isDark: boolean
   autoFeed: boolean
   chargeCells: number
+  // Lifetime totals, not just the current wallet balance — see
+  // lifetimeChargeCellsEarned's own doc comment for why these exist. Two
+  // agents in a row reported "Charge Cells not increasing" when the real
+  // cause was auto-feed (or a manual feed) spending each cell within
+  // moments of it being earned: the math was right, the wallet just never
+  // sat above 0 long enough to look like it moved. chargeCells alone can't
+  // tell that story; these two together can ("47 earned, 45 fed, 2 on
+  // hand" instead of just "2").
+  chargeCellsEarned: number
+  chargeCellsSpent: number
   litEras: string[] // ready card ids; retained for older clients
   eraCards: EraCardView[]
   newlyLitEraIds: string[]
@@ -160,6 +170,20 @@ export interface AgentChargeView {
   // silently erase the other, handing back a charge that was legitimately
   // spent moments earlier in the very same call.
   freezeChargesRemaining: number
+}
+
+/** Sum of charge_cells_awarded across EVERY district this agent has ever
+ *  activated (restored ones included) — each row's own counter only ever
+ *  grows (see creditChargeCells's doc comment: "award only the delta"), so
+ *  this total only ever grows too, exactly like lifetime XP. The current
+ *  wallet balance (rc_players.charge_cells) is the only thing that ever
+ *  goes back down, and only ever from a feed (see the two
+ *  rc_*_charge_feed RPCs — there is no other spend path and no refund
+ *  path), which makes "spent so far" a pure subtraction: earned - on hand,
+ *  no separate ledger needed. */
+async function lifetimeChargeCellsEarned(supabase: SupabaseDB, agentNo: string): Promise<number> {
+  const { data } = await supabase.from('rc_player_districts').select('charge_cells_awarded').eq('agent_no', agentNo)
+  return (data || []).reduce((sum: number, r: any) => sum + (r.charge_cells_awarded || 0), 0)
 }
 
 /**
@@ -248,11 +272,15 @@ export async function getAgentChargeView(supabase: SupabaseDB, content: GameCont
     await supabase.from('rc_agent_charge').update({ blackout_started_at: null, soft_reset_at: null, full_reset_at: null }).eq('agent_no', agentNo)
   }
 
+  const earned = await lifetimeChargeCellsEarned(supabase, agentNo)
+
   return {
     hoursRemaining: chargedUntilMs ? Math.max(0, (chargedUntilMs - now) / HOUR_MS) : 0,
     isDark,
     autoFeed: row.auto_feed,
     chargeCells: cells,
+    chargeCellsEarned: earned,
+    chargeCellsSpent: Math.max(0, earned - cells),
     litEras: weekly.eraCards.filter((e) => e.status === 'lit').map((e) => e.id),
     eraCards: weekly.eraCards,
     newlyLitEraIds: weekly.newlyLitEraIds,

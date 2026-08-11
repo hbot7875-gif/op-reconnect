@@ -83,6 +83,7 @@ function paint(body, ac, focusEraId = null) {
   feedCard.innerHTML = `
     <div class="ms-card-head"><span class="ms-card-icon">⚡</span><span class="ms-card-title">Feed the Bomb</span></div>
     <p class="ms-card-body ac-feed-copy">You have ${ac.chargeCells} Charge Cell${ac.chargeCells === 1 ? '' : 's'}. Each one adds ${CHARGE_CELL_HOURS} hours.</p>
+    ${ac.chargeCellsEarned ? `<p class="dim ac-lifetime-copy">${ac.chargeCellsEarned} earned all-time · ${ac.chargeCellsSpent} fed so far</p>` : ''}
   `
   const feedBtn = el('button', 'btn btn-primary', 'Feed 1 Charge Cell')
   feedBtn.disabled = ac.chargeCells < 1
@@ -104,6 +105,8 @@ function paint(body, ac, focusEraId = null) {
       stage.querySelector('.ac-reward').textContent = `+${hoursAdded} HOURS`
       const remainingCells = Math.max(0, ac.chargeCells - 1)
       body.querySelector('.ac-feed-copy').textContent = `You have ${remainingCells} Charge Cell${remainingCells === 1 ? '' : 's'}. Each one adds ${hoursAdded} hours.`
+      const lifetimeCopy = body.querySelector('.ac-lifetime-copy')
+      if (lifetimeCopy) lifetimeCopy.textContent = `${ac.chargeCellsEarned || 0} earned all-time · ${(ac.chargeCellsSpent || 0) + 1} fed so far`
 
       // Keep the Pack wallet honest immediately instead of waiting for the
       // next 90-second game-state poll.
