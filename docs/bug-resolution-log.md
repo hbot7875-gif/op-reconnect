@@ -1,5 +1,10 @@
 # Bug & complaint resolution log
 
+See also: [`test-account-and-session-tokens.md`](./test-account-and-session-tokens.md)
+for what AGENT001 (the "test" account) is and exactly how session tokens get
+minted, used, and cleaned up to verify a fix against the real deployed
+backend rather than just reading the code.
+
 A record of every real player-reported bug handled so far, organized by
 **symptom** rather than by date — when the next "X isn't counting" or "my
 partner can't see me" report comes in, the goal is to jump straight to a
