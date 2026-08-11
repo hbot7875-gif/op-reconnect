@@ -104,6 +104,28 @@ sum every alias's play count together as one track. Both consumers
 helpers instead of their own bare `normKeyFull(title)` call.
 Commit: `2f8f58b`.
 
+**Signal Sweep (side-missions.ts) undercounting Wild Flower / Don't Say
+You Love Me / Haegeum / Killin' It Girl.**
+Root cause: same family as the collab-artist audit above, but inverted —
+instead of a global allowlist missing a featured artist, this file had
+its OWN narrow per-track allowlist (`['RM','Rap Monster']` for Wild
+Flower, etc.) that a play's artist tag had to word-match before it
+counted at all, stricter than every other counting path in the codebase.
+Plenty of scrobble sources attribute a member's solo track to `"BTS"`
+rather than the member's own name — that combination never matched, so
+real plays silently didn't count, with no error shown.
+Found by comparing against the Arirang Mission reference this loop was
+carried forward from (`testarirang` repo's `findDailyTrackScrobbles` /
+`findTrackScrobbles`): it matches by track title alone, no artist check
+at all — and this file's own sibling `transmission.ts` already does the
+same for its `frozen.keys` tally (`bucket[k]?.n`, unfiltered).
+Fix: dropped the per-track `artistAliases` filter entirely; `countTrack`
+now sums the key's raw `.n` total, matching both the reference and the
+sibling file. Safe because none of these four titles collide with a
+different artist's differently-named catalog — there was no real
+collision risk the filter was protecting against.
+Commit: `9b7111d`.
+
 **"So 4 More" not counting — AGENT027. Not a bug.**
 Checked her entire scrobble history under every spelling variant —
 zero plays, ever, of this specific track, while every OTHER Dark & Wild
@@ -206,6 +228,34 @@ streams over "5 days" solo kept all 17 after accepting a different
 invite, instead of resetting to 0.
 Commit: `e06986a`.
 
+**Completed mission "got reset" back to open — AGENT015 + AGENT030,
+Haegeum's connect-2-agents goal.**
+Follow-on gap in the very first fix above (`findMyCompletedMission` as a
+fallback). That fallback only ever ran when `findMyMission` (open-only)
+found NOTHING — but an agent could still hold a stray open membership
+for the same goal from an old dangling mission (opened before a partner
+showed up, never folded away because `foldAwayDanglingMissions` only
+runs on the ACCEPTING side of a later invite, never for an agent who
+goes on to open or get invited into a separate mission normally).
+AGENT015 and AGENT030 had genuinely completed the goal together in one
+mission — but each ALSO still had a leftover `'joined'` row in the SAME
+old dangling mission from days earlier. Because both rows were in that
+one mission, `findMyMission`'s "prefer paired" rule (see above) read it
+as a real, active pairing and returned it before the completed-mission
+fallback ever ran, making their finished goal look freshly reopened.
+Scope check: **13 more agents** network-wide were in some version of
+this same trap (a joined row in both a complete and an open mission for
+the same goal) — mostly solo dangling missions from the same old
+matchmaking-removal mess, not just paired ones.
+Fix: `findMyCompletedMission` is now checked FIRST at every read/guard
+call site, not as a fallback — once a goal is complete, nothing else
+should ever be able to make it look open again. Also deleted 52
+network-wide open missions that were provably dead (every joined
+participant in each had already completed the same goal elsewhere),
+freeing a few pending invitees stuck on invites that could never
+resolve.
+Commit: `d12638b`.
+
 **"Can't invite anyone" — AGENT000, Hopesize Station. Not a bug.**
 Only 4 agents had ever activated that district, already split into two
 separate 2-person teams (each needing a 3rd for the 3-agent requirement).
@@ -256,6 +306,18 @@ progress *within the current level* (resets each level); the leaderboard
 number is *lifetime total* XP. Nothing distinguished them visually.
 Fix: relabeled the leaderboard's unit from "XP" to "total XP".
 Commit: `1144ea1`.
+
+**Follow-up: "keep xp same value in level like in ranking page."**
+The leaderboard relabel above fixed the leaderboard side but left the
+Level detail sheet showing only the in-level number with no qualifier —
+still reads as a mismatch the moment someone checks both screens, since
+neither one used to say which kind of XP it meant.
+Fix: added a second line to the Level sheet showing the SAME lifetime
+total (`state.player.xp` — already computed and sent to the client,
+just never displayed there) with the SAME "total XP" wording the
+Ranking board uses, right under the in-level progress bar. Both numbers
+now visible together, each clearly labeled, instead of picking one.
+Commit: `9b7111d`.
 
 ---
 
@@ -314,3 +376,17 @@ Commit: `5a509e5`.
   only affects agents who activate *after* it ships. An agent already
   active with stale frozen goals needs a direct, careful data repair
   (see the baseline lesson above for how NOT to do that repair).
+- **A "check X, fall back to Y" pattern is only as safe as X's blast
+  radius.** The reconnect-mission fix history above is really the same
+  gap discovered twice: first "no fallback to a completed mission at
+  all," then "the fallback never runs because the open-only lookup found
+  *something*, even if it's the wrong something." When a fallback exists
+  because one state should always beat another (complete beats open,
+  here), check the higher-priority state FIRST — don't wire it in as a
+  last resort for when the primary lookup finds literally nothing.
+- **The `testarirang` repo (github.com/hbot7875-gif/testarirang) is a
+  working reference for anything carried forward from Arirang Mission**
+  (Signal Sweep, the 148 Protocol, era/album tracking) — when a ported
+  feature's counting logic looks stricter or different from a sibling
+  file in this codebase, diff it against the reference's equivalent
+  function before assuming the stricter version is intentional.
