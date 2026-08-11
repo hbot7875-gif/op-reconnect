@@ -109,15 +109,37 @@ async function findMyMission(
  *  every WRITE path here (you can't invite into, get removed from, or
  *  respond to an invite on a mission that's already resolved), but wrong
  *  for "what's my current status," which is exactly what getMissionStatus
- *  and getReconnectMission use findMyMission for. Without this fallback, a
+ *  and getReconnectMission use this for.
+ *
+ *  Checked BEFORE findMyMission at both call sites, not just as its
+ *  fallback — a goal, once complete, must never look open again, but years
+ *  of dangling solo missions (opened before a partner showed up, then never
+ *  cleaned up — foldAwayDanglingMissions only runs on the ACCEPTING side of
+ *  a later invite, never for the agent who just goes on to open or get
+ *  invited into a separate mission the normal way) mean plenty of agents
+ *  still hold an open membership for this same goal_id alongside their real
+ *  completed one. findMyMission's "prefer paired" rule (see its own doc
+ *  comment) only tells genuinely-active pairs apart from solo stragglers
+ *  AMONG OPEN missions — it has no idea a completed one exists, and two
+ *  people who each still have a stray open row can even look "paired" to
+ *  each other there purely by accident, which is exactly what happened to
+ *  AGENT015 and AGENT030: both had already finished Haegeum's reconnect
+ *  goal together in one mission, but each also still had a leftover 'joined'
+ *  row in an old dangling mission from days earlier — and because both rows
+ *  were in the SAME old mission, findMyMission read it as a real pairing and
+ *  returned it before this fallback ever ran, making their finished goal
+ *  look freshly reset back to open.
+ *
+ *  Before this file's very first version of the fallback (findMyMission
+ *  first, this only as a backstop when nothing open existed at all), a
  *  genuinely finished reconnect goal disappeared the instant its mission
- *  left 'open': the very next poll found nothing, sent the agent back to
- *  "team up," and let them re-open a mission and redo the whole
- *  shared-track grind — with a brand-new joined_at, so none of their
- *  already-earned contribution carried over either. Some agents did this
- *  three, four, even six times over, and could never actually finish the
- *  district unless their solo goals happened to already be done on the
- *  exact poll their mission completed. */
+ *  left 'open' if the agent had no other open row: the very next poll found
+ *  nothing, sent them back to "team up," and let them re-open a mission and
+ *  redo the whole shared-track grind — with a brand-new joined_at, so none
+ *  of their already-earned contribution carried over either. Some agents
+ *  did this three, four, even six times over. Checking here first closes
+ *  both that gap and the "shadowed by a stray open row" gap in one rule:
+ *  complete always wins once it exists, full stop. */
 async function findMyCompletedMission(supabase: SupabaseDB, agentNo: string, districtId: string, goalId: string) {
   const { data: completeMissions } = await supabase.from('rc_reconnect_missions')
     .select('id').eq('district_id', districtId).eq('goal_id', goalId).eq('status', 'complete')
@@ -374,8 +396,8 @@ async function refreshMission(
  *  re-derived live), so this just resolves live mission state against it. */
 export async function getMissionStatus(supabase: SupabaseDB, agentNo: string, districtId: string, frozenReconnect: FrozenReconnectGoal) {
   const variant = frozenReconnect.variant as 'connect' | 'invite'
-  let mission = await findMyMission(supabase, agentNo, districtId, { goalId: frozenReconnect.id })
-    || await findMyCompletedMission(supabase, agentNo, districtId, frozenReconnect.id)
+  let mission = await findMyCompletedMission(supabase, agentNo, districtId, frozenReconnect.id)
+    || await findMyMission(supabase, agentNo, districtId, { goalId: frozenReconnect.id })
   if (mission) mission = await refreshMission(supabase, mission, variant, frozenReconnect.config)
   const participants = await participantsFor(supabase, mission)
   return { variant, done: mission?.status === 'complete', mission: mission ? await shape(supabase, mission, participants, agentNo) : null }
@@ -398,8 +420,8 @@ export async function getReconnectMission(supabase: SupabaseDB, content: unknown
   const reconnect = myReconnectGoal(pd)
   if (!reconnect) return { success: true, available: false }
 
-  let mission = await findMyMission(supabase, agentNo, districtId, { goalId: reconnect.id })
-    || await findMyCompletedMission(supabase, agentNo, districtId, reconnect.id)
+  let mission = await findMyCompletedMission(supabase, agentNo, districtId, reconnect.id)
+    || await findMyMission(supabase, agentNo, districtId, { goalId: reconnect.id })
   if (mission) mission = await refreshMission(supabase, mission, reconnect.variant, reconnect.config)
 
   const participants = await participantsFor(supabase, mission)
@@ -501,12 +523,14 @@ export async function openReconnectMission(supabase: SupabaseDB, content: unknow
   if (pd?.status !== 'active') return { success: false, error: 'not_eligible' }
   const reconnect = myReconnectGoal(pd)
   if (!reconnect) return { success: false, error: 'not_available' }
-  if (await findMyMission(supabase, agentNo, districtId)) return { success: false, error: 'already_in_mission' }
-  // Belt and suspenders alongside the getReconnectMission fallback above —
-  // once a mission's genuinely complete, opening a new one is pointless
-  // (the goal's already satisfied) and is exactly the "redo it from
-  // scratch" trap this whole fix exists to close.
+  // Checked in this order (completed first) so an agent who also still has
+  // a leftover dangling open mission for this same goal — see
+  // findMyCompletedMission's doc comment — gets told the true, better
+  // reason ("you already finished this") instead of the generic
+  // "already_in_mission", which would read as if they still had something
+  // left to do here.
   if (await findMyCompletedMission(supabase, agentNo, districtId, reconnect.id)) return { success: false, error: 'already_completed' }
+  if (await findMyMission(supabase, agentNo, districtId)) return { success: false, error: 'already_in_mission' }
 
   const { data: mission, error } = await supabase.from('rc_reconnect_missions').insert({
     district_id: districtId, goal_id: reconnect.id, required_agents: reconnect.config.requiredAgents,
