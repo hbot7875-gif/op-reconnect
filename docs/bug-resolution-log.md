@@ -23,18 +23,24 @@ By far the most common complaint shape. It has shown up with **four
 different, unrelated root causes** — always work through them in this
 order, cheapest check first:
 
-1. **Does the play exist at all?**
+1. **Does the play exist at all — under the track's OWN keyword, and
+   under any alternate official title it might have?**
    `select track_name, artist_name, listened_at from rc_scrobbles where agent_no='AGENTxxx' and lower(track_name) like '%keyword%'`
-   If nothing comes back under any spelling, the agent likely hasn't
-   actually streamed it (or it never synced from their source) — not a
-   counting bug. See *"So 4 More" — no bug* below.
+   If nothing comes back under the title you searched, that only rules
+   out that ONE title — it does NOT mean the agent never streamed the
+   song. Some BTS tracks have a genuinely different alternate official
+   name with zero word overlap ("So 4 More" / "2nd Grade" — see below);
+   a normalization or spelling-variant search will never surface those.
+   Only after checking the track's known alternates too and still coming
+   up empty is "hasn't streamed it yet" the right conclusion.
 
 2. **Does the real title normalize to the SAME key the goal/era expects?**
    Run the track name through `normalizeKey(stripVersionSuffix(name))`
    (text.ts) by hand, or just diff two title strings character by
    character. Punctuation placement (`Pt.3` vs `Pt. 3`, a comma, an
    ellipsis `…` vs `...`) changes the key even though it reads as "the
-   same song" to a person. See *BTS Cypher Pt.3* below.
+   same song" to a person. See *BTS Cypher Pt.3* and the *Bulletproof
+   Pt.2* network-wide audit below.
 
 3. **Is the play's artist attribution getting filtered out?**
    `track_counts[key].a` is a per-artist breakdown; only artists in
@@ -159,13 +165,30 @@ treatment. Every OTHER catalog track came back clean — nonzero,
 correctly-pooled — confirming this wasn't a wider systemic gap.
 Commit: `b0ed814`.
 
-**"So 4 More" not counting — AGENT027. Not a bug.**
-Checked her entire scrobble history under every spelling variant —
-zero plays, ever, of this specific track, while every OTHER Dark & Wild
-track had real recent plays. Concluded she likely hasn't actually
-streamed it yet, or it's from before her connected source
-(`musicat`) started syncing. No fix applied; explained the diagnostic
-distinction (this vs. a real miscount) to the reporter.
+**"So 4 More" not counting — AGENT027. CORRECTION: this was a real bug,
+not "no bug" as first concluded below.**
+Originally checked her scrobble history under every *spelling variant of
+"So 4 More"* and found zero — reasonable-looking, since every other
+Dark & Wild track had real recent plays and none of the usual
+punctuation/spacing tricks turned up a match. Concluded she just hadn't
+streamed it. **Wrong**: the real title her source (`musicat`) reports
+for this track is `"2nd Grade"` — BTS's own original Korean-era title
+for the song, a completely different-looking string with zero word
+overlap with "So 4 More" at all. A title-similarity audit (word-overlap
+or whitespace-squash, see the Bulletproof Pt.2 entry above) was never
+going to surface this — the two strings don't overlap by any of those
+measures. Only came to light from a real scrobble-history screenshot
+showing "2nd Grade — BTS" sitting right next to other real Dark & Wild
+plays. She had 6 real plays under that title the whole time; checking
+"every spelling variant" of the WRONG title is not the same as checking
+for the track.
+Lesson: a title-normalization audit only catches titles that are
+*variants of each other* — it can't catch a track with two genuinely
+unrelated official/alternate names. Those need either prior domain
+knowledge (BTS's back-catalog has a few of these) or a real report from
+someone who actually has the alternate-titled scrobble in their history.
+Fix: added `"2nd Grade"` as an alias on `"So 4 More"`.
+Commit: `<pending>`.
 
 **AGENT000's Neuron / Hope On The Street baseline — a repair-created bug.**
 Root cause: an EARLIER manual repair (adding 4 real tracks to her frozen

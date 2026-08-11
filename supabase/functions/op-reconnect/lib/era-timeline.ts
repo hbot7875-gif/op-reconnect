@@ -111,7 +111,16 @@ export const ERA_CATALOG: EraDef[] = [
       // scrobbles that never matched the plain-string form alone.
       { title: 'BTS Cypher PT.3: KILLER', aliases: ['BTS Cypher, Pt. 3: KILLER (feat. Supreme Boi)'] },
       'Danger', 'Let Me Know', 'War Of Hormone', 'Look Here', 'Hip Hop Phile',
-      'So 4 More', 'Could You Turn Off Your Cell Phone', '24/7=heaven', 'Rain', 'Embarrassed',
+      // "So 4 More" was previously written off as "AGENT027 genuinely never
+      // streamed it" (see docs/bug-resolution-log.md) — wrong. Musicat
+      // reports this track under BTS's own original Korean-era title,
+      // "2nd Grade" (2학년), a completely different-looking string with no
+      // word overlap at all, so it was never going to surface from a
+      // title-similarity audit either — only came to light from a real
+      // scrobble-history screenshot. She had 6 real plays under that title
+      // the whole time.
+      { title: 'So 4 More', aliases: ['2nd Grade'] },
+      'Could You Turn Off Your Cell Phone', '24/7=heaven', 'Rain', 'Embarrassed',
       'The Stars',
     ],
   },
