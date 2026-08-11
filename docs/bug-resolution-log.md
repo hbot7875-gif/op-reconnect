@@ -188,7 +188,7 @@ unrelated official/alternate names. Those need either prior domain
 knowledge (BTS's back-catalog has a few of these) or a real report from
 someone who actually has the alternate-titled scrobble in their history.
 Fix: added `"2nd Grade"` as an alias on `"So 4 More"`.
-Commit: `<pending>`.
+Commit: `dd3eefd`.
 
 **AGENT000's Neuron / Hope On The Street baseline — a repair-created bug.**
 Root cause: an EARLIER manual repair (adding 4 real tracks to her frozen
