@@ -37,6 +37,34 @@ import type { SupabaseDB, GameContent } from './config.ts'
 import type { FrozenReconnectGoal } from './districts.ts'
 import { kstDateOf } from './kst.ts'
 
+/** How long an unanswered invite stays live before it stops counting.
+ *
+ *  A pending invite makes its recipient unavailable to everyone else
+ *  (isSpokenFor), so an invite nobody answers quietly takes an agent off the
+ *  board — for up to the mission's full 7 days, since nothing below the
+ *  mission level ever expired. That is the one place waiting genuinely costs
+ *  an ACTIVE player something: the invitee may never have opened the app,
+ *  while everyone who could have paired with them sees them as taken.
+ *
+ *  Deliberately not applied to missions themselves. Agents sit unpaired here
+ *  for days while streaming every single day (17 of 20 checked were active
+ *  that same day), so expiring their mission would delete the state of the
+ *  most active players and reset the contribution their pooled progress is
+ *  counted from — see contributionSince/joined_at. An invite going stale
+ *  costs nobody anything; a mission going stale costs the person still
+ *  playing. */
+const INVITE_TTL_MS = 24 * 60 * 60 * 1000
+
+/** An 'invited' row nobody answered inside INVITE_TTL_MS. Treated as gone
+ *  everywhere it is read, whether or not the cleanup delete has run yet —
+ *  the delete only happens when someone loads that specific mission, so
+ *  read-time interpretation (same philosophy as derive.ts's rollups) is what
+ *  actually guarantees a stale invite can never block anyone. */
+function inviteExpired(row: { status?: string; joined_at?: string } | null | undefined): boolean {
+  if (!row || row.status !== 'invited' || !row.joined_at) return false
+  return Date.now() - new Date(row.joined_at).getTime() > INVITE_TTL_MS
+}
+
 /** The caller's own active restoration attempt on this district (and
  *  whatever reconnect goal was frozen into it, if any) — the only source of
  *  truth for "what mission am I even trying to do." */
@@ -338,10 +366,22 @@ async function refreshMission(
     return mission
   }
 
-  const { data: participants } = await supabase.from('rc_reconnect_participants')
+  const { data: rawParticipants } = await supabase.from('rc_reconnect_participants')
     .select('*').eq('mission_id', mission.id)
-  mission._participants = participants || []
-  const joined = (participants || []).filter((p: any) => p.status === 'joined')
+  // Drop invites nobody answered inside INVITE_TTL_MS — deleted outright,
+  // exactly like a declined one, so the slot frees up and the invitee stops
+  // reading as taken. Filtered out of _participants either way (see
+  // participantsFor, which trusts that array) so a failed delete still can't
+  // surface a dead invite in the roster.
+  const stale = (rawParticipants || []).filter((p: any) => inviteExpired(p))
+  if (stale.length) {
+    await supabase.from('rc_reconnect_participants').delete()
+      .eq('mission_id', mission.id).eq('status', 'invited')
+      .in('agent_no', stale.map((p: any) => p.agent_no))
+  }
+  const participants = (rawParticipants || []).filter((p: any) => !inviteExpired(p))
+  mission._participants = participants
+  const joined = participants.filter((p: any) => p.status === 'joined')
 
   const sharedTrack = config?.sharedTrack
   let sharedTotal = 0
@@ -536,7 +576,15 @@ function isSpokenFor(rosters: Map<string, any[]>, agentNo: string): boolean {
   for (const participants of rosters.values()) {
     const mine = participants.find((p) => p.agent_no === agentNo)
     if (!mine) continue
-    if (mine.status === 'invited') return true
+    // A stale invite no longer holds anyone: see INVITE_TTL_MS. Without this
+    // an unanswered invite kept its recipient off everyone else's list for
+    // the mission's whole 7 days. `continue`, never `return false` — this
+    // agent may still be genuinely paired in a DIFFERENT mission further
+    // down the loop, and a dead invite here must not mask that.
+    if (mine.status === 'invited') {
+      if (inviteExpired(mine)) continue
+      return true
+    }
     if (mine.status === 'joined' && participants.some((p) => p.agent_no !== agentNo && p.status === 'joined')) return true
   }
   return false
@@ -754,6 +802,17 @@ export async function respondReconnectInvite(supabase: SupabaseDB, content: unkn
   let mission = await findMyMission(supabase, agentNo, districtId, { status: 'invited' })
   if (!mission) return { success: false, error: 'no_pending_invite' }
 
+  // Checked BEFORE refreshMission below, which sweeps stale invites itself:
+  // let it run first and the row is already gone by the time we'd look, so
+  // the honest "this expired" answer degrades into the vaguer "you have no
+  // pending invite here" — the one case this message exists for.
+  const { data: earlyInvite } = await supabase.from('rc_reconnect_participants')
+    .select('status, joined_at').eq('mission_id', mission.id).eq('agent_no', agentNo).eq('status', 'invited').maybeSingle()
+  if (inviteExpired(earlyInvite)) {
+    await supabase.from('rc_reconnect_participants').delete().eq('mission_id', mission.id).eq('agent_no', agentNo).eq('status', 'invited')
+    return { success: false, error: 'invite_expired' }
+  }
+
   const { data: goal } = await supabase.from('rc_goals').select('variant, config').eq('id', mission.goal_id).maybeSingle()
   const variant = goal?.variant === 'connect' || goal?.variant === 'invite' ? goal.variant : null
   if (!variant) return { success: false, error: 'no_pending_invite' }
@@ -852,9 +911,13 @@ async function foldAwayDanglingMissions(supabase: SupabaseDB, agentNo: string, e
  *  raw agent number — same "agent numbers never leave the caller's own
  *  request" rule handlers.ts documents at the top of this file's sibling. */
 export async function getMyInvites(supabase: SupabaseDB, content: GameContent, agentNo: string) {
-  const { data: rows } = await supabase.from('rc_reconnect_participants')
-    .select('mission_id, invited_by').eq('agent_no', agentNo).eq('status', 'invited')
-  if (!rows || !rows.length) return { success: true, invites: [] }
+  const { data: allRows } = await supabase.from('rc_reconnect_participants')
+    .select('mission_id, invited_by, status, joined_at').eq('agent_no', agentNo).eq('status', 'invited')
+  // A stale invite must stop showing as a notification too, not just stop
+  // blocking (isSpokenFor) — otherwise it stays a badge the agent can tap
+  // forever with nothing behind it.
+  const rows = (allRows || []).filter((r: any) => !inviteExpired(r))
+  if (!rows.length) return { success: true, invites: [] }
 
   const missionIds = [...new Set(rows.map((r: any) => r.mission_id))]
   const { data: missions } = await supabase.from('rc_reconnect_missions')

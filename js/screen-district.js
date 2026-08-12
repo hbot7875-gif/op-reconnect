@@ -212,6 +212,7 @@ const RECONNECT_ERRORS = {
   cannot_invite_self: "You can't invite yourself.",
   not_in_mission: 'Open or join a mission before inviting someone.',
   no_pending_invite: "You don't have a pending invite here.",
+  invite_expired: 'That invite expired after a day unanswered — ask them to send a new one.',
   target_required: 'Something went wrong picking who to remove.',
   cannot_remove_self: "You can't remove yourself — decline or leave isn't available here.",
   not_mission_creator: 'Only whoever opened this mission can remove someone from it.',
