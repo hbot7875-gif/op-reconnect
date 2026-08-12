@@ -278,6 +278,20 @@ function paintPuzzlePanel(box, d, r) {
 
 /* — Co-op variants (connect / invite) — */
 
+/** How long someone's been waiting for a partner, capped at "1 day+".
+ *  Deliberately doesn't count past a day: the real numbers run to nearly a
+ *  week, and "waiting 6 days" reads as an accusation aimed at whoever's
+ *  reading it rather than a nudge to help. Past 24h the exact figure adds
+ *  nothing actionable — they're stuck either way. */
+function waitedLabel(waitingSince) {
+  if (!waitingSince) return 'waiting'
+  const mins = Math.max(0, Math.floor((Date.now() - new Date(waitingSince).getTime()) / 60000))
+  if (mins < 60) return 'just opened'
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `waiting ${hours}h`
+  return 'waiting 1 day+'
+}
+
 function paintMissionPanel(box, d, res) {
   const refresh = async () => {
     const fresh = await call('getReconnectMission', { agentNo: getAgentNo(), districtId: d.id })
@@ -290,9 +304,16 @@ function paintMissionPanel(box, d, res) {
   const me = getAgentNo()
 
   if (m?.status === 'complete') {
+    // Name the partner. An agent who got here by ACCEPTING an invite never
+    // sent one themselves, so a bare "everyone's in" reads as the mission
+    // completing on its own — one player reported exactly that ("I didn't
+    // invite anyone but it's completed"). Saying who they teamed up with
+    // makes the other half of the flow visible after the fact.
+    const others = (m.participants || []).filter((p) => !p.isMe && p.status === 'joined')
+    const withWho = others.length ? ` with ${others.map((p) => esc(p.codename)).join(' and ')}` : ''
     const done = m.sharedTrack
-      ? `Done — ${esc(m.sharedTrack.label)} hit ${m.sharedTrack.target} between you. Reward lands once the district finishes.`
-      : "Done — everyone's in. Reward lands once the district finishes."
+      ? `Done — you teamed up${withWho} and ${esc(m.sharedTrack.label)} hit ${m.sharedTrack.target} between you. Reward lands once the district finishes.`
+      : `Done — you teamed up${withWho}. Reward lands once the district finishes.`
     box.appendChild(el('p', 'muted', done))
     return
   }
@@ -306,6 +327,21 @@ function paintMissionPanel(box, d, res) {
       : st
         ? `Team up with ${res.config.requiredAgents} agents also restoring ${esc(districtDisplayName(d))}. Open a mission, then invite someone specific — once they accept, stream ${esc(st.label)} — everyone's own plays add up together until you hit ${st.target}.`
         : `Team up with ${res.config.requiredAgents} agents also restoring ${esc(districtDisplayName(d))} — open a mission, then invite someone specific. Once they accept, everyone needs to keep streaming toward their own goals here.`))
+    // Who's already standing here, BEFORE committing to open anything. The
+    // pickable list used to appear only after opening a mission, so this
+    // screen — the one everybody sees first — could never say whether
+    // anyone was actually around to team up with. "Open a mission" reads as
+    // a shot in the dark without it, and as answering someone with it.
+    const waiting = el('p', 'muted reconnect-waiting-now')
+    box.appendChild(waiting)
+    call('getInviteCandidates', { agentNo: me, districtId: d.id }).then((res2) => {
+      const n = res2?.success ? (res2.candidates?.length || 0) : 0
+      if (!n) { waiting.remove(); return }
+      waiting.innerHTML = n === 1
+        ? `<b>1 agent is waiting for a partner here right now.</b> Open a mission to invite them.`
+        : `<b>${n} agents are waiting for a partner here right now.</b> Open a mission to invite one.`
+    })
+
     const openBtn = el('button', 'btn btn-primary', res.variant === 'invite' ? 'Start inviting' : 'Open a mission')
     openBtn.onclick = async () => {
       openBtn.disabled = true
@@ -414,21 +450,16 @@ function paintMissionPanel(box, d, res) {
     box.appendChild(row)
   } else if (myRow?.status === 'joined') {
     if (need > 0) {
-      box.appendChild(el('p', 'muted', "Invite someone else already restoring this district — pick from who's currently free below. They'll get a notification to accept."))
-      const inviteRow = el('div', 'reconnect-invite-row')
-      // Agent numbers are never shown to players (see the roster above) —
-      // there's no way to "invite by agent number" if you'd never know
-      // anyone's number in the first place. Pick a codename instead; the
-      // agent number rides along as the option's value, never displayed.
-      const select = el('select', 'ob-input')
-      select.innerHTML = `<option value="">Loading…</option>`
-      select.disabled = true
-      // Stays disabled until an actual agent is picked, not just once the
-      // list finishes loading — nothing to invite with an empty selection.
-      const inviteBtn = el('button', 'btn btn-ghost', 'Invite')
-      inviteBtn.disabled = true
-      inviteRow.append(select, inviteBtn)
-      box.appendChild(inviteRow)
+      // A <select> of codenames read as "pick an option from a menu," which
+      // is why 20 agents could sit here for days each waiting on a partner
+      // while every one of them was visible to all the others the whole
+      // time. Same call, same data — rendered as a queue of real people who
+      // are stuck, each with their own button, so the screen says "these
+      // agents need someone" instead of "choose an agent…".
+      const intro = el('p', 'muted', 'Loading who needs a partner…')
+      box.appendChild(intro)
+      const waitList = el('div', 'reconnect-waitlist')
+      box.appendChild(waitList)
       // Optional — becomes the first line of the mission's shared thread
       // (see the chat section below), so "hey, let's team up!" and
       // whatever comes after it are one continuous conversation.
@@ -439,38 +470,45 @@ function paintMissionPanel(box, d, res) {
       const inviteMsg = el('div', 'reconnect-row-msg')
       box.appendChild(inviteMsg)
 
-      select.onchange = () => { inviteBtn.disabled = !select.value }
-
       call('getInviteCandidates', { agentNo: me, districtId: d.id }).then((res2) => {
-        if (!res2?.success) { select.innerHTML = `<option value="">Couldn't load — try again</option>`; return }
+        if (!res2?.success) { intro.textContent = "Couldn't load who's free — try again."; return }
         if (!res2.candidates?.length) {
-          // The dropdown already excludes anyone already invited, joined,
-          // or not actively restoring this district — an empty list means
-          // there's genuinely nobody free right now, not a filter mistake.
-          inviteRow.remove()
+          // The list already excludes anyone already invited, joined, or not
+          // actively restoring this district — empty means there's genuinely
+          // nobody free right now, not a filter mistake.
+          intro.remove()
           noteInput.remove()
-          box.appendChild(el('p', 'muted', 'No free agents right now—check again soon.'))
+          waitList.appendChild(el('p', 'muted', 'No free agents right now—check again soon.'))
           return
         }
-        select.innerHTML = `<option value="">Choose an agent…</option>`
-          + res2.candidates.map((c) => `<option value="${esc(c.agentNo)}">${esc(c.codename)}</option>`).join('')
-        select.disabled = false
-      })
-
-      inviteBtn.onclick = async () => {
-        const inviteeAgentNo = select.value
-        if (!inviteeAgentNo) return // button is disabled in this state — belt and suspenders
-        inviteBtn.disabled = true
-        inviteMsg.textContent = ''
-        inviteMsg.classList.remove('is-error')
-        const r = await call('inviteReconnectMission', { agentNo: me, districtId: d.id, inviteeAgentNo, message: noteInput.value.trim() })
-        if (r.success) { toast(`Invited ${r.inviteeCodename || 'them'}`); refresh() }
-        else {
-          inviteMsg.textContent = reconnectError(r.error)
-          inviteMsg.classList.add('is-error')
-          inviteBtn.disabled = false
+        const n = res2.candidates.length
+        intro.textContent = n === 1
+          ? '1 agent is waiting for a partner here. Invite them and they get a notification to accept.'
+          : `${n} agents are waiting for a partner here. Invite one and they get a notification to accept.`
+        for (const c of res2.candidates) {
+          const row = el('div', 'reconnect-wait-row')
+          row.innerHTML = `<span class="rw-name">${esc(c.codename)}</span>`
+            + `<span class="rw-since">${esc(waitedLabel(c.waitingSince))}</span>`
+          const btn = el('button', 'btn btn-ghost rw-invite', 'Invite')
+          btn.onclick = async () => {
+            // Agent numbers are never shown to players — the number rides
+            // along on the row's own data, never rendered.
+            for (const b of waitList.querySelectorAll('.rw-invite')) b.disabled = true
+            inviteMsg.textContent = ''
+            inviteMsg.classList.remove('is-error')
+            const r = await call('inviteReconnectMission',
+              { agentNo: me, districtId: d.id, inviteeAgentNo: c.agentNo, message: noteInput.value.trim() })
+            if (r.success) { toast(`Invited ${r.inviteeCodename || c.codename}`); refresh() }
+            else {
+              inviteMsg.textContent = reconnectError(r.error)
+              inviteMsg.classList.add('is-error')
+              for (const b of waitList.querySelectorAll('.rw-invite')) b.disabled = false
+            }
+          }
+          row.appendChild(btn)
+          waitList.appendChild(row)
         }
-      }
+      })
     }
   }
   // No third branch here anymore — getReconnectMission only ever returns a

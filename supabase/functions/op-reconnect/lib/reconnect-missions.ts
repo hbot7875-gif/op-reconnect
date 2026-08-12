@@ -444,12 +444,78 @@ async function openMissionRosters(supabase: SupabaseDB, districtId: string, goal
   const byMission = new Map<string, any[]>()
   if (!missionIds.length) return byMission
   const { data: rows } = await supabase.from('rc_reconnect_participants')
-    .select('mission_id, agent_no, status').in('mission_id', missionIds)
+    .select('mission_id, agent_no, status, joined_at').in('mission_id', missionIds)
   for (const r of rows || []) {
     if (!byMission.has(r.mission_id)) byMission.set(r.mission_id, [])
     byMission.get(r.mission_id)!.push(r)
   }
   return byMission
+}
+
+/** The bulk counterpart to findMyCompletedMission: everyone who has ALREADY
+ *  finished this reconnect goal. Inviting one of them is a dead end — their
+ *  own panel resolves findMyCompletedMission first (see its doc comment:
+ *  "complete always wins once it exists"), so it renders "Done — you teamed
+ *  up…" and never draws the Accept button at all. The invite still lands in
+ *  their notification list (getMyInvites doesn't consult completed missions),
+ *  giving them a badge they cannot act on, while the inviter waits on an
+ *  acceptance that can never come and isSpokenFor marks the invitee
+ *  unavailable to everyone else. Same class of trap as the 52 provably-dead
+ *  missions swept in commit d12638b. */
+async function agentsDoneWithGoal(supabase: SupabaseDB, districtId: string, goalId: string): Promise<Set<string>> {
+  const { data: completeMissions } = await supabase.from('rc_reconnect_missions')
+    .select('id').eq('district_id', districtId).eq('goal_id', goalId).eq('status', 'complete')
+  const missionIds = (completeMissions || []).map((m: any) => m.id)
+  if (!missionIds.length) return new Set()
+  const { data: rows } = await supabase.from('rc_reconnect_participants')
+    .select('agent_no').eq('status', 'joined').in('mission_id', missionIds)
+  return new Set((rows || []).map((r: any) => r.agent_no as string))
+}
+
+/** Everyone on this goal who is genuinely free to be invited right now, with
+ *  how long they've been sitting there. Shared by getInviteCandidates (the
+ *  pickable list) and countWaitingAgents (the "N agents are waiting" nudge)
+ *  so the two can never disagree about who counts as waiting.
+ *
+ *  An agent can hold more than one stray open mission here (see
+ *  foldAwayDanglingMissions' own comment on why those linger), so waitingSince
+ *  is the EARLIEST joined_at across all of them — how long they've actually
+ *  been waiting for a partner, not how recently they re-opened. */
+function freeAgentsWithWait(rosters: Map<string, any[]>, eligible: string[], done: Set<string>) {
+  const out: { agentNo: string; waitingSince: string | null }[] = []
+  for (const agentNo of eligible) {
+    if (done.has(agentNo)) continue
+    if (isSpokenFor(rosters, agentNo)) continue
+    let since: string | null = null
+    for (const participants of rosters.values()) {
+      const mine = participants.find((p) => p.agent_no === agentNo)
+      if (!mine?.joined_at) continue
+      if (!since || mine.joined_at < since) since = mine.joined_at
+    }
+    out.push({ agentNo, waitingSince: since })
+  }
+  return out
+}
+
+/** "N other agents are waiting for a partner here" — the same free-agent set
+ *  getInviteCandidates offers, counted for an agent who may not have opened a
+ *  mission of their own yet. That's the whole point: the pickable list used to
+ *  be reachable only AFTER opening a mission, so nobody standing at the
+ *  "Open a mission" button could tell whether anyone was actually there to
+ *  team up with. Returns 0 rather than erroring for anyone not eligible. */
+export async function countWaitingAgents(supabase: SupabaseDB, agentNo: string, pd: any): Promise<number> {
+  if (pd?.status !== 'active') return 0
+  const reconnect = myReconnectGoal(pd)
+  if (!reconnect) return 0
+  const { data: activeRows } = await supabase.from('rc_player_districts')
+    .select('agent_no, goals').eq('district_id', pd.district_id).eq('status', 'active')
+  const eligible = (activeRows || [])
+    .filter((r: any) => r.agent_no !== agentNo && r.goals?.reconnect?.id === reconnect.id)
+    .map((r: any) => r.agent_no as string)
+  if (!eligible.length) return 0
+  const rosters = await openMissionRosters(supabase, pd.district_id, reconnect.id)
+  const done = await agentsDoneWithGoal(supabase, pd.district_id, reconnect.id)
+  return freeAgentsWithWait(rosters, eligible, done).length
 }
 
 /** True only when genuinely unavailable for a NEW invite on this goal:
@@ -503,13 +569,22 @@ export async function getInviteCandidates(supabase: SupabaseDB, content: unknown
   if (!eligible.length) return { success: true, candidates: [] }
 
   const rosters = await openMissionRosters(supabase, districtId, reconnect.id)
-  const free = eligible.filter((a) => !isSpokenFor(rosters, a))
+  const done = await agentsDoneWithGoal(supabase, districtId, reconnect.id)
+  const free = freeAgentsWithWait(rosters, eligible, done)
   if (!free.length) return { success: true, candidates: [] }
 
-  const names = await codenameMap(supabase, free)
+  const names = await codenameMap(supabase, free.map((f) => f.agentNo))
+  // Longest-waiting first, not alphabetical: the list is now a queue of real
+  // people to help rather than a menu to pick from, so whoever has been
+  // stuck the longest should be the first name anyone sees.
   const candidates = free
-    .map((a) => ({ agentNo: a, codename: names.get(a) || a }))
-    .sort((a, b) => a.codename.localeCompare(b.codename))
+    .map((f) => ({ agentNo: f.agentNo, codename: names.get(f.agentNo) || f.agentNo, waitingSince: f.waitingSince }))
+    .sort((a, b) => {
+      if (a.waitingSince && b.waitingSince) return a.waitingSince.localeCompare(b.waitingSince)
+      if (a.waitingSince) return -1
+      if (b.waitingSince) return 1
+      return a.codename.localeCompare(b.codename)
+    })
   return { success: true, candidates }
 }
 

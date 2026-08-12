@@ -88,6 +88,21 @@ export function cityFeedCard(state) {
   const entries = (state.cityFeed || [])
     .map((entry) => ({ text: lineFor(entry), time: timeAgo(entry.createdAt) }))
     .filter((row) => row.text)
+
+  // "N agents are waiting for a partner" — a live aggregate rather than a
+  // logged event (see handlers.ts), so it's built here each render and
+  // pinned FIRST: it's the one line in this ticker that's a standing ask
+  // rather than something that already happened, and it's the only one a
+  // reader can act on right now.
+  const waiting = Number(state.waitingAgents) || 0
+  if (waiting > 0) {
+    entries.unshift({
+      text: waiting === 1
+        ? '1 agent is waiting for a partner'
+        : `${waiting} agents are waiting for a partner`,
+      time: 'now',
+    })
+  }
   if (!entries.length) return wrap
 
   wrap.appendChild(el('div', 'feed-eyebrow', 'CITY NEWS'))

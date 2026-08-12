@@ -11,7 +11,7 @@ import { resolveReconnectStatus } from './reconnect-goal.ts'
 import { todayKst, nextKstMidnightUtc, kstDateOf } from './kst.ts'
 import { getBombView, launchDefuse } from './bomb.ts'
 import { getEraTimeline } from './era-timeline.ts'
-import { getMyInvites } from './reconnect-missions.ts'
+import { getMyInvites, countWaitingAgents } from './reconnect-missions.ts'
 import { creditChargeCells, STREAMS_PER_CHARGE_CELL } from './charge-economy.ts'
 import { getAgentChargeView } from './agent-charge.ts'
 import { levelFor, applyLevelUpIfNeeded, nextLevelRewards } from './leveling.ts'
@@ -386,6 +386,12 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
   // above, so the World screen's activity card refreshes on the existing
   // ~90s cycle with no extra client request. See feed.ts / migrations/048.
   const cityFeed = await getCityFeed(supabase)
+  // "N agents are waiting for a partner" — a live aggregate, deliberately NOT
+  // an rc_feed_events row: it's a standing state, not a moment that happened,
+  // so it's recomputed per poll and pinned into the ticker client-side rather
+  // than logged once and left to go stale. Scoped to the agent's own active
+  // district, since that's the only place they can actually act on it.
+  const waitingAgents = activePd ? await countWaitingAgents(supabase, player.agent_no, activePd) : 0
 
   return {
     success: true,
@@ -420,6 +426,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     invites,
     broadcasts,
     cityFeed,
+    waitingAgents,
     sideMissions,
     today: {
       kstDate: today,

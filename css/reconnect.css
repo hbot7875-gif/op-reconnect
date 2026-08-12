@@ -2743,6 +2743,22 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .bcast-title { font-family: var(--disp); font-weight: 800; font-size: 15px; margin-top: 8px; }
 .bcast-msg { color: var(--muted); font-size: 13.5px; line-height: 1.55; margin-top: 5px; }
 
+/* The "who needs a partner" queue — replaced a <select> dropdown, which read
+   as a menu to pick from rather than a list of people who are stuck. */
+.reconnect-waitlist { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
+.reconnect-wait-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px; border-radius: var(--r-md);
+  background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07);
+}
+.rw-name { font-weight: 700; font-size: 13.5px; flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rw-since { font-family: var(--mono); font-size: 10px; color: var(--dim);
+  letter-spacing: .4px; flex-shrink: 0; }
+.rw-invite { flex-shrink: 0; padding: 5px 14px; font-size: 12px; }
+.reconnect-waiting-now { margin-bottom: 10px; }
+.reconnect-waiting-now b { color: var(--purple-lt); }
+
 /* Live City Feed / "City News" — a single rotating headline, not a growing
    list: one sentence, fades out, replaced by the next. No avatars, no big
    icons, no "View all". The point is just "other agents are here." */
