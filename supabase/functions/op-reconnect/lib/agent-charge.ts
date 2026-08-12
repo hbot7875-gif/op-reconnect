@@ -177,18 +177,28 @@ export interface AgentChargeView {
   freezeChargesRemaining: number
 }
 
-/** Sum of charge_cells_awarded across EVERY district this agent has ever
- *  activated (restored ones included) — each row's own counter only ever
- *  grows (see creditChargeCells's doc comment: "award only the delta"), so
- *  this total only ever grows too, exactly like lifetime XP. The current
- *  wallet balance (rc_players.charge_cells) is the only thing that ever
- *  goes back down, and only ever from a feed (see the two
- *  rc_*_charge_feed RPCs — there is no other spend path and no refund
- *  path), which makes "spent so far" a pure subtraction: earned - on hand,
- *  no separate ledger needed. */
+/** Lifetime Charge Cells earned, straight off rc_players — a counter that
+ *  only ever grows, incremented inside the same locked unit that grants the
+ *  cells (rc_credit_charge_cells, migration 049). The current wallet balance
+ *  (rc_players.charge_cells) is the only thing that ever goes back down, and
+ *  only ever from a feed (see the two rc_*_charge_feed RPCs — there is no
+ *  other spend path and no refund path), which makes "spent so far" a pure
+ *  subtraction: earned - on hand, no separate ledger needed.
+ *
+ *  This used to SUM rc_player_districts.charge_cells_awarded instead, which
+ *  undercounted two ways. A district attempt that misses its 7-day deadline
+ *  has its row deleted outright (handlers.ts) so the agent can start over
+ *  with a clean insert — taking the awarded record with it while the granted
+ *  cells stay in the wallet. And before rc_credit_charge_cells became atomic,
+ *  overlapping polls could double-credit the wallet while the baseline
+ *  advanced once. Four agents ended up holding more cells than the sum could
+ *  account for, rendering as "18 earned all-time · 0 fed so far" next to a
+ *  wallet of 19 — precisely the contradiction this display exists to remove.
+ *  A counter that lives on the player, not on rows that get deleted, cannot
+ *  drift from the wallet either way. */
 async function lifetimeChargeCellsEarned(supabase: SupabaseDB, agentNo: string): Promise<number> {
-  const { data } = await supabase.from('rc_player_districts').select('charge_cells_awarded').eq('agent_no', agentNo)
-  return (data || []).reduce((sum: number, r: any) => sum + (r.charge_cells_awarded || 0), 0)
+  const { data } = await supabase.from('rc_players').select('lifetime_charge_cells').eq('agent_no', agentNo).maybeSingle()
+  return data?.lifetime_charge_cells || 0
 }
 
 /**

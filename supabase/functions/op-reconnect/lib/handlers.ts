@@ -232,24 +232,24 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
           `ward:${player.agent_no}:${activePd.district_id}`)
       }
 
-      // The drop — one item, once per district. Guarded on an existing row
-      // rather than a ledger dedup_key since rc_player_items has no unique
-      // constraint to upsert against; a second completion poll would
-      // otherwise roll (and hand out) a second item.
-      const { data: existingDrop } = await supabase.from('rc_player_items')
-        .select('id').eq('agent_no', player.agent_no).eq('district_id', activePd.district_id).limit(1).maybeSingle()
-      if (!existingDrop) {
-        const { data: rolledId } = await supabase.rpc('rc_roll_item')
-        if (rolledId) {
-          const { data: itemRow } = await supabase.from('rc_items').select('*').eq('id', rolledId).maybeSingle()
-          if (itemRow) {
-            await supabase.from('rc_player_items').insert({ agent_no: player.agent_no, item_id: rolledId, district_id: activePd.district_id })
-            itemDropped = { itemId: itemRow.id, name: itemRow.name, kind: itemRow.kind, era: itemRow.era, rarity: itemRow.rarity, blurb: itemRow.blurb }
-            // Rarity only, never the item's name — same "don't spoil it"
-            // reasoning as everything else the feed omits.
-            await logFeedEvent(supabase, player.agent_no, 'item_dropped',
-              { rarity: itemRow.rarity || null }, `item:${player.agent_no}:${activePd.district_id}`)
-          }
+      // The drop — one item, once per district, as a single row-locked unit
+      // (rc_drop_district_item, migration 049): check for an existing drop,
+      // roll, and insert without ever letting go between the three. This was
+      // a select-then-insert with no lock in between, which is a race, not a
+      // guard — two polls landing together both read "no drop yet" and both
+      // inserted. Two agents really did collect a second free item that way,
+      // 455ms and 171ms apart. Returns null when a drop already existed.
+      const { data: droppedId } = await supabase.rpc('rc_drop_district_item', {
+        p_agent_no: player.agent_no, p_district_id: activePd.district_id,
+      })
+      if (droppedId) {
+        const { data: itemRow } = await supabase.from('rc_items').select('*').eq('id', droppedId).maybeSingle()
+        if (itemRow) {
+          itemDropped = { itemId: itemRow.id, name: itemRow.name, kind: itemRow.kind, era: itemRow.era, rarity: itemRow.rarity, blurb: itemRow.blurb }
+          // Rarity only, never the item's name — same "don't spoil it"
+          // reasoning as everything else the feed omits.
+          await logFeedEvent(supabase, player.agent_no, 'item_dropped',
+            { rarity: itemRow.rarity || null }, `item:${player.agent_no}:${activePd.district_id}`)
         }
       }
 
