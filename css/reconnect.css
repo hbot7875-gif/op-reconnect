@@ -1828,6 +1828,9 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
    ("waiting"): nothing is going to arrive, it's just a record of what
    happened until the sender clears it. */
 .reconnect-agent.is-expired { opacity: 0.4; border-style: solid; }
+/* Gone quiet — dimmed, but nowhere near as faint as expired/dropped: they're
+   still on the team and may well come back. */
+.reconnect-agent.is-idle { opacity: 0.75; }
 .reconnect-expired-note { margin-top: 8px; }
 /* Only the mission creator ever sees this, next to someone who hasn't
    contributed anything yet — see reconnect-missions.ts's shape(). Sized as

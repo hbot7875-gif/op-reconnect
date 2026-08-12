@@ -215,8 +215,11 @@ const RECONNECT_ERRORS = {
   invite_expired: 'That invite expired after a day unanswered — ask them to send a new one.',
   target_required: 'Something went wrong picking who to remove.',
   cannot_remove_self: "You can't remove yourself — decline or leave isn't available here.",
+  // Leaving is allowed now (see removeReconnectParticipant's isLeaving), so
+  // cannot_remove_self should no longer reach a player; kept above only so an
+  // older cached client still shows words rather than a raw error code.
   not_mission_creator: 'Only whoever opened this mission can remove someone from it.',
-  already_contributed: "They've already streamed toward this — can't remove them now.",
+  already_contributed: "They're still streaming toward this — you can't remove someone who's helping, but you can leave if you'd rather team up elsewhere.",
   no_active_puzzle: 'Nothing to answer here right now.',
   already_solved: "You've already cracked this one.",
   no_attempts_left: "You're out of attempts on this one.",
@@ -412,6 +415,21 @@ function paintMissionPanel(box, d, res) {
       `${who} ran out of time restoring this district, so they can't contribute here until they start it again. You're free to team up with someone else${need > 0 ? ' below' : ''}.`))
   }
 
+  // A teammate who's gone quiet. Named plainly so the person still playing
+  // knows the stall isn't their own doing and has a way out — either drop
+  // them (creator) or leave (anyone). Deliberately never says anything about
+  // someone streaming *less*: only silence is called out, so nobody gets
+  // pressured for playing at their own pace.
+  const idlers = m.participants.filter((p) => p.status === 'joined' && p.idle && !p.isMe && !p.leftDistrict)
+  if (idlers.length) {
+    const who = idlers.map((p) => esc(p.codename)).join(', ')
+    box.appendChild(el('p', 'muted reconnect-expired-note',
+      `${who} ${idlers.length === 1 ? "hasn't" : "haven't"} streamed in a couple of days. `
+      + (m.isCreator
+        ? 'You can drop them below and invite someone else, or give them more time — nothing is lost either way.'
+        : "You can leave this mission and team up with someone else if you'd rather not wait.")))
+  }
+
   // Only relevant while a slot is still open — once the team's full, extra
   // pending invites can't do anything either way.
   if (pending.length && need > 0) {
@@ -426,10 +444,12 @@ function paintMissionPanel(box, d, res) {
     const statusText = p.inviteExpired ? 'No reply &middot; expired'
       : p.leftDistrict ? 'Ran out of time here'
       : p.status === 'invited' ? 'Invite pending'
+      : p.idle ? `Quiet 2+ days${p.streams ? ` &middot; ${p.streams} stream${p.streams === 1 ? '' : 's'}` : ''}`
       : res.variant === 'invite' ? '✓ Ready'
       : `Ready &middot; ${p.streams ?? 0} stream${(p.streams ?? 0) === 1 ? '' : 's'}`
     const row = el('div', 'reconnect-agent'
       + (p.status === 'invited' ? ' is-pending' : '')
+      + (p.idle ? ' is-idle' : '')
       + (p.inviteExpired || p.leftDistrict ? ' is-expired' : ''), `
       <span>${esc(p.codename)}${p.isMe ? ' (you)' : ''}</span>
       <span>${statusText}</span>
@@ -442,7 +462,10 @@ function paintMissionPanel(box, d, res) {
     // though the server call is the same one either way.
     if (m.isCreator && p.removable) {
       const removeBtn = el('button', 'reconnect-remove',
-        p.inviteExpired ? 'Clear' : p.status === 'invited' ? 'Cancel invite' : 'Remove')
+        p.inviteExpired ? 'Clear'
+          : p.status === 'invited' ? 'Cancel invite'
+          : p.leftDistrict ? 'Clear'
+          : p.idle ? 'Drop' : 'Remove')
       removeBtn.onclick = async () => {
         removeBtn.disabled = true
         msg.textContent = ''
@@ -459,6 +482,25 @@ function paintMissionPanel(box, d, res) {
         }
       }
       row.appendChild(removeBtn)
+    }
+    // Your own way out, whoever opened the mission. The creator already had
+    // levers; an agent who accepted an invite had none at all and could only
+    // wait out the 7-day expiry.
+    if (p.isMe && p.canLeave && p.status === 'joined') {
+      const leaveBtn = el('button', 'reconnect-remove', 'Leave')
+      leaveBtn.onclick = async () => {
+        leaveBtn.disabled = true
+        msg.textContent = ''
+        msg.classList.remove('is-error')
+        const r = await call('removeReconnectParticipant', { agentNo: me, districtId: d.id, targetAgentNo: p.agentNo })
+        if (r.success) { toast('Left the mission — you can team up with someone else now'); refresh() }
+        else {
+          msg.textContent = reconnectError(r.error)
+          msg.classList.add('is-error')
+          leaveBtn.disabled = false
+        }
+      }
+      row.appendChild(leaveBtn)
     }
     list.append(row, msg)
   }

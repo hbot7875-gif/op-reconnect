@@ -35,7 +35,21 @@
 
 import type { SupabaseDB, GameContent } from './config.ts'
 import type { FrozenReconnectGoal } from './districts.ts'
-import { kstDateOf } from './kst.ts'
+import { kstDateOf, todayKst, addDaysStr } from './kst.ts'
+
+/** How long a teammate can go without streaming anything before the person
+ *  carrying the mission may drop them.
+ *
+ *  Deliberately measured as "has streamed nothing at all recently", not "is
+ *  contributing less than me". Rate of contribution is a terrible basis for
+ *  removal here: modes legitimately scale effort (a Hard-mode agent needs 30
+ *  streams per XP against an Easy agent's 10), people have different amounts
+ *  of time, and letting someone be kicked for being slower invites exactly
+ *  the resentment and pressure this is meant to prevent — including being
+ *  dropped right before completion after doing real work. Going quiet for
+ *  days is objective, is what "stuck" actually looks like, and is the only
+ *  case where one agent is genuinely holding another back. */
+const IDLE_DAYS = 2
 
 /** How long an unanswered invite stays live before it stops counting.
  *
@@ -306,6 +320,10 @@ async function shape(supabase: SupabaseDB, m: any, participants: any[], meAgentN
       // (see refreshMission). They contribute nothing and cannot see this
       // mission until they start the district again.
       leftDistrict: !!p._leftDistrict,
+      // Joined and still on the district, but has streamed nothing at all
+      // for IDLE_DAYS. Shown so a teammate can tell "stalled" apart from
+      // "slower than me" — only the former is grounds for dropping someone.
+      idle: !!p._idle,
       // Real contribution count, 'invite' variant. Only set once
       // refreshMission has actually computed one this call (see its own doc
       // comment) — null rather than 0 for "not counted this pass" (an
@@ -316,8 +334,19 @@ async function shape(supabase: SupabaseDB, m: any, participants: any[], meAgentN
       // Only meaningful alongside mission.isCreator — a participant who
       // hasn't contributed anything yet (still invited, or joined but never
       // streamed) can be removed to free their slot; one who's already
-      // helped can't be unfairly bumped.
-      removable: p.agent_no !== meAgentNo && (p.status === 'invited' || (p.status === 'joined' && !p.streamed_at)),
+      // helped can't be unfairly bumped. Extended to cover someone who DID
+      // help and has since gone quiet (idle) or lost the district entirely
+      // (leftDistrict): the original rule made a single stream a permanent
+      // seat, which left whoever was still playing with no way out at all.
+      removable: p.agent_no !== meAgentNo && (
+        p.status === 'invited'
+        || (p.status === 'joined' && (!p.streamed_at || p._idle || p._leftDistrict))
+      ),
+      // Anyone can walk away from their own mission. Previously nobody could
+      // — remove-self was refused outright and only the creator could remove
+      // anyone else, so an agent who ACCEPTED an invite had no lever of any
+      // kind and simply waited out the 7-day expiry.
+      canLeave: p.agent_no === meAgentNo,
     })),
   }
 }
@@ -397,6 +426,10 @@ async function refreshMission(
   // same distinction to stop a dropped partner from blocking them.
   const stillOn = await agentsStillOnDistrict(supabase, mission.district_id)
   for (const p of joined) p._leftDistrict = !stillOn.has(p.agent_no)
+  // Gone quiet for IDLE_DAYS — surfaced so a teammate who is carrying the
+  // mission can see WHY it stopped moving, and drop them if they choose to.
+  const idle = await idleAgents(supabase, joined.map((p: any) => p.agent_no))
+  for (const p of joined) p._idle = idle.has(p.agent_no)
 
   const sharedTrack = config?.sharedTrack
   let sharedTotal = 0
@@ -630,6 +663,24 @@ async function agentsStillOnDistrict(supabase: SupabaseDB, districtId: string): 
   return new Set((data || []).map((r: any) => r.agent_no as string))
 }
 
+/** Of the agents given, which have logged NO streams at all in the last
+ *  IDLE_DAYS days. One query for the whole roster rather than per-agent —
+ *  refreshMission already runs on every poll and does enough round trips.
+ *  Uses raw_streams (any listening at all), not counted-toward-this-goal:
+ *  the question being answered is "has this person gone quiet", and someone
+ *  streaming daily but on the wrong tracks is present and reachable, not
+ *  stuck — that is a conversation for the team chat, not grounds for a kick. */
+async function idleAgents(supabase: SupabaseDB, agentNos: string[]): Promise<Set<string>> {
+  const idle = new Set<string>(agentNos)
+  if (!agentNos.length) return idle
+  const since = addDaysStr(todayKst(), -IDLE_DAYS)
+  const { data } = await supabase.from('rc_daily_activity')
+    .select('agent_no, raw_streams, kst_date')
+    .in('agent_no', agentNos).gte('kst_date', since)
+  for (const r of data || []) if ((r.raw_streams || 0) > 0) idle.delete(r.agent_no)
+  return idle
+}
+
 /** Who the caller can actually invite — since agent numbers are never
  *  shown to players anymore (see shape()'s codename resolution), "invite
  *  by agent number" was a dead end: nothing in the game ever tells you
@@ -818,7 +869,11 @@ export async function removeReconnectParticipant(supabase: SupabaseDB, content: 
   const agentNo = String(params.agentNo || '').trim().toUpperCase()
   const targetAgentNo = String(params.targetAgentNo || '').trim().toUpperCase()
   if (!targetAgentNo) return { success: false, error: 'target_required' }
-  if (targetAgentNo === agentNo) return { success: false, error: 'cannot_remove_self' }
+  // Removing YOURSELF is leaving, and is always allowed. It used to be
+  // refused outright, which — combined with "only the creator may remove
+  // anyone" below — meant an agent who accepted an invite had no way out of
+  // a stalled pairing at all, short of waiting out the mission's 7 days.
+  const isLeaving = targetAgentNo === agentNo
 
   const pd = await myActivePd(supabase, agentNo, districtId)
   if (pd?.status !== 'active') return { success: false, error: 'not_eligible' }
@@ -827,20 +882,42 @@ export async function removeReconnectParticipant(supabase: SupabaseDB, content: 
 
   let mission = await findMyMission(supabase, agentNo, districtId, { goalId: reconnect.id })
   if (!mission) return { success: false, error: 'not_in_mission' }
-  if (mission.created_by !== agentNo) return { success: false, error: 'not_mission_creator' }
+  if (!isLeaving && mission.created_by !== agentNo) return { success: false, error: 'not_mission_creator' }
   mission = await refreshMission(supabase, mission, reconnect.variant, reconnect.config)
   if (mission.status !== 'open') return { success: false, error: 'mission_' + mission.status }
 
   const { data: target } = await supabase.from('rc_reconnect_participants')
     .select('*').eq('mission_id', mission.id).eq('agent_no', targetAgentNo).maybeSingle()
   if (!target) return { success: false, error: 'not_in_mission' }
-  if (target.status === 'joined' && target.streamed_at) return { success: false, error: 'already_contributed' }
+  // Having contributed once used to buy a permanent seat, so a teammate who
+  // helped and then vanished could hold the mission (and the person still
+  // playing) hostage until it expired. Someone who has gone quiet for
+  // IDLE_DAYS, or lost the district outright, can now be dropped — but a
+  // teammate who is still streaming stays protected no matter how much
+  // slower they are than whoever is doing the removing. See IDLE_DAYS.
+  if (!isLeaving && target.status === 'joined' && target.streamed_at) {
+    const stillOn = await agentsStillOnDistrict(supabase, districtId)
+    const idle = await idleAgents(supabase, [targetAgentNo])
+    if (stillOn.has(targetAgentNo) && !idle.has(targetAgentNo)) {
+      return { success: false, error: 'already_contributed' }
+    }
+  }
 
   const { error } = await supabase.from('rc_reconnect_participants')
     .delete().eq('mission_id', mission.id).eq('agent_no', targetAgentNo)
   if (error) return { success: false, error: error.message }
 
   const { data: freshParticipants } = await supabase.from('rc_reconnect_participants').select('*').eq('mission_id', mission.id)
+  // Walking out of a mission nobody else joined leaves an empty shell that
+  // can never do anything — same dead-end foldAwayDanglingMissions clears
+  // elsewhere, so clear it here rather than leaving it as clutter that also
+  // shows up in every "N agents waiting" count.
+  if (isLeaving && !(freshParticipants || []).some((p: any) => p.status === 'joined')) {
+    await supabase.from('rc_reconnect_missions').delete().eq('id', mission.id).eq('status', 'open')
+    return { success: true, left: true, mission: null }
+  }
+  if (isLeaving) return { success: true, left: true, mission: null }
+
   return { success: true, mission: await shapeWithMessages(supabase, mission, freshParticipants || [], agentNo) }
 }
 
