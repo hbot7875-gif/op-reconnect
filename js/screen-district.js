@@ -360,7 +360,11 @@ function paintMissionPanel(box, d, res) {
   // to show on the shared total yet. Leading with a plain-language status
   // line before the bars, because "1/2 joined" reads as a fraction to parse,
   // not a sentence to understand at a glance.
-  const joined = m.participants.filter((p) => p.status === 'joined')
+  // Someone whose own attempt here lapsed can't contribute or even open this
+  // mission, so they don't count toward a ready team — otherwise the panel
+  // claims "2 of 2 ready" for a pairing that can never finish.
+  const joined = m.participants.filter((p) => p.status === 'joined' && !p.leftDistrict)
+  const dropped = m.participants.filter((p) => p.status === 'joined' && p.leftDistrict)
   // An expired invite is not pending — nobody is going to answer it. Kept
   // separate so the "only N more acceptances needed" line below doesn't
   // count on a reply that can never come.
@@ -398,6 +402,16 @@ function paintMissionPanel(box, d, res) {
         : `${who} didn't reply within a day, so those invites expired — the slots are free again, invite someone else below.`))
   }
 
+  // The other way a teammate silently stops counting: their own 7-day
+  // restoration window on this district ran out, which deletes their attempt
+  // and leaves them unable to see this mission at all. Without this the
+  // partner just watches the shared total stop moving forever.
+  if (dropped.length) {
+    const who = dropped.map((p) => esc(p.codename)).join(', ')
+    box.appendChild(el('p', 'muted reconnect-expired-note',
+      `${who} ran out of time restoring this district, so they can't contribute here until they start it again. You're free to team up with someone else${need > 0 ? ' below' : ''}.`))
+  }
+
   // Only relevant while a slot is still open — once the team's full, extra
   // pending invites can't do anything either way.
   if (pending.length && need > 0) {
@@ -410,12 +424,13 @@ function paintMissionPanel(box, d, res) {
     // Three separate states, not one blended one: still-pending, ready
     // (joined) with nothing counted yet, and ready with a real number.
     const statusText = p.inviteExpired ? 'No reply &middot; expired'
+      : p.leftDistrict ? 'Ran out of time here'
       : p.status === 'invited' ? 'Invite pending'
       : res.variant === 'invite' ? '✓ Ready'
       : `Ready &middot; ${p.streams ?? 0} stream${(p.streams ?? 0) === 1 ? '' : 's'}`
     const row = el('div', 'reconnect-agent'
       + (p.status === 'invited' ? ' is-pending' : '')
-      + (p.inviteExpired ? ' is-expired' : ''), `
+      + (p.inviteExpired || p.leftDistrict ? ' is-expired' : ''), `
       <span>${esc(p.codename)}${p.isMe ? ' (you)' : ''}</span>
       <span>${statusText}</span>
     `)

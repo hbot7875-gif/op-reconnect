@@ -302,6 +302,10 @@ async function shape(supabase: SupabaseDB, m: any, participants: any[], meAgentN
       // nothing anywhere; the flag exists so the sender can be told what
       // happened instead of watching the name quietly disappear.
       inviteExpired: !!p._expired,
+      // Joined, but their attempt on this district lapsed past its deadline
+      // (see refreshMission). They contribute nothing and cannot see this
+      // mission until they start the district again.
+      leftDistrict: !!p._leftDistrict,
       // Real contribution count, 'invite' variant. Only set once
       // refreshMission has actually computed one this call (see its own doc
       // comment) — null rather than 0 for "not counted this pass" (an
@@ -385,6 +389,14 @@ async function refreshMission(
   ))
   mission._participants = participants
   const joined = participants.filter((p: any) => p.status === 'joined')
+  // Who on this roster still holds an active attempt here. A partner whose
+  // attempt lapsed keeps their participant row but can contribute nothing,
+  // and can't even see this mission (their own panel needs an active
+  // attempt) — flagged so the person still playing is told why the team
+  // stopped moving instead of watching a silent stall. isSpokenFor uses the
+  // same distinction to stop a dropped partner from blocking them.
+  const stillOn = await agentsStillOnDistrict(supabase, mission.district_id)
+  for (const p of joined) p._leftDistrict = !stillOn.has(p.agent_no)
 
   const sharedTrack = config?.sharedTrack
   let sharedTotal = 0
@@ -524,11 +536,11 @@ async function agentsDoneWithGoal(supabase: SupabaseDB, districtId: string, goal
  *  foldAwayDanglingMissions' own comment on why those linger), so waitingSince
  *  is the EARLIEST joined_at across all of them — how long they've actually
  *  been waiting for a partner, not how recently they re-opened. */
-function freeAgentsWithWait(rosters: Map<string, any[]>, eligible: string[], done: Set<string>) {
+function freeAgentsWithWait(rosters: Map<string, any[]>, eligible: string[], done: Set<string>, stillOnDistrict: Set<string>) {
   const out: { agentNo: string; waitingSince: string | null }[] = []
   for (const agentNo of eligible) {
     if (done.has(agentNo)) continue
-    if (isSpokenFor(rosters, agentNo)) continue
+    if (isSpokenFor(rosters, agentNo, stillOnDistrict)) continue
     let since: string | null = null
     for (const participants of rosters.values()) {
       const mine = participants.find((p) => p.agent_no === agentNo)
@@ -558,7 +570,10 @@ export async function countWaitingAgents(supabase: SupabaseDB, agentNo: string, 
   if (!eligible.length) return 0
   const rosters = await openMissionRosters(supabase, pd.district_id, reconnect.id)
   const done = await agentsDoneWithGoal(supabase, pd.district_id, reconnect.id)
-  return freeAgentsWithWait(rosters, eligible, done).length
+  // activeRows is already every active attempt on this district, so the
+  // dropped-partner set comes free here — no extra round trip.
+  const stillOn = new Set<string>((activeRows || []).map((r: any) => r.agent_no as string))
+  return freeAgentsWithWait(rosters, eligible, done, stillOn).length
 }
 
 /** True only when genuinely unavailable for a NEW invite on this goal:
@@ -575,7 +590,7 @@ export async function countWaitingAgents(supabase: SupabaseDB, agentNo: string, 
  *  to one participant each, that was most of the active population:
  *  dozens of agents each sitting in their own dead-end mission, mutually
  *  invisible, with nothing in the UI explaining why. */
-function isSpokenFor(rosters: Map<string, any[]>, agentNo: string): boolean {
+function isSpokenFor(rosters: Map<string, any[]>, agentNo: string, stillOnDistrict?: Set<string>): boolean {
   for (const participants of rosters.values()) {
     const mine = participants.find((p) => p.agent_no === agentNo)
     if (!mine) continue
@@ -588,9 +603,31 @@ function isSpokenFor(rosters: Map<string, any[]>, agentNo: string): boolean {
       if (inviteExpired(mine)) continue
       return true
     }
-    if (mine.status === 'joined' && participants.some((p) => p.agent_no !== agentNo && p.status === 'joined')) return true
+    // Only a partner who can still actually play this district counts as
+    // pairing you up. An agent whose attempt ran past its 7-day deadline has
+    // their rc_player_districts row DELETED (handlers.ts) but keeps their
+    // participant row here — so without this check they'd go on holding
+    // their partner hostage from every other pairing while contributing
+    // nothing (refreshMission already zeroes a dropped agent's contribution)
+    // and being unable to see the mission themselves, since their own panel
+    // needs an active attempt to render at all. The mission is not deleted:
+    // if they re-activate the district they simply start counting again.
+    if (mine.status === 'joined' && participants.some((p) =>
+      p.agent_no !== agentNo && p.status === 'joined' && (!stillOnDistrict || stillOnDistrict.has(p.agent_no))
+    )) return true
   }
   return false
+}
+
+/** Everyone still holding an ACTIVE attempt on this district — the set
+ *  isSpokenFor uses to tell a real partner from one who has dropped out.
+ *  Deliberately keyed on the district alone, not the frozen goal, to match
+ *  refreshMission's own myActivePd(agent, mission.district_id) check: an
+ *  active attempt is what decides whether someone can contribute here. */
+async function agentsStillOnDistrict(supabase: SupabaseDB, districtId: string): Promise<Set<string>> {
+  const { data } = await supabase.from('rc_player_districts')
+    .select('agent_no').eq('district_id', districtId).eq('status', 'active')
+  return new Set((data || []).map((r: any) => r.agent_no as string))
 }
 
 /** Who the caller can actually invite — since agent numbers are never
@@ -621,7 +658,8 @@ export async function getInviteCandidates(supabase: SupabaseDB, content: unknown
 
   const rosters = await openMissionRosters(supabase, districtId, reconnect.id)
   const done = await agentsDoneWithGoal(supabase, districtId, reconnect.id)
-  const free = freeAgentsWithWait(rosters, eligible, done)
+  const stillOn = new Set<string>((activeRows || []).map((r: any) => r.agent_no as string))
+  const free = freeAgentsWithWait(rosters, eligible, done, stillOn)
   if (!free.length) return { success: true, candidates: [] }
 
   const names = await codenameMap(supabase, free.map((f) => f.agentNo))
@@ -708,7 +746,9 @@ export async function inviteReconnectMission(supabase: SupabaseDB, content: unkn
   // any sense that should block this invite; only genuinely being spoken
   // for (pending elsewhere, or already paired with someone) does.
   const rosters = await openMissionRosters(supabase, districtId, reconnect.id)
-  if (isSpokenFor(rosters, inviteeAgentNo)) return { success: false, error: 'already_in_mission' }
+  if (isSpokenFor(rosters, inviteeAgentNo, await agentsStillOnDistrict(supabase, districtId))) {
+    return { success: false, error: 'already_in_mission' }
+  }
 
   const { data: participants } = await supabase.from('rc_reconnect_participants').select('*').eq('mission_id', mission.id)
   const joinedCount = (participants || []).filter((p: any) => p.status === 'joined').length
@@ -854,7 +894,9 @@ export async function respondReconnectInvite(supabase: SupabaseDB, content: unkn
   // accept, including the legitimate first one.
   const rostersForGuard = await openMissionRosters(supabase, districtId, mission.goal_id)
   rostersForGuard.delete(mission.id)
-  if (isSpokenFor(rostersForGuard, agentNo)) return { success: false, error: 'already_paired_elsewhere' }
+  if (isSpokenFor(rostersForGuard, agentNo, await agentsStillOnDistrict(supabase, districtId))) {
+    return { success: false, error: 'already_paired_elsewhere' }
+  }
 
   // rc_reconnect_accept_invite re-checks the invite and capacity, and
   // flips the status, all as one row-locked unit — the old separate
