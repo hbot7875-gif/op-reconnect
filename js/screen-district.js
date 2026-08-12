@@ -559,10 +559,17 @@ function paintMissionPanel(box, d, res) {
         if (!res2.candidates?.length) {
           // The list already excludes anyone already invited, joined, or not
           // actively restoring this district — empty means there's genuinely
-          // nobody free right now, not a filter mistake.
+          // nobody free right now, not a filter mistake. Said plainly: every
+          // real report of this turned out to be true (see bug-resolution-log
+          // — "Can't invite anyone... Not a bug"), so the fix was never the
+          // logic, it was that "No free agents" reads like an error when it's
+          // actually just population math. Spelling out WHY (already teamed
+          // up, or already finished) is what makes that legible instead of
+          // sounding broken.
           intro.remove()
           noteInput.remove()
-          waitList.appendChild(el('p', 'muted', 'No free agents right now—check again soon.'))
+          waitList.appendChild(el('p', 'muted',
+            "Nobody's free to invite right now — everyone else restoring this district has either already teamed up with someone or already finished this together. New agents open up here often, so check back in a bit."))
           return
         }
         const n = res2.candidates.length
