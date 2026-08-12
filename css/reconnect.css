@@ -2216,6 +2216,9 @@ body.overlay-open { overflow: hidden; }
 
 /* ── onboarding / misc ── */
 .ob-wrap { width: 100%; max-width: 520px; margin: auto; padding: 48px 20px; }
+/* Secondary to the real call to action above it — reading the manual is an
+   option here, never the expected next tap. */
+.ob-manual-link { margin-top: 10px; font-size: 13px; }
 .ob-charge-loop { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 7px;
   margin: 18px 0 22px; color: var(--purple-lt); font-family: var(--mono); font-size: 10px;
   font-weight: 700; letter-spacing: .7px; text-align: center; }

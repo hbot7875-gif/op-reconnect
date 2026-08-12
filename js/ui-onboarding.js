@@ -2,7 +2,8 @@
 // enter the network. All copy comes from the server payload (DB-driven).
 
 import { call } from './api.js'
-import { el, esc, toast, setState } from './state.js'
+import { el, esc, toast, setState, showOverlay } from './state.js'
+import { agentManualSheet } from './agent-manual.js'
 import { ambientToggle } from './ambient.js'
 import { openStreamSource, uplinkBroken } from './settings-streams.js'
 import { wardDisplayName, districtDisplayName } from './ward-tiles.js'
@@ -222,6 +223,15 @@ function renderFirstMove(mount, joinedState, proceed) {
   const btn = el('button', 'btn btn-primary', 'Show me my first district')
   btn.onclick = proceed
   mount.appendChild(btn)
+
+  // The manual was only ever reachable from Settings, which is the one screen
+  // a brand-new agent has no reason to open — so the rules it explains (how
+  // teaming up works, what happens when a timer runs out) were effectively
+  // undiscoverable at exactly the moment they matter most. Offered here as a
+  // second, quieter option so it never competes with the real call to action.
+  const manual = el('button', 'btn btn-ghost ob-manual-link', '📖 Read the Agent Manual first')
+  manual.onclick = () => showOverlay(agentManualSheet())
+  mount.appendChild(manual)
 }
 
 /* ── cinematic transmission ──────────────────────────────────────────── */

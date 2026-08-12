@@ -423,8 +423,13 @@ function paintMissionPanel(box, d, res) {
   const idlers = m.participants.filter((p) => p.status === 'joined' && p.idle && !p.isMe && !p.leftDistrict)
   if (idlers.length) {
     const who = idlers.map((p) => esc(p.codename)).join(', ')
+    // On the final day the bar for "gone quiet" drops to a single day (see
+    // idleThresholdFor) — say so, otherwise dropping someone who only missed
+    // yesterday looks arbitrary next to the usual couple-of-days wording.
+    const urgent = res.idleThreshold === 1
     box.appendChild(el('p', 'muted reconnect-expired-note',
-      `${who} ${idlers.length === 1 ? "hasn't" : "haven't"} streamed in a couple of days. `
+      `${who} ${idlers.length === 1 ? "hasn't" : "haven't"} streamed ${urgent ? 'today' : 'in a couple of days'}. `
+      + (urgent ? "You're on the last day here, so you don't have to wait them out. " : '')
       + (m.isCreator
         ? 'You can drop them below and invite someone else, or give them more time — nothing is lost either way.'
         : "You can leave this mission and team up with someone else if you'd rather not wait.")))
@@ -444,7 +449,7 @@ function paintMissionPanel(box, d, res) {
     const statusText = p.inviteExpired ? 'No reply &middot; expired'
       : p.leftDistrict ? 'Ran out of time here'
       : p.status === 'invited' ? 'Invite pending'
-      : p.idle ? `Quiet 2+ days${p.streams ? ` &middot; ${p.streams} stream${p.streams === 1 ? '' : 's'}` : ''}`
+      : p.idle ? `Quiet ${p.quietDays >= 3 ? '3+' : p.quietDays} day${p.quietDays === 1 ? '' : 's'}${p.streams ? ` &middot; ${p.streams} stream${p.streams === 1 ? '' : 's'}` : ''}`
       : res.variant === 'invite' ? '✓ Ready'
       : `Ready &middot; ${p.streams ?? 0} stream${(p.streams ?? 0) === 1 ? '' : 's'}`
     const row = el('div', 'reconnect-agent'

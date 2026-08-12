@@ -34,6 +34,7 @@
 // district's own reward, same as any other goal here.
 
 import type { SupabaseDB, GameContent } from './config.ts'
+import { restorationDays } from './config.ts'
 import type { FrozenReconnectGoal } from './districts.ts'
 import { kstDateOf, todayKst, addDaysStr } from './kst.ts'
 
@@ -84,8 +85,24 @@ function inviteExpired(row: { status?: string; joined_at?: string } | null | und
  *  truth for "what mission am I even trying to do." */
 async function myActivePd(supabase: SupabaseDB, agentNo: string, districtId: string) {
   const { data } = await supabase.from('rc_player_districts')
-    .select('status, goals').eq('agent_no', agentNo).eq('district_id', districtId).maybeSingle()
+    // activated_at drives the restoration deadline, which decides how long
+    // this agent can afford to wait on a quiet teammate — see idleThresholdFor.
+    .select('status, goals, activated_at').eq('agent_no', agentNo).eq('district_id', districtId).maybeSingle()
   return data || null
+}
+
+/** How many days of silence make a teammate droppable, for THIS agent right
+ *  now. Normally IDLE_DAYS — but that is useless on the last day of a
+ *  restoration: wait two days to earn the right to drop someone and the
+ *  district has already lapsed, which is the exact outcome the drop exists
+ *  to prevent. Inside the final day the bar drops to one day of silence.
+ *
+ *  It never reaches zero: a teammate who has streamed today is protected no
+ *  matter how close the deadline is, because they are helping. */
+function idleThresholdFor(pd: { activated_at?: string } | null, restoreDays: number): number {
+  if (!pd?.activated_at) return IDLE_DAYS
+  const msLeft = new Date(pd.activated_at).getTime() + restoreDays * 86400000 - Date.now()
+  return msLeft <= 86400000 ? 1 : IDLE_DAYS
 }
 
 function myReconnectGoal(pd: any): FrozenReconnectGoal | null {
@@ -290,7 +307,7 @@ async function participantsFor(supabase: SupabaseDB, mission: any) {
  *  (it briefly wasn't) because removeReconnectParticipant needs to target
  *  someone specific — same "travels as data, never rendered as text" rule
  *  getInviteCandidates already follows for exactly the same reason. */
-async function shape(supabase: SupabaseDB, m: any, participants: any[], meAgentNo: string) {
+async function shape(supabase: SupabaseDB, m: any, participants: any[], meAgentNo: string, idleThreshold = IDLE_DAYS) {
   const names = await codenameMap(supabase, participants.map((p) => p.agent_no))
   return {
     id: m.id,
@@ -320,10 +337,13 @@ async function shape(supabase: SupabaseDB, m: any, participants: any[], meAgentN
       // (see refreshMission). They contribute nothing and cannot see this
       // mission until they start the district again.
       leftDistrict: !!p._leftDistrict,
-      // Joined and still on the district, but has streamed nothing at all
-      // for IDLE_DAYS. Shown so a teammate can tell "stalled" apart from
-      // "slower than me" — only the former is grounds for dropping someone.
-      idle: !!p._idle,
+      // Joined and still on the district, but has streamed nothing at all for
+      // long enough to count as stalled for whoever is looking — the bar
+      // tightens on the final day of a restoration, see idleThresholdFor.
+      // Shown so a teammate can tell "stalled" apart from "slower than me";
+      // only the former is ever grounds for dropping someone.
+      idle: typeof p._quietDays === 'number' && p._quietDays >= idleThreshold,
+      quietDays: typeof p._quietDays === 'number' ? p._quietDays : 0,
       // Real contribution count, 'invite' variant. Only set once
       // refreshMission has actually computed one this call (see its own doc
       // comment) — null rather than 0 for "not counted this pass" (an
@@ -340,7 +360,11 @@ async function shape(supabase: SupabaseDB, m: any, participants: any[], meAgentN
       // seat, which left whoever was still playing with no way out at all.
       removable: p.agent_no !== meAgentNo && (
         p.status === 'invited'
-        || (p.status === 'joined' && (!p.streamed_at || p._idle || p._leftDistrict))
+        || (p.status === 'joined' && (
+          !p.streamed_at
+          || (typeof p._quietDays === 'number' && p._quietDays >= idleThreshold)
+          || p._leftDistrict
+        ))
       ),
       // Anyone can walk away from their own mission. Previously nobody could
       // — remove-self was refused outright and only the creator could remove
@@ -357,8 +381,8 @@ async function shape(supabase: SupabaseDB, m: any, participants: any[], meAgentN
  *  for message history. Every caller that feeds the interactive panel
  *  (getReconnectMission, openReconnectMission, removeReconnectParticipant)
  *  uses this instead. */
-async function shapeWithMessages(supabase: SupabaseDB, m: any, participants: any[], meAgentNo: string) {
-  const shaped: any = await shape(supabase, m, participants, meAgentNo)
+async function shapeWithMessages(supabase: SupabaseDB, m: any, participants: any[], meAgentNo: string, idleThreshold = IDLE_DAYS) {
+  const shaped: any = await shape(supabase, m, participants, meAgentNo, idleThreshold)
   shaped.messages = await missionMessages(supabase, m.id, meAgentNo)
   return shaped
 }
@@ -426,10 +450,13 @@ async function refreshMission(
   // same distinction to stop a dropped partner from blocking them.
   const stillOn = await agentsStillOnDistrict(supabase, mission.district_id)
   for (const p of joined) p._leftDistrict = !stillOn.has(p.agent_no)
-  // Gone quiet for IDLE_DAYS — surfaced so a teammate who is carrying the
-  // mission can see WHY it stopped moving, and drop them if they choose to.
-  const idle = await idleAgents(supabase, joined.map((p: any) => p.agent_no))
-  for (const p of joined) p._idle = idle.has(p.agent_no)
+  // Days since each teammate last streamed anything — surfaced so whoever is
+  // carrying the mission can see WHY it stopped moving. Stored as a count
+  // rather than a boolean because how much silence is tolerable depends on
+  // how much time the VIEWER has left (see idleThresholdFor), which this
+  // function has no way to know.
+  const quiet = await quietDaysByAgent(supabase, joined.map((p: any) => p.agent_no))
+  for (const p of joined) p._quietDays = quiet.get(p.agent_no) ?? 0
 
   const sharedTrack = config?.sharedTrack
   let sharedTotal = 0
@@ -498,7 +525,7 @@ export async function getMissionStatus(supabase: SupabaseDB, agentNo: string, di
  *  site owner: strangers ending up 'joined' together with no invite ever
  *  sent between them read as an unrequested auto-accept, which it
  *  effectively was from either player's point of view. */
-export async function getReconnectMission(supabase: SupabaseDB, content: unknown, params: any) {
+export async function getReconnectMission(supabase: SupabaseDB, content: any, params: any) {
   const districtId = String(params.districtId || '')
   const agentNo = String(params.agentNo || '').trim().toUpperCase()
   if (!districtId) return { success: false, error: 'district_required' }
@@ -513,11 +540,16 @@ export async function getReconnectMission(supabase: SupabaseDB, content: unknown
   if (mission) mission = await refreshMission(supabase, mission, reconnect.variant, reconnect.config)
 
   const participants = await participantsFor(supabase, mission)
+  // This is the screen the Drop button actually renders on, so it's where the
+  // deadline-aware threshold matters: on the final day, one day of silence is
+  // already too much to wait out.
+  const idleThreshold = idleThresholdFor(pd, restorationDays(content))
 
   return {
     success: true, available: true, variant: reconnect.variant,
     config: { requiredAgents: reconnect.config.requiredAgents, sharedTrack: reconnect.config.sharedTrack || null },
-    mission: mission ? await shapeWithMessages(supabase, mission, participants || [], agentNo) : null,
+    idleThreshold,
+    mission: mission ? await shapeWithMessages(supabase, mission, participants || [], agentNo, idleThreshold) : null,
   }
 }
 
@@ -670,15 +702,27 @@ async function agentsStillOnDistrict(supabase: SupabaseDB, districtId: string): 
  *  the question being answered is "has this person gone quiet", and someone
  *  streaming daily but on the wrong tracks is present and reachable, not
  *  stuck — that is a conversation for the team chat, not grounds for a kick. */
-async function idleAgents(supabase: SupabaseDB, agentNos: string[]): Promise<Set<string>> {
-  const idle = new Set<string>(agentNos)
-  if (!agentNos.length) return idle
-  const since = addDaysStr(todayKst(), -IDLE_DAYS)
+async function quietDaysByAgent(supabase: SupabaseDB, agentNos: string[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>()
+  if (!agentNos.length) return out
+  const today = todayKst()
+  const lookback = IDLE_DAYS + 1
+  for (const a of agentNos) out.set(a, lookback) // nothing found in the window = at least this quiet
   const { data } = await supabase.from('rc_daily_activity')
     .select('agent_no, raw_streams, kst_date')
-    .in('agent_no', agentNos).gte('kst_date', since)
-  for (const r of data || []) if ((r.raw_streams || 0) > 0) idle.delete(r.agent_no)
-  return idle
+    .in('agent_no', agentNos).gte('kst_date', addDaysStr(today, -lookback))
+  const lastActive = new Map<string, string>()
+  for (const r of data || []) {
+    if ((r.raw_streams || 0) <= 0) continue
+    const prev = lastActive.get(r.agent_no)
+    if (!prev || r.kst_date > prev) lastActive.set(r.agent_no, r.kst_date)
+  }
+  for (const [a, date] of lastActive) {
+    let days = 0
+    while (days < lookback && addDaysStr(today, -days) > date) days++
+    out.set(a, days)
+  }
+  return out
 }
 
 /** Who the caller can actually invite — since agent numbers are never
@@ -897,8 +941,11 @@ export async function removeReconnectParticipant(supabase: SupabaseDB, content: 
   // slower they are than whoever is doing the removing. See IDLE_DAYS.
   if (!isLeaving && target.status === 'joined' && target.streamed_at) {
     const stillOn = await agentsStillOnDistrict(supabase, districtId)
-    const idle = await idleAgents(supabase, [targetAgentNo])
-    if (stillOn.has(targetAgentNo) && !idle.has(targetAgentNo)) {
+    const quiet = (await quietDaysByAgent(supabase, [targetAgentNo])).get(targetAgentNo) ?? 0
+    // Threshold comes from the REMOVER's own deadline: on the last day of a
+    // restoration there is no time left to wait out a second day of silence.
+    const threshold = idleThresholdFor(pd, restorationDays(content as GameContent))
+    if (stillOn.has(targetAgentNo) && quiet < threshold) {
       return { success: false, error: 'already_contributed' }
     }
   }
