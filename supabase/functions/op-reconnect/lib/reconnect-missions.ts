@@ -297,6 +297,11 @@ async function shape(supabase: SupabaseDB, m: any, participants: any[], meAgentN
       codename: names.get(p.agent_no) || p.agent_no, // fallback: retired/missing rc_players row
       isMe: p.agent_no === meAgentNo,
       status: p.status, joinedAt: p.joined_at, streamed: !!p.streamed_at,
+      // An invite that ran past INVITE_TTL_MS unanswered. Still 'invited' in
+      // the DB (it's kept, not deleted — see refreshMission) but counts for
+      // nothing anywhere; the flag exists so the sender can be told what
+      // happened instead of watching the name quietly disappear.
+      inviteExpired: !!p._expired,
       // Real contribution count, 'invite' variant. Only set once
       // refreshMission has actually computed one this call (see its own doc
       // comment) — null rather than 0 for "not counted this pass" (an
@@ -368,18 +373,16 @@ async function refreshMission(
 
   const { data: rawParticipants } = await supabase.from('rc_reconnect_participants')
     .select('*').eq('mission_id', mission.id)
-  // Drop invites nobody answered inside INVITE_TTL_MS — deleted outright,
-  // exactly like a declined one, so the slot frees up and the invitee stops
-  // reading as taken. Filtered out of _participants either way (see
-  // participantsFor, which trusts that array) so a failed delete still can't
-  // surface a dead invite in the roster.
-  const stale = (rawParticipants || []).filter((p: any) => inviteExpired(p))
-  if (stale.length) {
-    await supabase.from('rc_reconnect_participants').delete()
-      .eq('mission_id', mission.id).eq('status', 'invited')
-      .in('agent_no', stale.map((p: any) => p.agent_no))
-  }
-  const participants = (rawParticipants || []).filter((p: any) => !inviteExpired(p))
+  // Stale invites are KEPT here, flagged rather than deleted. They already
+  // block nothing (isSpokenFor ignores them, getMyInvites hides them,
+  // respondReconnectInvite refuses them), so the only thing the row still
+  // does is tell the person who SENT it what became of it. Deleting it made
+  // the invitee silently vanish from the inviter's roster with no
+  // explanation — they'd have to notice someone was missing. The creator
+  // clears it with the same Cancel invite button they already had.
+  const participants = (rawParticipants || []).map((p: any) => (
+    inviteExpired(p) ? { ...p, _expired: true } : p
+  ))
   mission._participants = participants
   const joined = participants.filter((p: any) => p.status === 'joined')
 
@@ -713,6 +716,16 @@ export async function inviteReconnectMission(supabase: SupabaseDB, content: unkn
 
   const inviteePd = await myActivePd(supabase, inviteeAgentNo, districtId)
   if (inviteePd?.status !== 'active') return { success: false, error: 'invitee_not_eligible' }
+
+  // An expired invite to this same person is deliberately kept as a record
+  // for whoever sent it (see refreshMission), but (mission_id, agent_no) is
+  // the primary key — so re-inviting them would collide with that dead row
+  // and surface a raw Postgres duplicate-key error. Clear it first, scoped
+  // by BOTH status and age so this can only ever remove a provably expired
+  // invite: a still-live pending one and a joined member are untouchable.
+  await supabase.from('rc_reconnect_participants').delete()
+    .eq('mission_id', mission.id).eq('agent_no', inviteeAgentNo).eq('status', 'invited')
+    .lt('joined_at', new Date(Date.now() - INVITE_TTL_MS).toISOString())
 
   const { error } = await supabase.from('rc_reconnect_participants')
     .insert({ mission_id: mission.id, agent_no: inviteeAgentNo, status: 'invited', invited_by: agentNo })

@@ -361,7 +361,11 @@ function paintMissionPanel(box, d, res) {
   // line before the bars, because "1/2 joined" reads as a fraction to parse,
   // not a sentence to understand at a glance.
   const joined = m.participants.filter((p) => p.status === 'joined')
-  const pending = m.participants.filter((p) => p.status === 'invited')
+  // An expired invite is not pending — nobody is going to answer it. Kept
+  // separate so the "only N more acceptances needed" line below doesn't
+  // count on a reply that can never come.
+  const pending = m.participants.filter((p) => p.status === 'invited' && !p.inviteExpired)
+  const expired = m.participants.filter((p) => p.status === 'invited' && p.inviteExpired)
   const need = Math.max(0, m.requiredAgents - joined.length)
 
   box.appendChild(el('div', 'team-status', `
@@ -382,6 +386,18 @@ function paintMissionPanel(box, d, res) {
     box.appendChild(el('p', 'muted', `${streamedCount}/${joined.length} have streamed toward their own goals here since joining.`))
   }
 
+  // The one thing the sender would otherwise never learn: their invite ran
+  // out. Without this the name just disappeared from the roster (it used to
+  // be hard-deleted) and they'd be left wondering whether they'd imagined
+  // inviting anyone. Says plainly that the slot is theirs to use again.
+  if (expired.length && need > 0) {
+    const who = expired.map((p) => esc(p.codename)).join(', ')
+    box.appendChild(el('p', 'muted reconnect-expired-note',
+      expired.length === 1
+        ? `${who} didn't reply within a day, so that invite expired — the slot's free again, invite someone else below.`
+        : `${who} didn't reply within a day, so those invites expired — the slots are free again, invite someone else below.`))
+  }
+
   // Only relevant while a slot is still open — once the team's full, extra
   // pending invites can't do anything either way.
   if (pending.length && need > 0) {
@@ -393,10 +409,13 @@ function paintMissionPanel(box, d, res) {
   for (const p of m.participants) {
     // Three separate states, not one blended one: still-pending, ready
     // (joined) with nothing counted yet, and ready with a real number.
-    const statusText = p.status === 'invited' ? 'Invite pending'
+    const statusText = p.inviteExpired ? 'No reply &middot; expired'
+      : p.status === 'invited' ? 'Invite pending'
       : res.variant === 'invite' ? '✓ Ready'
       : `Ready &middot; ${p.streams ?? 0} stream${(p.streams ?? 0) === 1 ? '' : 's'}`
-    const row = el('div', 'reconnect-agent' + (p.status === 'invited' ? ' is-pending' : ''), `
+    const row = el('div', 'reconnect-agent'
+      + (p.status === 'invited' ? ' is-pending' : '')
+      + (p.inviteExpired ? ' is-expired' : ''), `
       <span>${esc(p.codename)}${p.isMe ? ' (you)' : ''}</span>
       <span>${statusText}</span>
     `)
@@ -407,14 +426,16 @@ function paintMissionPanel(box, d, res) {
     // Still-pending vs. already-joined reads as two different actions even
     // though the server call is the same one either way.
     if (m.isCreator && p.removable) {
-      const removeBtn = el('button', 'reconnect-remove', p.status === 'invited' ? 'Cancel invite' : 'Remove')
+      const removeBtn = el('button', 'reconnect-remove',
+        p.inviteExpired ? 'Clear' : p.status === 'invited' ? 'Cancel invite' : 'Remove')
       removeBtn.onclick = async () => {
         removeBtn.disabled = true
         msg.textContent = ''
         msg.classList.remove('is-error')
         const r = await call('removeReconnectParticipant', { agentNo: me, districtId: d.id, targetAgentNo: p.agentNo })
         if (r.success) {
-          toast(p.status === 'invited' ? `Cancelled the invite to ${p.codename}` : `Removed ${p.codename}`)
+          toast(p.inviteExpired ? `Cleared the expired invite to ${p.codename}`
+            : p.status === 'invited' ? `Cancelled the invite to ${p.codename}` : `Removed ${p.codename}`)
           refresh()
         } else {
           msg.textContent = reconnectError(r.error)
