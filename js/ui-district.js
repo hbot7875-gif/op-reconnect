@@ -30,7 +30,7 @@ function goalRow(label, sub, progress, target, done, unit) {
       <span class="gr-count">${done ? '✓ done' : `${progress}<i>/${target}</i>`}</span>
     </div>
     ${done ? '' : `<div class="gr-bar"><div class="gr-fill" style="width:${pct}%"></div></div>`}
-    ${!done && sub ? `<div class="gr-sub">${sub}</div>` : ''}
+    ${sub ? `<div class="gr-sub">${sub}</div>` : ''}
   `
   if (unit && !done) row.querySelector('.gr-count').insertAdjacentHTML('beforeend', ` <i>${unit}</i>`)
   return row
@@ -174,9 +174,24 @@ export function renderBoard(board, d, opts = {}) {
   // Track → Album → ReConnect reading order as the rest of the checklist.
   if (reconnect) {
     if (reconnect.done) {
+      // Name who it was completed with. The interactive panel already says
+      // this ("Done — you teamed up with X"), but that panel only exists
+      // while reconnect.done is still false — the instant a poll reports it
+      // complete, the checklist swaps straight to this static row and the
+      // panel (and its message) never renders again. In the ordinary case
+      // that's not a brief flash, it's the ENTIRE lifetime of the message:
+      // resolveReconnectStatus reports done:true starting the very same poll
+      // the mission's status flips to 'complete' server-side, so there is no
+      // separate poll where reconnectBox gets built with a still-open
+      // mission that then resolves to complete client-side. A player asking
+      // "does it just show a tick mark?" was accurately describing what they
+      // saw — the data (reconnect.mission.participants) was always in the
+      // response, just never read here.
+      const others = (reconnect.mission?.participants || []).filter((p) => !p.isMe && p.status === 'joined')
+      const withWho = others.length ? `With ${others.map((p) => esc(p.codename)).join(' and ')}` : ''
       const doneCard = el('div', 'card goal-card')
       doneCard.appendChild(missionSection('🤝', 'ReConnect Mission', 1, 1))
-      doneCard.appendChild(goalRow('🤝 ReConnect Mission', '', 1, 1, true))
+      doneCard.appendChild(goalRow('🤝 ReConnect Mission', withWho, 1, 1, true))
       board.appendChild(doneCard)
     } else if (opts.reconnectBox) {
       board.appendChild(missionSection('🤝', 'ReConnect Mission', 0, 1))
