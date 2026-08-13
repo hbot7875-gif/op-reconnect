@@ -16,7 +16,7 @@ import { creditChargeCells, STREAMS_PER_CHARGE_CELL } from './charge-economy.ts'
 import { getAgentChargeView } from './agent-charge.ts'
 import { levelFor, applyLevelUpIfNeeded, nextLevelRewards } from './leveling.ts'
 import { getActiveBroadcasts } from './broadcasts.ts'
-import { logFeedEvent, getCityFeed } from './feed.ts'
+import { logFeedEvent, getCityFeed, markOnline, getOnlineNow } from './feed.ts'
 
 // rc_agents (migration 016) is this season's own account table — a clean
 // break from the old site's `agents`. Migrations 019/020 added the columns
@@ -88,6 +88,11 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
   const cap = PERSONAL_COUNT_CAP
   const allowlist: string[] = content.config.bts_artists || []
   const today = todayKst()
+  // The real "online now" signal — see feed.ts's markOnline for why this,
+  // not raw_streams, is what makes "who's here right now" trustworthy.
+  // Fire-and-forget: a failed write here should never fail the poll it
+  // rides on, and nothing below depends on it having landed yet.
+  markOnline(supabase, player.agent_no).catch(() => {})
 
   // A level-up's timed personal boost, if still active — the only
   // multiplier real XP still gets (the ARMY Bomb's shared community
@@ -392,6 +397,12 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
   // than logged once and left to go stale. Scoped to the agent's own active
   // district, since that's the only place they can actually act on it.
   const waitingAgents = activePd ? await countWaitingAgents(supabase, player.agent_no, activePd) : 0
+  // Who's genuinely here right now, not a proxy for it. Same "solo game
+  // shouldn't feel solo" goal as cityFeed above, but a standing headcount
+  // rather than a scrolling log of past moments — the two are meant to be
+  // read together: "12 online now" says the city is occupied at THIS
+  // instant, the ticker says what those agents have been doing recently.
+  const onlineNow = await getOnlineNow(supabase)
 
   return {
     success: true,
@@ -427,6 +438,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     broadcasts,
     cityFeed,
     waitingAgents,
+    onlineNow,
     sideMissions,
     today: {
       kstDate: today,

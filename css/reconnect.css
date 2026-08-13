@@ -210,6 +210,7 @@ body {
 #hud.is-collapsed .hud-boost { font-size: 9.5px; }
 @media (prefers-reduced-motion: reduce) {
   .hud-inner, .hud-crest, .hud-code, .hud-meta, .hud-streak, .hud-bell, .hud-sync, .hud-xp, .hud-xp-note { transition: none; }
+  .active-now-dot { animation: none; }
 }
 
 /* ── tabs: the game vs. the tools ──
@@ -295,7 +296,17 @@ body {
 .command-scene > .city-plan { position: absolute; inset: 8px 8px 8px 310px; z-index: 0; border: 0; border-radius: 0;
   background: transparent; display: flex; align-items: center; justify-content: center; }
 .command-scene > .city-plan > * { width: auto; height: min(100%, 594px); max-width: 100%; }
-.recovery-signal { position: absolute; z-index: 3; top: 22px; left: 24px; display: flex; align-items: center; gap: 10px; }
+.recovery-signal { position: absolute; z-index: 3; top: 22px; left: 24px; display: flex; flex-direction: column; gap: 6px; max-width: min(220px, 60vw); }
+.recovery-row { display: flex; align-items: center; gap: 10px; }
+/* Real agent presence — deliberately a different color/shape from the
+   district "online" copy just above it, so the two "online"-adjacent words
+   sitting this close together don't read as the same stat. */
+.active-now { display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
+  font-family: var(--mono); font-size: 9px; letter-spacing: .3px; color: var(--dim); }
+.active-now-dot { width: 6px; height: 6px; border-radius: 50%; background: #34d17c;
+  box-shadow: 0 0 6px #34d17c; flex-shrink: 0; animation: activeNowPulse 2.2s ease-in-out infinite; }
+@keyframes activeNowPulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
+.active-now-names { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .recovery-orbit { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%;
   background: conic-gradient(var(--gold) var(--recovery), rgba(255,255,255,.08) 0); box-shadow: 0 0 14px rgba(217,173,95,.12); }
 .recovery-orbit::before { content: ''; position: absolute; width: 36px; height: 36px; border-radius: 50%; background: #0a0812; }

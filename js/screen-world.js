@@ -216,10 +216,28 @@ function recoverySignal(state) {
   const total = wards.reduce((sum, w) => sum + (w.totalCount || 0), 0)
   const done = wards.reduce((sum, w) => sum + (w.restoredCount || 0), 0)
   const pct = total ? Math.round((done / total) * 100) : 0
-  return el('div', 'recovery-signal', `
+  const wrap = el('div', 'recovery-signal')
+  const row = el('div', 'recovery-row', `
     <span class="recovery-orbit" style="--recovery:${pct * 3.6}deg"><b>${pct}%</b></span>
     <span class="recovery-copy"><b>City recovery</b><i>${done}/${total} online</i></span>
   `)
+  wrap.appendChild(row)
+  // Real agents currently on the app, not districts — deliberately worded
+  // "active now" rather than reusing "online" (the span just above means
+  // "this district's power is back on," a completely different thing).
+  // Genuine presence (feed.ts's markOnline/getOnlineNow), not a proxy —
+  // this is what actually answers "is anyone else here right now."
+  const n = state.onlineNow?.count || 0
+  if (n > 0) {
+    const names = state.onlineNow.codenames || []
+    const shown = names.slice(0, 3).map(esc).join(', ')
+    const more = names.length > 3 ? ` +${n - 3} more` : ''
+    const line = el('div', 'active-now')
+    line.innerHTML = `<i class="active-now-dot"></i>${n} agent${n === 1 ? '' : 's'} active now`
+      + (shown ? `<span class="active-now-names">${shown}${more}</span>` : '')
+    wrap.appendChild(line)
+  }
+  return wrap
 }
 
 function commandTools(state) {

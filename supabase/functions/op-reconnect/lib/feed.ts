@@ -31,6 +31,41 @@ export async function logFeedEvent(
   )
 }
 
+// How recently someone had to poll to still count as "here right now" — the
+// live client polls every 90s (main.js), so anything comfortably past two
+// polls means the tab is closed or backgrounded, not just between requests.
+const ONLINE_WINDOW_MS = 3 * 60 * 1000
+
+/** Marks this agent as currently online — called once per real poll
+ *  (buildState, handlers.ts), never from the background sync job
+ *  (sync-all.ts only ever calls ensureDailyRollups directly, not buildState).
+ *  That distinction is what makes this a real presence signal instead of
+ *  another activity proxy: unlike raw_streams, which the hourly cron writes
+ *  for every agent whether or not they've opened anything, last_seen_at only
+ *  ever moves from a live app request. Best-effort — a failed write here
+ *  should never break the poll it's riding on. */
+export async function markOnline(supabase: SupabaseDB, agentNo: string): Promise<void> {
+  await supabase.from('rc_players').update({ last_seen_at: new Date().toISOString() }).eq('agent_no', agentNo)
+}
+
+export interface OnlineNow {
+  count: number
+  codenames: string[]
+}
+
+/** Who's genuinely here right now — count plus a few real codenames to name,
+ *  not just a number. Ordered most-recent-first so the names shown are the
+ *  agents who polled most recently, not an arbitrary sample. */
+export async function getOnlineNow(supabase: SupabaseDB, sampleSize = 6): Promise<OnlineNow> {
+  const since = new Date(Date.now() - ONLINE_WINDOW_MS).toISOString()
+  const { data, count } = await supabase.from('rc_players')
+    .select('codename', { count: 'exact' })
+    .gte('last_seen_at', since)
+    .order('last_seen_at', { ascending: false })
+    .limit(sampleSize)
+  return { count: count || 0, codenames: (data || []).map((r: any) => r.codename) }
+}
+
 export interface FeedEntry {
   agentNo: string
   codename: string
