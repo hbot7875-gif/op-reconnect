@@ -233,9 +233,26 @@ function reconnectPanel(d) {
   const box = el('div', 'card reconnect-card')
   const r = d.reconnect
   if (r.variant === 'connect' || r.variant === 'invite') {
-    call('getReconnectMission', { agentNo: getAgentNo(), districtId: d.id }).then((res) => {
-      if (res?.success && res.available) paintMissionPanel(box, d, res)
+    // call() never throws — a dropped connection resolves to
+    // {success:false, error:'Network error...'} rather than rejecting (see
+    // api.js). That means a flaky mobile connection used to leave this box
+    // permanently blank: nothing painted the box on failure, nothing told
+    // the player anything went wrong, and nothing ever retried. One real
+    // report showed exactly that — an empty bordered box under "ReConnect
+    // Mission," reachable on a phone showing a single, weak WiFi bar. The
+    // server side turned out to be completely healthy; this was the whole
+    // bug. Show a loading state immediately, and turn a failure into a
+    // message with a real Retry button instead of permanent silence.
+    box.appendChild(el('p', 'muted', 'Loading your mission…'))
+    const load = () => call('getReconnectMission', { agentNo: getAgentNo(), districtId: d.id }).then((res) => {
+      if (res?.success && res.available) { paintMissionPanel(box, d, res); return }
+      box.innerHTML = ''
+      box.appendChild(el('p', 'muted', reconnectError(res?.error) || "Couldn't load this — check your connection."))
+      const retry = el('button', 'btn btn-ghost', 'Retry')
+      retry.onclick = () => { box.innerHTML = ''; box.appendChild(el('p', 'muted', 'Loading your mission…')); load() }
+      box.appendChild(retry)
     })
+    load()
   } else {
     paintPuzzlePanel(box, d, r)
   }
