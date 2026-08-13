@@ -610,13 +610,23 @@ function paintMissionPanel(box, d, res) {
           return
         }
         const n = res2.candidates.length
-        intro.textContent = n === 1
-          ? '1 agent is waiting for a partner here. Invite them and they get a notification to accept.'
-          : `${n} agents are waiting for a partner here. Invite one and they get a notification to accept.`
+        const onlineCount = res2.candidates.filter((c) => c.online).length
+        // Named up front, not just left to the green dots below — worth
+        // knowing before scanning the list whether inviting right now has
+        // good odds of a quick accept, or is a message in a bottle either way.
+        const onlineNote = onlineCount ? ` ${onlineCount} of them ${onlineCount === 1 ? 'is' : 'are'} online right now.` : ''
+        intro.textContent = (n === 1
+          ? '1 agent is waiting for a partner here.'
+          : `${n} agents are waiting for a partner here.`)
+          + onlineNote + ' Invite one and they get a notification to accept.'
         for (const c of res2.candidates) {
-          const row = el('div', 'reconnect-wait-row')
-          row.innerHTML = `<span class="rw-name">${esc(c.codename)}</span>`
-            + `<span class="rw-since">${esc(waitedLabel(c.waitingSince))}</span>`
+          // Online first (server already sorts the list this way) — flagged
+          // here too, since an invite to someone actually in the app right
+          // now has real odds of getting answered in the next few minutes.
+          const row = el('div', 'reconnect-wait-row' + (c.online ? ' is-online' : ''))
+          row.innerHTML = (c.online ? '<i class="rw-online-dot" title="Online now"></i>' : '')
+            + `<span class="rw-name">${esc(c.codename)}</span>`
+            + `<span class="rw-since">${c.online ? 'Online now' : esc(waitedLabel(c.waitingSince))}</span>`
           const btn = el('button', 'btn btn-ghost rw-invite', 'Invite')
           btn.onclick = async () => {
             // Agent numbers are never shown to players — the number rides

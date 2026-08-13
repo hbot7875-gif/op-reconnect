@@ -2778,6 +2778,13 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .rw-since { font-family: var(--mono); font-size: 10px; color: var(--dim);
   letter-spacing: .4px; flex-shrink: 0; }
 .rw-invite { flex-shrink: 0; padding: 5px 14px; font-size: 12px; }
+/* Same green-dot presence language as the World screen's "active now" line
+   — one visual vocabulary for "genuinely online" everywhere it appears. */
+.reconnect-wait-row.is-online { border-color: rgba(52,209,124,0.35); background: rgba(52,209,124,0.05); }
+.reconnect-wait-row.is-online .rw-since { color: #34d17c; }
+.rw-online-dot { width: 6px; height: 6px; border-radius: 50%; background: #34d17c;
+  box-shadow: 0 0 6px #34d17c; flex-shrink: 0; animation: activeNowPulse 2.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .rw-online-dot { animation: none; } }
 .reconnect-waiting-now { margin-bottom: 10px; }
 .reconnect-waiting-now b { color: var(--purple-lt); }
 

@@ -34,7 +34,10 @@ export async function logFeedEvent(
 // How recently someone had to poll to still count as "here right now" — the
 // live client polls every 90s (main.js), so anything comfortably past two
 // polls means the tab is closed or backgrounded, not just between requests.
-const ONLINE_WINDOW_MS = 3 * 60 * 1000
+// Exported so reconnect-missions.ts's invite candidates can use the exact
+// same cutoff a "N agents active now" claim uses elsewhere — one definition
+// of "online," not two that could quietly drift apart.
+export const ONLINE_WINDOW_MS = 3 * 60 * 1000
 
 /** Marks this agent as currently online — called once per real poll
  *  (buildState, handlers.ts), never from the background sync job

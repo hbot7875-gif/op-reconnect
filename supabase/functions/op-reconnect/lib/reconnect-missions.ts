@@ -37,6 +37,7 @@ import type { SupabaseDB, GameContent } from './config.ts'
 import { restorationDays } from './config.ts'
 import type { FrozenReconnectGoal } from './districts.ts'
 import { kstDateOf, todayKst, addDaysStr } from './kst.ts'
+import { ONLINE_WINDOW_MS } from './feed.ts'
 
 /** How long a teammate can go without streaming anything before the person
  *  carrying the mission may drop them.
@@ -772,12 +773,24 @@ export async function getInviteCandidates(supabase: SupabaseDB, content: GameCon
   if (!free.length) return { success: true, candidates: [], stillOnHomeBase }
 
   const names = await codenameMap(supabase, free.map((f) => f.agentNo))
-  // Longest-waiting first, not alphabetical: the list is now a queue of real
-  // people to help rather than a menu to pick from, so whoever has been
-  // stuck the longest should be the first name anyone sees.
+  // Who's actually online right now (same last_seen_at cutoff "N agents
+  // active now" uses, see feed.ts's ONLINE_WINDOW_MS) — an invite to someone
+  // already in the app has a real shot at getting answered in the next few
+  // minutes; one to someone who hasn't opened it in days sits exactly as
+  // pending as it would have anyway. Worth surfacing so the inviter can play
+  // the odds instead of guessing from a name alone.
+  const since = new Date(Date.now() - ONLINE_WINDOW_MS).toISOString()
+  const { data: onlineRows } = await supabase.from('rc_players')
+    .select('agent_no').in('agent_no', free.map((f) => f.agentNo)).gte('last_seen_at', since)
+  const online = new Set<string>((onlineRows || []).map((r: any) => r.agent_no as string))
+
+  // Online first — that's the whole point — then longest-waiting within each
+  // group, not alphabetical: this is a queue of real people to help, not a
+  // menu to pick from.
   const candidates = free
-    .map((f) => ({ agentNo: f.agentNo, codename: names.get(f.agentNo) || f.agentNo, waitingSince: f.waitingSince }))
+    .map((f) => ({ agentNo: f.agentNo, codename: names.get(f.agentNo) || f.agentNo, waitingSince: f.waitingSince, online: online.has(f.agentNo) }))
     .sort((a, b) => {
+      if (a.online !== b.online) return a.online ? -1 : 1
       if (a.waitingSince && b.waitingSince) return a.waitingSince.localeCompare(b.waitingSince)
       if (a.waitingSince) return -1
       if (b.waitingSince) return 1
