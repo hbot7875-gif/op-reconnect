@@ -340,10 +340,21 @@ function paintMissionPanel(box, d, res) {
     box.appendChild(waiting)
     call('getInviteCandidates', { agentNo: me, districtId: d.id }).then((res2) => {
       const n = res2?.success ? (res2.candidates?.length || 0) : 0
-      if (!n) { waiting.remove(); return }
-      waiting.innerHTML = n === 1
-        ? `<b>1 agent is waiting for a partner here right now.</b> Open a mission to invite them.`
-        : `<b>${n} agents are waiting for a partner here right now.</b> Open a mission to invite one.`
+      if (n) {
+        waiting.innerHTML = n === 1
+          ? `<b>1 agent is waiting for a partner here right now.</b> Open a mission to invite them.`
+          : `<b>${n} agents are waiting for a partner here right now.</b> Open a mission to invite one.`
+        return
+      }
+      // Nobody free yet — say so only if there's a real reason more people
+      // are coming (see getInviteCandidates), otherwise stay quiet rather
+      // than announcing an empty list nobody asked about yet.
+      if (res2?.stillOnHomeBase) {
+        waiting.textContent = `Nobody's free to team up with yet — ${res2.stillOnHomeBase} `
+          + `${res2.stillOnHomeBase === 1 ? 'agent is' : 'agents are'} still restoring Home Base and will be able to join here once they finish.`
+      } else {
+        waiting.remove()
+      }
     })
 
     const openBtn = el('button', 'btn btn-primary', res.variant === 'invite' ? 'Start inviting' : 'Open a mission')
@@ -568,8 +579,17 @@ function paintMissionPanel(box, d, res) {
           // sounding broken.
           intro.remove()
           noteInput.remove()
+          // Home Base is almost everyone's first district, auto-activated at
+          // join — so agents still working through it haven't reached this
+          // one yet, but will. Naming that pipeline turns "nobody's free" from
+          // a dead end into "not yet", which is what's actually true.
+          const pipeline = res2?.stillOnHomeBase
+            ? ` ${res2.stillOnHomeBase} more ${res2.stillOnHomeBase === 1 ? 'agent is' : 'agents are'} still restoring Home Base — once they finish there and start this district, they'll be able to team up with you too.`
+            : ''
           waitList.appendChild(el('p', 'muted',
-            "Nobody's free to invite right now — everyone else restoring this district has either already teamed up with someone or already finished this together. New agents open up here often, so check back in a bit."))
+            "Nobody's free to invite right now — everyone else restoring this district has either already teamed up with someone or already finished this together."
+            + pipeline
+            + ' New agents open up here often, so check back in a bit.'))
           return
         }
         const n = res2.candidates.length

@@ -734,7 +734,7 @@ async function quietDaysByAgent(supabase: SupabaseDB, agentNos: string[]): Promi
  *  instead of typing a number they can't know. agentNo still rides along
  *  per candidate (the invite call needs it) but is never meant to be
  *  displayed — same as shape()'s participants. */
-export async function getInviteCandidates(supabase: SupabaseDB, content: unknown, params: any) {
+export async function getInviteCandidates(supabase: SupabaseDB, content: GameContent, params: any) {
   const districtId = String(params.districtId || '')
   const agentNo = String(params.agentNo || '').trim().toUpperCase()
   if (!districtId) return { success: false, error: 'district_required' }
@@ -744,18 +744,32 @@ export async function getInviteCandidates(supabase: SupabaseDB, content: unknown
   const reconnect = myReconnectGoal(pd)
   if (!reconnect) return { success: true, candidates: [] }
 
+  // Nearly every agent's very first district — auto-activated at join (see
+  // handlers.ts's joinGame) — so almost the whole population passes through
+  // it before reaching anywhere else. When this district's own pool is dry,
+  // that's the honest reason more people are ON THE WAY: not a data problem,
+  // just upstream of here. Skipped when the district being asked about IS
+  // that one — "wait for Home Base to restore Home Base" says nothing.
+  const homeBase = content.districts.find((d) => d.is_tutorial)
+  let stillOnHomeBase = 0
+  if (homeBase && homeBase.id !== districtId) {
+    const { count } = await supabase.from('rc_player_districts')
+      .select('agent_no', { count: 'exact', head: true }).eq('district_id', homeBase.id).eq('status', 'active')
+    stillOnHomeBase = count || 0
+  }
+
   const { data: activeRows } = await supabase.from('rc_player_districts')
     .select('agent_no, goals').eq('district_id', districtId).eq('status', 'active')
   const eligible = (activeRows || [])
     .filter((r: any) => r.agent_no !== agentNo && r.goals?.reconnect?.id === reconnect.id)
     .map((r: any) => r.agent_no as string)
-  if (!eligible.length) return { success: true, candidates: [] }
+  if (!eligible.length) return { success: true, candidates: [], stillOnHomeBase }
 
   const rosters = await openMissionRosters(supabase, districtId, reconnect.id)
   const done = await agentsDoneWithGoal(supabase, districtId, reconnect.id)
   const stillOn = new Set<string>((activeRows || []).map((r: any) => r.agent_no as string))
   const free = freeAgentsWithWait(rosters, eligible, done, stillOn)
-  if (!free.length) return { success: true, candidates: [] }
+  if (!free.length) return { success: true, candidates: [], stillOnHomeBase }
 
   const names = await codenameMap(supabase, free.map((f) => f.agentNo))
   // Longest-waiting first, not alphabetical: the list is now a queue of real
@@ -769,7 +783,7 @@ export async function getInviteCandidates(supabase: SupabaseDB, content: unknown
       if (b.waitingSince) return 1
       return a.codename.localeCompare(b.codename)
     })
-  return { success: true, candidates }
+  return { success: true, candidates, stillOnHomeBase }
 }
 
 /** Opens a fresh mission for the caller's own frozen reconnect goal and
