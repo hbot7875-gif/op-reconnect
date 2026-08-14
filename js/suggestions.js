@@ -11,6 +11,15 @@ import { call } from './api.js'
 import { el, showOverlay, hideOverlay } from './state.js'
 import { getAgentNo } from './session.js'
 
+// Chips are just a starting phrase tapped into the box to get someone past
+// the blank-page problem — not categories the server tracks (still plain
+// text; see suggestions.ts).
+const EXAMPLES = [
+  { chip: '🆕 New feature', prefix: 'New feature: ' },
+  { chip: '🎯 Goal idea', prefix: 'Goal idea: ' },
+  { chip: '📣 Help promote it', prefix: 'Promotion idea: ' },
+]
+
 export function suggestionsSheet() {
   const sheet = el('div', 'sheet suggestions-sheet')
   sheet.appendChild(el('div', 'eyebrow', '💡 SUGGESTIONS'))
@@ -18,7 +27,21 @@ export function suggestionsSheet() {
 
   const input = el('textarea', 'ob-input suggest-input')
   input.maxLength = 240
-  input.placeholder = 'Type your idea here…'
+
+  const chips = el('div', 'suggest-chips')
+  EXAMPLES.forEach((ex) => {
+    const chip = el('button', 'suggest-chip', ex.chip)
+    chip.type = 'button'
+    chip.onclick = () => {
+      // Only pre-fill when the box is still empty/untouched — tapping a
+      // second chip after already typing something shouldn't wipe it out.
+      if (!input.value.trim()) input.value = ex.prefix
+      input.focus()
+      input.setSelectionRange(input.value.length, input.value.length)
+    }
+    chips.appendChild(chip)
+  })
+  sheet.appendChild(chips)
   sheet.appendChild(input)
 
   const row = el('div', 'suggest-row')
