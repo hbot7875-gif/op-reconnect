@@ -1,7 +1,7 @@
-// A simple public suggestions board — see migrations/051_rc_suggestions.sql
-// for the "why". Deliberately minimal: no voting, no categories, no
-// moderation queue. Just a chronological list anyone active can read and
-// add to.
+// A simple suggestions box — see migrations/051_rc_suggestions.sql for the
+// "why". One-way by design: an agent can drop an idea, but nothing here
+// reads them back out to other agents. No voting, no categories, no public
+// list.
 
 import type { SupabaseDB } from './config.ts'
 import { todayKst } from './kst.ts'
@@ -26,23 +26,4 @@ export async function submitSuggestion(supabase: SupabaseDB, params: any) {
   const { error } = await supabase.from('rc_suggestions').insert({ agent_no: agentNo, body })
   if (error) return { success: false, error: error.message }
   return { success: true }
-}
-
-export async function getSuggestions(supabase: SupabaseDB, limit = 40) {
-  const { data: rows } = await supabase.from('rc_suggestions')
-    .select('agent_no, body, created_at').order('created_at', { ascending: false }).limit(limit)
-  if (!rows || !rows.length) return { success: true, suggestions: [] }
-
-  const agentNos = [...new Set(rows.map((r: any) => r.agent_no))]
-  const { data: players } = await supabase.from('rc_players').select('agent_no, codename').in('agent_no', agentNos)
-  const codenameByAgent = new Map((players || []).map((p: any) => [p.agent_no, p.codename]))
-
-  return {
-    success: true,
-    suggestions: rows.map((r: any) => ({
-      codename: codenameByAgent.get(r.agent_no) || 'A retired agent',
-      body: r.body,
-      createdAt: r.created_at,
-    })),
-  }
 }

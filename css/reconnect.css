@@ -2803,10 +2803,6 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .suggest-row .btn { padding: 8px 20px; font-size: 13px; }
 .suggest-msg { font-family: var(--mono); font-size: 11px; color: var(--dim); flex: 1; text-align: right; }
 .suggest-msg.is-error { color: var(--crimson); }
-.suggest-list { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
-.suggest-row-item { padding: 10px 12px; border-radius: var(--r-md); background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); }
-.suggest-body { font-size: 13.5px; line-height: 1.5; color: var(--text); }
-.suggest-meta { margin-top: 6px; font-family: var(--mono); font-size: 10px; color: var(--dim); letter-spacing: .3px; }
 
 /* Live City Feed / "City News" — a single rotating headline, not a growing
    list: one sentence, fades out, replaced by the next. No avatars, no big

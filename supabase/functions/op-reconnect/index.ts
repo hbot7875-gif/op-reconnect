@@ -35,7 +35,7 @@ import { getLeaderboard } from './lib/leaderboard.ts'
 import { setEquippedBadge } from './lib/badge-profile.ts'
 import { getMagicShop, buyWings, claimTicket } from './lib/magic-shop.ts'
 import { feedCharge, setAutoFeed, getAgentCharge, useLitEra } from './lib/agent-charge.ts'
-import { submitSuggestion, getSuggestions } from './lib/suggestions.ts'
+import { submitSuggestion } from './lib/suggestions.ts'
 import { loadContent } from './lib/config.ts'
 
 const CORS_HEADERS: Record<string, string> = {
@@ -114,7 +114,6 @@ const ROUTES: Record<string, Route> = {
   sendReconnectMessage: { auth: 'agent', handler: async (sb, p) => sendReconnectMessage(sb, await loadContent(sb), p) },
   getMyInvites: { auth: 'agent', handler: async (sb, p) => getMyInvites(sb, await loadContent(sb), String(p.agentNo || '').trim().toUpperCase()) },
   submitSuggestion: { auth: 'agent', handler: async (sb, p) => submitSuggestion(sb, p) },
-  getSuggestions: { auth: 'agent', handler: async (sb) => getSuggestions(sb) },
   // Reconnect goal (sotd/cipher/memory puzzle variants).
   submitReconnectPuzzleAnswer: { auth: 'agent', handler: (sb, p) => submitReconnectPuzzleAnswer(sb, null, p) },
   // admin-gated inside the handler via SYNC_ADMIN_KEY
