@@ -2788,16 +2788,8 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .reconnect-waiting-now { margin-bottom: 10px; }
 .reconnect-waiting-now b { color: var(--purple-lt); }
 
-/* Suggestions — deliberately plain: one box, one button, a list. Sits at
-   the bottom of the World screen, a "check when curious" board rather than
-   part of the main mission flow above it. */
-.suggest-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-.suggest-chip {
-  flex: none; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border);
-  background: var(--surface-2); color: var(--muted); font-family: var(--mono); font-size: 11px;
-  font-weight: 700; letter-spacing: 0.3px; cursor: pointer; transition: all 0.15s;
-}
-.suggest-chip:hover { border-color: var(--purple); color: var(--purple-lt); }
+/* Suggestions — deliberately plain: one box, one button. Behind a small map
+   marker, not part of the main mission flow. */
 .suggest-input { min-height: 64px; resize: vertical; font-family: var(--body); margin-top: 8px; }
 .suggest-row { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 8px; }
 .suggest-row .btn { padding: 8px 20px; font-size: 13px; }
