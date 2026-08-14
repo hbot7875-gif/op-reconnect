@@ -332,8 +332,12 @@ function toolMarker(angle, icon, label, onClick) {
  *                      "NOW RESTORING" card's own percentage.
  * @param onCandyStar  ({x,y}) => void — optional. Draws the Candy Star tool
  *                     marker (see toolMarker above) when passed.
+ * @param onSuggestions ({x,y}) => void — optional. Same tool-marker treatment
+ *                     for the Suggestions board: a small, opt-in symbol on
+ *                     the map rather than a card sitting open on City for
+ *                     every agent whether they want it or not.
  */
-export function renderCityMap(wards, districts, onSelect, homeFraction, onCandyStar) {
+export function renderCityMap(wards, districts, onSelect, homeFraction, onCandyStar, onSuggestions) {
   const PAD = 5
   const svg = n('svg', {
     class: 'city-map', 'aria-hidden': 'true',
@@ -507,6 +511,11 @@ export function renderCityMap(wards, districts, onSelect, homeFraction, onCandyS
   // angle guaranteed not to cut across the middle of a wedge's label — same
   // reasoning wardless placement gets elsewhere in this file.
   if (onCandyStar) svg.appendChild(toolMarker(-Math.PI / 2, '🍬', 'Candy Star', onCandyStar))
+  // Same seam, offset just enough to sit beside Candy Star rather than under
+  // it — this is the one angle in the ring proven clear of a wedge label
+  // (see the comment above), so a second marker stays in that same safe
+  // strip instead of risking a new angle that might cut across one.
+  if (onSuggestions) svg.appendChild(toolMarker(-Math.PI / 2 - 0.3, '💡', 'Suggestions', onSuggestions))
 
   return svg
 }
