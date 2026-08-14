@@ -403,6 +403,29 @@ function paintMissionPanel(box, d, res) {
   const expired = m.participants.filter((p) => p.status === 'invited' && p.inviteExpired)
   const need = Math.max(0, m.requiredAgents - joined.length)
 
+  // The mission's own 7-day clock — returned by the server (m.expiresAt) but
+  // never shown anywhere until now. The DISTRICT's deadline already gets a
+  // loud ⏳ banner the instant it's close (ui-district.js's board-deadline);
+  // a stalled mission has the exact same shape of "this goes away soon" risk
+  // and got none of that visibility — someone could watch an invite sit
+  // unanswered for days with no idea the whole mission was about to expire
+  // out from under them. Same class, same wording pattern, so it reads as
+  // the same kind of warning a player has already learned to notice.
+  if (m.expiresAt) {
+    const msLeft = new Date(m.expiresAt).getTime() - Date.now()
+    const daysLeft = Math.ceil(msLeft / 86400000)
+    if (daysLeft <= 3) {
+      // Same ≤2-day threshold the district's own deadline banner uses for
+      // "urgent" (ui-district.js) — one meaning for red across the app,
+      // not a second, slightly different cutoff someone has to relearn.
+      const urgent = daysLeft <= 2
+      const text = daysLeft <= 0 ? 'Last day for this mission'
+        : daysLeft === 1 ? '<b>1 day</b> left for this mission'
+        : `<b>${daysLeft} days</b> left for this mission`
+      box.appendChild(el('div', 'board-deadline' + (urgent ? ' is-urgent' : ''), `⏳ ${text} — after that it expires and any invites are lost.`))
+    }
+  }
+
   box.appendChild(el('div', 'team-status', `
     <b>Team: ${joined.length} of ${m.requiredAgents} ready</b>
     ${need > 0 ? `<span> &middot; Need ${need} more agent${need === 1 ? '' : 's'}</span>` : ''}
