@@ -2788,6 +2788,20 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .reconnect-waiting-now { margin-bottom: 10px; }
 .reconnect-waiting-now b { color: var(--purple-lt); }
 
+/* Suggestions — deliberately plain: one box, one button, a list. Sits at
+   the bottom of the World screen, a "check when curious" board rather than
+   part of the main mission flow above it. */
+.suggestions-card { margin-top: 14px; }
+.suggest-input { min-height: 64px; resize: vertical; font-family: var(--body); margin-top: 8px; }
+.suggest-row { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 8px; }
+.suggest-row .btn { padding: 8px 20px; font-size: 13px; }
+.suggest-msg { font-family: var(--mono); font-size: 11px; color: var(--dim); flex: 1; text-align: right; }
+.suggest-msg.is-error { color: var(--crimson); }
+.suggest-list { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.suggest-row-item { padding: 10px 12px; border-radius: var(--r-md); background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); }
+.suggest-body { font-size: 13.5px; line-height: 1.5; color: var(--text); }
+.suggest-meta { margin-top: 6px; font-family: var(--mono); font-size: 10px; color: var(--dim); letter-spacing: .3px; }
+
 /* Live City Feed / "City News" — a single rotating headline, not a growing
    list: one sentence, fades out, replaced by the next. No avatars, no big
    icons, no "View all". The point is just "other agents are here." */

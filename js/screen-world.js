@@ -32,6 +32,7 @@ import { bombSheet } from './bomb-sheet.js'
 import { agentChargeSheet } from './agent-charge.js'
 import { broadcastCards } from './broadcasts.js'
 import { cityFeedCard } from './city-feed.js'
+import { suggestionsCard } from './suggestions.js'
 
 export function renderWorld(container, state) {
   container.innerHTML = ''
@@ -72,6 +73,14 @@ export function renderWorld(container, state) {
   // the community/all-time Era Timeline: every count here belongs to this
   // agent, resets Monday, and a lit card waits in Pack until they spend it.
   if (state.agentCharge?.eraCards?.length) wrap.appendChild(weeklyEraCards(state))
+
+  // Last, deliberately — this is a "check when curious" board, not part of
+  // the "what do I do right now" flow the top of this screen is built
+  // around. Its own data (state.suggestions isn't part of the main poll —
+  // fetched on demand inside the card, same pattern reconnectPanel already
+  // uses) so it never bloats every getGameState response for a feature
+  // most polls won't touch.
+  wrap.appendChild(suggestionsCard())
 
   container.appendChild(wrap)
 }
