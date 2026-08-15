@@ -582,3 +582,21 @@ export async function previewAlpaca(supabase: SupabaseDB, params: any): Promise<
     partial: focusSongs.length < focusInput.length,
   }
 }
+
+/** Admin: remove a generated playlist from the connected Spotify account's
+ *  library. Spotify has no true "delete" for a playlist you own — unfollow
+ *  is the real equivalent, which is what this does. Exists for cleaning up
+ *  test generations (the same connected account every generateAlpaca call
+ *  rides on) without leaving throwaway playlists sitting in the real
+ *  library indefinitely. */
+export async function adminDeleteAlpacaPlaylist(supabase: SupabaseDB, params: any): Promise<any> {
+  const playlistId = String(params.playlistId || '').trim()
+  if (!playlistId) return { success: false, error: 'playlistId_required' }
+  const { token } = await getUserAccessToken(supabase)
+  const res = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/followers`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) return { success: false, error: `Spotify delete failed: ${res.status} ${await res.text()}` }
+  return { success: true }
+}
