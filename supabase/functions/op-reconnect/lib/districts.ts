@@ -263,11 +263,16 @@ export function albumGoalStreamTotal(
 
 export interface DistrictDeadline { expiresAt: string; msLeft: number; expired: boolean }
 
-/** A district's restoration window — exactly `days` from activation. Checked
+// A one-time, free +3 days if the attempt is about to lapse — see
+// migrations/056_rc_district_deadline_extension.sql.
+export const DEADLINE_EXTENSION_DAYS = 3
+
+/** A district's restoration window — exactly `days` (plus `extraDays` from
+ *  a used one-time extension, see EXTENSION_DAYS) from activation. Checked
  *  against `!progress.complete` by the caller: a completion that lands on
  *  the buzzer still counts, since completion is evaluated before expiry. */
-export function districtDeadline(activatedAt: string, days: number): DistrictDeadline {
-  const deadlineMs = new Date(activatedAt).getTime() + days * 86400000
+export function districtDeadline(activatedAt: string, days: number, extraDays = 0): DistrictDeadline {
+  const deadlineMs = new Date(activatedAt).getTime() + (days + extraDays) * 86400000
   const msLeft = deadlineMs - Date.now()
   return { expiresAt: new Date(deadlineMs).toISOString(), msLeft: Math.max(0, msLeft), expired: msLeft <= 0 }
 }

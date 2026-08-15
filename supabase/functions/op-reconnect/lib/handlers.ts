@@ -6,7 +6,7 @@ import type { GameContent, SupabaseDB, DistrictRow } from './config.ts'
 import { loadContent, rankFor, xpRules, restorationDays, streamsPerXpFor, PERSONAL_COUNT_CAP, trackArtistOverrides } from './config.ts'
 import { ensureDailyRollups, computeStreak, awardStreakBadges, totalXp, goalXpCountForDate } from './derive.ts'
 import { awardDailySideMissionXp, awardWeeklySideMissionXp, buildSideMissions } from './side-missions.ts'
-import { freezeGoals, computeBaseline, districtProgress, districtDeadline, filesRevealedCount, albumGoalStreamTotal } from './districts.ts'
+import { freezeGoals, computeBaseline, districtProgress, districtDeadline, filesRevealedCount, albumGoalStreamTotal, DEADLINE_EXTENSION_DAYS } from './districts.ts'
 import { resolveReconnectStatus } from './reconnect-goal.ts'
 import { todayKst, nextKstMidnightUtc, kstDateOf } from './kst.ts'
 import { getBombView, launchDefuse } from './bomb.ts'
@@ -151,7 +151,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     const albumGoalStreams = albumGoalStreamTotal(activePd.goals, activePd.baseline || {}, windowRollups || [], activePd.activated_at, content)
     const chargeCellStreams = albumGoalStreams % STREAMS_PER_CHARGE_CELL
     const progress = districtProgress(activePd.goals, activePd.baseline || {}, windowRollups || [], activePd.activated_at, content)
-    const deadline = districtDeadline(activePd.activated_at, restorationDays(content))
+    const deadline = districtDeadline(activePd.activated_at, restorationDays(content), activePd.deadline_extended ? DEADLINE_EXTENSION_DAYS : 0)
     // districtProgress().complete only covers solo track+album goals — the
     // reconnect goal (if any was frozen in) needs its own live resolution
     // (mission/puzzle-attempt rows), so it's layered on here rather than
@@ -281,6 +281,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
       activatedAt: activePd.activated_at,
       expiresAt: deadline.expiresAt,
       daysLeft: Math.ceil(deadline.msLeft / 86400000),
+      deadlineExtended: !!activePd.deadline_extended,
       restoredNow,
       xpAwarded,
       itemDropped,
@@ -353,7 +354,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
   // overwrites the column on every level-up); starting either from the
   // stale pre-request count would silently erase whatever the rescue just
   // spent.
-  const levelUp = await applyLevelUpIfNeeded(supabase, content, player, xp, agentCharge.freezeChargesRemaining)
+  const levelUp = await applyLevelUpIfNeeded(supabase, content, player, xp, agentCharge.freezeChargesRemaining, player.deadline_extension_charges || 0)
   if (levelUp) {
     await logFeedEvent(supabase, player.agent_no, 'level_up', { level: levelUp.level, name: levelUp.name },
       `level:${player.agent_no}:${levelUp.level}`)
@@ -412,6 +413,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
       rank: rankFor(content, xp),
       level: { ...level, nextRewards: nextLevelRewards(content) },
       streakFreezeCharges: streak.freezeChargesRemaining,
+      deadlineExtensionCharges: (player.deadline_extension_charges || 0) + (levelUp?.extensionChargeGranted || 0),
       boost: levelUp
         ? { multiplier: levelUp.boostMultiplier, expiresAt: levelUp.boostExpiresAt }
         : (player.boost_expires_at && new Date(player.boost_expires_at).getTime() > Date.now()
@@ -566,6 +568,59 @@ export async function startDistrict(supabase: SupabaseDB, params: any) {
   }
 
   return buildState(supabase, content, agent, player)
+}
+
+/** Spends one earned Extension Charge (migration 057 — a rare level-up
+ *  reward that replaced Fuel, since nothing ever read or spent Fuel) for
+ *  +3 days when a district attempt is genuinely about to lapse — see
+ *  migrations/056_rc_district_deadline_extension.sql for the story that
+ *  prompted this (an agent 99/100 combined streams into her ReConnect
+ *  goal, reset by the clock with nothing left to show for it).
+ *  Deliberately gated to the final 2 days (same "urgent" cutoff the
+ *  district-deadline and mission-deadline banners already use) on top of
+ *  needing a charge — this is a rescue for a close call, not a way to
+ *  just always run every district 3 days longer. Still capped at one use
+ *  per district attempt (deadline_extended) even for an agent sitting on
+ *  several charges, so a single close call can't drain the whole stash. */
+export async function extendDistrictDeadline(supabase: SupabaseDB, params: any) {
+  const content = await loadContent(supabase)
+  const agentNo = String(params.agentNo || '').trim().toUpperCase()
+  const districtId = String(params.districtId || '')
+
+  const { data: activePd } = await supabase.from('rc_player_districts')
+    .select('*').eq('agent_no', agentNo).eq('district_id', districtId).eq('status', 'active').maybeSingle()
+  if (!activePd) return { success: false, error: 'not_eligible' }
+  if (activePd.deadline_extended) return { success: false, error: 'already_extended' }
+
+  const deadline = districtDeadline(activePd.activated_at, restorationDays(content), 0)
+  if (deadline.msLeft > 2 * 86400000) return { success: false, error: 'too_early' }
+  if (deadline.expired) return { success: false, error: 'already_expired' }
+
+  const { data: playerRow } = await supabase.from('rc_players')
+    .select('deadline_extension_charges').eq('agent_no', agentNo).maybeSingle()
+  const charges = playerRow?.deadline_extension_charges || 0
+  if (charges < 1) return { success: false, error: 'no_extension_charges' }
+
+  // Both updates are scoped by the exact pre-read values (deadline_extended
+  // = false, deadline_extension_charges = charges) as an optimistic-lock
+  // guard — a concurrent double-tap loses the race on whichever request
+  // lands second instead of spending two charges for one extension.
+  const { error: chargeErr } = await supabase.from('rc_players')
+    .update({ deadline_extension_charges: charges - 1 })
+    .eq('agent_no', agentNo).eq('deadline_extension_charges', charges)
+  if (chargeErr) return { success: false, error: chargeErr.message }
+
+  const { error } = await supabase.from('rc_player_districts')
+    .update({ deadline_extended: true })
+    .eq('agent_no', agentNo).eq('district_id', districtId).eq('status', 'active').eq('deadline_extended', false)
+  if (error) {
+    // Roll the spent charge back — the extension itself didn't land.
+    await supabase.from('rc_players').update({ deadline_extension_charges: charges }).eq('agent_no', agentNo).eq('deadline_extension_charges', charges - 1)
+    return { success: false, error: error.message }
+  }
+
+  const newDeadline = districtDeadline(activePd.activated_at, restorationDays(content), DEADLINE_EXTENSION_DAYS)
+  return { success: true, expiresAt: newDeadline.expiresAt, daysLeft: Math.ceil(newDeadline.msLeft / 86400000), chargesRemaining: charges - 1 }
 }
 
 /** Admin: launch a red-zone attack on the ARMY Bomb. */

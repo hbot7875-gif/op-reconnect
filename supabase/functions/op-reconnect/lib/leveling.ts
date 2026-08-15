@@ -14,7 +14,7 @@ export interface LevelInfo {
 }
 
 export interface LevelRewardsPreview {
-  fuel: number
+  extensionCharge: number
   streakFreeze: number
   boostMultiplier: number
   boostMinutes: number
@@ -22,12 +22,17 @@ export interface LevelRewardsPreview {
 
 /** What reaching the next level actually grants — same numbers
  *  applyLevelUpIfNeeded awards on a real crossing, read here so the client
- *  can preview them (Progress sheet) without duplicating the config. */
+ *  can preview them (Progress sheet) without duplicating the config.
+ *  Fuel used to be granted here (fuelPerLevel) — dropped per the site
+ *  owner, since nothing in the game reads or spends Fuel. Extension
+ *  Charges (migration 057) took its place: a rare, earned way to buy a
+ *  district attempt 3 more days when the clock is about to beat it — see
+ *  handlers.ts's extendDistrictDeadline. */
 export function nextLevelRewards(content: GameContent): LevelRewardsPreview {
   const rewards = content.config.level_rewards
-    || { streakFreezePerLevel: 1, fuelPerLevel: 5, boostMultiplier: 2, boostMinutes: 60 }
+    || { streakFreezePerLevel: 1, extensionChargePerLevel: 1, boostMultiplier: 2, boostMinutes: 60 }
   return {
-    fuel: rewards.fuelPerLevel || 0,
+    extensionCharge: rewards.extensionChargePerLevel || 0,
     streakFreeze: rewards.streakFreezePerLevel || 0,
     boostMultiplier: rewards.boostMultiplier || 1,
     boostMinutes: rewards.boostMinutes || 60,
@@ -79,7 +84,7 @@ export interface LevelUpResult {
   name: string | null
   levelsGained: number
   streakFreezeGranted: number
-  fuelGranted: number
+  extensionChargeGranted: number
   boostMultiplier: number
   boostExpiresAt: string
 }
@@ -97,9 +102,16 @@ export interface LevelUpResult {
  *  here would silently erase whatever the rescue just spent — and unlike
  *  computeStreak (derive.ts), which only overwrites the column when it
  *  actually spends a charge, this writes unconditionally on every level-up,
- *  so there'd be no later write to correct it. */
+ *  so there'd be no later write to correct it.
+ *
+ *  `currentExtensionCharges` follows the same reasoning — nothing else
+ *  spends from deadline_extension_charges within the same request today,
+ *  but threading it through the same way keeps this function's contract
+ *  consistent rather than half-trusting `player`'s own snapshot for one
+ *  counter and not the other. */
 export async function applyLevelUpIfNeeded(
-  supabase: SupabaseDB, content: GameContent, player: any, xp: number, currentFreezeCharges: number,
+  supabase: SupabaseDB, content: GameContent, player: any, xp: number,
+  currentFreezeCharges: number, currentExtensionCharges: number,
 ): Promise<LevelUpResult | null> {
   const { level } = levelFor(content, xp)
   const lastLevel = player.last_level || 1
@@ -107,24 +119,21 @@ export async function applyLevelUpIfNeeded(
 
   const levelsGained = level - lastLevel
   const rewards = content.config.level_rewards
-    || { streakFreezePerLevel: 1, fuelPerLevel: 5, boostMultiplier: 2, boostMinutes: 60 }
+    || { streakFreezePerLevel: 1, extensionChargePerLevel: 1, boostMultiplier: 2, boostMinutes: 60 }
   const streakFreezeGranted = (rewards.streakFreezePerLevel || 0) * levelsGained
-  const fuelGranted = (rewards.fuelPerLevel || 0) * levelsGained
+  const extensionChargeGranted = (rewards.extensionChargePerLevel || 0) * levelsGained
   const boostExpiresAt = new Date(Date.now() + (rewards.boostMinutes || 60) * 60000).toISOString()
 
   await supabase.from('rc_players').update({
     last_level: level,
     streak_freeze_charges: currentFreezeCharges + streakFreezeGranted,
+    deadline_extension_charges: currentExtensionCharges + extensionChargeGranted,
     boost_multiplier: rewards.boostMultiplier || 1,
     boost_expires_at: boostExpiresAt,
   }).eq('agent_no', player.agent_no)
 
-  if (fuelGranted > 0) {
-    await supabase.rpc('rc_add_resources', { p_agent_no: player.agent_no, p_signal: 0, p_fuel: fuelGranted, p_intel: 0 })
-  }
-
   return {
-    level, name: levelName(content, level), levelsGained, streakFreezeGranted, fuelGranted,
+    level, name: levelName(content, level), levelsGained, streakFreezeGranted, extensionChargeGranted,
     boostMultiplier: rewards.boostMultiplier || 1, boostExpiresAt,
   }
 }

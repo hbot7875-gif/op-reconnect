@@ -3,8 +3,10 @@
 // in screen-district.js, since every district status (not just "active") gets
 // its own full screen there.
 
-import { el, esc, showOverlay, hideOverlay, getState } from './state.js'
+import { el, esc, showOverlay, hideOverlay, getState, setState, toast } from './state.js'
 import { openPlaylist, remaining, dailyPace } from './playlist.js'
+import { call } from './api.js'
+import { getAgentNo } from './session.js'
 
 /** Overall restoration fraction (0..1) driving the scene's lights. */
 export function districtFraction(d) {
@@ -132,6 +134,42 @@ export function renderBoard(board, d, opts = {}) {
       : d.daysLeft === 1 ? '<b>1 day</b> left to restore this district'
       : `<b>${d.daysLeft} days</b> left to restore this district`
     board.appendChild(el('div', 'board-deadline' + (urgent ? ' is-urgent' : ''), `⏳ ${text}`))
+  }
+
+  // A rescue when the clock is genuinely about to run out, spending one
+  // earned Extension Charge (a rare level-up reward — see
+  // migrations/057_rc_deadline_extension_charges.sql, which replaced Fuel
+  // for this exact purpose since nothing ever read or spent Fuel). Same
+  // urgent (≤2 days) window as the deadline text above, in both the "still
+  // streaming" and "waiting on something else" cases — this is exactly the
+  // moment an agent close to finishing (see AGENT077, 99/100 combined
+  // ReConnect streams when her deadline hit) needs it most.
+  const urgentDeadline = typeof d.daysLeft === 'number' && d.daysLeft <= 2
+  const charges = getState()?.player?.deadlineExtensionCharges || 0
+  if (urgentDeadline && !d.deadlineExtended) {
+    const extendRow = el('div', 'board-extend')
+    const extendBtn = el('button', 'btn btn-ghost',
+      charges > 0 ? `⏳ Extend deadline +3 days (${charges} charge${charges === 1 ? '' : 's'})` : '⏳ Extend deadline +3 days (0 charges)')
+    extendBtn.disabled = charges < 1
+    const extendMsg = el('div', 'board-extend-msg')
+    if (charges < 1) extendMsg.textContent = 'Earn one by leveling up.'
+    extendBtn.onclick = async () => {
+      extendBtn.disabled = true
+      const res = await call('extendDistrictDeadline', { agentNo: getAgentNo(), districtId: d.id })
+      if (res.success) {
+        toast('Deadline extended — 3 more days')
+        const fresh = await call('getGameState', { agentNo: getAgentNo() })
+        if (fresh.success) setState(fresh)
+      } else {
+        extendMsg.textContent = res.error === 'already_extended' ? "You've already used this district's extension."
+          : res.error === 'too_early' ? 'Only available in the final 2 days.'
+          : res.error === 'no_extension_charges' ? 'Earn one by leveling up.'
+          : "Couldn't extend — try again."
+        extendBtn.disabled = false
+      }
+    }
+    extendRow.append(extendBtn, extendMsg)
+    board.appendChild(extendRow)
   }
 
   if (goals.length) {

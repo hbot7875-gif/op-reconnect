@@ -225,7 +225,7 @@ function sparks(host, count) {
    look like a matched set. These are plain currentColor strokes/fills, one
    visual language, themeable with the same gold the numbers use. */
 const ICONS = {
-  fuel: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="9" height="12" rx="1"/><path d="M7 5V3h3v2"/><path d="M13 8h1.5a1.5 1.5 0 0 1 1.5 1.5V13a1.3 1.3 0 0 0 2.6 0V8.6L16 6"/></svg>',
+  extension: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h8M6 18h8"/><path d="M7 2v3.2c0 1.6 1.2 2.5 3 4.8 1.8-2.3 3-3.2 3-4.8V2"/><path d="M7 18v-3.2c0-1.6 1.2-2.5 3-4.8 1.8 2.3 3 3.2 3 4.8V18"/></svg>',
   freeze: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M10 2v16M3.7 5.5l12.6 9M16.3 5.5l-12.6 9"/><path d="M10 4.6 8 6M10 4.6l2 1.4M10 15.4 8 14M10 15.4l2-1.4"/></svg>',
   boost: '<svg viewBox="0 0 20 20" fill="currentColor"><path d="M11 2 4 11h5l-1 7 8-10h-5l1-6z"/></svg>',
 }
@@ -233,7 +233,7 @@ const ICONS = {
 /**
  * @param state   full game state right after crossing a level — reads
  *                state.levelUp ({level, name, levelsGained,
- *                streakFreezeGranted, fuelGranted, boostMultiplier,
+ *                streakFreezeGranted, extensionChargeGranted, boostMultiplier,
  *                boostExpiresAt}) and state.player.rank.title as a fallback
  *                for levels past the named ladder
  * @param onDone  called when the player dismisses it
@@ -263,7 +263,7 @@ export function playLevelUp(state, onDone) {
   box.appendChild(el('p', 'lvlup-tie', 'Your Home Base gained more power.'))
 
   const rows = []
-  if (levelUp.fuelGranted > 0) rows.push([ICONS.fuel, `+${levelUp.fuelGranted} Fuel`])
+  if (levelUp.extensionChargeGranted > 0) rows.push([ICONS.extension, `+${levelUp.extensionChargeGranted} Deadline Extension`])
   if (levelUp.streakFreezeGranted > 0) rows.push([ICONS.freeze, `+${levelUp.streakFreezeGranted} Streak Freeze`])
   if (levelUp.boostMultiplier > 1 && levelUp.boostExpiresAt) {
     rows.push([ICONS.boost,

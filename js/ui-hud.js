@@ -198,7 +198,7 @@ function progressSheet(state) {
   sheet.appendChild(el('div', 'dim', `${p.xp.toLocaleString()} total XP`))
 
   const rewardLines = []
-  if (rewards.fuel) rewardLines.push(`<div class="bd-line"><span>Fuel</span><b>+${rewards.fuel}</b></div>`)
+  if (rewards.extensionCharge) rewardLines.push(`<div class="bd-line"><span>Deadline Extension</span><b>+${rewards.extensionCharge}</b></div>`)
   if (rewards.streakFreeze) rewardLines.push(`<div class="bd-line"><span>Streak freeze</span><b>+${rewards.streakFreeze}</b></div>`)
   if (rewards.boostMultiplier > 1) rewardLines.push(`<div class="bd-line"><span>XP boost</span><b>${rewards.boostMultiplier}&times; for ${rewards.boostMinutes}m</b></div>`)
   if (rewardLines.length) {

@@ -31,7 +31,7 @@ const XP_SOURCES = [
   ['📡', 'Signal Sweep', "BOTZ needs four signals to stay stable. Stream Wild Flower, Don't Say You Love Me, Haegeum, and Killin' It Girl once each before midnight KST. Recovering all four protects the city signal and earns +10 XP once that day. Getting all four to 20 streams in the same week earns a further +30 XP, once per week."],
   ['🏙️', 'District restored', 'Finish its Track Goals, Album Goals, and ReConnect Goal to bring the district online and earn +50 XP.'],
   ['🚨', 'Red Zone pool', 'Stream at least 7 times during the event to qualify. If the network defuses it, the displayed XP pool is divided among every qualified agent.'],
-  ['⬆️', 'Every Level you reach', 'Each Level pays 5 Fuel, 1 Streak Freeze, and doubles your XP for 60 minutes. Level-ups are where Streak Freezes come from.'],
+  ['⬆️', 'Every Level you reach', 'Each Level pays 1 Streak Freeze, 1 Deadline Extension Charge, and doubles your XP for 60 minutes. Level-ups are where both Streak Freezes and Extension Charges come from.'],
 ]
 
 // The flow nobody could work out from the old one-clause mention.
@@ -96,6 +96,7 @@ export function agentManualSheet() {
   const dark = el('section', 'am-section am-charge-note')
   dark.appendChild(sectionTitle('If time runs out'))
   dark.appendChild(el('p', '', "Miss a district's 7-day timer and that attempt resets: its goal progress is cleared and the district goes back to available, so you can start it again whenever you like. Nothing you already earned is taken — XP, Charge Cells, merch and badges all stay."))
+  dark.appendChild(el('p', '', "In the final 2 days, a '⏳ Extend deadline +3 days' button appears on the district board — spends one Deadline Extension Charge (earned from leveling up), once per attempt. Use it if you're close but the clock is about to beat you, especially if you're waiting on a ReConnect partner."))
   dark.appendChild(el('p', '', 'If the Bomb goes dark instead, a short blackout is only a warning. If it stays dark for 7 days, your active district resets. At 14 days, restored districts reset.'))
   dark.appendChild(el('p', '', 'Your XP, Level, Rank, badges, and merch remain safe. Each Streak Freeze is used automatically to cover one missed day and can delay a blackout reset.'))
   dark.appendChild(el('p', 'am-footnote',
