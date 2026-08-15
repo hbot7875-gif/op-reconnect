@@ -347,15 +347,29 @@ export function buildPlaylistOrder(
 
   const MIN_SAME_MS = (8 + Math.random() * 2) * 60 * 1000
   const DURATION_TOLERANCE_MS = 2000
+  // Hard ceiling on the VISIBLE track distance between two real focus
+  // plays: 6. This has to be tracked as a window that survives across
+  // album-track k-iterations, not just per-k spacer count — album tracks
+  // are forced gap=0 and inserted at their own independent positions, so a
+  // spacer gap that's already maxed out can still get 1-2 album tracks
+  // stacked on top of it, which is what produced the reported 7-8-track
+  // gaps even after capping spacers alone. windowCount accumulates every
+  // non-real-focus track (spacer or album) since the last real focus play
+  // and only resets when a real (non-album) focus track is pushed.
+  const MAX_GAP = 6
+  let windowCount = 0
   const lastPlayed: Record<string, { ms: number; durationMs: number }> = {}
-  const ensureGap = (key: string, durationMs: number) => {
+  const ensureGap = (key: string, durationMs: number, maxExtra: number): number => {
     const prev = lastPlayed[key]
-    if (!prev) return
+    if (!prev) return 0
     const isDistinctVersion = Math.abs((prev.durationMs || 0) - (durationMs || 0)) > DURATION_TOLERANCE_MS
-    if (isDistinctVersion) return
-    while (ms - prev.ms < MIN_SAME_MS) {
+    if (isDistinctVersion) return 0
+    let pushed = 0
+    while (ms - prev.ms < MIN_SAME_MS && pushed < maxExtra) {
       if (!pushGapFiller(MIN_SAME_MS - (ms - prev.ms))) break
+      pushed++
     }
+    return pushed
   }
 
   for (let o = 0; o < 2; o++) {
@@ -364,15 +378,24 @@ export function buildPlaylistOrder(
 
   for (let k = 0; k < focusSeq.length; k++) {
     const r = Math.random()
+    // Re-weighted so 3 is the clear mode, 2/4 are the common shoulders, and
+    // 5/6 are rare — 1 stays a small floor rather than disappearing.
     const gap = (k === 0 || focusSeq[k].isAlbumTrack) ? 0
-      : r < 0.10 ? 1 : r < 0.35 ? 2 : r < 0.65 ? 3 : r < 0.85 ? 4 : r < 0.95 ? 5 : 6
-    for (let g = 0; g < gap && spacerBudget > 0 && roomForSpacer(k); g++) {
-      if (pushSpacer()) spacerBudget--; else break
+      : r < 0.05 ? 1 : r < 0.30 ? 2 : r < 0.70 ? 3 : r < 0.90 ? 4 : r < 0.97 ? 5 : 6
+    const roomLeftInWindow = Math.max(0, MAX_GAP - windowCount)
+    const effectiveGap = Math.min(gap, roomLeftInWindow)
+    let pushedThisGap = 0
+    for (let g = 0; g < effectiveGap && spacerBudget > 0 && roomForSpacer(k); g++) {
+      if (pushSpacer()) { spacerBudget--; pushedThisGap++ } else break
     }
+    windowCount += pushedThisGap
     const ck = focusSeq[k].key || focusSeq[k].isrc || focusSeq[k].uri || focusSeq[k].id
-    ensureGap(ck, focusSeq[k].durationMs)
-    if (sinceNonBts >= fillerEvery) pushSpacer()
+    const extraPushed = ensureGap(ck, focusSeq[k].durationMs, Math.max(0, MAX_GAP - windowCount))
+    windowCount += extraPushed
+    if (sinceNonBts >= fillerEvery && windowCount < MAX_GAP) { pushSpacer(); windowCount++ }
     push(focusSeq[k])
+    if (focusSeq[k].isAlbumTrack) windowCount++
+    else windowCount = 0
     lastPlayed[ck] = { ms, durationMs: focusSeq[k].durationMs }
     passCheckpoints()
   }
