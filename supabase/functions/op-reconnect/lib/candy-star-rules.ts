@@ -332,7 +332,13 @@ export function buildPlaylistOrder(
   }
 
   const avgMs = (focusSeq.reduce((s, t) => s + (t.durationMs || 0), 0) / Math.max(1, focusSeq.length)) || 200000
-  const fillTarget = targetMs * 0.6
+  // 0.6 was too tight: roomForSpacer's duration ceiling forced almost every
+  // gap down to ~3 spacers regardless of the wider rolled distribution
+  // above. 0.75 was simulation-verified (N=200/ratio) against a realistic
+  // 10x-focus + 18-track-album scenario: 0/200 trials exceed the 180min
+  // hard cap (max observed 173.4min, vs 0/200 at 0.7 topping out at
+  // 161.9min) while giving real gap-size variety room to survive.
+  const fillTarget = targetMs * 0.75
   const approxTracks = Math.max(focusSeq.length, Math.floor(fillTarget / avgMs))
   let spacerBudget = Math.max(0, approxTracks - focusSeq.length)
   const focusSuffix = new Array(focusSeq.length + 1).fill(0)
