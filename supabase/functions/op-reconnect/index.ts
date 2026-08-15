@@ -22,7 +22,7 @@ import { importFillerPlaylist, addFillerManual, getFillerLibrary, removeFiller }
 import { generatePlaylist, validatePlaylist, validatePlaylistFromTracks, getAlpacaOptions, generateAlpaca, previewAlpaca } from './lib/candy-star.ts'
 import { adminGetActiveDefuse } from './lib/bomb.ts'
 import { adminCreateBroadcast, adminListBroadcasts, adminDeleteBroadcast } from './lib/broadcasts.ts'
-import { adminDeleteAgent, adminGetAgent, adminGetAgentTracks, adminScanAltAccounts, adminResetAgentXp } from './lib/admin-agent.ts'
+import { adminDeleteAgent, adminGetAgent, adminGetAgentTracks, adminScanAltAccounts, adminResetAgentXp, adminDeleteInactiveAgents } from './lib/admin-agent.ts'
 import { adminSyncAllStreams } from './lib/sync-all.ts'
 import { adminListGoals, adminAddGoal, adminUpdateGoal, adminDeleteGoal } from './lib/goals.ts'
 import {
@@ -164,6 +164,7 @@ const ROUTES: Record<string, Route> = {
   adminGetAgentTracks: { auth: 'admin', handler: (sb, p) => adminGetAgentTracks(sb, p) },
   adminScanAltAccounts: { auth: 'admin', handler: (sb, p) => adminScanAltAccounts(sb, p) },
   adminDeleteAgent: { auth: 'admin', handler: (sb, p) => adminDeleteAgent(sb, p) },
+  adminDeleteInactiveAgents: { auth: 'admin', handler: (sb, p) => adminDeleteInactiveAgents(sb, p) },
   adminResetAgentXp: { auth: 'admin', handler: (sb, p) => adminResetAgentXp(sb, p) },
   adminSyncAllStreams: { auth: 'admin', handler: (sb, p) => adminSyncAllStreams(sb, p) },
 

@@ -262,6 +262,47 @@ export async function adminDeleteAgent(supabase: SupabaseDB, params: any) {
   return { success: true, deleted: { agentNo, handle: agent.handle } }
 }
 
+/** Automatic cleanup for agents who haven't fed the ARMY Bomb in
+ *  p_inactive_days days straight (default 14) — "not charged" specifically,
+ *  not general streaming/app activity, per the site owner. The candidate
+ *  list itself lives in Postgres (migrations/053_rc_inactive_agent_cleanup
+ *  .sql's rc_inactive_agent_candidates — already excludes AGENT001 and
+ *  retired agents); this just loops it through the SAME adminDeleteAgent
+ *  used for a manual one-off delete, so there is exactly one place that
+ *  knows how to fully remove an agent, not two that can drift apart.
+ *
+ *  dryRun (default true) returns who WOULD be deleted without touching
+ *  anything — the mode this is meant to be checked with before ever
+ *  flipping it to actually run, and what the scheduled cron calls with
+ *  dryRun explicitly set to false. Real deletion is permanent; there is no
+ *  undo, unlike settings.ts's retireAccount(). */
+export async function adminDeleteInactiveAgents(supabase: SupabaseDB, params: any) {
+  const inactiveDays = Number.isFinite(parseInt(params.inactiveDays)) ? parseInt(params.inactiveDays) : 14
+  const dryRun = params.dryRun !== false // opt OUT, not opt in — a missing/misspelled flag must never accidentally trigger real deletes
+
+  const { data: candidates, error } = await supabase.rpc('rc_inactive_agent_candidates', { p_inactive_days: inactiveDays })
+  if (error) return { success: false, error: error.message }
+  const rows = candidates || []
+
+  if (dryRun) {
+    return {
+      success: true, dryRun: true, count: rows.length,
+      candidates: rows.map((r: any) => ({
+        agentNo: r.agent_no, codename: r.codename, lastFedAt: r.last_fed_at, joinedAt: r.joined_at, daysInactive: r.days_inactive,
+      })),
+    }
+  }
+
+  const deleted: string[] = []
+  const failed: { agentNo: string; error: string }[] = []
+  for (const r of rows) {
+    const result = await adminDeleteAgent(supabase, { agentNo: r.agent_no })
+    if (result.success) deleted.push(r.agent_no)
+    else failed.push({ agentNo: r.agent_no, error: result.error })
+  }
+  return { success: true, dryRun: false, deletedCount: deleted.length, deleted, failed }
+}
+
 /** Reset visible XP without deleting historical reward rows. A compensating
  * ledger entry prevents the next stream sync from recreating old XP. */
 export async function adminResetAgentXp(supabase: SupabaseDB, params: any) {
