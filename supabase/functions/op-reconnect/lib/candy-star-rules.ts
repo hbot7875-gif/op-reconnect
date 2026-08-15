@@ -260,6 +260,30 @@ export function buildPlaylistOrder(
     }
   }
 
+  // A 2hr+ playlist gets at least 2 genuinely-other-artist plays pinned to
+  // real checkpoints ~30-45 min apart (see passCheckpoints below) — not
+  // just "prefer non-BTS whenever picking a spacer" (below), because a
+  // small library can get fully spent in the first few slots once every
+  // spacer wants one first, leaving nothing but BTS spacers for the rest of
+  // a long playlist. reservedForCheckpoints holds back that many non-BTS
+  // tracks from the GREEDY pushSpacer/pushGapFiller path so they survive to
+  // actually reach their checkpoint instead of getting spent immediately by
+  // the very first couple of spacer slots.
+  //
+  // Each checkpoint's target ms is set relative to when the PREVIOUS one
+  // actually fired, not a fixed absolute mark — the build advances in
+  // chunky, uneven steps (several spacers can land between one
+  // passCheckpoints() call and the next), so two independently-rolled
+  // absolute marks can each overshoot enough that the real gap between them
+  // ends up well under 30 min even though both individually looked ~30-45
+  // min from the start. Anchoring to the first firing's actual time is what
+  // keeps the GAP itself correct regardless of how much either one drifts.
+  const nextCheckpointGapMs = () => (30 + Math.random() * 15) * 60000
+  let remainingCheckpoints = targetMs >= 120 * 60000 ? 2 : 0
+  let nextCheckpointMs = remainingCheckpoints > 0 ? nextCheckpointGapMs() : Infinity
+  const reservedForCheckpoints = () => remainingCheckpoints
+  const greedyNonBtsAvailable = () => fi < nbQ.length - reservedForCheckpoints()
+
   // Non-BTS fillers go first now, not last — both focus songs here are BTS,
   // so a spacer slot that's ALSO BTS (a member solo, an OT7 track) barely
   // dilutes anything; it just reads as more BTS. The old order only reached
@@ -271,7 +295,7 @@ export function buildPlaylistOrder(
   // library still produces a full playlist, just leaning more BTS again
   // once its variety is exhausted.
   const pushSpacer = (): boolean => {
-    if (fi < nbQ.length) { push({ ...nbQ[fi++], isBTS: false }); return true }
+    if (greedyNonBtsAvailable()) { push({ ...nbQ[fi++], isBTS: false }); return true }
     if (bi >= btsQ.length && btsQ.length > 0) {
       const mid = Math.ceil(btsQ.length / 2)
       const rnd = (a: any[]) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[a[i], a[j]] = [a[j], a[i]] }; return a }
@@ -282,7 +306,7 @@ export function buildPlaylistOrder(
     return false
   }
   const pushGapFiller = (remainingMs: number): boolean => {
-    if (fi < nbQ.length) { push({ ...nbQ[fi++], isBTS: false }); return true }
+    if (greedyNonBtsAvailable()) { push({ ...nbQ[fi++], isBTS: false }); return true }
     if (bi >= btsQ.length && btsQ.length > 0) {
       const mid = Math.ceil(btsQ.length / 2)
       const rnd = (a: any[]) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[a[i], a[j]] = [a[j], a[i]] }; return a }
@@ -301,6 +325,13 @@ export function buildPlaylistOrder(
     if (pick > bi) { const tmp = btsQ[bi]; btsQ[bi] = btsQ[pick]; btsQ[pick] = tmp }
     if (bi < btsQ.length) { push({ ...btsQ[bi++], isBTS: true }); return true }
     return false
+  }
+  const passCheckpoints = () => {
+    while (remainingCheckpoints > 0 && ms >= nextCheckpointMs) {
+      if (fi < nbQ.length) push({ ...nbQ[fi++], isBTS: false })
+      remainingCheckpoints--
+      nextCheckpointMs = ms + nextCheckpointGapMs()
+    }
   }
 
   const avgMs = (focusSeq.reduce((s, t) => s + (t.durationMs || 0), 0) / Math.max(1, focusSeq.length)) || 200000
@@ -340,6 +371,7 @@ export function buildPlaylistOrder(
     if (sinceNonBts >= fillerEvery) pushSpacer()
     push(focusSeq[k])
     lastPlayed[ck] = { ms, durationMs: focusSeq[k].durationMs }
+    passCheckpoints()
   }
   pushSpacer(); pushSpacer()
   return { order, usedFillers: fi, usedSpacers: bi, truncated }
@@ -380,18 +412,29 @@ export function buildPlaylistOrder2Focus(
       bi = 0
     }
   }
+  // Same checkpoint reservation as buildPlaylistOrder above — see its
+  // comment (including why each checkpoint's target is relative to when
+  // the previous one fired, not a fixed absolute mark). Declared before
+  // pushSpacer/pushGapFiller so the greedy path can see how many non-BTS
+  // tracks to hold back.
+  const nextCheckpointGapMs = () => (30 + Math.random() * 15) * 60000
+  let remainingCheckpoints = targetMs >= 120 * 60000 ? 2 : 0
+  let nextCheckpointMs = remainingCheckpoints > 0 ? nextCheckpointGapMs() : Infinity
+  const reservedForCheckpoints = () => remainingCheckpoints
+  const greedyNonBtsAvailable = () => fi < nbQ.length - reservedForCheckpoints()
+
   // Same fix as buildPlaylistOrder above — non-BTS fillers first, BTS
   // spacers as the fallback once the filler library runs dry. See that
   // function's comment for why (both focus songs here are BTS too, so an
   // "OT7 track" spacer barely dilutes anything).
   const pushSpacer = (): boolean => {
-    if (fi < nbQ.length) { push({ ...nbQ[fi++], isBTS: false }); return true }
+    if (greedyNonBtsAvailable()) { push({ ...nbQ[fi++], isBTS: false }); return true }
     btsRecycle()
     if (bi < btsQ.length) { push({ ...btsQ[bi++], isBTS: true }); return true }
     return false
   }
   const pushGapFiller = (remainingMs: number): boolean => {
-    if (fi < nbQ.length) { push({ ...nbQ[fi++], isBTS: false }); return true }
+    if (greedyNonBtsAvailable()) { push({ ...nbQ[fi++], isBTS: false }); return true }
     btsRecycle()
     const end = Math.min(bi + 20, btsQ.length)
     let bestIdx = -1, bestDur = Infinity
@@ -405,6 +448,13 @@ export function buildPlaylistOrder2Focus(
     if (pick > bi) { const tmp = btsQ[bi]; btsQ[bi] = btsQ[pick]; btsQ[pick] = tmp }
     if (bi < btsQ.length) { push({ ...btsQ[bi++], isBTS: true }); return true }
     return false
+  }
+  const passCheckpoints = () => {
+    while (remainingCheckpoints > 0 && ms >= nextCheckpointMs) {
+      if (fi < nbQ.length) push({ ...nbQ[fi++], isBTS: false })
+      remainingCheckpoints--
+      nextCheckpointMs = ms + nextCheckpointGapMs()
+    }
   }
   const pushSpacers = (count: number) => { for (let i = 0; i < count; i++) { if (!pushSpacer()) return } }
 
@@ -535,6 +585,7 @@ export function buildPlaylistOrder2Focus(
 
     push(curr)
     lastPlayed[curr.key || curr.isrc || curr.uri || curr.id] = { ms, durationMs: curr.durationMs }
+    passCheckpoints()
   }
 
   pushSpacers(2)
