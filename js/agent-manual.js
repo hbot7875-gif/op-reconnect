@@ -1,108 +1,112 @@
-// Agent Manual — the shortest useful explanation of the game. This is not
-// an encyclopedia: it answers the questions a new agent actually has
-// ("how do I keep my Bomb alive?", "how do I earn XP?", "how does teaming
-// up work?", "what happens if I run out of time?").
+// Agent Manual — a quick-start guide first, reference material second.
 //
-// Teaming up gets a section of its own because it was the single biggest
-// source of real confusion: it used to be one clause inside step 3, which
-// never said that one agent invites and the other accepts — so an agent who
-// had only ever ACCEPTED an invite reported their mission completing without
-// them having invited anybody, with nothing in the game to explain it.
+// A new agent should be able to understand the core loop without reading an
+// encyclopedia. The four steps and deadline rescue stay visible; exact XP,
+// ReConnect, power, shop, and safety rules live in expandable sections.
 //
-// Everything with a number in it is mirrored from code, not restated from
-// memory: 20 streams/Cell and 2h each (charge-economy.ts, agent-charge.ts),
-// 10h era cards (HOURS_PER_LIT_ERA), 10/20/30 streams per XP by mode
-// (config.ts's streamsPerXpFor), +10/+30 Signal Sweep (side-missions.ts),
-// +50 district (xpRules), the 1-day invite expiry (INVITE_TTL_MS) and the
-// 7/14-day blackout tiers (agent-charge.ts). If any of those change, this
-// file is the other place that has to change.
+// Numbers here mirror the implementation: 20 album-goal streams per Charge
+// Cell and 2 hours per Cell (charge-economy.ts), 10-hour Era Cards, the
+// 10/20/30 goal-stream XP cadence (config.ts), +10/+30 Signal Sweep
+// (side-missions.ts), +50 district restoration (config.ts), 24-hour invite
+// expiry (reconnect-missions.ts), and the 7/14-day safety clocks.
 
 import { el, hideOverlay } from './state.js'
 
-const STEPS = [
-  ['1', 'Check your ARMY Bomb', 'Your remaining charge is shown on City. Tap the Bomb to feed it, or turn on Auto Feed to use Cells when its power runs out.'],
-  ['2', 'Earn Charge Cells', 'Every 20 counted Album Goal streams automatically earns 1 Charge Cell. Your Album Goal progress does not drop, and each Cell adds 2 hours.'],
-  ['3', 'Restore districts', 'Complete the active Track, Album, and ReConnect goals before the 7-day timer ends. A ReConnect goal needs another agent — see Teaming up below.'],
-  ['4', 'Build backup power', 'Stream every track in an era during the week to activate its card. It stays in Pack until you use it for 10 emergency hours, then resets Monday.'],
+const QUICK_START = [
+  ['1', 'Check your ARMY Bomb', 'Open City and tap the Bomb. Feed it a Charge Cell, or switch on Auto Feed so it can use one when power runs out.'],
+  ['2', 'Stream your assigned goals', "Open your active district and use Build today's queue. Only goals shown on that district board count toward its restoration."],
+  ['3', 'Team up when ReConnect appears', 'Invite a waiting agent—or accept an invite sent to you. The mission card tells you whether acceptance completes it or the team streams toward a shared target.'],
+  ['4', 'Finish before the timer ends', 'A district attempt lasts 7 days. Complete its Track, Album, and ReConnect goals to restore it and earn XP.'],
 ]
 
 const XP_SOURCES = [
-  ['🎵', 'Assigned goal streams', 'Only tracks listed in your active Track Goals and Album Goals count. Easy: 10 streams = 1 XP · Medium: 20 = 1 XP · Hard: 30 = 1 XP.'],
-  ['📡', 'Signal Sweep', "BOTZ needs four signals to stay stable. Stream Wild Flower, Don't Say You Love Me, Haegeum, and Killin' It Girl once each before midnight KST. Recovering all four protects the city signal and earns +10 XP once that day. Getting all four to 20 streams in the same week earns a further +30 XP, once per week."],
-  ['🏙️', 'District restored', 'Finish its Track Goals, Album Goals, and ReConnect Goal to bring the district online and earn +50 XP.'],
-  ['🚨', 'Red Zone pool', 'Stream at least 7 times during the event to qualify. If the network defuses it, the displayed XP pool is divided among every qualified agent.'],
-  ['⬆️', 'Every Level you reach', 'Each Level pays 1 Streak Freeze, 1 Deadline Extension Charge, and doubles your XP for 60 minutes. Level-ups are where both Streak Freezes and Extension Charges come from.'],
+  ['🎵', 'Assigned goal streams', 'Easy: 10 streams = 1 XP · Medium: 20 = 1 XP · Hard: 30 = 1 XP. Only streams for your active Track and Album Goals count.'],
+  ['📡', 'Signal Sweep', "Stream Wild Flower, Don't Say You Love Me, Haegeum, and Killin' It Girl. All four once before midnight KST earns +10 XP; all four at 20 streams in one week earns another +30 XP."],
+  ['🏙️', 'Restore a district', 'Complete every mission on its board to bring it online and earn +50 XP.'],
+  ['🚨', 'Red Zone', 'Stream at least 7 times to qualify. If the network wins, the displayed XP pool is split among all qualifying agents.'],
 ]
 
-// The flow nobody could work out from the old one-clause mention.
 const TEAM_STEPS = [
-  ['Open a mission', 'On a district with a ReConnect goal, open a mission first. That alone does not team you up with anyone.'],
-  ['Invite one agent', "You pick someone specific from the list of agents waiting for a partner — there is no automatic matching. They get a notification."],
-  ['They accept', 'Only then are you a team. If someone invited YOU, accepting is your whole part of that step — you never need to send an invite of your own.'],
-  ['Stream together', 'Both of you keep streaming toward the goal. The mission completes for both sides at once.'],
+  ['Open the mission', 'A ReConnect mission does not pair you automatically.'],
+  ['Invite or accept', 'Choose one waiting agent, or accept an invite you received. Accepting is enough—you do not also need to invite someone.'],
+  ['Follow the mission card', 'Some missions complete when the invite is accepted; others combine both agents’ streams toward one shared target. Either way, completion counts for both.'],
 ]
 
-function sectionTitle(text) {
-  return el('div', 'am-section-title', text)
+function detailSection(title, open = false) {
+  const section = el('details', 'am-details')
+  section.open = open
+  section.appendChild(el('summary', '', `<span>${title}</span><i>▾</i>`))
+  const body = el('div', 'am-details-body')
+  section.appendChild(body)
+  return { section, body }
+}
+
+function infoRow(icon, title, body) {
+  return el('div', 'am-xp-row', `
+    <span class="am-xp-icon">${icon}</span>
+    <span><b>${title}</b><small>${body}</small></span>
+  `)
 }
 
 export function agentManualSheet() {
   const sheet = el('div', 'sheet agent-manual')
   const content = el('div', 'am-scroll')
   content.appendChild(el('div', 'eyebrow', '📖 HOW TO PLAY'))
-  content.appendChild(el('p', 'am-intro', 'Keep your ARMY Bomb charged. Complete assigned goals to restore districts and earn XP.'))
+  content.appendChild(el('h3', 'am-title', 'Your mission in 30 seconds'))
+  content.appendChild(el('p', 'am-intro', 'Keep your ARMY Bomb powered, finish the missions in your active district, and restore the city one district at a time.'))
 
-  const play = el('section', 'am-section')
-  play.appendChild(sectionTitle('Keep the Bomb alive'))
-  for (const [number, title, body] of STEPS) {
-    play.appendChild(el('div', 'am-step', `
+  const quick = el('section', 'am-section am-quick')
+  for (const [number, title, body] of QUICK_START) {
+    quick.appendChild(el('div', 'am-step', `
       <span class="am-step-number">${number}</span>
       <span><b>${title}</b><small>${body}</small></span>
     `))
   }
-  content.appendChild(play)
+  content.appendChild(quick)
 
-  const xp = el('section', 'am-section')
-  xp.appendChild(sectionTitle('How to earn XP'))
-  for (const [icon, title, body] of XP_SOURCES) {
-    xp.appendChild(el('div', 'am-xp-row', `
-      <span class="am-xp-icon">${icon}</span>
-      <span><b>${title}</b><small>${body}</small></span>
-    `))
-  }
-  xp.appendChild(el('p', 'am-footnote', 'XP raises your Level and Rank. Your current progress is always shown at the top of the screen. Buying Wings in the Magic Shop is the one thing that spends XP.'))
-  content.appendChild(xp)
+  const rescue = el('section', 'am-rescue')
+  rescue.appendChild(el('div', 'am-rescue-icon', '⏳'))
+  rescue.appendChild(el('div', '', `
+    <b>Need more time?</b>
+    <p>Every Level grants <strong>1 Deadline Extension Charge</strong>. During the final 2 days, the district board lets you spend one to add <strong>3 days</strong>.</p>
+    <small>Only one extension can be used per district attempt. Unused Charges stay in your Pack.</small>
+  `))
+  content.appendChild(rescue)
 
-  const team = el('section', 'am-section')
-  team.appendChild(sectionTitle('Teaming up (ReConnect)'))
-  team.appendChild(el('p', 'am-intro', 'Some districts need another agent before they will come back online.'))
+  const xp = detailSection('XP and Level rewards', true)
+  for (const [icon, title, body] of XP_SOURCES) xp.body.appendChild(infoRow(icon, title, body))
+  xp.body.appendChild(infoRow('⬆️', 'Level up', 'Every Level grants 1 Deadline Extension Charge, 1 Streak Freeze, and 2× XP for 60 minutes. Fuel is no longer a Level reward.'))
+  xp.body.appendChild(el('p', 'am-footnote', 'XP raises your Level and Rank. Buying Wings in the Magic Shop is the only action that spends XP.'))
+  content.appendChild(xp.section)
+
+  const team = detailSection('How ReConnect teams work')
+  team.body.appendChild(el('p', 'am-intro', 'Some districts need one other agent before they can come back online.'))
   for (const [title, body] of TEAM_STEPS) {
-    team.appendChild(el('div', 'am-step', `
+    team.body.appendChild(el('div', 'am-step', `
       <span class="am-step-number">·</span>
       <span><b>${title}</b><small>${body}</small></span>
     `))
   }
-  team.appendChild(el('p', 'am-footnote',
-    'An invite nobody answers expires after a day, which frees both of you. '
-    + "If a teammate goes quiet for a couple of days, or their own time on the district runs out, you can drop them and invite someone else — and you can leave a mission yourself at any point. Nobody can be removed while they are still streaming, however slowly."))
-  content.appendChild(team)
+  team.body.appendChild(el('p', 'am-footnote', 'Unanswered invites expire after 24 hours. If a teammate goes quiet, the mission explains when they can be removed; an actively streaming teammate cannot be removed. You may leave a mission yourself at any time.'))
+  content.appendChild(team.section)
 
-  const shop = el('section', 'am-section')
-  shop.appendChild(sectionTitle('Streaks, Wings and the Ticket'))
-  shop.appendChild(el('p', '', 'Streaming on consecutive days builds a streak, with badges at 7, 30 and 100 days. A Streak Freeze covers one missed day automatically.'))
-  shop.appendChild(el('p', '', 'The Magic Shop sells Wings — 3 a day, 1 XP each — which are spent generating Candy Star playlists. The Ticket unlocks once you reach Level 7, restore 3 districts and hold 50 XP; reaching that bar is its only cost.'))
-  content.appendChild(shop)
+  const power = detailSection('Bomb power and emergency backup')
+  power.body.appendChild(infoRow('⚡', 'Charge Cells', 'Every 20 counted Album Goal streams earns 1 Cell automatically. Goal progress stays counted, and each Cell adds 2 hours of Bomb power.'))
+  power.body.appendChild(infoRow('💿', 'Lit Era Cards', 'Stream every track in an era during the week to light its card. Use it from Pack for 10 emergency hours; cards reset Monday.'))
+  power.body.appendChild(el('p', 'am-footnote', 'Auto Feed can spend banked Cells when the Bomb runs out, but it does not count as personally feeding the Bomb.'))
+  content.appendChild(power.section)
 
-  const dark = el('section', 'am-section am-charge-note')
-  dark.appendChild(sectionTitle('If time runs out'))
-  dark.appendChild(el('p', '', "Miss a district's 7-day timer and that attempt resets: its goal progress is cleared and the district goes back to available, so you can start it again whenever you like. Nothing you already earned is taken — XP, Charge Cells, merch and badges all stay."))
-  dark.appendChild(el('p', '', "In the final 2 days, a '⏳ Extend deadline +3 days' button appears on the district board — spends one Deadline Extension Charge (earned from leveling up), once per attempt. Use it if you're close but the clock is about to beat you, especially if you're waiting on a ReConnect partner."))
-  dark.appendChild(el('p', '', 'If the Bomb goes dark instead, a short blackout is only a warning. If it stays dark for 7 days, your active district resets. At 14 days, restored districts reset.'))
-  dark.appendChild(el('p', '', 'Your XP, Level, Rank, badges, and merch remain safe. Each Streak Freeze is used automatically to cover one missed day and can delay a blackout reset.'))
-  dark.appendChild(el('p', 'am-footnote',
-    "That's about progress, not your account — a separate, stricter clock covers that. Go 7 days without personally tapping Feed the Bomb and you'll see a warning here; "
-    + 'go 14 days and your agent file is permanently deleted, no recovery. Auto Feed spending your banked Charge Cells does not reset this clock — only tapping Feed yourself does.'))
-  content.appendChild(dark)
+  const extras = detailSection('Streaks, Wings, and the Ticket')
+  extras.body.appendChild(infoRow('🔥', 'Streaks', 'Streaming on consecutive days builds a streak, with badges at 7, 30, and 100 days. A Streak Freeze automatically covers one missed day.'))
+  extras.body.appendChild(infoRow('🪽', 'Wings', 'The Magic Shop sells up to 3 Wings a day for 1 XP total. Candy Star spends 1 Wing each time it generates a playlist.'))
+  extras.body.appendChild(infoRow('🎫', 'Ticket', 'Unlocks at Level 7 after restoring 3 districts while holding 50 XP. Claiming it does not spend that XP.'))
+  content.appendChild(extras.section)
+
+  const safety = detailSection('Deadlines and account safety')
+  safety.body.appendChild(infoRow('⏳', 'District deadline', 'If the 7-day timer expires, that attempt resets and its goal progress is cleared. Start the district again whenever you like; XP, Charges, merch, and badges remain safe.'))
+  safety.body.appendChild(infoRow('💡', 'Bomb blackout', 'A short blackout is only a warning. After 7 dark days your active district resets; after 14 dark days restored districts reset. Streak Freezes can delay these resets.'))
+  safety.body.appendChild(infoRow('⚠️', 'Agent-file inactivity', 'Go 7 days without personally tapping Feed the Bomb and you receive a warning. At 14 days the agent file is permanently deleted. Auto Feed does not reset this clock.'))
+  content.appendChild(safety.section)
 
   sheet.appendChild(content)
 

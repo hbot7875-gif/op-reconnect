@@ -605,18 +605,21 @@ export async function extendDistrictDeadline(supabase: SupabaseDB, params: any) 
   // = false, deadline_extension_charges = charges) as an optimistic-lock
   // guard — a concurrent double-tap loses the race on whichever request
   // lands second instead of spending two charges for one extension.
-  const { error: chargeErr } = await supabase.from('rc_players')
+  const { data: charged, error: chargeErr } = await supabase.from('rc_players')
     .update({ deadline_extension_charges: charges - 1 })
     .eq('agent_no', agentNo).eq('deadline_extension_charges', charges)
+    .select('deadline_extension_charges').maybeSingle()
   if (chargeErr) return { success: false, error: chargeErr.message }
+  if (!charged) return { success: false, error: 'no_extension_charges' }
 
-  const { error } = await supabase.from('rc_player_districts')
+  const { data: extended, error } = await supabase.from('rc_player_districts')
     .update({ deadline_extended: true })
     .eq('agent_no', agentNo).eq('district_id', districtId).eq('status', 'active').eq('deadline_extended', false)
-  if (error) {
+    .select('district_id').maybeSingle()
+  if (error || !extended) {
     // Roll the spent charge back — the extension itself didn't land.
     await supabase.from('rc_players').update({ deadline_extension_charges: charges }).eq('agent_no', agentNo).eq('deadline_extension_charges', charges - 1)
-    return { success: false, error: error.message }
+    return { success: false, error: error?.message || 'already_extended' }
   }
 
   const newDeadline = districtDeadline(activePd.activated_at, restorationDays(content), DEADLINE_EXTENSION_DAYS)

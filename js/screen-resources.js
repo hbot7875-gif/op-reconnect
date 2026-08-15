@@ -24,8 +24,8 @@
 // space with an agent's actual inventory.
 //
 // What's left is exactly two things: a wallet of currencies that actually
-// get spent (Charge Cells, Wings, Streak Freezes), and the collectibles the
-// agent owns. Tickets are deliberately NOT in the wallet row — a claimed
+// get spent (Charge Cells, Wings, Streak Freezes, Deadline Extensions), and
+// the collectibles the agent owns. Tickets are deliberately NOT in the wallet row — a claimed
 // ticket is a one-time unlock, not a currency earned repeatedly, so it
 // shows up as a usable object on the collection shelf instead (see items.js).
 
@@ -80,13 +80,14 @@ export function renderResources(container, state) {
     <span class="pack-eyebrow">🎒 Agent Pack</span>
   `))
 
-  // ── Wallet — the only three balances actually spent ──
+  // ── Wallet — balances that are actually spent ──
   const p = state?.player || {}
   const wallet = el('div', 'wallet-row')
   wallet.append(
     walletTile('⚡', p.chargeCells || 0, 'Charge Cells'),
     walletTile('🪽', p.wings || 0, 'Wings'),
     walletTile('🧊', p.streakFreezeCharges || 0, 'Streak Freezes'),
+    walletTile('⏳', p.deadlineExtensionCharges || 0, 'Deadline Extensions'),
   )
   wrap.appendChild(wallet)
   const cellProgress = state?.activeDistrict?.chargeCellProgress

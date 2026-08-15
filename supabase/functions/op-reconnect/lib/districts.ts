@@ -263,8 +263,8 @@ export function albumGoalStreamTotal(
 
 export interface DistrictDeadline { expiresAt: string; msLeft: number; expired: boolean }
 
-// A one-time, free +3 days if the attempt is about to lapse — see
-// migrations/056_rc_district_deadline_extension.sql.
+// A one-time +3-day rescue, paid with a banked Deadline Extension Charge
+// during the final 2 days — see migrations/056 and 057.
 export const DEADLINE_EXTENSION_DAYS = 3
 
 /** A district's restoration window — exactly `days` (plus `extraDays` from
