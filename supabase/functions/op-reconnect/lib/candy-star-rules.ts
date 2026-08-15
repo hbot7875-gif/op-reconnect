@@ -260,8 +260,18 @@ export function buildPlaylistOrder(
     }
   }
 
+  // Non-BTS fillers go first now, not last — both focus songs here are BTS,
+  // so a spacer slot that's ALSO BTS (a member solo, an OT7 track) barely
+  // dilutes anything; it just reads as more BTS. The old order only reached
+  // into the filler library once 20 BTS-flagged tracks had played in a row
+  // or ~40-55 real minutes had passed since the last one, so a normal-length
+  // playlist rarely got there — one real generation came back 29 BTS/member
+  // spacers to 2 genuinely other-artist ones. BTS spacers are still the
+  // fallback once the filler library runs dry, not removed — a small
+  // library still produces a full playlist, just leaning more BTS again
+  // once its variety is exhausted.
   const pushSpacer = (): boolean => {
-    if ((msSinceNonBts >= nonKpopGapMs || sinceNonBts >= fillerEvery) && fi < nbQ.length) { push({ ...nbQ[fi++], isBTS: false }); return true }
+    if (fi < nbQ.length) { push({ ...nbQ[fi++], isBTS: false }); return true }
     if (bi >= btsQ.length && btsQ.length > 0) {
       const mid = Math.ceil(btsQ.length / 2)
       const rnd = (a: any[]) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[a[i], a[j]] = [a[j], a[i]] }; return a }
@@ -269,13 +279,10 @@ export function buildPlaylistOrder(
       bi = 0
     }
     if (bi < btsQ.length) { push({ ...btsQ[bi++], isBTS: true }); return true }
-    if (fi < nbQ.length) { push({ ...nbQ[fi++], isBTS: false }); return true }
     return false
   }
   const pushGapFiller = (remainingMs: number): boolean => {
-    if ((msSinceNonBts >= nonKpopGapMs || sinceNonBts >= fillerEvery) && fi < nbQ.length) {
-      push({ ...nbQ[fi++], isBTS: false }); return true
-    }
+    if (fi < nbQ.length) { push({ ...nbQ[fi++], isBTS: false }); return true }
     if (bi >= btsQ.length && btsQ.length > 0) {
       const mid = Math.ceil(btsQ.length / 2)
       const rnd = (a: any[]) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[a[i], a[j]] = [a[j], a[i]] }; return a }
@@ -293,7 +300,6 @@ export function buildPlaylistOrder(
     const pick = bestIdx >= 0 ? bestIdx : longestIdx
     if (pick > bi) { const tmp = btsQ[bi]; btsQ[bi] = btsQ[pick]; btsQ[pick] = tmp }
     if (bi < btsQ.length) { push({ ...btsQ[bi++], isBTS: true }); return true }
-    if (fi < nbQ.length) { push({ ...nbQ[fi++], isBTS: false }); return true }
     return false
   }
 
@@ -374,17 +380,18 @@ export function buildPlaylistOrder2Focus(
       bi = 0
     }
   }
+  // Same fix as buildPlaylistOrder above — non-BTS fillers first, BTS
+  // spacers as the fallback once the filler library runs dry. See that
+  // function's comment for why (both focus songs here are BTS too, so an
+  // "OT7 track" spacer barely dilutes anything).
   const pushSpacer = (): boolean => {
-    if ((msSinceNonBts >= nonKpopGapMs || sinceNonBts >= fillerEvery) && fi < nbQ.length) { push({ ...nbQ[fi++], isBTS: false }); return true }
+    if (fi < nbQ.length) { push({ ...nbQ[fi++], isBTS: false }); return true }
     btsRecycle()
     if (bi < btsQ.length) { push({ ...btsQ[bi++], isBTS: true }); return true }
-    if (fi < nbQ.length) { push({ ...nbQ[fi++], isBTS: false }); return true }
     return false
   }
   const pushGapFiller = (remainingMs: number): boolean => {
-    if ((msSinceNonBts >= nonKpopGapMs || sinceNonBts >= fillerEvery) && fi < nbQ.length) {
-      push({ ...nbQ[fi++], isBTS: false }); return true
-    }
+    if (fi < nbQ.length) { push({ ...nbQ[fi++], isBTS: false }); return true }
     btsRecycle()
     const end = Math.min(bi + 20, btsQ.length)
     let bestIdx = -1, bestDur = Infinity
@@ -397,7 +404,6 @@ export function buildPlaylistOrder2Focus(
     const pick = bestIdx >= 0 ? bestIdx : longestIdx
     if (pick > bi) { const tmp = btsQ[bi]; btsQ[bi] = btsQ[pick]; btsQ[pick] = tmp }
     if (bi < btsQ.length) { push({ ...btsQ[bi++], isBTS: true }); return true }
-    if (fi < nbQ.length) { push({ ...nbQ[fi++], isBTS: false }); return true }
     return false
   }
   const pushSpacers = (count: number) => { for (let i = 0; i < count; i++) { if (!pushSpacer()) return } }
