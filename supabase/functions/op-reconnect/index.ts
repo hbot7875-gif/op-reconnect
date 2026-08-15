@@ -28,7 +28,7 @@ import { adminListGoals, adminAddGoal, adminUpdateGoal, adminDeleteGoal } from '
 import {
   getReconnectMission, getInviteCandidates, openReconnectMission,
   inviteReconnectMission, removeReconnectParticipant, respondReconnectInvite, adminAutoAssignMissions,
-  getMyInvites, sendReconnectMessage,
+  getMyInvites, sendReconnectMessage, submitReconnectMissionCipherAnswer,
 } from './lib/reconnect-missions.ts'
 import { submitReconnectPuzzleAnswer } from './lib/reconnect-puzzle.ts'
 import { getLeaderboard } from './lib/leaderboard.ts'
@@ -112,6 +112,7 @@ const ROUTES: Record<string, Route> = {
   removeReconnectParticipant: { auth: 'agent', handler: async (sb, p) => removeReconnectParticipant(sb, await loadContent(sb), p) },
   respondReconnectInvite: { auth: 'agent', handler: async (sb, p) => respondReconnectInvite(sb, await loadContent(sb), p) },
   sendReconnectMessage: { auth: 'agent', handler: async (sb, p) => sendReconnectMessage(sb, await loadContent(sb), p) },
+  submitReconnectMissionCipherAnswer: { auth: 'agent', handler: async (sb, p) => submitReconnectMissionCipherAnswer(sb, p) },
   getMyInvites: { auth: 'agent', handler: async (sb, p) => getMyInvites(sb, await loadContent(sb), String(p.agentNo || '').trim().toUpperCase()) },
   submitSuggestion: { auth: 'agent', handler: async (sb, p) => submitSuggestion(sb, p) },
   // Reconnect goal (sotd/cipher/memory puzzle variants).

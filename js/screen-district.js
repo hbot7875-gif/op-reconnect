@@ -444,6 +444,39 @@ function paintMissionPanel(box, d, res) {
     box.appendChild(el('p', 'muted', `${streamedCount}/${joined.length} have streamed toward their own goals here since joining.`))
   }
 
+  // Phase two, once the streaming target is hit and the goal carries a
+  // cipher sequence (see reconnect-missions.ts's refreshMission) — the
+  // whole team shares one prompt and one attempt pool, so this is deliberately
+  // placed right above the team chat: solving it is meant to happen there,
+  // not alone.
+  if (res.variant === 'connect' && m.cipher) {
+    box.appendChild(el('div', 'eyebrow', 'CIPHER'))
+    box.appendChild(el('p', 'muted', `Cipher ${m.cipher.index + 1} of ${m.cipher.total} — talk it out below, then submit your best answer together.`))
+    box.appendChild(el('p', 'muted', m.cipher.prompt))
+    if (m.cipher.attemptsLeft <= 0) {
+      box.appendChild(el('div', 'dim', "Out of attempts — this one's stuck for this attempt."))
+    } else {
+      const cipherRow = el('div', 'reconnect-invite-row')
+      const cipherInput = el('input', 'ob-input')
+      cipherInput.placeholder = 'Your answer'
+      const cipherSubmit = el('button', 'btn btn-primary', 'Submit')
+      cipherSubmit.onclick = async () => {
+        const answer = cipherInput.value.trim()
+        if (!answer) { toast(reconnectError('answer_required')); return }
+        cipherSubmit.disabled = true
+        const r = await call('submitReconnectMissionCipherAnswer', { agentNo: me, districtId: d.id, answer })
+        cipherSubmit.disabled = false
+        if (!r.success) { toast(reconnectError(r.error)); return }
+        if (r.solved) toast(r.allSolved ? 'Cracked it — mission complete!' : `Cracked it — ${r.cipherIndex}/${r.ciphersTotal} down, on to the next one.`)
+        else toast(r.attemptsLeft > 0 ? 'Not quite — try again.' : "Out of attempts on this one.")
+        refresh()
+      }
+      cipherRow.append(cipherInput, cipherSubmit)
+      box.appendChild(cipherRow)
+      box.appendChild(el('div', 'dim', `${m.cipher.attemptsLeft} ${m.cipher.attemptsLeft === 1 ? 'try' : 'tries'} left on this cipher, shared across the team`))
+    }
+  }
+
   // The one thing the sender would otherwise never learn: their invite ran
   // out. Without this the name just disappeared from the roster (it used to
   // be hard-deleted) and they'd be left wondering whether they'd imagined

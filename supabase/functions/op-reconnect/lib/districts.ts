@@ -92,10 +92,14 @@ export function freezeGoals(content: GameContent, mode: string, district: Distri
       // sharedTrack (optional) turns 'connect' from "everyone streams
       // anything of their own once" into a pooled target on one specific
       // track — every joined participant's own plays of it, counted from
-      // when THEY joined, add together toward the same total. Frozen
-      // verbatim like everything else here, so an admin editing it later
-      // never changes what an already-open mission is chasing.
-      ? { requiredAgents: cfg.requiredAgents, sharedTrack: cfg.sharedTrack || null }
+      // when THEY joined, add together toward the same total. ciphers
+      // (optional, 'connect' only) is a second phase after the streaming
+      // target is hit: an ordered list of {prompt, answerKeys} the whole
+      // team solves together before the mission completes — see
+      // reconnect-missions.ts's refreshMission(). Frozen verbatim like
+      // everything else here, so an admin editing it later never changes
+      // what an already-open mission is chasing.
+      ? { requiredAgents: cfg.requiredAgents, sharedTrack: cfg.sharedTrack || null, ciphers: cfg.ciphers || null }
       : variant === 'sotd'
       // A YouTube-link guess, not a text guess — frozen verbatim so an
       // admin changing the answer later can't retroactively change what an

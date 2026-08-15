@@ -38,6 +38,13 @@ import { restorationDays } from './config.ts'
 import type { FrozenReconnectGoal } from './districts.ts'
 import { kstDateOf, todayKst, addDaysStr } from './kst.ts'
 import { ONLINE_WINDOW_MS } from './feed.ts'
+import { normKeyFull } from './text.ts'
+
+/** Wrong-guess budget for a mission's cipher phase (see submitReconnect
+ *  MissionCipherAnswer) — one shared pool per cipher, not per agent, so the
+ *  team has to actually agree on an answer before spending a guess. Reset
+ *  to this every time the team advances to the next cipher in the sequence. */
+const CIPHER_ATTEMPTS = 3
 
 /** How long a teammate can go without streaming anything before the person
  *  carrying the mission may drop them.
@@ -308,7 +315,10 @@ async function participantsFor(supabase: SupabaseDB, mission: any) {
  *  (it briefly wasn't) because removeReconnectParticipant needs to target
  *  someone specific — same "travels as data, never rendered as text" rule
  *  getInviteCandidates already follows for exactly the same reason. */
-async function shape(supabase: SupabaseDB, m: any, participants: any[], meAgentNo: string, idleThreshold = IDLE_DAYS) {
+async function shape(
+  supabase: SupabaseDB, m: any, participants: any[], meAgentNo: string, idleThreshold = IDLE_DAYS,
+  ciphers?: { prompt: string; answerKeys: string[] }[] | null,
+) {
   const names = await codenameMap(supabase, participants.map((p) => p.agent_no))
   return {
     id: m.id,
@@ -324,6 +334,18 @@ async function shape(supabase: SupabaseDB, m: any, participants: any[], meAgentN
     // refreshMission. Pooled progress toward one specific track, everyone's
     // own plays (since they personally joined) counted together.
     sharedTrack: m.sharedTrackProgress || null,
+    // Only present once the streaming target is hit and the goal actually
+    // carries a cipher sequence — see refreshMission's phase transition.
+    // Deliberately exposes only the CURRENT cipher's prompt, never the
+    // full ciphers array (which carries answerKeys) or anything about
+    // ciphers still ahead — same "never leak the answer" rule the solo
+    // puzzle variants already follow (reconnect-puzzle.ts).
+    cipher: (m.phase === 'cipher' && ciphers?.length) ? {
+      index: m.cipher_index,
+      total: ciphers.length,
+      prompt: ciphers[m.cipher_index]?.prompt || '',
+      attemptsLeft: m.cipher_attempts_left,
+    } : null,
     participants: participants.map((p) => ({
       agentNo: p.agent_no, // not for display — see doc comment above
       codename: names.get(p.agent_no) || p.agent_no, // fallback: retired/missing rc_players row
@@ -382,8 +404,11 @@ async function shape(supabase: SupabaseDB, m: any, participants: any[], meAgentN
  *  for message history. Every caller that feeds the interactive panel
  *  (getReconnectMission, openReconnectMission, removeReconnectParticipant)
  *  uses this instead. */
-async function shapeWithMessages(supabase: SupabaseDB, m: any, participants: any[], meAgentNo: string, idleThreshold = IDLE_DAYS) {
-  const shaped: any = await shape(supabase, m, participants, meAgentNo, idleThreshold)
+async function shapeWithMessages(
+  supabase: SupabaseDB, m: any, participants: any[], meAgentNo: string, idleThreshold = IDLE_DAYS,
+  ciphers?: { prompt: string; answerKeys: string[] }[] | null,
+) {
+  const shaped: any = await shape(supabase, m, participants, meAgentNo, idleThreshold, ciphers)
   shaped.messages = await missionMessages(supabase, m.id, meAgentNo)
   return shaped
 }
@@ -419,7 +444,11 @@ async function shapeWithMessages(supabase: SupabaseDB, m: any, participants: any
  *  there's nothing live left to compute for those. */
 async function refreshMission(
   supabase: SupabaseDB, mission: any, variant: 'connect' | 'invite',
-  config?: { requiredAgents?: number; sharedTrack?: { label: string; keys: string[]; target: number } | null },
+  config?: {
+    requiredAgents?: number
+    sharedTrack?: { label: string; keys: string[]; target: number } | null
+    ciphers?: { prompt: string; answerKeys: string[] }[] | null
+  },
 ) {
   if (mission.status !== 'open' && mission.status !== 'complete') return mission
 
@@ -490,14 +519,28 @@ async function refreshMission(
     }
   }
 
-  if (mission.status === 'open') {
+  // The cipher phase (see module const CIPHER_ATTEMPTS) only ever exists for
+  // 'connect' missions whose goal carries config.ciphers — everything else
+  // (including every mission created before this feature) has phase stuck at
+  // its 'streaming' default and behaves exactly as before. Once a mission
+  // has moved into 'cipher', this block has nothing left to decide — the
+  // team either hasn't cracked the current one yet or has, and the latter is
+  // handled by submitReconnectMissionCipherAnswer, not here — so it's
+  // guarded to run only while still in the streaming phase.
+  const ciphers = config?.ciphers
+  if (mission.status === 'open' && mission.phase === 'streaming') {
     const qualified = variant === 'invite'
       ? joined.length >= mission.required_agents
       : sharedTrack?.keys?.length
         ? joined.length >= mission.required_agents && sharedTotal >= sharedTrack.target
         : joined.length >= mission.required_agents && joined.every((p: any) => p.streamed_at)
 
-    if (qualified) {
+    if (qualified && variant === 'connect' && ciphers?.length) {
+      const { error } = await supabase.from('rc_reconnect_missions')
+        .update({ phase: 'cipher', cipher_index: 0, cipher_attempts_left: CIPHER_ATTEMPTS })
+        .eq('id', mission.id).eq('status', 'open').eq('phase', 'streaming')
+      if (!error) { mission.phase = 'cipher'; mission.cipher_index = 0; mission.cipher_attempts_left = CIPHER_ATTEMPTS }
+    } else if (qualified) {
       const { error } = await supabase.from('rc_reconnect_missions')
         .update({ status: 'complete', completed_at: new Date().toISOString() })
         .eq('id', mission.id).eq('status', 'open')
@@ -516,7 +559,10 @@ export async function getMissionStatus(supabase: SupabaseDB, agentNo: string, di
     || await findMyMission(supabase, agentNo, districtId, { goalId: frozenReconnect.id })
   if (mission) mission = await refreshMission(supabase, mission, variant, frozenReconnect.config)
   const participants = await participantsFor(supabase, mission)
-  return { variant, done: mission?.status === 'complete', mission: mission ? await shape(supabase, mission, participants, agentNo) : null }
+  return {
+    variant, done: mission?.status === 'complete',
+    mission: mission ? await shape(supabase, mission, participants, agentNo, IDLE_DAYS, frozenReconnect.config.ciphers) : null,
+  }
 }
 
 /** Read-only, richer than getMissionStatus: for the interactive player
@@ -550,7 +596,7 @@ export async function getReconnectMission(supabase: SupabaseDB, content: any, pa
     success: true, available: true, variant: reconnect.variant,
     config: { requiredAgents: reconnect.config.requiredAgents, sharedTrack: reconnect.config.sharedTrack || null },
     idleThreshold,
-    mission: mission ? await shapeWithMessages(supabase, mission, participants || [], agentNo, idleThreshold) : null,
+    mission: mission ? await shapeWithMessages(supabase, mission, participants || [], agentNo, idleThreshold, reconnect.config.ciphers) : null,
   }
 }
 
@@ -833,7 +879,7 @@ export async function openReconnectMission(supabase: SupabaseDB, content: unknow
   // first response, instead of the caller having to poll again to see it.
   const fresh = await refreshMission(supabase, mission, reconnect.variant, reconnect.config)
   const participants = await participantsFor(supabase, fresh)
-  return { success: true, mission: await shapeWithMessages(supabase, fresh, participants, agentNo) }
+  return { success: true, mission: await shapeWithMessages(supabase, fresh, participants, agentNo, IDLE_DAYS, reconnect.config.ciphers) }
 }
 
 // Open-matchmaking join (joinReconnectMission / rc_reconnect_join_open)
@@ -930,6 +976,65 @@ export async function sendReconnectMessage(supabase: SupabaseDB, content: unknow
   return { success: true }
 }
 
+/** Any joined (or invited — same "can chat before deciding" reasoning
+ *  sendReconnectMessage follows) participant submits a guess for the
+ *  team's CURRENT cipher, once the mission has moved into its cipher phase
+ *  (see refreshMission). A shared attempt pool, not one per agent — the
+ *  whole point of putting this behind the team chat is that they discuss
+ *  before guessing, and a per-person pool would let them just brute-force
+ *  it individually instead. A correct answer advances the whole team to
+ *  the next cipher (fresh CIPHER_ATTEMPTS) or, on the last one, completes
+ *  the mission outright — same reward path as any other qualified mission
+ *  (handlers.ts awards once the whole district finishes, not here). */
+export async function submitReconnectMissionCipherAnswer(supabase: SupabaseDB, params: any) {
+  const districtId = String(params.districtId || '')
+  const agentNo = String(params.agentNo || '').trim().toUpperCase()
+  const answer = String(params.answer || '').trim()
+  if (!answer) return { success: false, error: 'answer_required' }
+
+  const pd = await myActivePd(supabase, agentNo, districtId)
+  if (pd?.status !== 'active') return { success: false, error: 'not_eligible' }
+  const reconnect = myReconnectGoal(pd)
+  const ciphers = reconnect?.variant === 'connect' ? reconnect.config?.ciphers : null
+  if (!reconnect || !ciphers?.length) return { success: false, error: 'not_available' }
+
+  if (await findMyCompletedMission(supabase, agentNo, districtId, reconnect.id)) {
+    return { success: false, error: 'already_completed' }
+  }
+  let mission = await findMyMission(supabase, agentNo, districtId, { goalId: reconnect.id })
+  if (!mission) return { success: false, error: 'not_in_mission' }
+  mission = await refreshMission(supabase, mission, reconnect.variant, reconnect.config)
+  if (mission.status !== 'open') return { success: false, error: 'mission_' + mission.status }
+  if (mission.phase !== 'cipher') return { success: false, error: 'no_active_puzzle' }
+  if (mission.cipher_attempts_left <= 0) return { success: false, error: 'no_attempts_left' }
+
+  const current = ciphers[mission.cipher_index]
+  const solved = !!current && current.answerKeys.includes(normKeyFull(answer))
+
+  if (!solved) {
+    const attemptsLeft = Math.max(0, mission.cipher_attempts_left - 1)
+    const { error } = await supabase.from('rc_reconnect_missions')
+      .update({ cipher_attempts_left: attemptsLeft })
+      .eq('id', mission.id).eq('status', 'open').eq('phase', 'cipher')
+    if (error) return { success: false, error: error.message }
+    return { success: true, solved: false, attemptsLeft, cipherIndex: mission.cipher_index, ciphersTotal: ciphers.length }
+  }
+
+  const nextIndex = mission.cipher_index + 1
+  if (nextIndex >= ciphers.length) {
+    const { error } = await supabase.from('rc_reconnect_missions')
+      .update({ status: 'complete', completed_at: new Date().toISOString(), cipher_index: nextIndex })
+      .eq('id', mission.id).eq('status', 'open').eq('phase', 'cipher')
+    if (error) return { success: false, error: error.message }
+    return { success: true, solved: true, allSolved: true, cipherIndex: nextIndex, ciphersTotal: ciphers.length }
+  }
+  const { error } = await supabase.from('rc_reconnect_missions')
+    .update({ cipher_index: nextIndex, cipher_attempts_left: CIPHER_ATTEMPTS })
+    .eq('id', mission.id).eq('status', 'open').eq('phase', 'cipher')
+  if (error) return { success: false, error: error.message }
+  return { success: true, solved: true, allSolved: false, cipherIndex: nextIndex, ciphersTotal: ciphers.length, attemptsLeft: CIPHER_ATTEMPTS }
+}
+
 /** The mission creator frees up a slot occupied by someone who hasn't
  *  contributed anything yet — still 'invited' (never accepted) or 'joined'
  *  but never streamed. Confirmed with the site owner: creator-only, and
@@ -992,7 +1097,7 @@ export async function removeReconnectParticipant(supabase: SupabaseDB, content: 
   }
   if (isLeaving) return { success: true, left: true, mission: null }
 
-  return { success: true, mission: await shapeWithMessages(supabase, mission, freshParticipants || [], agentNo) }
+  return { success: true, mission: await shapeWithMessages(supabase, mission, freshParticipants || [], agentNo, IDLE_DAYS, reconnect.config.ciphers) }
 }
 
 /** The invited agent accepts (joins a real slot) or declines (row removed
