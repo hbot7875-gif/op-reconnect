@@ -111,8 +111,16 @@ function wireHudScrollCollapse() {
   const hud = document.getElementById('hud')
   if (!hud) return
   hudScrollWired = true
-  const COLLAPSE_AT = 36
-  const onScroll = () => hud.classList.toggle('is-collapsed', window.scrollY > COLLAPSE_AT)
+  // Hysteresis gap between collapse/expand thresholds — a single shared
+  // threshold flickers because collapsing shrinks the header's own height,
+  // which shifts scrollY back across the line and immediately re-expands it.
+  const COLLAPSE_AT = 80
+  const EXPAND_AT = 20
+  const onScroll = () => {
+    const y = window.scrollY
+    if (y > COLLAPSE_AT) hud.classList.add('is-collapsed')
+    else if (y < EXPAND_AT) hud.classList.remove('is-collapsed')
+  }
   window.addEventListener('scroll', onScroll, { passive: true })
   onScroll()
 }

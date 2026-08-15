@@ -17,4 +17,7 @@ export function tickCountdowns() {
   }
 }
 
-setInterval(tickCountdowns, 1000)
+// Direct calls (bomb-sheet.js, celebrate.js) always run — they're one-shot
+// "paint this now" calls that matter even on a backgrounded tab. Only the
+// perpetual tick skips while hidden; nothing's watching it then anyway.
+setInterval(() => { if (!document.hidden) tickCountdowns() }, 1000)

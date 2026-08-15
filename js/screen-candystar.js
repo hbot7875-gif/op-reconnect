@@ -8,8 +8,17 @@ import { el, esc } from './state.js'
 import { goResources } from './router.js'
 
 let mounted = false
+// `container` (the shared #scene node) survives untouched across a poll or
+// tab-focus refresh as long as the player stays on this screen — nothing
+// else writes to it in that case. So if our own wrapper is still there, this
+// call is just a background state refresh, not a real navigation: leave the
+// in-progress generator (typed songs, picks, tab) alone instead of tearing
+// it down and re-fetching getAlpacaOptions out from under the player.
+let mountedIn = null
 
 export async function renderCandyStar(container, state) {
+  if (mountedIn === container && container.querySelector('.cs-screen')) return
+  mountedIn = container
   container.innerHTML = ''
   const wrap = el('div', 'cs-screen')
 

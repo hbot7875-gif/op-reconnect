@@ -124,6 +124,14 @@ body {
   position: sticky; top: 0; z-index: 5; backdrop-filter: blur(12px);
   background: rgba(10, 9, 16, 0.88); border-bottom: 1px solid var(--border);
 }
+/* backdrop-filter forces the browser to re-sample everything behind the HUD
+   on every scroll frame — the single most expensive thing paying rent on a
+   sticky header. Mobile GPUs feel it most, and it's also where scroll-jank
+   complaints come from, so drop it there and go with a solid panel instead
+   (bumped opacity keeps the same practical legibility without the blur). */
+@media (max-width: 640px) {
+  #hud { backdrop-filter: none; background: rgba(10, 9, 16, 0.97); }
+}
 .hud-inner { max-width: 620px; margin: 0 auto; padding: 10px var(--gut) 0; }
 .hud-row { display: flex; align-items: center; gap: 10px; }
 .hud-identity { min-width: 0; flex: 1; display: flex; align-items: center; gap: 10px; padding: 2px 0;
@@ -194,7 +202,10 @@ body {
    but modern engines interpolate them fine here; nothing breaks if they
    don't — it just snaps instead of easing). */
 .hud-inner, .hud-crest, .hud-code, .hud-meta, .hud-streak, .hud-bell, .hud-sync, .hud-xp, .hud-xp-note {
-  transition: padding 0.2s ease, width 0.2s ease, height 0.2s ease, font-size 0.2s ease, opacity 0.2s ease, margin 0.2s ease;
+  /* Only opacity animates — width/height/font-size/padding snap instantly.
+     Animating those forces layout on every tick, which repeatedly nudges
+     scroll position near the collapse threshold and compounds the jank. */
+  transition: opacity 0.2s ease;
 }
 #hud.is-collapsed .hud-inner { padding-top: 6px; }
 #hud.is-collapsed .hud-crest { width: 30px; height: 30px; flex-basis: 30px; }
@@ -957,7 +968,7 @@ body.red-zone .wtb.now { fill: var(--crimson); filter: drop-shadow(0 0 3px rgba(
    .army-core's --bomb custom property doesn't inherit sideways to it. */
 .core-ports { display: flex; gap: 6px; justify-content: center; margin-top: 8px; }
 .core-ports .wp { width: 7px; height: 7px; border-radius: 50%; background: #111;
-  border: 1.5px solid rgba(255,255,255,0.12); transition: all 0.6s ease; }
+  border: 1.5px solid rgba(255,255,255,0.12); transition: background 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease; }
 .core-ports .wp.lit { background: var(--purple); border-color: var(--purple); box-shadow: 0 0 7px var(--purple); }
 .core-ports.is-attack .wp.lit { background: var(--crimson); border-color: var(--crimson); box-shadow: 0 0 7px var(--crimson); }
 .core-ports.is-brownout .wp.lit { background: var(--dim); border-color: var(--dim); box-shadow: none; }
@@ -1251,7 +1262,7 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 .filter-tab {
   flex: none; padding: 7px 14px; border-radius: 999px; border: 1px solid var(--border);
   background: var(--surface-2); color: var(--muted); font-family: var(--mono); font-size: 11.5px;
-  font-weight: 800; letter-spacing: 0.5px; cursor: pointer; transition: all 0.15s;
+  font-weight: 800; letter-spacing: 0.5px; cursor: pointer; transition: border-color 0.15s, color 0.15s, background 0.15s;
 }
 .pack-cell-progress { display: flex; align-items: baseline; gap: 8px; margin: -11px 2px 22px;
   color: var(--muted); font-family: var(--mono); font-size: 10px; }
@@ -2562,7 +2573,7 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   padding: 12px 24px; background: var(--purple); border: none; color: #fff;
   font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em;
-  cursor: pointer; border-radius: var(--r); transition: all 0.2s; width: 100%;
+  cursor: pointer; border-radius: var(--r); transition: filter 0.2s, transform 0.2s; width: 100%;
   font-family: inherit;
 }
 .btn-red:hover { filter: brightness(1.15); transform: translateY(-1px); }
@@ -2613,7 +2624,7 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
   background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-lg); }
 .cs-tab { display: flex; align-items: center; justify-content: center; gap: 7px; padding: 11px 10px;
   background: transparent; border: none; border-radius: var(--r); color: var(--muted);
-  font-size: 14px; font-weight: 800; letter-spacing: 0.03em; cursor: pointer; transition: all 0.18s; font-family: inherit; }
+  font-size: 14px; font-weight: 800; letter-spacing: 0.03em; cursor: pointer; transition: background 0.18s, color 0.18s; font-family: inherit; }
 .cs-tab:hover { color: var(--text); background: var(--panel); }
 .cs-tab.is-active { background: var(--purple); color: #fff; }
 .cs-tab:focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; }
@@ -2631,7 +2642,7 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
   font-size: 12px; font-weight: 700; color: var(--muted); }
 
 .cs-quick-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-bottom: 14px; }
-.cs-goal-pick { font-family: inherit; cursor: pointer; transition: all 0.15s; }
+.cs-goal-pick { font-family: inherit; cursor: pointer; transition: border-color 0.15s, color 0.15s, background 0.15s, box-shadow 0.15s; }
 .cs-goal-pick:hover:not(:disabled) { border-color: var(--border-str); color: var(--text); }
 .cs-goal-pick:focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; }
 .cs-goal-pick.is-picked { background: var(--purple-soft); border-color: var(--purple); color: var(--text); box-shadow: 0 0 0 1px var(--purple); }
@@ -2643,7 +2654,7 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .cs-quick-album input { position: absolute; opacity: 0; pointer-events: none; }
 .cs-quick-album-box { flex: none; width: 16px; height: 16px; margin-top: 1px; display: flex; align-items: center;
   justify-content: center; border-radius: 4px; border: 1.5px solid var(--border-str); background: var(--panel);
-  font-size: 9px; font-weight: 900; color: transparent; transition: all 0.15s; }
+  font-size: 9px; font-weight: 900; color: transparent; transition: border-color 0.15s, background 0.15s, color 0.15s; }
 .cs-quick-album:has(input:checked) { border-color: var(--purple); background: var(--purple-soft); }
 .cs-quick-album:has(input:checked) .cs-quick-album-box { border-color: var(--purple); background: var(--purple); color: #fff; }
 .cs-quick-album:has(input:focus-visible) { outline: 2px solid var(--purple); outline-offset: 2px; }
@@ -2688,12 +2699,12 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .cs-dd-empty { padding: 12px; font-size: 11px; color: var(--muted); text-align: center; }
 .cs-row-remove { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;
   background: none; border: 1px solid var(--border); border-radius: 50%; color: var(--muted);
-  cursor: pointer; font-size: 15px; line-height: 1; transition: all 0.15s; }
+  cursor: pointer; font-size: 15px; line-height: 1; transition: color 0.15s, border-color 0.15s, background 0.15s; }
 .cs-row-remove:hover { color: var(--crimson); border-color: var(--crimson); background: rgba(229,56,79,0.1); }
 
 .cs-add-row { display: inline-flex; align-items: center; gap: 6px; padding: 9px 14px; background: transparent;
   border: 1px dashed var(--border-str); color: var(--muted); border-radius: var(--r); font-size: 11px;
-  font-weight: 800; cursor: pointer; transition: all 0.15s; font-family: inherit; }
+  font-weight: 800; cursor: pointer; transition: color 0.15s, border-color 0.15s, background 0.15s; font-family: inherit; }
 .cs-add-row:hover { color: var(--purple-lt); border-color: var(--purple); background: var(--purple-soft); }
 
 .cs-album-grid { display: grid; grid-template-columns: 1fr; gap: 8px; margin: 6px 0 4px; max-height: 340px; overflow-y: auto; padding-right: 2px; }
@@ -2730,6 +2741,11 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .cs-actionbar { position: sticky; bottom: 0; z-index: 5; display: flex; align-items: center; gap: 12px;
   margin-top: 14px; padding: 12px; border: 1px solid var(--border); border-radius: var(--r-lg);
   background: rgba(10, 9, 16, 0.92); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+/* Same per-scroll-frame cost as #hud (see above) — it's sticky too, just
+   pinned to the bottom instead of the top. Same mobile fix. */
+@media (max-width: 640px) {
+  .cs-actionbar { backdrop-filter: none; -webkit-backdrop-filter: none; background: rgba(10, 9, 16, 0.98); }
+}
 .cs-actionbar .btn-red { width: auto; flex: 1; }
 .cs-actionbar-total { display: flex; flex-direction: column; gap: 1px; flex-shrink: 0; }
 .cs-actionbar-total span:first-child { font-size: 9px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
@@ -2833,7 +2849,7 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .suggest-chip {
   flex: none; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border);
   background: var(--surface-2); color: var(--muted); font-family: var(--mono); font-size: 11px;
-  font-weight: 700; letter-spacing: 0.3px; cursor: pointer; transition: all 0.15s;
+  font-weight: 700; letter-spacing: 0.3px; cursor: pointer; transition: border-color 0.15s, color 0.15s;
 }
 .suggest-chip:hover { border-color: var(--purple); color: var(--purple-lt); }
 .suggest-input { min-height: 64px; resize: vertical; font-family: var(--body); margin-top: 8px; }
@@ -2871,7 +2887,7 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .rank-tab {
   flex: none; padding: 8px 16px; border-radius: 999px; border: 1px solid var(--border);
   background: var(--surface-2); color: var(--muted); font-family: var(--mono); font-size: 12.5px;
-  font-weight: 800; letter-spacing: 0.5px; cursor: pointer; transition: all 0.15s;
+  font-weight: 800; letter-spacing: 0.5px; cursor: pointer; transition: border-color 0.15s, background 0.15s, color 0.15s;
 }
 .rank-tab:hover { border-color: var(--border-str); color: var(--text); }
 .rank-tab.sel { border-color: var(--purple); background: var(--purple-soft); color: var(--purple-lt); }

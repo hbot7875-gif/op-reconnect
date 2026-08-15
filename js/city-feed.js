@@ -120,6 +120,7 @@ function paintTickerLine(ticker) {
 }
 
 function tickFeedTickers() {
+  if (document.hidden) return
   for (const ticker of document.querySelectorAll('.feed-ticker')) {
     if (!ticker._entries || ticker._entries.length < 2) continue
     ticker.classList.add('is-fading')

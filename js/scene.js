@@ -591,8 +591,24 @@ export function mountScene(container, districtId, getProgress, getCharge = () =>
   window.addEventListener('resize', onResize)
   raf = requestAnimationFrame(frame)
 
+  // The scene keeps rendering at 60fps even while scrolled off-screen —
+  // pause the rAF loop when the canvas isn't visible and resume on return.
+  let io = null
+  if ('IntersectionObserver' in window) {
+    io = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        if (raf === null) raf = requestAnimationFrame(frame)
+      } else if (raf !== null) {
+        cancelAnimationFrame(raf)
+        raf = null
+      }
+    })
+    io.observe(canvas)
+  }
+
   return () => {
-    cancelAnimationFrame(raf)
+    if (raf !== null) cancelAnimationFrame(raf)
     window.removeEventListener('resize', onResize)
+    if (io) io.disconnect()
   }
 }
