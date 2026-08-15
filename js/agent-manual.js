@@ -98,6 +98,9 @@ export function agentManualSheet() {
   dark.appendChild(el('p', '', "Miss a district's 7-day timer and that attempt resets: its goal progress is cleared and the district goes back to available, so you can start it again whenever you like. Nothing you already earned is taken — XP, Charge Cells, merch and badges all stay."))
   dark.appendChild(el('p', '', 'If the Bomb goes dark instead, a short blackout is only a warning. If it stays dark for 7 days, your active district resets. At 14 days, restored districts reset.'))
   dark.appendChild(el('p', '', 'Your XP, Level, Rank, badges, and merch remain safe. Each Streak Freeze is used automatically to cover one missed day and can delay a blackout reset.'))
+  dark.appendChild(el('p', 'am-footnote',
+    "That's about progress, not your account — a separate, stricter clock covers that. Go 7 days without personally tapping Feed the Bomb and you'll see a warning here; "
+    + 'go 14 days and your agent file is permanently deleted, no recovery. Auto Feed spending your banked Charge Cells does not reset this clock — only tapping Feed yourself does.'))
   content.appendChild(dark)
 
   sheet.appendChild(content)

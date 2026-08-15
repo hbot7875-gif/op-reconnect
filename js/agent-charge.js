@@ -79,6 +79,17 @@ function paint(body, ac, focusEraId = null) {
       '7 days dark and your active district lapses back to available. 14 days and every restored district reverts — your XP stays banked either way.'))
   }
 
+  // A separate clock from isDark above — this one tracks a real Feed tap
+  // specifically (Auto Feed spending banked Cells doesn't reset it), and
+  // the consequence at 14 days is losing the account entirely, not just
+  // district progress. Kept as its own distinct, more urgent-styled
+  // paragraph so it doesn't read as a restatement of the note above.
+  if (ac.deletionWarning) {
+    body.appendChild(el('p', 'muted ac-warn ac-warn-critical',
+      `⚠️ You haven't personally fed the Bomb in ${ac.deletionWarning.daysInactive} days. `
+      + `Feed it yourself within ${ac.deletionWarning.daysLeft} more day${ac.deletionWarning.daysLeft === 1 ? '' : 's'} or your agent file is permanently deleted — Auto Feed alone doesn't count.`))
+  }
+
   const feedCard = el('div', 'ms-card')
   feedCard.innerHTML = `
     <div class="ms-card-head"><span class="ms-card-icon">⚡</span><span class="ms-card-title">Feed the Bomb</span></div>

@@ -175,6 +175,36 @@ export interface AgentChargeView {
   // silently erase the other, handing back a charge that was legitimately
   // spent moments earlier in the very same call.
   freezeChargesRemaining: number
+  // Present once this agent is 7+ days since their last explicit Feed the
+  // Bomb tap (or since joining, if they've never fed it once) — a
+  // deliberately SEPARATE clock from isDark/blackout above. isDark tracks
+  // charged_until running out, which Auto Feed alone can keep from ever
+  // happening; this tracks the real action of feeding, per the site
+  // owner's choice (see migrations/053_rc_inactive_agent_cleanup.sql).
+  // null once the 14-day mark passes — by then the nightly cleanup job has
+  // either already deleted the account or is about to, and there's nothing
+  // left for a warning to accomplish.
+  deletionWarning: { daysInactive: number; daysLeft: number } | null
+}
+
+/** Same "last bomb_fed feed event, else join date" rule
+ *  rc_inactive_agent_candidates() uses server-side for the actual deletion
+ *  — kept in sync by hand since one lives in SQL (for the cron job with no
+ *  access to this file) and this one needs to run inside the normal poll
+ *  response. AGENT001 is not special-cased here the way the SQL version
+ *  special-cases it out of deletion; showing the test account its own
+ *  (harmless, since it's excluded from actual deletion) warning is fine and
+ *  simpler than threading an exception through every caller. */
+async function bombDeletionWarning(supabase: SupabaseDB, agentNo: string): Promise<{ daysInactive: number; daysLeft: number } | null> {
+  const { data: lastFed } = await supabase.from('rc_feed_events')
+    .select('created_at').eq('agent_no', agentNo).eq('event_type', 'bomb_fed')
+    .order('created_at', { ascending: false }).limit(1).maybeSingle()
+  const { data: agent } = await supabase.from('rc_agents').select('created_at').eq('agent_no', agentNo).maybeSingle()
+  const sinceIso = lastFed?.created_at || agent?.created_at
+  if (!sinceIso) return null
+  const daysInactive = (Date.now() - new Date(sinceIso).getTime()) / 86400000
+  if (daysInactive < 7 || daysInactive >= 14) return null
+  return { daysInactive: Math.floor(daysInactive), daysLeft: Math.max(0, Math.ceil(14 - daysInactive)) }
 }
 
 /** Lifetime Charge Cells earned, straight off rc_players — a counter that
@@ -288,6 +318,7 @@ export async function getAgentChargeView(supabase: SupabaseDB, content: GameCont
   }
 
   const earned = await lifetimeChargeCellsEarned(supabase, agentNo)
+  const deletionWarning = await bombDeletionWarning(supabase, agentNo)
 
   return {
     hoursRemaining: chargedUntilMs ? Math.max(0, (chargedUntilMs - now) / HOUR_MS) : 0,
@@ -300,6 +331,7 @@ export async function getAgentChargeView(supabase: SupabaseDB, content: GameCont
     eraCards: weekly.eraCards,
     newlyLitEraIds: weekly.newlyLitEraIds,
     freezeChargesRemaining: freezes,
+    deletionWarning,
   }
 }
 

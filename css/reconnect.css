@@ -1496,6 +1496,7 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 .ac-stage.is-dark .ac-label { color: var(--crimson); }
 .ac-stage.is-dark .ac-bomb-sphere { filter: grayscale(0.72); }
 .ac-warn { font-size: 12px; margin: 0 0 14px; }
+.ac-warn-critical { color: var(--crimson); border: 1px solid var(--crimson); border-radius: var(--r-md); padding: 10px 12px; }
 
 /* The Pack is visibly the source. The transient token launches from this
    readout and lands in the handle before any numbers change. */
