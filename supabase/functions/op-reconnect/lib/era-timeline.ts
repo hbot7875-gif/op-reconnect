@@ -158,8 +158,23 @@ export const ERA_CATALOG: EraDef[] = [
       'Fake Love', 'The Truth Untold', '134340', 'Paradise', 'Love Maze', 'Magic Shop',
       { title: 'Airplane Pt.2', aliases: ['Airplane, Pt. 2'] },
       'Anpanman', 'So What',
-      'Idol', 'Euphoria', 'Trivia 起 : Just Dance', 'Epiphany', 'Trivia 承 : Love',
-      'Tear', "I'm Fine", 'Answer : Love Myself', 'Her', 'Trivia 轉 : Seesaw', 'Singularity',
+      'Idol', 'Euphoria',
+      // Hanja ordinal markers (起/承/轉) in these three titles are a known
+      // source of scrobble-source disagreement — same bug shape as BTS
+      // Cypher Pt.3 / We Are Bulletproof Pt.2 above. AGENT046 reported Just
+      // Dance and Seesaw not counting toward the Love Yourself card;
+      // checked her actual rc_daily_activity keys rather than guessing —
+      // her source doesn't drop the hanja, it ROMANIZES it: "trivia ki
+      // just dance" and "trivia ten seesaw" (承/Love came through with the
+      // hanja intact and needed no fix, which is why only these two were
+      // reported broken). Aliased to the exact strings that normalize to
+      // those keys, not the bare English titles a first guess landed on.
+      { title: 'Trivia 起 : Just Dance', aliases: ['Trivia 起: Just Dance', 'Trivia ki : Just Dance'] },
+      'Epiphany',
+      { title: 'Trivia 承 : Love', aliases: ['Trivia 承: Love'] },
+      'Tear', "I'm Fine", 'Answer : Love Myself', 'Her',
+      { title: 'Trivia 轉 : Seesaw', aliases: ['Trivia 轉: Seesaw', 'Trivia ten : Seesaw'] },
+      'Singularity',
     ],
   },
   {
