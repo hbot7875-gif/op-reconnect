@@ -18,6 +18,7 @@ import { renderCandyStar } from './screen-candystar.js'
 import { renderRanking } from './screen-ranking.js'
 import { playLevelUp } from './celebrate.js'
 import { districtDisplayName } from './ward-tiles.js'
+import { trackEngagement } from './engagement.js'
 
 const $ = (id) => document.getElementById(id)
 
@@ -32,6 +33,12 @@ function showAuth() {
 
 let lastScreenName = null
 let refreshRetry = null
+let engagementStarted = false
+
+function trackScreen(scr) {
+  trackEngagement('screen_viewed', { screen: scr.name, districtId: scr.districtId || undefined })
+  if (scr.name === 'district') trackEngagement('district_opened', { screen: 'district', districtId: scr.districtId })
+}
 
 function retryRefresh() {
   if (refreshRetry) return
@@ -101,6 +108,12 @@ const celebratedEraCards = new Set()
 
 subscribe((state) => {
   if (!state || !state.joined) return
+  if (!engagementStarted) {
+    engagementStarted = true
+    const scr = getScreen()
+    trackEngagement('app_opened', { screen: scr.name, districtId: scr.districtId || undefined })
+    trackScreen(scr)
+  }
   window.__rcState = state
   show('game')
   renderHud($('hud'), state)
@@ -124,9 +137,10 @@ subscribe((state) => {
   }
 })
 
-onScreenChange(() => {
+onScreenChange((scr) => {
   const state = getState()
   if (!state?.joined) return
+  trackScreen(scr)
   // The tab bar reflects which screen is current, so it repaints on
   // navigation too.
   renderHud($('hud'), state)

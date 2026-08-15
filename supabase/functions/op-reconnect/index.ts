@@ -37,6 +37,7 @@ import { getMagicShop, buyWings, claimTicket } from './lib/magic-shop.ts'
 import { feedCharge, setAutoFeed, getAgentCharge, useLitEra } from './lib/agent-charge.ts'
 import { submitSuggestion } from './lib/suggestions.ts'
 import { loadContent } from './lib/config.ts'
+import { trackEngagement, adminGetEngagementReport } from './lib/engagement.ts'
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -79,6 +80,7 @@ const ROUTES: Record<string, Route> = {
   changePassword: { auth: 'agent', handler: (sb, p) => changePassword(sb, p) },
   retireAccount: { auth: 'agent', handler: (sb, p) => retireAccount(sb, p) },
   getGameState: { auth: 'agent', handler: (sb, p) => getGameState(sb, p) },
+  trackEngagement: { auth: 'agent', handler: (sb, p) => trackEngagement(sb, p) },
   joinGame: { auth: 'agent', handler: (sb, p) => joinGame(sb, p) },
   startDistrict: { auth: 'agent', handler: (sb, p) => startDistrict(sb, p) },
   extendDistrictDeadline: { auth: 'agent', handler: (sb, p) => extendDistrictDeadline(sb, p) },
@@ -168,6 +170,7 @@ const ROUTES: Record<string, Route> = {
   adminDeleteInactiveAgents: { auth: 'admin', handler: (sb, p) => adminDeleteInactiveAgents(sb, p) },
   adminResetAgentXp: { auth: 'admin', handler: (sb, p) => adminResetAgentXp(sb, p) },
   adminSyncAllStreams: { auth: 'admin', handler: (sb, p) => adminSyncAllStreams(sb, p) },
+  adminGetEngagementReport: { auth: 'admin', handler: (sb, p) => adminGetEngagementReport(sb, p) },
 
   // Batch-assign a series of connect/invite missions for one reconnect goal
   // at once — the rest of that system's admin config now lives on the goal

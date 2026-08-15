@@ -17,6 +17,7 @@ import { getAgentChargeView } from './agent-charge.ts'
 import { levelFor, applyLevelUpIfNeeded, nextLevelRewards } from './leveling.ts'
 import { getActiveBroadcasts } from './broadcasts.ts'
 import { logFeedEvent, getCityFeed, markOnline, getOnlineNow } from './feed.ts'
+import { logEngagementEvent } from './engagement.ts'
 
 // rc_agents (migration 016) is this season's own account table — a clean
 // break from the old site's `agents`. Migrations 019/020 added the columns
@@ -122,6 +123,14 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     : null
   const rollups = await ensureDailyRollups(supabase, agent, player, content, personalBoostMult, goalXpScope)
   const todayRow = rollups.find((r) => String(r.kst_date) === today) || null
+  if ((todayRow?.raw_streams || todayRow?.counted_streams || 0) > 0) {
+    logEngagementEvent(supabase, {
+      agentNo: player.agent_no,
+      eventType: 'stream_detected',
+      metadata: { rawStreams: todayRow?.raw_streams || 0, countedStreams: todayRow?.counted_streams || 0 },
+      dedupKey: `stream:${player.agent_no}:${today}`,
+    }).catch(() => {})
+  }
   const sideMissions = buildSideMissions(rollups, today)
   await awardDailySideMissionXp(supabase, player.agent_no, today, sideMissions)
   await awardWeeklySideMissionXp(supabase, player.agent_no, sideMissions)

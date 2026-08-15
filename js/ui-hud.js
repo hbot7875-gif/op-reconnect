@@ -144,7 +144,7 @@ export function renderHud(container, state) {
           </span>
         </div>
         <div class="hud-streak" title="${p.streak.current} days in a row">${streakLabel}</div>
-        <button class="hud-sync" id="syncBtn" type="button" title="Sync streams now">🔄</button>
+        <button class="hud-sync" id="syncBtn" type="button" title="Sync streams now" aria-label="Sync streams now">🔄</button>
         <button class="hud-bell" id="bellBtn" type="button" title="Invites"
           aria-label="${invites.length ? `${invites.length} pending invite${invites.length === 1 ? '' : 's'}` : 'No pending invites'}">
           🔔${invites.length ? `<span class="hud-bell-count">${invites.length}</span>` : ''}
@@ -153,7 +153,7 @@ export function renderHud(container, state) {
     </div>
     <div class="hud-xp">
       <span class="hud-xp-note">${xpLeft} XP to LV ${lvl.level + 1}</span>
-      <div class="xp-bar"><div class="xp-fill" style="width:${pct}%"></div></div>
+      <div class="xp-bar" role="progressbar" aria-label="Level ${lvl.level} XP progress" aria-valuemin="0" aria-valuemax="${lvl.xpForNextLevel}" aria-valuenow="${lvl.xpIntoLevel}"><div class="xp-fill" style="width:${pct}%"></div></div>
       ${boost ? `<span class="hud-boost">${boost.multiplier}&times; BOOST &middot; ${boost.minsLeft}m</span>` : ''}
     </div>
   `
@@ -186,7 +186,7 @@ function progressSheet(state) {
   sheet.appendChild(el('div', 'eyebrow', `LEVEL ${lvl.level}`))
   if (lvl.name) sheet.appendChild(el('h3', '', esc(lvl.name)))
   sheet.appendChild(el('div', 'goal-line', `
-    <div class="pbar" style="flex:1"><div class="pfill" style="width:${pct}%"></div></div>
+    <div class="pbar" style="flex:1" role="progressbar" aria-label="Level ${lvl.level} XP progress" aria-valuemin="0" aria-valuemax="${lvl.xpForNextLevel}" aria-valuenow="${lvl.xpIntoLevel}"><div class="pfill" style="width:${pct}%"></div></div>
     <span class="count">${lvl.xpIntoLevel} / ${lvl.xpForNextLevel} this level</span>
   `))
   // Same number, same "total XP" wording as the Ranking board (see
@@ -224,6 +224,10 @@ function progressSheet(state) {
   close.onclick = hideOverlay
   sheet.appendChild(close)
   return sheet
+}
+
+export function openProgressSheet(state) {
+  showOverlay(progressSheet(state))
 }
 
 /** Pending reconnect-mission invites — another agent already restoring a
@@ -266,7 +270,9 @@ function invitesSheet(state) {
       location.reload()
     }
     accept.onclick = () => respond(true)
-    decline.onclick = () => respond(false)
+    decline.onclick = () => {
+      if (window.confirm('Decline this ReConnect invitation?\n\nThe sender will be able to invite someone else.')) respond(false)
+    }
     actions.append(accept, decline)
     row.appendChild(actions)
     sheet.appendChild(row)

@@ -356,7 +356,7 @@ function peekSheet(d, ward, state) {
 
   if (d.status !== 'locked' && d.status !== 'centerpiece_dark') {
     sheet.appendChild(el('div', 'goal-line', `
-      <div class="pbar" style="flex:1"><div class="pfill${pct === 100 ? ' done' : ''}" style="width:${pct}%"></div></div>
+      <div class="pbar" style="flex:1" role="progressbar" aria-label="${esc(districtDisplayName(d))} restoration progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><div class="pfill${pct === 100 ? ' done' : ''}" style="width:${pct}%"></div></div>
       <span class="count">${pct}%</span>`))
   }
 
@@ -537,7 +537,7 @@ function eraTracksSheet(e, personal = false) {
     sheet.appendChild(el('div', 'et-albums', `From: ${esc(e.albums.join(', '))}`))
   }
   sheet.appendChild(el('div', 'goal-line', `
-    <div class="pbar" style="flex:1"><div class="pfill${e.done >= e.total && e.total > 0 ? ' done' : ''}" style="width:${e.total ? Math.round((e.done / e.total) * 100) : 0}%"></div></div>
+    <div class="pbar" style="flex:1" role="progressbar" aria-label="${esc(e.name)} tracks streamed" aria-valuemin="0" aria-valuemax="${e.total}" aria-valuenow="${Math.min(e.done, e.total)}"><div class="pfill${e.done >= e.total && e.total > 0 ? ' done' : ''}" style="width:${e.total ? Math.round((e.done / e.total) * 100) : 0}%"></div></div>
     <span class="count">${e.done} / ${e.total} streamed</span>`))
   sheet.appendChild(el('div', 'dim', personal
     ? (e.status === 'used'

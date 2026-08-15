@@ -46,17 +46,35 @@ export function joinNames(names) {
 
 export function toast(msg, ms = 3200) {
   const t = el('div', 'toast', esc(msg))
+  t.setAttribute('role', 'status')
+  t.setAttribute('aria-live', 'polite')
   document.body.appendChild(t)
   setTimeout(() => t.remove(), ms)
 }
 
+let overlayReturnFocus = null
+
+function overlayFocusables(overlay) {
+  return [...overlay.querySelectorAll('button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+    .filter((node) => !node.hidden && node.getAttribute('aria-hidden') !== 'true')
+}
+
 export function showOverlay(contentNode) {
   const overlay = document.getElementById('overlay')
+  if (overlay.hidden) overlayReturnFocus = document.activeElement
   overlay.innerHTML = ''
+  contentNode.setAttribute('role', 'dialog')
+  contentNode.setAttribute('aria-modal', 'true')
+  if (!contentNode.hasAttribute('aria-label') && !contentNode.hasAttribute('aria-labelledby')) {
+    const heading = contentNode.querySelector('h1, h2, h3, .eyebrow')
+    contentNode.setAttribute('aria-label', heading?.textContent?.trim() || 'Game dialog')
+  }
+  if (!contentNode.hasAttribute('tabindex')) contentNode.tabIndex = -1
   overlay.appendChild(contentNode)
   overlay.hidden = false
   document.body.classList.add('overlay-open')
   overlay.onclick = (e) => { if (e.target === overlay) hideOverlay() }
+  requestAnimationFrame(() => (overlayFocusables(overlay)[0] || contentNode).focus())
 }
 
 export function hideOverlay() {
@@ -64,6 +82,8 @@ export function hideOverlay() {
   overlay.hidden = true
   overlay.innerHTML = ''
   document.body.classList.remove('overlay-open')
+  if (overlayReturnFocus?.isConnected) overlayReturnFocus.focus()
+  overlayReturnFocus = null
 }
 
 // Every sheet in the game (Settings, Personal Charge, Candy Star pickers,
@@ -73,7 +93,18 @@ export function hideOverlay() {
 // keyboard-only and screen-reader users had no way to back out of a sheet
 // at all without this.
 document.addEventListener('keydown', (e) => {
-  if (e.key !== 'Escape') return
   const overlay = document.getElementById('overlay')
-  if (overlay && !overlay.hidden) hideOverlay()
+  if (!overlay || overlay.hidden) return
+  if (e.key === 'Escape') {
+    e.preventDefault()
+    hideOverlay()
+    return
+  }
+  if (e.key !== 'Tab') return
+  const focusables = overlayFocusables(overlay)
+  if (!focusables.length) { e.preventDefault(); overlay.firstElementChild?.focus(); return }
+  const first = focusables[0]
+  const last = focusables[focusables.length - 1]
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
 })

@@ -13,6 +13,7 @@ import { mountScene } from './scene.js'
 import { districtFraction, renderBoard } from './ui-district.js'
 import { playRestoration } from './celebrate.js'
 import { itemTile, itemSheet, itemsAt, itemsInPack } from './items.js'
+import { trackEngagementOnce } from './engagement.js'
 
 let teardown = null
 let sceneFor = null
@@ -48,8 +49,8 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
         <div class="stage-echo"></div>
       </div>
       <div class="stage-bottom">
-        <div class="stage-power"><span class="pw-val">0%</span><span class="pw-lbl">POWER</span></div>
-        <div class="stage-meter"><div class="stage-meter-fill"></div></div>
+        <div class="stage-power"><span class="pw-val">0%</span><span class="pw-lbl">RESTORED</span></div>
+        <div class="stage-meter" role="progressbar" aria-label="District restoration progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="stage-meter-fill"></div></div>
       </div>`
     stage.appendChild(ov)
     wrap.appendChild(stage)
@@ -88,6 +89,7 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
     const pct = Math.round(frac * 100)
     container.querySelector('.pw-val').textContent = pct + '%'
     container.querySelector('.stage-meter-fill').style.width = pct + '%'
+    container.querySelector('.stage-meter').setAttribute('aria-valuenow', String(pct))
     container.querySelector('.stage').classList.toggle('is-dark', pct < 34)
     // Built here (screen-district.js owns the interactive open/invite/accept
     // flow) but handed to renderBoard so it can be positioned right after
@@ -132,6 +134,7 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
   const pct = Math.round((mapD.status === 'restored' || mapD.status === 'centerpiece_lit' ? 100 : 0))
   container.querySelector('.pw-val').textContent = pct + '%'
   container.querySelector('.stage-meter-fill').style.width = pct + '%'
+  container.querySelector('.stage-meter').setAttribute('aria-valuenow', String(pct))
   container.querySelector('.stage').classList.toggle('is-dark', pct < 34)
 
   board.innerHTML = ''
@@ -231,6 +234,7 @@ function reconnectError(code) { return RECONNECT_ERRORS[code] || code || 'Someth
 
 function reconnectPanel(d) {
   const box = el('div', 'card reconnect-card')
+  trackEngagementOnce(`reconnect:${d.id}`, 'reconnect_opened', { screen: 'district', districtId: d.id })
   const r = d.reconnect
   if (r.variant === 'connect' || r.variant === 'invite') {
     // call() never throws — a dropped connection resolves to
@@ -422,9 +426,33 @@ function paintMissionPanel(box, d, res) {
       const text = daysLeft <= 0 ? 'Last day for this mission'
         : daysLeft === 1 ? '<b>1 day</b> left for this mission'
         : `<b>${daysLeft} days</b> left for this mission`
-      box.appendChild(el('div', 'board-deadline' + (urgent ? ' is-urgent' : ''), `⏳ ${text} — after that it expires and any invites are lost.`))
+      box.appendChild(el('div', 'board-deadline' + (urgent ? ' is-urgent' : ''), `<span class="deadline-kind">Team mission expires</span><span>⏳ ${text} — after that it expires and any invites are lost.</span>`))
     }
   }
+
+  let nextTitle = 'Review the team mission'
+  let nextBody = 'Check the mission status and complete the remaining step.'
+  if (myRow?.status === 'invited') {
+    nextTitle = 'Accept or decline the invitation'
+    nextBody = res.variant === 'invite' ? 'Accepting completes this ReConnect mission for both agents.' : 'Accept to join this team before streaming toward its goal.'
+  } else if (need > 0 && pending.length) {
+    nextTitle = 'Waiting for an invited agent'
+    nextBody = `${pending.map((p) => esc(p.codename)).join(' and ')} ${pending.length === 1 ? 'has' : 'have'} 24 hours to respond. You can cancel a pending invite below.`
+  } else if (need > 0) {
+    nextTitle = 'Invite one waiting agent'
+    nextBody = 'Choose someone from the live waiting list below. The mission starts together after they accept.'
+  } else if (m.cipher) {
+    nextTitle = `Solve cipher ${m.cipher.index + 1} of ${m.cipher.total}`
+    nextBody = 'Discuss it in team chat, then submit one shared answer below.'
+  } else if (res.variant === 'connect' && m.sharedTrack && m.sharedTrack.progress < m.sharedTrack.target) {
+    const streamsLeft = Math.max(0, m.sharedTrack.target - m.sharedTrack.progress)
+    nextTitle = `Stream ${esc(m.sharedTrack.label)} together`
+    nextBody = `${streamsLeft} combined play${streamsLeft === 1 ? '' : 's'} remaining. Both agents’ plays count after they join.`
+  } else if (res.variant === 'connect') {
+    nextTitle = 'Stream an active district goal'
+    nextBody = 'Each ready agent needs at least one qualifying play after joining.'
+  }
+  box.appendChild(el('div', 'reconnect-next', `<span>Next step</span><b>${nextTitle}</b><p>${nextBody}</p>`))
 
   box.appendChild(el('div', 'team-status', `
     <b>Team: ${joined.length} of ${m.requiredAgents} ready</b>
@@ -556,6 +584,8 @@ function paintMissionPanel(box, d, res) {
           : p.leftDistrict ? 'Clear'
           : p.idle ? 'Drop' : 'Remove')
       removeBtn.onclick = async () => {
+        const action = p.status === 'invited' ? 'Cancel this invitation?' : `Remove ${p.codename} from this mission?`
+        if (!window.confirm(`${action}\n\nThey will no longer count toward this ReConnect team.`)) return
         removeBtn.disabled = true
         msg.textContent = ''
         msg.classList.remove('is-error')
@@ -578,6 +608,7 @@ function paintMissionPanel(box, d, res) {
     if (p.isMe && p.canLeave && p.status === 'joined') {
       const leaveBtn = el('button', 'reconnect-remove', 'Leave')
       leaveBtn.onclick = async () => {
+        if (!window.confirm('Leave this ReConnect mission?\n\nYour team membership will be removed and you will need to team up again.')) return
         leaveBtn.disabled = true
         msg.textContent = ''
         msg.classList.remove('is-error')
@@ -610,6 +641,7 @@ function paintMissionPanel(box, d, res) {
     }
     const decline = el('button', 'btn btn-ghost', 'Decline')
     decline.onclick = async () => {
+      if (!window.confirm('Decline this ReConnect invitation?\n\nThe sender can then invite someone else.')) return
       decline.disabled = true
       const r = await call('respondReconnectInvite', { agentNo: me, districtId: d.id, accept: false })
       if (r.success) refresh(); else { decline.disabled = false }
@@ -764,7 +796,7 @@ function labeledBar(label, countText, pct, done) {
   const wrap = el('div', 'lbar')
   wrap.innerHTML = `
     <div class="lbar-head"><span>${esc(label)}</span><b>${esc(countText)}</b></div>
-    <div class="pbar"><div class="pfill${done ? ' done' : ''}" style="width:${Math.max(0, Math.min(100, pct))}%"></div></div>
+    <div class="pbar" role="progressbar" aria-label="${esc(label)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.max(0, Math.min(100, pct))}"><div class="pfill${done ? ' done' : ''}" style="width:${Math.max(0, Math.min(100, pct))}%"></div></div>
   `
   return wrap
 }

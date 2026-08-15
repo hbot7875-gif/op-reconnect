@@ -39,6 +39,7 @@ import type { FrozenReconnectGoal } from './districts.ts'
 import { kstDateOf, todayKst, addDaysStr } from './kst.ts'
 import { ONLINE_WINDOW_MS } from './feed.ts'
 import { normKeyFull } from './text.ts'
+import { logEngagementEvent } from './engagement.ts'
 
 /** Wrong-guess budget for a mission's cipher phase (see submitReconnect
  *  MissionCipherAnswer) — one shared pool per cipher, not per agent, so the
@@ -946,6 +947,7 @@ export async function inviteReconnectMission(supabase: SupabaseDB, content: unkn
   // agent-numbers-stay-server-side rule as everywhere else in this file,
   // and a friendlier confirmation ("Invited Euphoria") than an echo.
   const { data: inviteePlayer } = await supabase.from('rc_players').select('codename').eq('agent_no', inviteeAgentNo).maybeSingle()
+  await logEngagementEvent(supabase, { agentNo, eventType: 'invite_sent', districtId })
   return { success: true, inviteeCodename: inviteePlayer?.codename || inviteeAgentNo }
 }
 
@@ -1165,6 +1167,7 @@ export async function respondReconnectInvite(supabase: SupabaseDB, content: unkn
   if (rpcError || !result?.joined) return { success: false, error: result?.error || rpcError?.message || 'join_failed' }
   await foldAwayDanglingMissions(supabase, agentNo, mission.id, mission.goal_id)
   await refreshMission(supabase, mission, variant, goal?.config)
+  await logEngagementEvent(supabase, { agentNo, eventType: 'invite_accepted', districtId })
   return { success: true, joined: true }
 }
 

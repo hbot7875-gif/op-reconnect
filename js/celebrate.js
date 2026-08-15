@@ -260,7 +260,7 @@ export function playLevelUp(state, onDone) {
   if (subtitle) box.appendChild(el('div', 'lvlup-rank', esc(subtitle)))
 
   // Progression only means something if the city feels it too.
-  box.appendChild(el('p', 'lvlup-tie', 'Your Home Base gained more power.'))
+  box.appendChild(el('p', 'lvlup-tie', 'Your signal grew stronger.'))
 
   const rows = []
   if (levelUp.extensionChargeGranted > 0) rows.push([ICONS.extension, `+${levelUp.extensionChargeGranted} Deadline Extension`])

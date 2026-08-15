@@ -7,6 +7,8 @@ import { el, esc, showOverlay, hideOverlay, getState, setState, toast } from './
 import { openPlaylist, remaining, dailyPace } from './playlist.js'
 import { call } from './api.js'
 import { getAgentNo } from './session.js'
+import { openProgressSheet } from './ui-hud.js'
+import { trackEngagement } from './engagement.js'
 
 /** Overall restoration fraction (0..1) driving the scene's lights. */
 export function districtFraction(d) {
@@ -31,7 +33,7 @@ function goalRow(label, sub, progress, target, done, unit) {
       <span class="gr-name">${esc(label)}</span>
       <span class="gr-count">${done ? '✓ done' : `${progress}<i>/${target}</i>`}</span>
     </div>
-    ${done ? '' : `<div class="gr-bar"><div class="gr-fill" style="width:${pct}%"></div></div>`}
+    ${done ? '' : `<div class="gr-bar" role="progressbar" aria-label="${esc(label)} progress" aria-valuemin="0" aria-valuemax="${target}" aria-valuenow="${Math.min(target, progress)}"><div class="gr-fill" style="width:${pct}%"></div></div>`}
     ${sub ? `<div class="gr-sub">${sub}</div>` : ''}
   `
   if (unit && !done) row.querySelector('.gr-count').insertAdjacentHTML('beforeend', ` <i>${unit}</i>`)
@@ -97,7 +99,7 @@ export function renderBoard(board, d, opts = {}) {
 
   const head = el('div', 'board-head')
   head.innerHTML = `
-    <span class="board-title">Today's targets</span>
+    <span class="board-title">District missions</span>
     <span class="board-count${doneCount === totalCount ? ' all' : ''}">${doneCount}/${totalCount} done</span>
   `
   board.appendChild(head)
@@ -116,14 +118,17 @@ export function renderBoard(board, d, opts = {}) {
     const bits = [`${totalNeed} play${totalNeed === 1 ? '' : 's'} remaining`]
     if (pace.perTrack.length) bits.push(`Aim for ${pace.totalPerDay}/day`)
     if (typeof d.daysLeft === 'number') {
-      bits.push(d.daysLeft <= 0 ? 'last day' : d.daysLeft === 1 ? '1 day left' : `${d.daysLeft} days left`)
+      bits.push(d.daysLeft <= 0 ? 'District deadline: last day' : d.daysLeft === 1 ? 'District deadline: 1 day left' : `District deadline: ${d.daysLeft} days left`)
     }
     const urgent = typeof pace.daysLeft === 'number' && pace.daysLeft <= 2
     const q = el('button', 'queue-btn' + (urgent ? ' is-urgent' : ''), `
       <span class="qb-title">🧠 Build today's queue</span>
       <span class="qb-meta">${bits.join(' &middot; ')}</span>
     `)
-    q.onclick = () => showOverlay(openPlaylist(getState() || { activeDistrict: d }))
+    q.onclick = () => {
+      trackEngagement('queue_built', { screen: 'district', districtId: d.id })
+      showOverlay(openPlaylist(getState() || { activeDistrict: d }))
+    }
     board.appendChild(q)
   } else if (typeof d.daysLeft === 'number') {
     // Nothing left to queue (goals met, waiting on something else, e.g. the
@@ -133,7 +138,7 @@ export function renderBoard(board, d, opts = {}) {
     const text = d.daysLeft <= 0 ? 'Last day to restore this district'
       : d.daysLeft === 1 ? '<b>1 day</b> left to restore this district'
       : `<b>${d.daysLeft} days</b> left to restore this district`
-    board.appendChild(el('div', 'board-deadline' + (urgent ? ' is-urgent' : ''), `⏳ ${text}`))
+    board.appendChild(el('div', 'board-deadline' + (urgent ? ' is-urgent' : ''), `<span class="deadline-kind">District deadline</span><span>⏳ ${text}</span>`))
   }
 
   // A rescue when the clock is genuinely about to run out, spending one
@@ -152,7 +157,12 @@ export function renderBoard(board, d, opts = {}) {
       charges > 0 ? `⏳ Extend deadline +3 days (${charges} charge${charges === 1 ? '' : 's'})` : '⏳ Extend deadline +3 days (0 charges)')
     extendBtn.disabled = charges < 1
     const extendMsg = el('div', 'board-extend-msg')
-    if (charges < 1) extendMsg.textContent = 'Earn one by leveling up.'
+    if (charges < 1) {
+      extendMsg.append('Earn one by leveling up. ')
+      const rewardLink = el('button', 'inline-action', 'See next Level reward')
+      rewardLink.onclick = () => openProgressSheet(getState())
+      extendMsg.appendChild(rewardLink)
+    }
     extendBtn.onclick = async () => {
       extendBtn.disabled = true
       const res = await call('extendDistrictDeadline', { agentNo: getAgentNo(), districtId: d.id })
@@ -169,6 +179,9 @@ export function renderBoard(board, d, opts = {}) {
       }
     }
     extendRow.append(extendBtn, extendMsg)
+    if (reconnect && !reconnect.done) {
+      extendRow.appendChild(el('div', 'board-extend-note', 'Extends this district only. An open ReConnect team mission keeps its own expiry.'))
+    }
     board.appendChild(extendRow)
   }
 
@@ -200,7 +213,7 @@ export function renderBoard(board, d, opts = {}) {
           <span>⚡ Next Charge Cell</span>
           <b>${c.streams}/${c.required}</b>
         </div>
-        <div class="cell-progress-bar"><i style="width:${pct}%"></i></div>
+        <div class="cell-progress-bar" role="progressbar" aria-label="Progress toward next Charge Cell" aria-valuemin="0" aria-valuemax="${c.required}" aria-valuenow="${c.streams}"><i style="width:${pct}%"></i></div>
         <div class="cell-progress-left">${c.remaining} more Album Goal stream${c.remaining === 1 ? '' : 's'} · your goal total stays counted</div>
       `))
     }
