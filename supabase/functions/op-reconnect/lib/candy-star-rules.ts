@@ -12,6 +12,7 @@
 import jpegjs from 'npm:jpeg-js'
 import { encodeBase64 } from 'jsr:@std/encoding/base64'
 import { MAX_RUNTIME_MS, MIN_GAP_MS, SHORT_SONG_MS } from './spotify-shared.ts'
+import { shuffle, artistInterleave, planGapCounts } from './candy-star-planner.js'
 
 /** Analyse an ordered tracklist against the ruleset. Returns per-rule findings. */
 export function analyzeTracklist(tracks: any[]): any {
@@ -163,33 +164,6 @@ export function buildHumanPlaylistMeta(
   if (albumLabel) parts.push(`${albumLabel}${toSuperscript(1)}`)
   const description = parts.join(' + ') || 'Generated playlist'
   return { name, description }
-}
-
-const shuffle = <T>(arr: T[]): T[] => {
-  const a = [...arr]
-  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[a[i], a[j]] = [a[j], a[i]] }
-  return a
-}
-
-// Interleave songs by primary artist so no more than ~1 consecutive track from the same member.
-const artistInterleave = <T extends { artists?: string[] }>(songs: T[]): T[] => {
-  const groups = new Map<string, T[]>()
-  for (const s of songs) {
-    const artist = (s.artists?.[0] || '').toLowerCase() || 'bts'
-    if (!groups.has(artist)) groups.set(artist, [])
-    groups.get(artist)!.push(s)
-  }
-  const keys = [...groups.keys()]
-  const result: T[] = []
-  let changed = true
-  while (changed) {
-    changed = false
-    for (const k of keys) {
-      const g = groups.get(k)!
-      if (g.length) { result.push(g.shift()!); changed = true }
-    }
-  }
-  return result
 }
 
 /** Spread focus plays so the same song is never adjacent and is maximally separated. */
@@ -388,16 +362,33 @@ export function buildPlaylistOrder(
   for (let o = 0; o < 2; o++) pushSpacer()
 
   let gapCursor = 0
+  let totalDelivered = 0
   for (let k = 0; k < focusSeq.length; k++) {
     const isRealGapK = k > 0 && !focusSeq[k].isAlbumTrack
     const plannedGap = isRealGapK ? gapPlan[gapCursor] : 0
     const roomLeftInWindow = Math.max(0, MAX_GAP - windowCount)
     const effectiveGap = Math.min(plannedGap, roomLeftInWindow)
     let pushedThisGap = 0
+    // For a small planned gap (<=3), pick spacers duration-aware (reusing
+    // pushGapFiller's best-fit-or-longest logic, aiming each pick at an
+    // even share of whatever's still needed to clear MIN_GAP_MS) instead
+    // of plain sequential pushSpacer. Without this, a planned gap of 1-2
+    // short tracks almost never reaches the 8min same-song floor on its
+    // own, so ensureGap silently tops it up to ~3 anyway — this makes the
+    // delivered gap actually track the plan instead of quietly overriding
+    // it every time.
+    let gapAccumMs = 0
     for (let g = 0; g < effectiveGap; g++) {
-      if (pushSpacer()) pushedThisGap++; else break
+      const stepsLeft = effectiveGap - g
+      const remainingToFloor = Math.max(0, MIN_GAP_MS - gapAccumMs)
+      const perStepTarget = stepsLeft > 0 ? Math.ceil(remainingToFloor / stepsLeft) : 0
+      const ok = (plannedGap <= 3 && perStepTarget > 0) ? pushGapFiller(perStepTarget) : pushSpacer()
+      if (!ok) break
+      pushedThisGap++
+      gapAccumMs += order[order.length - 1].durationMs || 0
     }
     windowCount += pushedThisGap
+    totalDelivered += pushedThisGap
     const ck = focusSeq[k].key || focusSeq[k].isrc || focusSeq[k].uri || focusSeq[k].id
     const extraPushed = ensureGap(ck, focusSeq[k].durationMs, Math.max(0, MAX_GAP - windowCount))
     windowCount += extraPushed
@@ -409,34 +400,19 @@ export function buildPlaylistOrder(
     passCheckpoints()
     if (isRealGapK) gapCursor++
   }
+  // The MAX_GAP window (album tracks stacking on top of a planned gap) can
+  // only ever hold effectiveGap <= plannedGap, so totalDelivered can end up
+  // short of the planned totalSpacerTracks even though ensureGap's top-ups
+  // elsewhere might also push it over. Make up a real shortfall so the
+  // planned total (and therefore the target runtime) survives truncation
+  // instead of just silently coming in short — but never chase it past the
+  // soft target.
+  for (let i = totalDelivered; i < totalSpacerTracks; i++) {
+    if (ms + avgSpacerMs > softTargetMs) break
+    if (!pushSpacer()) break
+  }
   pushSpacer(); pushSpacer()
   return { order, usedFillers: fi, usedSpacers: bi, truncated }
-}
-
-/** Plan n gap-track-counts summing to `total`, centered on 3 with 2/4 as
- *  common shoulders and 5/6 rare — the same shape as before, but now
- *  guaranteed to sum to an actual track budget instead of being
- *  independently rolled and truncated by a duration ceiling. */
-function planGapCounts(n: number, total: number): number[] {
-  if (n <= 0) return []
-  const MIN_G = 1, MAX_G = 6, MODE = 3
-  const plan = new Array(n).fill(MODE)
-  let sum = plan.reduce((a, b) => a + b, 0)
-  const idxOrder = shuffle([...Array(n).keys()])
-  let iter = 0
-  while (sum !== total && iter < n * 100) {
-    const idx = idxOrder[iter % n]
-    if (sum < total && plan[idx] < MAX_G) { plan[idx]++; sum++ } else
-    if (sum > total && plan[idx] > MIN_G) { plan[idx]--; sum-- }
-    iter++
-  }
-  // Sum-preserving +1/-1 swaps for natural variety around the target sum.
-  for (let pass = 0; pass < n * 2; pass++) {
-    const a = Math.floor(Math.random() * n), b = Math.floor(Math.random() * n)
-    if (a === b) continue
-    if (Math.random() < 0.4 && plan[a] < MAX_G && plan[b] > MIN_G) { plan[a]++; plan[b]-- }
-  }
-  return shuffle(plan)
 }
 
 /**

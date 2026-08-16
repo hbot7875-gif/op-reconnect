@@ -210,18 +210,35 @@ export async function generatePlaylist(supabase: SupabaseDB, params: any): Promi
 
   let trimTotal = order.reduce((s: number, t: any) => s + (t.durationMs || 0), 0)
   const MAX_RUNTIME_MS = 3 * 60 * 60 * 1000
+  // Tracks a trim attempt already found to be unsafe (removing it broke the
+  // min-repeat-gap rule below) so it isn't retried forever.
+  const unsafeToTrim = new Set<any>()
   while (trimTotal > MAX_RUNTIME_MS) {
     // Only ever drop an optional spacer/filler, never a requested focus
     // play or album track — used to pop blindly off the tail, which
     // happened to be safe only because trailing spacers usually ended up
-    // there. Walk backward for the last optional track instead.
+    // there. Walk backward for the last untried optional track instead.
     let idx = -1
     for (let i = order.length - 1; i >= 0; i--) {
-      if (!order[i].isFocus && !order[i].isAlbumTrack) { idx = i; break }
+      if (!order[i].isFocus && !order[i].isAlbumTrack && !unsafeToTrim.has(order[i])) { idx = i; break }
     }
-    if (idx === -1) break // nothing optional left to trim; validation below will catch an overrun
-    trimTotal -= order[idx].durationMs || 0
+    if (idx === -1) break // nothing left that's both optional and safe; validation below will catch an overrun
+    const candidate = order[idx]
     order.splice(idx, 1)
+    // A spacer can be the only thing keeping two repeats of the same song
+    // MIN_GAP_MS apart — removing it blindly used to be able to trade a
+    // silent runtime fix for a silent compliance break (validation would
+    // then just fail the whole generation instead of the trim repairing
+    // itself). Re-check and put it back in favor of a different candidate
+    // if this specific removal broke that rule.
+    const recheck = analyzeTracklist(order)
+    const brokeGapRule = recheck.findings.some((f: any) => f.status === 'fail' && String(f.rule).includes('gap between repeats'))
+    if (brokeGapRule) {
+      order.splice(idx, 0, candidate)
+      unsafeToTrim.add(candidate)
+      continue
+    }
+    trimTotal -= candidate.durationMs || 0
   }
 
   const report = analyzeTracklist(order)
