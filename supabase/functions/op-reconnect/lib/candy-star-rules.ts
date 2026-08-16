@@ -332,12 +332,16 @@ export function buildPlaylistOrder(
   }
 
   const avgMs = (focusSeq.reduce((s, t) => s + (t.durationMs || 0), 0) / Math.max(1, focusSeq.length)) || 200000
-  // 0.6 was too tight: roomForSpacer's duration ceiling forced almost every
-  // gap down to ~3 spacers regardless of the wider rolled distribution
-  // above. 0.75 was simulation-verified (N=200/ratio) against a realistic
-  // 10x-focus + 18-track-album scenario: 0/200 trials exceed the 180min
-  // hard cap (max observed 173.4min, vs 0/200 at 0.7 topping out at
-  // 161.9min) while giving real gap-size variety room to survive.
+  // Tried reverting this to 0.6 to trim the runtime increase back toward
+  // ~137min — a local simulation (narrow synthetic track-duration spread)
+  // suggested 0.6 would still deliver gap variety once the roll re-weight +
+  // MAX_GAP window (below) were doing the real work. A real generateAlpaca
+  // call against the live BTS catalog proved that wrong: gaps came back as
+  // a rigid run of nine straight 3s, the original bug. The real catalog's
+  // much wider track-duration spread (sub-minute skits next to full songs)
+  // hits roomForSpacer's ceiling harder than the synthetic mock predicted.
+  // 0.75 is confirmed (twice, live) to deliver real variety — the ~155min
+  // runtime is a genuine tradeoff for that, not a tunable side effect.
   const fillTarget = targetMs * 0.75
   const approxTracks = Math.max(focusSeq.length, Math.floor(fillTarget / avgMs))
   let spacerBudget = Math.max(0, approxTracks - focusSeq.length)
