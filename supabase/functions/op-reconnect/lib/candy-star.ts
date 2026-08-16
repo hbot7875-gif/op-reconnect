@@ -210,9 +210,18 @@ export async function generatePlaylist(supabase: SupabaseDB, params: any): Promi
 
   let trimTotal = order.reduce((s: number, t: any) => s + (t.durationMs || 0), 0)
   const MAX_RUNTIME_MS = 3 * 60 * 60 * 1000
-  while (order.length > 1 && trimTotal > MAX_RUNTIME_MS) {
-    trimTotal -= order[order.length - 1].durationMs || 0
-    order.pop()
+  while (trimTotal > MAX_RUNTIME_MS) {
+    // Only ever drop an optional spacer/filler, never a requested focus
+    // play or album track — used to pop blindly off the tail, which
+    // happened to be safe only because trailing spacers usually ended up
+    // there. Walk backward for the last optional track instead.
+    let idx = -1
+    for (let i = order.length - 1; i >= 0; i--) {
+      if (!order[i].isFocus && !order[i].isAlbumTrack) { idx = i; break }
+    }
+    if (idx === -1) break // nothing optional left to trim; validation below will catch an overrun
+    trimTotal -= order[idx].durationMs || 0
+    order.splice(idx, 1)
   }
 
   const report = analyzeTracklist(order)

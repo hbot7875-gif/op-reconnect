@@ -218,7 +218,7 @@ export function spreadFocusPlays(songs: { isrc: string; versions: any[]; name: s
     const k = (s as any).key || s.isrc
     const vi = vIdx.get(k) || 0
     const v = s.versions[vi % s.versions.length]
-    out.push({ key: (s as any).key, uri: v.uri, id: v.id, name: s.name, isrc: v.isrc || s.isrc, durationMs: v.durationMs || s.durationMs, isBTS: true, album: v.album })
+    out.push({ key: (s as any).key, uri: v.uri, id: v.id, name: s.name, isrc: v.isrc || s.isrc, durationMs: v.durationMs || s.durationMs, isBTS: true, isFocus: true, album: v.album })
     vIdx.set(k, vi + 1)
   }
   return out
@@ -331,35 +331,41 @@ export function buildPlaylistOrder(
     }
   }
 
-  const avgMs = (focusSeq.reduce((s, t) => s + (t.durationMs || 0), 0) / Math.max(1, focusSeq.length)) || 200000
-  // Tried reverting this to 0.6 to trim the runtime increase back toward
-  // ~137min — a local simulation (narrow synthetic track-duration spread)
-  // suggested 0.6 would still deliver gap variety once the roll re-weight +
-  // MAX_GAP window (below) were doing the real work. A real generateAlpaca
-  // call against the live BTS catalog proved that wrong: gaps came back as
-  // a rigid run of nine straight 3s, the original bug. The real catalog's
-  // much wider track-duration spread (sub-minute skits next to full songs)
-  // hits roomForSpacer's ceiling harder than the synthetic mock predicted.
-  // 0.75 is confirmed (twice, live) to deliver real variety — the ~155min
-  // runtime is a genuine tradeoff for that, not a tunable side effect.
-  const fillTarget = targetMs * 0.75
-  const approxTracks = Math.max(focusSeq.length, Math.floor(fillTarget / avgMs))
-  let spacerBudget = Math.max(0, approxTracks - focusSeq.length)
-  const focusSuffix = new Array(focusSeq.length + 1).fill(0)
-  for (let k = focusSeq.length - 1; k >= 0; k--) focusSuffix[k] = focusSuffix[k + 1] + (focusSeq[k].durationMs || 0)
-  const roomForSpacer = (k: number) => ms + focusSuffix[k] + avgMs <= fillTarget
+  // Duration-aware gap planning. Earlier attempts estimated available
+  // "room" from the average FOCUS-song duration and then had to inflate a
+  // global ratio (0.6 -> 0.75) just to give that inaccurate estimate enough
+  // slack to survive — the real BTS catalog mixes sub-minute skits with
+  // full songs, so a focus-duration-based estimate has nothing to do with
+  // how many actual spacer tracks fit. This instead: (1) estimates a
+  // track-count budget from the REAL spacer pool's average duration, and
+  // (2) plans the exact per-gap track-count sequence upfront so it sums to
+  // that budget, rather than rolling gaps independently and hoping a
+  // duration ceiling doesn't truncate them unevenly.
+  const spacerPool = [...btsQ, ...nbQ]
+  const avgSpacerMs = spacerPool.length > 0
+    ? spacerPool.reduce((s, t) => s + (t.durationMs || 210000), 0) / spacerPool.length
+    : 210000
+  const mandatoryMs = focusSeq.reduce((s, t) => s + (t.durationMs || 0), 0)
+  const HARD_CAP_MS = 179 * 60 * 1000
+  // Soft target: never plan past what was actually requested, and cap the
+  // "comfortable" length at 145min even for a longer requested target —
+  // mirrors buildPlaylistOrder2Focus's own budget ceiling below.
+  const softTargetMs = Math.min(targetMs, 145 * 60 * 1000, HARD_CAP_MS)
+  // Reserve room for the 2 intro + 2 outro pushSpacer() calls and the 2
+  // artist-mix checkpoints, all of which draw from the same spacer pool.
+  const reserveMs = (4 + remainingCheckpoints) * avgSpacerMs
+  const spacerBudgetMs = Math.max(0, softTargetMs - mandatoryMs - reserveMs)
+  const totalSpacerTracks = Math.max(0, Math.round(spacerBudgetMs / avgSpacerMs))
+  const realGapCount = Math.max(0, focusSeq.filter((t) => !t.isAlbumTrack).length - 1)
+  const gapPlan = planGapCounts(realGapCount, totalSpacerTracks)
 
-  const MIN_SAME_MS = (8 + Math.random() * 2) * 60 * 1000
   const DURATION_TOLERANCE_MS = 2000
   // Hard ceiling on the VISIBLE track distance between two real focus
-  // plays: 6. This has to be tracked as a window that survives across
-  // album-track k-iterations, not just per-k spacer count — album tracks
-  // are forced gap=0 and inserted at their own independent positions, so a
-  // spacer gap that's already maxed out can still get 1-2 album tracks
-  // stacked on top of it, which is what produced the reported 7-8-track
-  // gaps even after capping spacers alone. windowCount accumulates every
-  // non-real-focus track (spacer or album) since the last real focus play
-  // and only resets when a real (non-album) focus track is pushed.
+  // plays: 6, as a safety net (the plan above should already stay within
+  // this, but album tracks land at independent positions and can still
+  // stack on top of a planned gap — see windowCount below). windowCount
+  // accumulates every non-real-focus track (spacer or album) since the
+  // last real focus play and only resets when a real focus track lands.
   const MAX_GAP = 6
   let windowCount = 0
   const lastPlayed: Record<string, { ms: number; durationMs: number }> = {}
@@ -369,28 +375,27 @@ export function buildPlaylistOrder(
     const isDistinctVersion = Math.abs((prev.durationMs || 0) - (durationMs || 0)) > DURATION_TOLERANCE_MS
     if (isDistinctVersion) return 0
     let pushed = 0
-    while (ms - prev.ms < MIN_SAME_MS && pushed < maxExtra) {
-      if (!pushGapFiller(MIN_SAME_MS - (ms - prev.ms))) break
+    // MIN_GAP_MS (flat 8min) is the actual validated floor — padding this
+    // randomly to 8-10min (the previous version) just forced unplanned
+    // extra fillers into gaps for no compliance benefit.
+    while (ms - prev.ms < MIN_GAP_MS && pushed < maxExtra) {
+      if (!pushGapFiller(MIN_GAP_MS - (ms - prev.ms))) break
       pushed++
     }
     return pushed
   }
 
-  for (let o = 0; o < 2; o++) {
-    if (roomForSpacer(0) && pushSpacer() && spacerBudget > 0) spacerBudget--
-  }
+  for (let o = 0; o < 2; o++) pushSpacer()
 
+  let gapCursor = 0
   for (let k = 0; k < focusSeq.length; k++) {
-    const r = Math.random()
-    // Re-weighted so 3 is the clear mode, 2/4 are the common shoulders, and
-    // 5/6 are rare — 1 stays a small floor rather than disappearing.
-    const gap = (k === 0 || focusSeq[k].isAlbumTrack) ? 0
-      : r < 0.05 ? 1 : r < 0.30 ? 2 : r < 0.70 ? 3 : r < 0.90 ? 4 : r < 0.97 ? 5 : 6
+    const isRealGapK = k > 0 && !focusSeq[k].isAlbumTrack
+    const plannedGap = isRealGapK ? gapPlan[gapCursor] : 0
     const roomLeftInWindow = Math.max(0, MAX_GAP - windowCount)
-    const effectiveGap = Math.min(gap, roomLeftInWindow)
+    const effectiveGap = Math.min(plannedGap, roomLeftInWindow)
     let pushedThisGap = 0
-    for (let g = 0; g < effectiveGap && spacerBudget > 0 && roomForSpacer(k); g++) {
-      if (pushSpacer()) { spacerBudget--; pushedThisGap++ } else break
+    for (let g = 0; g < effectiveGap; g++) {
+      if (pushSpacer()) pushedThisGap++; else break
     }
     windowCount += pushedThisGap
     const ck = focusSeq[k].key || focusSeq[k].isrc || focusSeq[k].uri || focusSeq[k].id
@@ -402,9 +407,36 @@ export function buildPlaylistOrder(
     else windowCount = 0
     lastPlayed[ck] = { ms, durationMs: focusSeq[k].durationMs }
     passCheckpoints()
+    if (isRealGapK) gapCursor++
   }
   pushSpacer(); pushSpacer()
   return { order, usedFillers: fi, usedSpacers: bi, truncated }
+}
+
+/** Plan n gap-track-counts summing to `total`, centered on 3 with 2/4 as
+ *  common shoulders and 5/6 rare — the same shape as before, but now
+ *  guaranteed to sum to an actual track budget instead of being
+ *  independently rolled and truncated by a duration ceiling. */
+function planGapCounts(n: number, total: number): number[] {
+  if (n <= 0) return []
+  const MIN_G = 1, MAX_G = 6, MODE = 3
+  const plan = new Array(n).fill(MODE)
+  let sum = plan.reduce((a, b) => a + b, 0)
+  const idxOrder = shuffle([...Array(n).keys()])
+  let iter = 0
+  while (sum !== total && iter < n * 100) {
+    const idx = idxOrder[iter % n]
+    if (sum < total && plan[idx] < MAX_G) { plan[idx]++; sum++ } else
+    if (sum > total && plan[idx] > MIN_G) { plan[idx]--; sum-- }
+    iter++
+  }
+  // Sum-preserving +1/-1 swaps for natural variety around the target sum.
+  for (let pass = 0; pass < n * 2; pass++) {
+    const a = Math.floor(Math.random() * n), b = Math.floor(Math.random() * n)
+    if (a === b) continue
+    if (Math.random() < 0.4 && plan[a] < MAX_G && plan[b] > MIN_G) { plan[a]++; plan[b]-- }
+  }
+  return shuffle(plan)
 }
 
 /**
@@ -532,11 +564,11 @@ export function buildPlaylistOrder2Focus(
   for (const key of focusOrder) {
     if (key === 'A') {
       const v = songA.versions[vA % songA.versions.length]
-      focusSeq.push({ key: songA.key, uri: v.uri, id: v.id, name: songA.name, isrc: v.isrc || songA.isrc, durationMs: v.durationMs || songA.durationMs, isBTS: true, album: v.album })
+      focusSeq.push({ key: songA.key, uri: v.uri, id: v.id, name: songA.name, isrc: v.isrc || songA.isrc, durationMs: v.durationMs || songA.durationMs, isBTS: true, isFocus: true, album: v.album })
       vA++
     } else {
       const v = songB.versions[vB % songB.versions.length]
-      focusSeq.push({ key: songB.key, uri: v.uri, id: v.id, name: songB.name, isrc: v.isrc || songB.isrc, durationMs: v.durationMs || songB.durationMs, isBTS: true, album: v.album })
+      focusSeq.push({ key: songB.key, uri: v.uri, id: v.id, name: songB.name, isrc: v.isrc || songB.isrc, durationMs: v.durationMs || songB.durationMs, isBTS: true, isFocus: true, album: v.album })
       vB++
     }
   }
@@ -557,9 +589,11 @@ export function buildPlaylistOrder2Focus(
     }
   }
 
-  const MIN_SAME_MS = (8 + Math.random() * 2) * 60 * 1000
   const HARD_CAP_MS = 179 * 60 * 1000
-  const BUDGET_TARGET_MS = Math.min(HARD_CAP_MS, 145 * 60 * 1000)
+  // Was unconditionally 145min regardless of a smaller requested targetMs —
+  // a caller asking for e.g. a 60min playlist still got budgeted toward
+  // 145min internally. Now respects the actual request.
+  const BUDGET_TARGET_MS = Math.min(HARD_CAP_MS, 145 * 60 * 1000, targetMs)
   const DURATION_TOLERANCE_MS = 2000
   const lastPlayed: Record<string, { ms: number; durationMs: number }> = {}
 
@@ -604,8 +638,10 @@ export function buildPlaylistOrder2Focus(
       if (prev) {
         const isDistinctVersion = Math.abs((prev.durationMs || 0) - (curr.durationMs || 0)) > DURATION_TOLERANCE_MS
         if (!isDistinctVersion) {
-          while (ms - prev.ms < MIN_SAME_MS) {
-            if (!pushGapFiller(MIN_SAME_MS - (ms - prev.ms))) break
+          // MIN_GAP_MS (flat 8min) is the actual validated floor — no need
+          // to pad it randomly to 8-10min.
+          while (ms - prev.ms < MIN_GAP_MS) {
+            if (!pushGapFiller(MIN_GAP_MS - (ms - prev.ms))) break
           }
         }
       }
