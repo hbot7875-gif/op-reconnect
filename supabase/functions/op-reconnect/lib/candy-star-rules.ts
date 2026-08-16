@@ -368,6 +368,9 @@ export function buildPlaylistOrder(
     const plannedGap = isRealGapK ? gapPlan[gapCursor] : 0
     const roomLeftInWindow = Math.max(0, MAX_GAP - windowCount)
     const effectiveGap = Math.min(plannedGap, roomLeftInWindow)
+    const ck = focusSeq[k].key || focusSeq[k].isrc || focusSeq[k].uri || focusSeq[k].id
+    const prevSame = lastPlayed[ck]
+    const isDistinctVersion = !!prevSame && Math.abs((prevSame.durationMs || 0) - (focusSeq[k].durationMs || 0)) > DURATION_TOLERANCE_MS
     let pushedThisGap = 0
     // For a small planned gap (<=3), pick spacers duration-aware (reusing
     // pushGapFiller's best-fit-or-longest logic, aiming each pick at an
@@ -377,7 +380,15 @@ export function buildPlaylistOrder(
     // own, so ensureGap silently tops it up to ~3 anyway — this makes the
     // delivered gap actually track the plan instead of quietly overriding
     // it every time.
-    let gapAccumMs = 0
+    // Seeded from the REAL elapsed time since the previous occurrence of
+    // this same song, not just what this k's own roll-out adds — an album
+    // track or checkpoint filler can already have landed earlier in this
+    // same visible gap (a separate k-iteration / passCheckpoints() call,
+    // both of which already advanced the global `ms`), and that already
+    // counts toward the 8min floor. Starting from 0 every time made this
+    // loop chase a floor that was often already partly or fully met,
+    // pushing avoidable extra spacers and inflating runtime.
+    let gapAccumMs = (prevSame && !isDistinctVersion) ? Math.max(0, ms - prevSame.ms) : 0
     for (let g = 0; g < effectiveGap; g++) {
       const stepsLeft = effectiveGap - g
       const remainingToFloor = Math.max(0, MIN_GAP_MS - gapAccumMs)
@@ -389,15 +400,17 @@ export function buildPlaylistOrder(
     }
     windowCount += pushedThisGap
     totalDelivered += pushedThisGap
-    const ck = focusSeq[k].key || focusSeq[k].isrc || focusSeq[k].uri || focusSeq[k].id
     const extraPushed = ensureGap(ck, focusSeq[k].durationMs, Math.max(0, MAX_GAP - windowCount))
     windowCount += extraPushed
-    if (sinceNonBts >= fillerEvery && windowCount < MAX_GAP) { pushSpacer(); windowCount++ }
+    totalDelivered += extraPushed
+    if (sinceNonBts >= fillerEvery && windowCount < MAX_GAP) { pushSpacer(); windowCount++; totalDelivered++ }
     push(focusSeq[k])
     if (focusSeq[k].isAlbumTrack) windowCount++
     else windowCount = 0
     lastPlayed[ck] = { ms, durationMs: focusSeq[k].durationMs }
+    const beforeCheckpointFi = fi
     passCheckpoints()
+    totalDelivered += fi - beforeCheckpointFi
     if (isRealGapK) gapCursor++
   }
   // The MAX_GAP window (album tracks stacking on top of a planned gap) can

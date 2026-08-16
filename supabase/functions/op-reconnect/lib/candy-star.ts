@@ -210,8 +210,14 @@ export async function generatePlaylist(supabase: SupabaseDB, params: any): Promi
 
   let trimTotal = order.reduce((s: number, t: any) => s + (t.durationMs || 0), 0)
   const MAX_RUNTIME_MS = 3 * 60 * 60 * 1000
-  // Tracks a trim attempt already found to be unsafe (removing it broke the
-  // min-repeat-gap rule below) so it isn't retried forever.
+  // Rules already failing before any trimming started aren't the trim's
+  // fault — only guard against trimming NEWLY introducing a failure (e.g.
+  // R3 same-song gap, R4 no-repeat fillers if it removes the last unique
+  // one, R6 needing >=2 non-Kpop songs if it removes the last one).
+  const preTrimFailedRules = new Set(
+    analyzeTracklist(order).findings.filter((f: any) => f.status === 'fail').map((f: any) => f.rule),
+  )
+  // Tracks a trim attempt already found to be unsafe so it isn't retried.
   const unsafeToTrim = new Set<any>()
   while (trimTotal > MAX_RUNTIME_MS) {
     // Only ever drop an optional spacer/filler, never a requested focus
@@ -226,14 +232,18 @@ export async function generatePlaylist(supabase: SupabaseDB, params: any): Promi
     const candidate = order[idx]
     order.splice(idx, 1)
     // A spacer can be the only thing keeping two repeats of the same song
-    // MIN_GAP_MS apart — removing it blindly used to be able to trade a
-    // silent runtime fix for a silent compliance break (validation would
-    // then just fail the whole generation instead of the trim repairing
-    // itself). Re-check and put it back in favor of a different candidate
-    // if this specific removal broke that rule.
+    // MIN_GAP_MS apart, the last unique filler, or the last non-Kpop track
+    // — removing it blindly used to be able to trade a silent runtime fix
+    // for a silent compliance break (validation would then just fail the
+    // whole generation instead of the trim repairing itself). Re-check
+    // every rule (not just the gap one) and put the track back in favor of
+    // a different candidate if this specific removal newly broke any of
+    // them.
     const recheck = analyzeTracklist(order)
-    const brokeGapRule = recheck.findings.some((f: any) => f.status === 'fail' && String(f.rule).includes('gap between repeats'))
-    if (brokeGapRule) {
+    const introducedNewFailure = recheck.findings.some(
+      (f: any) => f.status === 'fail' && !preTrimFailedRules.has(f.rule),
+    )
+    if (introducedNewFailure) {
       order.splice(idx, 0, candidate)
       unsafeToTrim.add(candidate)
       continue
