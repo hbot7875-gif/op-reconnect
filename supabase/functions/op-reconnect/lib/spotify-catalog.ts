@@ -193,15 +193,35 @@ export async function searchBTSTracks(supabase: SupabaseDB, params: { query: str
   }
 
   let added = 0
+  let mergedVersions = 0
   if (results.length) {
     const uriMap = await getResolvedUriMap(supabase)
     for (const s of results) {
-      if (!uriMap[s.key] || !uriMap[s.key].uri) added++
-      uriMap[s.key] = { id: s.versions[0].id, uri: s.versions[0].uri, name: s.name, artists: s.artists, isrc: s.isrc, durationMs: s.durationMs }
+      const existing = uriMap[s.key]
+      const primary = s.versions[0]
+      if (existing && existing.uri) {
+        // A prior search or manual add may already have alternate versions
+        // (covers, remixes, mastering variants) attached to this key —
+        // this used to overwrite the whole entry and silently discard
+        // them. Merge instead, same as addCatalogSongManual: add the new
+        // track as an extra version if it's not already known, and only
+        // backfill isrc/durationMs if the existing entry is missing them.
+        const allIds = new Set([existing.id, ...(existing.versions || []).map((v: any) => v.id)])
+        if (!allIds.has(primary.id)) {
+          existing.versions = [...(existing.versions || []), { id: primary.id, uri: primary.uri, album: primary.album }]
+          mergedVersions++
+        }
+        if (!existing.isrc && s.isrc) existing.isrc = s.isrc
+        if (!existing.durationMs && s.durationMs) existing.durationMs = s.durationMs
+        uriMap[s.key] = existing
+      } else {
+        added++
+        uriMap[s.key] = { id: primary.id, uri: primary.uri, name: s.name, artists: s.artists, isrc: s.isrc, durationMs: s.durationMs }
+      }
     }
     await saveResolvedUriMap(supabase, uriMap)
   }
-  return { success: true, results, found: results.length, addedToCatalog: added, rawTracks: items.length }
+  return { success: true, results, found: results.length, addedToCatalog: added, mergedVersions, rawTracks: items.length }
 }
 
 /** Manually add a BTS song by pasting a Spotify track link/URI/ID.
