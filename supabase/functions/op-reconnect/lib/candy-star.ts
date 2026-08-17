@@ -37,7 +37,9 @@ import {
   analyzeTracklist, buildHumanPlaylistMeta, buildPlaylistOrder, buildPlaylistOrder2Focus,
   spreadFocusPlays, createUserPlaylist, uploadPlaylistCover,
 } from './candy-star-rules.ts'
-import { dedupeTracksByIdentity, excludeTracksByIdentity } from './candy-star-planner.js'
+import {
+  dedupeTracksByIdentity, excludeTracksByIdentity, mergeSavedTracksWithPlan,
+} from './candy-star-planner.js'
 
 /** Shared by both validate paths: run the rule engine, then layer the
  *  K-pop-filler genre check on top (needs a token for `/v1/artists` —
@@ -323,7 +325,16 @@ export async function generatePlaylist(supabase: SupabaseDB, params: any): Promi
   // unfollowed immediately and never consume the agent's Wing because the
   // caller charges only after generatePlaylist() returns successfully.
   const savedTracks = await fetchAllPlaylistTracks(token, created.id)
-  const savedReport = await runValidation(supabase, savedTracks)
+  let savedTracksWithPlan: any[]
+  try {
+    savedTracksWithPlan = mergeSavedTracksWithPlan(savedTracks, order)
+  } catch (e) {
+    await fetch(`https://api.spotify.com/v1/playlists/${created.id}/followers`, {
+      method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
+    }).catch(() => null)
+    throw new Error(`Spotify copy could not be verified — please retry (no Wing spent): ${(e as Error).message}`)
+  }
+  const savedReport = await runValidation(supabase, savedTracksWithPlan)
   const savedFailures = savedReport.findings.filter((f: any) => f.status === 'fail')
   if (savedFailures.length > 0) {
     await fetch(`https://api.spotify.com/v1/playlists/${created.id}/followers`, {

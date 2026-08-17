@@ -12,6 +12,7 @@ import {
   planGapCounts, planFocusGapCounts, shuffle, artistInterleave,
   buildBurstSkeleton, buildFocusOrder, buildDistributedFocusOrder,
   buildPlaylistOrder2Focus, dedupeTracksByIdentity, excludeTracksByIdentity,
+  mergeSavedTracksWithPlan,
 } from './candy-star-planner.js'
 
 const MIN_GAP_MS = 480000 // matches spotify-shared.ts's MIN_GAP_MS — duplicated because that's a
@@ -153,6 +154,22 @@ test('excludeTracksByIdentity removes filler collisions across catalog pools', (
   const fillerB = { id: 'BBBBBBBBBBBBBBBBBBBBBB', isrc: 'GBUM71029604', name: 'Unique filler' }
   const staleCatalogCopy = { uri: 'spotify:track:AAAAAAAAAAAAAAAAAAAAAA', isrc: null }
   assert.deepEqual(excludeTracksByIdentity([fillerA, fillerB], [staleCatalogCopy]), [fillerB])
+})
+
+test('mergeSavedTracksWithPlan keeps live metadata and restores focus roles and song keys', () => {
+  const saved = [
+    { id: 'live-focus', isrc: 'LIVE123', durationMs: 180123, isBTS: false },
+    { id: 'live-filler', isrc: 'FILL456', durationMs: 250456, isBTS: true },
+  ]
+  const planned = [
+    { id: 'stored-focus', key: 'song:dsylm', isBTS: true, isFocus: true },
+    { id: 'stored-filler', isBTS: false },
+  ]
+  assert.deepEqual(mergeSavedTracksWithPlan(saved, planned), [
+    { id: 'live-focus', isrc: 'LIVE123', durationMs: 180123, key: 'song:dsylm', isBTS: true, isFocus: true, isAlbumTrack: false },
+    { id: 'live-filler', isrc: 'FILL456', durationMs: 250456, key: undefined, isBTS: false, isFocus: false, isAlbumTrack: false },
+  ])
+  assert.throws(() => mergeSavedTracksWithPlan(saved.slice(0, 1), planned), /saved 1 of 2/)
 })
 
 test('planGapCounts sums exactly to a feasible total', () => {

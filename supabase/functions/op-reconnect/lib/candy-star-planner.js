@@ -75,6 +75,26 @@ export function excludeTracksByIdentity(tracks, excludedTracks) {
     !trackIdentityTokens(track).some((identity) => blocked.has(identity)))
 }
 
+/** Apply Spotify's saved recording metadata to the planner's positional
+ * roles. Spotify supplies the authoritative ID/ISRC/duration, while only the
+ * planner knows which occurrences are focus plays, album tracks, spacers, or
+ * non-BTS fillers and which cover versions share one catalog song key. */
+export function mergeSavedTracksWithPlan(savedTracks, plannedTracks) {
+  if ((savedTracks || []).length !== (plannedTracks || []).length) {
+    throw new Error(`Spotify saved ${(savedTracks || []).length} of ${(plannedTracks || []).length} planned tracks.`)
+  }
+  return savedTracks.map((saved, index) => {
+    const planned = plannedTracks[index] || {}
+    return {
+      ...saved,
+      key: planned.key || saved.key,
+      isBTS: planned.isBTS === true,
+      isFocus: planned.isFocus === true,
+      isAlbumTrack: planned.isAlbumTrack === true,
+    }
+  })
+}
+
 /** Plan n gap-track-counts summing to `total` (clamped into the feasible
  *  [n*MIN_G, n*MAX_G] range first — an out-of-range `total` used to make
  *  the balancing loop below exit early at n*MIN_G or n*MAX_G silently,
