@@ -36,6 +36,7 @@ import {
   analyzeTracklist, buildHumanPlaylistMeta, buildPlaylistOrder, buildPlaylistOrder2Focus,
   spreadFocusPlays, createUserPlaylist, uploadPlaylistCover,
 } from './candy-star-rules.ts'
+import { dedupeTracksByIdentity } from './candy-star-planner.js'
 
 /** Shared by both validate paths: run the rule engine, then layer the
  *  K-pop-filler genre check on top (needs a token for `/v1/artists` —
@@ -157,7 +158,7 @@ export async function generatePlaylist(supabase: SupabaseDB, params: any): Promi
     .filter((k: string) => !focusKeys.has(k))
     .map((k: string) => byKey.get(k))
     .filter((s: any) => s && s.versions?.length > 0)
-    .map((s: any) => ({ key: keyOf(s), uri: s.versions[0].uri, id: s.versions[0].id, name: s.name, isrc: s.isrc, durationMs: s.durationMs, album: s.versions[0].album }))
+    .map((s: any) => ({ key: keyOf(s), uri: s.versions[0].uri, id: s.versions[0].id, name: s.name, isrc: s.versions[0].isrc || s.isrc, durationMs: s.versions[0].durationMs || s.durationMs, album: s.versions[0].album }))
 
   const totalFocusPlays = focusSongs.reduce((n: number, s: any) => n + s.plays, 0) + albumOnce.length
 
@@ -173,10 +174,12 @@ export async function generatePlaylist(supabase: SupabaseDB, params: any): Promi
     }
   }
 
-  const nonBtsFillers = (lib.fillers || []).map((f: any) => ({ uri: f.uri, id: f.track_id, name: f.name, isrc: f.isrc, durationMs: f.duration_ms, isBTS: false }))
+  const nonBtsFillers = dedupeTracksByIdentity(
+    (lib.fillers || []).map((f: any) => ({ uri: f.uri, id: f.track_id, name: f.name, isrc: f.isrc, durationMs: f.duration_ms, isBTS: false })),
+  )
   const btsSpacers = (cat.songs || [])
-    .filter((s: any) => !focusKeys.has(keyOf(s)) && !albumKeys.has(keyOf(s)) && s.versions?.[0]?.uri && (s.durationMs || 0) >= 90000)
-    .map((s: any) => ({ key: keyOf(s), uri: s.versions[0].uri, id: s.versions[0].id, name: s.name, isrc: s.isrc, durationMs: s.durationMs, isBTS: true, album: s.versions[0].album }))
+    .filter((s: any) => !focusKeys.has(keyOf(s)) && !albumKeys.has(keyOf(s)) && s.versions?.[0]?.uri && (s.versions[0].durationMs || s.durationMs || 0) >= 90000)
+    .map((s: any) => ({ key: keyOf(s), uri: s.versions[0].uri, id: s.versions[0].id, name: s.name, isrc: s.versions[0].isrc || s.isrc, durationMs: s.versions[0].durationMs || s.durationMs, isBTS: true, album: s.versions[0].album }))
 
   const avgMs = (focusSongs.reduce((n: number, s: any) => n + s.durationMs, 0) / Math.max(1, focusSongs.length)) || 200000
   const focusTotalMs = focusSongs.reduce((n: number, s: any) => n + s.durationMs * s.plays, 0)
@@ -287,6 +290,26 @@ export async function generatePlaylist(supabase: SupabaseDB, params: any): Promi
   const name = params.name || humanName
   const uris = order.map((t: any) => t.uri).filter(Boolean)
   const created = await createUserPlaylist(token, userId, name, humanDescription, uris)
+
+  // Catalog rows can be stale or represent another Spotify pressing. Validate
+  // the exact tracks Spotify saved, with Spotify's real durations and ISRCs,
+  // before treating the generation as successful. This closes the gap where
+  // a locally valid order could publish with a 7:59 repeat window or two
+  // alternate track IDs for one filler recording. Invalid attempts are
+  // unfollowed immediately and never consume the agent's Wing because the
+  // caller charges only after generatePlaylist() returns successfully.
+  const savedTracks = await fetchAllPlaylistTracks(token, created.id)
+  const savedReport = await runValidation(supabase, savedTracks)
+  const savedFailures = savedReport.findings.filter((f: any) => f.status === 'fail')
+  if (savedFailures.length > 0) {
+    await fetch(`https://api.spotify.com/v1/playlists/${created.id}/followers`, {
+      method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
+    }).catch(() => null)
+    throw new Error(
+      `Spotify copy failed live validation — please retry (no Wing spent):\n` +
+      savedFailures.map((f: any) => `• ${f.rule}: ${f.detail}`).join('\n')
+    )
+  }
 
   try {
     await uploadPlaylistCover(token, created.id, created.id)

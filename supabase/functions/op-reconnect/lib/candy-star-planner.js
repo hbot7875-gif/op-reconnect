@@ -36,6 +36,27 @@ export function artistInterleave(songs) {
   return result
 }
 
+/**
+ * Remove duplicate Spotify recordings while preserving the first pool item.
+ * Different track IDs can represent the same recording/mastering, so ISRC is
+ * the primary identity and the Spotify id/URI is the fallback when no ISRC is
+ * available. This is intentionally pure so production and Node tests share
+ * the exact same dedupe rule.
+ */
+export function dedupeTracksByIdentity(tracks) {
+  const seen = new Set()
+  const out = []
+  for (const track of tracks || []) {
+    const rawIsrc = String(track?.isrc || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
+    const rawId = String(track?.id || track?.track_id || track?.uri || '').trim()
+    const identity = rawIsrc ? `isrc:${rawIsrc}` : rawId ? `id:${rawId}` : null
+    if (!identity || seen.has(identity)) continue
+    seen.add(identity)
+    out.push(track)
+  }
+  return out
+}
+
 /** Plan n gap-track-counts summing to `total` (clamped into the feasible
  *  [n*MIN_G, n*MAX_G] range first — an out-of-range `total` used to make
  *  the balancing loop below exit early at n*MIN_G or n*MAX_G silently,

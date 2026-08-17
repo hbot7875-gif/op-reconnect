@@ -70,7 +70,11 @@ export async function addFillerManual(supabase: SupabaseDB, params: { trackUrl: 
 
 export async function getFillerLibrary(supabase: SupabaseDB): Promise<any> {
   const { data } = await supabase.from('spotify_filler_library')
-    .select('track_id, uri, name, artists, album, duration_ms, region, genres, source')
+    // Keep the recording identity. The generator dedupes fillers by ISRC
+    // before shuffling; omitting this field made two Spotify track IDs for
+    // the same recording look unique locally, only for the post-publish
+    // validator to (correctly) reject the playlist as a repeated filler.
+    .select('track_id, uri, isrc, name, artists, album, duration_ms, region, genres, source')
     .order('name', { ascending: true })
   return { success: true, fillers: data || [], count: (data || []).length }
 }

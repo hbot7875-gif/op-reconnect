@@ -11,7 +11,7 @@ import assert from 'node:assert/strict'
 import {
   planGapCounts, planFocusGapCounts, shuffle, artistInterleave,
   buildBurstSkeleton, buildFocusOrder, buildDistributedFocusOrder,
-  buildPlaylistOrder2Focus,
+  buildPlaylistOrder2Focus, dedupeTracksByIdentity,
 } from './candy-star-planner.js'
 
 const MIN_GAP_MS = 480000 // matches spotify-shared.ts's MIN_GAP_MS — duplicated because that's a
@@ -123,6 +123,23 @@ function test(name, fn) {
   passed++
   console.log(`ok - ${name}`)
 }
+
+test('dedupeTracksByIdentity treats alternate Spotify IDs with one ISRC as one filler', () => {
+  const first = { id: 'track-a', isrc: 'us-abc-12-34567', name: 'Original' }
+  const alternateId = { id: 'track-b', isrc: 'USABC1234567', name: 'Same recording' }
+  const unique = { id: 'track-c', isrc: 'GBXYZ7654321', name: 'Different recording' }
+  assert.deepEqual(dedupeTracksByIdentity([first, alternateId, unique]), [first, unique])
+})
+
+test('dedupeTracksByIdentity falls back to Spotify id/URI when ISRC is missing', () => {
+  const tracks = [
+    { id: 'one', name: 'One' },
+    { track_id: 'one', name: 'Duplicate One' },
+    { uri: 'spotify:track:two', name: 'Two' },
+    { uri: 'spotify:track:two', name: 'Duplicate Two' },
+  ]
+  assert.deepEqual(dedupeTracksByIdentity(tracks).map((t) => t.name), ['One', 'Two'])
+})
 
 test('planGapCounts sums exactly to a feasible total', () => {
   for (let trial = 0; trial < 200; trial++) {
