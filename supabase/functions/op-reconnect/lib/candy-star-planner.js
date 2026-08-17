@@ -63,3 +63,54 @@ export function planGapCounts(n, total) {
   }
   return shuffle(plan)
 }
+
+/** Build one candidate near-alternating 'A'/'B' skeleton for m A-plays and
+ *  n B-plays: prefers switching songs each step (targetRatio), allows up
+ *  to 2 of the busier song in a row but never a direct repeat of the other,
+ *  and — critically — when NEITHER preference can be honored (only
+ *  possible once one song is exhausted and the other's own no-3-in-a-row
+ *  rule is blocking the next slot), drains whichever song still has plays
+ *  left rather than assuming it's always B. An earlier version only ever
+ *  drained B in that branch, which silently dropped the rest of A's plays
+ *  whenever A was the one still holding a remainder — the no-repeat rules
+ *  are discretionary shape preferences, not correctness requirements, so
+ *  every requested play landing takes priority over their shape. */
+export function buildBurstSkeleton(m, n, targetRatio = 0.97) {
+  const out = []
+  let remA = m, remB = n
+  while (remA + remB > 0) {
+    const prev = out.length > 0 ? out[out.length - 1] : ''
+    const prev2 = out.length > 1 ? out[out.length - 2] : ''
+    const canA = remA > 0 && !(prev === 'A' && prev2 === 'A')
+    const canB = remB > 0 && prev !== 'B'
+    if (!canA && !canB) {
+      while (remA > 0) { out.push('A'); remA-- }
+      while (remB > 0) { out.push('B'); remB-- }
+      break
+    }
+    if (!canA) { out.push('B'); remB--; continue }
+    if (!canB) { out.push('A'); remA--; continue }
+    let choice
+    if (prev === 'A') choice = Math.random() < targetRatio ? 'B' : 'A'
+    else if (prev === 'B') choice = Math.random() < targetRatio ? 'A' : 'B'
+    else choice = Math.random() < remA / (remA + remB) ? 'A' : 'B'
+    if (choice === 'A') { out.push('A'); remA-- } else { out.push('B'); remB-- }
+  }
+  return out
+}
+
+const altRatio = (arr) =>
+  arr.length < 2 ? 0 : arr.filter((k, i) => i > 0 && k !== arr[i - 1]).length / (arr.length - 1)
+
+/** Best-of-8-attempts wrapper around buildBurstSkeleton, picking whichever
+ *  candidate's actual alternation ratio lands closest to targetRatio. */
+export function buildFocusOrder(m, n, targetRatio = 0.97, attempts = 8) {
+  let best = buildBurstSkeleton(m, n, targetRatio)
+  let bestDist = Math.abs(altRatio(best) - targetRatio)
+  for (let attempt = 1; attempt < attempts; attempt++) {
+    const candidate = buildBurstSkeleton(m, n, targetRatio)
+    const dist = Math.abs(altRatio(candidate) - targetRatio)
+    if (dist < bestDist) { best = candidate; bestDist = dist }
+  }
+  return best
+}

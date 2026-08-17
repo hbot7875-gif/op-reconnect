@@ -8,7 +8,7 @@
 // existing JS test harness to hook into.)
 
 import assert from 'node:assert/strict'
-import { planGapCounts, shuffle, artistInterleave } from './candy-star-planner.js'
+import { planGapCounts, shuffle, artistInterleave, buildBurstSkeleton, buildFocusOrder } from './candy-star-planner.js'
 
 let passed = 0
 function test(name, fn) {
@@ -81,6 +81,64 @@ test('artistInterleave never lets more than 1 consecutive track from the same pr
   assert.equal(out.length, 10)
   for (let i = 1; i < out.length; i++) {
     assert.notEqual(out[i].artists[0], out[i - 1].artists[0], `consecutive same-artist at ${i}`)
+  }
+})
+
+test('buildBurstSkeleton never drops a requested play — the play-count-loss regression', () => {
+  // The exact reported bug: "Don't Say You Love Me x10 + SWIM x5" came
+  // back with only 7 of 10 requested plays. The fallback branch (neither
+  // song's no-repeat preference can be honored) used to only ever drain
+  // leftover B, silently dropping A's remainder whenever A was the one
+  // still holding plays — which happens routinely once B empties out.
+  // 2000 trials per pair, including the exact reported ratios plus edge
+  // cases (1:1, a lopsided 20:2, and 10:1 which is the boundary this
+  // function still has to handle even though a real 10:1 request goes
+  // through the single-focus builder instead).
+  const pairs = [[10, 10], [10, 9], [10, 5], [10, 1], [1, 1], [15, 3], [20, 2]]
+  for (const [m, n] of pairs) {
+    for (let trial = 0; trial < 2000; trial++) {
+      const out = buildBurstSkeleton(m, n)
+      const countA = out.filter((x) => x === 'A').length
+      const countB = out.filter((x) => x === 'B').length
+      assert.equal(countA, m, `m=${m} n=${n}: expected ${m} A's, got ${countA} (${out.join('')})`)
+      assert.equal(countB, n, `m=${m} n=${n}: expected ${n} B's, got ${countB} (${out.join('')})`)
+    }
+  }
+})
+
+test('buildFocusOrder (best-of-8 wrapper) also never drops a play', () => {
+  for (const [m, n] of [[10, 10], [10, 9], [10, 5]]) {
+    for (let trial = 0; trial < 200; trial++) {
+      const out = buildFocusOrder(m, n)
+      assert.equal(out.filter((x) => x === 'A').length, m)
+      assert.equal(out.filter((x) => x === 'B').length, n)
+    }
+  }
+})
+
+test('buildBurstSkeleton honors its shape preferences (no B-B, max 2 A-in-a-row) up until whichever song runs out first', () => {
+  // These are discretionary, not guaranteed for the whole sequence — once
+  // one song's supply is exhausted, the tail necessarily drains whatever's
+  // left of the other with nothing to interleave with, which can violate
+  // both preferences (and did even in the pre-fix code's B-only drain).
+  // Only check the constraint up to the point where the first-exhausted
+  // song places its LAST occurrence — before that, both songs still had
+  // supply, so the preference should hold.
+  for (const [m, n] of [[10, 9], [12, 11], [10, 5]]) {
+    for (let trial = 0; trial < 500; trial++) {
+      const out = buildBurstSkeleton(m, n)
+      let seenA = 0, seenB = 0
+      let exhaustIdx = out.length - 1
+      for (let i = 0; i < out.length; i++) {
+        if (out[i] === 'A') seenA++; else seenB++
+        if (seenA === m || seenB === n) { exhaustIdx = i; break }
+      }
+      let run = 0
+      for (let i = 0; i <= exhaustIdx; i++) {
+        if (out[i] === 'B' && out[i - 1] === 'B') assert.fail(`B repeated back-to-back before exhaustion: ${out.join('')}`)
+        if (out[i] === 'A') { run++; assert.ok(run <= 2, `A ran 3+ in a row before exhaustion: ${out.join('')}`) } else run = 0
+      }
+    }
   }
 })
 

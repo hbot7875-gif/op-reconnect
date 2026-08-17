@@ -12,7 +12,7 @@
 import jpegjs from 'npm:jpeg-js'
 import { encodeBase64 } from 'jsr:@std/encoding/base64'
 import { MAX_RUNTIME_MS, MIN_GAP_MS, SHORT_SONG_MS } from './spotify-shared.ts'
-import { shuffle, artistInterleave, planGapCounts } from './candy-star-planner.js'
+import { shuffle, artistInterleave, planGapCounts, buildFocusOrder } from './candy-star-planner.js'
 
 /** Analyse an ordered tracklist against the ruleset. Returns per-rule findings. */
 export function analyzeTracklist(tracks: any[]): any {
@@ -518,53 +518,7 @@ export function buildPlaylistOrder2Focus(
   const [songA, songB] = [...focusSongs].sort((a: any, b: any) => b.plays - a.plays)
   const m = songA.plays, n = songB.plays
 
-  let focusOrder: string[] = []
-  {
-    const TARGET_RATIO = 0.97
-    const buildBurstSkeleton = (): string[] => {
-      const out: string[] = []
-      let remA = m, remB = n
-      while (remA + remB > 0) {
-        const prev  = out.length > 0 ? out[out.length - 1] : ''
-        const prev2 = out.length > 1 ? out[out.length - 2] : ''
-        const canA = remA > 0 && !(prev === 'A' && prev2 === 'A')
-        const canB = remB > 0 && prev !== 'B'
-        if (!canA && !canB) {
-          // Neither constraint-respecting choice is available — this only
-          // happens when one song's own no-3-in-a-row/no-repeat rule is
-          // blocking it while the OTHER song is exhausted (nothing left to
-          // interleave with). The old code only drained remB here, which
-          // silently dropped the rest of remA when it was the one still
-          // nonzero — the exact cause of real playlists coming up short on
-          // requested plays. Both no-repeat preferences are discretionary
-          // shape preferences, not correctness requirements — draining
-          // whichever is left, even back-to-back, guarantees every
-          // requested play still lands.
-          while (remA > 0) { out.push('A'); remA-- }
-          while (remB > 0) { out.push('B'); remB-- }
-          break
-        }
-        if (!canA) { out.push('B'); remB--; continue }
-        if (!canB) { out.push('A'); remA--; continue }
-        let choice: 'A' | 'B'
-        if (prev === 'A') choice = Math.random() < TARGET_RATIO ? 'B' : 'A'
-        else if (prev === 'B') choice = Math.random() < TARGET_RATIO ? 'A' : 'B'
-        else choice = Math.random() < remA / (remA + remB) ? 'A' : 'B'
-        if (choice === 'A') { out.push('A'); remA-- } else { out.push('B'); remB-- }
-      }
-      return out
-    }
-    const altRatio = (arr: string[]) =>
-      arr.length < 2 ? 0 : arr.filter((k, i) => i > 0 && k !== arr[i - 1]).length / (arr.length - 1)
-    let best = buildBurstSkeleton()
-    let bestDist = Math.abs(altRatio(best) - TARGET_RATIO)
-    for (let attempt = 1; attempt < 8; attempt++) {
-      const candidate = buildBurstSkeleton()
-      const dist = Math.abs(altRatio(candidate) - TARGET_RATIO)
-      if (dist < bestDist) { best = candidate; bestDist = dist }
-    }
-    focusOrder = best
-  }
+  const focusOrder: string[] = buildFocusOrder(m, n)
   const focusSeq: any[] = []
   let vA = 0, vB = 0
   for (const key of focusOrder) {
