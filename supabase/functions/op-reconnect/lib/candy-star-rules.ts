@@ -343,16 +343,22 @@ export function buildPlaylistOrder(
   const MAX_GAP = 6
   let windowCount = 0
   const lastPlayed: Record<string, { ms: number; durationMs: number }> = {}
-  const ensureGap = (key: string, durationMs: number, maxExtra: number): number => {
+  const ensureGap = (key: string, durationMs: number): number => {
     const prev = lastPlayed[key]
     if (!prev) return 0
     const isDistinctVersion = Math.abs((prev.durationMs || 0) - (durationMs || 0)) > DURATION_TOLERANCE_MS
     if (isDistinctVersion) return 0
     let pushed = 0
-    // MIN_GAP_MS (flat 8min) is the actual validated floor — padding this
-    // randomly to 8-10min (the previous version) just forced unplanned
-    // extra fillers into gaps for no compliance benefit.
-    while (ms - prev.ms < MIN_GAP_MS && pushed < maxExtra) {
+    // MIN_GAP_MS (flat 8min) is the actual validated, MANDATORY floor —
+    // padding this randomly to 8-10min (an even earlier version) just
+    // forced unplanned extra fillers for no compliance benefit. This loop
+    // is NOT capped by MAX_GAP: MAX_GAP bounds the discretionary variety
+    // roll-out below, but compliance can't be capped — a real generation
+    // hit an actual 0-min-gap rule violation when this was capped and the
+    // window was already full from unrelated album-track clustering,
+    // leaving no room for the mandatory top-up. Trading a wider-than-usual
+    // gap for staying compliant is the only acceptable choice here.
+    while (ms - prev.ms < MIN_GAP_MS) {
       if (!pushGapFiller(MIN_GAP_MS - (ms - prev.ms))) break
       pushed++
     }
@@ -400,7 +406,7 @@ export function buildPlaylistOrder(
     }
     windowCount += pushedThisGap
     totalDelivered += pushedThisGap
-    const extraPushed = ensureGap(ck, focusSeq[k].durationMs, Math.max(0, MAX_GAP - windowCount))
+    const extraPushed = ensureGap(ck, focusSeq[k].durationMs)
     windowCount += extraPushed
     totalDelivered += extraPushed
     if (sinceNonBts >= fillerEvery && windowCount < MAX_GAP) { pushSpacer(); windowCount++; totalDelivered++ }
@@ -578,69 +584,150 @@ export function buildPlaylistOrder2Focus(
     }
   }
 
-  const HARD_CAP_MS = 179 * 60 * 1000
-  // Was unconditionally 145min regardless of a smaller requested targetMs —
-  // a caller asking for e.g. a 60min playlist still got budgeted toward
-  // 145min internally. Now respects the actual request.
-  const BUDGET_TARGET_MS = Math.min(HARD_CAP_MS, 145 * 60 * 1000, targetMs)
   const DURATION_TOLERANCE_MS = 2000
   const lastPlayed: Record<string, { ms: number; durationMs: number }> = {}
 
+  // Duration-aware, PER-SONG gap planning — the shared budgetPerGap this
+  // replaced applied ONE gap roll to whichever song's turn it was next, so
+  // a real per-song gap (the visible distance between two plays of the
+  // SAME song) was actually the sum of several independent rolls plus the
+  // other song's own occurrence(s) landing in between — nothing kept that
+  // sum bounded, which is what let a busier song's gaps balloon past what
+  // the roll distribution alone implied.
+  //
+  // Each song gets its OWN target average, planned independently
+  // (planGapCounts rolls fresh randomness per call, which is what makes
+  // equal-play songs land on different patterns from each other). The
+  // busier song (A, has >= plays) stays tight; the other (B) scales up
+  // with how much less it plays — close ratios (10:9) land around
+  // "somewhat more"; far ratios (10:5) push further up, capped so it's
+  // still "more fillers", not "always the max". These are independent
+  // per-song targets, not a shared pool split — a shared-pool split
+  // silently starved whichever song's target didn't fit the pre-computed
+  // budget (verified via simulation: for two 10x songs it went deeply
+  // negative for one of them).
+  //
+  // Kept modest (3.0-3.8) rather than the 3.5-5.0 initially tried: at ~200s
+  // average track length, two 10x-play songs both wanting a 3.5+ average
+  // implies ~70 spacer tracks (~230min) on top of the ~67min of mandatory
+  // content alone — impossible under even the 179min hard cap. Chasing
+  // that with roomForSpacer as the sole brake front-loaded generous gaps
+  // early and starved everything late (confirmed via simulation) instead
+  // of a steady pattern throughout. Runtime bookkeeping past this softer
+  // target is left to the final "Under 3 hours" trim (protects focus/
+  // album content, re-validates after each removal).
+  const aAvg = 3.0
+  const ratio = n > 0 ? m / n : 1
+  const bAvg = m === n ? 3.0 : ratio <= 1.2 ? 3.4 : 3.8
+  const aTotal = Math.round(m * aAvg)
+  const bTotal = Math.round(n * bAvg)
+  const gapPlanA = planGapCounts(m, aTotal)
+  const gapPlanB = planGapCounts(n, bTotal)
+
+  // The per-song targets above are the IDEAL, uncompressed shape — for two
+  // high-play-count songs (e.g. 10x + 10x) they can imply more total
+  // runtime than fits under the cap even at 145min, let alone the 179min
+  // hard ceiling. Rather than pre-splitting a fixed total budget between
+  // the two songs (tried that — for equal high play counts it went
+  // negative for one of them), throttle actual delivery in real time
+  // against remaining room, same mechanism as buildPlaylistOrder's
+  // roomForSpacer: as the running total approaches the target, fewer of
+  // each planned gap's spacers actually get pushed, closing evenly toward
+  // the end rather than leaving a lopsided pattern from a hard trim later.
   const avgSpacerMs = btsQ.length > 0
     ? btsQ.reduce((s: number, t: any) => s + (t.durationMs || 210000), 0) / btsQ.length
     : 210000
-
+  const HARD_CAP_MS = 179 * 60 * 1000
+  const softTargetMs = Math.min(targetMs, 145 * 60 * 1000, HARD_CAP_MS)
   const focusSuffixMs = new Array(focusSeq.length + 1).fill(0)
   for (let fk = focusSeq.length - 1; fk >= 0; fk--) {
     focusSuffixMs[fk] = focusSuffixMs[fk + 1] + (focusSeq[fk].durationMs || 210000)
   }
+  const roomForSpacer = (k: number) => ms + focusSuffixMs[k] + avgSpacerMs <= softTargetMs
+
+  // Hard ceiling on the VISIBLE track distance between two plays of the
+  // SAME song. Tracked per song, but every neutral (non-focus) push — a
+  // spacer, filler, or checkpoint track — advances BOTH counters together,
+  // since it extends the wait for whichever song's turn it ISN'T just as
+  // much as the one it's nominally being added for; only a song's own
+  // occurrence resets its own counter. The room available for a new push
+  // is therefore gated by whichever counter is closer to the cap
+  // (Math.max), not just the current song's — an earlier version gated
+  // only on the current song's counter while still letting neutral pushes
+  // advance just that one counter, which let the OTHER song's counter
+  // silently sail past the cap (confirmed via simulation: gaps up to 14).
+  const MAX_GAP = 6
+  let windowCountA = 0, windowCountB = 0
+  const addNeutral = (n2: number) => { windowCountA += n2; windowCountB += n2 }
 
   pushSpacers(2)
 
+  let gapCursorA = 0, gapCursorB = 0
   for (let k = 0; k < focusSeq.length; k++) {
     const curr = focusSeq[k]
+    const isSongA = !curr.isAlbumTrack && curr.key === songA.key
+    const isSongB = !curr.isAlbumTrack && curr.key === songB.key
 
     if (k > 0) {
-      const remainingFocusMs = focusSuffixMs[k]
-      const remainingGaps    = focusSeq.length - k + 1
-      const closingReserveMs = 2 * avgSpacerMs
-      const budgetLeft       = BUDGET_TARGET_MS - ms - remainingFocusMs - closingReserveMs
-      const budgetPerGap     = remainingGaps > 0 ? budgetLeft / remainingGaps / avgSpacerMs : 0
-
-      const r = Math.random()
-      let naturalGap: number
-      if (curr.isAlbumTrack) {
-        naturalGap = 0
-      } else if (budgetPerGap >= 2.0) {
-        naturalGap = r < 0.35 ? 0 : r < 0.85 ? 1 : r < 0.97 ? 2 : 3
-      } else if (budgetPerGap >= 1.0) {
-        naturalGap = r < 0.50 ? 0 : r < 0.90 ? 1 : 2
-      } else if (budgetPerGap >= 0.5) {
-        naturalGap = r < 0.70 ? 0 : 1
-      } else {
-        naturalGap = 0
-      }
-      for (let g = 0; g < naturalGap; g++) pushSpacer()
+      const plannedGap = curr.isAlbumTrack ? 0 : isSongA ? gapPlanA[gapCursorA++] : isSongB ? gapPlanB[gapCursorB++] : 0
+      const roomLeftInWindow = Math.max(0, MAX_GAP - Math.max(windowCountA, windowCountB))
+      const effectiveGap = Math.min(plannedGap, roomLeftInWindow)
 
       const ck = curr.key || curr.isrc || curr.uri || curr.id
       const prev = lastPlayed[ck]
-      if (prev) {
-        const isDistinctVersion = Math.abs((prev.durationMs || 0) - (curr.durationMs || 0)) > DURATION_TOLERANCE_MS
-        if (!isDistinctVersion) {
-          // MIN_GAP_MS (flat 8min) is the actual validated floor — no need
-          // to pad it randomly to 8-10min.
-          while (ms - prev.ms < MIN_GAP_MS) {
-            if (!pushGapFiller(MIN_GAP_MS - (ms - prev.ms))) break
-          }
+      const isDistinctVersion = !!prev && Math.abs((prev.durationMs || 0) - (curr.durationMs || 0)) > DURATION_TOLERANCE_MS
+      // Seeded from real elapsed time since the previous occurrence of
+      // this same song, not just what this gap's own roll-out adds — the
+      // other focus song's own play (or an album track) can already have
+      // landed earlier in this same visible gap, and that already counts
+      // toward the 8min floor.
+      let gapAccumMs = (prev && !isDistinctVersion) ? Math.max(0, ms - prev.ms) : 0
+      let pushedThisGap = 0
+      for (let g = 0; g < effectiveGap && roomForSpacer(k); g++) {
+        const stepsLeft = effectiveGap - g
+        const remainingToFloor = Math.max(0, MIN_GAP_MS - gapAccumMs)
+        const perStepTarget = stepsLeft > 0 ? Math.ceil(remainingToFloor / stepsLeft) : 0
+        // Unlike buildPlaylistOrder, duration-aware selection applies at
+        // every planned gap size here, not just small ones — with two
+        // interleaving songs pulling from the same spacer pool, a plain
+        // (non-duration-aware) pick at a larger planned size undershooting
+        // MIN_GAP_MS was pushing extra top-up fillers often enough to pile
+        // up at the MAX_GAP ceiling instead of tracking the plan.
+        const ok = perStepTarget > 0 ? pushGapFiller(perStepTarget) : pushSpacer()
+        if (!ok) break
+        pushedThisGap++
+        gapAccumMs += order[order.length - 1].durationMs || 0
+      }
+      addNeutral(pushedThisGap)
+
+      if (prev && !isDistinctVersion) {
+        // NOT capped by MAX_GAP — that cap is only for the discretionary
+        // variety roll-out above. Compliance can't be capped: a real
+        // generation with dense album-track clustering hit an actual
+        // 0-min-gap rule violation when this was capped and the window was
+        // already full from unrelated activity, leaving no room for the
+        // mandatory top-up.
+        let extraPushed = 0
+        while (ms - prev.ms < MIN_GAP_MS) {
+          if (!pushGapFiller(MIN_GAP_MS - (ms - prev.ms))) break
+          extraPushed++
         }
+        addNeutral(extraPushed)
       }
 
-      if (sinceNonBts >= fillerEvery) pushGapFiller(0)
+      if (sinceNonBts >= fillerEvery && Math.max(windowCountA, windowCountB) < MAX_GAP) {
+        if (pushGapFiller(0)) addNeutral(1)
+      }
     }
 
     push(curr)
     lastPlayed[curr.key || curr.isrc || curr.uri || curr.id] = { ms, durationMs: curr.durationMs }
+    if (curr.isAlbumTrack) addNeutral(1)
+    else if (isSongA) { windowCountA = 0; windowCountB++ }
+    else { windowCountB = 0; windowCountA++ }
+    const beforeCheckpointFi = fi
     passCheckpoints()
+    addNeutral(fi - beforeCheckpointFi)
   }
 
   pushSpacers(2)
