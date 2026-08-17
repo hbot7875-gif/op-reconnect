@@ -27,6 +27,7 @@ import type { SupabaseDB } from './spotify-shared.ts'
 import {
   utcNow, isBTSArtists, spotifyGetJson, spotifyGetJsonOrThrow, fetchArtistGenres,
   looksKpop, normalizeKey, stripVersionSuffix, fetchAllPlaylistTracks, parseSpotifyId,
+  BTS_ARTIST_IDS,
 } from './spotify-shared.ts'
 import { getUserAccessToken } from './spotify-oauth.ts'
 import { getBTSCatalog, getAlbumsMap } from './spotify-catalog.ts'
@@ -174,8 +175,20 @@ export async function generatePlaylist(supabase: SupabaseDB, params: any): Promi
     }
   }
 
+  // A real generation once repeated a "filler" because the exact same
+  // Spotify recording (same ISRC) had ALSO been resolved into the BTS
+  // catalog — the filler-library copy was credited to "Jung Kook" (a BTS
+  // member), which live re-validation correctly recognizes as BTS, so the
+  // playlist ended up with the same recording once from each pool and only
+  // Spotify's own real ISRC data caught it (dedupeTracksByIdentity only
+  // dedupes WITHIN the filler pool, not against the separate BTS catalog).
+  // Filtering member-credited tracks out of the filler pool up front closes
+  // that path regardless of how a future filler entry gets added.
+  const btsMemberNames = new Set(Object.keys(BTS_ARTIST_IDS).map((n) => n.toLowerCase()))
   const nonBtsFillers = dedupeTracksByIdentity(
-    (lib.fillers || []).map((f: any) => ({ uri: f.uri, id: f.track_id, name: f.name, isrc: f.isrc, durationMs: f.duration_ms, isBTS: false })),
+    (lib.fillers || [])
+      .filter((f: any) => !(f.artists || []).some((a: string) => btsMemberNames.has(String(a || '').toLowerCase())))
+      .map((f: any) => ({ uri: f.uri, id: f.track_id, name: f.name, isrc: f.isrc, durationMs: f.duration_ms, isBTS: false })),
   )
   const btsSpacers = (cat.songs || [])
     .filter((s: any) => !focusKeys.has(keyOf(s)) && !albumKeys.has(keyOf(s)) && s.versions?.[0]?.uri && (s.versions[0].durationMs || s.durationMs || 0) >= 90000)
