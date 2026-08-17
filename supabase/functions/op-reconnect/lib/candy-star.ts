@@ -221,6 +221,15 @@ export async function generatePlaylist(supabase: SupabaseDB, params: any): Promi
       throw new Error(`Internal error: "${s.name}" requested ${s.plays} play(s) but the builder produced ${actual}. Please try generating again.`)
     }
   }
+  // Album tracks are mandatory too (each selected album track should
+  // appear exactly once) — the 2-focus builder's placement logic defers
+  // album tracks to whichever window has room and only force-flushes
+  // leftovers at the very end, so the same "never lose it silently"
+  // guarantee needs the same explicit check here.
+  const actualAlbumCount = order.filter((t: any) => t.isAlbumTrack).length
+  if (actualAlbumCount !== albumOnce.length) {
+    throw new Error(`Internal error: requested ${albumOnce.length} album track(s) but the builder produced ${actualAlbumCount}. Please try generating again.`)
+  }
 
   let trimTotal = order.reduce((s: number, t: any) => s + (t.durationMs || 0), 0)
   const MAX_RUNTIME_MS = 3 * 60 * 60 * 1000

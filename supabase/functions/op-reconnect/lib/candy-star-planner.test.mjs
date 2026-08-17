@@ -8,7 +8,51 @@
 // existing JS test harness to hook into.)
 
 import assert from 'node:assert/strict'
-import { planGapCounts, shuffle, artistInterleave, buildBurstSkeleton, buildFocusOrder } from './candy-star-planner.js'
+import {
+  planGapCounts, shuffle, artistInterleave, buildBurstSkeleton, buildFocusOrder,
+  buildPlaylistOrder2Focus,
+} from './candy-star-planner.js'
+
+const MIN_GAP_MS = 480000 // matches spotify-shared.ts's MIN_GAP_MS — duplicated because that's a
+// .ts file this plain-JS module can't import; see the module header for why.
+
+function mkFocusSong(key, plays, durationMs) {
+  return {
+    key, name: key, plays, durationMs,
+    versions: [{ id: `${key}-v1`, uri: `u-${key}-1` }, { id: `${key}-v2`, uri: `u-${key}-2` }],
+  }
+}
+function mkSpacerPool(count, prefix = 'bts') {
+  return Array.from({ length: count }, (_, i) => {
+    const isSkit = Math.random() < 0.15
+    const durationMs = isSkit ? 30000 + Math.floor(Math.random() * 60000) : 180000 + Math.floor(Math.random() * 140000)
+    return { key: `${prefix}-${i}`, uri: `u${prefix}${i}`, id: `id${prefix}${i}`, name: `Track ${i}`, durationMs, isBTS: true, artists: ['bts'] }
+  })
+}
+function mkFillerPool(count) {
+  return Array.from({ length: count }, (_, i) => ({
+    uri: `f${i}`, id: `fid${i}`, name: `Filler ${i}`, durationMs: 150000 + Math.floor(Math.random() * 150000), isBTS: false,
+  }))
+}
+function mkAlbum(count, prefix = 'album') {
+  return Array.from({ length: count }, (_, i) => ({
+    key: `${prefix}-${i}`, uri: `u-${prefix}-${i}`, id: `id-${prefix}-${i}`, name: `Album Track ${i}`,
+    durationMs: 30000 + Math.floor(Math.random() * 290000),
+  }))
+}
+// Largest run of non-A (or non-B) entries between two consecutive plays of
+// that song — the actual "visible gap" a listener experiences.
+function maxWindow(order, key) {
+  let max = 0, run = 0, seenFirst = false
+  for (const t of order) {
+    if (t.key === key) {
+      if (seenFirst) max = Math.max(max, run)
+      run = 0
+      seenFirst = true
+    } else if (seenFirst) run++
+  }
+  return max
+}
 
 let passed = 0
 function test(name, fn) {
@@ -138,6 +182,75 @@ test('buildBurstSkeleton honors its shape preferences (no B-B, max 2 A-in-a-row)
         if (out[i] === 'B' && out[i - 1] === 'B') assert.fail(`B repeated back-to-back before exhaustion: ${out.join('')}`)
         if (out[i] === 'A') { run++; assert.ok(run <= 2, `A ran 3+ in a row before exhaustion: ${out.join('')}`) } else run = 0
       }
+    }
+  }
+})
+
+test('buildPlaylistOrder2Focus never loses a requested focus play or album track', () => {
+  // The reviewed regression, at the full-builder level (not just the
+  // skeleton helper) — and now also covering album tracks, whose
+  // placement is handled entirely differently (deferred to whichever
+  // window has room, force-flushed at the end) and needed the same
+  // guarantee checked independently.
+  const scenarios = [
+    { pA: 10, pB: 10, album: 14 },
+    { pA: 10, pB: 9, album: 14 },
+    { pA: 10, pB: 5, album: 14 },
+    { pA: 10, pB: 5, album: 0 },
+    { pA: 1, pB: 1, album: 1 },
+  ]
+  for (const { pA, pB, album } of scenarios) {
+    for (let trial = 0; trial < 100; trial++) {
+      const focusSongs = [mkFocusSong('A', pA, 200000), mkFocusSong('B', pB, 195000)]
+      const { order } = buildPlaylistOrder2Focus(
+        focusSongs, mkSpacerPool(150), mkFillerPool(60), mkAlbum(album), 180 * 60000, 20, MIN_GAP_MS,
+      )
+      const actualA = order.filter((t) => t.key === 'A').length
+      const actualB = order.filter((t) => t.key === 'B').length
+      const actualAlbum = order.filter((t) => t.isAlbumTrack).length
+      assert.equal(actualA, pA, `pA=${pA} pB=${pB} album=${album}: got ${actualA} A plays`)
+      assert.equal(actualB, pB, `pA=${pA} pB=${pB} album=${album}: got ${actualB} B plays`)
+      assert.equal(actualAlbum, album, `pA=${pA} pB=${pB} album=${album}: got ${actualAlbum} album tracks`)
+    }
+  }
+})
+
+test('buildPlaylistOrder2Focus keeps same-song windows bounded even under dense album clustering', () => {
+  // Not a strict MAX_GAP<=6 guarantee — legitimate mandatory content (an
+  // album track landing in the same window as the other focus song's own
+  // play) can still combine past that on rare occasions, and the fix
+  // doesn't pretend otherwise. What IS guaranteed: nothing like the
+  // pre-fix pathological cases (up to 14 from the uncoordinated version,
+  // 6+ album tracks stacked from the uncoordinated placement version).
+  // 14 album tracks across 15 focus plays (10+5) was the exact reported
+  // reproduction scenario.
+  let maxSeenA = 0, maxSeenB = 0
+  const N = 150
+  for (let trial = 0; trial < N; trial++) {
+    const focusSongs = [mkFocusSong('A', 10, 200000), mkFocusSong('B', 5, 195000)]
+    const { order } = buildPlaylistOrder2Focus(
+      focusSongs, mkSpacerPool(150), mkFillerPool(60), mkAlbum(14), 180 * 60000, 20, MIN_GAP_MS,
+    )
+    maxSeenA = Math.max(maxSeenA, maxWindow(order, 'A'))
+    maxSeenB = Math.max(maxSeenB, maxWindow(order, 'B'))
+  }
+  assert.ok(maxSeenA <= 10, `A's worst window reached ${maxSeenA} across ${N} trials — regression toward the pre-fix pathological clustering`)
+  assert.ok(maxSeenB <= 10, `B's worst window reached ${maxSeenB} across ${N} trials — regression toward the pre-fix pathological clustering`)
+})
+
+test('buildPlaylistOrder2Focus never stacks more than 1 album track back-to-back', () => {
+  // Direct check on the placement-coordination fix itself: consecutive
+  // album-track entries in the output (not just within a same-song
+  // window) should never exceed 1, confirming slots are actually
+  // non-colliding rather than merely "usually spread out".
+  for (let trial = 0; trial < 150; trial++) {
+    const focusSongs = [mkFocusSong('A', 10, 200000), mkFocusSong('B', 5, 195000)]
+    const { order } = buildPlaylistOrder2Focus(
+      focusSongs, mkSpacerPool(150), mkFillerPool(60), mkAlbum(14), 180 * 60000, 20, MIN_GAP_MS,
+    )
+    let run = 0
+    for (const t of order) {
+      if (t.isAlbumTrack) { run++; assert.ok(run <= 1, `2+ album tracks landed back-to-back in trial ${trial}`) } else run = 0
     }
   }
 })

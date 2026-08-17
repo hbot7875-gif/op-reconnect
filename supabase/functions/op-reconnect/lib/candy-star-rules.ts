@@ -12,7 +12,10 @@
 import jpegjs from 'npm:jpeg-js'
 import { encodeBase64 } from 'jsr:@std/encoding/base64'
 import { MAX_RUNTIME_MS, MIN_GAP_MS, SHORT_SONG_MS } from './spotify-shared.ts'
-import { shuffle, artistInterleave, planGapCounts, buildFocusOrder } from './candy-star-planner.js'
+import {
+  shuffle, artistInterleave, planGapCounts, buildFocusOrder,
+  buildPlaylistOrder2Focus as buildPlaylistOrder2FocusImpl,
+} from './candy-star-planner.js'
 
 /** Analyse an ordered tracklist against the ruleset. Returns per-rule findings. */
 export function analyzeTracklist(tracks: any[]): any {
@@ -435,295 +438,21 @@ export function buildPlaylistOrder(
 }
 
 /**
- * 2-focus playlist order builder — near-alternation skeleton + 8-10 min
- * same-song gap rule. See the source's own long inline comments (kept out of
- * this port for brevity) for exactly why the ratios below are what they are —
- * they're calibrated against real observed manual playlists, not guesses.
+ * 2-focus playlist order builder — near-alternation skeleton + coordinated
+ * gap/album/checkpoint placement sharing one live capacity budget. The
+ * actual implementation lives in candy-star-planner.js (plain JS, no
+ * Deno-only imports) alongside buildFocusOrder/planGapCounts — same reason
+ * as always: the exact module the deployed Deno function imports is also
+ * directly testable from plain Node, with zero drift risk between what's
+ * tested and what's deployed. This is a thin wrapper supplying MIN_GAP_MS
+ * (imported here from spotify-shared.ts, which the plain-JS module can't
+ * import directly since it's a TypeScript file).
  */
 export function buildPlaylistOrder2Focus(
   focusSongs: any[], btsSpacers: any[], nonBtsFillers: any[], albumOnce: any[],
   targetMs: number, fillerEvery = 10,
 ): { order: any[]; usedFillers: number; usedSpacers: number; truncated: boolean } {
-  const btsQ = artistInterleave(shuffle(btsSpacers)); let bi = 0
-  const nbQ = shuffle(nonBtsFillers); let fi = 0
-
-  const order: any[] = []
-  let ms = 0
-  const truncated = false
-
-  let sinceNonBts = 0
-  let msSinceNonBts = 0
-  const nextGapMs = () => (55 + Math.random() * 20) * 60000
-  let nonKpopGapMs = nextGapMs()
-  const push = (t: any) => {
-    order.push(t); ms += t.durationMs || 210000
-    if (t.isBTS === false) { sinceNonBts = 0; msSinceNonBts = 0; nonKpopGapMs = nextGapMs() }
-    else { sinceNonBts++; msSinceNonBts += t.durationMs || 210000 }
-  }
-
-  const btsRecycle = () => {
-    if (bi >= btsQ.length && btsQ.length > 0) {
-      const mid = Math.ceil(btsQ.length / 2)
-      const rnd = (a: any[]) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[a[i], a[j]] = [a[j], a[i]] }; return a }
-      btsQ.splice(0, btsQ.length, ...rnd(btsQ.slice(0, mid)), ...rnd(btsQ.slice(mid)))
-      bi = 0
-    }
-  }
-  // Same checkpoint reservation as buildPlaylistOrder above — see its
-  // comment (including why each checkpoint's target is relative to when
-  // the previous one fired, not a fixed absolute mark). Declared before
-  // pushSpacer/pushGapFiller so the greedy path can see how many non-BTS
-  // tracks to hold back.
-  const nextCheckpointGapMs = () => (30 + Math.random() * 15) * 60000
-  let remainingCheckpoints = targetMs >= 120 * 60000 ? 2 : 0
-  let nextCheckpointMs = remainingCheckpoints > 0 ? nextCheckpointGapMs() : Infinity
-  const reservedForCheckpoints = () => remainingCheckpoints
-  const nonReservedNonBtsAvailable = () => fi < nbQ.length - reservedForCheckpoints()
-
-  // Same fix as buildPlaylistOrder above — BTS spacers are the default,
-  // non-BTS only enters through the 2 checkpoints (both focus songs here
-  // are BTS too, so an "OT7 track" spacer is the normal texture, not
-  // dilution). See that function's comment.
-  const pushSpacer = (): boolean => {
-    btsRecycle()
-    if (bi < btsQ.length) { push({ ...btsQ[bi++], isBTS: true }); return true }
-    if (nonReservedNonBtsAvailable()) { push({ ...nbQ[fi++], isBTS: false }); return true }
-    return false
-  }
-  const pushGapFiller = (remainingMs: number): boolean => {
-    btsRecycle()
-    const end = Math.min(bi + 20, btsQ.length)
-    let bestIdx = -1, bestDur = Infinity
-    let longestIdx = -1, longestDur = -1
-    for (let i = bi; i < end; i++) {
-      const d = btsQ[i].durationMs || 0
-      if (d >= remainingMs && d < bestDur) { bestDur = d; bestIdx = i }
-      if (d > longestDur) { longestDur = d; longestIdx = i }
-    }
-    const pick = bestIdx >= 0 ? bestIdx : longestIdx
-    if (pick > bi) { const tmp = btsQ[bi]; btsQ[bi] = btsQ[pick]; btsQ[pick] = tmp }
-    if (bi < btsQ.length) { push({ ...btsQ[bi++], isBTS: true }); return true }
-    if (nonReservedNonBtsAvailable()) { push({ ...nbQ[fi++], isBTS: false }); return true }
-    return false
-  }
-  const passCheckpoints = () => {
-    while (remainingCheckpoints > 0 && ms >= nextCheckpointMs) {
-      if (fi < nbQ.length) push({ ...nbQ[fi++], isBTS: false })
-      remainingCheckpoints--
-      nextCheckpointMs = ms + nextCheckpointGapMs()
-    }
-  }
-  const pushSpacers = (count: number) => { for (let i = 0; i < count; i++) { if (!pushSpacer()) return } }
-
-  const [songA, songB] = [...focusSongs].sort((a: any, b: any) => b.plays - a.plays)
-  const m = songA.plays, n = songB.plays
-
-  const focusOrder: string[] = buildFocusOrder(m, n)
-  const focusSeq: any[] = []
-  let vA = 0, vB = 0
-  for (const key of focusOrder) {
-    if (key === 'A') {
-      const v = songA.versions[vA % songA.versions.length]
-      focusSeq.push({ key: songA.key, uri: v.uri, id: v.id, name: songA.name, isrc: v.isrc || songA.isrc, durationMs: v.durationMs || songA.durationMs, isBTS: true, isFocus: true, album: v.album })
-      vA++
-    } else {
-      const v = songB.versions[vB % songB.versions.length]
-      focusSeq.push({ key: songB.key, uri: v.uri, id: v.id, name: songB.name, isrc: v.isrc || songB.isrc, durationMs: v.durationMs || songB.durationMs, isBTS: true, isFocus: true, album: v.album })
-      vB++
-    }
-  }
-
-  // Was reading focusSeq.length fresh on every iteration (drifting as each
-  // insertion grew it) and adding independent random jitter per track with
-  // no coordination between them — both let multiple album tracks pile
-  // into the same real gap between two focus repeats (confirmed via a real
-  // generation: 6+ ARIRANG tracks landing in one window). Fixed the same
-  // way buildPlaylistOrder above already does it: capture the length ONCE
-  // before inserting anything, assign each album track its own distinct
-  // slot via even stride spacing (guaranteed non-colliding whenever there
-  // are at least as many slots as album tracks, which is the common case),
-  // and insert from the highest slot down so earlier insertions don't
-  // shift the meaning of remaining target slots.
-  const shuffledAlbum2 = shuffle(albumOnce)
-  if (shuffledAlbum2.length > 0) {
-    const n2 = focusSeq.length
-    const numSlots = n2 + 1
-    const positions2 = shuffledAlbum2.map((_, i) =>
-      Math.min(n2, Math.max(0, Math.round((i + 0.5) * numSlots / shuffledAlbum2.length))),
-    )
-    const order2 = shuffledAlbum2.map((_, i) => i).sort((a, b) => positions2[b] - positions2[a])
-    for (const i of order2) {
-      focusSeq.splice(positions2[i], 0, { ...shuffledAlbum2[i], isBTS: true, isAlbumTrack: true })
-    }
-  }
-
-  for (let i = 1; i < focusSeq.length; i++) {
-    if (focusSeq[i].uri === focusSeq[i - 1].uri) {
-      const song = focusSeq[i].key === songA.key ? songA : songB
-      const alt = song.versions.find((v: any) => v.uri !== focusSeq[i - 1].uri)
-      if (alt) focusSeq[i] = { ...focusSeq[i], uri: alt.uri, id: alt.id, album: alt.album }
-    }
-  }
-
-  const DURATION_TOLERANCE_MS = 2000
-  const lastPlayed: Record<string, { ms: number; durationMs: number }> = {}
-
-  // Duration-aware, PER-SONG gap planning — the shared budgetPerGap this
-  // replaced applied ONE gap roll to whichever song's turn it was next, so
-  // a real per-song gap (the visible distance between two plays of the
-  // SAME song) was actually the sum of several independent rolls plus the
-  // other song's own occurrence(s) landing in between — nothing kept that
-  // sum bounded, which is what let a busier song's gaps balloon past what
-  // the roll distribution alone implied.
-  //
-  // Each song gets its OWN target average, planned independently
-  // (planGapCounts rolls fresh randomness per call, which is what makes
-  // equal-play songs land on different patterns from each other). The
-  // busier song (A, has >= plays) stays tight; the other (B) scales up
-  // with how much less it plays — close ratios (10:9) land around
-  // "somewhat more"; far ratios (10:5) push further up, capped so it's
-  // still "more fillers", not "always the max". These are independent
-  // per-song targets, not a shared pool split — a shared-pool split
-  // silently starved whichever song's target didn't fit the pre-computed
-  // budget (verified via simulation: for two 10x songs it went deeply
-  // negative for one of them).
-  //
-  // Kept modest (3.0-3.8) rather than the 3.5-5.0 initially tried: at ~200s
-  // average track length, two 10x-play songs both wanting a 3.5+ average
-  // implies ~70 spacer tracks (~230min) on top of the ~67min of mandatory
-  // content alone — impossible under even the 179min hard cap. Chasing
-  // that with roomForSpacer as the sole brake front-loaded generous gaps
-  // early and starved everything late (confirmed via simulation) instead
-  // of a steady pattern throughout. Runtime bookkeeping past this softer
-  // target is left to the final "Under 3 hours" trim (protects focus/
-  // album content, re-validates after each removal).
-  const aAvg = 3.0
-  const ratio = n > 0 ? m / n : 1
-  const bAvg = m === n ? 3.0 : ratio <= 1.2 ? 3.4 : 3.8
-  const aTotal = Math.round(m * aAvg)
-  const bTotal = Math.round(n * bAvg)
-  const gapPlanA = planGapCounts(m, aTotal)
-  const gapPlanB = planGapCounts(n, bTotal)
-
-  // The per-song targets above are the IDEAL, uncompressed shape — for two
-  // high-play-count songs (e.g. 10x + 10x) they can imply more total
-  // runtime than fits under the cap even at 145min, let alone the 179min
-  // hard ceiling. Rather than pre-splitting a fixed total budget between
-  // the two songs (tried that — for equal high play counts it went
-  // negative for one of them), throttle actual delivery in real time
-  // against remaining room, same mechanism as buildPlaylistOrder's
-  // roomForSpacer: as the running total approaches the target, fewer of
-  // each planned gap's spacers actually get pushed, closing evenly toward
-  // the end rather than leaving a lopsided pattern from a hard trim later.
-  const avgSpacerMs = btsQ.length > 0
-    ? btsQ.reduce((s: number, t: any) => s + (t.durationMs || 210000), 0) / btsQ.length
-    : 210000
-  const HARD_CAP_MS = 179 * 60 * 1000
-  const softTargetMs = Math.min(targetMs, 145 * 60 * 1000, HARD_CAP_MS)
-  const focusSuffixMs = new Array(focusSeq.length + 1).fill(0)
-  for (let fk = focusSeq.length - 1; fk >= 0; fk--) {
-    focusSuffixMs[fk] = focusSuffixMs[fk + 1] + (focusSeq[fk].durationMs || 210000)
-  }
-  const roomForSpacer = (k: number) => ms + focusSuffixMs[k] + avgSpacerMs <= softTargetMs
-
-  // Hard ceiling on the VISIBLE track distance between two plays of the
-  // SAME song. Tracked per song, but every neutral (non-focus) push — a
-  // spacer, filler, or checkpoint track — advances BOTH counters together,
-  // since it extends the wait for whichever song's turn it ISN'T just as
-  // much as the one it's nominally being added for; only a song's own
-  // occurrence resets its own counter. The room available for a new push
-  // is therefore gated by whichever counter is closer to the cap
-  // (Math.max), not just the current song's — an earlier version gated
-  // only on the current song's counter while still letting neutral pushes
-  // advance just that one counter, which let the OTHER song's counter
-  // silently sail past the cap (confirmed via simulation: gaps up to 14).
-  const MAX_GAP = 6
-  let windowCountA = 0, windowCountB = 0
-  const addNeutral = (n2: number) => { windowCountA += n2; windowCountB += n2 }
-
-  pushSpacers(2)
-
-  let gapCursorA = 0, gapCursorB = 0
-  for (let k = 0; k < focusSeq.length; k++) {
-    const curr = focusSeq[k]
-    const isSongA = !curr.isAlbumTrack && curr.key === songA.key
-    const isSongB = !curr.isAlbumTrack && curr.key === songB.key
-
-    if (k > 0) {
-      const plannedGap = curr.isAlbumTrack ? 0 : isSongA ? gapPlanA[gapCursorA++] : isSongB ? gapPlanB[gapCursorB++] : 0
-      // plannedGap is this song's TOTAL desired visible-gap size, not an
-      // amount to add on top — windowCount (this song's own counter) may
-      // already include tracks from the other song's plays or album
-      // tracks that landed in this same window. Treating plannedGap as
-      // pure addition (the previous version) meant a gap that already had
-      // 2-3 tracks in it from the other song got another full 3-4 piled
-      // on, which is what produced the reported 6-8-track gaps even after
-      // the per-song plan targeted ~3.
-      const ownWindowCount = isSongA ? windowCountA : windowCountB
-      const stillNeeded = Math.max(0, plannedGap - ownWindowCount)
-      const roomLeftInWindow = Math.max(0, MAX_GAP - Math.max(windowCountA, windowCountB))
-      const effectiveGap = Math.min(stillNeeded, roomLeftInWindow)
-
-      const ck = curr.key || curr.isrc || curr.uri || curr.id
-      const prev = lastPlayed[ck]
-      const isDistinctVersion = !!prev && Math.abs((prev.durationMs || 0) - (curr.durationMs || 0)) > DURATION_TOLERANCE_MS
-      // Seeded from real elapsed time since the previous occurrence of
-      // this same song, not just what this gap's own roll-out adds — the
-      // other focus song's own play (or an album track) can already have
-      // landed earlier in this same visible gap, and that already counts
-      // toward the 8min floor.
-      let gapAccumMs = (prev && !isDistinctVersion) ? Math.max(0, ms - prev.ms) : 0
-      let pushedThisGap = 0
-      for (let g = 0; g < effectiveGap && roomForSpacer(k); g++) {
-        const stepsLeft = effectiveGap - g
-        const remainingToFloor = Math.max(0, MIN_GAP_MS - gapAccumMs)
-        const perStepTarget = stepsLeft > 0 ? Math.ceil(remainingToFloor / stepsLeft) : 0
-        // Unlike buildPlaylistOrder, duration-aware selection applies at
-        // every planned gap size here, not just small ones — with two
-        // interleaving songs pulling from the same spacer pool, a plain
-        // (non-duration-aware) pick at a larger planned size undershooting
-        // MIN_GAP_MS was pushing extra top-up fillers often enough to pile
-        // up at the MAX_GAP ceiling instead of tracking the plan.
-        const ok = perStepTarget > 0 ? pushGapFiller(perStepTarget) : pushSpacer()
-        if (!ok) break
-        pushedThisGap++
-        gapAccumMs += order[order.length - 1].durationMs || 0
-      }
-      addNeutral(pushedThisGap)
-
-      if (prev && !isDistinctVersion) {
-        // NOT capped by MAX_GAP — that cap is only for the discretionary
-        // variety roll-out above. Compliance can't be capped: a real
-        // generation with dense album-track clustering hit an actual
-        // 0-min-gap rule violation when this was capped and the window was
-        // already full from unrelated activity, leaving no room for the
-        // mandatory top-up.
-        let extraPushed = 0
-        while (ms - prev.ms < MIN_GAP_MS) {
-          if (!pushGapFiller(MIN_GAP_MS - (ms - prev.ms))) break
-          extraPushed++
-        }
-        addNeutral(extraPushed)
-      }
-
-      if (sinceNonBts >= fillerEvery && Math.max(windowCountA, windowCountB) < MAX_GAP) {
-        if (pushGapFiller(0)) addNeutral(1)
-      }
-    }
-
-    push(curr)
-    lastPlayed[curr.key || curr.isrc || curr.uri || curr.id] = { ms, durationMs: curr.durationMs }
-    if (curr.isAlbumTrack) addNeutral(1)
-    else if (isSongA) { windowCountA = 0; windowCountB++ }
-    else { windowCountB = 0; windowCountA++ }
-    const beforeCheckpointFi = fi
-    passCheckpoints()
-    addNeutral(fi - beforeCheckpointFi)
-  }
-
-  pushSpacers(2)
-
-  return { order, usedFillers: fi, usedSpacers: bi, truncated }
+  return buildPlaylistOrder2FocusImpl(focusSongs, btsSpacers, nonBtsFillers, albumOnce, targetMs, fillerEvery, MIN_GAP_MS)
 }
 
 /** Create the playlist in the connected account and add the tracks. */
