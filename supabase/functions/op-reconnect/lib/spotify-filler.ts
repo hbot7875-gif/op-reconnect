@@ -5,7 +5,10 @@
 // track_id. All four actions are admin-only.
 
 import type { SupabaseDB } from './spotify-shared.ts'
-import { utcNow, parseSpotifyId, looksKpop, regionFromGenres, fetchArtistGenres, fetchAllPlaylistTracks } from './spotify-shared.ts'
+import {
+  utcNow, parseSpotifyId, looksKpop, regionFromGenres, fetchArtistGenres,
+  fetchAllPlaylistTracks, spotifyGetJsonOrThrow, normTrack,
+} from './spotify-shared.ts'
 import { getUserAccessToken } from './spotify-oauth.ts'
 
 /** Import a playlist's non-BTS, non-Kpop tracks into the filler library. */
@@ -46,26 +49,33 @@ export async function importFillerPlaylist(supabase: SupabaseDB, params: { playl
   return { success: true, scanned: tracks.length, added, skippedKpop: skipped.length, skipped }
 }
 
-/** Add a single filler track manually by url/id. BTS/K-pop validation is
- *  skipped here — the admin vouches it's neither. */
+/** Add one filler with Spotify's real metadata. The old manual path wrote a
+ * placeholder 3:30 duration and null ISRC, which defeated duration planning
+ * and recording-level deduplication until somebody backfilled the row. */
 export async function addFillerManual(supabase: SupabaseDB, params: { trackUrl: string }): Promise<any> {
   const tid = parseSpotifyId(params.trackUrl, 'track')
   if (!tid) throw new Error('Could not parse a Spotify track id from that input.')
-  const uri = `spotify:track:${tid}`
+  const { token } = await getUserAccessToken(supabase)
+  const raw = await spotifyGetJsonOrThrow(`https://api.spotify.com/v1/tracks/${tid}?market=from_token`, token)
+  if (!raw?.id) throw new Error('Spotify did not return a playable track for that link.')
+  const track = normTrack(raw)
+  if (track.isBTS) throw new Error('That track is credited to BTS or a BTS member, so it belongs in the BTS catalog—not the filler library.')
 
-  let name = `filler:${tid.slice(0, 8)}`
-  try {
-    const oe = await fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(`https://open.spotify.com/track/${tid}`)}`)
-    if (oe.ok) { const j = await oe.json(); if (j.title) name = j.title }
-  } catch (_) { /* non-fatal — name stays as fallback */ }
+  const artistIds = (track.artists || []).map((a: any) => a.id).filter(Boolean)
+  const genreMap = await fetchArtistGenres(token, artistIds)
+  const genres: string[] = [...new Set<string>(
+    track.artists.flatMap((a: any) => genreMap[a.id] || []) as string[],
+  )]
+  if (looksKpop(genres)) throw new Error('That track is K-pop, so it cannot be used as a non-K-pop filler.')
 
   const { error } = await supabase.from('spotify_filler_library').upsert({
-    track_id: tid, uri, isrc: null, name,
-    artists: [], album: '', duration_ms: 210000,
-    genres: [], region: 'Unknown', source: 'manual', created_at: utcNow(),
+    track_id: track.id, uri: track.uri, isrc: track.isrc, name: track.name,
+    artists: track.artists.map((a: any) => a.name), album: track.album,
+    duration_ms: track.durationMs, genres: genres.slice(0, 6),
+    region: regionFromGenres(genres), source: 'manual', created_at: utcNow(),
   }, { onConflict: 'track_id' })
   if (error) throw new Error(error.message)
-  return { success: true, name }
+  return { success: true, name: track.name }
 }
 
 export async function getFillerLibrary(supabase: SupabaseDB): Promise<any> {

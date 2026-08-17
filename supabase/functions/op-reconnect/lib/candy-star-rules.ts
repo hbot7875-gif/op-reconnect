@@ -14,7 +14,7 @@ import { encodeBase64 } from 'jsr:@std/encoding/base64'
 import { MAX_RUNTIME_MS, MIN_GAP_MS, SHORT_SONG_MS } from './spotify-shared.ts'
 import {
   shuffle, artistInterleave, planGapCounts, buildFocusOrder,
-  buildPlaylistOrder2Focus as buildPlaylistOrder2FocusImpl,
+  buildPlaylistOrder2Focus as buildPlaylistOrder2FocusImpl, trackIdentityTokens,
 } from './candy-star-planner.js'
 
 /** Analyse an ordered tracklist against the ruleset. Returns per-rule findings. */
@@ -75,14 +75,20 @@ export function analyzeTracklist(tracks: any[]): any {
       : fillerLight > 0 ? `Time gaps all ${gapMinLabel}+ min; ${fillerLight} repeat(s) spaced by focus songs rather than 2–3 fillers.`
       : `Every repeat is spaced ${gapMinLabel}+ min with enough fillers.`)
 
-  // R4 — fillers never repeat.
-  const nonFocusRepeats = [...counts.entries()].filter(([k, c]) => {
-    const t = tracks.find(x => songKey(x) === k)
-    return c > 1 && t && !t.isBTS
-  })
+  // R4 — fillers never repeat. Use Spotify recording identity directly,
+  // independent of the catalog `key` R3 intentionally uses to group focus
+  // versions. This also exposes the exact offending recording in failures.
+  const recordingGroups = new Map<string, any[]>()
+  for (const t of tracks) {
+    const recordingKey = trackIdentityTokens(t)[0] || songKey(t)
+    if (!recordingGroups.has(recordingKey)) recordingGroups.set(recordingKey, [])
+    recordingGroups.get(recordingKey)!.push(t)
+  }
+  const nonFocusRepeats = [...recordingGroups.entries()].filter(([, group]) =>
+    group.length > 1 && group.some((t: any) => t.isBTS === false))
   add('Fillers never repeat', nonFocusRepeats.length === 0 ? 'pass' : 'fail',
     nonFocusRepeats.length === 0 ? 'No filler appears more than once.'
-      : `${nonFocusRepeats.length} filler(s) repeat — fillers must be unique.`)
+      : `${nonFocusRepeats.length} filler recording(s) repeat: ${nonFocusRepeats.slice(0, 5).map(([identity, group]) => `"${group[0]?.name || 'unknown'}" ×${group.length} (${identity})`).join(', ')}.`)
 
   // R5 — consecutive BTS track run.
   let run = 0, longestRun = 0

@@ -27,7 +27,7 @@ import type { SupabaseDB } from './spotify-shared.ts'
 import {
   utcNow, isBTSArtists, spotifyGetJson, spotifyGetJsonOrThrow, fetchArtistGenres,
   looksKpop, normalizeKey, stripVersionSuffix, fetchAllPlaylistTracks, parseSpotifyId,
-  BTS_ARTIST_IDS,
+  fetchTracksByIds, BTS_ARTIST_IDS,
 } from './spotify-shared.ts'
 import { getUserAccessToken } from './spotify-oauth.ts'
 import { getBTSCatalog, getAlbumsMap } from './spotify-catalog.ts'
@@ -37,7 +37,7 @@ import {
   analyzeTracklist, buildHumanPlaylistMeta, buildPlaylistOrder, buildPlaylistOrder2Focus,
   spreadFocusPlays, createUserPlaylist, uploadPlaylistCover,
 } from './candy-star-rules.ts'
-import { dedupeTracksByIdentity } from './candy-star-planner.js'
+import { dedupeTracksByIdentity, excludeTracksByIdentity } from './candy-star-planner.js'
 
 /** Shared by both validate paths: run the rule engine, then layer the
  *  K-pop-filler genre check on top (needs a token for `/v1/artists` —
@@ -155,7 +155,7 @@ export async function generatePlaylist(supabase: SupabaseDB, params: any): Promi
   const focusKeys = new Set<string>(focusSongs.map((s: any) => s.key))
   const albumKeys = new Set<string>(params.album || [])
 
-  const albumOnce = (params.album || [])
+  let albumOnce = (params.album || [])
     .filter((k: string) => !focusKeys.has(k))
     .map((k: string) => byKey.get(k))
     .filter((s: any) => s && s.versions?.length > 0)
@@ -185,14 +185,73 @@ export async function generatePlaylist(supabase: SupabaseDB, params: any): Promi
   // Filtering member-credited tracks out of the filler pool up front closes
   // that path regardless of how a future filler entry gets added.
   const btsMemberNames = new Set(Object.keys(BTS_ARTIST_IDS).map((n) => n.toLowerCase()))
-  const nonBtsFillers = dedupeTracksByIdentity(
+  let nonBtsFillers = dedupeTracksByIdentity(
     (lib.fillers || [])
       .filter((f: any) => !(f.artists || []).some((a: string) => btsMemberNames.has(String(a || '').toLowerCase())))
       .map((f: any) => ({ uri: f.uri, id: f.track_id, name: f.name, isrc: f.isrc, durationMs: f.duration_ms, isBTS: false })),
   )
-  const btsSpacers = (cat.songs || [])
+  let btsSpacers = (cat.songs || [])
     .filter((s: any) => !focusKeys.has(keyOf(s)) && !albumKeys.has(keyOf(s)) && s.versions?.[0]?.uri && (s.versions[0].durationMs || s.durationMs || 0) >= 90000)
     .map((s: any) => ({ key: keyOf(s), uri: s.versions[0].uri, id: s.versions[0].id, name: s.name, isrc: s.versions[0].isrc || s.isrc, durationMs: s.versions[0].durationMs || s.durationMs, isBTS: true, album: s.versions[0].album }))
+
+  // Resolve every candidate in the connected account's market before the
+  // planner sees it. Spotify can relink unavailable IDs to another playable
+  // pressing, so two unique stored IDs can collapse into the same live ID or
+  // ISRC after publication. That was the remaining source of playlists that
+  // passed locally and then failed R4 ("fillers never repeat") every time.
+  const candidateTracks = [
+    ...focusSongs.flatMap((s: any) => s.versions || []),
+    ...albumOnce, ...btsSpacers, ...nonBtsFillers,
+  ]
+  const candidateIds = candidateTracks
+    .map((t: any) => parseSpotifyId(t.id || t.uri || '', 'track'))
+    .filter(Boolean) as string[]
+  const liveById = await fetchTracksByIds(token, candidateIds)
+  const hydrate = (t: any): any => {
+    const requestedId = parseSpotifyId(t.id || t.uri || '', 'track')
+    const live = requestedId ? liveById.get(requestedId) : null
+    if (!live) return t
+    return {
+      ...t,
+      id: live.id,
+      uri: live.uri,
+      isrc: live.isrc || t.isrc || null,
+      durationMs: live.durationMs || t.durationMs,
+      spotifyArtists: live.artists,
+      spotifyIsBTS: live.isBTS,
+    }
+  }
+
+  for (const song of focusSongs) {
+    const seenVersionIds = new Set<string>()
+    song.versions = (song.versions || []).map(hydrate).filter((v: any) => {
+      if (v.spotifyIsBTS === false) return false
+      const id = parseSpotifyId(v.id || v.uri || '', 'track')
+      if (!id || seenVersionIds.has(id)) return false
+      seenVersionIds.add(id)
+      return true
+    })
+    if (!song.versions.length) throw new Error(`No playable Spotify version remains for "${song.name}".`)
+    song.durationMs = song.versions[0].durationMs || song.durationMs
+  }
+  albumOnce = dedupeTracksByIdentity(albumOnce.map(hydrate))
+  const invalidAlbumTrack = albumOnce.find((t: any) => t.spotifyIsBTS === false)
+  if (invalidAlbumTrack) {
+    throw new Error(`"${invalidAlbumTrack.name}" is not credited to the verified BTS/member Spotify artists, so it cannot be used as an album track.`)
+  }
+  btsSpacers = dedupeTracksByIdentity(btsSpacers.map(hydrate))
+    .filter((t: any) => t.spotifyIsBTS !== false)
+  nonBtsFillers = dedupeTracksByIdentity(nonBtsFillers.map(hydrate))
+    .filter((f: any) => f.spotifyIsBTS !== true)
+
+  // A filler must also be unique against every BTS-side recording, not only
+  // against other fillers. Using both live ID and ISRC catches stale catalog
+  // copies whose ISRC has not been populated yet.
+  const btsRecordings = [
+    ...focusSongs.flatMap((s: any) => s.versions || []),
+    ...albumOnce, ...btsSpacers,
+  ]
+  nonBtsFillers = excludeTracksByIdentity(nonBtsFillers, btsRecordings)
 
   const avgMs = (focusSongs.reduce((n: number, s: any) => n + s.durationMs, 0) / Math.max(1, focusSongs.length)) || 200000
   const focusTotalMs = focusSongs.reduce((n: number, s: any) => n + s.durationMs * s.plays, 0)

@@ -43,18 +43,36 @@ export function artistInterleave(songs) {
  * available. This is intentionally pure so production and Node tests share
  * the exact same dedupe rule.
  */
+export function trackIdentityTokens(track) {
+  const rawIsrc = String(track?.isrc || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
+  const rawId = String(track?.id || track?.track_id || track?.uri || '').trim()
+  const idMatch = rawId.match(/(?:spotify:track:|open\.spotify\.com\/track\/)?([A-Za-z0-9]{22})(?:\?|$)/i)
+  const spotifyId = idMatch?.[1] || rawId
+  const tokens = []
+  if (rawIsrc) tokens.push(`isrc:${rawIsrc}`)
+  if (spotifyId) tokens.push(`id:${spotifyId}`)
+  return tokens
+}
+
 export function dedupeTracksByIdentity(tracks) {
   const seen = new Set()
   const out = []
   for (const track of tracks || []) {
-    const rawIsrc = String(track?.isrc || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
-    const rawId = String(track?.id || track?.track_id || track?.uri || '').trim()
-    const identity = rawIsrc ? `isrc:${rawIsrc}` : rawId ? `id:${rawId}` : null
-    if (!identity || seen.has(identity)) continue
-    seen.add(identity)
+    const identities = trackIdentityTokens(track)
+    if (identities.length === 0 || identities.some((identity) => seen.has(identity))) continue
+    for (const identity of identities) seen.add(identity)
     out.push(track)
   }
   return out
+}
+
+/** Remove candidates that represent a recording already owned by another
+ * pool. Both Spotify ID and ISRC participate so a stale catalog copy with no
+ * ISRC still collides with a fully-hydrated filler carrying the same ID. */
+export function excludeTracksByIdentity(tracks, excludedTracks) {
+  const blocked = new Set((excludedTracks || []).flatMap(trackIdentityTokens))
+  return (tracks || []).filter((track) =>
+    !trackIdentityTokens(track).some((identity) => blocked.has(identity)))
 }
 
 /** Plan n gap-track-counts summing to `total` (clamped into the feasible

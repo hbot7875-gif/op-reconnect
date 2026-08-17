@@ -11,7 +11,7 @@ import assert from 'node:assert/strict'
 import {
   planGapCounts, planFocusGapCounts, shuffle, artistInterleave,
   buildBurstSkeleton, buildFocusOrder, buildDistributedFocusOrder,
-  buildPlaylistOrder2Focus, dedupeTracksByIdentity,
+  buildPlaylistOrder2Focus, dedupeTracksByIdentity, excludeTracksByIdentity,
 } from './candy-star-planner.js'
 
 const MIN_GAP_MS = 480000 // matches spotify-shared.ts's MIN_GAP_MS — duplicated because that's a
@@ -139,6 +139,20 @@ test('dedupeTracksByIdentity falls back to Spotify id/URI when ISRC is missing',
     { uri: 'spotify:track:two', name: 'Duplicate Two' },
   ]
   assert.deepEqual(dedupeTracksByIdentity(tracks).map((t) => t.name), ['One', 'Two'])
+})
+
+test('dedupeTracksByIdentity matches the same Spotify ID even when only one copy has an ISRC', () => {
+  const id = '1234567890123456789012'
+  const hydrated = { id, isrc: 'USRC17607839', name: 'Hydrated' }
+  const stale = { uri: `spotify:track:${id}`, isrc: null, name: 'Stale catalog copy' }
+  assert.deepEqual(dedupeTracksByIdentity([hydrated, stale]), [hydrated])
+})
+
+test('excludeTracksByIdentity removes filler collisions across catalog pools', () => {
+  const fillerA = { id: 'AAAAAAAAAAAAAAAAAAAAAA', isrc: 'USRC17607839', name: 'Same recording' }
+  const fillerB = { id: 'BBBBBBBBBBBBBBBBBBBBBB', isrc: 'GBUM71029604', name: 'Unique filler' }
+  const staleCatalogCopy = { uri: 'spotify:track:AAAAAAAAAAAAAAAAAAAAAA', isrc: null }
+  assert.deepEqual(excludeTracksByIdentity([fillerA, fillerB], [staleCatalogCopy]), [fillerB])
 })
 
 test('planGapCounts sums exactly to a feasible total', () => {
