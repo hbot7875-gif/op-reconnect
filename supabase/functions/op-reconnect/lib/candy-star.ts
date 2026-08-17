@@ -208,6 +208,20 @@ export async function generatePlaylist(supabase: SupabaseDB, params: any): Promi
     ? buildPlaylistOrder2Focus(focusSongs, btsSpacers, nonBtsFillers, albumOnce, targetMs, fillerEvery)
     : buildPlaylistOrder(focusPlays, btsSpacers, nonBtsFillers, albumOnce, targetMs, fillerEvery)
 
+  // Safety net: assert the builder actually delivered every requested play.
+  // A real generation once came back with only 7 of a requested 10 plays
+  // (a builder skeleton bug silently dropped the rest) while every rule
+  // still reported "pass", since nothing checked requested vs. actual
+  // counts. Fail loudly instead of silently shipping an undercounted
+  // playlist — this should never fire now that the underlying bug is
+  // fixed, but it's cheap insurance against the next one.
+  for (const s of focusSongs) {
+    const actual = order.filter((t: any) => t.key === s.key).length
+    if (actual !== s.plays) {
+      throw new Error(`Internal error: "${s.name}" requested ${s.plays} play(s) but the builder produced ${actual}. Please try generating again.`)
+    }
+  }
+
   let trimTotal = order.reduce((s: number, t: any) => s + (t.durationMs || 0), 0)
   const MAX_RUNTIME_MS = 3 * 60 * 60 * 1000
   // Rules already failing before any trimming started aren't the trim's

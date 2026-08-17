@@ -530,6 +530,17 @@ export function buildPlaylistOrder2Focus(
         const canA = remA > 0 && !(prev === 'A' && prev2 === 'A')
         const canB = remB > 0 && prev !== 'B'
         if (!canA && !canB) {
+          // Neither constraint-respecting choice is available — this only
+          // happens when one song's own no-3-in-a-row/no-repeat rule is
+          // blocking it while the OTHER song is exhausted (nothing left to
+          // interleave with). The old code only drained remB here, which
+          // silently dropped the rest of remA when it was the one still
+          // nonzero — the exact cause of real playlists coming up short on
+          // requested plays. Both no-repeat preferences are discretionary
+          // shape preferences, not correctness requirements — draining
+          // whichever is left, even back-to-back, guarantees every
+          // requested play still lands.
+          while (remA > 0) { out.push('A'); remA-- }
           while (remB > 0) { out.push('B'); remB-- }
           break
         }
@@ -670,8 +681,18 @@ export function buildPlaylistOrder2Focus(
 
     if (k > 0) {
       const plannedGap = curr.isAlbumTrack ? 0 : isSongA ? gapPlanA[gapCursorA++] : isSongB ? gapPlanB[gapCursorB++] : 0
+      // plannedGap is this song's TOTAL desired visible-gap size, not an
+      // amount to add on top — windowCount (this song's own counter) may
+      // already include tracks from the other song's plays or album
+      // tracks that landed in this same window. Treating plannedGap as
+      // pure addition (the previous version) meant a gap that already had
+      // 2-3 tracks in it from the other song got another full 3-4 piled
+      // on, which is what produced the reported 6-8-track gaps even after
+      // the per-song plan targeted ~3.
+      const ownWindowCount = isSongA ? windowCountA : windowCountB
+      const stillNeeded = Math.max(0, plannedGap - ownWindowCount)
       const roomLeftInWindow = Math.max(0, MAX_GAP - Math.max(windowCountA, windowCountB))
-      const effectiveGap = Math.min(plannedGap, roomLeftInWindow)
+      const effectiveGap = Math.min(stillNeeded, roomLeftInWindow)
 
       const ck = curr.key || curr.isrc || curr.uri || curr.id
       const prev = lastPlayed[ck]
