@@ -55,8 +55,26 @@ export async function importFillerPlaylist(supabase: SupabaseDB, params: { playl
 export async function addFillerManual(supabase: SupabaseDB, params: { trackUrl: string }): Promise<any> {
   const tid = parseSpotifyId(params.trackUrl, 'track')
   if (!tid) throw new Error('Could not parse a Spotify track id from that input.')
+  let name = ''
+  let artist = ''
+  try {
+    const oe = await fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(`https://open.spotify.com/track/${tid}`)}`)
+    if (oe.ok) {
+      const title = String((await oe.json())?.title || '')
+      const bullet = title.indexOf(' · ')
+      name = bullet > -1 ? title.slice(0, bullet).trim() : title.trim()
+      artist = bullet > -1 ? title.slice(bullet + 3).trim() : ''
+    }
+  } catch (_) { /* resolved below through Spotify search */ }
+  if (!name) throw new Error('Could not read that Spotify track title. Try importing it from a playlist instead.')
+
   const { token } = await getUserAccessToken(supabase)
-  const raw = await spotifyGetJsonOrThrow(`https://api.spotify.com/v1/tracks/${tid}?market=from_token`, token)
+  const search = await spotifyGetJsonOrThrow(
+    `https://api.spotify.com/v1/search?q=${encodeURIComponent(`${name} ${artist}`)}&type=track&market=from_token&limit=10`,
+    token,
+  )
+  const items = search?.tracks?.items || []
+  const raw = items.find((t: any) => t.id === tid || t.linked_from?.id === tid) || items[0]
   if (!raw?.id) throw new Error('Spotify did not return a playable track for that link.')
   const track = normTrack(raw)
   if (track.isBTS) throw new Error('That track is credited to BTS or a BTS member, so it belongs in the BTS catalog—not the filler library.')

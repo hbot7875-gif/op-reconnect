@@ -98,33 +98,6 @@ export async function fetchAllPlaylistTracks(token: string, playlistId: string):
   return out
 }
 
-/** Resolve Spotify track IDs in the connected user's market before playlist
- * planning. Spotify may relink an unavailable URI to a different playable
- * track; two apparently distinct stored IDs can therefore become one live
- * recording. The map is keyed by both the requested and returned IDs so
- * callers can update stale catalog rows without losing that relationship. */
-export async function fetchTracksByIds(token: string, ids: string[]): Promise<Map<string, any>> {
-  const uniq = [...new Set((ids || []).filter((id) => /^[A-Za-z0-9]{22}$/.test(String(id || ''))))]
-  const out = new Map<string, any>()
-  for (let i = 0; i < uniq.length; i += 50) {
-    const requested = uniq.slice(i, i + 50)
-    const data = await spotifyGetJsonOrThrow(
-      `https://api.spotify.com/v1/tracks?ids=${requested.join(',')}&market=from_token`,
-      token,
-    )
-    const tracks = data?.tracks || []
-    for (let j = 0; j < requested.length; j++) {
-      const raw = tracks[j]
-      if (!raw?.id) continue
-      const track = normTrack(raw)
-      out.set(requested[j], track)
-      out.set(raw.id, track)
-      if (raw.linked_from?.id) out.set(raw.linked_from.id, track)
-    }
-  }
-  return out
-}
-
 /** Fetch a Spotify JSON endpoint with retry on 429 and 5xx.
  *  Retry-After is honored but capped at 8s — unbounded sleeps inside one request cause 504s.
  *  Returns null on hard failure when throws=false (default); throws when throws=true. */
