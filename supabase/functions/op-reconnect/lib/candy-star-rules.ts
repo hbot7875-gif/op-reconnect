@@ -533,12 +533,28 @@ export function buildPlaylistOrder2Focus(
     }
   }
 
+  // Was reading focusSeq.length fresh on every iteration (drifting as each
+  // insertion grew it) and adding independent random jitter per track with
+  // no coordination between them — both let multiple album tracks pile
+  // into the same real gap between two focus repeats (confirmed via a real
+  // generation: 6+ ARIRANG tracks landing in one window). Fixed the same
+  // way buildPlaylistOrder above already does it: capture the length ONCE
+  // before inserting anything, assign each album track its own distinct
+  // slot via even stride spacing (guaranteed non-colliding whenever there
+  // are at least as many slots as album tracks, which is the common case),
+  // and insert from the highest slot down so earlier insertions don't
+  // shift the meaning of remaining target slots.
   const shuffledAlbum2 = shuffle(albumOnce)
-  for (let i = 0; i < shuffledAlbum2.length; i++) {
-    const base = Math.round((i + 1) * focusSeq.length / (shuffledAlbum2.length + 1))
-    const jitter = Math.floor(Math.random() * 3) - 1
-    const pos = Math.max(0, Math.min(focusSeq.length, base + jitter))
-    focusSeq.splice(pos, 0, { ...shuffledAlbum2[i], isBTS: true, isAlbumTrack: true })
+  if (shuffledAlbum2.length > 0) {
+    const n2 = focusSeq.length
+    const numSlots = n2 + 1
+    const positions2 = shuffledAlbum2.map((_, i) =>
+      Math.min(n2, Math.max(0, Math.round((i + 0.5) * numSlots / shuffledAlbum2.length))),
+    )
+    const order2 = shuffledAlbum2.map((_, i) => i).sort((a, b) => positions2[b] - positions2[a])
+    for (const i of order2) {
+      focusSeq.splice(positions2[i], 0, { ...shuffledAlbum2[i], isBTS: true, isAlbumTrack: true })
+    }
   }
 
   for (let i = 1; i < focusSeq.length; i++) {
