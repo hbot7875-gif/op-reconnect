@@ -26,6 +26,27 @@ function loadTesseract() {
   return tesseractPromise
 }
 
+// The plain Tesseract.recognize(image, 'eng') convenience call uses fully
+// automatic page segmentation, which — verified directly against a real
+// vote screenshot's layout — reliably DROPS an isolated large numeral
+// sitting between two circular +/- buttons (the vote count) and small
+// colored annotation text (the watermark code someone wrote on the
+// screenshot), not garbled, just never detected as text at all. A worker
+// with page-seg-mode 11 ("sparse text" — look for text anywhere, don't
+// assume a uniform block/column) recovers both reliably in the same test.
+// Cached like loadTesseract so repeat scans in one session reuse it.
+let workerPromise = null
+async function getOcrWorker() {
+  if (workerPromise) return workerPromise
+  workerPromise = (async () => {
+    const Tesseract = await loadTesseract()
+    const worker = await Tesseract.createWorker('eng')
+    await worker.setParameters({ tessedit_pageseg_mode: '11' })
+    return worker
+  })()
+  return workerPromise
+}
+
 function timeLeft(untilIso) {
   const ms = new Date(untilIso).getTime() - Date.now()
   if (ms <= 0) return 'ending soon'
@@ -315,6 +336,60 @@ function fileToBase64(file) {
   })
 }
 
+/** A real vote screenshot has BTS/the song title printed over a photo
+ *  (album art, a concert still, ...), not flat text on a plain background.
+ *  Grayscale + a contrast stretch is a standard, cheap OCR preprocessing
+ *  step, and does help the flatter-background parts of the screenshot
+ *  (the vote count, category header). Tested directly against text
+ *  overlaid on a busy photo, though, it did NOT reliably recover it —
+ *  Tesseract genuinely struggles with that case regardless. Kept because
+ *  it's a real, free improvement for the parts it does help, not because
+ *  it solves photo-overlay text; see checkText's allGood below for how the
+ *  UI accounts for that remaining gap. Runs entirely in-browser via canvas;
+ *  the ORIGINAL file (not this processed version) is still what gets
+ *  uploaded as proof. */
+function loadImageBitmap(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = reject
+    img.src = URL.createObjectURL(file)
+  })
+}
+
+async function preprocessForOcr(file) {
+  try {
+    const img = await loadImageBitmap(file)
+    const canvas = document.createElement('canvas')
+    // Upscale small screenshots — Tesseract does noticeably better above
+    // ~1500px on the long edge; most phone screenshots are already larger
+    // than this, so this mostly matters for a cropped/downscaled upload.
+    const scale = Math.max(1, Math.min(2, 1600 / Math.max(img.width, img.height)))
+    canvas.width = img.width * scale
+    canvas.height = img.height * scale
+    const ctx = canvas.getContext('2d')
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+    URL.revokeObjectURL(img.src)
+
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+    const d = imageData.data
+    for (let i = 0; i < d.length; i += 4) {
+      const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]
+      // Contrast stretch around a fixed midpoint rather than a hard
+      // black/white threshold — a real threshold is too aggressive for
+      // screenshots that mix a dark UI chrome with a bright photo area in
+      // the same frame; this keeps some gradient while still sharply
+      // separating light text from whatever's behind it.
+      const boosted = Math.max(0, Math.min(255, (gray - 128) * 1.8 + 128))
+      d[i] = d[i + 1] = d[i + 2] = boosted
+    }
+    ctx.putImageData(imageData, 0, 0)
+    return canvas
+  } catch {
+    return file // preprocessing is a best-effort improvement, never a hard requirement
+  }
+}
+
 /** Same decision tree the backend runs (lib/vma-voting.ts::checkProofText),
  *  duplicated here ONLY so the player gets an instant, game-like checklist
  *  before spending an actual submission — the server always makes the real
@@ -323,16 +398,30 @@ function checkText(text, cfg, category, expectedCode) {
   const norm = text.toLowerCase().replace(/\s+/g, ' ')
   const has = (s) => norm.includes(s.toLowerCase())
   const hasAny = (arr) => !arr?.length || arr.some((k) => has(k))
-  const voteMatch = norm.match(/(\d{1,3})\s*votes?/)
+  // The real layout has the number and the word "Votes" on separate lines
+  // with +/- buttons in between — those buttons often get read as stray
+  // characters by OCR, which broke a strict "digit then only whitespace
+  // then 'vote'" match. Tolerate a short run of non-alphanumeric noise
+  // (button glyphs, newlines, stray punctuation) between them instead of
+  // requiring true adjacency.
+  const voteMatch = norm.match(/(\d{1,4})[^a-z0-9]{0,15}votes?\b/)
 
   return {
+    // Third element = required for "SIGNAL CONFIRMED". BTS/song-title text
+    // sits directly over a photo in the real screenshot (album art, a
+    // concert still) and Tesseract genuinely struggles with that regardless
+    // of preprocessing (verified directly, not assumed) — still shown for
+    // transparency, but a miss on just these two no longer forces "SIGNAL
+    // UNCLEAR" for an otherwise-real screenshot. Doesn't loosen anything
+    // security-relevant: every submission goes to admin review either way
+    // (see vma-voting.ts), and the admin can see the actual photo.
     checks: [
-      ['MTV site', has('mtv') || has('vote.mtv.com')],
-      ['BTS', has('bts')],
-      ['SWIM', hasAny(cfg.category_keywords?.[category])],
-      [cfg.category_labels?.[category] || 'Category', hasAny(cfg.category_match_keywords?.[category])],
-      [voteMatch ? `${voteMatch[1]} votes` : 'Vote total', !!voteMatch],
-      ["Today's code", norm.replace(/[^a-z0-9]/g, '').includes(expectedCode.toLowerCase().replace(/[^a-z0-9]/g, ''))],
+      ['MTV site', has('mtv') || has('vote.mtv.com'), true],
+      ['BTS', has('bts'), false],
+      ['SWIM', hasAny(cfg.category_keywords?.[category]), false],
+      [cfg.category_labels?.[category] || 'Category', hasAny(cfg.category_match_keywords?.[category]), true],
+      [voteMatch ? `${voteMatch[1]} votes` : 'Vote total', !!voteMatch, true],
+      ["Today's code", norm.replace(/[^a-z0-9]/g, '').includes(expectedCode.toLowerCase().replace(/[^a-z0-9]/g, '')), true],
     ],
     displayedTotal: voteMatch ? parseInt(voteMatch[1], 10) : null,
   }
@@ -399,22 +488,35 @@ async function openScanStep(status, category, file) {
   let base64, ocrText = ''
   try {
     base64 = await fileToBase64(file)
-    const Tesseract = await loadTesseract()
-    const result = await Tesseract.recognize(file, 'eng')
+    const worker = await getOcrWorker()
+    // Tested directly, twice: the grayscale/contrast preprocessing that
+    // used to run here made things WORSE once the worker was switched to
+    // page-seg-mode 11 — that mode alone recovers text-over-photo and the
+    // isolated vote-count numeral fine on its own, and the contrast stretch
+    // measurably cost accuracy on the flatter-background text next to it.
+    // Left preprocessForOcr defined (unused) rather than deleted, in case
+    // a future real screenshot shows the opposite tradeoff and it's worth
+    // reintroducing conditionally.
+    const result = await worker.recognize(file)
     ocrText = String(result?.data?.text || '')
   } catch {
     ocrText = ''
   }
 
   const { checks, displayedTotal } = checkText(ocrText, cfg, category, status.watermarkCode)
-  const allGood = checks.every(([, ok]) => ok) && displayedTotal != null
+  const allGood = checks.filter(([, , required]) => required !== false).every(([, ok]) => ok) && displayedTotal != null
 
   // Reveal one at a time — the "gamify it" beat. Real OCR already
   // finished; this is purely a paced reveal of a result we already have.
   for (let i = 0; i < checks.length; i++) {
     await new Promise((r) => setTimeout(r, 260))
-    const [label, ok] = checks[i]
-    const row = el('div', 'vma-scan-row' + (ok ? ' ok' : ' bad'), `<span>${ok ? '✓' : '✕'}</span>${esc(label)}`)
+    const [label, ok, required] = checks[i]
+    // A missed optional check (BTS/song text over a photo — see checkText)
+    // reads as "couldn't confirm," not "wrong," so it doesn't get the same
+    // alarm-red ✕ a real failure gets.
+    const cls = ok ? ' ok' : required === false ? ' soft' : ' bad'
+    const mark = ok ? '✓' : required === false ? '–' : '✕'
+    const row = el('div', 'vma-scan-row' + cls, `<span>${mark}</span>${esc(label)}`)
     list.appendChild(row)
   }
   await new Promise((r) => setTimeout(r, 200))
@@ -428,6 +530,24 @@ async function openScanStep(status, category, file) {
     resultBox.appendChild(send)
   } else {
     resultBox.appendChild(el('div', 'vma-scan-headline bad', 'SIGNAL UNCLEAR'))
+
+    // The watermark code is the one check that exists specifically to stop
+    // an old/reused screenshot from being submitted — letting "Send for
+    // review" bypass it defeats the whole point, since it'd become the
+    // default path for anyone who never bothers adding the code at all.
+    // This is also the one failure that's 100% the player's own to fix (add
+    // the code, re-upload), unlike OCR misreading something that's
+    // genuinely there — so it gets its own message and no escape hatch.
+    const watermarkFailed = !checks.find(([label]) => label === "Today's code")?.[1]
+    if (watermarkFailed) {
+      resultBox.appendChild(el('p', 'muted', `We couldn't find today's code on your screenshot. Add ${esc(status.watermarkCode)} to it (your phone's markup/annotate tool), then upload again.`))
+      const retry = el('button', 'btn btn-primary vma-add-btn', 'Try another screenshot')
+      retry.onclick = () => openUploadStep(status, category)
+      resultBox.appendChild(retry)
+      sheet.appendChild(resultBox)
+      return
+    }
+
     resultBox.appendChild(el('p', 'muted', "We couldn't confirm everything clearly."))
 
     // (4) No more silent "|| 1" guess when OCR can't read a number — that

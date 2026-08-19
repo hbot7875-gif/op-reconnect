@@ -3026,6 +3026,8 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .vma-scan-row span { flex: none; width: 18px; text-align: center; font-weight: 800; }
 .vma-scan-row.ok span { color: var(--gold); }
 .vma-scan-row.bad span { color: var(--crimson); }
+.vma-scan-row.soft { opacity: 0.7; }
+.vma-scan-row.soft span { color: var(--muted); }
 .vma-scan-result { margin-top: 6px; }
 .vma-scan-headline { font-family: var(--disp); font-weight: 800; font-size: 19px; text-align: center; margin-bottom: 4px; }
 .vma-scan-headline.good { color: var(--gold); }
