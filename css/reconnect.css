@@ -1404,17 +1404,39 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 .playlist .btn-primary { display: block; width: 100%; }
 .playlist .btn-ghost { margin-top: 8px; }
 
-/* ── Badge Drawer: a trophy case, not a leaderboard — no ranks, no numbers
-   competing against anyone else's collection, just what's unlocked. ── */
-.bdr-count { font-family: var(--mono); font-size: 11px; color: var(--dim); text-align: center; margin: 6px 0 16px; }
-.bdr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 14px 10px; margin-bottom: 4px; }
-.bdr-tile { aspect-ratio: 1; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+/* ── Badge Drawer: a personal trophy case, grouped into readable shelves. ── */
+.badge-drawer { position: relative; isolation: isolate; overflow-x: hidden;
+  background:
+    radial-gradient(circle at 85% 5%, rgba(139,92,246,.12), transparent 30%),
+    radial-gradient(circle at 8% 45%, rgba(217,173,95,.08), transparent 34%),
+    var(--surface); }
+.badge-drawer::before { content: ''; position: absolute; z-index: -1; inset: 0; pointer-events: none;
+  background: linear-gradient(115deg, transparent 35%, rgba(255,255,255,.025) 50%, transparent 65%); }
+.bdr-intro { margin-top: 3px; color: var(--muted); }
+.bdr-summary { display: flex; align-items: center; gap: 11px; margin: 14px 0 18px; padding: 11px 13px;
+  border: 1px solid rgba(217,173,95,.2); border-radius: var(--r); background: rgba(217,173,95,.055); }
+.bdr-summary-mark { display: grid; place-items: center; width: 34px; height: 34px; flex: 0 0 34px;
+  border-radius: 50%; background: var(--gold-soft); box-shadow: 0 0 14px rgba(217,173,95,.18); }
+.bdr-count { font-family: var(--mono); font-size: 11px; color: var(--gold); letter-spacing: .6px; }
+.bdr-summary-note { margin-top: 2px; font-size: 10.5px; color: var(--dim); }
+.bdr-grid { display: block; margin-bottom: 8px; }
+.bdr-section + .bdr-section { margin-top: 21px; padding-top: 18px; border-top: 1px solid var(--border); }
+.bdr-section-head { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 8px; align-items: center; margin-bottom: 12px; }
+.bdr-section-icon { color: var(--purple-lt); font-size: 17px; text-align: center; text-shadow: 0 0 10px rgba(139,92,246,.55); }
+.bdr-section-head b { display: block; font-family: var(--disp); font-size: 13px; color: var(--text); }
+.bdr-section-head small { display: block; margin-top: 2px; font-size: 9.5px; line-height: 1.3; color: var(--dim); }
+.bdr-section-head em { font-family: var(--mono); font-size: 8px; font-style: normal; color: var(--gold); white-space: nowrap; }
+.bdr-shelf { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 15px 10px; align-items: start; }
+.bdr-slot { min-width: 0; text-align: center; }
+.bdr-tile { width: min(100%, 94px); aspect-ratio: 1; border-radius: 50%; display: flex; align-items: center; justify-content: center;
   position: relative; border: 3px solid var(--border); background: var(--panel); cursor: pointer; overflow: hidden;
   box-shadow: inset 0 0 0 2px rgba(0,0,0,0.35), 0 3px 8px rgba(0,0,0,0.35);
   transition: transform 0.15s ease, box-shadow 0.2s ease, border-color 0.2s ease; }
 .bdr-tile:hover { transform: scale(1.08) rotate(-1deg); }
 .bdr-tile .bdr-icon { font-size: 26px; }
-.bdr-tile.locked { opacity: 0.4; border-style: dashed; filter: grayscale(1); box-shadow: none; }
+.bdr-tile.locked { opacity: 0.48; border-style: dashed; filter: grayscale(1); box-shadow: none;
+  background: radial-gradient(circle at 50% 38%, rgba(139,92,246,.12), transparent 45%), var(--panel); }
+.bdr-lock-core { font-size: 28px; color: var(--dim); text-shadow: 0 0 14px rgba(139,92,246,.45); }
 .bdr-tile.got { border-color: var(--gold); background: linear-gradient(160deg, var(--gold-soft), var(--purple-soft));
   box-shadow: inset 0 0 0 2px rgba(0,0,0,0.35), 0 0 0 1px rgba(217,173,95,0.35), 0 0 16px rgba(217,173,95,0.35); }
 .bdr-tile.got::after { content: ''; position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
@@ -1425,6 +1447,12 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
   border-color: var(--gold); box-shadow: inset 0 0 0 2px rgba(0,0,0,0.35), 0 0 0 1px rgba(217,173,95,0.5), 0 0 20px rgba(217,173,95,0.45);
   animation: bdrPulse 2.4s ease-in-out infinite; }
 .bdr-tile.rare::after, .bdr-tile.rare .bdr-photo { border-radius: 10px; }
+.bdr-label { display: block; margin-top: 7px; padding: 0 2px; overflow: hidden; text-overflow: ellipsis;
+  font-size: 10px; line-height: 1.25; color: var(--text); white-space: nowrap; }
+.bdr-state { display: block; margin-top: 3px; font-family: var(--mono); font-size: 6.5px; letter-spacing: .7px; color: var(--gold); }
+.bdr-slot.locked .bdr-state { color: var(--dim); }
+.bdr-rarity { position: absolute; left: 5px; bottom: 5px; padding: 2px 4px; border-radius: 4px;
+  background: rgba(7,5,13,.78); color: var(--gold); font-family: var(--mono); font-size: 5.5px; letter-spacing: .7px; }
 .bdr-tile.equipped { border-color: var(--purple-lt);
   box-shadow: inset 0 0 0 2px rgba(0,0,0,0.35), 0 0 0 3px rgba(139,92,246,.35), 0 0 18px rgba(139,92,246,.45); }
 .bdr-tile > i { position: absolute; top: -1px; right: -1px; background: var(--gold); color: #1b1400;
@@ -1438,13 +1466,18 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 .bdr-detail-name { font-family: var(--disp); font-weight: 800; font-size: 16px; margin-top: 8px; color: var(--text); }
 .bdr-detail-desc { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
 .bdr-detail.pop { animation: bdrPop 0.35s ease; }
-.bdr-photo { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.bdr-photo { width: 100%; height: 100%; object-fit: cover; object-position: 50% 20%; border-radius: 50%; transform: scale(1.015); }
 .bdr-detail-photo { width: 84px; height: 84px; object-fit: cover; border-radius: 50%;
-  border: 3px solid var(--gold); box-shadow: inset 0 0 0 2px rgba(0,0,0,0.35), 0 0 14px rgba(217,173,95,0.35); }
+  object-position: 50% 20%; border: 3px solid var(--gold); box-shadow: inset 0 0 0 2px rgba(0,0,0,0.35), 0 0 14px rgba(217,173,95,0.35); }
 .bdr-detail.is-rare .bdr-detail-photo { width: 96px; height: 120px; border-radius: 12px; }
 .bdr-error, .bdr-retry { grid-column: 1 / -1; }
 .bdr-error { margin: 0; text-align: center; }
 .bdr-retry { width: 100%; margin-top: 0; }
+@media (max-width: 370px) {
+  .badge-drawer { padding: 18px 16px; }
+  .bdr-shelf { gap: 13px 8px; }
+  .bdr-section-head small { max-width: 190px; }
+}
 @keyframes bdrPop {
   0% { transform: scale(0.9); opacity: 0.4; }
   60% { transform: scale(1.03); opacity: 1; }

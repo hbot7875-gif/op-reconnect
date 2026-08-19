@@ -11,11 +11,21 @@ import { call } from './api.js'
 import { el, esc, getState, hideOverlay, setState, toast } from './state.js'
 import { getAgentNo } from './session.js'
 
+const BADGE_SECTIONS = [
+  { id: 'district', icon: '◇', title: 'Current District', note: 'Progress from the district you are restoring now' },
+  { id: 'ward', icon: '⌂', title: 'Ward Collection', note: 'Earned by bringing a whole ward back online' },
+  { id: 'achievement', icon: '✦', title: 'Achievements', note: 'Special moments from missions and challenges' },
+  { id: 'event', icon: '◉', title: 'Special Events', note: 'Limited badges from live events' },
+]
+
 export function badgeDrawerSheet(state) {
   const sheet = el('div', 'sheet badge-drawer')
-  sheet.appendChild(el('div', 'eyebrow', '🎖️ BADGE DRAWER'))
-  sheet.appendChild(el('div', 'pl-sub', 'Your collection'))
-  sheet.appendChild(el('div', 'bdr-count', 'Loading…'))
+  sheet.appendChild(el('div', 'eyebrow', '✦ BADGE COLLECTION'))
+  sheet.appendChild(el('div', 'pl-sub bdr-intro', 'A keepsake from every moment you unlock.'))
+  const summary = el('div', 'bdr-summary')
+  summary.appendChild(el('span', 'bdr-summary-mark', '🎖️'))
+  summary.appendChild(el('div', '', '<div class="bdr-count">Loading…</div><div class="bdr-summary-note">Tap a badge to see its story</div>'))
+  sheet.appendChild(summary)
   sheet.appendChild(el('div', 'bdr-grid'))
   const detail = el('div', 'bdr-detail')
   detail.hidden = true
@@ -57,19 +67,44 @@ async function loadAndPaint(sheet, state, detail) {
 
   grid.innerHTML = ''
 
-  for (const e of collection.earned) {
-    const wearing = liveState.player?.equippedBadgeId === e.badgeId
-    grid.appendChild(collectionTile(e, wearing, liveState, sheet, detail))
-  }
-  for (const t of lockedTemplates) {
-    grid.appendChild(lockedTile(t))
+  for (const sectionMeta of BADGE_SECTIONS) {
+    const earned = collection.earned.filter((e) => e.section === sectionMeta.id)
+    const locked = lockedTemplates.filter((t) => t.section === sectionMeta.id)
+    if (earned.length === 0 && locked.length === 0) continue
+
+    const section = el('section', 'bdr-section')
+    section.appendChild(el('div', 'bdr-section-head', `
+      <span class="bdr-section-icon">${sectionMeta.icon}</span>
+      <span><b>${esc(sectionMeta.title)}</b><small>${esc(sectionMeta.note)}</small></span>
+      <em>${earned.length} unlocked</em>
+    `))
+    const shelf = el('div', 'bdr-shelf')
+    for (const e of earned) {
+      const wearing = liveState.player?.equippedBadgeId === e.badgeId
+      shelf.appendChild(badgeSlot(
+        collectionTile(e, wearing, liveState, sheet, detail), e.name, e.rarity, true,
+      ))
+    }
+    for (const t of locked) {
+      shelf.appendChild(badgeSlot(lockedTile(t), t.name, t.rarity, false))
+    }
+    section.appendChild(shelf)
+    grid.appendChild(section)
   }
 }
 
+function badgeSlot(tile, name, rarity, earned) {
+  const slot = el('div', 'bdr-slot ' + (earned ? 'earned' : 'locked') + (rarity === 'rare' ? ' rare' : ''))
+  slot.appendChild(tile)
+  slot.appendChild(el('span', 'bdr-label', esc(name)))
+  slot.appendChild(el('small', 'bdr-state', earned ? (rarity === 'rare' ? 'RARE · UNLOCKED' : 'UNLOCKED') : 'LOCKED'))
+  return slot
+}
+
 function collectionTile(e, wearing, state, sheet, detail) {
-  const art = e.artworkUrl ? `<img class="bdr-photo" src="${esc(e.artworkUrl)}" alt="">` : `<span class="bdr-icon">${e.rarity === 'rare' ? '🎖️' : '🔹'}</span>`
+  const art = e.artworkUrl ? `<img class="bdr-photo" src="${esc(e.artworkUrl)}" alt="" loading="lazy" decoding="async">` : `<span class="bdr-icon">${e.rarity === 'rare' ? '🎖️' : '🔹'}</span>`
   const tile = el('button', 'bdr-tile got' + (wearing ? ' equipped' : '') + (e.rarity === 'rare' ? ' rare' : ''),
-    `${art}${wearing ? '<i>WORN</i>' : ''}`)
+    `${art}${e.rarity === 'rare' ? '<span class="bdr-rarity">RARE</span>' : ''}${wearing ? '<i>WORN</i>' : ''}`)
   tile.setAttribute('aria-label', e.name)
   tile.onclick = () => showDetail(detail, {
     got: true, collection: true, rarity: e.rarity, photo: e.artworkUrl,
@@ -79,7 +114,7 @@ function collectionTile(e, wearing, state, sheet, detail) {
 }
 
 function lockedTile(t) {
-  const tile = el('button', 'bdr-tile locked' + (t.rarity === 'rare' ? ' rare' : ''), '<span class="bdr-icon">?</span>')
+  const tile = el('button', 'bdr-tile locked' + (t.rarity === 'rare' ? ' rare' : ''), '<span class="bdr-lock-core">◇</span>')
   tile.setAttribute('aria-label', `${t.name}, locked. ${t.unlockHint}`)
   tile.onclick = () => {
     const detail = tile.closest('.badge-drawer').querySelector('.bdr-detail')
