@@ -416,7 +416,10 @@ function checkText(text, cfg, category, expectedCode) {
     // security-relevant: every submission goes to admin review either way
     // (see vma-voting.ts), and the admin can see the actual photo.
     checks: [
-      ['MTV site', has('mtv') || has('vote.mtv.com'), true],
+      // Best K-Pop's vote page doesn't reliably show "mtv" text in-frame
+      // the way Song of the Year's does (category confirmed live) — not
+      // required there, still shown for transparency like BTS/SWIM below.
+      ['MTV site', has('mtv') || has('vote.mtv.com'), category !== 'best_kpop'],
       ['BTS', has('bts'), false],
       ['SWIM', hasAny(cfg.category_keywords?.[category]), false],
       [cfg.category_labels?.[category] || 'Category', hasAny(cfg.category_match_keywords?.[category]), true],
