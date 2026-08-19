@@ -132,6 +132,11 @@ export function renderHud(container, state) {
   const xpLeft = Math.max(0, lvl.xpForNextLevel - lvl.xpIntoLevel)
   const boost = activeBoost(p.boost)
   const agentBadge = equippedBadge(state)
+  // Real Badge Collection artwork (a photo) takes priority over the legacy
+  // emoji lookup when the server actually resolved one — see
+  // badge-profile.ts::resolveEquippedBadges. Legacy ids (streak:*, level:*,
+  // ...) aren't in that catalog and keep using agentBadge.icon as before.
+  const badgeArt = p.equippedBadgeArtwork?.artworkUrl || null
   const streakLabel = p.streak.current > 0 ? `🔥 ${p.streak.current}D` : '○ 0D'
 
   const invites = state.invites || []
@@ -142,7 +147,9 @@ export function renderHud(container, state) {
     <div class="hud-inner">
       <div class="hud-row">
         <div class="hud-identity" id="levelPill" role="button" tabindex="0" title="Open Agent Dossier">
-          <span class="hud-crest${agentBadge ? ' has-badge' : ''}" aria-hidden="true"><i></i><b>${agentBadge ? agentBadge.icon : '⟭⟬'}</b></span>
+          <span class="hud-crest${agentBadge || badgeArt ? ' has-badge' : ''}" aria-hidden="true"><i></i>${
+            badgeArt ? `<img class="hud-crest-photo" src="${esc(badgeArt)}" alt="">` : `<b>${agentBadge ? agentBadge.icon : '⟭⟬'}</b>`
+          }</span>
           <span class="hud-who">
             <span class="hud-code-row">
               <span class="hud-code">${displayCode}</span>

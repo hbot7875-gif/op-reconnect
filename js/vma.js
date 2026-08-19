@@ -45,13 +45,31 @@ export function vmaEventCard(state) {
   if (!v) return wrap
 
   const card = el('section', 'vma-banner' + (v.chestReady ? ' chest-ready' : ''))
-  const tag = v.isPowerHour ? '<span class="vma-tag power">⚡ POWER HOUR</span>'
-    : v.isDoubleDay ? '<span class="vma-tag double">🔥 DOUBLE DAY</span>' : ''
+  // (7) Both can be true at once (e.g. a Power Hour that falls inside a
+  // Double Day) — show every tag that applies, not just the first match.
+  const tags = []
+  if (v.isPowerHour) tags.push('<span class="vma-tag power">⚡ POWER HOUR</span>')
+  if (v.isDoubleDay) tags.push('<span class="vma-tag double">🔥 DOUBLE DAY</span>')
+
+  if (v.ended) {
+    card.innerHTML = `
+      <div class="vma-banner-head"><span class="vma-dot"></span>EVENT ENDED</div>
+      <div class="vma-banner-title">${esc(v.title || 'VMA Voting Mission')}</div>
+      <p class="vma-banner-msg">Voting has closed, but you still have a Supply Chest to claim.</p>
+      <div class="vma-banner-progress${v.chestReady ? ' is-ready' : ''}">${v.chestReady ? '📦 Supply Chest ready!' : `📦 ${v.chestFill}/${v.chestThreshold}`}</div>
+    `
+    const go = el('button', 'btn btn-primary vma-banner-btn' + (v.chestReady ? ' has-dot' : ''), 'CLAIM CHEST')
+    go.onclick = () => openVmaMission()
+    card.appendChild(go)
+    wrap.appendChild(card)
+    return wrap
+  }
+
   const progressLine = v.chestReady
     ? '<div class="vma-banner-progress is-ready">📦 Supply Chest ready!</div>'
     : `<div class="vma-banner-progress">Today: ${v.todayVotes}/${v.todayCap} across both categories &middot; 📦 ${v.chestFill}/${v.chestThreshold}</div>`
   card.innerHTML = `
-    <div class="vma-banner-head"><span class="vma-dot"></span>LIVE EVENT ${tag}</div>
+    <div class="vma-banner-head"><span class="vma-dot"></span>LIVE EVENT ${tags.join(' ')}</div>
     <div class="vma-banner-title">${esc(v.title || 'VMA Voting Mission')}</div>
     <p class="vma-banner-msg">Vote, send your proof, and earn Supply Chests.</p>
     ${progressLine}
@@ -102,9 +120,10 @@ function paintMissionSheet(sheet, status) {
   const cfg = status.config || {}
   sheet.append(el('div', 'eyebrow', 'VMA SIGNAL MISSION'))
 
+  // (7) Not mutually exclusive — show every condition that's actually true.
   const tags = []
   if (status.isPowerHour) tags.push('<div class="vma-flag power">⚡ POWER HOUR · voting is boosted right now</div>')
-  else if (status.isDoubleDay) tags.push('<div class="vma-flag double">🔥 DOUBLE DAY · up to double votes count today</div>')
+  if (status.isDoubleDay) tags.push('<div class="vma-flag double">🔥 DOUBLE DAY · up to double votes count today</div>')
   if (tags.length) sheet.appendChild(el('div', '', tags.join('')))
 
   sheet.appendChild(el('div', 'vma-timer', `⏳ Voting ${esc(timeLeft(cfg.period_end_utc))}`))
@@ -128,6 +147,17 @@ function paintMissionSheet(sheet, status) {
     cats.appendChild(row)
   }
   sheet.appendChild(cats)
+
+  // (6) The mission never told players WHERE to actually vote — it jumped
+  // straight to "upload proof" as if the vote already happened. This is
+  // step 1 of the real flow: vote on MTV first, come back to upload after.
+  if (cfg.url) {
+    const voteLink = el('a', 'btn btn-ghost vma-mtv-link', 'VOTE ON MTV ↗')
+    voteLink.href = cfg.url
+    voteLink.target = '_blank'
+    voteLink.rel = 'noopener noreferrer'
+    sheet.appendChild(voteLink)
+  }
 
   const addBtn = el('button', 'btn btn-primary vma-add-btn', 'ADD VOTES')
   addBtn.disabled = !status.open
@@ -311,14 +341,22 @@ function checkText(text, cfg, category, expectedCode) {
 function openUploadStep(status, category) {
   const cfg = status.config || {}
   const sheet = el('div', 'sheet vma-sheet')
-  sheet.append(
-    el('div', 'eyebrow', 'ADD YOUR PROOF'),
-    el('p', 'muted', 'Before uploading, make sure your screenshot shows:'),
-  )
-  const checklist = el('div', 'vma-hint-list')
-  checklist.innerHTML = ['BTS', 'SWIM', esc(cfg.category_labels?.[category] || category), 'Your vote total', `Today's code: <b>${esc(status.watermarkCode)}</b>`]
-    .map((t) => `<div>✓ ${t}</div>`).join('')
-  sheet.appendChild(checklist)
+  sheet.append(el('div', 'eyebrow', 'ADD YOUR PROOF'))
+
+  // (6) The old copy jumped straight to "make sure your screenshot shows
+  // X" as if the player had already voted and wrote the code on somehow —
+  // it never said WHERE to vote or that writing the code is something THEY
+  // do (with their phone's markup tool) before uploading, not something
+  // that appears automatically.
+  const steps = el('div', 'vma-steps')
+  steps.innerHTML = `
+    <div class="vma-step${cfg.url ? '' : ' is-done'}"><b>1</b><span>${cfg.url ? `<a href="${esc(cfg.url)}" target="_blank" rel="noopener noreferrer">Vote on MTV</a> for BTS in ${esc(cfg.category_labels?.[category] || category)}` : `Vote on MTV for BTS in ${esc(cfg.category_labels?.[category] || category)}`}</span></div>
+    <div class="vma-step"><b>2</b><span>Take a screenshot after voting</span></div>
+    <div class="vma-step"><b>3</b><span>Write <b>${esc(status.watermarkCode)}</b> somewhere on the screenshot (your phone's markup/annotate tool)</span></div>
+    <div class="vma-step"><b>4</b><span>Upload it below</span></div>
+  `
+  sheet.appendChild(steps)
+  sheet.appendChild(el('p', 'muted', 'Make sure the screenshot also shows BTS, SWIM, and your vote total.'))
 
   const input = el('input')
   input.type = 'file'
@@ -391,10 +429,31 @@ async function openScanStep(status, category, file) {
   } else {
     resultBox.appendChild(el('div', 'vma-scan-headline bad', 'SIGNAL UNCLEAR'))
     resultBox.appendChild(el('p', 'muted', "We couldn't confirm everything clearly."))
+
+    // (4) No more silent "|| 1" guess when OCR can't read a number — that
+    // fake total became the permanent record with no way to fix it later.
+    // If OCR DID find a number, use it (some other check just failed);
+    // otherwise ask the player directly rather than inventing one.
+    let countInput = null
+    if (displayedTotal == null) {
+      resultBox.appendChild(el('div', 'vma-count-label', 'How many votes does the screenshot show?'))
+      countInput = el('input', 'vma-count-input')
+      countInput.type = 'number'
+      countInput.min = '1'
+      countInput.max = '10000'
+      countInput.placeholder = 'e.g. 10'
+      resultBox.appendChild(countInput)
+    }
+
     const retry = el('button', 'btn btn-primary vma-add-btn', 'Try another screenshot')
     retry.onclick = () => openUploadStep(status, category)
     const review = el('button', 'btn btn-ghost', 'Send for review')
-    review.onclick = () => submitVote(status, category, base64, file.type, ocrText, displayedTotal || 1)
+    review.onclick = () => {
+      const manual = countInput ? Math.floor(Number(countInput.value)) : null
+      const total = displayedTotal ?? manual
+      if (!total || total < 1) { toast('Enter how many votes the screenshot shows'); return }
+      submitVote(status, category, base64, file.type, ocrText, total)
+    }
     resultBox.append(retry, review)
   }
   sheet.appendChild(resultBox)

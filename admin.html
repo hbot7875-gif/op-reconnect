@@ -318,6 +318,7 @@
   <button class="adm-tab" data-tab="broadcast" type="button">📡 Broadcasts</button>
   <button class="adm-tab" data-tab="goals" type="button">🎯 Goals</button>
   <button class="adm-tab" data-tab="lookup" type="button">🔎 Agent Lookup</button>
+  <button class="adm-tab" data-tab="vma" type="button">🎫 VMA Review</button>
 </div>
 
 <!-- ── Red Zone ── -->
@@ -518,6 +519,23 @@
       <button class="btn btn-primary" id="btnLookup" type="button">Search</button>
     </div>
     <div id="lkOut"></div>
+  </section>
+</div>
+
+<!-- ── VMA Review ── -->
+<div class="adm-panel" id="panel-vma" data-panel="vma" hidden>
+  <section class="adm-card">
+    <div class="adm-card-head">
+      <h2>Pending vote proofs</h2>
+      <button class="btn btn-ghost" id="btnLoadVma" type="button">↻ Load</button>
+    </div>
+    <p class="muted" id="vmaPendingCount">—</p>
+    <div id="vmaList"></div>
+    <div class="adm-row" id="vmaPager" style="margin-top:12px; justify-content:center; gap:10px;">
+      <button class="btn btn-ghost" id="btnVmaPrev" type="button">← Prev</button>
+      <span id="vmaPageLabel" class="muted"></span>
+      <button class="btn btn-ghost" id="btnVmaNext" type="button">Next →</button>
+    </div>
   </section>
 </div>
 
@@ -1297,6 +1315,73 @@ $('btnLookup').onclick = async () => {
   if (sessionUnauthorized) setMutationButtonsDisabled(true)
 }
 $('lkQuery').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btnLookup').click() })
+
+/* ── VMA Review ── */
+let vmaOffset = 0
+const VMA_PAGE_SIZE = 10
+
+function vmaCard(row) {
+  const card = document.createElement('div')
+  card.className = 'adm-card'
+  card.style.marginTop = '10px'
+  card.innerHTML = `
+    <div class="adm-card-head"><h2>${esc(row.agent_no)} · ${esc(row.category)}</h2><span class="muted">${fmtDate(row.voted_at)}</span></div>
+    <p class="muted">${esc(row.verify_note || '')}</p>
+    ${row.proofUrl ? `<img src="${esc(row.proofUrl)}" alt="proof screenshot" style="max-width:100%; border-radius:10px; border:1px solid var(--border); margin:8px 0;">` : '<p class="muted">No preview available.</p>'}
+    <div class="adm-grid2">
+      <label class="adm-field"><span>Displayed vote total</span>
+        <input type="number" min="1" max="10000" class="ob-input vma-total-input" value="${row.displayed_total}"></label>
+      <label class="adm-field"><span>Watermark</span>
+        <input type="text" class="ob-input" value="${row.watermark_ok ? '✓ matched' : '✕ not found'}" disabled></label>
+    </div>
+    <div class="adm-row" style="margin-top:8px;">
+      <button class="btn btn-primary vma-approve-btn" type="button">✓ Approve</button>
+      <button class="btn btn-alert vma-reject-btn" type="button">✕ Reject</button>
+    </div>
+    <div class="adm-out vma-out"></div>
+  `
+  card.querySelector('.vma-approve-btn').onclick = async (e) => {
+    const btn = e.currentTarget
+    btn.disabled = true
+    const totalInput = card.querySelector('.vma-total-input')
+    const corrected = Number(totalInput.value)
+    const res = await call('adminReviewVmaVote', {
+      voteId: row.id, decision: 'approve',
+      correctedDisplayedTotal: corrected !== row.displayed_total ? corrected : undefined,
+    })
+    if (res?.success) { card.remove(); loadVmaCount() }
+    else { const out = card.querySelector('.vma-out'); out.textContent = res?.error || 'Failed'; out.className = 'adm-out is-visible is-error'; btn.disabled = false }
+  }
+  card.querySelector('.vma-reject-btn').onclick = async (e) => {
+    const btn = e.currentTarget
+    btn.disabled = true
+    const res = await call('adminReviewVmaVote', { voteId: row.id, decision: 'reject' })
+    if (res?.success) { card.remove(); loadVmaCount() }
+    else { const out = card.querySelector('.vma-out'); out.textContent = res?.error || 'Failed'; out.className = 'adm-out is-visible is-error'; btn.disabled = false }
+  }
+  return card
+}
+
+async function loadVmaCount() {
+  const res = await call('adminListVmaPending', { limit: 1, offset: 0 })
+  $('vmaPendingCount').textContent = res?.success ? `${res.pendingCount} pending total` : ''
+}
+
+async function loadVmaPage() {
+  const list = $('vmaList')
+  list.innerHTML = `<div class="adm-empty"><span class="adm-spin"></span> Loading…</div>`
+  const res = await call('adminListVmaPending', { limit: VMA_PAGE_SIZE, offset: vmaOffset })
+  if (!res || !res.success) { list.innerHTML = `<div class="adm-empty">${esc(res?.error || 'Failed to load')}</div>`; return }
+  $('vmaPendingCount').textContent = `${res.pendingCount} pending total`
+  $('vmaPageLabel').textContent = `${vmaOffset + 1}–${vmaOffset + res.pending.length} of ${res.pendingCount}`
+  list.innerHTML = ''
+  if (!res.pending.length) { list.innerHTML = `<div class="adm-empty">Nothing pending right now.</div>`; return }
+  for (const row of res.pending) list.appendChild(vmaCard(row))
+}
+$('btnLoadVma').onclick = () => { vmaOffset = 0; loadVmaPage() }
+$('btnVmaPrev').onclick = () => { vmaOffset = Math.max(0, vmaOffset - VMA_PAGE_SIZE); loadVmaPage() }
+$('btnVmaNext').onclick = () => { vmaOffset += VMA_PAGE_SIZE; loadVmaPage() }
+document.querySelector('[data-tab="vma"]').addEventListener('click', () => loadVmaPage())
 
 tryStoredKey()
 </script>

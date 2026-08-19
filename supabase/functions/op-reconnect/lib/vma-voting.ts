@@ -129,7 +129,23 @@ export async function getVmaBanner(supabase: SupabaseDB, content: GameContent, a
   if (!cfg) return null
   const now = new Date()
   const open = now >= new Date(cfg.period_start_utc) && now <= new Date(cfg.period_end_utc)
-  if (!open) return null
+  const chest = await getChestStatus(supabase, content, { agentNo, eventId })
+
+  if (!open) {
+    // (9) Voting closing doesn't mean saved chest progress becomes
+    // unreachable — keep a minimal claim-only banner up while there's still
+    // something in it. Once fillCount hits 0 there's genuinely nothing
+    // left to show, and the banner disappears for good.
+    if (chest.success && chest.fillCount > 0) {
+      return {
+        eventId, title: cfg.title, ended: true,
+        isPowerHour: false, isDoubleDay: false, periodEndUtc: cfg.period_end_utc,
+        todayVotes: 0, todayCap: 0,
+        chestFill: chest.fillCount, chestThreshold: chest.threshold, chestReady: chest.ready,
+      }
+    }
+    return null
+  }
 
   const day = etDateOf(now)
   const { data: rows } = await supabase.from('rc_vma_votes')
@@ -138,10 +154,11 @@ export async function getVmaBanner(supabase: SupabaseDB, content: GameContent, a
   const todayVotes = (rows || []).reduce((s: number, r: any) => s + r.votes_logged, 0)
   const todayCap = cap * cfg.categories.length
 
-  const chest = await getChestStatus(supabase, content, { agentNo, eventId })
-
   return {
-    eventId, title: cfg.title,
+    eventId, title: cfg.title, ended: false,
+    // (7) Both can be true on the same real-world day (e.g. a Double Day
+    // that also has a Power Hour window inside it) — the caller renders
+    // both tags, not one-or-the-other.
     isPowerHour: isPowerHour(cfg, now), isDoubleDay: isDoubleDay(cfg, now),
     periodEndUtc: cfg.period_end_utc,
     todayVotes, todayCap,
@@ -234,6 +251,11 @@ export async function logVmaVote(supabase: SupabaseDB, content: GameContent, par
   const cap = doubleDay ? cfg.daily_cap_per_category * 2 : cfg.daily_cap_per_category
   const imageHash = await sha256Hex(bytes)
   const expectedCode = dailyWatermarkCode(cfg, day)
+  // check.status is advisory only now — it drives the client's local
+  // "looks right" hint and the note an admin sees, never an auto-verify
+  // decision. A client can send fabricated OCR text claiming a perfect
+  // match; matching keywords was never proof, so every real submission
+  // is queued for a human regardless of what this says. See module header.
   const check = checkProofText(ocrText, cfg, category, expectedCode)
 
   const path = `${agentNo}/${Date.now()}.${imageMime.includes('png') ? 'png' : 'jpg'}`
@@ -246,41 +268,58 @@ export async function logVmaVote(supabase: SupabaseDB, content: GameContent, par
   // (3) Atomic: locks this agent/category/day/event, re-checks the
   // duplicate hash and the cap, and inserts — all inside one transaction —
   // so two concurrent submissions can't both read a stale cap and both get
-  // credited past it.
+  // credited past it. p_verify_status is always 'pending' — nothing is
+  // ever auto-credited at submit time; only adminReviewVmaVote can move a
+  // row to 'verified' and actually credit votes.
   const { data: result, error: rpcErr } = await supabase.rpc('rc_vma_submit_vote', {
     p_agent_no: agentNo, p_event_id: eventId, p_category: category, p_vote_day: day,
     p_displayed_total: displayedTotal, p_daily_cap: cap,
     p_is_power_hour: powerHour, p_is_double_day: doubleDay,
     p_proof_path: path, p_image_hash: imageHash, p_image_mime: imageMime, p_ocr_text: ocrText,
     p_expected_code: expectedCode, p_watermark_ok: check.watermarkOk,
-    p_verify_status: check.status, p_verify_note: check.note,
+    p_verify_status: 'pending', p_verify_note: check.note,
   })
   if (rpcErr) return { success: false, error: 'db_error', detail: rpcErr.message }
   if (!result?.success) return { success: false, error: result?.error || 'submit_failed' }
 
-  if (check.status === 'verified') {
-    const templateIds = ['event_vma_voter']
-    if (powerHour) templateIds.push('event_vma_power_hour')
-    if (doubleDay) templateIds.push('event_vma_double_day')
-    for (const templateId of templateIds) await awardBadge(supabase, agentNo, templateId)
-    await addChestFill(supabase, agentNo, eventId, result.creditedVotes)
-  }
-
   return {
-    success: true, verifyStatus: check.status, verifyNote: check.note,
-    watermarkCode: expectedCode, creditedVotes: result.creditedVotes, remaining: result.remaining,
+    success: true, verifyStatus: 'pending', verifyNote: check.note, looksGood: check.status === 'verified',
+    watermarkCode: expectedCode, remaining: result.remaining,
   }
 }
 
 // ── Admin review (7) ─────────────────────────────────────────────────────
 
+const PROOF_BUCKET = 'vma-vote-proofs'
+const SIGNED_URL_TTL_SECONDS = 10 * 60
+
+// (5) A usable review queue needs to actually show the screenshot — the
+// bucket is private (proof screenshots show the phone's status bar), so
+// the list hands back a short-lived signed URL per row instead of the raw
+// proof_path, and supports paging so a backlog doesn't have to load in one
+// shot.
 export async function adminListVmaPending(supabase: SupabaseDB, params: Record<string, unknown>) {
   const eventId = String(params.eventId || 'vma_2026')
+  const limit = Math.min(50, Math.max(1, Number(params.limit) || 20))
+  const offset = Math.max(0, Number(params.offset) || 0)
+
+  const { count } = await supabase.from('rc_vma_votes')
+    .select('id', { count: 'exact', head: true }).eq('event_id', eventId).eq('verify_status', 'pending')
+
   const { data, error } = await supabase.from('rc_vma_votes')
     .select('id, agent_no, category, vote_day, displayed_total, ocr_text, expected_code, watermark_ok, verify_note, voted_at, proof_path')
-    .eq('event_id', eventId).eq('verify_status', 'pending').order('voted_at', { ascending: true })
+    .eq('event_id', eventId).eq('verify_status', 'pending')
+    .order('voted_at', { ascending: true }).range(offset, offset + limit - 1)
   if (error) return { success: false, error: error.message }
-  return { success: true, pending: data || [] }
+
+  const rows = data || []
+  const withUrls = await Promise.all(rows.map(async (r: any) => {
+    const { data: signed } = await supabase.storage.from(PROOF_BUCKET).createSignedUrl(r.proof_path, SIGNED_URL_TTL_SECONDS)
+    const { proof_path, ...rest } = r
+    return { ...rest, proofUrl: signed?.signedUrl || null }
+  }))
+
+  return { success: true, pending: withUrls, pendingCount: count || 0, limit, offset }
 }
 
 export async function adminReviewVmaVote(supabase: SupabaseDB, content: GameContent, params: Record<string, unknown>) {
@@ -288,23 +327,35 @@ export async function adminReviewVmaVote(supabase: SupabaseDB, content: GameCont
   const decision = String(params.decision || '')
   const admin = String(params.admin || 'admin')
   const note = params.note ? String(params.note) : null
+  const correctedTotal = params.correctedDisplayedTotal != null ? Math.floor(Number(params.correctedDisplayedTotal)) : null
   if (!voteId || !['approve', 'reject'].includes(decision)) return { success: false, error: 'bad_params' }
+  if (correctedTotal != null && !(correctedTotal >= 1 && correctedTotal <= 10000)) {
+    return { success: false, error: 'bad_corrected_total' }
+  }
+
+  // The cap for a row is decided by conditions AT SUBMIT TIME (is_double_day
+  // was already resolved then), not "now" — an admin reviewing a Tuesday
+  // submission on Wednesday must still get Tuesday's cap.
+  const { data: row } = await supabase.from('rc_vma_votes')
+    .select('agent_no, event_id, category, is_power_hour, is_double_day').eq('id', voteId).maybeSingle()
+  if (!row) return { success: false, error: 'not_found' }
+  const cfg = vmaConfig(content, row.event_id)
+  if (!cfg) return { success: false, error: 'not_configured' }
+  const dailyCap = row.is_double_day ? cfg.daily_cap_per_category * 2 : cfg.daily_cap_per_category
 
   const { data: result, error } = await supabase.rpc('rc_vma_review_vote', {
     p_vote_id: voteId, p_decision: decision, p_admin: admin, p_note: note,
+    p_daily_cap: dailyCap, p_corrected_total: correctedTotal,
   })
   if (error) return { success: false, error: error.message }
   if (!result?.success) return { success: false, error: result?.error || 'review_failed' }
 
   if (result.verifyStatus === 'verified') {
-    const { data: row } = await supabase.from('rc_vma_votes').select('agent_no, event_id, is_power_hour, is_double_day').eq('id', voteId).maybeSingle()
-    if (row) {
-      const templateIds = ['event_vma_voter']
-      if (row.is_power_hour) templateIds.push('event_vma_power_hour')
-      if (row.is_double_day) templateIds.push('event_vma_double_day')
-      for (const templateId of templateIds) await awardBadge(supabase, row.agent_no, templateId)
-      await addChestFill(supabase, row.agent_no, row.event_id, result.creditedVotes)
-    }
+    const templateIds = ['event_vma_voter']
+    if (row.is_power_hour) templateIds.push('event_vma_power_hour')
+    if (row.is_double_day) templateIds.push('event_vma_double_day')
+    for (const templateId of templateIds) await awardBadge(supabase, row.agent_no, templateId)
+    await addChestFill(supabase, row.agent_no, row.event_id, result.creditedVotes)
   }
 
   return { success: true, verifyStatus: result.verifyStatus, creditedVotes: result.creditedVotes }

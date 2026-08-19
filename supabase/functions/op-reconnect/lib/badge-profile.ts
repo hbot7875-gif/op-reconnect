@@ -29,25 +29,52 @@ function parseBadgeId(badgeId: string): { templateId: string; scopeId: string | 
  *  now, so old awards don't stay blank forever once art shows up. Shared by
  *  every award trigger (districts.ts, handlers.ts's ward badge,
  *  vma-voting.ts, ...) so the pick-art-once/backfill behavior stays in
- *  exactly one place. */
+ *  exactly one place.
+ *
+ *  (13) Every DB call here is now checked and surfaced — previously a
+ *  failed select/insert/update was silently swallowed, so the caller (and
+ *  the player, via a chest-reveal card or "badge earned" message) could
+ *  believe a badge was saved when it wasn't. Returns {success:false, error}
+ *  on any real failure instead; existing fire-and-forget callers that don't
+ *  check the return value are unaffected, but now have the option to. */
 export async function awardBadge(
   supabase: SupabaseDB, agentNo: string, templateId: string, scopeId?: string,
-): Promise<void> {
+): Promise<{ success: boolean; error?: string }> {
   const badgeId = scopeId ? `${templateId}:${scopeId}` : templateId
-  const { data: existing } = await supabase.from('rc_badges').select('badge_id, artwork_id')
+  const { data: existing, error: selectErr } = await supabase.from('rc_badges').select('badge_id, artwork_id')
     .eq('agent_no', agentNo).eq('badge_id', badgeId).maybeSingle()
+  if (selectErr) {
+    console.error(`awardBadge: select failed for ${agentNo}/${badgeId}: ${selectErr.message}`)
+    return { success: false, error: selectErr.message }
+  }
 
-  if (existing && existing.artwork_id != null) return
+  if (existing && existing.artwork_id != null) return { success: true }
 
-  const { data: art } = await supabase.from('rc_badge_art').select('id')
+  const { data: art, error: artErr } = await supabase.from('rc_badge_art').select('id')
     .eq('template_id', templateId).eq('active', true)
+  if (artErr) {
+    console.error(`awardBadge: art lookup failed for ${templateId}: ${artErr.message}`)
+    return { success: false, error: artErr.message }
+  }
   const artworkId = art && art.length ? art[Math.floor(Math.random() * art.length)].id : null
 
   if (existing) {
-    if (artworkId != null) await supabase.from('rc_badges').update({ artwork_id: artworkId }).eq('agent_no', agentNo).eq('badge_id', badgeId)
-    return
+    if (artworkId == null) return { success: true }
+    const { error: updateErr } = await supabase.from('rc_badges').update({ artwork_id: artworkId })
+      .eq('agent_no', agentNo).eq('badge_id', badgeId)
+    if (updateErr) {
+      console.error(`awardBadge: artwork backfill failed for ${agentNo}/${badgeId}: ${updateErr.message}`)
+      return { success: false, error: updateErr.message }
+    }
+    return { success: true }
   }
-  await supabase.from('rc_badges').insert({ agent_no: agentNo, badge_id: badgeId, artwork_id: artworkId })
+
+  const { error: insertErr } = await supabase.from('rc_badges').insert({ agent_no: agentNo, badge_id: badgeId, artwork_id: artworkId })
+  if (insertErr) {
+    console.error(`awardBadge: insert failed for ${agentNo}/${badgeId}: ${insertErr.message}`)
+    return { success: false, error: insertErr.message }
+  }
+  return { success: true }
 }
 
 export async function setEquippedBadge(supabase: SupabaseDB, content: GameContent, params: Record<string, unknown>) {

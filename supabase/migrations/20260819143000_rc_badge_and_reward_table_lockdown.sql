@@ -1,0 +1,19 @@
+-- Found during adversarial testing of the previous lockdown migration: a
+-- direct anon-key POST to /rest/v1/rc_badges succeeds and grants an
+-- arbitrary badge outright (proved live — see session notes), completely
+-- bypassing awardBadge(), the art-pool pick, and every other check. These
+-- three tables predate this session's work, but they are now the actual
+-- substrate Supply Chest and Backup Pass grant real rewards into
+-- (rc_badges for the badge reward, rc_player_items for Backup Pass
+-- items/consumption, rc_players for charge_cells/streak_freeze_charges/
+-- deadline_extension_charges) — leaving them directly writable makes the
+-- whole reward system trivially bypassable regardless of how locked-down
+-- the RPCs are. Scoped to just these three, not a project-wide RLS pass:
+-- the rest of the app's tables have the same permissive default, but
+-- auditing and fixing that everywhere is a much larger, separate change
+-- this migration deliberately does not attempt.
+--
+-- Safe to revoke: this app never uses a client-side Supabase SDK — every
+-- request goes through fetch() to the edge function (see js/api.js), which
+-- authenticates as service_role and isn't subject to these grants at all.
+revoke all on table rc_badges, rc_player_items, rc_players from anon, authenticated;
