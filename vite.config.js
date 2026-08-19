@@ -18,11 +18,66 @@
 // see functions on window — module scope would break every one of them.
 
 import { resolve } from 'path'
+import { copyFileSync, mkdirSync, readFileSync } from 'fs'
 import { defineConfig } from 'vite'
+
+function copyOcrRuntime() {
+  const files = new Map([
+    ['/ocr/worker.min.js', [resolve(__dirname, 'node_modules', 'tesseract.js', 'dist', 'worker.min.js'), 'text/javascript']],
+    ['/ocr/lang/eng.traineddata.gz', [resolve(__dirname, 'node_modules', '@tesseract.js-data', 'eng', '4.0.0_best_int', 'eng.traineddata.gz'), 'application/gzip']],
+    ...[
+      'tesseract-core.wasm.js',
+      'tesseract-core-simd.wasm.js',
+      'tesseract-core-lstm.wasm.js',
+      'tesseract-core-simd-lstm.wasm.js',
+    ].map((name) => [`/ocr/core/${name}`, [resolve(__dirname, 'node_modules', 'tesseract.js-core', name), 'text/javascript']]),
+  ])
+  return {
+    name: 'copy-self-hosted-ocr-runtime',
+    configureServer(server) {
+      // Keep local playtests on the same self-hosted paths production uses.
+      server.middlewares.use((request, response, next) => {
+        const pathname = new URL(request.url || '/', 'http://localhost').pathname
+        const asset = files.get(pathname)
+        if (!asset) return next()
+        response.setHeader('Content-Type', asset[1])
+        response.end(readFileSync(asset[0]))
+      })
+    },
+    closeBundle() {
+      const ocrRoot = resolve(__dirname, 'dist', 'ocr')
+      const coreRoot = resolve(ocrRoot, 'core')
+      const langRoot = resolve(ocrRoot, 'lang')
+      mkdirSync(coreRoot, { recursive: true })
+      mkdirSync(langRoot, { recursive: true })
+
+      copyFileSync(
+        resolve(__dirname, 'node_modules', 'tesseract.js', 'dist', 'worker.min.js'),
+        resolve(ocrRoot, 'worker.min.js'),
+      )
+      for (const name of [
+        'tesseract-core.wasm.js',
+        'tesseract-core-simd.wasm.js',
+        'tesseract-core-lstm.wasm.js',
+        'tesseract-core-simd-lstm.wasm.js',
+      ]) {
+        copyFileSync(
+          resolve(__dirname, 'node_modules', 'tesseract.js-core', name),
+          resolve(coreRoot, name),
+        )
+      }
+      copyFileSync(
+        resolve(__dirname, 'node_modules', '@tesseract.js-data', 'eng', '4.0.0_best_int', 'eng.traineddata.gz'),
+        resolve(langRoot, 'eng.traineddata.gz'),
+      )
+    },
+  }
+}
 
 export default defineConfig({
   root: __dirname,
   base: './',
+  plugins: [copyOcrRuntime()],
   server: {
     // Respect an assigned PORT (e.g. the harness's autoPort) instead of
     // always claiming 5173 — otherwise two dev servers can't run side by

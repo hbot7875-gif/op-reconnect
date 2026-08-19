@@ -11,23 +11,10 @@
 import { call } from './api.js'
 import { el, esc, toast, showOverlay, hideOverlay, setState } from './state.js'
 import { getAgentNo } from './session.js'
+import { createWorker } from 'tesseract.js'
 import {
   evaluateVoteProof, validVoteTotals, watermarkMatches,
 } from '../supabase/functions/op-reconnect/lib/vma-ocr.js'
-
-let tesseractPromise = null
-function loadTesseract() {
-  if (tesseractPromise) return tesseractPromise
-  tesseractPromise = new Promise((resolve, reject) => {
-    if (window.Tesseract) return resolve(window.Tesseract)
-    const s = document.createElement('script')
-    s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js'
-    s.onload = () => resolve(window.Tesseract)
-    s.onerror = () => reject(new Error('scan_unavailable'))
-    document.head.appendChild(s)
-  })
-  return tesseractPromise
-}
 
 // The plain Tesseract.recognize(image, 'eng') convenience call uses fully
 // automatic page segmentation, which — verified directly against a real
@@ -42,11 +29,20 @@ let workerPromise = null
 async function getOcrWorker() {
   if (workerPromise) return workerPromise
   workerPromise = (async () => {
-    const Tesseract = await loadTesseract()
-    const worker = await Tesseract.createWorker('eng')
+    const origin = window.location.origin
+    const worker = await createWorker('eng', 1, {
+      workerPath: `${origin}/ocr/worker.min.js`,
+      corePath: `${origin}/ocr/core`,
+      langPath: `${origin}/ocr/lang`,
+    })
     await worker.setParameters({ tessedit_pageseg_mode: '11' })
     return worker
-  })()
+  })().catch((error) => {
+    // A transient download/memory failure must not poison every later scan
+    // in this browser session. A retry gets a fresh worker promise.
+    workerPromise = null
+    throw error
+  })
   return workerPromise
 }
 
@@ -632,14 +628,25 @@ async function openScanStep(status, category, file) {
   sheet.appendChild(list)
   showOverlay(sheet)
 
-  let base64, ocrText = ''
+  let base64 = ''
+  let ocrText = ''
+  let scanFailed = false
   try {
     base64 = await fileToBase64(file)
+  } catch {
+    // Submission will show a specific attach/read error instead of hiding
+    // this behind the OCR result.
+  }
+  try {
     ocrText = await scanVoteProofImage(
       file, cfg, category, status.watermarkCode, allowedVoteTotals,
     )
-  } catch {
-    ocrText = ''
+  } catch (error) {
+    scanFailed = true
+    const reason = error instanceof Error ? error.message : String(error || 'unknown')
+    // Stored only as audit/debug context on a pending proof. It never makes
+    // a proof pass and helps distinguish a dead OCR worker from a real miss.
+    ocrText = `[scanner-error] ${reason.slice(0, 180)}`
   }
 
   const { checks, displayedTotal } = checkText(
@@ -677,7 +684,9 @@ async function openScanStep(status, category, file) {
     // browser the final judge: unclear proofs still reach the private admin
     // queue with zero credit, where the actual image can be checked safely.
     const watermarkFailed = !checks.find(([label]) => label === "Today's code")?.[1]
-    if (watermarkFailed) {
+    if (scanFailed) {
+      resultBox.appendChild(el('p', 'muted', "Automatic scanning couldn't start on this phone. Your screenshot is still safe to send for review."))
+    } else if (watermarkFailed) {
       resultBox.appendChild(el('p', 'muted', `We couldn't automatically read today's code. If ${esc(status.watermarkCode)} is visible on your screenshot, send it for review. Otherwise, add the code and try again.`))
     } else {
       resultBox.appendChild(el('p', 'muted', "We couldn't confirm everything clearly."))
