@@ -3,18 +3,12 @@
 // unlocked and what's still waiting, styled as a gamified reveal rather
 // than a stats table.
 //
-// Two badge systems coexist here: the legacy client-computed set
-// (BADGE_CATALOG — streak/level/xp/districts, derived from state with no
-// server round trip) and the newer Badge Collection catalog
-// (rc_badge_catalog/rc_badges, fetched via getBadgeCollection) that VMA and
-// Supply Chest award into, with real photo artwork per earned instance.
-// Both render in the same grid; setEquippedBadge already treats both id
-// shapes the same way server-side, so equipping either kind works
-// identically here.
+// Only the photo-based Badge Collection is rendered here. The older
+// fire/star/XP/district emoji achievements belong to the previous badge
+// experience and are intentionally not mixed into this collection.
 
 import { call } from './api.js'
 import { el, esc, getState, hideOverlay, setState, toast } from './state.js'
-import { BADGE_CATALOG } from './badges.js'
 import { getAgentNo } from './session.js'
 
 export function badgeDrawerSheet(state) {
@@ -58,17 +52,11 @@ async function loadAndPaint(sheet, state, detail) {
   const earnedTemplateIds = new Set(collection.earned.map((e) => e.templateId))
   const lockedTemplates = collection.templates.filter((t) => !earnedTemplateIds.has(t.id))
 
-  const legacyEarned = BADGE_CATALOG.filter((b) => b.earned(liveState))
-  const totalEarned = legacyEarned.length + collection.earned.length
+  const totalEarned = collection.earned.length
   count.textContent = `${totalEarned} badge${totalEarned === 1 ? '' : 's'} unlocked`
 
   grid.innerHTML = ''
 
-  for (const b of BADGE_CATALOG) {
-    const got = b.earned(liveState)
-    const wearing = liveState.player?.equippedBadgeId === b.id
-    grid.appendChild(legacyTile(b, got, wearing, liveState, sheet, detail))
-  }
   for (const e of collection.earned) {
     const wearing = liveState.player?.equippedBadgeId === e.badgeId
     grid.appendChild(collectionTile(e, wearing, liveState, sheet, detail))
@@ -76,16 +64,6 @@ async function loadAndPaint(sheet, state, detail) {
   for (const t of lockedTemplates) {
     grid.appendChild(lockedTile(t))
   }
-}
-
-function legacyTile(b, got, wearing, state, sheet, detail) {
-  const tile = el('button', 'bdr-tile' + (got ? ' got' : ' locked') + (wearing ? ' equipped' : ''),
-    `<span class="bdr-icon">${got ? b.icon : '?'}</span>${wearing ? '<i>WORN</i>' : ''}`)
-  tile.setAttribute('aria-label', got ? b.name : 'Locked badge')
-  tile.onclick = () => showDetail(detail, {
-    got, icon: b.icon, name: b.name, desc: b.desc, badgeId: b.id, wearing,
-  }, state, sheet)
-  return tile
 }
 
 function collectionTile(e, wearing, state, sheet, detail) {
