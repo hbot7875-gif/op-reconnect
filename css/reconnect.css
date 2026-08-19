@@ -1407,18 +1407,27 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 /* ── Badge Drawer: a trophy case, not a leaderboard — no ranks, no numbers
    competing against anyone else's collection, just what's unlocked. ── */
 .bdr-count { font-family: var(--mono); font-size: 11px; color: var(--dim); text-align: center; margin: 6px 0 16px; }
-.bdr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 10px; margin-bottom: 4px; }
-.bdr-tile { aspect-ratio: 1; border-radius: 14px; display: flex; align-items: center; justify-content: center;
-  position: relative; border: 1px solid var(--border); background: var(--panel); cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.2s ease; }
-.bdr-tile:hover { transform: scale(1.06); }
+.bdr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 14px 10px; margin-bottom: 4px; }
+.bdr-tile { aspect-ratio: 1; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  position: relative; border: 3px solid var(--border); background: var(--panel); cursor: pointer; overflow: hidden;
+  box-shadow: inset 0 0 0 2px rgba(0,0,0,0.35), 0 3px 8px rgba(0,0,0,0.35);
+  transition: transform 0.15s ease, box-shadow 0.2s ease, border-color 0.2s ease; }
+.bdr-tile:hover { transform: scale(1.08) rotate(-1deg); }
 .bdr-tile .bdr-icon { font-size: 26px; }
-.bdr-tile.locked { opacity: 0.35; border-style: dashed; filter: grayscale(1); }
-.bdr-tile.got { background: linear-gradient(160deg, var(--gold-soft), var(--purple-soft));
-  border-color: rgba(217,173,95,0.5); box-shadow: 0 0 14px rgba(217,173,95,0.22); }
-.bdr-tile.equipped { border-color: var(--purple-lt); box-shadow: 0 0 0 2px rgba(139,92,246,.25), 0 0 16px rgba(139,92,246,.3); }
-.bdr-tile > i { position: absolute; left: 50%; bottom: 3px; transform: translateX(-50%); color: var(--gold);
-  font-family: var(--mono); font-size: 7px; font-style: normal; font-weight: 800; letter-spacing: .7px; }
+.bdr-tile.locked { opacity: 0.4; border-style: dashed; filter: grayscale(1); box-shadow: none; }
+.bdr-tile.got { border-color: var(--gold); background: linear-gradient(160deg, var(--gold-soft), var(--purple-soft));
+  box-shadow: inset 0 0 0 2px rgba(0,0,0,0.35), 0 0 0 1px rgba(217,173,95,0.35), 0 0 16px rgba(217,173,95,0.35); }
+.bdr-tile.got::after { content: ''; position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
+  background: conic-gradient(from 220deg, transparent 0%, rgba(255,255,255,0.35) 8%, transparent 16%);
+  opacity: 0; transition: opacity 0.2s ease; }
+.bdr-tile.got:hover::after { opacity: 1; animation: bdrShine 1.1s linear; }
+.bdr-tile.rare { border-color: var(--gold); box-shadow: inset 0 0 0 2px rgba(0,0,0,0.35), 0 0 0 1px rgba(217,173,95,0.5), 0 0 20px rgba(217,173,95,0.45);
+  animation: bdrPulse 2.4s ease-in-out infinite; }
+.bdr-tile.equipped { border-color: var(--purple-lt);
+  box-shadow: inset 0 0 0 2px rgba(0,0,0,0.35), 0 0 0 3px rgba(139,92,246,.35), 0 0 18px rgba(139,92,246,.45); }
+.bdr-tile > i { position: absolute; top: -1px; right: -1px; background: var(--gold); color: #1b1400;
+  border-radius: 999px; padding: 2px 6px 2px 7px; box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+  font-family: var(--mono); font-size: 7px; font-style: normal; font-weight: 800; letter-spacing: .6px; }
 .bdr-wear { width: 100%; margin-top: 14px; }
 
 .bdr-detail { margin-top: 14px; padding: 18px; border-radius: var(--r-lg);
@@ -1427,13 +1436,21 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 .bdr-detail-name { font-family: var(--disp); font-weight: 800; font-size: 16px; margin-top: 8px; color: var(--text); }
 .bdr-detail-desc { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
 .bdr-detail.pop { animation: bdrPop 0.35s ease; }
-.bdr-tile.rare { border-color: rgba(217,173,95,0.5); }
-.bdr-photo { width: 100%; height: 100%; object-fit: cover; border-radius: 14px; }
-.bdr-detail-photo { width: 84px; height: 84px; object-fit: cover; border-radius: 16px; border: 1px solid var(--border-str); }
+.bdr-photo { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.bdr-detail-photo { width: 84px; height: 84px; object-fit: cover; border-radius: 50%;
+  border: 3px solid var(--gold); box-shadow: inset 0 0 0 2px rgba(0,0,0,0.35), 0 0 14px rgba(217,173,95,0.35); }
 @keyframes bdrPop {
   0% { transform: scale(0.9); opacity: 0.4; }
   60% { transform: scale(1.03); opacity: 1; }
   100% { transform: scale(1); opacity: 1; }
+}
+@keyframes bdrShine {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+@keyframes bdrPulse {
+  0%, 100% { box-shadow: inset 0 0 0 2px rgba(0,0,0,0.35), 0 0 0 1px rgba(217,173,95,0.5), 0 0 20px rgba(217,173,95,0.45); }
+  50% { box-shadow: inset 0 0 0 2px rgba(0,0,0,0.35), 0 0 0 1px rgba(217,173,95,0.7), 0 0 28px rgba(217,173,95,0.7); }
 }
 
 /* ── Weekly Mission Board — three existing goal kinds, one board ── */
