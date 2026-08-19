@@ -70,6 +70,16 @@
   .adm-snap-tile.is-live .adm-snap-val { color: var(--gold); }
   .adm-snap-sub { font-size: 14px; color: var(--muted); margin-top: 3px; }
 
+  .vma-recheck-status { margin: 10px 0 14px; padding: 10px 12px; border: 1px solid var(--border);
+    border-radius: var(--r); background: var(--surface-2); font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .vma-recheck-status.is-running { border-color: rgba(139,92,246,.5); color: var(--purple-lt); }
+  .vma-recheck-status.is-done { border-color: rgba(217,173,95,.5); color: var(--gold); }
+  .vma-recheck-result { margin-top: 10px; padding: 9px 11px; border-radius: var(--r); border: 1px solid var(--border);
+    background: rgba(255,255,255,.025); font-family: var(--mono); font-size: 12px; }
+  .vma-recheck-result.is-pass { border-color: rgba(43,190,126,.45); color: #75dcae; }
+  .vma-recheck-result.is-miss { border-color: rgba(217,173,95,.45); color: var(--gold); }
+  .vma-recheck-result.is-error { border-color: rgba(229,56,79,.45); color: var(--crimson); }
+
   /* ── Tabs ── sticky: every panel here runs long, so the way to switch
      tabs — and the live snapshot tiles above it — should never scroll out
      of reach. */
@@ -527,9 +537,13 @@
   <section class="adm-card">
     <div class="adm-card-head">
       <h2>Pending vote proofs</h2>
-      <button class="btn btn-ghost" id="btnLoadVma" type="button">↻ Load</button>
+      <div class="adm-row" style="gap:8px;">
+        <button class="btn btn-primary" id="btnRecheckAllVma" type="button">⌁ OCR check all</button>
+        <button class="btn btn-ghost" id="btnLoadVma" type="button">↻ Load</button>
+      </div>
     </div>
     <p class="muted" id="vmaPendingCount">—</p>
+    <div class="vma-recheck-status" id="vmaRecheckStatus" role="status" aria-live="polite" hidden></div>
     <div id="vmaList"></div>
     <div class="adm-row" id="vmaPager" style="margin-top:12px; justify-content:center; gap:10px;">
       <button class="btn btn-ghost" id="btnVmaPrev" type="button">← Prev</button>
@@ -543,6 +557,8 @@
 
 <script type="module">
 import { call as rawCall, API_URL } from './js/api.js'
+import { scanVoteProofImage } from './js/vma.js'
+import { evaluateVoteProof } from './supabase/functions/op-reconnect/lib/vma-ocr.js'
 
 const $ = (id) => document.getElementById(id)
 const KEY_STORAGE = 'rc_admin_key' // shared with candy-star-admin.html on purpose
@@ -1319,6 +1335,116 @@ $('lkQuery').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btnL
 /* ── VMA Review ── */
 let vmaOffset = 0
 const VMA_PAGE_SIZE = 10
+const VMA_RECHECK_BATCH_SIZE = 5
+const vmaRecheckResults = new Map()
+let vmaRecheckRunning = false
+let vmaRecheckStopRequested = false
+
+function vmaRecheckMarkup(result) {
+  if (!result) return ''
+  if (result.error) {
+    return `<div class="vma-recheck-result is-error">OCR ERROR · ${esc(result.error)}</div>`
+  }
+  if (result.proof.passed) {
+    return `<div class="vma-recheck-result is-pass">✓ OCR PASS · ${result.proof.displayedTotal} votes · SWIM · today’s code</div>`
+  }
+  const missing = []
+  if (!result.proof.hasSong) missing.push('SWIM')
+  if (!result.proof.voteTotalOk) missing.push('vote total')
+  if (!result.proof.watermarkOk) missing.push('today’s code')
+  return `<div class="vma-recheck-result is-miss">△ OCR UNCLEAR · missing ${esc(missing.join(', ') || 'proof details')}</div>`
+}
+
+function paintVmaRecheckResult(voteId) {
+  const card = document.querySelector(`[data-vma-vote-id="${CSS.escape(String(voteId))}"]`)
+  if (!card) return
+  const slot = card.querySelector('.vma-recheck-slot')
+  if (slot) slot.innerHTML = vmaRecheckMarkup(vmaRecheckResults.get(String(voteId)))
+}
+
+async function recheckVmaProof(row) {
+  if (!row.proofUrl) return { error: 'No proof image available' }
+  const response = await fetch(row.proofUrl)
+  if (!response.ok) throw new Error('Proof link expired — reload and retry')
+  const blob = await response.blob()
+  if (!blob.type.startsWith('image/')) throw new Error('Proof is not an image')
+  const file = new File([blob], `proof-${row.id}`, { type: blob.type })
+  const allowedTotal = Number(row.allowedTotal) || (row.is_double_day ? 20 : 10)
+  const songKeywords = Array.isArray(row.songKeywords) && row.songKeywords.length ? row.songKeywords : ['SWIM']
+  const cfg = { category_keywords: { [row.category]: songKeywords } }
+  const text = await scanVoteProofImage(
+    file, cfg, row.category, row.expected_code || '', [allowedTotal],
+  )
+  return {
+    text,
+    proof: evaluateVoteProof(text, {
+      expectedCode: row.expected_code || '', songKeywords, allowedVoteTotals: [allowedTotal],
+    }),
+  }
+}
+
+function setVmaRecheckStatus(text, state = '') {
+  const status = $('vmaRecheckStatus')
+  status.hidden = false
+  status.textContent = text
+  status.className = `vma-recheck-status${state ? ` is-${state}` : ''}`
+}
+
+async function recheckAllVmaPending() {
+  if (vmaRecheckRunning) {
+    vmaRecheckStopRequested = true
+    setVmaRecheckStatus('Stopping after the current proof…', 'running')
+    return
+  }
+
+  vmaRecheckRunning = true
+  vmaRecheckStopRequested = false
+  const button = $('btnRecheckAllVma')
+  button.textContent = '■ Stop OCR check'
+  let checked = 0
+  let passed = 0
+  let unclear = 0
+  let failed = 0
+  let offset = 0
+  let total = 0
+
+  try {
+    while (!vmaRecheckStopRequested) {
+      const page = await call('adminListVmaPending', { limit: VMA_RECHECK_BATCH_SIZE, offset })
+      if (!page?.success) throw new Error(page?.error || 'Could not load pending proofs')
+      total = Number(page.pendingCount) || 0
+      if (!page.pending.length) break
+
+      for (const row of page.pending) {
+        if (vmaRecheckStopRequested) break
+        setVmaRecheckStatus(`OCR checking ${checked + 1} of ${total} · ${row.agent_no}…`, 'running')
+        let result
+        try {
+          result = await recheckVmaProof(row)
+          if (result.error) failed += 1
+          else if (result.proof?.passed) passed += 1
+          else unclear += 1
+        } catch (error) {
+          failed += 1
+          result = { error: error instanceof Error ? error.message : String(error || 'Scan failed') }
+        }
+        vmaRecheckResults.set(String(row.id), result)
+        paintVmaRecheckResult(row.id)
+        checked += 1
+      }
+      offset += page.pending.length
+      if (offset >= total) break
+    }
+    const stopped = vmaRecheckStopRequested ? 'Stopped' : 'Complete'
+    setVmaRecheckStatus(`${stopped} · ${checked}/${total} checked · ${passed} passed · ${unclear} unclear${failed ? ` · ${failed} errors` : ''}`, 'done')
+  } catch (error) {
+    setVmaRecheckStatus(`OCR check stopped · ${error instanceof Error ? error.message : String(error)}`, '')
+  } finally {
+    vmaRecheckRunning = false
+    vmaRecheckStopRequested = false
+    button.textContent = '⌁ OCR check all'
+  }
+}
 
 function vmaCard(row) {
   const allowedTotal = Number(row.allowedTotal) || (row.is_double_day ? 20 : 10)
@@ -1327,6 +1453,7 @@ function vmaCard(row) {
     : row.category === 'best_kpop' ? 'Best K-Pop' : row.category
   const card = document.createElement('div')
   card.className = 'adm-card'
+  card.dataset.vmaVoteId = String(row.id)
   card.style.marginTop = '10px'
   card.innerHTML = `
     <div class="adm-card-head"><h2>${esc(row.agent_no)} · ${esc(categoryLabel)}</h2><span class="muted">${fmtDate(row.voted_at)}</span></div>
@@ -1344,6 +1471,7 @@ function vmaCard(row) {
       <button class="btn btn-primary adm-mutate-btn vma-approve-btn" type="button">✓ Approve ${allowedTotal}</button>
       <button class="btn btn-alert adm-mutate-btn vma-reject-btn" type="button">✕ Reject</button>
     </div>
+    <div class="vma-recheck-slot">${vmaRecheckMarkup(vmaRecheckResults.get(String(row.id)))}</div>
     <div class="adm-out vma-out"></div>
   `
   card.querySelector('.vma-approve-btn').onclick = async (e) => {
@@ -1383,6 +1511,7 @@ async function loadVmaPage() {
   for (const row of res.pending) list.appendChild(vmaCard(row))
 }
 $('btnLoadVma').onclick = () => { vmaOffset = 0; loadVmaPage() }
+$('btnRecheckAllVma').onclick = () => recheckAllVmaPending()
 $('btnVmaPrev').onclick = () => { vmaOffset = Math.max(0, vmaOffset - VMA_PAGE_SIZE); loadVmaPage() }
 $('btnVmaNext').onclick = () => { vmaOffset += VMA_PAGE_SIZE; loadVmaPage() }
 document.querySelector('[data-tab="vma"]').addEventListener('click', () => loadVmaPage())

@@ -315,7 +315,8 @@ export async function adminListVmaPending(supabase: SupabaseDB, content: GameCon
     const { data: signed } = await supabase.storage.from(PROOF_BUCKET).createSignedUrl(r.proof_path, SIGNED_URL_TTL_SECONDS)
     const { proof_path, ...rest } = r
     const allowedTotal = r.is_double_day ? cfg.daily_cap_per_category * 2 : cfg.daily_cap_per_category
-    return { ...rest, allowedTotal, proofUrl: signed?.signedUrl || null }
+    const songKeywords = cfg.category_keywords[r.category] || []
+    return { ...rest, allowedTotal, songKeywords, proofUrl: signed?.signedUrl || null }
   }))
 
   return { success: true, pending: withUrls, pendingCount: count || 0, limit, offset }
