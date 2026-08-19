@@ -290,14 +290,14 @@ export function renderArtOverlay(wards, onSelect) {
  *  be mistaken for one — tethered back to the core with a dashed line, same
  *  idea as Home Base's own break from the wedge pattern (it's the reactor,
  *  not a restoration goal, so it isn't drawn as one either). */
-function toolMarker(angle, icon, label, onClick) {
+function toolMarker(angle, icon, label, onClick, extraClass) {
   // r=49: clears the coastline (max ~46.7) with room to spare, and stays
   // inside the viewBox edge (55 units from centre in any direction, since
   // the canvas is square and PAD is uniform) once the halo's own radius is
   // added on top.
   const [mx, my] = pt(angle, 49)
   const [tx, ty] = pt(angle, RING_IN)
-  const g = n('g', { class: 'cm-tool' })
+  const g = n('g', { class: 'cm-tool' + (extraClass ? ` ${extraClass}` : '') })
   g.appendChild(n('line', {
     x1: tx.toFixed(2), y1: ty.toFixed(2), x2: mx.toFixed(2), y2: my.toFixed(2), class: 'cm-tool-line',
   }))
@@ -336,8 +336,13 @@ function toolMarker(angle, icon, label, onClick) {
  *                     for the Suggestions board: a small, opt-in symbol on
  *                     the map rather than a card sitting open on City for
  *                     every agent whether they want it or not.
+ * @param onVma        ({x,y}) => void — optional. A temporary live-event
+ *                     marker, not a permanent tool like the two above — see
+ *                     its own placement comment below.
+ * @param vmaPulse     whether to pulse the VMA marker gold (Power Hour /
+ *                     Double Day) rather than its plain resting purple.
  */
-export function renderCityMap(wards, districts, onSelect, homeFraction, onCandyStar, onSuggestions) {
+export function renderCityMap(wards, districts, onSelect, homeFraction, onCandyStar, onSuggestions, onVma, vmaPulse) {
   const PAD = 5
   const svg = n('svg', {
     class: 'city-map', 'aria-hidden': 'true',
@@ -516,6 +521,12 @@ export function renderCityMap(wards, districts, onSelect, homeFraction, onCandyS
   // (see the comment above), so a second marker stays in that same safe
   // strip instead of risking a new angle that might cut across one.
   if (onSuggestions) svg.appendChild(toolMarker(-Math.PI / 2 - 0.3, '💡', 'Suggestions', onSuggestions))
+
+  // The opposite seam from Candy Star/Suggestions, deliberately — a
+  // temporary event marker sitting beside two permanent utilities would
+  // read as equally routine. Placed on its own side of the ring instead,
+  // like a location that appeared on the map for the event's duration.
+  if (onVma) svg.appendChild(toolMarker(Math.PI / 2, '⚡', 'VMA', onVma, vmaPulse ? 'is-vma-pulse' : ''))
 
   return svg
 }

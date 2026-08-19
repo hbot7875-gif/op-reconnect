@@ -250,7 +250,7 @@ function kstDateOfIso(iso: string): string {
  *  now (see config.ts's PERSONAL_COUNT_CAP). Both refreshMission's shared
  *  and per-agent qualify checks run off this, and its return value is what
  *  ends up as each roster row's "N streams" (see shape()). */
-async function contributionSince(supabase: SupabaseDB, agentNo: string, sinceIso: string, keys: string[]): Promise<number> {
+export async function contributionSince(supabase: SupabaseDB, agentNo: string, sinceIso: string, keys: string[]): Promise<number> {
   if (!keys.length) return 0
   const sinceDate = kstDateOfIso(sinceIso)
   const { data } = await supabase.from('rc_daily_activity')

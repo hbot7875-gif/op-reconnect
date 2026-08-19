@@ -18,6 +18,9 @@ import { levelFor, applyLevelUpIfNeeded, nextLevelRewards } from './leveling.ts'
 import { getActiveBroadcasts } from './broadcasts.ts'
 import { logFeedEvent, getCityFeed, markOnline, getOnlineNow } from './feed.ts'
 import { logEngagementEvent } from './engagement.ts'
+import { awardBadge, resolveEquippedBadges } from './badge-profile.ts'
+import { getBackupOverlay } from './backup-pass.ts'
+import { getVmaBanner } from './vma-voting.ts'
 
 // rc_agents (migration 016) is this season's own account table — a clean
 // break from the old site's `agents`. Migrations 019/020 added the columns
@@ -159,7 +162,8 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     chargeCellsEarnedNow = await creditChargeCells(supabase, content, player.agent_no, activePd, windowRollups || [])
     const albumGoalStreams = albumGoalStreamTotal(activePd.goals, activePd.baseline || {}, windowRollups || [], activePd.activated_at, content)
     const chargeCellStreams = albumGoalStreams % STREAMS_PER_CHARGE_CELL
-    const progress = districtProgress(activePd.goals, activePd.baseline || {}, windowRollups || [], activePd.activated_at, content)
+    const backupOverlay = await getBackupOverlay(supabase, player.agent_no, activePd.district_id)
+    const progress = districtProgress(activePd.goals, activePd.baseline || {}, windowRollups || [], activePd.activated_at, content, backupOverlay)
     const deadline = districtDeadline(activePd.activated_at, restorationDays(content), activePd.deadline_extended ? DEADLINE_EXTENSION_DAYS : 0)
     // districtProgress().complete only covers solo track+album goals — the
     // reconnect goal (if any was frozen in) needs its own live resolution
@@ -200,9 +204,13 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
       const ward = content.districts.filter((d) => d.ward_id === districtRow?.ward_id && !d.is_centerpiece)
       const wardJustCompleted = ward.length > 0 && ward.every((d) => restored.has(d.id))
       if (wardJustCompleted) {
-        await supabase.from('rc_badges').upsert(
-          { agent_no: player.agent_no, badge_id: `ward:${districtRow?.ward_id}` },
-          { onConflict: 'agent_no, badge_id', ignoreDuplicates: true })
+        // (14) Routed through the shared awardBadge() so this gets the same
+        // Badge Collection art-pool/backfill treatment as every other
+        // template — 'ward' is the live template id (see migration
+        // 20260819100000, which renamed the catalog seed to match this
+        // already-live 'ward:<wardId>' award format instead of the other
+        // way around).
+        await awardBadge(supabase, player.agent_no, 'ward', districtRow?.ward_id)
         // Bigger, rarer than the per-district ward_progress line below —
         // dedup'd on the same badge identity so it can only ever log once.
         await logFeedEvent(supabase, player.agent_no, 'ward_completed',
@@ -413,6 +421,13 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
   // read together: "12 online now" says the city is occupied at THIS
   // instant, the ticker says what those agents have been doing recently.
   const onlineNow = await getOnlineNow(supabase)
+  // (13) Resolves real Badge Collection artwork server-side so the client
+  // doesn't have to guess via its own hardcoded badges.js catalog — that
+  // catalog still owns legacy ids (streak/level/xp/districts), which
+  // resolve to null here and fall through to it unchanged.
+  const equippedBadgeArtwork = (await resolveEquippedBadges(
+    supabase, [{ agentNo: player.agent_no, badgeId: player.equipped_badge_id || null }],
+  )).get(player.agent_no) || null
 
   return {
     success: true,
@@ -431,6 +446,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
       streak,
       badges: (badgeRows || []).map((b: any) => b.badge_id),
       equippedBadgeId: player.equipped_badge_id || null,
+      equippedBadgeArtwork,
       // BOTZ redesign Phase 2 — see charge-economy.ts / magic-shop.ts.
       chargeCells: (player.charge_cells || 0) + chargeCellsEarnedNow,
       wings: player.wings || 0,
@@ -447,6 +463,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     eraTimeline,
     invites,
     broadcasts,
+    vma: await getVmaBanner(supabase, content, player.agent_no),
     cityFeed,
     waitingAgents,
     onlineNow,

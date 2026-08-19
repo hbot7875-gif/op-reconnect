@@ -33,6 +33,7 @@ import { agentChargeSheet } from './agent-charge.js'
 import { broadcastCards } from './broadcasts.js'
 import { cityFeedCard } from './city-feed.js'
 import { openSuggestions } from './suggestions.js'
+import { vmaEventCard, openVmaMission } from './vma.js'
 
 export function renderWorld(container, state) {
   container.innerHTML = ''
@@ -42,6 +43,7 @@ export function renderWorld(container, state) {
   const bc = broadcastCards(state)
   if (bc.children.length) wrap.appendChild(bc)
   if (b.defuse) wrap.appendChild(redZoneCard(state))
+  if (state.vma) wrap.appendChild(vmaEventCard(state))
 
   // One playable command scene instead of a dashboard stack. The map is the
   // world; personal charge, recovery and the current mission sit on its edge
@@ -313,7 +315,9 @@ function cityPlan(state) {
   box.appendChild(renderCityMap(wards, state.map?.districts || [],
     (w, origin) => goWard(w.id, origin), homeFraction,
     (origin) => goCandyStar(origin),
-    () => openSuggestions()))
+    () => openSuggestions(),
+    state.vma ? () => openVmaMission() : null,
+    !!(state.vma?.isPowerHour || state.vma?.isDoubleDay)))
   return box
 }
 

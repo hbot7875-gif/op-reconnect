@@ -146,12 +146,17 @@ export function computeBaseline(
   return baseline
 }
 
+// Present only while a Backup Pass is active/banked on that goal — see
+// lib/backup-pass.ts::getBackupOverlay.
+interface BackupInfo { bonus: number; originalTarget: number; ownProgress?: number; ownPasses?: number }
+
 export interface DistrictProgress {
-  trackGoals: { id: string; label: string; artist: string | null; progress: number; target: number; done: boolean; today: number }[]
+  trackGoals: { id: string; label: string; artist: string | null; progress: number; target: number; done: boolean; today: number; backup: BackupInfo | null }[]
   albums: {
     id: string; label: string; passesDone: number; target: number; signalPct: number; done: boolean
     nextPassTracks: { label: string; have: number; need: number; today: number }[]
     tracks: { label: string; have: number; target: number; done: boolean }[]
+    backup: BackupInfo | null
   }[]
   allTracksDone: boolean
   complete: boolean
@@ -191,6 +196,11 @@ export function districtProgress(
   rollups: RollupRow[],
   activatedAt: string,
   content: GameContent,
+  // Backup Pass overlay (lib/backup-pass.ts::getBackupOverlay), keyed by
+  // trackGoals[].id / albumGoals[].id. Deliberately the ONLY way a Backup
+  // Pass affects progress here — frozen never changes; this is read fresh
+  // every call and applied on top, never written back anywhere.
+  backupOverlay: Record<string, { target: number; bonus: number }> = {},
 ): DistrictProgress {
   // District/album goal progress is uncapped — every real counted stream
   // moves the goal, same as the arirang mission. See config.ts's
@@ -203,35 +213,59 @@ export function districtProgress(
   const trackGoals = frozen.trackGoals.map((g) => {
     const total = windowedPlays(g.keys, inWindow, activationDate, baseline[`t:${g.id}`] || 0, cap, false)
     const today = todayCountFor(g.keys, inWindow, todayDate)
-    return { id: g.id, label: g.label, artist: g.artist, progress: Math.min(total, g.target), target: g.target, done: total >= g.target, today }
+    const backup = backupOverlay[g.id]
+    const effectiveTarget = backup?.target || g.target
+    const pooled = total + (backup?.bonus || 0)
+    const done = total >= g.target || pooled >= effectiveTarget
+    return {
+      id: g.id, label: g.label, artist: g.artist,
+      progress: Math.min(pooled, effectiveTarget), target: effectiveTarget, done, today,
+      // Only present with an active/banked Backup Pass — lets the UI show
+      // "your 82 + helper 20 = 102/180" instead of one merged number.
+      backup: backup ? { ownProgress: Math.min(total, effectiveTarget), bonus: backup.bonus, originalTarget: g.target } : null,
+    }
   })
   const allTracksDone = trackGoals.length > 0 && trackGoals.every((g) => g.done)
 
   const albums = frozen.albumGoals.map((a) => {
+    const backup = backupOverlay[a.id]
     const perTrack = a.tracks.map((t) => ({
       label: t.label,
       keys: t.keys,
       total: windowedPlays(t.keys, inWindow, activationDate, baseline[`a:${a.id}:${t.label}`] || 0, cap, true),
     }))
-    const target = a.target
-    const passesDone = Math.min(perTrack.reduce((m, t) => Math.min(m, t.total), Infinity), target)
-    const capped = perTrack.reduce((s, t) => s + Math.min(t.total, target), 0)
-    const signalPct = Math.min(100, Math.round((capped / (perTrack.length * target)) * 100))
+    const originalTarget = a.target
+    const target = backup?.target || originalTarget
+    // Backup Pass bonus applies to the album's bottleneck (passesDone), not
+    // per-track — matches how a helper "helping with the album" was framed
+    // in design (any of its tracks), not a specific one.
+    const passesDoneRaw = Math.min(perTrack.reduce((m, t) => Math.min(m, t.total), Infinity), originalTarget)
+    const passesDone = Math.min((Number.isFinite(passesDoneRaw) ? passesDoneRaw : 0) + (backup?.bonus || 0), target)
+    const capped = perTrack.reduce((s, t) => s + Math.min(t.total, originalTarget), 0)
+    const signalPct = Math.min(100, Math.round((capped / (perTrack.length * originalTarget)) * 100))
     // Unsliced now — the 148 Protocol playlist builder (playlist.js's
     // remaining()) reads every entry here to know what to queue, so a
     // 5-item cap used to silently under-queue any album with more than 5
     // tracks still short of its next pass, not just truncate a display.
+    // Per-track "need" stays against originalTarget — the boost is a flat
+    // bonus on the aggregate passesDone below, never a higher per-track
+    // requirement (a helper streaming one track doesn't change what every
+    // OTHER track individually needs).
     const nextPassTracks = perTrack
-      .filter((t) => t.total < target)
+      .filter((t) => t.total < originalTarget)
       .sort((a2, b2) => a2.total - b2.total)
-      .map((t) => ({ label: t.label, have: t.total, need: target - t.total, today: todayCountFor(t.keys, inWindow, todayDate) }))
+      .map((t) => ({ label: t.label, have: t.total, need: originalTarget - t.total, today: todayCountFor(t.keys, inWindow, todayDate) }))
     // Full roster, done tracks included — lets the UI expand an album's
     // "X passes" summary into every track's own progress, not just the
     // ones still short (site owner: "expanded to all tracks in that album").
     const tracks = perTrack
-      .map((t) => ({ label: t.label, have: Math.min(t.total, target), target, done: t.total >= target }))
+      .map((t) => ({ label: t.label, have: Math.min(t.total, originalTarget), target: originalTarget, done: t.total >= originalTarget }))
       .sort((a2, b2) => Number(a2.done) - Number(b2.done) || a2.have - b2.have)
-    return { id: a.id, label: a.label, passesDone: Number.isFinite(passesDone) ? passesDone : 0, target, signalPct, done: passesDone >= target, nextPassTracks, tracks }
+    return {
+      id: a.id, label: a.label, passesDone: Number.isFinite(passesDone) ? passesDone : 0, target, signalPct,
+      done: passesDone >= target, nextPassTracks, tracks,
+      backup: backup ? { ownPasses: Number.isFinite(passesDoneRaw) ? passesDoneRaw : 0, bonus: backup.bonus, originalTarget } : null,
+    }
   })
 
   const complete = allTracksDone && albums.every((a) => a.done)

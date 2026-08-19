@@ -32,12 +32,15 @@ import {
 } from './lib/reconnect-missions.ts'
 import { submitReconnectPuzzleAnswer } from './lib/reconnect-puzzle.ts'
 import { getLeaderboard } from './lib/leaderboard.ts'
-import { setEquippedBadge } from './lib/badge-profile.ts'
+import { setEquippedBadge, getBadgeCollection } from './lib/badge-profile.ts'
 import { getMagicShop, buyWings, claimTicket } from './lib/magic-shop.ts'
 import { feedCharge, setAutoFeed, getAgentCharge, useLitEra } from './lib/agent-charge.ts'
 import { submitSuggestion } from './lib/suggestions.ts'
 import { loadContent } from './lib/config.ts'
 import { trackEngagement, adminGetEngagementReport } from './lib/engagement.ts'
+import { getVmaStatus, logVmaVote, adminListVmaPending, adminReviewVmaVote } from './lib/vma-voting.ts'
+import { getBackupStatus, listOpenBackupRequests, openBackupRequest, joinBackupRequest, leaveBackupHelper } from './lib/backup-pass.ts'
+import { getChestStatus, openChest } from './lib/supply-chest.ts'
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -95,6 +98,7 @@ const ROUTES: Record<string, Route> = {
   getMySelfCheck: { auth: 'agent', handler: (sb, p) => getMySelfCheck(sb, p) },
   getLeaderboard: { auth: 'agent', handler: (sb, p) => getLeaderboard(sb, p) },
   setEquippedBadge: { auth: 'agent', handler: async (sb, p) => setEquippedBadge(sb, await loadContent(sb), p) },
+  getBadgeCollection: { auth: 'agent', handler: (sb, p) => getBadgeCollection(sb, p) },
   // BOTZ redesign Phase 2 — see lib/magic-shop.ts.
   getMagicShop: { auth: 'agent', handler: async (sb, p) => getMagicShop(sb, await loadContent(sb), p) },
   buyWings: { auth: 'agent', handler: async (sb, p) => buyWings(sb, await loadContent(sb), p) },
@@ -118,6 +122,24 @@ const ROUTES: Record<string, Route> = {
   submitReconnectMissionCipherAnswer: { auth: 'agent', handler: async (sb, p) => submitReconnectMissionCipherAnswer(sb, p) },
   getMyInvites: { auth: 'agent', handler: async (sb, p) => getMyInvites(sb, await loadContent(sb), String(p.agentNo || '').trim().toUpperCase()) },
   submitSuggestion: { auth: 'agent', handler: async (sb, p) => submitSuggestion(sb, p) },
+  // MTV VMAs 2026 voting mission — see lib/vma-voting.ts and migration
+  // 20260819091000. Self-reported with a screenshot the backend auto-checks.
+  getVmaStatus: { auth: 'agent', handler: async (sb, p) => getVmaStatus(sb, await loadContent(sb), p) },
+  logVmaVote: { auth: 'agent', handler: async (sb, p) => logVmaVote(sb, await loadContent(sb), p) },
+  // (7) Admin review queue for anything OCR couldn't auto-clear.
+  adminListVmaPending: { auth: 'admin', handler: (sb, p) => adminListVmaPending(sb, p) },
+  adminReviewVmaVote: { auth: 'admin', handler: async (sb, p) => adminReviewVmaVote(sb, await loadContent(sb), p) },
+
+  // ── Backup Pass — see lib/backup-pass.ts and migration 20260819110000 ──
+  getBackupStatus: { auth: 'agent', handler: async (sb, p) => getBackupStatus(sb, await loadContent(sb), p) },
+  listOpenBackupRequests: { auth: 'agent', handler: async (sb, p) => listOpenBackupRequests(sb, await loadContent(sb), p) },
+  openBackupRequest: { auth: 'agent', handler: async (sb, p) => openBackupRequest(sb, await loadContent(sb), p) },
+  joinBackupRequest: { auth: 'agent', handler: (sb, p) => joinBackupRequest(sb, p) },
+  leaveBackupHelper: { auth: 'agent', handler: (sb, p) => leaveBackupHelper(sb, p) },
+
+  // ── Supply Chest — see lib/supply-chest.ts and migration 20260819120000 ─
+  getChestStatus: { auth: 'agent', handler: async (sb, p) => getChestStatus(sb, await loadContent(sb), p) },
+  openChest: { auth: 'agent', handler: async (sb, p) => openChest(sb, await loadContent(sb), p) },
   // Reconnect goal (sotd/cipher/memory puzzle variants).
   submitReconnectPuzzleAnswer: { auth: 'agent', handler: (sb, p) => submitReconnectPuzzleAnswer(sb, null, p) },
   // admin-gated inside the handler via SYNC_ADMIN_KEY

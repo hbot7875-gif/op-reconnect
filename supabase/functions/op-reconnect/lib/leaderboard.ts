@@ -4,6 +4,7 @@
 import type { SupabaseDB } from './config.ts'
 import { loadContent } from './config.ts'
 import { levelFor } from './leveling.ts'
+import { resolveEquippedBadges } from './badge-profile.ts'
 
 export async function getLeaderboard(supabase: SupabaseDB, _params: Record<string, unknown>) {
   const content = await loadContent(supabase)
@@ -17,6 +18,12 @@ export async function getLeaderboard(supabase: SupabaseDB, _params: Record<strin
   // it's read here purely as an internal join key and dropped below —
   // never part of the `agents` shape this returns to the client.
   const icons = new Map((profiles || []).map((p: any) => [p.agent_no, p.equipped_badge_id]))
+  // (13) One batched resolve for the whole board instead of N lookups —
+  // real Badge Collection artwork where it applies, null (client falls back
+  // to badges.js) for legacy ids.
+  const artwork = await resolveEquippedBadges(
+    supabase, (profiles || []).map((p: any) => ({ agentNo: p.agent_no, badgeId: p.equipped_badge_id || null })),
+  )
 
   const agents = (data || []).map((row: any) => ({
     codename: row.codename,
@@ -24,6 +31,7 @@ export async function getLeaderboard(supabase: SupabaseDB, _params: Record<strin
     xp: Number(row.xp) || 0,
     level: levelFor(content, Number(row.xp) || 0).level,
     equippedBadgeId: icons.get(row.agent_no) || null,
+    equippedBadgeArtwork: artwork.get(row.agent_no) || null,
   }))
 
   return { success: true, agents }
