@@ -337,17 +337,17 @@ function fileToBase64(file) {
 }
 
 /** A real vote screenshot has BTS/the song title printed over a photo
- *  (album art, a concert still, ...), not flat text on a plain background.
+ *  (album art, a concert still, ...), not flat text on a plain background,
+ *  and the watermark code is small colored text a player adds by hand —
+ *  neither reliably survives a single OCR pass, but which one fails varies
+ *  screenshot to screenshot (verified against real user screenshots: a
+ *  clearly-readable watermark was still missed on the raw pass alone).
  *  Grayscale + a contrast stretch is a standard, cheap OCR preprocessing
- *  step, and does help the flatter-background parts of the screenshot
- *  (the vote count, category header). Tested directly against text
- *  overlaid on a busy photo, though, it did NOT reliably recover it —
- *  Tesseract genuinely struggles with that case regardless. Kept because
- *  it's a real, free improvement for the parts it does help, not because
- *  it solves photo-overlay text; see checkText's allGood below for how the
- *  UI accounts for that remaining gap. Runs entirely in-browser via canvas;
- *  the ORIGINAL file (not this processed version) is still what gets
- *  uploaded as proof. */
+ *  step that recovers a different subset of text than the raw image does.
+ *  openScanStep runs OCR on both this and the raw file and merges the text
+ *  before checking, rather than picking one pass and accepting its blind
+ *  spots. Runs entirely in-browser via canvas; the ORIGINAL file (not this
+ *  processed version) is still what gets uploaded as proof. */
 function loadImageBitmap(file) {
   return new Promise((resolve, reject) => {
     const img = new Image()
@@ -441,7 +441,7 @@ function openUploadStep(status, category) {
   steps.innerHTML = `
     <div class="vma-step${cfg.url ? '' : ' is-done'}"><b>1</b><span>${cfg.url ? `<a href="${esc(cfg.url)}" target="_blank" rel="noopener noreferrer">Vote on MTV</a> for BTS in ${esc(cfg.category_labels?.[category] || category)}` : `Vote on MTV for BTS in ${esc(cfg.category_labels?.[category] || category)}`}</span></div>
     <div class="vma-step"><b>2</b><span>Take a screenshot after voting</span></div>
-    <div class="vma-step"><b>3</b><span>Write <b>${esc(status.watermarkCode)}</b> somewhere on the screenshot (your phone's markup/annotate tool)</span></div>
+    <div class="vma-step"><b>3</b><span>Write <b>${esc(status.watermarkCode)}</b> somewhere on the screenshot (your phone's markup/annotate tool) — pick a spot with good contrast, like a dark area, so it stays easy to read</span></div>
     <div class="vma-step"><b>4</b><span>Upload it below</span></div>
   `
   sheet.appendChild(steps)
@@ -489,16 +489,23 @@ async function openScanStep(status, category, file) {
   try {
     base64 = await fileToBase64(file)
     const worker = await getOcrWorker()
-    // Tested directly, twice: the grayscale/contrast preprocessing that
-    // used to run here made things WORSE once the worker was switched to
-    // page-seg-mode 11 — that mode alone recovers text-over-photo and the
-    // isolated vote-count numeral fine on its own, and the contrast stretch
-    // measurably cost accuracy on the flatter-background text next to it.
-    // Left preprocessForOcr defined (unused) rather than deleted, in case
-    // a future real screenshot shows the opposite tradeoff and it's worth
-    // reintroducing conditionally.
-    const result = await worker.recognize(file)
-    ocrText = String(result?.data?.text || '')
+    // Two passes, merged: the raw file and a grayscale/contrast-boosted
+    // version each recover text the other one misses (verified against a
+    // real screenshot where the watermark — plainly readable to a human —
+    // was dropped on the raw pass alone). Sequential, not parallel: a
+    // Tesseract.js worker processes one recognize() job at a time anyway,
+    // and this keeps the two results unambiguous instead of racing.
+    const rawResult = await worker.recognize(file)
+    let combined = String(rawResult?.data?.text || '')
+    try {
+      const boosted = await preprocessForOcr(file)
+      const boostedResult = await worker.recognize(boosted)
+      combined += '\n' + String(boostedResult?.data?.text || '')
+    } catch {
+      // preprocessing/second pass is a best-effort improvement — the raw
+      // pass's text above is still used even if this one fails
+    }
+    ocrText = combined
   } catch {
     ocrText = ''
   }
