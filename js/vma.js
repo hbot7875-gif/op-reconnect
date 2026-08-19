@@ -11,6 +11,7 @@
 import { call } from './api.js'
 import { el, esc, toast, showOverlay, hideOverlay } from './state.js'
 import { getAgentNo } from './session.js'
+import { extractVoteTotal, watermarkMatches } from '../supabase/functions/op-reconnect/lib/vma-ocr.js'
 
 let tesseractPromise = null
 function loadTesseract() {
@@ -390,6 +391,39 @@ async function preprocessForOcr(file) {
   }
 }
 
+/** A second fallback aimed specifically at colored annotation text. Normal
+ * grayscale makes bright red writing surprisingly dark; using the strongest
+ * RGB channel keeps red/purple/white lettering bright, then a binary split
+ * separates it from the dark vote-page background. This pass only runs when
+ * the cheaper raw + grayscale passes still cannot see today's code. */
+async function preprocessColoredTextForOcr(file) {
+  try {
+    const img = await loadImageBitmap(file)
+    const canvas = document.createElement('canvas')
+    const scale = Math.max(1, Math.min(2, 1800 / Math.max(img.width, img.height)))
+    canvas.width = img.width * scale
+    canvas.height = img.height * scale
+    const ctx = canvas.getContext('2d')
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+    URL.revokeObjectURL(img.src)
+
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+    const d = imageData.data
+    for (let i = 0; i < d.length; i += 4) {
+      const strongest = Math.max(d[i], d[i + 1], d[i + 2])
+      const weakest = Math.min(d[i], d[i + 1], d[i + 2])
+      const saturated = strongest - weakest > 45
+      const value = saturated ? strongest : 0.85 * strongest + 0.15 * weakest
+      const binary = value >= 125 ? 255 : 0
+      d[i] = d[i + 1] = d[i + 2] = binary
+    }
+    ctx.putImageData(imageData, 0, 0)
+    return canvas
+  } catch {
+    return file
+  }
+}
+
 /** Same decision tree the backend runs (lib/vma-voting.ts::checkProofText),
  *  duplicated here ONLY so the player gets an instant, game-like checklist
  *  before spending an actual submission — the server always makes the real
@@ -398,13 +432,7 @@ function checkText(text, cfg, category, expectedCode) {
   const norm = text.toLowerCase().replace(/\s+/g, ' ')
   const has = (s) => norm.includes(s.toLowerCase())
   const hasAny = (arr) => !arr?.length || arr.some((k) => has(k))
-  // The real layout has the number and the word "Votes" on separate lines
-  // with +/- buttons in between — those buttons often get read as stray
-  // characters by OCR, which broke a strict "digit then only whitespace
-  // then 'vote'" match. Tolerate a short run of non-alphanumeric noise
-  // (button glyphs, newlines, stray punctuation) between them instead of
-  // requiring true adjacency.
-  const voteMatch = norm.match(/(\d{1,4})[^a-z0-9]{0,15}votes?\b/)
+  const displayedTotal = extractVoteTotal(text)
 
   return {
     // Third element = required for "SIGNAL CONFIRMED". BTS/song-title text
@@ -416,17 +444,18 @@ function checkText(text, cfg, category, expectedCode) {
     // security-relevant: every submission goes to admin review either way
     // (see vma-voting.ts), and the admin can see the actual photo.
     checks: [
-      // Best K-Pop's vote page doesn't reliably show "mtv" text in-frame
-      // the way Song of the Year's does (category confirmed live) — not
-      // required there, still shown for transparency like BTS/SWIM below.
-      ['MTV site', has('mtv') || has('vote.mtv.com'), category !== 'best_kpop'],
+      // The mobile page uses a stylized VMA logo and often omits the category
+      // heading from the scrolled viewport. These identity checks remain
+      // useful hints for the reviewer, but only the vote total + today's code
+      // gate upload; every submission is human-reviewed on the backend.
+      ['MTV site', has('mtv') || has('vma') || has('vote.mtv.com'), false],
       ['BTS', has('bts'), false],
       ['SWIM', hasAny(cfg.category_keywords?.[category]), false],
-      [cfg.category_labels?.[category] || 'Category', hasAny(cfg.category_match_keywords?.[category]), true],
-      [voteMatch ? `${voteMatch[1]} votes` : 'Vote total', !!voteMatch, true],
-      ["Today's code", norm.replace(/[^a-z0-9]/g, '').includes(expectedCode.toLowerCase().replace(/[^a-z0-9]/g, '')), true],
+      [cfg.category_labels?.[category] || 'Category', hasAny(cfg.category_match_keywords?.[category]), false],
+      [displayedTotal != null ? `${displayedTotal} votes` : 'Vote total', displayedTotal != null, true],
+      ["Today's code", watermarkMatches(text, expectedCode), true],
     ],
-    displayedTotal: voteMatch ? parseInt(voteMatch[1], 10) : null,
+    displayedTotal,
   }
 }
 
@@ -508,6 +537,18 @@ async function openScanStep(status, category, file) {
       // preprocessing/second pass is a best-effort improvement — the raw
       // pass's text above is still used even if this one fails
     }
+    // The example mobile proof writes YOONGI19 in red over a dark card.
+    // Luminance-based grayscale suppresses red, so run one color-aware pass
+    // only when the first two passes still miss the expected code.
+    if (!watermarkMatches(combined, status.watermarkCode)) {
+      try {
+        const colored = await preprocessColoredTextForOcr(file)
+        const coloredResult = await worker.recognize(colored)
+        combined += '\n' + String(coloredResult?.data?.text || '')
+      } catch {
+        // best-effort fallback; the raw and grayscale results remain usable
+      }
+    }
     ocrText = combined
   } catch {
     ocrText = ''
@@ -534,8 +575,8 @@ async function openScanStep(status, category, file) {
 
   const resultBox = el('div', 'vma-scan-result')
   if (allGood) {
-    resultBox.appendChild(el('div', 'vma-scan-headline good', 'SIGNAL CONFIRMED'))
-    const send = el('button', 'btn btn-primary vma-add-btn', 'SEND VOTES')
+    resultBox.appendChild(el('div', 'vma-scan-headline good', 'PROOF READY'))
+    const send = el('button', 'btn btn-primary vma-add-btn', 'SEND FOR REVIEW')
     send.onclick = () => submitVote(status, category, base64, file.type, ocrText, displayedTotal)
     resultBox.appendChild(send)
   } else {

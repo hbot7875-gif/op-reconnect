@@ -17,6 +17,7 @@
 import type { GameContent, SupabaseDB } from './config.ts'
 import { awardBadge } from './badge-profile.ts'
 import { addChestFill, getChestStatus } from './supply-chest.ts'
+import { watermarkMatches } from './vma-ocr.js'
 
 const BUCKET = 'vma-vote-proofs'
 const ET_OFFSET_HOURS = -4 // fixed EDT for the whole Aug 18 - Sep 25 window
@@ -103,7 +104,7 @@ function checkProofText(text: string, cfg: VmaConfig, category: string, expected
   const hasSong = hasAny(cfg.category_keywords[category] || [])
   const hasCategoryPage = hasAny(cfg.category_match_keywords?.[category] || [])
   const hasSubmitted = has(cfg.submitted_phrase)
-  const watermarkOk = norm.replace(/[^a-z0-9]/g, '').includes(expectedCode.toLowerCase().replace(/[^a-z0-9]/g, ''))
+  const watermarkOk = watermarkMatches(text, expectedCode)
 
   const missing: string[] = []
   if (!hasMtv) missing.push('MTV site')
