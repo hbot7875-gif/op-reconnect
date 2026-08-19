@@ -15,11 +15,15 @@ export function badgeById(id) {
   return null
 }
 
-export function earnedBadgeCount(state) {
-  return new Set((state?.player?.badges || []).filter((badgeId) => {
+export function collectionBadgeIds(state) {
+  return [...new Set((state?.player?.badges || []).filter((badgeId) => {
     const templateId = String(badgeId).split(':', 1)[0]
     return COLLECTION_TEMPLATES.has(templateId)
-  })).size
+  }))]
+}
+
+export function earnedBadgeCount(state) {
+  return collectionBadgeIds(state).length
 }
 
 export function equippedBadge(state) {

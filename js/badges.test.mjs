@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { earnedBadgeCount, equippedBadge } from './badges.js'
+import { collectionBadgeIds, earnedBadgeCount, equippedBadge } from './badges.js'
 
 const state = {
   player: {
@@ -12,6 +12,7 @@ const state = {
 }
 
 assert.equal(earnedBadgeCount(state), 2)
+assert.deepEqual(collectionBadgeIds(state), ['event_vma_voter', 'district_frag_1:home-base'])
 assert.equal(equippedBadge(state), null)
 assert.equal(equippedBadge({
   ...state,
@@ -22,4 +23,4 @@ assert.equal(equippedBadge({
   player: { ...state.player, equippedBadgeId: 'level:20' },
 }), null)
 
-console.log('4 badge UI state regression tests passed')
+console.log('5 badge UI state regression tests passed')

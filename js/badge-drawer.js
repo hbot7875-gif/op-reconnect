@@ -8,7 +8,7 @@
 // experience and are intentionally not mixed into this collection.
 
 import { call } from './api.js'
-import { el, esc, getState, hideOverlay, setState, toast } from './state.js'
+import { el, esc, getState, hideOverlay, setState, showOverlay, toast } from './state.js'
 import { getAgentNo } from './session.js'
 
 const BADGE_SECTIONS = [
@@ -27,18 +27,15 @@ export function badgeDrawerSheet(state) {
   summary.appendChild(el('div', '', '<div class="bdr-count">Loading…</div><div class="bdr-summary-note">Tap a badge to see its story</div>'))
   sheet.appendChild(summary)
   sheet.appendChild(el('div', 'bdr-grid'))
-  const detail = el('div', 'bdr-detail')
-  detail.hidden = true
-  sheet.appendChild(detail)
   const close = el('button', 'btn btn-ghost', 'Close')
   close.onclick = hideOverlay
   sheet.appendChild(close)
 
-  loadAndPaint(sheet, state, detail)
+  loadAndPaint(sheet, state)
   return sheet
 }
 
-async function loadAndPaint(sheet, state, detail) {
+async function loadAndPaint(sheet, state) {
   const count = sheet.querySelector('.bdr-count')
   const grid = sheet.querySelector('.bdr-grid')
   count.textContent = 'Loading…'
@@ -48,7 +45,7 @@ async function loadAndPaint(sheet, state, detail) {
     grid.innerHTML = ''
     grid.appendChild(el('p', 'muted bdr-error', esc(res.error || 'Check your connection and try again.')))
     const retry = el('button', 'btn btn-primary bdr-retry', 'Try again')
-    retry.onclick = () => loadAndPaint(sheet, getState() || state, detail)
+    retry.onclick = () => loadAndPaint(sheet, getState() || state)
     grid.appendChild(retry)
     return
   }
@@ -82,11 +79,11 @@ async function loadAndPaint(sheet, state, detail) {
     for (const e of earned) {
       const wearing = liveState.player?.equippedBadgeId === e.badgeId
       shelf.appendChild(badgeSlot(
-        collectionTile(e, wearing, liveState, sheet, detail), e.name, e.rarity, true,
+        collectionTile(e, wearing, liveState), e.name, e.rarity, true,
       ))
     }
     for (const t of locked) {
-      shelf.appendChild(badgeSlot(lockedTile(t), t.name, t.rarity, false))
+      shelf.appendChild(badgeSlot(lockedTile(t, liveState), t.name, t.rarity, false))
     }
     section.appendChild(shelf)
     grid.appendChild(section)
@@ -101,36 +98,28 @@ function badgeSlot(tile, name, rarity, earned) {
   return slot
 }
 
-function collectionTile(e, wearing, state, sheet, detail) {
+function collectionTile(e, wearing, state) {
   const art = e.artworkUrl ? `<img class="bdr-photo" src="${esc(e.artworkUrl)}" alt="" loading="lazy" decoding="async">` : `<span class="bdr-icon">${e.rarity === 'rare' ? '🎖️' : '🔹'}</span>`
   const tile = el('button', 'bdr-tile got' + (wearing ? ' equipped' : '') + (e.rarity === 'rare' ? ' rare' : ''),
     `${art}${e.rarity === 'rare' ? '<span class="bdr-rarity">RARE</span>' : ''}${wearing ? '<i>WORN</i>' : ''}`)
   tile.setAttribute('aria-label', e.name)
-  tile.onclick = () => showDetail(detail, {
+  tile.onclick = () => showOverlay(badgeStorySheet({
     got: true, collection: true, rarity: e.rarity, photo: e.artworkUrl,
-    name: e.name, desc: scopeLine(e, state), badgeId: e.badgeId, wearing,
-  }, state, sheet)
+    name: e.name, desc: badgeStory(e, state), badgeId: e.badgeId, wearing,
+  }, state))
   return tile
 }
 
-function lockedTile(t) {
+function lockedTile(t, state) {
   const tile = el('button', 'bdr-tile locked' + (t.rarity === 'rare' ? ' rare' : ''), '<span class="bdr-lock-core">◇</span>')
   tile.setAttribute('aria-label', `${t.name}, locked. ${t.unlockHint}`)
-  tile.onclick = () => {
-    const detail = tile.closest('.badge-drawer').querySelector('.bdr-detail')
-    detail.hidden = false
-    detail.classList.toggle('is-rare', t.rarity === 'rare')
-    detail.classList.remove('pop'); void detail.offsetWidth; detail.classList.add('pop')
-    detail.innerHTML = `
-      <span class="bdr-detail-icon">🔒</span>
-      <div class="bdr-detail-name">${esc(t.name)}</div>
-      <div class="bdr-detail-desc">${esc(t.unlockHint)}</div>
-    `
-  }
+  tile.onclick = () => showOverlay(badgeStorySheet({
+    got: false, rarity: t.rarity, name: t.name, desc: t.unlockHint,
+  }, state))
   return tile
 }
 
-function scopeLine(e, state) {
+export function badgeStory(e, state) {
   const district = state?.map?.districts?.find((d) => d.id === e.scopeId)
   const ward = state?.map?.wards?.find((w) => w.id === e.scopeId)
   const place = district?.name || e.scopeId || 'this district'
@@ -147,16 +136,15 @@ function scopeLine(e, state) {
   return e.unlockHint || 'Badge unlocked.'
 }
 
-function showDetail(detail, info, state, sheet) {
-  detail.hidden = false
-  detail.classList.toggle('is-rare', info.rarity === 'rare')
-  detail.classList.remove('pop'); void detail.offsetWidth; detail.classList.add('pop')
+export function badgeStorySheet(info, state) {
+  const detail = el('div', 'sheet bdr-story' + (info.rarity === 'rare' ? ' is-rare' : ''))
   const iconHtml = info.photo ? `<img class="bdr-detail-photo" src="${esc(info.photo)}" alt="">`
-    : `<span class="bdr-detail-icon">${info.got ? info.icon : '🔒'}</span>`
+    : `<span class="bdr-detail-icon">${info.got ? (info.icon || (info.rarity === 'rare' ? '🎖️' : '◇')) : '🔒'}</span>`
   detail.innerHTML = `
+    <div class="eyebrow">${info.got ? (info.rarity === 'rare' ? '✦ RARE BADGE' : '◇ BADGE STORY') : '◇ LOCKED BADGE'}</div>
     ${iconHtml}
-    <div class="bdr-detail-name">${esc(info.got ? info.name : 'Locked')}</div>
-    <div class="bdr-detail-desc">${esc(info.got ? info.desc : "Keep going, agent — this one hasn't unlocked yet.")}</div>
+    <div class="bdr-detail-name">${esc(info.name)}</div>
+    <div class="bdr-detail-desc">${esc(info.desc)}</div>
   `
   if (info.got) {
     const wear = el('button', info.wearing ? 'btn btn-ghost bdr-wear' : 'btn btn-primary bdr-wear',
@@ -182,4 +170,8 @@ function showDetail(detail, info, state, sheet) {
     }
     detail.appendChild(wear)
   }
+  const back = el('button', 'btn btn-ghost bdr-back', 'Back to Collection')
+  back.onclick = () => showOverlay(badgeDrawerSheet(getState() || state))
+  detail.appendChild(back)
+  return detail
 }

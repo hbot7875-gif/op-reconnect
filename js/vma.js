@@ -9,7 +9,7 @@
 // tried running it server-side first and it doesn't work in Deno's sandbox.
 
 import { call } from './api.js'
-import { el, esc, toast, showOverlay, hideOverlay } from './state.js'
+import { el, esc, toast, showOverlay, hideOverlay, setState } from './state.js'
 import { getAgentNo } from './session.js'
 import { evaluateVoteProof, watermarkMatches } from '../supabase/functions/op-reconnect/lib/vma-ocr.js'
 
@@ -245,6 +245,12 @@ async function runChestOpen(box, chest) {
     return
   }
   await playChestReveal(box, res.reward)
+  if (res.reward?.kind === 'badge') refreshGameStateForRewards()
+}
+
+async function refreshGameStateForRewards() {
+  const fresh = await call('getGameState', { agentNo: getAgentNo() })
+  if (fresh.success) setState(fresh)
 }
 
 const REWARD_COPY = {
@@ -671,4 +677,5 @@ async function submitVote(status, category, imageBase64, imageMime, ocrText, dis
     else hideOverlay()
   }
   sheet.appendChild(done)
+  if (res.verifyStatus === 'verified') refreshGameStateForRewards()
 }
