@@ -3,21 +3,15 @@
 // schema and 20260819100000 for the follow-up fixes referenced by number
 // below (matching the review that drove them).
 //
-// Votes happen off-site (vote.mtv.com), so there's nothing to verify
-// cryptographically. OCR runs client-side (Tesseract.js in the browser —
-// its best-supported environment; a Deno Edge Function tried it first and
-// failed, no worker/core/lang auto-discovery there). The client sends the
-// extracted text alongside the image, but (per review) that text is NOT
-// trusted as proof by itself — it's matched against expected keywords, a
-// shared daily watermark, exact-duplicate-image rejection, and a Postgres
-// function (rc_vma_submit_vote) that does the cap/dedupe/credit math
-// atomically so concurrent submissions can't race past the limit. Anything
-// that doesn't clear every check falls to 'pending' for manual admin review
-// rather than being trusted outright.
+// Votes happen off-site (vote.mtv.com), so proof is checked from browser OCR
+// against BTS, the configured song, the displayed vote total and the shared
+// daily watermark. Proofs that clear all four checks are credited immediately;
+// anything unclear falls to 'pending'. Exact-image dedupe and the atomic SQL
+// cap calculation still prevent reuse and concurrent over-crediting.
 import type { GameContent, SupabaseDB } from './config.ts'
 import { awardBadge } from './badge-profile.ts'
 import { addChestFill, getChestStatus } from './supply-chest.ts'
-import { watermarkMatches } from './vma-ocr.js'
+import { evaluateVoteProof } from './vma-ocr.js'
 
 const BUCKET = 'vma-vote-proofs'
 const ET_OFFSET_HOURS = -4 // fixed EDT for the whole Aug 18 - Sep 25 window
@@ -84,38 +78,42 @@ async function sha256Hex(bytes: Uint8Array): Promise<string> {
 
 interface ProofCheck { status: 'verified' | 'pending'; note: string; watermarkOk: boolean }
 
-/** (1) Now checks BOTH which song (category_keywords, shared — BTS's entry
- *  is the same song in every category) AND which category page
- *  (category_match_keywords) so a Song of the Year screenshot can't credit
- *  Best K-Pop or vice versa. Decision tree: mtv site -> BTS -> song ->
- *  category page -> "votes submitted" -> today's shared watermark. All must
- *  pass to auto-approve; any single miss goes to 'pending', never
- *  'rejected' by text alone (duplicate-image is the only server-side
- *  rejection — see rc_vma_submit_vote). */
-function checkProofText(text: string, cfg: VmaConfig, category: string, expectedCode: string): ProofCheck {
+/** Uses the exact same proof-bearing checks as the browser. The VMA logo and
+ * category heading remain advisory because the mobile viewport often omits
+ * them; the selected category still controls which daily counter is credited.
+ * A miss goes to pending rather than being rejected. */
+function checkProofText(text: string, cfg: VmaConfig, category: string, expectedCode: string, displayedTotal: number): ProofCheck {
   if (!text.trim()) return { status: 'pending', note: 'No OCR text supplied — held for manual review.', watermarkOk: false }
 
-  const norm = text.toLowerCase().replace(/\s+/g, ' ')
-  const has = (s: string) => norm.includes(s.toLowerCase())
-  const hasAny = (arr: string[]) => arr.length === 0 || arr.some((k) => has(k))
-
-  const hasMtv = has('mtv') || has('vote.mtv.com')
-  const hasBts = has('bts')
-  const hasSong = hasAny(cfg.category_keywords[category] || [])
-  const hasCategoryPage = hasAny(cfg.category_match_keywords?.[category] || [])
-  const hasSubmitted = has(cfg.submitted_phrase)
-  const watermarkOk = watermarkMatches(text, expectedCode)
+  const proof = evaluateVoteProof(text, {
+    expectedCode,
+    songKeywords: cfg.category_keywords[category] || [],
+    displayedTotal,
+  })
 
   const missing: string[] = []
-  if (!hasMtv) missing.push('MTV site')
-  if (!hasBts) missing.push('BTS')
-  if (!hasSong) missing.push('song title')
-  if (!hasCategoryPage) missing.push('category page')
-  if (!hasSubmitted) missing.push('"Votes Submitted"')
-  if (!watermarkOk) missing.push('watermark code')
+  if (!proof.hasBts) missing.push('BTS')
+  if (!proof.hasSong) missing.push('song title')
+  if (!proof.voteTotalOk) missing.push('matching vote total')
+  if (!proof.watermarkOk) missing.push('watermark code')
 
-  if (missing.length === 0) return { status: 'verified', note: 'All checks passed.', watermarkOk }
-  return { status: 'pending', note: `Needs manual review — missing: ${missing.join(', ')}.`, watermarkOk }
+  if (proof.passed) return { status: 'verified', note: 'All automatic checks passed.', watermarkOk: proof.watermarkOk }
+  return { status: 'pending', note: `Needs manual review — missing: ${missing.join(', ')}.`, watermarkOk: proof.watermarkOk }
+}
+
+async function applyVerifiedVoteRewards(
+  supabase: SupabaseDB,
+  agentNo: string,
+  eventId: string,
+  powerHour: boolean,
+  doubleDay: boolean,
+  creditedVotes: number,
+) {
+  const templateIds = ['event_vma_voter']
+  if (powerHour) templateIds.push('event_vma_power_hour')
+  if (doubleDay) templateIds.push('event_vma_double_day')
+  for (const templateId of templateIds) await awardBadge(supabase, agentNo, templateId)
+  await addChestFill(supabase, agentNo, eventId, creditedVotes)
 }
 
 /** Cheap, DB-free summary for the World-screen event banner — folded into
@@ -252,12 +250,7 @@ export async function logVmaVote(supabase: SupabaseDB, content: GameContent, par
   const cap = doubleDay ? cfg.daily_cap_per_category * 2 : cfg.daily_cap_per_category
   const imageHash = await sha256Hex(bytes)
   const expectedCode = dailyWatermarkCode(cfg, day)
-  // check.status is advisory only now — it drives the client's local
-  // "looks right" hint and the note an admin sees, never an auto-verify
-  // decision. A client can send fabricated OCR text claiming a perfect
-  // match; matching keywords was never proof, so every real submission
-  // is queued for a human regardless of what this says. See module header.
-  const check = checkProofText(ocrText, cfg, category, expectedCode)
+  const check = checkProofText(ocrText, cfg, category, expectedCode, displayedTotal)
 
   const path = `${agentNo}/${Date.now()}.${imageMime.includes('png') ? 'png' : 'jpg'}`
   const { error: uploadErr } = await supabase.storage.from(BUCKET).upload(path, bytes, { contentType: imageMime })
@@ -269,23 +262,27 @@ export async function logVmaVote(supabase: SupabaseDB, content: GameContent, par
   // (3) Atomic: locks this agent/category/day/event, re-checks the
   // duplicate hash and the cap, and inserts — all inside one transaction —
   // so two concurrent submissions can't both read a stale cap and both get
-  // credited past it. p_verify_status is always 'pending' — nothing is
-  // ever auto-credited at submit time; only adminReviewVmaVote can move a
-  // row to 'verified' and actually credit votes.
+  // credited past it. Clear proofs are verified and credited atomically;
+  // unclear proofs are inserted with zero credit for later review.
   const { data: result, error: rpcErr } = await supabase.rpc('rc_vma_submit_vote', {
     p_agent_no: agentNo, p_event_id: eventId, p_category: category, p_vote_day: day,
     p_displayed_total: displayedTotal, p_daily_cap: cap,
     p_is_power_hour: powerHour, p_is_double_day: doubleDay,
     p_proof_path: path, p_image_hash: imageHash, p_image_mime: imageMime, p_ocr_text: ocrText,
     p_expected_code: expectedCode, p_watermark_ok: check.watermarkOk,
-    p_verify_status: 'pending', p_verify_note: check.note,
+    p_verify_status: check.status, p_verify_note: check.note,
   })
   if (rpcErr) return { success: false, error: 'db_error', detail: rpcErr.message }
   if (!result?.success) return { success: false, error: result?.error || 'submit_failed' }
 
+  const creditedVotes = Number(result.creditedVotes) || 0
+  if (check.status === 'verified') {
+    await applyVerifiedVoteRewards(supabase, agentNo, eventId, powerHour, doubleDay, creditedVotes)
+  }
+
   return {
-    success: true, verifyStatus: 'pending', verifyNote: check.note, looksGood: check.status === 'verified',
-    watermarkCode: expectedCode, remaining: result.remaining,
+    success: true, verifyStatus: check.status, verifyNote: check.note,
+    creditedVotes, watermarkCode: expectedCode, remaining: result.remaining,
   }
 }
 
@@ -352,11 +349,10 @@ export async function adminReviewVmaVote(supabase: SupabaseDB, content: GameCont
   if (!result?.success) return { success: false, error: result?.error || 'review_failed' }
 
   if (result.verifyStatus === 'verified') {
-    const templateIds = ['event_vma_voter']
-    if (row.is_power_hour) templateIds.push('event_vma_power_hour')
-    if (row.is_double_day) templateIds.push('event_vma_double_day')
-    for (const templateId of templateIds) await awardBadge(supabase, row.agent_no, templateId)
-    await addChestFill(supabase, row.agent_no, row.event_id, result.creditedVotes)
+    await applyVerifiedVoteRewards(
+      supabase, row.agent_no, row.event_id,
+      row.is_power_hour, row.is_double_day, result.creditedVotes,
+    )
   }
 
   return { success: true, verifyStatus: result.verifyStatus, creditedVotes: result.creditedVotes }

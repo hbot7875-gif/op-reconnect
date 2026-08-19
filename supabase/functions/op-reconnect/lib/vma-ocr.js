@@ -52,8 +52,8 @@ export function watermarkMatches(text, expectedCode) {
   // The real YOONGI19 screenshot's raw sparse-text pass returned ONGI19:
   // an otherwise-perfect suffix with its first two letters dropped. For an
   // 8+ character daily code, six matching characters is still specific
-  // enough for this client-side precheck (the server queues every proof for
-  // human review); shorter codes keep the stricter one-edit allowance.
+  // enough when combined with the artist, song and vote-total checks;
+  // shorter codes keep the stricter one-edit allowance.
   const limit = expectedKey.length >= 8 ? 2 : 1
   const minLength = Math.max(4, expectedKey.length - limit)
   const maxLength = expectedKey.length + limit
@@ -76,4 +76,28 @@ export function extractVoteTotal(text) {
     if (Number.isInteger(value) && value > 0 && value <= 10000) totals.push(value)
   }
   return totals.length ? Math.max(...totals) : null
+}
+
+/** One shared auto-approval decision for the browser and Edge Function.
+ * The stylized VMA logo and category heading are not reliably present in a
+ * mobile screenshot, so the proof-bearing fields are BTS, the configured
+ * song title, a positive vote counter and today's watermark code. When the
+ * backend supplies displayedTotal, it must exactly match the total OCR read. */
+export function evaluateVoteProof(text, { expectedCode = '', songKeywords = [], displayedTotal = null } = {}) {
+  const norm = String(text || '').toLowerCase().replace(/\s+/g, ' ')
+  const has = (value) => norm.includes(String(value || '').toLowerCase())
+  const ocrTotal = extractVoteTotal(text)
+  const hasBts = has('bts')
+  const hasSong = songKeywords.length === 0 || songKeywords.some(has)
+  const voteTotalOk = ocrTotal != null && (displayedTotal == null || ocrTotal === displayedTotal)
+  const watermarkOk = watermarkMatches(text, expectedCode)
+
+  return {
+    passed: hasBts && hasSong && voteTotalOk && watermarkOk,
+    hasBts,
+    hasSong,
+    voteTotalOk,
+    watermarkOk,
+    displayedTotal: ocrTotal,
+  }
 }

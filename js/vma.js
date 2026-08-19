@@ -11,7 +11,7 @@
 import { call } from './api.js'
 import { el, esc, toast, showOverlay, hideOverlay } from './state.js'
 import { getAgentNo } from './session.js'
-import { extractVoteTotal, watermarkMatches } from '../supabase/functions/op-reconnect/lib/vma-ocr.js'
+import { evaluateVoteProof, watermarkMatches } from '../supabase/functions/op-reconnect/lib/vma-ocr.js'
 
 let tesseractPromise = null
 function loadTesseract() {
@@ -432,30 +432,27 @@ function checkText(text, cfg, category, expectedCode) {
   const norm = text.toLowerCase().replace(/\s+/g, ' ')
   const has = (s) => norm.includes(s.toLowerCase())
   const hasAny = (arr) => !arr?.length || arr.some((k) => has(k))
-  const displayedTotal = extractVoteTotal(text)
+  const proof = evaluateVoteProof(text, {
+    expectedCode,
+    songKeywords: cfg.category_keywords?.[category] || [],
+  })
 
   return {
-    // Third element = required for "SIGNAL CONFIRMED". BTS/song-title text
-    // sits directly over a photo in the real screenshot (album art, a
-    // concert still) and Tesseract genuinely struggles with that regardless
-    // of preprocessing (verified directly, not assumed) — still shown for
-    // transparency, but a miss on just these two no longer forces "SIGNAL
-    // UNCLEAR" for an otherwise-real screenshot. Doesn't loosen anything
-    // security-relevant: every submission goes to admin review either way
-    // (see vma-voting.ts), and the admin can see the actual photo.
+    // Third element = required for automatic approval. These are the same
+    // four proof-bearing checks the backend runs before crediting votes.
     checks: [
       // The mobile page uses a stylized VMA logo and often omits the category
       // heading from the scrolled viewport. These identity checks remain
-      // useful hints for the reviewer, but only the vote total + today's code
-      // gate upload; every submission is human-reviewed on the backend.
+      // useful hints, but do not block a screenshot that clearly contains
+      // BTS, the song, its vote total and today's code.
       ['MTV site', has('mtv') || has('vma') || has('vote.mtv.com'), false],
-      ['BTS', has('bts'), false],
-      ['SWIM', hasAny(cfg.category_keywords?.[category]), false],
+      ['BTS', proof.hasBts, true],
+      ['SWIM', proof.hasSong, true],
       [cfg.category_labels?.[category] || 'Category', hasAny(cfg.category_match_keywords?.[category]), false],
-      [displayedTotal != null ? `${displayedTotal} votes` : 'Vote total', displayedTotal != null, true],
-      ["Today's code", watermarkMatches(text, expectedCode), true],
+      [proof.displayedTotal != null ? `${proof.displayedTotal} votes` : 'Vote total', proof.voteTotalOk, true],
+      ["Today's code", proof.watermarkOk, true],
     ],
-    displayedTotal,
+    displayedTotal: proof.displayedTotal,
   }
 }
 
@@ -575,8 +572,8 @@ async function openScanStep(status, category, file) {
 
   const resultBox = el('div', 'vma-scan-result')
   if (allGood) {
-    resultBox.appendChild(el('div', 'vma-scan-headline good', 'PROOF READY'))
-    const send = el('button', 'btn btn-primary vma-add-btn', 'SEND FOR REVIEW')
+    resultBox.appendChild(el('div', 'vma-scan-headline good', 'PROOF VERIFIED'))
+    const send = el('button', 'btn btn-primary vma-add-btn', 'SEND VOTES')
     send.onclick = () => submitVote(status, category, base64, file.type, ocrText, displayedTotal)
     resultBox.appendChild(send)
   } else {
