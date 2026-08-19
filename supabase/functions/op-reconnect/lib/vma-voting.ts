@@ -10,7 +10,7 @@
 // cap calculation still prevent reuse and concurrent over-crediting.
 import type { GameContent, SupabaseDB } from './config.ts'
 import { addChestFill, getChestStatus } from './supply-chest.ts'
-import { evaluateVoteProof } from './vma-ocr.js'
+import { evaluateVoteProof, validVoteTotals } from './vma-ocr.js'
 
 const BUCKET = 'vma-vote-proofs'
 const ET_OFFSET_HOURS = -4 // fixed EDT for the whole Aug 18 - Sep 25 window
@@ -75,29 +75,46 @@ async function sha256Hex(bytes: Uint8Array): Promise<string> {
   return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-interface ProofCheck { status: 'verified' | 'pending'; note: string; watermarkOk: boolean }
+interface ProofCheck {
+  status: 'verified' | 'pending'
+  note: string
+  watermarkOk: boolean
+  displayedTotal: number | null
+}
 
 /** Uses the exact same proof-bearing checks as the browser. The VMA logo and
  * category heading remain advisory because the mobile viewport often omits
  * them; the selected category still controls which daily counter is credited.
  * A miss goes to pending rather than being rejected. */
-function checkProofText(text: string, cfg: VmaConfig, category: string, expectedCode: string, displayedTotal: number): ProofCheck {
-  if (!text.trim()) return { status: 'pending', note: 'No OCR text supplied — held for manual review.', watermarkOk: false }
+function checkProofText(text: string, cfg: VmaConfig, category: string, expectedCode: string, dailyCap: number): ProofCheck {
+  if (!text.trim()) {
+    return {
+      status: 'pending', note: 'No OCR text supplied — held for manual review.',
+      watermarkOk: false, displayedTotal: null,
+    }
+  }
 
   const proof = evaluateVoteProof(text, {
     expectedCode,
     songKeywords: cfg.category_keywords[category] || [],
-    displayedTotal,
+    allowedVoteTotals: validVoteTotals(dailyCap),
   })
 
   const missing: string[] = []
-  if (!proof.hasBts) missing.push('BTS')
   if (!proof.hasSong) missing.push('song title')
   if (!proof.voteTotalOk) missing.push('matching vote total')
   if (!proof.watermarkOk) missing.push('watermark code')
 
-  if (proof.passed) return { status: 'verified', note: 'All automatic checks passed.', watermarkOk: proof.watermarkOk }
-  return { status: 'pending', note: `Needs manual review — missing: ${missing.join(', ')}.`, watermarkOk: proof.watermarkOk }
+  if (proof.passed) {
+    return {
+      status: 'verified', note: 'All automatic checks passed.',
+      watermarkOk: proof.watermarkOk, displayedTotal: proof.displayedTotal,
+    }
+  }
+  return {
+    status: 'pending', note: `Needs manual review — missing: ${missing.join(', ')}.`,
+    watermarkOk: proof.watermarkOk, displayedTotal: proof.displayedTotal,
+  }
 }
 
 /** Cheap, DB-free summary for the World-screen event banner — folded into
@@ -199,16 +216,11 @@ export async function logVmaVote(supabase: SupabaseDB, content: GameContent, par
   if (!cfg) return { success: false, error: 'Voting mission not configured' }
   const agentNo = String(params.agentNo || '').trim().toUpperCase()
   const category = String(params.category || '')
-  // (2) What the screenshot's counter shows right now — cumulative, not a
-  // per-submission count. Credit is the delta above this agent/category/
-  // day's highest prior *verified* total, computed atomically in SQL.
-  const displayedTotal = Math.floor(Number(params.displayedTotal))
   const imageBase64 = String(params.imageBase64 || '')
   const imageMime = String(params.imageMime || '').toLowerCase()
   const ocrText = String(params.ocrText || '') // client-extracted, untrusted — see module header
 
   if (!cfg.categories.includes(category)) return { success: false, error: 'bad_category' }
-  if (!(displayedTotal >= 1 && displayedTotal <= 10000)) return { success: false, error: 'bad_vote_count' }
   if (!imageBase64) return { success: false, error: 'proof_required' }
   // (6) Only JPG/PNG, capped at 5MB. Compression itself is a frontend
   // concern (not built yet) — this is the hard server-side backstop
@@ -234,7 +246,12 @@ export async function logVmaVote(supabase: SupabaseDB, content: GameContent, par
   const cap = doubleDay ? cfg.daily_cap_per_category * 2 : cfg.daily_cap_per_category
   const imageHash = await sha256Hex(bytes)
   const expectedCode = dailyWatermarkCode(cfg, day)
-  const check = checkProofText(ocrText, cfg, category, expectedCode, displayedTotal)
+  // Never trust or even read an agent-supplied number. The only value stored
+  // comes from OCR and must equal today's configured completed-proof total:
+  // 10 normally or 20 on a Double Day. Unreadable proofs store 0 and receive
+  // no credit until an admin checks the actual screenshot.
+  const check = checkProofText(ocrText, cfg, category, expectedCode, cap)
+  const displayedTotal = check.displayedTotal ?? 0
 
   const path = `${agentNo}/${Date.now()}.${imageMime.includes('png') ? 'png' : 'jpg'}`
   const { error: uploadErr } = await supabase.storage.from(BUCKET).upload(path, bytes, { contentType: imageMime })
@@ -277,8 +294,10 @@ const SIGNED_URL_TTL_SECONDS = 10 * 60
 // the list hands back a short-lived signed URL per row instead of the raw
 // proof_path, and supports paging so a backlog doesn't have to load in one
 // shot.
-export async function adminListVmaPending(supabase: SupabaseDB, params: Record<string, unknown>) {
+export async function adminListVmaPending(supabase: SupabaseDB, content: GameContent, params: Record<string, unknown>) {
   const eventId = String(params.eventId || 'vma_2026')
+  const cfg = vmaConfig(content, eventId)
+  if (!cfg) return { success: false, error: 'not_configured' }
   const limit = Math.min(50, Math.max(1, Number(params.limit) || 20))
   const offset = Math.max(0, Number(params.offset) || 0)
 
@@ -286,7 +305,7 @@ export async function adminListVmaPending(supabase: SupabaseDB, params: Record<s
     .select('id', { count: 'exact', head: true }).eq('event_id', eventId).eq('verify_status', 'pending')
 
   const { data, error } = await supabase.from('rc_vma_votes')
-    .select('id, agent_no, category, vote_day, displayed_total, ocr_text, expected_code, watermark_ok, verify_note, voted_at, proof_path')
+    .select('id, agent_no, category, vote_day, displayed_total, ocr_text, expected_code, watermark_ok, verify_note, voted_at, proof_path, is_double_day')
     .eq('event_id', eventId).eq('verify_status', 'pending')
     .order('voted_at', { ascending: true }).range(offset, offset + limit - 1)
   if (error) return { success: false, error: error.message }
@@ -295,7 +314,8 @@ export async function adminListVmaPending(supabase: SupabaseDB, params: Record<s
   const withUrls = await Promise.all(rows.map(async (r: any) => {
     const { data: signed } = await supabase.storage.from(PROOF_BUCKET).createSignedUrl(r.proof_path, SIGNED_URL_TTL_SECONDS)
     const { proof_path, ...rest } = r
-    return { ...rest, proofUrl: signed?.signedUrl || null }
+    const allowedTotal = r.is_double_day ? cfg.daily_cap_per_category * 2 : cfg.daily_cap_per_category
+    return { ...rest, allowedTotal, proofUrl: signed?.signedUrl || null }
   }))
 
   return { success: true, pending: withUrls, pendingCount: count || 0, limit, offset }
@@ -308,7 +328,7 @@ export async function adminReviewVmaVote(supabase: SupabaseDB, content: GameCont
   const note = params.note ? String(params.note) : null
   const correctedTotal = params.correctedDisplayedTotal != null ? Math.floor(Number(params.correctedDisplayedTotal)) : null
   if (!voteId || !['approve', 'reject'].includes(decision)) return { success: false, error: 'bad_params' }
-  if (correctedTotal != null && !(correctedTotal >= 1 && correctedTotal <= 10000)) {
+  if (correctedTotal != null && !Number.isInteger(correctedTotal)) {
     return { success: false, error: 'bad_corrected_total' }
   }
 
@@ -316,11 +336,15 @@ export async function adminReviewVmaVote(supabase: SupabaseDB, content: GameCont
   // was already resolved then), not "now" — an admin reviewing a Tuesday
   // submission on Wednesday must still get Tuesday's cap.
   const { data: row } = await supabase.from('rc_vma_votes')
-    .select('agent_no, event_id, category, is_power_hour, is_double_day').eq('id', voteId).maybeSingle()
+    .select('agent_no, event_id, category, displayed_total, is_power_hour, is_double_day').eq('id', voteId).maybeSingle()
   if (!row) return { success: false, error: 'not_found' }
   const cfg = vmaConfig(content, row.event_id)
   if (!cfg) return { success: false, error: 'not_configured' }
   const dailyCap = row.is_double_day ? cfg.daily_cap_per_category * 2 : cfg.daily_cap_per_category
+  const effectiveTotal = correctedTotal ?? Number(row.displayed_total)
+  if (decision === 'approve' && effectiveTotal !== dailyCap) {
+    return { success: false, error: 'bad_corrected_total', expectedTotal: dailyCap }
+  }
 
   const { data: result, error } = await supabase.rpc('rc_vma_review_vote', {
     p_vote_id: voteId, p_decision: decision, p_admin: admin, p_note: note,

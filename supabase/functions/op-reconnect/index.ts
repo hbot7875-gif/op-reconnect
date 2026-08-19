@@ -127,7 +127,7 @@ const ROUTES: Record<string, Route> = {
   getVmaStatus: { auth: 'agent', handler: async (sb, p) => getVmaStatus(sb, await loadContent(sb), p) },
   logVmaVote: { auth: 'agent', handler: async (sb, p) => logVmaVote(sb, await loadContent(sb), p) },
   // (7) Admin review queue for anything OCR couldn't auto-clear.
-  adminListVmaPending: { auth: 'admin', handler: (sb, p) => adminListVmaPending(sb, p) },
+  adminListVmaPending: { auth: 'admin', handler: async (sb, p) => adminListVmaPending(sb, await loadContent(sb), p) },
   adminReviewVmaVote: { auth: 'admin', handler: async (sb, p) => adminReviewVmaVote(sb, await loadContent(sb), p) },
 
   // ── Backup Pass — see lib/backup-pass.ts and migration 20260819110000 ──

@@ -11,7 +11,9 @@
 import { call } from './api.js'
 import { el, esc, toast, showOverlay, hideOverlay, setState } from './state.js'
 import { getAgentNo } from './session.js'
-import { evaluateVoteProof, watermarkMatches } from '../supabase/functions/op-reconnect/lib/vma-ocr.js'
+import {
+  evaluateVoteProof, validVoteTotals, watermarkMatches,
+} from '../supabase/functions/op-reconnect/lib/vma-ocr.js'
 
 let tesseractPromise = null
 function loadTesseract() {
@@ -430,17 +432,124 @@ async function preprocessColoredTextForOcr(file) {
   }
 }
 
+/** Split a tall phone screenshot into overlapping card-sized regions. Whole-
+ * page OCR tends to skip the large BTS/song/counter text because each vote
+ * card looks like a separate layout over a photo. Giving Tesseract one card-
+ * sized region at a time fixes that without asking the player what it says. */
+async function createOcrTiles(file, highContrast = false) {
+  const img = await loadImageBitmap(file)
+  try {
+    const tileHeight = Math.min(img.height, Math.max(img.width * 1.15, img.height * 0.44))
+    const stride = Math.max(1, tileHeight * 0.68)
+    const starts = []
+    for (let y = 0; y < img.height; y += stride) {
+      starts.push(Math.min(y, Math.max(0, img.height - tileHeight)))
+      if (starts.at(-1) + tileHeight >= img.height) break
+    }
+
+    const uniqueStarts = [...new Set(starts.map((n) => Math.round(n)))]
+    return uniqueStarts.map((y) => {
+      const height = Math.min(tileHeight, img.height - y)
+      const scale = Math.max(1, Math.min(2.25, 1200 / img.width))
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.round(img.width * scale)
+      canvas.height = Math.round(height * scale)
+      const ctx = canvas.getContext('2d')
+      ctx.drawImage(img, 0, y, img.width, height, 0, 0, canvas.width, canvas.height)
+
+      if (highContrast) {
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+        const d = imageData.data
+        for (let i = 0; i < d.length; i += 4) {
+          // Local card crops let a simple light-text mask work much better
+          // than it does on the full page. The strongest channel preserves
+          // white labels and red/purple handwritten watermark text.
+          const strongest = Math.max(d[i], d[i + 1], d[i + 2])
+          const weakest = Math.min(d[i], d[i + 1], d[i + 2])
+          const saturated = strongest - weakest > 45
+          const value = saturated ? strongest : 0.8 * strongest + 0.2 * weakest
+          const binary = value >= 145 ? 255 : 0
+          d[i] = d[i + 1] = d[i + 2] = binary
+        }
+        ctx.putImageData(imageData, 0, 0)
+      }
+      return canvas
+    })
+  } finally {
+    URL.revokeObjectURL(img.src)
+  }
+}
+
+function proofIsComplete(text, cfg, category, expectedCode, allowedVoteTotals) {
+  const { checks, displayedTotal } = checkText(text, cfg, category, expectedCode, allowedVoteTotals)
+  return displayedTotal != null && checks
+    .filter(([, , required]) => required !== false)
+    .every(([, ok]) => ok)
+}
+
+async function scanOcrTiles(worker, file, seedText, cfg, category, expectedCode, allowedVoteTotals) {
+  let combined = seedText
+  for (const highContrast of [false, true]) {
+    let tiles = []
+    try { tiles = await createOcrTiles(file, highContrast) } catch { tiles = [] }
+    for (const tile of tiles) {
+      try {
+        const result = await worker.recognize(tile)
+        combined += '\n' + String(result?.data?.text || '')
+      } catch {
+        // One bad crop must not discard text recovered by the other passes.
+      }
+      if (proofIsComplete(combined, cfg, category, expectedCode, allowedVoteTotals)) return combined
+    }
+  }
+  return combined
+}
+
+/** Exported so the exact production scanner can be exercised against real
+ * screenshots in a browser test without submitting anything. */
+export async function scanVoteProofImage(file, cfg, category, expectedCode, allowedVoteTotals) {
+  const worker = await getOcrWorker()
+  const rawResult = await worker.recognize(file)
+  let combined = String(rawResult?.data?.text || '')
+
+  try {
+    const boosted = await preprocessForOcr(file)
+    const boostedResult = await worker.recognize(boosted)
+    combined += '\n' + String(boostedResult?.data?.text || '')
+  } catch {
+    // The raw pass remains usable.
+  }
+
+  if (!proofIsComplete(combined, cfg, category, expectedCode, allowedVoteTotals)) {
+    combined = await scanOcrTiles(
+      worker, file, combined, cfg, category, expectedCode, allowedVoteTotals,
+    )
+  }
+
+  if (!watermarkMatches(combined, expectedCode)) {
+    try {
+      const colored = await preprocessColoredTextForOcr(file)
+      const coloredResult = await worker.recognize(colored)
+      combined += '\n' + String(coloredResult?.data?.text || '')
+    } catch {
+      // Raw/grayscale/tile results remain usable.
+    }
+  }
+  return combined
+}
+
 /** Same decision tree the backend runs (lib/vma-voting.ts::checkProofText),
  *  duplicated here ONLY so the player gets an instant, game-like checklist
  *  before spending an actual submission — the server always makes the real
  *  call regardless of what this predicts. */
-function checkText(text, cfg, category, expectedCode) {
+function checkText(text, cfg, category, expectedCode, allowedVoteTotals = null) {
   const norm = text.toLowerCase().replace(/\s+/g, ' ')
   const has = (s) => norm.includes(s.toLowerCase())
   const hasAny = (arr) => !arr?.length || arr.some((k) => has(k))
   const proof = evaluateVoteProof(text, {
     expectedCode,
     songKeywords: cfg.category_keywords?.[category] || [],
+    allowedVoteTotals,
   })
 
   return {
@@ -452,7 +561,9 @@ function checkText(text, cfg, category, expectedCode) {
       // useful hints, but do not block a screenshot that clearly contains
       // BTS, the song, its vote total and today's code.
       ['MTV site', has('mtv') || has('vma') || has('vote.mtv.com'), false],
-      ['BTS', proof.hasBts, true],
+      // SWIM is the configured BTS song, so BTS is a useful extra signal,
+      // not a duplicate blocker when the song itself is clearly readable.
+      ['BTS', proof.hasBts, false],
       ['SWIM', proof.hasSong, true],
       [cfg.category_labels?.[category] || 'Category', hasAny(cfg.category_match_keywords?.[category]), false],
       [proof.displayedTotal != null ? `${proof.displayedTotal} votes` : 'Vote total', proof.voteTotalOk, true],
@@ -512,6 +623,7 @@ function openUploadStep(status, category) {
 
 async function openScanStep(status, category, file) {
   const cfg = status.config || {}
+  const allowedVoteTotals = validVoteTotals(status.dailyCap)
   const sheet = el('div', 'sheet vma-sheet vma-scan')
   sheet.append(el('div', 'eyebrow', 'SCANNING SIGNAL'))
   const spinner = el('div', 'vma-scan-spinner', 'Scanning proof…')
@@ -523,41 +635,16 @@ async function openScanStep(status, category, file) {
   let base64, ocrText = ''
   try {
     base64 = await fileToBase64(file)
-    const worker = await getOcrWorker()
-    // Two passes, merged: the raw file and a grayscale/contrast-boosted
-    // version each recover text the other one misses (verified against a
-    // real screenshot where the watermark — plainly readable to a human —
-    // was dropped on the raw pass alone). Sequential, not parallel: a
-    // Tesseract.js worker processes one recognize() job at a time anyway,
-    // and this keeps the two results unambiguous instead of racing.
-    const rawResult = await worker.recognize(file)
-    let combined = String(rawResult?.data?.text || '')
-    try {
-      const boosted = await preprocessForOcr(file)
-      const boostedResult = await worker.recognize(boosted)
-      combined += '\n' + String(boostedResult?.data?.text || '')
-    } catch {
-      // preprocessing/second pass is a best-effort improvement — the raw
-      // pass's text above is still used even if this one fails
-    }
-    // The example mobile proof writes YOONGI19 in red over a dark card.
-    // Luminance-based grayscale suppresses red, so run one color-aware pass
-    // only when the first two passes still miss the expected code.
-    if (!watermarkMatches(combined, status.watermarkCode)) {
-      try {
-        const colored = await preprocessColoredTextForOcr(file)
-        const coloredResult = await worker.recognize(colored)
-        combined += '\n' + String(coloredResult?.data?.text || '')
-      } catch {
-        // best-effort fallback; the raw and grayscale results remain usable
-      }
-    }
-    ocrText = combined
+    ocrText = await scanVoteProofImage(
+      file, cfg, category, status.watermarkCode, allowedVoteTotals,
+    )
   } catch {
     ocrText = ''
   }
 
-  const { checks, displayedTotal } = checkText(ocrText, cfg, category, status.watermarkCode)
+  const { checks, displayedTotal } = checkText(
+    ocrText, cfg, category, status.watermarkCode, allowedVoteTotals,
+  )
   const allGood = checks.filter(([, , required]) => required !== false).every(([, ok]) => ok) && displayedTotal != null
 
   // Reveal one at a time — the "gamify it" beat. Real OCR already
@@ -580,7 +667,7 @@ async function openScanStep(status, category, file) {
   if (allGood) {
     resultBox.appendChild(el('div', 'vma-scan-headline good', 'PROOF VERIFIED'))
     const send = el('button', 'btn btn-primary vma-add-btn', 'SEND VOTES')
-    send.onclick = () => submitVote(status, category, base64, file.type, ocrText, displayedTotal)
+    send.onclick = () => submitVote(status, category, base64, file.type, ocrText)
     resultBox.appendChild(send)
   } else {
     resultBox.appendChild(el('div', 'vma-scan-headline bad', 'SIGNAL UNCLEAR'))
@@ -604,30 +691,17 @@ async function openScanStep(status, category, file) {
 
     resultBox.appendChild(el('p', 'muted', "We couldn't confirm everything clearly."))
 
-    // (4) No more silent "|| 1" guess when OCR can't read a number — that
-    // fake total became the permanent record with no way to fix it later.
-    // If OCR DID find a number, use it (some other check just failed);
-    // otherwise ask the player directly rather than inventing one.
-    let countInput = null
-    if (displayedTotal == null) {
-      resultBox.appendChild(el('div', 'vma-count-label', 'How many votes does the screenshot show?'))
-      countInput = el('input', 'vma-count-input')
-      countInput.type = 'number'
-      countInput.min = '1'
-      countInput.max = '10000'
-      countInput.placeholder = 'e.g. 10'
-      resultBox.appendChild(countInput)
-    }
+    resultBox.appendChild(el(
+      'p', 'muted',
+      displayedTotal == null
+        ? `We couldn't read the ${allowedVoteTotals[0] || 10}-vote counter. You never need to type it yourself.`
+        : `We read ${displayedTotal} votes, but another part of the proof is unclear.`,
+    ))
 
     const retry = el('button', 'btn btn-primary vma-add-btn', 'Try another screenshot')
     retry.onclick = () => openUploadStep(status, category)
     const review = el('button', 'btn btn-ghost', 'Send for review')
-    review.onclick = () => {
-      const manual = countInput ? Math.floor(Number(countInput.value)) : null
-      const total = displayedTotal ?? manual
-      if (!total || total < 1) { toast('Enter how many votes the screenshot shows'); return }
-      submitVote(status, category, base64, file.type, ocrText, total)
-    }
+    review.onclick = () => submitVote(status, category, base64, file.type, ocrText)
     resultBox.append(retry, review)
   }
   sheet.appendChild(resultBox)
@@ -635,13 +709,13 @@ async function openScanStep(status, category, file) {
 
 /* ── step 4: submit + confirm ──────────────────────────────────────────── */
 
-async function submitVote(status, category, imageBase64, imageMime, ocrText, displayedTotal) {
+async function submitVote(status, category, imageBase64, imageMime, ocrText) {
   const sheet = el('div', 'sheet vma-sheet')
   sheet.append(el('div', 'eyebrow', 'VMA SIGNAL MISSION'), el('div', 'vma-loading', 'Sending…'))
   showOverlay(sheet)
 
   const res = await call('logVmaVote', {
-    agentNo: getAgentNo(), category, displayedTotal, imageBase64, imageMime, ocrText,
+    agentNo: getAgentNo(), category, imageBase64, imageMime, ocrText,
   })
 
   sheet.innerHTML = ''

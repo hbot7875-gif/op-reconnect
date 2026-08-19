@@ -1321,33 +1321,37 @@ let vmaOffset = 0
 const VMA_PAGE_SIZE = 10
 
 function vmaCard(row) {
+  const allowedTotal = Number(row.allowedTotal) || (row.is_double_day ? 20 : 10)
+  const storedTotal = Number(row.displayed_total) || 0
+  const categoryLabel = row.category === 'song_of_the_year' ? 'Song of the Year'
+    : row.category === 'best_kpop' ? 'Best K-Pop' : row.category
   const card = document.createElement('div')
   card.className = 'adm-card'
   card.style.marginTop = '10px'
   card.innerHTML = `
-    <div class="adm-card-head"><h2>${esc(row.agent_no)} · ${esc(row.category)}</h2><span class="muted">${fmtDate(row.voted_at)}</span></div>
+    <div class="adm-card-head"><h2>${esc(row.agent_no)} · ${esc(categoryLabel)}</h2><span class="muted">${fmtDate(row.voted_at)}</span></div>
     <p class="muted">${esc(row.verify_note || '')}</p>
     ${row.proofUrl ? `<img src="${esc(row.proofUrl)}" alt="proof screenshot" style="max-width:100%; border-radius:10px; border:1px solid var(--border); margin:8px 0;">` : '<p class="muted">No preview available.</p>'}
     <div class="adm-grid2">
-      <label class="adm-field"><span>Displayed vote total</span>
-        <input type="number" min="1" max="10000" class="ob-input vma-total-input" value="${row.displayed_total}"></label>
+      <label class="adm-field"><span>Valid total for this voting day</span>
+        <input type="text" class="ob-input vma-total-input" value="${allowedTotal} votes" disabled>
+        <small class="muted">${storedTotal === allowedTotal ? `OCR read ${storedTotal}` : `OCR read ${storedTotal || 'nothing'} — approval will safely use ${allowedTotal}`}</small></label>
       <label class="adm-field"><span>Watermark</span>
-        <input type="text" class="ob-input" value="${row.watermark_ok ? '✓ matched' : '✕ not found'}" disabled></label>
+        <input type="text" class="ob-input" value="${row.watermark_ok ? '✓ matched' : '✕ not found'}" disabled>
+        <small class="muted">Expected: ${esc(row.expected_code || '—')}</small></label>
     </div>
     <div class="adm-row" style="margin-top:8px;">
-      <button class="btn btn-primary vma-approve-btn" type="button">✓ Approve</button>
-      <button class="btn btn-alert vma-reject-btn" type="button">✕ Reject</button>
+      <button class="btn btn-primary adm-mutate-btn vma-approve-btn" type="button">✓ Approve ${allowedTotal}</button>
+      <button class="btn btn-alert adm-mutate-btn vma-reject-btn" type="button">✕ Reject</button>
     </div>
     <div class="adm-out vma-out"></div>
   `
   card.querySelector('.vma-approve-btn').onclick = async (e) => {
     const btn = e.currentTarget
     btn.disabled = true
-    const totalInput = card.querySelector('.vma-total-input')
-    const corrected = Number(totalInput.value)
     const res = await call('adminReviewVmaVote', {
       voteId: row.id, decision: 'approve',
-      correctedDisplayedTotal: corrected !== row.displayed_total ? corrected : undefined,
+      correctedDisplayedTotal: allowedTotal,
     })
     if (res?.success) { card.remove(); loadVmaCount() }
     else { const out = card.querySelector('.vma-out'); out.textContent = res?.error || 'Failed'; out.className = 'adm-out is-visible is-error'; btn.disabled = false }
