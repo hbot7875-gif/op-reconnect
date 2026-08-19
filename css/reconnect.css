@@ -136,7 +136,10 @@ body {
 .hud-row { display: flex; align-items: center; gap: 10px; }
 .hud-identity { min-width: 0; flex: 1; display: flex; align-items: center; gap: 10px; padding: 2px 0;
   border: 0; background: none; color: var(--text); text-align: left; cursor: pointer; }
-.hud-crest { position: relative; width: 46px; height: 46px; flex: 0 0 46px; display: grid; place-items: center;
+.hud-crest { --hud-crest-size: 46px; position: relative;
+  width: var(--hud-crest-size); height: var(--hud-crest-size); min-width: var(--hud-crest-size); max-width: var(--hud-crest-size);
+  min-height: var(--hud-crest-size); max-height: var(--hud-crest-size); aspect-ratio: 1 / 1; flex: 0 0 var(--hud-crest-size);
+  display: grid; place-items: center;
   border: 1px solid rgba(139,92,246,.62); border-radius: 50%; background: radial-gradient(circle, rgba(139,92,246,.28), rgba(20,18,30,.2) 68%);
   color: var(--purple-lt); box-shadow: inset 0 0 14px rgba(139,92,246,.2), 0 0 12px rgba(139,92,246,.12); }
 .hud-crest::before { content: ''; position: absolute; inset: 4px; border: 1px dashed rgba(217,173,95,.42); border-radius: 50%; }
@@ -153,9 +156,12 @@ body {
   border-radius: 50%; background: #181426; color: var(--gold); font-size: 7px; line-height: 1;
   box-shadow: 0 1px 5px rgba(0,0,0,.65); }
 .hud-crest.has-photo i { z-index: 3; top: -1px; width: 3px; height: 3px; box-shadow: none; }
-.hud-crest-photo { position: relative; z-index: 1; width: calc(100% - 10px); height: calc(100% - 10px);
+.hud-crest-photo { position: relative; z-index: 1; display: block;
+  width: calc(var(--hud-crest-size) - 10px); height: calc(var(--hud-crest-size) - 10px);
+  min-width: calc(var(--hud-crest-size) - 10px); max-width: calc(var(--hud-crest-size) - 10px);
+  min-height: calc(var(--hud-crest-size) - 10px); max-height: calc(var(--hud-crest-size) - 10px); aspect-ratio: 1 / 1;
   border: 1px solid rgba(217,173,95,.72); border-radius: 50%; object-fit: cover; object-position: 50% 20%;
-  box-shadow: 0 0 0 1px rgba(0,0,0,.5); }
+  clip-path: circle(50%); box-shadow: 0 0 0 1px rgba(0,0,0,.5); }
 .hud-who { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .hud-code-row { display: flex; align-items: center; gap: 5px; min-width: 0; }
 .hud-code { display: block; font-family: var(--disp); font-weight: 900; font-size: 19px; letter-spacing: .7px;
@@ -199,7 +205,7 @@ body {
 .hud-boost { color: var(--gold); font-weight: 700; flex-shrink: 0; }
 
 @media (max-width: 420px) {
-  .hud-crest { width: 40px; height: 40px; flex-basis: 40px; }
+  .hud-crest { --hud-crest-size: 40px; }
   .hud-code { font-size: 17px; }
   .hud-streak { padding-inline: 5px; }
   .hud-xp-note { font-size: 8.5px; }
@@ -220,7 +226,7 @@ body {
   transition: opacity 0.2s ease;
 }
 #hud.is-collapsed .hud-inner { padding-top: 6px; }
-#hud.is-collapsed .hud-crest { width: 30px; height: 30px; flex-basis: 30px; }
+#hud.is-collapsed .hud-crest { --hud-crest-size: 30px; }
 #hud.is-collapsed .hud-crest b { font-size: 11px; }
 #hud.is-collapsed .hud-crest.has-badge b { font-size: 15px; }
 #hud.is-collapsed .hud-crest.has-photo::after { display: none; }
