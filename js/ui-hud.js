@@ -17,7 +17,7 @@ import { call } from './api.js'
 import { el, esc, toast, setState, showOverlay, hideOverlay } from './state.js'
 import { getScreen, goWorld, goResources, goSettings, goCandyStar, goRanking } from './router.js'
 import { getAgentNo } from './session.js'
-import { BADGE_CATALOG, equippedBadge } from './badges.js'
+import { earnedBadgeCount, equippedBadge } from './badges.js'
 import { openMoonStation } from './settings-streams.js'
 
 /** { multiplier, minsLeft } while state.player.boost is live, else null. */
@@ -136,7 +136,8 @@ export function renderHud(container, state) {
   // emoji lookup when the server actually resolved one — see
   // badge-profile.ts::resolveEquippedBadges. Legacy ids (streak:*, level:*,
   // ...) aren't in that catalog and keep using agentBadge.icon as before.
-  const badgeArt = p.equippedBadgeArtwork?.artworkUrl || null
+  const collectionBadge = p.equippedBadgeArtwork || null
+  const badgeArt = collectionBadge?.artworkUrl || null
   const streakLabel = p.streak.current > 0 ? `🔥 ${p.streak.current}D` : '○ 0D'
 
   const invites = state.invites || []
@@ -147,8 +148,8 @@ export function renderHud(container, state) {
     <div class="hud-inner">
       <div class="hud-row">
         <div class="hud-identity" id="levelPill" role="button" tabindex="0" title="Open Agent Dossier">
-          <span class="hud-crest${agentBadge || badgeArt ? ' has-badge' : ''}" aria-hidden="true"><i></i>${
-            badgeArt ? `<img class="hud-crest-photo" src="${esc(badgeArt)}" alt="">` : `<b>${agentBadge ? agentBadge.icon : '⟭⟬'}</b>`
+          <span class="hud-crest${agentBadge || collectionBadge ? ' has-badge' : ''}" aria-hidden="true"><i></i>${
+            badgeArt ? `<img class="hud-crest-photo" src="${esc(badgeArt)}" alt="">` : `<b>${collectionBadge ? '🎖️' : agentBadge ? agentBadge.icon : '⟭⟬'}</b>`
           }</span>
           <span class="hud-who">
             <span class="hud-code-row">
@@ -232,7 +233,7 @@ function progressSheet(state) {
     <div class="bd-block-head">Rank</div>
     <div class="bd-line"><span>Current</span><b>${esc(p.rank.title)}</b></div>
     ${p.rank.nextTitle ? `<div class="bd-line"><span>Next rank</span><b>${esc(p.rank.nextTitle)}</b></div>` : ''}
-    <div class="bd-line"><span>Badges earned</span><b>${BADGE_CATALOG.filter((b) => b.earned(state)).length} / ${BADGE_CATALOG.length}</b></div>
+    <div class="bd-line"><span>Badges earned</span><b>${earnedBadgeCount(state)}</b></div>
   `))
 
   const close = el('button', 'btn btn-ghost', 'Close')

@@ -31,75 +31,51 @@ function parseBadgeId(badgeId: string): { templateId: string; scopeId: string | 
  *  vma-voting.ts, ...) so the pick-art-once/backfill behavior stays in
  *  exactly one place.
  *
- *  (13) Every DB call here is now checked and surfaced — previously a
- *  failed select/insert/update was silently swallowed, so the caller (and
- *  the player, via a chest-reveal card or "badge earned" message) could
- *  believe a badge was saved when it wasn't. Returns {success:false, error}
- *  on any real failure instead; existing fire-and-forget callers that don't
- *  check the return value are unaffected, but now have the option to. */
+ *  The database RPC performs the ownership check, permanent art selection,
+ *  insert and blank-art backfill atomically, so concurrent award paths can
+ *  never turn a harmless duplicate into a false failure. */
 export async function awardBadge(
   supabase: SupabaseDB, agentNo: string, templateId: string, scopeId?: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const badgeId = scopeId ? `${templateId}:${scopeId}` : templateId
-  const { data: existing, error: selectErr } = await supabase.from('rc_badges').select('badge_id, artwork_id')
-    .eq('agent_no', agentNo).eq('badge_id', badgeId).maybeSingle()
-  if (selectErr) {
-    console.error(`awardBadge: select failed for ${agentNo}/${badgeId}: ${selectErr.message}`)
-    return { success: false, error: selectErr.message }
+  const { data, error } = await supabase.rpc('rc_award_badge', {
+    p_agent_no: agentNo,
+    p_template_id: templateId,
+    p_scope_id: scopeId || null,
+  })
+  if (error) {
+    console.error(`awardBadge: RPC failed for ${agentNo}/${templateId}: ${error.message}`)
+    return { success: false, error: error.message }
   }
-
-  if (existing && existing.artwork_id != null) return { success: true }
-
-  const { data: art, error: artErr } = await supabase.from('rc_badge_art').select('id')
-    .eq('template_id', templateId).eq('active', true)
-  if (artErr) {
-    console.error(`awardBadge: art lookup failed for ${templateId}: ${artErr.message}`)
-    return { success: false, error: artErr.message }
-  }
-  const artworkId = art && art.length ? art[Math.floor(Math.random() * art.length)].id : null
-
-  if (existing) {
-    if (artworkId == null) return { success: true }
-    const { error: updateErr } = await supabase.from('rc_badges').update({ artwork_id: artworkId })
-      .eq('agent_no', agentNo).eq('badge_id', badgeId)
-    if (updateErr) {
-      console.error(`awardBadge: artwork backfill failed for ${agentNo}/${badgeId}: ${updateErr.message}`)
-      return { success: false, error: updateErr.message }
-    }
-    return { success: true }
-  }
-
-  const { error: insertErr } = await supabase.from('rc_badges').insert({ agent_no: agentNo, badge_id: badgeId, artwork_id: artworkId })
-  if (insertErr) {
-    console.error(`awardBadge: insert failed for ${agentNo}/${badgeId}: ${insertErr.message}`)
-    return { success: false, error: insertErr.message }
-  }
+  if (!data) return { success: false, error: 'badge_template_unavailable' }
   return { success: true }
 }
 
 export async function setEquippedBadge(supabase: SupabaseDB, content: GameContent, params: Record<string, unknown>) {
   const agentNo = String(params.agentNo || '').trim().toUpperCase()
   const badgeId = String(params.badgeId || '').trim()
-  const { data: player } = await supabase.from('rc_players').select('agent_no').eq('agent_no', agentNo).maybeSingle()
+  const { data: player, error: playerErr } = await supabase.from('rc_players').select('agent_no').eq('agent_no', agentNo).maybeSingle()
+  if (playerErr) return { success: false, error: playerErr.message }
   if (!player) return { success: false, error: 'Not joined' }
 
   if (!badgeId) {
-    await supabase.from('rc_players').update({ equipped_badge_id: null }).eq('agent_no', agentNo)
-    return { success: true, equippedBadgeId: null }
+    const { error } = await supabase.from('rc_players').update({ equipped_badge_id: null }).eq('agent_no', agentNo)
+    return error ? { success: false, error: error.message } : { success: true, equippedBadgeId: null }
   }
 
   let earned = false
   if (STREAK_BADGES.has(badgeId)) {
-    const { data } = await supabase.from('rc_badges').select('badge_id')
+    const { data, error } = await supabase.from('rc_badges').select('badge_id')
       .eq('agent_no', agentNo).eq('badge_id', badgeId).maybeSingle()
+    if (error) return { success: false, error: error.message }
     earned = !!data
   } else if (LEVEL_BADGES[badgeId] || XP_BADGES[badgeId] || DISTRICT_BADGES[badgeId]) {
     const xp = await totalXp(supabase, agentNo)
     if (LEVEL_BADGES[badgeId]) earned = levelFor(content, xp).level >= LEVEL_BADGES[badgeId]
     else if (XP_BADGES[badgeId]) earned = xp >= XP_BADGES[badgeId]
     else if (DISTRICT_BADGES[badgeId]) {
-      const { count } = await supabase.from('rc_player_districts').select('district_id', { count: 'exact', head: true })
+      const { count, error } = await supabase.from('rc_player_districts').select('district_id', { count: 'exact', head: true })
         .eq('agent_no', agentNo).eq('status', 'restored')
+      if (error) return { success: false, error: error.message }
       earned = (count || 0) >= DISTRICT_BADGES[badgeId]
     }
   } else {
@@ -110,10 +86,12 @@ export async function setEquippedBadge(supabase: SupabaseDB, content: GameConten
     // above, generalized so new rc_badge_catalog templates equip for free
     // with no code change (this repo's DB-driven-content rule).
     const { templateId } = parseBadgeId(badgeId)
-    const { data: template } = await supabase.from('rc_badge_catalog').select('id').eq('id', templateId).maybeSingle()
+    const { data: template, error: templateErr } = await supabase.from('rc_badge_catalog').select('id').eq('id', templateId).maybeSingle()
+    if (templateErr) return { success: false, error: templateErr.message }
     if (template) {
-      const { data } = await supabase.from('rc_badges').select('badge_id')
+      const { data, error } = await supabase.from('rc_badges').select('badge_id')
         .eq('agent_no', agentNo).eq('badge_id', badgeId).maybeSingle()
+      if (error) return { success: false, error: error.message }
       earned = !!data
     }
   }
@@ -144,9 +122,10 @@ export async function getBadgeCollection(supabase: SupabaseDB, params: Record<st
   if (awardsErr) return { success: false, error: awardsErr.message }
 
   const artworkIds = [...new Set((awards || []).map((a: any) => a.artwork_id).filter((id: any) => id != null))]
-  const { data: artRows } = artworkIds.length
+  const { data: artRows, error: artRowsErr } = artworkIds.length
     ? await supabase.from('rc_badge_art').select('id, storage_path').in('id', artworkIds)
-    : { data: [] }
+    : { data: [], error: null }
+  if (artRowsErr) return { success: false, error: artRowsErr.message }
   const artById = new Map((artRows || []).map((a: any) => [a.id, a.storage_path]))
   const templateById = new Map((templates || []).map((t: any) => [t.id, t]))
   const equippedBadgeId = player?.equipped_badge_id || null
@@ -163,6 +142,7 @@ export async function getBadgeCollection(supabase: SupabaseDB, params: Record<st
         name: template.name,
         rarity: template.rarity,
         section: template.section,
+        unlockHint: template.unlock_hint,
         artworkUrl: publicArtUrl(artById.get(a.artwork_id) || null),
         earnedAt: a.earned_at,
         equipped: a.badge_id === equippedBadgeId,
@@ -198,15 +178,23 @@ export async function resolveEquippedBadges(
   const badgeIds = [...new Set(withBadge.map((p) => p.badgeId as string))]
   const templateIds = [...new Set(badgeIds.map((b) => parseBadgeId(b).templateId))]
 
-  const [{ data: awardRows }, { data: templates }] = await Promise.all([
+  const [{ data: awardRows, error: awardsErr }, { data: templates, error: templatesErr }] = await Promise.all([
     supabase.from('rc_badges').select('agent_no, badge_id, artwork_id').in('agent_no', agentNos).in('badge_id', badgeIds),
     supabase.from('rc_badge_catalog').select('id, name, rarity').in('id', templateIds),
   ])
+  if (awardsErr || templatesErr) {
+    console.error(`resolveEquippedBadges failed: ${awardsErr?.message || templatesErr?.message}`)
+    return out
+  }
   const templateById = new Map((templates || []).map((t: any) => [t.id, t]))
   const artworkIds = [...new Set((awardRows || []).map((a: any) => a.artwork_id).filter((id: any) => id != null))]
-  const { data: artRows } = artworkIds.length
+  const { data: artRows, error: artRowsErr } = artworkIds.length
     ? await supabase.from('rc_badge_art').select('id, storage_path').in('id', artworkIds)
-    : { data: [] }
+    : { data: [], error: null }
+  if (artRowsErr) {
+    console.error(`resolveEquippedBadges artwork lookup failed: ${artRowsErr.message}`)
+    return out
+  }
   const artById = new Map((artRows || []).map((a: any) => [a.id, a.storage_path]))
   const awardByAgentBadge = new Map((awardRows || []).map((a: any) => [`${a.agent_no} ${a.badge_id}`, a]))
 

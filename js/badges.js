@@ -31,8 +31,16 @@ export function badgeById(id) {
   return BADGE_CATALOG.find((b) => b.id === id) || null
 }
 
+export function earnedBadgeCount(state) {
+  const ids = new Set(state?.player?.badges || [])
+  for (const badge of BADGE_CATALOG) {
+    if (badge.earned(state)) ids.add(badge.id)
+  }
+  return ids.size
+}
+
 export function equippedBadge(state) {
   const chosen = badgeById(state?.player?.equippedBadgeId)
   if (chosen?.earned(state)) return chosen
-  return [...BADGE_CATALOG].reverse().find((b) => b.earned(state)) || null
+  return null
 }

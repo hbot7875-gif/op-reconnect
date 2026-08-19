@@ -9,7 +9,6 @@
 // anything unclear falls to 'pending'. Exact-image dedupe and the atomic SQL
 // cap calculation still prevent reuse and concurrent over-crediting.
 import type { GameContent, SupabaseDB } from './config.ts'
-import { awardBadge } from './badge-profile.ts'
 import { addChestFill, getChestStatus } from './supply-chest.ts'
 import { evaluateVoteProof } from './vma-ocr.js'
 
@@ -99,21 +98,6 @@ function checkProofText(text: string, cfg: VmaConfig, category: string, expected
 
   if (proof.passed) return { status: 'verified', note: 'All automatic checks passed.', watermarkOk: proof.watermarkOk }
   return { status: 'pending', note: `Needs manual review — missing: ${missing.join(', ')}.`, watermarkOk: proof.watermarkOk }
-}
-
-async function applyVerifiedVoteRewards(
-  supabase: SupabaseDB,
-  agentNo: string,
-  eventId: string,
-  powerHour: boolean,
-  doubleDay: boolean,
-  creditedVotes: number,
-) {
-  const templateIds = ['event_vma_voter']
-  if (powerHour) templateIds.push('event_vma_power_hour')
-  if (doubleDay) templateIds.push('event_vma_double_day')
-  for (const templateId of templateIds) await awardBadge(supabase, agentNo, templateId)
-  await addChestFill(supabase, agentNo, eventId, creditedVotes)
 }
 
 /** Cheap, DB-free summary for the World-screen event banner — folded into
@@ -276,10 +260,7 @@ export async function logVmaVote(supabase: SupabaseDB, content: GameContent, par
   if (!result?.success) return { success: false, error: result?.error || 'submit_failed' }
 
   const creditedVotes = Number(result.creditedVotes) || 0
-  if (check.status === 'verified') {
-    await applyVerifiedVoteRewards(supabase, agentNo, eventId, powerHour, doubleDay, creditedVotes)
-  }
-
+  if (check.status === 'verified') await addChestFill(supabase, agentNo, eventId, creditedVotes)
   return {
     success: true, verifyStatus: check.status, verifyNote: check.note,
     creditedVotes, watermarkCode: expectedCode, remaining: result.remaining,
@@ -349,10 +330,7 @@ export async function adminReviewVmaVote(supabase: SupabaseDB, content: GameCont
   if (!result?.success) return { success: false, error: result?.error || 'review_failed' }
 
   if (result.verifyStatus === 'verified') {
-    await applyVerifiedVoteRewards(
-      supabase, row.agent_no, row.event_id,
-      row.is_power_hour, row.is_double_day, result.creditedVotes,
-    )
+    await addChestFill(supabase, row.agent_no, row.event_id, result.creditedVotes)
   }
 
   return { success: true, verifyStatus: result.verifyStatus, creditedVotes: result.creditedVotes }

@@ -19,6 +19,7 @@ import { getActiveBroadcasts } from './broadcasts.ts'
 import { logFeedEvent, getCityFeed, markOnline, getOnlineNow } from './feed.ts'
 import { logEngagementEvent } from './engagement.ts'
 import { awardBadge, resolveEquippedBadges } from './badge-profile.ts'
+import { districtBadgeProgress } from './badge-rules.js'
 import { getBackupOverlay } from './backup-pass.ts'
 import { getVmaBanner } from './vma-voting.ts'
 
@@ -170,6 +171,11 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     // (mission/puzzle-attempt rows), so it's layered on here rather than
     // inside districts.ts's pure, DB-free districtProgress().
     const reconnect = await resolveReconnectStatus(supabase, content, player.agent_no, activePd.district_id, activePd.goals.reconnect)
+    const badgeProgress = districtBadgeProgress(progress, reconnect)
+    for (const templateId of badgeProgress.templateIds) {
+      await awardBadge(supabase, player.agent_no, templateId, activePd.district_id)
+    }
+    if (reconnect?.done) await awardBadge(supabase, player.agent_no, 'mission_bond')
     const districtComplete = progress.complete && (!reconnect || reconnect.done)
 
     // The week ran out before restoration finished — the attempt lapses.
@@ -204,15 +210,8 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
       const ward = content.districts.filter((d) => d.ward_id === districtRow?.ward_id && !d.is_centerpiece)
       const wardJustCompleted = ward.length > 0 && ward.every((d) => restored.has(d.id))
       if (wardJustCompleted) {
-        // (14) Routed through the shared awardBadge() so this gets the same
-        // Badge Collection art-pool/backfill treatment as every other
-        // template — 'ward' is the live template id (see migration
-        // 20260819100000, which renamed the catalog seed to match this
-        // already-live 'ward:<wardId>' award format instead of the other
-        // way around).
-        await awardBadge(supabase, player.agent_no, 'ward', districtRow?.ward_id)
-        // Bigger, rarer than the per-district ward_progress line below —
-        // dedup'd on the same badge identity so it can only ever log once.
+        // The restoration-row database trigger awards the ward badge in the
+        // same transaction. This feed entry remains the player-facing reveal.
         await logFeedEvent(supabase, player.agent_no, 'ward_completed',
           { wardName: content.wards.find((w) => w.id === districtRow?.ward_id)?.name || null },
           `ward-badge:${player.agent_no}:${districtRow?.ward_id}`)

@@ -72,13 +72,14 @@ function paintList(body, agents, state) {
   rows.forEach((a, i) => {
     const place = i + 1
     const badge = badgeById(a.equippedBadgeId)
+    const collectionBadge = a.equippedBadgeArtwork || null
     const badgeArt = a.equippedBadgeArtwork?.artworkUrl || null
     const row = el('div', 'rank-row'
       + (a.codename === mine ? ' is-me' : '')
       + (place <= 3 ? ' is-top' : ''))
     row.innerHTML = `
       <span class="rank-place">${place <= 3 ? MEDAL[place] : place}</span>
-      <span class="rank-agent-icon">${badgeArt ? `<img class="rank-agent-photo" src="${esc(badgeArt)}" alt="">` : (badge ? badge.icon : '⟭⟬')}</span>
+      <span class="rank-agent-icon">${badgeArt ? `<img class="rank-agent-photo" src="${esc(badgeArt)}" alt="">` : (collectionBadge ? '🎖️' : badge ? badge.icon : '⟭⟬')}</span>
       <span class="rank-main">
         <span class="rank-name">${esc(a.codename)}</span>
         <span class="rank-sub">Level ${a.level}${activeTab === 'all' ? ` · ${esc(MODE_LABEL[a.mode] || a.mode)}` : ''}</span>

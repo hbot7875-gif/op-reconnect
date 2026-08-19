@@ -252,7 +252,7 @@ const REWARD_COPY = {
   xp: { icon: '⚡', name: (d) => `+${d.amount || 10} XP` },
   streak_freeze: { icon: '🧊', name: '+1 Streak Freeze' },
   extension: { icon: '⏳', name: '+1 Deadline Extension' },
-  badge: { icon: '🎖️', name: 'Rare Badge' },
+  badge: { icon: '🎖️', name: 'Supply Chest Badge' },
   backup_pass: { icon: '🤝', name: 'Backup Pass' },
 }
 
