@@ -672,31 +672,23 @@ async function openScanStep(status, category, file) {
   } else {
     resultBox.appendChild(el('div', 'vma-scan-headline bad', 'SIGNAL UNCLEAR'))
 
-    // The watermark code is the one check that exists specifically to stop
-    // an old/reused screenshot from being submitted — letting "Send for
-    // review" bypass it defeats the whole point, since it'd become the
-    // default path for anyone who never bothers adding the code at all.
-    // This is also the one failure that's 100% the player's own to fix (add
-    // the code, re-upload), unlike OCR misreading something that's
-    // genuinely there — so it gets its own message and no escape hatch.
+    // A missed watermark can mean either that the player forgot it OR that
+    // OCR failed to read text which is plainly visible. Do not make the
+    // browser the final judge: unclear proofs still reach the private admin
+    // queue with zero credit, where the actual image can be checked safely.
     const watermarkFailed = !checks.find(([label]) => label === "Today's code")?.[1]
     if (watermarkFailed) {
-      resultBox.appendChild(el('p', 'muted', `We couldn't find today's code on your screenshot. Add ${esc(status.watermarkCode)} to it (your phone's markup/annotate tool), then upload again.`))
-      const retry = el('button', 'btn btn-primary vma-add-btn', 'Try another screenshot')
-      retry.onclick = () => openUploadStep(status, category)
-      resultBox.appendChild(retry)
-      sheet.appendChild(resultBox)
-      return
+      resultBox.appendChild(el('p', 'muted', `We couldn't automatically read today's code. If ${esc(status.watermarkCode)} is visible on your screenshot, send it for review. Otherwise, add the code and try again.`))
+    } else {
+      resultBox.appendChild(el('p', 'muted', "We couldn't confirm everything clearly."))
+
+      resultBox.appendChild(el(
+        'p', 'muted',
+        displayedTotal == null
+          ? `We couldn't read the ${allowedVoteTotals[0] || 10}-vote counter. You never need to type it yourself.`
+          : `We read ${displayedTotal} votes, but another part of the proof is unclear.`,
+      ))
     }
-
-    resultBox.appendChild(el('p', 'muted', "We couldn't confirm everything clearly."))
-
-    resultBox.appendChild(el(
-      'p', 'muted',
-      displayedTotal == null
-        ? `We couldn't read the ${allowedVoteTotals[0] || 10}-vote counter. You never need to type it yourself.`
-        : `We read ${displayedTotal} votes, but another part of the proof is unclear.`,
-    ))
 
     const retry = el('button', 'btn btn-primary vma-add-btn', 'Try another screenshot')
     retry.onclick = () => openUploadStep(status, category)
@@ -728,6 +720,11 @@ async function submitVote(status, category, imageBase64, imageMime, ocrText) {
       voting_closed: 'Voting has closed.',
       bad_image_type: 'Please use a JPG or PNG image.',
       image_too_large: 'That image is too large — please choose one under 5MB.',
+      bad_image_data: "We couldn't read that screenshot — please try another one.",
+      proof_required: 'Please attach your screenshot again.',
+      upload_failed: "We couldn't upload that proof — please try again.",
+      db_error: "We uploaded the proof but couldn't save it — please try again.",
+      bad_vote_count: 'The voting service needs a refresh — please try again.',
     }
     sheet.appendChild(el('p', 'muted', messages[res.error] || "Couldn't send that — please try again."))
     const close = el('button', 'btn btn-ghost', 'Close')
