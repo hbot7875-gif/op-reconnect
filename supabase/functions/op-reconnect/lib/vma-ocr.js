@@ -141,8 +141,13 @@ export function evaluateVoteProof(text, {
   // block the same fact twice and caused the live false-review backlog.
   const identityOk = songKeywords.length > 0 ? hasSong : hasBts
 
+  // The on-screen vote counter is the flakiest thing to OCR (small text
+  // sitting over a photo) and isn't needed for proof anyway — the song +
+  // BTS + today's watermark code already establish "this is a real vote
+  // cast today by this agent." voteTotalOk/displayedTotal are still
+  // returned for the checklist/admin view, just no longer required to pass.
   return {
-    passed: identityOk && voteTotalOk && watermarkOk,
+    passed: identityOk && watermarkOk,
     hasBts,
     hasSong,
     voteTotalOk,

@@ -82,6 +82,14 @@ function isDoubleDay(cfg: VmaConfig, at: Date): boolean {
   return cfg.double_days_utc.some((w) => at >= new Date(w.start) && at <= new Date(w.end))
 }
 
+/** The per-category daily cap, doubled during EITHER boost window — Power
+ *  Hour or a Double Day — not just Double Day. The mission sheet's own
+ *  copy already called Power Hour "boosted"; this is what makes that true
+ *  for the actual credited amount, not just the label. */
+function boostedCap(cfg: VmaConfig, at: Date): number {
+  return (isDoubleDay(cfg, at) || isPowerHour(cfg, at)) ? cfg.daily_cap_per_category * 2 : cfg.daily_cap_per_category
+}
+
 /** (8) ONE shared code for every agent, per ET day — no per-agent suffix.
  *  Deterministic so nothing needs pre-generating for all 39 days. */
 function dailyWatermarkCode(cfg: VmaConfig, etDay: string): string {
@@ -124,7 +132,6 @@ function checkProofText(text: string, cfg: VmaConfig, category: string, expected
 
   const missing: string[] = []
   if (!proof.hasSong) missing.push('song title')
-  if (!proof.voteTotalOk) missing.push('matching vote total')
   if (!proof.watermarkOk) missing.push('watermark code')
 
   if (proof.passed) {
@@ -172,7 +179,7 @@ export async function getVmaBanner(supabase: SupabaseDB, content: GameContent, a
   const day = etDateOf(now)
   const { data: rows } = await supabase.from('rc_vma_votes')
     .select('votes_logged').eq('event_id', eventId).eq('agent_no', agentNo).eq('vote_day', day).eq('verify_status', 'verified')
-  const cap = isDoubleDay(cfg, now) ? cfg.daily_cap_per_category * 2 : cfg.daily_cap_per_category
+  const cap = boostedCap(cfg, now)
   const todayVotes = (rows || []).reduce((s: number, r: any) => s + r.votes_logged, 0)
   const todayCap = cap * cfg.categories.length
 
@@ -230,7 +237,7 @@ export async function getVmaStatus(supabase: SupabaseDB, content: GameContent, p
   for (const r of pendingRows || []) pendingByCategory[r.category] = (pendingByCategory[r.category] || 0) + 1
   const pendingTotal = (pendingRows || []).length
 
-  const cap = isDoubleDay(cfg, now) ? cfg.daily_cap_per_category * 2 : cfg.daily_cap_per_category
+  const cap = boostedCap(cfg, now)
   const usedByCategory: Record<string, number> = {}
   for (const c of cfg.categories) usedByCategory[c] = 0
   for (const r of rows || []) usedByCategory[r.category] = (usedByCategory[r.category] || 0) + r.votes_logged
@@ -291,15 +298,17 @@ export async function logVmaVote(supabase: SupabaseDB, content: GameContent, par
   const doubleDay = isDoubleDay(cfg, now)
   const powerHour = isPowerHour(cfg, now)
   const day = etDateOf(now)
-  const cap = doubleDay ? cfg.daily_cap_per_category * 2 : cfg.daily_cap_per_category
+  const cap = boostedCap(cfg, now)
   const imageHash = await sha256Hex(bytes)
   const expectedCode = dailyWatermarkCode(cfg, day)
-  // Never trust or even read an agent-supplied number. The only value stored
-  // comes from OCR and must equal today's configured completed-proof total:
-  // 10 normally or 20 on a Double Day. Unreadable proofs store 0 and receive
-  // no credit until an admin checks the actual screenshot.
   const check = checkProofText(ocrText, cfg, category, expectedCode, cap)
-  const displayedTotal = check.displayedTotal ?? 0
+  // The on-screen vote counter is no longer part of the proof — song +
+  // BTS + today's watermark code passing is what "this screenshot is
+  // real" means now. A verified proof credits the full boosted cap
+  // outright (10 normally, 20 during Power Hour or a Double Day); an
+  // unclear one still stores whatever OCR could read (0 if nothing) and
+  // waits for an admin to check the actual screenshot.
+  const displayedTotal = check.status === 'verified' ? cap : (check.displayedTotal ?? 0)
 
   const path = `${agentNo}/${Date.now()}.${imageMime.includes('png') ? 'png' : 'jpg'}`
   const { error: uploadErr } = await supabase.storage.from(BUCKET).upload(path, bytes, { contentType: imageMime })
@@ -353,7 +362,7 @@ export async function adminListVmaPending(supabase: SupabaseDB, content: GameCon
     .select('id', { count: 'exact', head: true }).eq('event_id', eventId).eq('verify_status', 'pending')
 
   const { data, error } = await supabase.from('rc_vma_votes')
-    .select('id, agent_no, category, vote_day, displayed_total, ocr_text, expected_code, watermark_ok, verify_note, voted_at, proof_path, is_double_day')
+    .select('id, agent_no, category, vote_day, displayed_total, ocr_text, expected_code, watermark_ok, verify_note, voted_at, proof_path, is_double_day, is_power_hour')
     .eq('event_id', eventId).eq('verify_status', 'pending')
     .order('voted_at', { ascending: true }).range(offset, offset + limit - 1)
   if (error) return { success: false, error: error.message }
@@ -362,7 +371,7 @@ export async function adminListVmaPending(supabase: SupabaseDB, content: GameCon
   const withUrls = await Promise.all(rows.map(async (r: any) => {
     const { data: signed } = await supabase.storage.from(PROOF_BUCKET).createSignedUrl(r.proof_path, SIGNED_URL_TTL_SECONDS)
     const { proof_path, ...rest } = r
-    const allowedTotal = r.is_double_day ? cfg.daily_cap_per_category * 2 : cfg.daily_cap_per_category
+    const allowedTotal = (r.is_double_day || r.is_power_hour) ? cfg.daily_cap_per_category * 2 : cfg.daily_cap_per_category
     const songKeywords = cfg.category_keywords[r.category] || []
     return { ...rest, allowedTotal, songKeywords, proofUrl: signed?.signedUrl || null }
   }))
@@ -389,7 +398,7 @@ export async function adminReviewVmaVote(supabase: SupabaseDB, content: GameCont
   if (!row) return { success: false, error: 'not_found' }
   const cfg = vmaConfig(content, row.event_id)
   if (!cfg) return { success: false, error: 'not_configured' }
-  const dailyCap = row.is_double_day ? cfg.daily_cap_per_category * 2 : cfg.daily_cap_per_category
+  const dailyCap = (row.is_double_day || row.is_power_hour) ? cfg.daily_cap_per_category * 2 : cfg.daily_cap_per_category
   const effectiveTotal = correctedTotal ?? Number(row.displayed_total)
   if (decision === 'approve' && effectiveTotal !== dailyCap) {
     return { success: false, error: 'bad_corrected_total', expectedTotal: dailyCap }

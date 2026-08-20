@@ -724,8 +724,8 @@ async function createOcrTiles(file, highContrast = false) {
 }
 
 function proofIsComplete(text, cfg, category, expectedCode, allowedVoteTotals) {
-  const { checks, displayedTotal } = checkText(text, cfg, category, expectedCode, allowedVoteTotals)
-  return displayedTotal != null && checks
+  const { checks } = checkText(text, cfg, category, expectedCode, allowedVoteTotals)
+  return checks
     .filter(([, , required]) => required !== false)
     .every(([, ok]) => ok)
 }
@@ -809,7 +809,10 @@ function checkText(text, cfg, category, expectedCode, allowedVoteTotals = null) 
       ['BTS', proof.hasBts, false],
       ['SWIM', proof.hasSong, true],
       [cfg.category_labels?.[category] || 'Category', hasAny(cfg.category_match_keywords?.[category]), false],
-      [proof.displayedTotal != null ? `${proof.displayedTotal} votes` : 'Vote total', proof.voteTotalOk, true],
+      // Informational only now — the on-screen counter is the flakiest
+      // thing to OCR and isn't needed for proof; song + BTS + today's code
+      // already establish a real vote was cast today.
+      [proof.displayedTotal != null ? `${proof.displayedTotal} votes` : 'Vote total', proof.voteTotalOk, false],
       ["Today's code", proof.watermarkOk, true],
     ],
     displayedTotal: proof.displayedTotal,
@@ -896,10 +899,10 @@ async function openScanStep(status, category, file) {
     ocrText = `[scanner-error] ${reason.slice(0, 180)}`
   }
 
-  const { checks, displayedTotal } = checkText(
+  const { checks } = checkText(
     ocrText, cfg, category, status.watermarkCode, allowedVoteTotals,
   )
-  const allGood = checks.filter(([, , required]) => required !== false).every(([, ok]) => ok) && displayedTotal != null
+  const allGood = checks.filter(([, , required]) => required !== false).every(([, ok]) => ok)
 
   // Reveal one at a time — the "gamify it" beat. Real OCR already
   // finished; this is purely a paced reveal of a result we already have.
@@ -936,14 +939,7 @@ async function openScanStep(status, category, file) {
     } else if (watermarkFailed) {
       resultBox.appendChild(el('p', 'muted', `We couldn't automatically read today's code. If ${esc(status.watermarkCode)} is visible on your screenshot, send it for review. Otherwise, add the code and try again.`))
     } else {
-      resultBox.appendChild(el('p', 'muted', "We couldn't confirm everything clearly."))
-
-      resultBox.appendChild(el(
-        'p', 'muted',
-        displayedTotal == null
-          ? `We couldn't read the ${allowedVoteTotals[0] || 10}-vote counter. You never need to type it yourself.`
-          : `We read ${displayedTotal} votes, but another part of the proof is unclear.`,
-      ))
+      resultBox.appendChild(el('p', 'muted', "We couldn't confirm the song title on this screenshot."))
     }
 
     const retry = el('button', 'btn btn-primary vma-add-btn', 'Try another screenshot')
