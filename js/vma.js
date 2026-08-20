@@ -170,35 +170,102 @@ function maybeAlertClosingSoon(eventId, periodEndUtc) {
 }
 
 /* ── Share ─────────────────────────────────────────────────────────────
- * Pulling in new voters works better as "here's what's happening right
- * now, come help" than a bare link — the community vote count and Group
- * Chest progress are the actual hook (same reasoning as share.js's city
- * grid: a number people can watch move is what gets posted, not a plain
- * invite). navigator.share hands straight to the OS share sheet on
- * mobile (Instagram Stories included); clipboard is the desktop/
- * unsupported-browser fallback, same pattern as share.js's openShare. */
-function buildVmaShareText(v) {
-  const lines = ['🎤 OP: ReConnect — Vote for BTS', '']
-  if (v.communityVotesToday > 0) lines.push(`👥 ${v.communityVotesToday.toLocaleString()} votes from ARMY today`)
-  if (v.communityChestNextThreshold) {
-    lines.push(v.communityChestClaimable
-      ? '🎁 Group Supply Chest is READY — come claim it'
-      : `🎁 Group Chest: ${(v.communityChestCumulative || 0).toLocaleString()}/${v.communityChestNextThreshold.toLocaleString()} overall votes`)
-  }
-  lines.push('', 'Every vote counts toward it. Join us →')
-  try { lines.push(new URL('index.html', location.href).href) } catch { lines.push('https://hopetrackers.org/') }
-  return lines.join('\n')
+ * A plain text share doesn't work for what this is actually for —
+ * "post it to your Story" needs an image, not a caption Instagram just
+ * drops. Draws a small vertical (Story-shaped) card on canvas — headline
+ * built around Power Hour since that's the actual moment worth rallying
+ * people to ("join us and vote"), not a stats dump. navigator.share with
+ * a file hands straight into the OS share sheet (Instagram Stories
+ * included) on mobile; where file-sharing isn't supported the image
+ * downloads and the caption copies instead, same
+ * download-then-post-yourself fallback shape as everywhere else in the
+ * app that leans on navigator.share. */
+function powerHourHeadline(v) {
+  if (v.isPowerHour) return '⚡ POWER HOUR\nIS LIVE'
+  if (v.nextPowerHourStartUtc) return `⚡ POWER HOUR\nIN ${countdownLabel(v.nextPowerHourStartUtc).toUpperCase()}`
+  return '🎤 VOTE FOR BTS'
+}
+
+async function loadShareFonts() {
+  try { await document.fonts.ready } catch {}
+}
+
+async function buildVmaShareImage(v) {
+  await loadShareFonts()
+  const W = 1080
+  const H = 1920
+  const canvas = document.createElement('canvas')
+  canvas.width = W
+  canvas.height = H
+  const ctx = canvas.getContext('2d')
+
+  const bg = ctx.createLinearGradient(0, 0, 0, H)
+  bg.addColorStop(0, '#0a0910')
+  bg.addColorStop(0.55, '#150f26')
+  bg.addColorStop(1, '#0a0910')
+  ctx.fillStyle = bg
+  ctx.fillRect(0, 0, W, H)
+
+  const glow = ctx.createRadialGradient(W / 2, H * 0.4, 40, W / 2, H * 0.4, 620)
+  glow.addColorStop(0, 'rgba(139,92,246,0.35)')
+  glow.addColorStop(1, 'rgba(139,92,246,0)')
+  ctx.fillStyle = glow
+  ctx.fillRect(0, 0, W, H)
+
+  ctx.textAlign = 'center'
+  ctx.fillStyle = '#c9b8ff'
+  ctx.font = '700 30px "Share Tech Mono", monospace'
+  ctx.fillText('O P  :  R E C O N N E C T', W / 2, 300)
+
+  ctx.fillStyle = '#ffffff'
+  ctx.font = '800 96px "Orbitron", sans-serif'
+  const lines = powerHourHeadline(v).split('\n')
+  const startY = H / 2 - ((lines.length - 1) * 110) / 2
+  lines.forEach((line, i) => ctx.fillText(line, W / 2, startY + i * 110))
+
+  ctx.fillStyle = '#e5def9'
+  ctx.font = '500 42px "Share Tech Mono", monospace'
+  ctx.fillText('Join us and vote for BTS', W / 2, startY + lines.length * 110 + 90)
+
+  ctx.strokeStyle = 'rgba(217,173,95,0.6)'
+  ctx.lineWidth = 2
+  const boxY = H - 260
+  ctx.strokeRect(W / 2 - 320, boxY, 640, 110)
+  ctx.fillStyle = '#d9ad5f'
+  ctx.font = '700 40px "Share Tech Mono", monospace'
+  ctx.fillText('hopetrackers.org', W / 2, boxY + 68)
+
+  return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'))
 }
 
 async function shareVmaBanner(v) {
-  const text = buildVmaShareText(v)
-  if (typeof navigator.share === 'function') {
-    try { await navigator.share({ text }); return } catch (e) {
-      if (e?.name === 'AbortError') return // they changed their mind
+  const caption = `${v.isPowerHour ? '⚡ Power Hour is LIVE' : v.nextPowerHourStartUtc ? `⚡ Power Hour in ${countdownLabel(v.nextPowerHourStartUtc)}` : '🎤 Vote for BTS'} — join us and vote! https://hopetrackers.org/`
+
+  let blob = null
+  try { blob = await buildVmaShareImage(v) } catch {
+    // Image generation is a nice-to-have; text-only share still works below.
+  }
+  const file = blob ? new File([blob], 'op-reconnect-vote.png', { type: 'image/png' }) : null
+
+  if (file && navigator.canShare?.({ files: [file] })) {
+    try { await navigator.share({ files: [file], text: caption }); return } catch (e) {
+      if (e?.name === 'AbortError') return
     }
   }
-  try { await navigator.clipboard.writeText(text); toast('Copied — go post it') }
-  catch { toast("Couldn't copy — try again") }
+  if (typeof navigator.share === 'function') {
+    try { await navigator.share({ text: caption }); return } catch (e) {
+      if (e?.name === 'AbortError') return
+    }
+  }
+  if (file) {
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(file)
+    a.download = file.name
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+  try { await navigator.clipboard.writeText(caption); toast(file ? 'Image saved — caption copied, go post it' : 'Copied — go post it') }
+  catch { toast(file ? 'Image saved — go post it' : "Couldn't copy — try again") }
 }
 
 /** Small event banner for the World screen. Empty (childless) when no
