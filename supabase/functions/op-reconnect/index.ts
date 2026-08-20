@@ -20,6 +20,7 @@ import {
 } from './lib/spotify-catalog.ts'
 import { importFillerPlaylist, addFillerManual, getFillerLibrary, removeFiller } from './lib/spotify-filler.ts'
 import { generatePlaylist, validatePlaylist, validatePlaylistFromTracks, getAlpacaOptions, generateAlpaca, previewAlpaca, adminDeleteAlpacaPlaylist } from './lib/candy-star.ts'
+import { getCandyPlaylistLibrary, setCandyPlaylistSaved, shareCandyPlaylist, reportCandyPlaylist } from './lib/playlist-vault.ts'
 import { adminGetActiveDefuse } from './lib/bomb.ts'
 import { adminCreateBroadcast, adminListBroadcasts, adminDeleteBroadcast } from './lib/broadcasts.ts'
 import { adminDeleteAgent, adminGetAgent, adminGetAgentTracks, adminScanAltAccounts, adminResetAgentXp, adminDeleteInactiveAgents } from './lib/admin-agent.ts'
@@ -150,6 +151,10 @@ const ROUTES: Record<string, Route> = {
   getAlpacaOptions: { auth: 'agent', handler: (sb, p) => getAlpacaOptions(sb, p) },
   generateAlpaca: { auth: 'agent', handler: (sb, p) => generateAlpaca(sb, p) },
   previewAlpaca: { auth: 'agent', handler: (sb, p) => previewAlpaca(sb, p) },
+  getCandyPlaylistLibrary: { auth: 'agent', handler: (sb, p) => getCandyPlaylistLibrary(sb, p) },
+  setCandyPlaylistSaved: { auth: 'agent', handler: (sb, p) => setCandyPlaylistSaved(sb, p) },
+  shareCandyPlaylist: { auth: 'agent', handler: (sb, p) => shareCandyPlaylist(sb, p) },
+  reportCandyPlaylist: { auth: 'agent', handler: (sb, p) => reportCandyPlaylist(sb, p) },
   adminDeleteAlpacaPlaylist: { auth: 'admin', handler: (sb, p) => adminDeleteAlpacaPlaylist(sb, p) },
 
   // ── Candy Star Generator — admin-only (catalog/filler/OAuth/raw generate) ─

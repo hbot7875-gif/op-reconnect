@@ -352,14 +352,48 @@ export async function generatePlaylist(supabase: SupabaseDB, params: any): Promi
     console.log('[cover-upload] failed (non-fatal):', (e as any)?.message || e)
   }
 
-  await supabase.from('generated_playlists').insert({
+  const runtimeMs = savedTracksWithPlan.reduce((sum: number, track: any) => sum + (track.durationMs || 0), 0)
+  const displayAlbums = Array.isArray(params.albumNames) && params.albumNames.length
+    ? [...new Set(params.albumNames.map((value: any) => String(value).trim()).filter(Boolean))]
+    : (albumLabel ? [albumLabel] : [])
+  const vaultConfig = {
+    focus: focusInput,
+    album: params.album || [],
+    albumIds: Array.isArray(params.albumIds) ? params.albumIds : [],
+    targetMinutes: params.targetMinutes || 180,
+    fillerEvery,
+    runtimeMs,
+    display: {
+      focus: focusSongs.map((song: any) => ({
+        key: song.key,
+        name: song.name,
+        artists: song.artists || ['BTS'],
+        plays: song.plays,
+      })),
+      albums: displayAlbums,
+    },
+  }
+  const { error: vaultError } = await supabase.from('generated_playlists').insert({
     name, playlist_id: created.id, url: created.url,
     agent_no: params.agentNo || null,
-    config: { focus: focusInput, album: params.album || [], targetMinutes: params.targetMinutes || 180, fillerEvery },
-    track_count: order.length, created_at: utcNow(),
+    config: vaultConfig,
+    track_count: order.length,
+    source: 'generated',
+    status: 'active',
+    created_at: utcNow(),
+    updated_at: utcNow(),
   })
+  if (vaultError) console.error('[playlist-vault] save failed:', vaultError.message)
 
-  return { success: true, name, url: created.url, trackCount: order.length, report }
+  return {
+    success: true,
+    name,
+    playlistId: created.id,
+    url: created.url,
+    trackCount: order.length,
+    report,
+    savedToVault: !vaultError,
+  }
 }
 
 const ALPACA_QUICK_PLAYS = 4
@@ -580,7 +614,8 @@ export async function generateAlpaca(supabase: SupabaseDB, params: any): Promise
   const { fromTs } = kstDayBounds(todayKst())
   const { count: todayCount } = await supabase.from('generated_playlists')
     .select('id', { count: 'exact', head: true })
-    .eq('agent_no', agentNo).gte('created_at', new Date(fromTs * 1000).toISOString())
+    .eq('agent_no', agentNo).eq('source', 'generated')
+    .gte('created_at', new Date(fromTs * 1000).toISOString())
   if ((todayCount || 0) >= ALPACA_DAILY_LIMIT) {
     return { success: false, error: `You've made ${ALPACA_DAILY_LIMIT} Alpacas today — come back tomorrow.` }
   }
@@ -591,7 +626,15 @@ export async function generateAlpaca(supabase: SupabaseDB, params: any): Promise
   }
 
   try {
-    const res = await generatePlaylist(supabase, { focus, album, targetMinutes, agentNo, name: params.name || '' })
+    const res = await generatePlaylist(supabase, {
+      focus,
+      album,
+      albumIds: selectedAlbums.map((selected) => selected.id),
+      albumNames: selectedAlbums.map((selected) => selected.name),
+      targetMinutes,
+      agentNo,
+      name: params.name || '',
+    })
     if (res.success) {
       await supabase.from('rc_players').update({ wings: player.wings - ALPACA_WING_COST }).eq('agent_no', agentNo)
     }
@@ -715,5 +758,6 @@ export async function adminDeleteAlpacaPlaylist(supabase: SupabaseDB, params: an
     headers: { Authorization: `Bearer ${token}` },
   })
   if (!res.ok) return { success: false, error: `Spotify delete failed: ${res.status} ${await res.text()}` }
+  await supabase.from('generated_playlists').update({ status: 'hidden', updated_at: utcNow() }).eq('playlist_id', playlistId)
   return { success: true }
 }
