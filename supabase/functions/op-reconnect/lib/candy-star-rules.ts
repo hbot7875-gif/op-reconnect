@@ -47,24 +47,20 @@ export function analyzeTracklist(tracks: any[]): any {
   }
 
   // R3 — gap between repeats of the SAME SONG (catalog key), not same exact Spotify track id.
-  const DURATION_TOLERANCE_MS = 2000
   const lastIdx = new Map<string, number>()
   let gapFails = 0, gapWorst = Infinity, fillerLight = 0
   for (let i = 0; i < n; i++) {
     const k = songKey(tracks[i])
     if (lastIdx.has(k)) {
       const prev = lastIdx.get(k)!
-      const isDistinctVersion = Math.abs((tracks[prev].durationMs || 0) - (tracks[i].durationMs || 0)) > DURATION_TOLERANCE_MS
-      if (!isDistinctVersion) {
-        let gapMs = 0, fillerCount = 0
-        for (let j = prev + 1; j < i; j++) {
-          gapMs += tracks[j].durationMs || 0
-          if (isFiller(tracks[j])) fillerCount++
-        }
-        const needFillers = (tracks[i].durationMs || 0) < SHORT_SONG_MS ? 3 : 2
-        if (gapMs < MIN_GAP_MS) { gapFails++; gapWorst = Math.min(gapWorst, Math.round(gapMs / 60000)) }
-        else if (fillerCount < needFillers) { fillerLight++ }
+      let gapMs = 0, fillerCount = 0
+      for (let j = prev + 1; j < i; j++) {
+        gapMs += tracks[j].durationMs || 0
+        if (isFiller(tracks[j])) fillerCount++
       }
+      const needFillers = (tracks[i].durationMs || 0) < SHORT_SONG_MS ? 3 : 2
+      if (gapMs < MIN_GAP_MS) { gapFails++; gapWorst = Math.min(gapWorst, Math.round(gapMs / 60000)) }
+      else if (fillerCount < needFillers) { fillerLight++ }
     }
     lastIdx.set(k, i)
   }
@@ -95,24 +91,34 @@ export function analyzeTracklist(tracks: any[]): any {
   for (const t of tracks) {
     if (t.isBTS) { run++; longestRun = Math.max(longestRun, run) } else run = 0
   }
-  const r5 = longestRun <= 14 ? 'pass' : (longestRun <= 22 ? 'warn' : 'fail')
+  // This is guidance only. R6 below is the hard placement rule. Treating a
+  // track-count run as a second hard gate forced the builder to inject extra
+  // non-BTS songs even when both time-based checkpoints were already valid.
+  const r5 = longestRun <= 14 ? 'pass' : 'warn'
   add('Non-BTS fillers interspersed', r5,
     `Longest run of consecutive BTS tracks: ${longestRun}${longestRun > 14 ? ' — consider one more filler.' : '.'}`)
 
-  // R6 — at least 2 non-Kpop (non-BTS) songs, never more than ~80 min apart.
+  // R6 — for a 2hr+ playlist, exactly two other-artist songs at deliberate
+  // 30–45 minute checkpoints. Alternate "break the BTS run" insertions used
+  // to add 2–3 more on top of these checkpoints, including pairs only ten
+  // minutes apart. The generator now has one source of truth for placement;
+  // this validator makes any future drift fail before Spotify publishes it.
   const cumAt: number[] = []
   let cum = 0
   for (let i = 0; i < n; i++) { cumAt[i] = cum; cum += tracks[i].durationMs || 0 }
   const nonBtsPos = tracks.map((t, i) => ({ t, i })).filter(x => x.t.isBTS === false).map(x => x.i)
-  let maxGapMin = 0, prevEnd = 0
+  const checkpointGapsMin: number[] = []
+  let prevEnd = 0
   for (const idx of nonBtsPos) {
-    maxGapMin = Math.max(maxGapMin, (cumAt[idx] - prevEnd) / 60000)
+    checkpointGapsMin.push((cumAt[idx] - prevEnd) / 60000)
     prevEnd = cumAt[idx] + (tracks[idx].durationMs || 0)
   }
-  maxGapMin = Math.max(maxGapMin, (totalMs - prevEnd) / 60000)
-  const r6 = (nonBtsPos.length >= 2 && maxGapMin <= 80) ? 'pass' : (nonBtsPos.length >= 1 ? 'warn' : 'fail')
-  add('Non-Kpop song every 55–75 min (≥2)', r6,
-    `${nonBtsPos.length} non-Kpop song(s); longest stretch without one ~${Math.round(maxGapMin)} min.`)
+  const isTwoHours = totalMs >= 120 * 60000
+  const checkpointsValid = checkpointGapsMin.every(gap => gap >= 30 && gap <= 45)
+  const r6 = !isTwoHours || (nonBtsPos.length === 2 && checkpointsValid) ? 'pass' : 'fail'
+  add('2 other-artist songs at 30–45 min checkpoints', r6,
+    !isTwoHours ? 'Playlist is under 2 hours; checkpoint rule does not apply.'
+      : `${nonBtsPos.length} other-artist song(s); checkpoint gaps ${checkpointGapsMin.map(gap => `~${Math.round(gap)} min`).join(', ') || 'missing'}.`)
 
   return {
     summary: {
@@ -222,13 +228,10 @@ export function buildPlaylistOrder(
   let ms = 0
   const truncated = false
   let sinceNonBts = 0
-  let msSinceNonBts = 0
-  const nextGapMs = () => (40 + Math.random() * 15) * 60000
-  let nonKpopGapMs = nextGapMs()
   const push = (t: any) => {
     order.push(t); ms += t.durationMs || 210000
-    if (t.isBTS === false) { sinceNonBts = 0; msSinceNonBts = 0; nonKpopGapMs = nextGapMs() }
-    else { sinceNonBts++; msSinceNonBts += t.durationMs || 210000 }
+    if (t.isBTS === false) sinceNonBts = 0
+    else sinceNonBts++
   }
 
   const focusSeq = [...focusPlays]
@@ -248,11 +251,8 @@ export function buildPlaylistOrder(
   // much non-BTS as the library allows" (an earlier version of this fix
   // preferred non-BTS for every spacer slot, which overcorrected: a well-
   // stocked library produced a dozen-plus other-artist tracks when the
-  // actual ask was "2 is enough"). reservedForCheckpoints holds back that
-  // many non-BTS tracks from the routine BTS-spacer path below so they
-  // survive to actually reach their checkpoint, and pushSpacer/pushGapFiller
-  // otherwise never touch the filler library except as a last-resort
-  // fallback if the BTS catalog itself somehow runs dry.
+  // actual ask was "2 is enough"). pushSpacer/pushGapFiller therefore never
+  // touch the other-artist library; only the checkpoint functions do.
   //
   // Each checkpoint's target ms is set relative to when the PREVIOUS one
   // actually fired, not a fixed absolute mark — the build advances in
@@ -262,18 +262,38 @@ export function buildPlaylistOrder(
   // ends up well under 30 min even though both individually looked ~30-45
   // min from the start. Anchoring to the first firing's actual time is what
   // keeps the GAP itself correct regardless of how much either one drifts.
-  const nextCheckpointGapMs = () => (30 + Math.random() * 15) * 60000
+  // Aim early enough inside the window to absorb a planned two-track spacer
+  // pair. The deadline guard remains as a safety net for unusually long
+  // catalog tracks, but normal checkpoints replace an existing spacer slot.
+  const nextCheckpointGapMs = () => 33 * 60000
   let remainingCheckpoints = targetMs >= 120 * 60000 ? 2 : 0
   let nextCheckpointMs = remainingCheckpoints > 0 ? nextCheckpointGapMs() : Infinity
-  const reservedForCheckpoints = () => remainingCheckpoints
-  const nonReservedNonBtsAvailable = () => fi < nbQ.length - reservedForCheckpoints()
+  let checkpointWindowStartMs = remainingCheckpoints > 0 ? 30 * 60000 : Infinity
+  let checkpointWindowEndMs = remainingCheckpoints > 0 ? 45 * 60000 : Infinity
+  const checkpointWouldBeLate = (durationMs: number) => remainingCheckpoints > 0 &&
+    ms >= checkpointWindowStartMs && ms + (durationMs || 210000) > checkpointWindowEndMs
+
+  const pushCheckpoint = (): boolean => {
+    if (remainingCheckpoints <= 0 || fi >= nbQ.length) return false
+    push({ ...nbQ[fi++], isBTS: false })
+    remainingCheckpoints--
+    nextCheckpointMs = remainingCheckpoints > 0 ? ms + nextCheckpointGapMs() : Infinity
+    checkpointWindowStartMs = remainingCheckpoints > 0 ? ms + 30 * 60000 : Infinity
+    checkpointWindowEndMs = remainingCheckpoints > 0 ? ms + 45 * 60000 : Infinity
+    return true
+  }
+  const passCheckpoints = () => {
+    while (remainingCheckpoints > 0 && ms >= nextCheckpointMs) {
+      if (!pushCheckpoint()) break
+    }
+  }
+  const passCheckpointBefore = (durationMs: number): boolean =>
+    checkpointWouldBeLate(durationMs) && pushCheckpoint()
 
   // BTS spacers are the default again — both focus songs here are BTS, so a
   // spacer that's ALSO BTS (a member solo, an OT7 track) is the normal,
   // expected texture of a playlist like this. Non-BTS only ever enters
-  // through the 2 checkpoints above; the nonReservedNonBtsAvailable() calls
-  // below are purely a last-resort fallback for the (essentially never
-  // reached) case where the BTS catalog itself is exhausted.
+  // through the two checkpoint functions above.
   const pushSpacer = (): boolean => {
     if (bi >= btsQ.length && btsQ.length > 0) {
       const mid = Math.ceil(btsQ.length / 2)
@@ -281,8 +301,11 @@ export function buildPlaylistOrder(
       btsQ.splice(0, btsQ.length, ...rnd(btsQ.slice(0, mid)), ...rnd(btsQ.slice(mid)))
       bi = 0
     }
-    if (bi < btsQ.length) { push({ ...btsQ[bi++], isBTS: true }); return true }
-    if (nonReservedNonBtsAvailable()) { push({ ...nbQ[fi++], isBTS: false }); return true }
+    if (bi < btsQ.length) {
+      const candidate = btsQ[bi]
+      if (passCheckpointBefore(candidate.durationMs || 210000)) return true
+      push({ ...candidate, isBTS: true }); bi++; passCheckpoints(); return true
+    }
     return false
   }
   const pushGapFiller = (remainingMs: number): boolean => {
@@ -302,16 +325,12 @@ export function buildPlaylistOrder(
     }
     const pick = bestIdx >= 0 ? bestIdx : longestIdx
     if (pick > bi) { const tmp = btsQ[bi]; btsQ[bi] = btsQ[pick]; btsQ[pick] = tmp }
-    if (bi < btsQ.length) { push({ ...btsQ[bi++], isBTS: true }); return true }
-    if (nonReservedNonBtsAvailable()) { push({ ...nbQ[fi++], isBTS: false }); return true }
-    return false
-  }
-  const passCheckpoints = () => {
-    while (remainingCheckpoints > 0 && ms >= nextCheckpointMs) {
-      if (fi < nbQ.length) push({ ...nbQ[fi++], isBTS: false })
-      remainingCheckpoints--
-      nextCheckpointMs = ms + nextCheckpointGapMs()
+    if (bi < btsQ.length) {
+      const candidate = btsQ[bi]
+      if (passCheckpointBefore(candidate.durationMs || 210000)) return true
+      push({ ...candidate, isBTS: true }); bi++; passCheckpoints(); return true
     }
+    return false
   }
 
   // Duration-aware gap planning. Earlier attempts estimated available
@@ -342,7 +361,6 @@ export function buildPlaylistOrder(
   const realGapCount = Math.max(0, focusSeq.filter((t) => !t.isAlbumTrack).length - 1)
   const gapPlan = planGapCounts(realGapCount, totalSpacerTracks)
 
-  const DURATION_TOLERANCE_MS = 2000
   // Hard ceiling on the VISIBLE track distance between two real focus
   // plays: 6, as a safety net (the plan above should already stay within
   // this, but album tracks land at independent positions and can still
@@ -355,8 +373,6 @@ export function buildPlaylistOrder(
   const ensureGap = (key: string, durationMs: number): number => {
     const prev = lastPlayed[key]
     if (!prev) return 0
-    const isDistinctVersion = Math.abs((prev.durationMs || 0) - (durationMs || 0)) > DURATION_TOLERANCE_MS
-    if (isDistinctVersion) return 0
     let pushed = 0
     // MIN_GAP_MS (flat 8min) is the actual validated, MANDATORY floor —
     // padding this randomly to 8-10min (an even earlier version) just
@@ -385,7 +401,6 @@ export function buildPlaylistOrder(
     const effectiveGap = Math.min(plannedGap, roomLeftInWindow)
     const ck = focusSeq[k].key || focusSeq[k].isrc || focusSeq[k].uri || focusSeq[k].id
     const prevSame = lastPlayed[ck]
-    const isDistinctVersion = !!prevSame && Math.abs((prevSame.durationMs || 0) - (focusSeq[k].durationMs || 0)) > DURATION_TOLERANCE_MS
     let pushedThisGap = 0
     // For a small planned gap (<=3), pick spacers duration-aware (reusing
     // pushGapFiller's best-fit-or-longest logic, aiming each pick at an
@@ -403,7 +418,7 @@ export function buildPlaylistOrder(
     // counts toward the 8min floor. Starting from 0 every time made this
     // loop chase a floor that was often already partly or fully met,
     // pushing avoidable extra spacers and inflating runtime.
-    let gapAccumMs = (prevSame && !isDistinctVersion) ? Math.max(0, ms - prevSame.ms) : 0
+    let gapAccumMs = prevSame ? Math.max(0, ms - prevSame.ms) : 0
     for (let g = 0; g < effectiveGap; g++) {
       const stepsLeft = effectiveGap - g
       const remainingToFloor = Math.max(0, MIN_GAP_MS - gapAccumMs)
@@ -419,6 +434,7 @@ export function buildPlaylistOrder(
     windowCount += extraPushed
     totalDelivered += extraPushed
     if (sinceNonBts >= fillerEvery && windowCount < MAX_GAP) { pushSpacer(); windowCount++; totalDelivered++ }
+    passCheckpointBefore(focusSeq[k].durationMs || 210000)
     push(focusSeq[k])
     if (focusSeq[k].isAlbumTrack) windowCount++
     else windowCount = 0

@@ -149,6 +149,12 @@ export function planFocusGapCounts(n, profile, rng = Math.random) {
     plan = new Array(n).fill(4)
     if (n >= 3) plan[0] = 3
     if (n >= 5) plan[1] = 5
+  } else if (profile === 'close-spread') {
+    // In a 10:9 pairing, mandatory partner/album tracks already create an
+    // occasional five-track window. Plan four with one three so the final
+    // result remains mostly four without turning five into a common case.
+    plan = new Array(n).fill(4)
+    if (n >= 3) plan[0] = 3
   } else {
     plan = new Array(n).fill(5)
     if (n >= 3) plan[0] = 4
@@ -253,14 +259,14 @@ export function buildPlaylistOrder2Focus(
   const nbQ = shuffle(nonBtsFillers, rng); let fi = 0
   const order = []
   let ms = 0
-  let sinceNonBts = 0
+  let sinceVarietyBreak = 0
   const truncated = false
 
   const push = (t) => {
     order.push(t)
     ms += t.durationMs || 210000
-    if (t.isBTS === false) sinceNonBts = 0
-    else sinceNonBts++
+    if (t.isBTS === false) sinceVarietyBreak = 0
+    else sinceVarietyBreak++
   }
 
   const btsRecycle = () => {
@@ -272,16 +278,23 @@ export function buildPlaylistOrder2Focus(
     bi = 0
   }
 
-  const nextCheckpointGapMs = () => (30 + rng() * 15) * 60000
+  // Aim early enough inside the window to absorb a planned two-track spacer
+  // pair. The deadline guard remains as a safety net for unusually long
+  // catalog tracks, but normal checkpoints replace an existing spacer slot.
+  const nextCheckpointGapMs = () => 33 * 60000
   let remainingCheckpoints = targetMs >= 120 * 60000 ? 2 : 0
   let nextCheckpointMs = remainingCheckpoints > 0 ? nextCheckpointGapMs() : Infinity
+  let checkpointWindowStartMs = remainingCheckpoints > 0 ? 30 * 60000 : Infinity
+  let checkpointWindowEndMs = remainingCheckpoints > 0 ? 45 * 60000 : Infinity
   const checkpointDue = () => remainingCheckpoints > 0 && ms >= nextCheckpointMs
-  // R5 passes at <=14 consecutive BTS tracks. Schedule the replacement a
-  // little before that boundary so a mandatory focus/album push cannot tip
-  // an otherwise healthy run over the limit before the next neutral slot.
-  const nonBtsReplacementAt = Math.min(fillerEvery, 10)
+  const checkpointWouldBeLate = (durationMs) => remainingCheckpoints > 0 &&
+    ms >= checkpointWindowStartMs && ms + (durationMs || 210000) > checkpointWindowEndMs
+  // Preserve the existing playlist density/shape without using another
+  // artist to break a long track-count run. These positions now receive a
+  // BTS spacer; only the two timed checkpoints may receive non-BTS tracks.
+  const btsVarietySpacerAt = Math.min(fillerEvery, 10)
 
-  const pushNonBts = (consumeCheckpoint, remainingMs = 0) => {
+  const pushNonBts = (consumeCheckpoint, remainingMs = 0, requireMinDuration = false) => {
     if (fi >= nbQ.length) return false
     let pick = -1, bestDuration = Infinity
     for (let i = fi; i < nbQ.length; i++) {
@@ -291,11 +304,14 @@ export function buildPlaylistOrder2Focus(
         bestDuration = duration
       }
     }
+    if (pick < 0 && requireMinDuration) return false
     if (pick > fi) { const tmp = nbQ[fi]; nbQ[fi] = nbQ[pick]; nbQ[pick] = tmp }
     push({ ...nbQ[fi++], isBTS: false })
     if (consumeCheckpoint) {
       remainingCheckpoints--
       nextCheckpointMs = remainingCheckpoints > 0 ? ms + nextCheckpointGapMs() : Infinity
+      checkpointWindowStartMs = remainingCheckpoints > 0 ? ms + 30 * 60000 : Infinity
+      checkpointWindowEndMs = remainingCheckpoints > 0 ? ms + 45 * 60000 : Infinity
     }
     return true
   }
@@ -316,19 +332,29 @@ export function buildPlaylistOrder2Focus(
     }
     const pick = bestIdx >= 0 ? bestIdx : longestIdx
     if (pick < 0) return false
+    const pickedDuration = btsQ[pick].durationMs || 210000
+    if (checkpointWouldBeLate(pickedDuration)) {
+      // This replaces the already-planned neutral slot. When the slot is a
+      // two-filler pair, require this checkpoint track to satisfy that same
+      // 4:00+ promise rather than weakening the separate duration rule.
+      const minimum = Math.max(remainingMs, minDurationMs)
+      if (pushNonBts(true, minimum, minDurationMs > 0)) return true
+    }
     if (pick > bi) { const tmp = btsQ[bi]; btsQ[bi] = btsQ[pick]; btsQ[pick] = tmp }
     push({ ...btsQ[bi++], isBTS: true })
     return true
   }
 
-  // A non-BTS checkpoint uses an already-budgeted neutral slot. This keeps
-  // R5 healthy without silently enlarging the repeat window. Four-minute
-  // two-filler slots stay BTS-only so both selected tracks satisfy that
-  // separate duration promise.
+  // A non-BTS checkpoint uses an already-budgeted neutral slot. It may only
+  // fire when its 30–45 minute checkpoint is due; track-count heuristics must
+  // never add extra other-artist songs between those two planned placements.
+  // Four-minute two-filler slots stay BTS-only so both selected tracks still
+  // satisfy that separate duration promise.
   const pushNeutral = (remainingMs = 0, minDurationMs = 0) => {
     const due = checkpointDue()
-    if (minDurationMs === 0 && (due || sinceNonBts >= nonBtsReplacementAt) && fi < nbQ.length) {
-      return pushNonBts(due, remainingMs)
+    if (due && fi < nbQ.length) {
+      const minimum = Math.max(remainingMs, minDurationMs)
+      if (pushNonBts(true, minimum, minDurationMs > 0)) return true
     }
     return pushBtsFiller(remainingMs, minDurationMs)
   }
@@ -357,7 +383,11 @@ export function buildPlaylistOrder2Focus(
   // value for whichever song happened to appear second in the playlist,
   // even though that was its first occurrence and no repeat gap existed.
   const profileA = m === n ? 'balanced' : ratio <= 1.2 ? 'close-tight' : 'tight'
-  const profileB = m === n ? 'balanced' : ratio <= 1.2 ? 'tight' : 'wide'
+  // In a close 10:9 pairing the less-frequent song still needs the wider
+  // existing pattern (mostly four). Previously the extra non-BTS insertion
+  // accidentally supplied that extra space; keep the shape with BTS
+  // spacing now that non-BTS is reserved strictly for two checkpoints.
+  const profileB = m === n ? 'balanced' : ratio <= 1.2 ? 'close-spread' : 'wide'
   const gapPlanA = planFocusGapCounts(Math.max(0, m - 1), profileA, rng)
   let gapPlanB = planFocusGapCounts(Math.max(0, n - 1), profileB, rng)
   if (m === n && gapPlanA.length > 1 && gapPlanA.join(',') === gapPlanB.join(',')) {
@@ -405,6 +435,12 @@ export function buildPlaylistOrder2Focus(
     if (activeA()) { windowCountA++; windowDurationA += duration }
     if (activeB()) { windowCountB++; windowDurationB += duration }
   }
+  const passCheckpointBefore = (durationMs) => {
+    if (!checkpointWouldBeLate(durationMs)) return false
+    if (!pushNonBts(true)) return false
+    addNeutralTrack(order[order.length - 1])
+    return true
+  }
 
   // Reserve the focus occurrence that will follow the neutral slot: an A
   // play adds one visible track to B's still-open repeat window and vice
@@ -439,14 +475,20 @@ export function buildPlaylistOrder2Focus(
     while (albumIdx < albumQueue.length && albumTargets[albumIdx] <= slotIdx && placed < 2) {
       // Dense albums can fill every available neutral slot, leaving no BTS
       // spacer for the normal checkpoint-replacement path. Spend capacity
-      // on the non-BTS replacement first and defer the album if necessary;
+      // on a due non-BTS checkpoint first and defer the album if necessary;
       // the album is mandatory, but this particular slot is not.
-      if ((checkpointDue() || sinceNonBts >= nonBtsReplacementAt) && capRoomBeforeFocus(nextKey) > 0) {
+      if ((checkpointDue() || sinceVarietyBreak >= btsVarietySpacerAt) && capRoomBeforeFocus(nextKey) > 0) {
         const due = checkpointDue()
         const remainingForClosingWindow = nextKey === songA.key
           ? Math.max(0, MIN_GAP_MS - windowDurationA)
           : Math.max(0, MIN_GAP_MS - windowDurationB)
-        if (pushNonBts(due, remainingForClosingWindow)) addNeutralTrack(order[order.length - 1])
+        const placedVariety = due
+          ? pushNonBts(true, remainingForClosingWindow)
+          : pushBtsFiller(remainingForClosingWindow)
+        if (placedVariety) {
+          addNeutralTrack(order[order.length - 1])
+          sinceVarietyBreak = 0
+        }
       }
       // A deferred album may catch up in a later, roomier slot. Keep two
       // albums audibly separated and count that separator against the same
@@ -459,6 +501,7 @@ export function buildPlaylistOrder2Focus(
         addNeutralTrack(order[order.length - 1])
       }
       if (capRoomBeforeFocus(nextKey) <= 0) break
+      passCheckpointBefore(albumQueue[albumIdx].durationMs || 210000)
       push({ ...albumQueue[albumIdx++], isBTS: true, isAlbumTrack: true })
       addNeutralTrack(order[order.length - 1])
       placed++
@@ -468,11 +511,11 @@ export function buildPlaylistOrder2Focus(
 
   pushNeutralTracks(2)
   for (let i = 0; i < openingAlbumCount; i++) {
+    passCheckpointBefore(albumQueue[albumIdx].durationMs || 210000)
     push({ ...albumQueue[albumIdx++], isBTS: true, isAlbumTrack: true })
     if (i + 1 < openingAlbumCount) pushNeutral()
   }
 
-  const DURATION_TOLERANCE_MS = 2000
   const lastPlayed = {}
   let gapCursorA = 0, gapCursorB = 0
   for (let k = 0; k < focusSeq.length; k++) {
@@ -489,20 +532,25 @@ export function buildPlaylistOrder2Focus(
       // checkpoint turn an intended two-new-filler window into one
       // checkpoint + one filler, preserving the separate rule that a true
       // two-filler selection must contain two 4:00+ BTS tracks.
-      if ((checkpointDue() || sinceNonBts >= nonBtsReplacementAt) &&
+      if ((checkpointDue() || sinceVarietyBreak >= btsVarietySpacerAt) &&
           capRoomBeforeFocus(curr.key) > 0 && roomForSpacer(k)) {
         const due = checkpointDue()
         const remainingForCurrent = isSongA
           ? Math.max(0, MIN_GAP_MS - windowDurationA)
           : Math.max(0, MIN_GAP_MS - windowDurationB)
-        if (pushNonBts(due, remainingForCurrent)) addNeutralTrack(order[order.length - 1])
+        const placedVariety = due
+          ? pushNonBts(true, remainingForCurrent)
+          : pushBtsFiller(remainingForCurrent)
+        if (placedVariety) {
+          addNeutralTrack(order[order.length - 1])
+          sinceVarietyBreak = 0
+        }
       }
 
       const ownWindowCount = isSongA ? windowCountA : windowCountB
       const stillNeeded = Math.max(0, plannedGap - ownWindowCount)
       const effectiveGap = Math.min(stillNeeded, capRoomBeforeFocus(curr.key))
-      const isDistinctVersion = Math.abs((prev.durationMs || 0) - (curr.durationMs || 0)) > DURATION_TOLERANCE_MS
-      let gapAccumMs = isDistinctVersion ? MIN_GAP_MS : Math.max(0, ms - prev.ms)
+      let gapAccumMs = Math.max(0, ms - prev.ms)
       const requireLongPair = effectiveGap === 2
 
       for (let g = 0; g < effectiveGap && roomForSpacer(k); g++) {
@@ -517,11 +565,9 @@ export function buildPlaylistOrder2Focus(
 
       // Time compliance outranks the cosmetic count target. With the
       // duration-aware/long-pair selection above this should be exceptional.
-      if (!isDistinctVersion) {
-        while (ms - prev.ms < MIN_GAP_MS) {
-          if (!pushNeutral(MIN_GAP_MS - (ms - prev.ms))) break
-          addNeutralTrack(order[order.length - 1])
-        }
+      while (ms - prev.ms < MIN_GAP_MS) {
+        if (!pushNeutral(MIN_GAP_MS - (ms - prev.ms))) break
+        addNeutralTrack(order[order.length - 1])
       }
     }
 
@@ -532,6 +578,7 @@ export function buildPlaylistOrder2Focus(
       if (alt) curr = { ...curr, uri: alt.uri, id: alt.id, album: alt.album }
     }
 
+    passCheckpointBefore(curr.durationMs || 210000)
     push(curr)
     lastPlayed[ck] = { ms, durationMs: curr.durationMs }
     if (isSongA) {
@@ -556,7 +603,9 @@ export function buildPlaylistOrder2Focus(
   // inputs while still separating leftovers; committed tests ensure the
   // real 10:10/10:9/10:5 combinations never need it.
   while (albumIdx < albumQueue.length) {
+    passCheckpointBefore(albumQueue[albumIdx].durationMs || 210000)
     push({ ...albumQueue[albumIdx++], isBTS: true, isAlbumTrack: true })
+    if (checkpointDue()) pushNonBts(true)
     if (albumIdx < albumQueue.length) pushNeutral()
   }
   pushNeutralTracks(2)

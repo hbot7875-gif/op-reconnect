@@ -21,7 +21,12 @@ const MIN_GAP_MS = 480000 // matches spotify-shared.ts's MIN_GAP_MS — duplicat
 function mkFocusSong(key, plays, durationMs) {
   return {
     key, name: key, plays, durationMs,
-    versions: [{ id: `${key}-v1`, uri: `u-${key}-1` }, { id: `${key}-v2`, uri: `u-${key}-2` }],
+    // Deliberately different durations reproduce cover/remix rotation. The
+    // same catalog song must still keep the full eight-minute repeat gap.
+    versions: [
+      { id: `${key}-v1`, uri: `u-${key}-1`, durationMs },
+      { id: `${key}-v2`, uri: `u-${key}-2`, durationMs: durationMs + 15000 },
+    ],
   }
 }
 function mkSpacerPool(count, prefix = 'bts') {
@@ -98,13 +103,19 @@ function mkDeterministicAlbum(count = 14) {
   }))
 }
 
-function longestBtsRun(order) {
-  let run = 0, longest = 0
+function nonBtsCheckpointGaps(order) {
+  const gaps = []
+  let elapsedMs = 0
+  let previousCheckpointEndMs = 0
   for (const track of order) {
-    run = track.isBTS === false ? 0 : run + 1
-    longest = Math.max(longest, run)
+    const durationMs = track.durationMs || 0
+    if (track.isBTS === false) {
+      gaps.push((elapsedMs - previousCheckpointEndMs) / 60000)
+      previousCheckpointEndMs = elapsedMs + durationMs
+    }
+    elapsedMs += durationMs
   }
-  return longest
+  return gaps
 }
 
 function histogram(values) {
@@ -212,6 +223,7 @@ test('planFocusGapCounts keeps each product profile inside its promised shape', 
   assert.ok(planFocusGapCounts(9, 'close-tight', rng).every((gap) => gap === 2 || gap === 3))
   assert.deepEqual([...new Set(planFocusGapCounts(9, 'balanced', rng))].sort(), [2, 3, 4, 5])
   assert.ok(planFocusGapCounts(8, 'spread', rng).every((gap) => gap >= 3 && gap <= 5))
+  assert.ok(planFocusGapCounts(8, 'close-spread', rng).every((gap) => gap === 3 || gap === 4))
   assert.ok(planFocusGapCounts(4, 'wide', rng).every((gap) => gap >= 4 && gap <= 6))
 })
 
@@ -354,7 +366,8 @@ test('buildPlaylistOrder2Focus never loses a requested focus play or album track
 
 test('buildPlaylistOrder2Focus enforces the requested 10:10, 10:9, and 10:5 patterns', () => {
   // Seeded full-builder coverage: exact counts, mandatory album placement,
-  // runtime, the real eight-minute floor, R5, and the requested per-ratio
+  // runtime, the real eight-minute floor (even across alternate versions),
+  // the two timed other-artist checkpoints, and the requested per-ratio
   // gap shapes. The previous <=10 assertion let the exact 7–10-track
   // regression under review pass; these bounds describe the product rule.
   const scenarios = [
@@ -396,7 +409,13 @@ test('buildPlaylistOrder2Focus enforces the requested 10:10, 10:9, and 10:5 patt
       assert.equal(order.filter((t) => t.isAlbumTrack).length, 14)
       assert.ok(order.reduce((sum, t) => sum + (t.durationMs || 0), 0) <= 180 * 60000)
       assert.ok(!order[0].isFocus, 'playlist opened on a focus song')
-      assert.ok(longestBtsRun(order) <= 14, `R5 failed for ${scenario.pA}:${scenario.pB}, seed ${seed}`)
+      const checkpointGaps = nonBtsCheckpointGaps(order)
+      assert.equal(checkpointGaps.length, 2,
+        `expected exactly two other-artist songs for ${scenario.pA}:${scenario.pB}, seed ${seed}`)
+      for (const gap of checkpointGaps) {
+        assert.ok(gap >= 30 && gap <= 45,
+          `other-artist checkpoint landed at ${gap.toFixed(2)} min for ${scenario.pA}:${scenario.pB}, seed ${seed}`)
+      }
       assert.ok(Math.max(...gapsA) <= scenario.maxA, `A exceeded ${scenario.maxA}: ${gapsA}`)
       assert.ok(Math.max(...gapsB) <= scenario.maxB, `B exceeded ${scenario.maxB}: ${gapsB}`)
       for (const window of [...windowsA, ...windowsB]) {
