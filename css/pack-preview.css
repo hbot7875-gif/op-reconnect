@@ -1,0 +1,219 @@
+/* Agent Pack redesign — PREVIEW ONLY. Not linked from the live app.
+   Reuses reconnect.css's variables and palette discipline (purple = in
+   progress/tech, gold = rare/ready, no other hues) — no new colors defined
+   here beyond graphite tones for the bag material itself. */
+
+.pv-wrap { max-width: 480px; margin: 0 auto; padding: 20px 16px 100px; }
+@media (min-width: 720px) { .pv-wrap { max-width: 520px; } }
+
+.pv-note { font-family: var(--mono); font-size: 10.5px; color: var(--dim); text-align: center;
+  letter-spacing: 0.6px; margin-bottom: 16px; padding: 6px 10px; border: 1px dashed var(--border);
+  border-radius: 8px; }
+
+/* ── Agent ID ─────────────────────────────────────────────────────────── */
+/* Its own separate card, sitting above the Pack — not attached to it. */
+.aid-card { position: relative; border-radius: var(--r-lg); background: linear-gradient(155deg, #17141f, #0d0b14);
+  border: 1px solid var(--border-str); padding: 14px 16px; margin-bottom: 22px; overflow: hidden;
+  box-shadow: 0 0 0 1px rgba(139,92,246,0.08), 0 8px 20px rgba(0,0,0,0.4); }
+/* Neutral (not purple) hologram sheen — sits still by default, only sweeps
+   on hover/tap, so the resting card stays flat/clean. */
+.aid-card::before { content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(115deg, transparent 42%, rgba(255,255,255,0.05) 50%, transparent 58%);
+  background-size: 240% 240%; background-position: 0% 0%; transition: background-position 0.8s ease; }
+.aid-card:hover::before, .aid-card:focus-within::before, .aid-card.is-shimmer::before { background-position: 100% 100%; }
+@media (prefers-reduced-motion: reduce) { .aid-card::before { transition: none; } }
+.aid-scanline { position: absolute; left: 0; right: 0; height: 40px; pointer-events: none;
+  background: linear-gradient(180deg, transparent, rgba(139,92,246,0.08), transparent);
+  animation: pvScan 5s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .aid-scanline { animation: none; display: none; } }
+@keyframes pvScan { 0% { top: -40px; } 100% { top: 100%; } }
+
+.aid-top { display: flex; align-items: center; gap: 12px; position: relative; z-index: 1; }
+.aid-photo { position: relative; width: 52px; height: 52px; border-radius: 10px; background: var(--surface-2);
+  border: 1px solid var(--border-str); display: flex; align-items: center; justify-content: center;
+  font-size: 24px; flex: none; overflow: hidden; }
+.aid-photo img { width: 100%; height: 100%; object-fit: cover; }
+/* Same shine technique as the Badge Drawer's earned medallions (reconnect.css
+   .bdr-tile.got:hover::after) — reused here, not reinvented, so the equipped
+   badge reads as the same object in both places. Gold, matching the badge's
+   own accent, not purple. Interaction-triggered only, nothing ambient. */
+.aid-photo::after { content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: conic-gradient(from 220deg, transparent 0%, rgba(217,173,95,0.4) 8%, transparent 16%);
+  opacity: 0; transition: opacity 0.2s ease; }
+.aid-card:hover .aid-photo::after, .aid-card:focus-within .aid-photo::after,
+.aid-card.is-shimmer .aid-photo::after { opacity: 1; animation: pvBadgeShine 1s linear; }
+@keyframes pvBadgeShine { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .aid-photo::after { animation: none !important; } }
+.aid-info { min-width: 0; flex: 1; }
+.aid-codename { font-family: var(--disp); font-weight: 800; font-size: 16px; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.aid-meta { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: 0.4px;
+  margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.aid-active { display: flex; align-items: center; gap: 5px; font-family: var(--mono); font-size: 9.5px;
+  color: var(--purple-lt); letter-spacing: 1px; flex: none; }
+.aid-active i { width: 6px; height: 6px; border-radius: 50%; background: var(--purple-lt);
+  box-shadow: 0 0 6px var(--purple); animation: pvPulseDot 1.8s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .aid-active i { animation: none; } }
+@keyframes pvPulseDot { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+.aid-strip { display: flex; align-items: baseline; gap: 14px; margin-top: 11px; padding-top: 10px;
+  border-top: 1px dashed var(--border); font-family: var(--mono); font-size: 10.5px; color: var(--dim);
+  letter-spacing: 0.3px; position: relative; z-index: 1; flex-wrap: wrap; }
+.aid-strip b { color: var(--muted); font-weight: 600; }
+.aid-id-no { margin-left: auto; font-family: var(--mono); font-size: 9px;
+  color: rgba(255,255,255,0.22); letter-spacing: 1px; white-space: nowrap; }
+
+/* ── The bag ──────────────────────────────────────────────────────────── */
+.bag-wrap { position: relative; margin: 0 0 8px; padding-top: 22px; }
+.bag-handle { position: absolute; top: 1px; left: 50%; transform: translateX(-50%); width: 88px; height: 33px;
+  border: 7px solid #423d52; border-bottom: none; border-radius: 44px 44px 0 0; z-index: 2;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -1px 0 rgba(0,0,0,0.3), 0 3px 6px rgba(0,0,0,0.45); }
+.bag-handle::after { content: ''; position: absolute; inset: -1px; border-radius: 44px 44px 0 0;
+  border: 1px solid rgba(255,255,255,0.06); border-bottom: none; }
+.bag-handle-rivet { position: absolute; bottom: -3px; width: 6px; height: 6px; border-radius: 50%;
+  background: #423d52; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 1px 2px rgba(0,0,0,0.4); z-index: 3; }
+.bag-handle-rivet.l { left: calc(50% - 51px); } .bag-handle-rivet.r { right: calc(50% - 51px); }
+
+.bag-body { position: relative; background: linear-gradient(175deg, #1a1722 0%, #100e17 55%, #0b0910 100%);
+  border-radius: 0 0 20px 20px; clip-path: polygon(0% 0%, 100% 0%, 100% 97%, 93% 100%, 7% 100%, 0% 97%);
+  border: 1px solid var(--border-str); border-top: none; box-shadow: inset 0 2px 0 rgba(255,255,255,0.03),
+  inset 0 -40px 60px -30px rgba(0,0,0,0.6), 0 0 0 1px rgba(139,92,246,0.05), 0 14px 34px rgba(0,0,0,0.45);
+  padding: 20px 16px 22px; animation: pvBagOpen 0.5s ease-out both; }
+@media (prefers-reduced-motion: reduce) { .bag-body { animation: none; } }
+@keyframes pvBagOpen { 0% { opacity: 0; transform: scaleY(0.92) translateY(6px); } 100% { opacity: 1; transform: none; } }
+
+.bag-seam { position: absolute; inset: 8px; border-radius: 20px 20px 15px 15px; pointer-events: none;
+  border: 1px dashed rgba(255,255,255,0.08); }
+
+.bag-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.bag-title { font-family: var(--mono); font-size: 10.5px; letter-spacing: 2px; color: var(--purple-lt); }
+.bag-zip { display: flex; align-items: center; gap: 2px; }
+.bag-zip i { width: 3px; height: 8px; background: rgba(255,255,255,0.12); border-radius: 1px; }
+.bag-zip-pull { width: 10px; height: 14px; border-radius: 3px; background: linear-gradient(160deg, #3a3548, #211e2b);
+  border: 1px solid var(--border-str); margin-left: 3px; }
+
+/* One tiny detail, not per-compartment: 7 embossed dots (member count),
+   upper-right corner of the case itself. Deliberately not colored —
+   emboss reads from shadow alone, exactly as subtle as a stitched detail
+   on real gear would be. */
+.bag-emblem { position: absolute; top: 4px; right: 12px; display: flex; gap: 3px; z-index: 1; }
+.bag-emblem span { width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.05);
+  box-shadow: inset 0 1px 1px rgba(0,0,0,0.7), 0 0.5px 0 rgba(255,255,255,0.05); }
+
+.bag-compartments { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+@media (min-width: 380px) { .bag-compartments { grid-template-columns: repeat(4, 1fr); } }
+
+/* Fitted pockets, not oversized shapes — same restrained, flat-card feel
+   as .pocket-slot below (the reference the redesign is now built around),
+   just vertically stacked since a count needs its own line. Hardware
+   (corner brackets + a small top buckle tab) sells "equipment cutout"
+   instead of leaning on the silhouette itself the way the first pass did. */
+/* Recessed cutout, not a card sitting on top: a darker top edge fading to
+   the panel tone plus a stronger inner shadow reads as a well the part is
+   seated INTO, and a hairline highlight along the bottom inner lip is
+   where light would actually catch the far edge of a real recess. */
+.slot { position: relative; background: linear-gradient(180deg, rgba(0,0,0,0.32) 0%, rgba(0,0,0,0.08) 35%, var(--panel) 100%);
+  border: 1px solid var(--border); border-top-color: rgba(0,0,0,0.4);
+  border-radius: 10px; padding: 13px 6px 9px; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 3px; min-height: 84px;
+  box-shadow: inset 0 5px 9px -2px rgba(0,0,0,0.55), inset 0 -1px 0 rgba(255,255,255,0.05);
+  cursor: pointer; transition: border-color 0.15s ease; }
+.slot:hover, .slot:focus-visible { border-color: rgba(255,255,255,0.28); outline: none; }
+.slot-icon { font-size: 25px; line-height: 1; }
+.slot-val { font-family: var(--disp); font-weight: 800; font-size: 21px; color: var(--text); line-height: 1.1; }
+.slot-label { font-family: var(--mono); font-size: 8px; letter-spacing: 0.5px; color: var(--muted);
+  text-transform: uppercase; text-align: center; }
+
+/* Real progress, Charge Cells only — the one compartment with actual
+   progress data (activeDistrict.chargeCellProgress). Reuses --purple-lt,
+   the same color every other progress meter in the game already uses for
+   "in progress" (pack-cell-progress, era-pack-card) — not a new use of
+   purple, the same one restated in a new spot. Pinned to the compartment's
+   own bottom inner edge, not floated inline with the label — that's the
+   one thing that breaks the four-identical-box read on sight. */
+.slot-cell { padding-bottom: 15px; }
+.slot-fill { position: absolute; left: 10px; right: 10px; bottom: 6px; height: 3px; border-radius: 2px;
+  background: rgba(0,0,0,0.4); overflow: hidden; }
+.slot-fill-bar { height: 100%; background: var(--purple-lt); border-radius: 2px; }
+
+/* Reinforced corners — a short bracket at two opposing corners, the same
+   detail real equipment cases use at stress points. */
+.slot::before, .slot::after { content: ''; position: absolute; width: 8px; height: 8px; pointer-events: none; }
+.slot::before { top: 3px; left: 3px; border-top: 1.5px solid rgba(255,255,255,0.16); border-left: 1.5px solid rgba(255,255,255,0.16); }
+.slot::after { bottom: 3px; right: 3px; border-bottom: 1.5px solid rgba(255,255,255,0.16); border-right: 1.5px solid rgba(255,255,255,0.16); }
+
+/* Small buckle tab, top-center — the one shared hardware cue across every
+   compartment; the type-specific ::before/::after below layer on top. */
+.slot-buckle { position: absolute; top: -4px; left: 50%; transform: translateX(-50%); width: 16px; height: 5px;
+  background: #26222f; border: 1px solid var(--border); border-radius: 2px; }
+.slot.is-new::after { content: 'NEW'; position: absolute; top: -6px; right: -4px; background: var(--gold);
+  color: #1b1400; font-family: var(--mono); font-size: 7.5px; font-weight: 800; letter-spacing: 0.5px;
+  padding: 2px 5px; border-radius: 999px; box-shadow: 0 2px 5px rgba(0,0,0,0.4); animation: pvNewPulse 1.6s ease-in-out 2; }
+@media (prefers-reduced-motion: reduce) { .slot.is-new::after { animation: none; } }
+@keyframes pvNewPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+
+/* Type accent — one small, real DOM element per slot (not a pseudo-element,
+   since ::before/::after are already spoken for by the corner brackets
+   above) giving each compartment its own quiet hardware tell without
+   changing the tile's own shape. */
+.slot-accent { position: absolute; pointer-events: none; }
+.slot-accent-cell { top: 6px; left: 50%; transform: translateX(-50%); width: 16px; height: 3px;
+  background: rgba(255,255,255,0.1); border-radius: 2px; }
+.slot-accent-wing { top: 20%; bottom: 20%; width: 2px; background: rgba(255,255,255,0.1); border-radius: 2px; }
+.slot-accent-wing.l { left: 9px; } .slot-accent-wing.r { right: 9px; }
+.slot-accent-freeze { top: 6px; right: 9px; width: 5px; height: 5px; border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.14); }
+.slot-accent-ext { bottom: 7px; left: 50%; transform: translateX(-50%); width: 22px; height: 1.5px;
+  background: repeating-linear-gradient(90deg, rgba(255,255,255,0.16) 0 2px, transparent 2px 4px); }
+
+/* ── Front pocket ─────────────────────────────────────────────────────── */
+/* A perforated seam, not the same dashed rule used elsewhere in the case
+   (.bag-seam, .aid-strip) — small round holes read as a stitched/zipper
+   boundary, the visual cue that this is a distinct compartment rather than
+   a continuation of the four above it. */
+.bag-pocket { margin-top: 16px; padding-top: 16px; position: relative; }
+.bag-pocket::before { content: ''; position: absolute; top: 0; left: 2px; right: 2px; height: 3px;
+  background-image: radial-gradient(circle, rgba(255,255,255,0.18) 1px, transparent 1.3px);
+  background-size: 7px 3px; background-repeat: repeat-x; background-position: center; }
+.pocket-seam-label { font-family: var(--mono); font-size: 9px; letter-spacing: 1.5px; color: var(--dim);
+  margin-bottom: 8px; display: block; }
+.pocket-items { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pocket-slot { display: flex; align-items: center; gap: 8px; background: var(--surface-2);
+  border: 1px solid var(--border); border-radius: 12px; padding: 9px 10px; cursor: pointer;
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.3); transition: border-color 0.15s ease; }
+.pocket-slot:hover { border-color: var(--purple-lt); }
+.pocket-slot.is-locked { opacity: 0.55; cursor: default; }
+.pocket-slot .ps-icon { font-size: 18px; flex: none; }
+.pocket-slot .ps-name { font-weight: 700; font-size: 12.5px; color: var(--text); }
+.pocket-slot .ps-status { font-family: var(--mono); font-size: 9.5px; color: var(--purple-lt); display: block; }
+.pocket-slot.is-locked .ps-status { color: var(--muted); }
+
+/* ── Section hierarchy below the bag ─────────────────────────────────── */
+.pv-section { margin-top: 28px; }
+/* Extra breathing room specifically where content leaves the case — small
+   everywhere else reads as "next section," this much reads as "the bag
+   ends here." */
+.pv-section.pv-after-bag { margin-top: 38px; }
+.pv-section-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
+.pv-section-title { font-family: var(--mono); font-size: 11px; letter-spacing: 1.5px; color: var(--dim);
+  text-transform: uppercase; }
+.pv-section-count { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+.pv-era-card.era-lit .epc-status-line { color: var(--gold); font-weight: 700; }
+.pv-era-ready-banner { font-family: var(--mono); font-size: 9px; letter-spacing: 0.8px; color: var(--gold);
+  text-align: center; margin-top: 2px; }
+/* Distinguishes this "Wings" (an album era) from the Wings currency slot in
+   the bag above — same word, unrelated systems, so the card says which one
+   it is instead of relying on proximity/memory. */
+.epc-album-tag { position: absolute; top: 6px; left: 6px; font-family: var(--mono); font-size: 6.5px;
+  letter-spacing: 0.6px; color: var(--dim); }
+
+.pv-quick { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.pv-quick-link { display: grid; grid-template-columns: 26px 1fr auto; align-items: center; gap: 10px;
+  padding: 12px 14px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+  cursor: pointer; transition: border-color 0.15s ease; }
+.pv-quick-link:hover { border-color: var(--purple-lt); }
+.pv-quick-link .ql-icon { font-size: 18px; }
+.pv-quick-link .ql-name { font-weight: 700; font-size: 13.5px; }
+.pv-quick-link .ql-sub { font-family: var(--mono); font-size: 10px; color: var(--muted); display: block; margin-top: 1px; }
+.pv-quick-link .ql-go { color: var(--muted); }
