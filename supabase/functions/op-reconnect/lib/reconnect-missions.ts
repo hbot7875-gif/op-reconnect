@@ -1396,9 +1396,16 @@ export async function adminListStuckReconnects(supabase: SupabaseDB, content: Ga
   const since = new Date(Date.now() - ONLINE_WINDOW_MS).toISOString()
   const { data: onlineRows } = await supabase.from('rc_players')
     .select('agent_no, last_seen_at').in('agent_no', filtered.map((s) => s.agentNo))
+  const lastSeenByAgent = new Map((onlineRows || []).map((r: any) => [r.agent_no as string, r.last_seen_at as string | null]))
   const onlineSet = new Set((onlineRows || [])
     .filter((r: any) => r.last_seen_at && r.last_seen_at >= since)
     .map((r: any) => r.agent_no as string))
+  // last_seen_at is null for a meaningful chunk of agents (older accounts,
+  // or whatever screen sets it never got opened) — real streaming activity
+  // is a truer "can this person actually be reached" signal than that one
+  // field alone, and it's what quietDaysByAgent already computes for the
+  // idle-teammate check above, just reused here for a different purpose.
+  const quietDays = await quietDaysByAgent(supabase, filtered.map((s) => s.agentNo))
 
   const districtNames = new Map(content.districts.map((d: any) => [d.id, d.name]))
   const restoreDays = restorationDays(content)
@@ -1420,6 +1427,8 @@ export async function adminListStuckReconnects(supabase: SupabaseDB, content: Ga
       waitingSince: s.waitingSince,
       deadline,
       online: onlineSet.has(s.agentNo),
+      lastSeenAt: lastSeenByAgent.get(s.agentNo) || null,
+      quietDays: quietDays.get(s.agentNo) ?? IDLE_DAYS + 1,
     }
   }).sort((a, b) => a.waitingSince.localeCompare(b.waitingSince))
 

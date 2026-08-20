@@ -1551,6 +1551,38 @@ function fmtDeadline(iso) {
   return days <= 1 ? ' · deadline in <1d' : ` · deadline in ${days}d`
 }
 
+// last_seen_at is null for a real chunk of accounts — quietDays (real
+// streaming activity, computed server-side) is the more trustworthy
+// reachability signal, so it leads; last_seen_at is shown alongside as a
+// second data point, not the only one.
+function fmtLastSeen(agent) {
+  const seenPart = agent.lastSeenAt
+    ? `seen ${fmtWait(agent.lastSeenAt) === 'today' ? 'today' : fmtWait(agent.lastSeenAt) + ' ago'}`
+    : 'last-seen not recorded'
+  const activePart = agent.quietDays === 0 ? 'streamed today'
+    : agent.quietDays === 1 ? 'streamed yesterday'
+    : `quiet ${agent.quietDays}d`
+  return `${seenPart} · ${activePart}`
+}
+
+// Reachable-first: recently-streamed beats "online right now" (a stale
+// online flag from a null last_seen_at shouldn't outrank someone who
+// streamed an hour ago), then online, then who's been waiting longest —
+// same ordering principle getInviteCandidates already uses for the
+// player-facing invite list, just applied to picking a PAIR instead of
+// ranking a single list.
+function reachabilityRank(agent) {
+  return agent.quietDays * 2 - (agent.online ? 1 : 0)
+}
+
+function smartPairs(agents) {
+  const sorted = agents.slice().sort((a, b) => reachabilityRank(a) - reachabilityRank(b) || a.waitingSince.localeCompare(b.waitingSince))
+  const pairs = []
+  for (let i = 0; i + 1 < sorted.length; i += 2) pairs.push([sorted[i], sorted[i + 1]])
+  const leftover = sorted.length % 2 ? sorted[sorted.length - 1] : null
+  return { pairs, leftover }
+}
+
 function reconnectRow(agent) {
   const row = document.createElement('div')
   row.className = 'adm-row'
@@ -1559,8 +1591,8 @@ function reconnectRow(agent) {
   row.innerHTML = `
     <label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1;">
       <input type="checkbox" class="reconnect-pick" ${isSelected ? 'checked' : ''}>
-      <span>${agent.online ? '🟢' : '⚪'} ${esc(agent.codename)}</span>
-      <span class="muted">waiting ${fmtWait(agent.waitingSince)}${fmtDeadline(agent.deadline)}</span>
+      <span>${agent.online ? '🟢' : '⚪'} ${esc(agent.codename)} <span class="muted">(${esc(agent.agentNo)})</span></span>
+      <span class="muted">waiting ${fmtWait(agent.waitingSince)}${fmtDeadline(agent.deadline)} · ${fmtLastSeen(agent)}</span>
     </label>
   `
   row.querySelector('.reconnect-pick').onchange = (e) => {
@@ -1576,6 +1608,20 @@ function reconnectRow(agent) {
     paintReconnectList(window.__reconnectStuck || [])
   }
   return row
+}
+
+async function connectPair(btn, a, b) {
+  btn.disabled = true
+  const res = await call('adminPairReconnect', {
+    districtId: a.districtId, goalId: a.goalId, agentA: a.agentNo, agentB: b.agentNo,
+  })
+  if (res?.success) {
+    reconnectSelected = []
+    loadReconnectList()
+  } else {
+    btn.textContent = res?.error || 'Failed — try again'
+    btn.disabled = false
+  }
 }
 
 function paintReconnectList(stuck) {
@@ -1599,6 +1645,38 @@ function paintReconnectList(stuck) {
     head.className = 'adm-card-head'
     head.innerHTML = `<h2>${esc(agents[0].districtName)}</h2><span class="muted">${agents.length} waiting</span>`
     card.appendChild(head)
+
+    // Smart suggestions first — the most reachable agents paired together,
+    // ready to connect with one click. Manual override list stays below for
+    // when the admin wants a different combination.
+    const { pairs, leftover } = smartPairs(agents)
+    if (pairs.length) {
+      const suggestBox = document.createElement('div')
+      suggestBox.innerHTML = '<div class="muted" style="margin:8px 0 4px;">Suggested (most reachable paired first)</div>'
+      for (const [a, b] of pairs) {
+        const sRow = document.createElement('div')
+        sRow.className = 'adm-row'
+        sRow.style.cssText = 'justify-content:space-between; align-items:center; margin-bottom:6px;'
+        const label = document.createElement('span')
+        label.innerHTML = `${a.online ? '🟢' : '⚪'} ${esc(a.codename)} <span class="muted">(${esc(a.agentNo)})</span> ↔ ${b.online ? '🟢' : '⚪'} ${esc(b.codename)} <span class="muted">(${esc(b.agentNo)})</span>`
+        const btn = document.createElement('button')
+        btn.className = 'btn btn-primary adm-mutate-btn'
+        btn.type = 'button'
+        btn.textContent = 'Connect'
+        btn.onclick = () => connectPair(btn, a, b)
+        sRow.append(label, btn)
+        suggestBox.appendChild(sRow)
+      }
+      if (leftover) {
+        const oddOut = document.createElement('div')
+        oddOut.className = 'muted'
+        oddOut.textContent = `${leftover.codename} (${leftover.agentNo}) has no match yet — odd one out this round.`
+        suggestBox.appendChild(oddOut)
+      }
+      card.appendChild(suggestBox)
+      card.appendChild(document.createElement('hr'))
+    }
+
     for (const a of agents) card.appendChild(reconnectRow(a))
 
     const picked = reconnectSelected.filter((s) => `${s.districtId}::${s.goalId}` === key)
@@ -1609,21 +1687,8 @@ function paintReconnectList(stuck) {
       const btn = document.createElement('button')
       btn.className = 'btn btn-primary adm-mutate-btn'
       btn.type = 'button'
-      btn.textContent = `Connect ${picked[0].codename} ↔ ${picked[1].codename}`
-      btn.onclick = async () => {
-        btn.disabled = true
-        const res = await call('adminPairReconnect', {
-          districtId: picked[0].districtId, goalId: picked[0].goalId,
-          agentA: picked[0].agentNo, agentB: picked[1].agentNo,
-        })
-        if (res?.success) {
-          reconnectSelected = []
-          loadReconnectList()
-        } else {
-          btn.textContent = res?.error || 'Failed — try again'
-          btn.disabled = false
-        }
-      }
+      btn.textContent = `Connect ${picked[0].codename} ↔ ${picked[1].codename} (manual pick)`
+      btn.onclick = () => connectPair(btn, picked[0], picked[1])
       connectRow.appendChild(btn)
       card.appendChild(connectRow)
     }
