@@ -1332,3 +1332,139 @@ export async function adminAutoAssignMissions(supabase: SupabaseDB, params: any)
 
   return { success: true, missionsCreated: created.length, agentsAssigned: groups.length * requiredAgents, agentsLeftOver: leftover }
 }
+
+/** Admin: every agent across every district currently stuck alone in an open
+ *  'connect' reconnect mission — no live pending invite, not already done via
+ *  a completed mission elsewhere, and still actively restoring that district.
+ *  Nothing else surfaces this: an open mission never expires just because
+ *  nobody's watching it (see INVITE_TTL_MS's own doc comment for why), so an
+ *  agent who opened one and never got a partner can sit invisible for the
+ *  district's entire restoration window with no signal anywhere that they
+ *  need help. Built for the admin panel's Reconnect tab so a human can see
+ *  who's actually waiting and pair specific people, not just run a random
+ *  batch shuffle (see adminAutoAssignMissions above for that alternative). */
+export async function adminListStuckReconnects(supabase: SupabaseDB, content: GameContent) {
+  const { data: openMissions } = await supabase.from('rc_reconnect_missions')
+    .select('id, district_id, goal_id').eq('status', 'open')
+  if (!openMissions?.length) return { success: true, stuck: [] }
+
+  const missionIds = openMissions.map((m: any) => m.id)
+  const { data: allParticipants } = await supabase.from('rc_reconnect_participants')
+    .select('mission_id, agent_no, status, joined_at').in('mission_id', missionIds)
+  const byMission = new Map<string, any[]>()
+  for (const p of allParticipants || []) {
+    if (!byMission.has(p.mission_id)) byMission.set(p.mission_id, [])
+    byMission.get(p.mission_id)!.push(p)
+  }
+
+  // Solo missions only: exactly one joined participant and no live invite —
+  // a mission still mid-negotiation (an unanswered invite less than
+  // INVITE_TTL_MS old) isn't "stuck," it's just waiting on a normal response.
+  const soloAgents: { agentNo: string; districtId: string; goalId: string; waitingSince: string }[] = []
+  for (const m of openMissions) {
+    const rows = byMission.get(m.id) || []
+    const joined = rows.filter((r: any) => r.status === 'joined')
+    const liveInvited = rows.filter((r: any) => r.status === 'invited' && !inviteExpired(r))
+    if (joined.length === 1 && liveInvited.length === 0) {
+      soloAgents.push({ agentNo: joined[0].agent_no, districtId: m.district_id, goalId: m.goal_id, waitingSince: joined[0].joined_at })
+    }
+  }
+  if (!soloAgents.length) return { success: true, stuck: [] }
+
+  // Drop anyone who already finished this exact goal via a different mission
+  // (a dangling duplicate — see findMyCompletedMission's doc comment) or who
+  // is no longer actively restoring that district at all.
+  const goalKeys = [...new Set(soloAgents.map((s) => `${s.districtId}::${s.goalId}`))]
+  const doneSets = new Map<string, Set<string>>()
+  for (const key of goalKeys) {
+    const [districtId, goalId] = key.split('::')
+    doneSets.set(key, await agentsDoneWithGoal(supabase, districtId, goalId))
+  }
+  const agentNos = [...new Set(soloAgents.map((s) => s.agentNo))]
+  const { data: pdRows } = await supabase.from('rc_player_districts')
+    .select('agent_no, district_id, status, activated_at').in('agent_no', agentNos)
+  const pdByKey = new Map<string, any>()
+  for (const r of pdRows || []) pdByKey.set(`${r.agent_no}::${r.district_id}`, r)
+
+  const filtered = soloAgents.filter((s) => {
+    if (doneSets.get(`${s.districtId}::${s.goalId}`)?.has(s.agentNo)) return false
+    return pdByKey.get(`${s.agentNo}::${s.districtId}`)?.status === 'active'
+  })
+  if (!filtered.length) return { success: true, stuck: [] }
+
+  const names = await codenameMap(supabase, filtered.map((s) => s.agentNo))
+  const since = new Date(Date.now() - ONLINE_WINDOW_MS).toISOString()
+  const { data: onlineRows } = await supabase.from('rc_players')
+    .select('agent_no, last_seen_at').in('agent_no', filtered.map((s) => s.agentNo))
+  const onlineSet = new Set((onlineRows || [])
+    .filter((r: any) => r.last_seen_at && r.last_seen_at >= since)
+    .map((r: any) => r.agent_no as string))
+
+  const districtNames = new Map(content.districts.map((d: any) => [d.id, d.name]))
+  const restoreDays = restorationDays(content)
+
+  const stuck = filtered.map((s) => {
+    const pd = pdByKey.get(`${s.agentNo}::${s.districtId}`)
+    // When they'll be dropped from the district entirely for missing the
+    // deadline — the "no active member gets suffered" number this feature
+    // exists to make visible before that happens, not after.
+    const deadline = pd?.activated_at
+      ? new Date(new Date(pd.activated_at).getTime() + restoreDays * 86400000).toISOString()
+      : null
+    return {
+      agentNo: s.agentNo,
+      codename: names.get(s.agentNo) || s.agentNo,
+      districtId: s.districtId,
+      districtName: districtNames.get(s.districtId) || s.districtId,
+      goalId: s.goalId,
+      waitingSince: s.waitingSince,
+      deadline,
+      online: onlineSet.has(s.agentNo),
+    }
+  }).sort((a, b) => a.waitingSince.localeCompare(b.waitingSince))
+
+  return { success: true, stuck }
+}
+
+/** Admin: directly pair two currently-stuck agents (same district + goal)
+ *  into one fresh mission, both already 'joined' — the same "admin already
+ *  did the assigning" shortcut adminAutoAssignMissions uses for its shuffled
+ *  batch groups above, just for one hand-picked pair instead of a random
+ *  one. Their old dangling solo missions are left in place rather than
+ *  deleted: harmless, since findMyMission already prefers a genuinely
+ *  paired mission over a solo one (see its own doc comment) — same
+ *  never-destructive-just-outranked pattern every other dangling-mission
+ *  case in this file follows. */
+export async function adminPairReconnect(supabase: SupabaseDB, params: any) {
+  const districtId = String(params.districtId || '')
+  const goalId = String(params.goalId || '')
+  const agentA = String(params.agentA || '').trim().toUpperCase()
+  const agentB = String(params.agentB || '').trim().toUpperCase()
+  if (!districtId || !goalId || !agentA || !agentB) return { success: false, error: 'missing_params' }
+  if (agentA === agentB) return { success: false, error: 'same_agent' }
+
+  const { data: pdRows } = await supabase.from('rc_player_districts')
+    .select('agent_no, status, goals').eq('district_id', districtId).in('agent_no', [agentA, agentB])
+  for (const agentNo of [agentA, agentB]) {
+    const pd = (pdRows || []).find((r: any) => r.agent_no === agentNo)
+    if (!pd || pd.status !== 'active' || pd.goals?.reconnect?.id !== goalId) {
+      return { success: false, error: 'agent_not_eligible', agentNo }
+    }
+  }
+
+  const requiredAgents = (pdRows || [])[0]?.goals?.reconnect?.config?.requiredAgents || 2
+  const { data: mission, error } = await supabase.from('rc_reconnect_missions').insert({
+    district_id: districtId, goal_id: goalId, required_agents: requiredAgents,
+    track_label: 'reconnect:connect', track_artist: null, track_aliases: [],
+    created_by: '__admin__',
+  }).select().single()
+  if (error || !mission) return { success: false, error: error?.message || 'insert_failed' }
+
+  const { error: partErr } = await supabase.from('rc_reconnect_participants').insert([
+    { mission_id: mission.id, agent_no: agentA, status: 'joined' },
+    { mission_id: mission.id, agent_no: agentB, status: 'joined' },
+  ])
+  if (partErr) return { success: false, error: partErr.message }
+
+  return { success: true, missionId: mission.id }
+}

@@ -29,6 +29,7 @@ import {
   getReconnectMission, getInviteCandidates, openReconnectMission,
   inviteReconnectMission, removeReconnectParticipant, respondReconnectInvite, adminAutoAssignMissions,
   getMyInvites, sendReconnectMessage, submitReconnectMissionCipherAnswer,
+  adminListStuckReconnects, adminPairReconnect,
 } from './lib/reconnect-missions.ts'
 import { submitReconnectPuzzleAnswer } from './lib/reconnect-puzzle.ts'
 import { getLeaderboard } from './lib/leaderboard.ts'
@@ -199,6 +200,10 @@ const ROUTES: Record<string, Route> = {
   // at once — the rest of that system's admin config now lives on the goal
   // itself (adminAddGoal/adminUpdateGoal below), not a separate panel.
   adminAutoAssignMissions: { auth: 'admin', handler: (sb, p) => adminAutoAssignMissions(sb, p) },
+  // Reconnect tab: who's stuck alone waiting for a partner, and a way to
+  // pair two of them by hand instead of adminAutoAssignMissions's shuffle.
+  adminListStuckReconnects: { auth: 'admin', handler: async (sb) => adminListStuckReconnects(sb, await loadContent(sb)) },
+  adminPairReconnect: { auth: 'admin', handler: (sb, p) => adminPairReconnect(sb, p) },
 
   // ── Admin panel (admin.html) — Goals ── rc_goals is per-district (track,
   // album, and reconnect kinds) — see goals.ts's module comment and

@@ -329,6 +329,7 @@
   <button class="adm-tab" data-tab="goals" type="button">🎯 Goals</button>
   <button class="adm-tab" data-tab="lookup" type="button">🔎 Agent Lookup</button>
   <button class="adm-tab" data-tab="vma" type="button">🎫 VMA Review</button>
+  <button class="adm-tab" data-tab="reconnect" type="button">🔗 Reconnect</button>
 </div>
 
 <!-- ── Red Zone ── -->
@@ -550,6 +551,21 @@
       <span id="vmaPageLabel" class="muted"></span>
       <button class="btn btn-ghost" id="btnVmaNext" type="button">Next →</button>
     </div>
+  </section>
+</div>
+
+<!-- ── Reconnect ── -->
+<div class="adm-panel" id="panel-reconnect" data-panel="reconnect" hidden>
+  <section class="adm-card">
+    <div class="adm-card-head">
+      <h2>Agents stuck waiting for a partner</h2>
+      <button class="btn btn-ghost" id="btnLoadReconnect" type="button">↻ Load</button>
+    </div>
+    <p class="muted">Alone in an open reconnect mission with no live invite pending — nothing else in the
+      game surfaces these, so they can sit unpaired for their whole restoration window. Select two agents
+      in the same group below, then connect them directly (skips the invite/accept step, same as batch
+      auto-assign does).</p>
+    <div id="reconnectList"></div>
   </section>
 </div>
 
@@ -1515,6 +1531,115 @@ $('btnRecheckAllVma').onclick = () => recheckAllVmaPending()
 $('btnVmaPrev').onclick = () => { vmaOffset = Math.max(0, vmaOffset - VMA_PAGE_SIZE); loadVmaPage() }
 $('btnVmaNext').onclick = () => { vmaOffset += VMA_PAGE_SIZE; loadVmaPage() }
 document.querySelector('[data-tab="vma"]').addEventListener('click', () => loadVmaPage())
+
+/* ── Reconnect ── */
+// At most 2 selections at once, both from the same district+goal group —
+// picking a third or a mismatched group replaces the selection instead of
+// erroring, so the admin never has to explicitly "clear" first.
+let reconnectSelected = []
+
+function fmtWait(iso) {
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000)
+  return days <= 0 ? 'today' : `${days}d`
+}
+
+function fmtDeadline(iso) {
+  if (!iso) return ''
+  const msLeft = new Date(iso).getTime() - Date.now()
+  if (msLeft <= 0) return ' · deadline passed'
+  const days = Math.floor(msLeft / 86400000)
+  return days <= 1 ? ' · deadline in <1d' : ` · deadline in ${days}d`
+}
+
+function reconnectRow(agent) {
+  const row = document.createElement('div')
+  row.className = 'adm-row'
+  row.style.cssText = 'justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border);'
+  const isSelected = reconnectSelected.some((s) => s.agentNo === agent.agentNo)
+  row.innerHTML = `
+    <label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1;">
+      <input type="checkbox" class="reconnect-pick" ${isSelected ? 'checked' : ''}>
+      <span>${agent.online ? '🟢' : '⚪'} ${esc(agent.codename)}</span>
+      <span class="muted">waiting ${fmtWait(agent.waitingSince)}${fmtDeadline(agent.deadline)}</span>
+    </label>
+  `
+  row.querySelector('.reconnect-pick').onchange = (e) => {
+    if (e.currentTarget.checked) {
+      // Drop any prior pick from a different district/goal group — a pair
+      // only ever makes sense within the same one.
+      reconnectSelected = reconnectSelected.filter((s) => s.districtId === agent.districtId && s.goalId === agent.goalId)
+      if (reconnectSelected.length >= 2) reconnectSelected.shift()
+      reconnectSelected.push(agent)
+    } else {
+      reconnectSelected = reconnectSelected.filter((s) => s.agentNo !== agent.agentNo)
+    }
+    paintReconnectList(window.__reconnectStuck || [])
+  }
+  return row
+}
+
+function paintReconnectList(stuck) {
+  window.__reconnectStuck = stuck
+  const list = $('reconnectList')
+  list.innerHTML = ''
+  if (!stuck.length) { list.innerHTML = '<div class="adm-empty">Nobody stuck right now.</div>'; return }
+
+  const groups = new Map()
+  for (const a of stuck) {
+    const key = `${a.districtId}::${a.goalId}`
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key).push(a)
+  }
+
+  for (const [key, agents] of groups) {
+    const card = document.createElement('div')
+    card.className = 'adm-card'
+    card.style.marginTop = '10px'
+    const head = document.createElement('div')
+    head.className = 'adm-card-head'
+    head.innerHTML = `<h2>${esc(agents[0].districtName)}</h2><span class="muted">${agents.length} waiting</span>`
+    card.appendChild(head)
+    for (const a of agents) card.appendChild(reconnectRow(a))
+
+    const picked = reconnectSelected.filter((s) => `${s.districtId}::${s.goalId}` === key)
+    if (picked.length === 2) {
+      const connectRow = document.createElement('div')
+      connectRow.className = 'adm-row'
+      connectRow.style.marginTop = '10px'
+      const btn = document.createElement('button')
+      btn.className = 'btn btn-primary adm-mutate-btn'
+      btn.type = 'button'
+      btn.textContent = `Connect ${picked[0].codename} ↔ ${picked[1].codename}`
+      btn.onclick = async () => {
+        btn.disabled = true
+        const res = await call('adminPairReconnect', {
+          districtId: picked[0].districtId, goalId: picked[0].goalId,
+          agentA: picked[0].agentNo, agentB: picked[1].agentNo,
+        })
+        if (res?.success) {
+          reconnectSelected = []
+          loadReconnectList()
+        } else {
+          btn.textContent = res?.error || 'Failed — try again'
+          btn.disabled = false
+        }
+      }
+      connectRow.appendChild(btn)
+      card.appendChild(connectRow)
+    }
+    list.appendChild(card)
+  }
+}
+
+async function loadReconnectList() {
+  const list = $('reconnectList')
+  list.innerHTML = `<div class="adm-empty"><span class="adm-spin"></span> Loading…</div>`
+  const res = await call('adminListStuckReconnects')
+  if (!res?.success) { list.innerHTML = `<div class="adm-empty">${esc(res?.error || 'Failed to load')}</div>`; return }
+  paintReconnectList(res.stuck)
+}
+$('btnLoadReconnect').onclick = () => loadReconnectList()
+document.querySelector('[data-tab="reconnect"]').addEventListener('click', () => loadReconnectList())
 
 tryStoredKey()
 </script>
