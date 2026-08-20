@@ -3442,10 +3442,19 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .vma-tag { font-family: var(--mono); font-size: 9.5px; letter-spacing: 1.5px; padding: 2px 7px; border-radius: 20px; }
 .vma-tag.power { background: rgba(217,173,95,0.16); color: var(--gold); }
 .vma-tag.double { background: rgba(217,173,95,0.16); color: var(--gold); }
+/* Gold, not crimson — crimson stays reserved for Red Zone alerts. Bolder
+   weight + a slow pulse is what carries the urgency here instead. */
+.vma-tag.closing { background: rgba(217,173,95,0.22); color: var(--gold); font-weight: 700; animation: vmaClosingPulse 2.2s ease-in-out infinite; }
+@keyframes vmaClosingPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+@media (prefers-reduced-motion: reduce) { .vma-tag.closing { animation: none; } }
+.vma-banner.closing-soon { border-color: rgba(217,173,95,0.4); }
 .vma-banner-title { font-family: var(--disp); font-weight: 800; font-size: 15.5px; margin-top: 6px; position: relative; }
 .vma-banner-msg { color: var(--muted); font-size: 13px; line-height: 1.5; margin-top: 4px; position: relative; }
 .vma-banner-progress { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 8px; position: relative; }
 .vma-banner-progress.is-ready { color: var(--gold); font-weight: 700; }
+.vma-banner-community { font-family: var(--mono); font-size: 10.5px; color: var(--purple-lt); margin-top: 4px; position: relative; }
+.vma-community-flag { font-family: var(--mono); font-size: 11px; color: var(--purple-lt); padding: 8px 10px;
+  border-radius: 10px; background: var(--panel); border: 1px solid var(--border); margin-bottom: 10px; }
 /* Power Hour countdown + reminder toggle — shown on the World-screen
    banner and again inside the mission sheet, same markup both places. */
 .vma-power-hour-next { display: flex; align-items: center; justify-content: space-between; gap: 8px;

@@ -175,6 +175,13 @@ export async function getVmaBanner(supabase: SupabaseDB, content: GameContent, a
   const todayVotes = (rows || []).reduce((s: number, r: any) => s + r.votes_logged, 0)
   const todayCap = cap * cfg.categories.length
 
+  // Every agent's votes today, not just this one's — a live "the whole
+  // fandom logged N votes today" figure reads as collective momentum,
+  // which a single agent's own capped count (max 20/day) can't convey.
+  const { data: communityRows } = await supabase.from('rc_vma_votes')
+    .select('votes_logged').eq('event_id', eventId).eq('vote_day', day).eq('verify_status', 'verified')
+  const communityVotesToday = (communityRows || []).reduce((s: number, r: any) => s + r.votes_logged, 0)
+
   return {
     eventId, title: cfg.title, ended: false,
     // (7) Both can be true on the same real-world day (e.g. a Double Day
@@ -183,7 +190,7 @@ export async function getVmaBanner(supabase: SupabaseDB, content: GameContent, a
     isPowerHour: isPowerHour(cfg, now), isDoubleDay: isDoubleDay(cfg, now),
     nextPowerHourStartUtc: nextPowerHourStart(cfg, now)?.toISOString() || null,
     periodEndUtc: cfg.period_end_utc,
-    todayVotes, todayCap,
+    todayVotes, todayCap, communityVotesToday,
     chestFill: chest.success ? chest.fillCount : 0,
     chestThreshold: chest.success ? chest.threshold : null,
     chestReady: chest.success ? chest.ready : false,
@@ -219,6 +226,13 @@ export async function getVmaStatus(supabase: SupabaseDB, content: GameContent, p
   for (const c of cfg.categories) usedByCategory[c] = 0
   for (const r of rows || []) usedByCategory[r.category] = (usedByCategory[r.category] || 0) + r.votes_logged
 
+  // Same fandom-wide total shown on the World-screen banner (getVmaBanner)
+  // — repeated here so it still reads inside the mission sheet without
+  // needing both endpoints called together.
+  const { data: communityRows } = await supabase.from('rc_vma_votes')
+    .select('votes_logged').eq('event_id', eventId).eq('vote_day', day).eq('verify_status', 'verified')
+  const communityVotesToday = (communityRows || []).reduce((s: number, r: any) => s + r.votes_logged, 0)
+
   return {
     success: true,
     eventId,
@@ -231,6 +245,7 @@ export async function getVmaStatus(supabase: SupabaseDB, content: GameContent, p
     dailyCap: cap,
     remaining: Object.fromEntries(cfg.categories.map((c) => [c, Math.max(0, cap - (usedByCategory[c] || 0))])),
     watermarkCode: dailyWatermarkCode(cfg, day),
+    communityVotesToday,
   }
 }
 

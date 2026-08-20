@@ -146,6 +146,29 @@ function attachCountdownTicker(span, untilIso, prefix) {
   const interval = setInterval(tick, 1000)
 }
 
+/* ── Closing-soon alert ────────────────────────────────────────────────
+ * A lapsed player who opens the app once a week has no way to know the
+ * whole campaign — not just today's cap — is about to end for good. The
+ * countdown already buried in the mission sheet ("⏳ Voting Xd Xh left")
+ * doesn't surface that until they've already opened the mission; this
+ * puts it on the banner itself once it's genuinely urgent, plus a single
+ * toast the first time that becomes true so it isn't easy to miss even
+ * without opening anything. */
+const CLOSING_SOON_MS = 48 * 3_600_000
+const CLOSING_ALERTED_KEY_PREFIX = 'vma_closing_alerted_'
+
+function isClosingSoon(periodEndUtc) {
+  const ms = new Date(periodEndUtc).getTime() - Date.now()
+  return ms > 0 && ms <= CLOSING_SOON_MS
+}
+
+function maybeAlertClosingSoon(eventId, periodEndUtc) {
+  const key = CLOSING_ALERTED_KEY_PREFIX + eventId
+  if (localStorage.getItem(key)) return
+  localStorage.setItem(key, '1')
+  toast('⏰ Voting closes soon — this is your last chance to send in votes!', 6000)
+}
+
 /** Small event banner for the World screen. Empty (childless) when no
  *  event is live, so screen-world.js can append it unconditionally same as
  *  broadcastCards. */
@@ -154,10 +177,14 @@ export function vmaEventCard(state) {
   const v = state.vma
   if (!v) return wrap
 
-  const card = el('section', 'vma-banner' + (v.chestReady ? ' chest-ready' : ''))
+  const closingSoon = !v.ended && isClosingSoon(v.periodEndUtc)
+  if (closingSoon) maybeAlertClosingSoon(v.eventId, v.periodEndUtc)
+
+  const card = el('section', 'vma-banner' + (v.chestReady ? ' chest-ready' : '') + (closingSoon ? ' closing-soon' : ''))
   // (7) Both can be true at once (e.g. a Power Hour that falls inside a
   // Double Day) — show every tag that applies, not just the first match.
   const tags = []
+  if (closingSoon) tags.push('<span class="vma-tag closing">⏰ CLOSING SOON</span>')
   if (v.isPowerHour) tags.push('<span class="vma-tag power">⚡ POWER HOUR</span>')
   if (v.isDoubleDay) tags.push('<span class="vma-tag double">🔥 DOUBLE DAY</span>')
 
@@ -178,11 +205,14 @@ export function vmaEventCard(state) {
   const progressLine = v.chestReady
     ? '<div class="vma-banner-progress is-ready">📦 Supply Chest ready!</div>'
     : `<div class="vma-banner-progress">Today: ${v.todayVotes}/${v.todayCap} across both categories &middot; 📦 ${v.chestFill}/${v.chestThreshold}</div>`
+  const communityLine = v.communityVotesToday > 0
+    ? `<div class="vma-banner-community">👥 ${v.communityVotesToday.toLocaleString()} votes from ARMY today</div>` : ''
   card.innerHTML = `
     <div class="vma-banner-head"><span class="vma-dot"></span>LIVE EVENT ${tags.join(' ')}</div>
     <div class="vma-banner-title">${esc(v.title || 'VMA Voting Mission')}</div>
-    <p class="vma-banner-msg">Vote, send your proof, and earn Supply Chests.</p>
+    <p class="vma-banner-msg">${closingSoon ? 'Voting closes soon — send in your last votes before it\'s too late.' : 'Vote, send your proof, and earn Supply Chests.'}</p>
     ${progressLine}
+    ${communityLine}
   `
 
   // Power Hour rewards voting the moment it opens, so a countdown + a
@@ -252,9 +282,14 @@ function paintMissionSheet(sheet, status) {
 
   // (7) Not mutually exclusive — show every condition that's actually true.
   const tags = []
+  if (isClosingSoon(cfg.period_end_utc)) tags.push('<div class="vma-flag closing">⏰ CLOSING SOON · last chance to send in votes</div>')
   if (status.isPowerHour) tags.push('<div class="vma-flag power">⚡ POWER HOUR · voting is boosted right now</div>')
   if (status.isDoubleDay) tags.push('<div class="vma-flag double">🔥 DOUBLE DAY · up to double votes count today</div>')
   if (tags.length) sheet.appendChild(el('div', '', tags.join('')))
+
+  if (status.communityVotesToday > 0) {
+    sheet.appendChild(el('div', 'vma-community-flag', `👥 ${status.communityVotesToday.toLocaleString()} votes from ARMY today`))
+  }
 
   if (!status.isPowerHour && status.nextPowerHourStartUtc) {
     const row = el('div', 'vma-power-hour-next in-sheet')
