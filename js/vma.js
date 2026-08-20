@@ -169,6 +169,38 @@ function maybeAlertClosingSoon(eventId, periodEndUtc) {
   toast('⏰ Voting closes soon — this is your last chance to send in votes!', 6000)
 }
 
+/* ── Share ─────────────────────────────────────────────────────────────
+ * Pulling in new voters works better as "here's what's happening right
+ * now, come help" than a bare link — the community vote count and Group
+ * Chest progress are the actual hook (same reasoning as share.js's city
+ * grid: a number people can watch move is what gets posted, not a plain
+ * invite). navigator.share hands straight to the OS share sheet on
+ * mobile (Instagram Stories included); clipboard is the desktop/
+ * unsupported-browser fallback, same pattern as share.js's openShare. */
+function buildVmaShareText(v) {
+  const lines = ['🎤 OP: ReConnect — Vote for BTS', '']
+  if (v.communityVotesToday > 0) lines.push(`👥 ${v.communityVotesToday.toLocaleString()} votes from ARMY today`)
+  if (v.communityChestNextThreshold) {
+    lines.push(v.communityChestClaimable
+      ? '🎁 Group Supply Chest is READY — come claim it'
+      : `🎁 Group Chest: ${(v.communityChestCumulative || 0).toLocaleString()}/${v.communityChestNextThreshold.toLocaleString()} overall votes`)
+  }
+  lines.push('', 'Every vote counts toward it. Join us →')
+  try { lines.push(new URL('index.html', location.href).href) } catch { lines.push('https://hopetrackers.org/') }
+  return lines.join('\n')
+}
+
+async function shareVmaBanner(v) {
+  const text = buildVmaShareText(v)
+  if (typeof navigator.share === 'function') {
+    try { await navigator.share({ text }); return } catch (e) {
+      if (e?.name === 'AbortError') return // they changed their mind
+    }
+  }
+  try { await navigator.clipboard.writeText(text); toast('Copied — go post it') }
+  catch { toast("Couldn't copy — try again") }
+}
+
 /** Small event banner for the World screen. Empty (childless) when no
  *  event is live, so screen-world.js can append it unconditionally same as
  *  broadcastCards. */
@@ -200,6 +232,11 @@ export function vmaEventCard(state) {
     const go = el('button', 'btn btn-primary vma-banner-btn' + (anyChestReady ? ' has-dot' : ''), 'CLAIM CHEST')
     go.onclick = () => openVmaMission()
     card.appendChild(go)
+    const share = el('button', 'vma-banner-share', '📤')
+    share.type = 'button'
+    share.setAttribute('aria-label', 'Share this mission')
+    share.onclick = () => shareVmaBanner(v)
+    card.querySelector('.vma-banner-head').appendChild(share)
     wrap.appendChild(card)
     return wrap
   }
@@ -222,6 +259,11 @@ export function vmaEventCard(state) {
     ${communityLine}
     ${communityChestLine}
   `
+  const share = el('button', 'vma-banner-share', '📤')
+  share.type = 'button'
+  share.setAttribute('aria-label', 'Share this mission')
+  share.onclick = () => shareVmaBanner(v)
+  card.querySelector('.vma-banner-head').appendChild(share)
 
   // Power Hour rewards voting the moment it opens, so a countdown + a
   // reminder toggle here is worth more to a fan than only a badge once

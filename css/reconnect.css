@@ -3439,6 +3439,10 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .vma-banner-head { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 10.5px;
   letter-spacing: 2px; text-transform: uppercase; color: var(--purple-lt); flex-wrap: wrap; position: relative; }
 .vma-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--purple-lt); animation: rzBlink 1.4s ease-in-out infinite; }
+.vma-banner-share { margin-left: auto; flex: none; width: 26px; height: 26px; border-radius: 50%;
+  border: 1px solid var(--border-str); background: var(--panel); font-size: 12px; line-height: 1;
+  cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.vma-banner-share:hover { border-color: var(--purple); background: var(--purple-soft); }
 .vma-tag { font-family: var(--mono); font-size: 9.5px; letter-spacing: 1.5px; padding: 2px 7px; border-radius: 20px; }
 .vma-tag.power { background: rgba(217,173,95,0.16); color: var(--gold); }
 .vma-tag.double { background: rgba(217,173,95,0.16); color: var(--gold); }
