@@ -13,6 +13,7 @@ import { el, esc, hideOverlay, toast, getState, setState } from './state.js'
 import { call } from './api.js'
 import { getAgentNo } from './session.js'
 import { itemArt } from './items-art.js'
+import { openBackupPassFlow } from './backup-pass.js'
 
 export { itemArt }
 
@@ -83,6 +84,14 @@ export function itemSheet(item, opts = {}) {
   if (item.kind === 'ticket' && !item.usedAt) {
     const go = el('button', 'btn btn-primary', '🎫 Use the ticket')
     go.onclick = () => { hideOverlay(); useTicket(item) }
+    sheet.appendChild(go)
+  }
+
+  // Backup Pass had a backend all along (open/join/close/complete) with no
+  // way to ever reach it — this is that missing door.
+  if (item.itemId === 'backup-pass' && !item.usedAt) {
+    const go = el('button', 'btn btn-primary', '🤝 Open to a helper')
+    go.onclick = () => { hideOverlay(); openBackupPassFlow(item) }
     sheet.appendChild(go)
   }
 

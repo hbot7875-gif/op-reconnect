@@ -57,9 +57,14 @@ export async function openChest(supabase: SupabaseDB, content: GameContent, para
   if (error) return { success: false, error: error.message }
   if (!result?.success) return { success: false, error: result?.error || 'open_failed' }
 
+  // rc_supply_chest_open now grants several rewards per open (see migration
+  // 20260820120000) — each roll's own detail fields spread onto its own
+  // object, same shape a single reward used to have, just one per array
+  // entry instead of a single top-level field.
+  const rewards = (result.rewards || []).map((r: any) => ({ kind: r.kind, ...(r.detail || {}) }))
   return {
     success: true,
-    reward: { kind: result.rewardKind, ...(result.rewardDetail || {}) },
+    rewards,
     fillRemaining: result.fillRemaining,
     threshold: cfg.threshold,
   }

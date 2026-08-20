@@ -242,8 +242,8 @@ async function runChestOpen(box, chest) {
     if (btn) btn.disabled = false
     return
   }
-  await playChestReveal(box, res.reward)
-  if (res.reward?.kind === 'badge') refreshGameStateForRewards()
+  await playChestReveal(box, res.rewards || [])
+  if ((res.rewards || []).some((r) => r.kind === 'badge')) refreshGameStateForRewards()
 }
 
 async function refreshGameStateForRewards() {
@@ -260,13 +260,32 @@ const REWARD_COPY = {
   backup_pass: { icon: '🤝', name: 'Backup Pass' },
 }
 
-/** Shake → purple light leaks out → flash → reward card. Backup Pass and
- *  the event badge (the two rewards meant to feel special) get a longer,
- *  brighter beat than a plain resource tick. Respects reduced-motion by
- *  skipping straight to the reward card. */
-async function playChestReveal(box, reward) {
-  const visual = box.querySelector('.vma-chest-box')
+function rewardCard(reward, index, total) {
   const big = reward.kind === 'badge' || reward.kind === 'backup_pass'
+  const copy = REWARD_COPY[reward.kind] || { icon: '🎁', name: 'Reward' }
+  const name = typeof copy.name === 'function' ? copy.name(reward) : copy.name
+  const card = el('div', 'vma-chest-reward' + (big ? ' big' : ''))
+  card.innerHTML = `
+    ${total > 1 ? `<div class="vma-chest-reward-count">${index + 1} / ${total}</div>` : ''}
+    <div class="vma-chest-reward-icon">${copy.icon}</div>
+    <div class="vma-chest-reward-name">${esc(name)}</div>
+    ${reward.kind === 'backup_pass' ? '<p class="muted">Get help from another agent on one track or album mission. Find it in Pack when you\'re ready.</p>' : ''}
+    ${reward.kind === 'badge' ? '<p class="muted">Added to your Badge Collection.</p>' : ''}
+  `
+  return card
+}
+
+/** Shake → purple light leaks out → flash once, then every reward from this
+ *  open reveals one at a time (see migration 20260820120000 — a chest now
+ *  grants several, not just one) with its own "Next"/"Nice" beat, so a
+ *  3-reward open still reads as 3 distinct things worth noticing instead of
+ *  one card that happens to list three items. Backup Pass and the event
+ *  badge (the two rewards meant to feel special) get a longer, brighter
+ *  burst than a plain resource tick. Respects reduced-motion by skipping
+ *  straight to the cards. */
+async function playChestReveal(box, rewards) {
+  const visual = box.querySelector('.vma-chest-box')
+  const big = rewards.some((r) => r.kind === 'badge' || r.kind === 'backup_pass')
   const buzz = (pattern) => { try { navigator.vibrate?.(pattern) } catch {} }
 
   if (!REDUCED()) {
@@ -279,24 +298,33 @@ async function playChestReveal(box, reward) {
     await new Promise((r) => setTimeout(r, 420))
   }
 
-  const copy = REWARD_COPY[reward.kind] || { icon: '🎁', name: 'Reward' }
-  const name = typeof copy.name === 'function' ? copy.name(reward) : copy.name
-
-  box.innerHTML = ''
-  const card = el('div', 'vma-chest-reward' + (big ? ' big' : ''))
-  card.innerHTML = `
-    <div class="vma-chest-reward-icon">${copy.icon}</div>
-    <div class="vma-chest-reward-name">${esc(name)}</div>
-    ${reward.kind === 'backup_pass' ? '<p class="muted">Get help from another agent on one track or album mission. Find it in Pack when you\'re ready.</p>' : ''}
-    ${reward.kind === 'badge' ? '<p class="muted">Added to your Badge Collection.</p>' : ''}
-  `
-  box.appendChild(card)
-  const nice = el('button', 'btn btn-primary vma-add-btn', 'Nice')
-  nice.onclick = async () => {
-    const fresh = await fetchStatus()
-    if (fresh.success) showMissionSheet(fresh)
+  if (!rewards.length) {
+    box.innerHTML = ''
+    box.appendChild(el('p', 'muted', 'Nothing left to award this time — everything in the pool is already yours.'))
+    const nice = el('button', 'btn btn-primary vma-add-btn', 'Nice')
+    nice.onclick = async () => { const fresh = await fetchStatus(); if (fresh.success) showMissionSheet(fresh) }
+    box.appendChild(nice)
+    return
   }
-  box.appendChild(nice)
+
+  let i = 0
+  const showNext = () => {
+    box.innerHTML = ''
+    box.appendChild(rewardCard(rewards[i], i, rewards.length))
+    const isLast = i === rewards.length - 1
+    const btn = el('button', 'btn btn-primary vma-add-btn', isLast ? 'Nice' : 'Next reward →')
+    btn.onclick = async () => {
+      if (isLast) {
+        const fresh = await fetchStatus()
+        if (fresh.success) showMissionSheet(fresh)
+        return
+      }
+      i += 1
+      showNext()
+    }
+    box.appendChild(btn)
+  }
+  showNext()
 }
 
 /* ── step 1: choose category ───────────────────────────────────────────── */

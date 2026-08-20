@@ -3283,7 +3283,17 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .vma-chest .muted { font-size: 12.5px; margin-bottom: 10px; }
 
 .vma-chest-reward { padding: 6px 0 4px; animation: vmaHeadlinePop 0.4s ease; }
+.vma-chest-reward-count { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: 0.5px; margin-bottom: 4px; }
 .vma-chest-reward-icon { font-size: 44px; margin-bottom: 8px; }
 .vma-chest-reward.big .vma-chest-reward-icon { font-size: 56px; filter: drop-shadow(0 0 14px rgba(217,173,95,0.6)); }
 .vma-chest-reward-name { font-family: var(--disp); font-weight: 800; font-size: 17px; color: var(--gold); margin-bottom: 6px; }
 .vma-chest-reward .muted { font-size: 13px; margin-bottom: 10px; }
+
+/* ── Backup Pass ── */
+.backup-goal-list { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+.backup-goal-row { display: flex; align-items: center; justify-content: space-between; padding: 11px 13px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 12px; font-size: 14px;
+  cursor: pointer; transition: border-color 0.15s ease; text-align: left; }
+.backup-goal-row:hover { border-color: var(--purple-lt); }
+.bg-label { font-weight: 600; }
+.bg-progress { font-family: var(--mono); font-size: 12.5px; }
