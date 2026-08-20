@@ -61,8 +61,15 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
+  /* Color-cleanup pass: this ellipse used to wash the top of every single
+     screen in the app with purple-soft (0.13 alpha) at 70% width — the
+     single biggest source of the "hazy" feel, since it's present literally
+     everywhere, not tied to any actual state. Cut to a third of its former
+     footprint and reach so black/graphite carries the surface and purple
+     reads as a deliberate accent again, not ambient tint. Not removed
+     outright — a faint trace is kept so the identity isn't gone, just quiet. */
   background:
-    radial-gradient(ellipse 70% 38% at 25% -4%, var(--purple-soft) 0%, transparent 58%),
+    radial-gradient(ellipse 45% 22% at 25% -4%, rgba(139,92,246,0.055) 0%, transparent 60%),
     var(--bg);
   color: var(--text);
   font-family: var(--body);
@@ -858,10 +865,14 @@ body.red-zone .wtb.now { fill: var(--crimson); filter: drop-shadow(0 0 3px rgba(
 /* the Voyage back-glow: one big blurred disc behind the sphere.
    Opacity now scales with --charge (set inline from real b.charge in
    screen-world.js) — a fresh, uncharged network reads as dim embers, not a
-   sphere that already looks fully powered before anything's happened. */
+   sphere that already looks fully powered before anything's happened.
+   Color-cleanup pass: ceiling brought down from 0.90 to 0.55 and the blur
+   tightened — at full charge this was blooming into a full purple haze
+   behind the whole core; still clearly reads as "charged" without washing
+   the screen around it. */
 .core-glow { position: absolute; top: -12px; left: 50%; margin-left: -54px; width: 108px; height: 108px;
-  border-radius: 50%; background: var(--bomb); filter: blur(33px);
-  opacity: calc(0.06 + var(--charge) * 0.84);
+  border-radius: 50%; background: var(--bomb); filter: blur(26px);
+  opacity: calc(0.05 + var(--charge) * 0.5);
   animation: corePulse 4.5s ease-in-out infinite; transition: background 0.8s, opacity 0.9s ease; }
 .army-core.is-attack .core-glow { animation-duration: 1.1s; }
 .army-core.is-brownout .core-glow { opacity: 0.12; animation: none; }
@@ -1589,9 +1600,11 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 .ac-stage-stars i:nth-child(5) { left: 63%; top: 61%; }
 .ac-stage-stars i:nth-child(6) { left: 38%; top: 12%; }
 
+/* Color-cleanup pass: same halo pattern as the World screen's .core-glow,
+   trimmed the same way — tighter blur, lower ceiling. */
 .ac-bomb-glow { position: absolute; z-index: 0; left: 50%; top: 9px; width: 150px; height: 150px;
-  transform: translateX(-50%); border-radius: 50%; background: var(--purple); filter: blur(38px);
-  opacity: calc(0.04 + var(--fuel) * 0.42); transition: opacity 0.45s ease; }
+  transform: translateX(-50%); border-radius: 50%; background: var(--purple); filter: blur(30px);
+  opacity: calc(0.03 + var(--fuel) * 0.28); transition: opacity 0.45s ease; }
 .ac-personal-bomb { position: absolute; z-index: 2; left: 50%; top: 20px; width: 94px;
   transform: translateX(-50%); display: flex; flex-direction: column; align-items: center;
   filter: drop-shadow(0 12px 22px rgba(0,0,0,0.7)); }
@@ -3160,9 +3173,15 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 /* ── VMA Voting Mission ──────────────────────────────────────────────────
    Same shape as .redzone (js/screen-world.js's redZoneCard) but purple —
    an active live event, not an alert. Crimson stays reserved for Red Zone. */
+/* Color-cleanup pass: this card's whole background used to be a purple
+   gradient (var(--purple-soft) fading to a fainter purple) — the "VMA card
+   background haze." Surface is now the same neutral dark panel every other
+   card in the app uses; the border stays purple (a real accent marking a
+   live event) and the radar sweep stays as a small game-world detail
+   instead of the whole card being tinted. */
 .vma-banner {
   position: relative; overflow: hidden;
-  background: linear-gradient(165deg, var(--purple-soft), rgba(139,92,246,0.03));
+  background: var(--surface-2);
   border: 1px solid rgba(139,92,246,0.42); border-radius: var(--r-lg); padding: 13px 15px 14px;
 }
 /* A faint radar sweep behind the copy — the one "game-world" detail this
@@ -3170,7 +3189,7 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
    texture, not another animated UI element competing for attention. */
 .vma-banner::before {
   content: ''; position: absolute; inset: -40% -20% auto auto; width: 160px; height: 160px;
-  background: conic-gradient(from 0deg, transparent 0deg, rgba(139,92,246,0.16) 18deg, transparent 40deg);
+  background: conic-gradient(from 0deg, transparent 0deg, rgba(139,92,246,0.12) 18deg, transparent 40deg);
   animation: vmaRadar 5s linear infinite; pointer-events: none;
 }
 @keyframes vmaRadar { to { transform: rotate(360deg); } }
@@ -3290,8 +3309,11 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .vma-chest-reward .muted { font-size: 13px; margin-bottom: 10px; }
 
 /* ── Backup Pass ── */
+/* Color-cleanup pass: same purple-wash-background pattern as the old VMA
+   banner — replaced with the neutral panel surface; the border stays
+   purple as the meaningful "you have something ready" signal. */
 .backup-pass-tile { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
-  padding: 12px 14px; border-radius: var(--r-lg); background: linear-gradient(160deg, var(--purple-soft), var(--panel));
+  padding: 12px 14px; border-radius: var(--r-lg); background: var(--panel);
   border: 1px solid rgba(139,92,246,0.35); cursor: pointer; margin: 12px 0; transition: transform 0.15s ease; }
 .backup-pass-tile:hover { transform: scale(1.01); }
 .backup-pass-tile.is-locked { background: var(--panel); border-color: var(--border); cursor: default; opacity: 0.75; }
