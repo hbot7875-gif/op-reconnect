@@ -90,6 +90,22 @@ export function renderResources(container, state) {
     walletTile('⏳', p.deadlineExtensionCharges || 0, 'Deadline Extensions'),
   )
   wrap.appendChild(wallet)
+  // Backup Pass is a real Supply Chest drop, but it only ever showed up in
+  // Pack once you already owned one — a player who'd never gotten one had
+  // no way to even discover the mechanic exists. Shown here regardless of
+  // count, same as the wallet tiles above, instead of purely inventory-
+  // driven like the collectible grid below.
+  const items0 = state.items || []
+  const backupItem = items0.find((i) => i.itemId === 'backup-pass' && !i.usedAt)
+  const backupTile = el('button', 'backup-pass-tile' + (backupItem ? '' : ' is-locked'))
+  backupTile.type = 'button'
+  backupTile.innerHTML = backupItem
+    ? `<span class="bpt-icon">🤝</span><span class="bpt-name">Backup Pass</span><span class="bpt-status">Ready — tap to open</span>`
+    : `<span class="bpt-icon">🤝</span><span class="bpt-name">Backup Pass</span><span class="bpt-status muted">0 — earned from a Supply Chest</span>`
+  if (backupItem) backupTile.onclick = () => showOverlay(itemSheet(backupItem))
+  else backupTile.disabled = true
+  wrap.appendChild(backupTile)
+
   const cellProgress = state?.activeDistrict?.chargeCellProgress
   if (cellProgress) {
     wrap.appendChild(el('div', 'pack-cell-progress', `

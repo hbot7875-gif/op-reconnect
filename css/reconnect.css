@@ -3290,6 +3290,15 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .vma-chest-reward .muted { font-size: 13px; margin-bottom: 10px; }
 
 /* ── Backup Pass ── */
+.backup-pass-tile { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  padding: 12px 14px; border-radius: var(--r-lg); background: linear-gradient(160deg, var(--purple-soft), var(--panel));
+  border: 1px solid rgba(139,92,246,0.35); cursor: pointer; margin: 12px 0; transition: transform 0.15s ease; }
+.backup-pass-tile:hover { transform: scale(1.01); }
+.backup-pass-tile.is-locked { background: var(--panel); border-color: var(--border); cursor: default; opacity: 0.75; }
+.backup-pass-tile .bpt-icon { font-size: 22px; }
+.backup-pass-tile .bpt-name { font-weight: 700; margin-right: auto; }
+.backup-pass-tile .bpt-status { font-family: var(--mono); font-size: 11.5px; color: var(--purple-lt); }
+.backup-pass-tile.is-locked .bpt-status { color: var(--muted); }
 .backup-goal-list { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
 .backup-goal-row { display: flex; align-items: center; justify-content: space-between; padding: 11px 13px;
   background: var(--panel); border: 1px solid var(--border); border-radius: 12px; font-size: 14px;
