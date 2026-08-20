@@ -180,22 +180,24 @@ export function vmaEventCard(state) {
   const closingSoon = !v.ended && isClosingSoon(v.periodEndUtc)
   if (closingSoon) maybeAlertClosingSoon(v.eventId, v.periodEndUtc)
 
-  const card = el('section', 'vma-banner' + (v.chestReady ? ' chest-ready' : '') + (closingSoon ? ' closing-soon' : ''))
+  const anyChestReady = v.chestReady || v.communityChestClaimable
+  const card = el('section', 'vma-banner' + (anyChestReady ? ' chest-ready' : '') + (closingSoon ? ' closing-soon' : ''))
   // (7) Both can be true at once (e.g. a Power Hour that falls inside a
   // Double Day) — show every tag that applies, not just the first match.
   const tags = []
   if (closingSoon) tags.push('<span class="vma-tag closing">⏰ CLOSING SOON</span>')
   if (v.isPowerHour) tags.push('<span class="vma-tag power">⚡ POWER HOUR</span>')
   if (v.isDoubleDay) tags.push('<span class="vma-tag double">🔥 DOUBLE DAY</span>')
+  if (v.communityChestClaimable) tags.push('<span class="vma-tag group">🎁 GROUP CHEST READY</span>')
 
   if (v.ended) {
     card.innerHTML = `
-      <div class="vma-banner-head"><span class="vma-dot"></span>EVENT ENDED</div>
+      <div class="vma-banner-head"><span class="vma-dot"></span>EVENT ENDED ${tags.join(' ')}</div>
       <div class="vma-banner-title">${esc(v.title || 'VMA Voting Mission')}</div>
       <p class="vma-banner-msg">Voting has closed, but you still have a Supply Chest to claim.</p>
       <div class="vma-banner-progress${v.chestReady ? ' is-ready' : ''}">${v.chestReady ? '📦 Supply Chest ready!' : `📦 ${v.chestFill}/${v.chestThreshold}`}</div>
     `
-    const go = el('button', 'btn btn-primary vma-banner-btn' + (v.chestReady ? ' has-dot' : ''), 'CLAIM CHEST')
+    const go = el('button', 'btn btn-primary vma-banner-btn' + (anyChestReady ? ' has-dot' : ''), 'CLAIM CHEST')
     go.onclick = () => openVmaMission()
     card.appendChild(go)
     wrap.appendChild(card)
@@ -207,12 +209,18 @@ export function vmaEventCard(state) {
     : `<div class="vma-banner-progress">Today: ${v.todayVotes}/${v.todayCap} across both categories &middot; 📦 ${v.chestFill}/${v.chestThreshold}</div>`
   const communityLine = v.communityVotesToday > 0
     ? `<div class="vma-banner-community">👥 ${v.communityVotesToday.toLocaleString()} votes from ARMY today</div>` : ''
+  const communityChestLine = v.communityChestClaimable
+    ? '<div class="vma-banner-community is-ready">🎁 Group Supply Chest ready — tap in to claim!</div>'
+    : v.communityChestNextThreshold
+      ? `<div class="vma-banner-community">🎁 Group Chest: ${(v.communityChestCumulative || 0).toLocaleString()}/${v.communityChestNextThreshold.toLocaleString()} overall</div>`
+      : ''
   card.innerHTML = `
     <div class="vma-banner-head"><span class="vma-dot"></span>LIVE EVENT ${tags.join(' ')}</div>
     <div class="vma-banner-title">${esc(v.title || 'VMA Voting Mission')}</div>
     <p class="vma-banner-msg">${closingSoon ? 'Voting closes soon — send in your last votes before it\'s too late.' : 'Vote, send your proof, and earn Supply Chests.'}</p>
     ${progressLine}
     ${communityLine}
+    ${communityChestLine}
   `
 
   // Power Hour rewards voting the moment it opens, so a countdown + a
@@ -234,7 +242,7 @@ export function vmaEventCard(state) {
     card.appendChild(row)
   }
 
-  const go = el('button', 'btn btn-primary vma-banner-btn' + (v.chestReady ? ' has-dot' : ''), 'ENTER MISSION')
+  const go = el('button', 'btn btn-primary vma-banner-btn' + (anyChestReady ? ' has-dot' : ''), 'ENTER MISSION')
   go.onclick = () => openVmaMission()
   card.appendChild(go)
   wrap.appendChild(card)
@@ -244,11 +252,15 @@ export function vmaEventCard(state) {
 /* ── the mission sheet ─────────────────────────────────────────────────── */
 
 async function fetchStatus() {
-  const [res, chest] = await Promise.all([
+  const [res, chest, communityChest] = await Promise.all([
     call('getVmaStatus', { agentNo: getAgentNo() }),
     call('getChestStatus', { agentNo: getAgentNo() }),
+    call('getCommunityChestStatus', { agentNo: getAgentNo() }),
   ])
-  if (res.success) res._chest = chest.success ? chest : null
+  if (res.success) {
+    res._chest = chest.success ? chest : null
+    res._communityChest = communityChest.success ? communityChest : null
+  }
   return res
 }
 
@@ -346,6 +358,7 @@ function paintMissionSheet(sheet, status) {
   if (!status.open) sheet.appendChild(el('p', 'muted', 'Voting isn\'t open right now.'))
 
   if (status._chest) sheet.appendChild(chestSection(status._chest))
+  if (status._communityChest) sheet.appendChild(communityChestSection(status._communityChest))
 
   const close = el('button', 'btn btn-ghost', 'Close')
   close.onclick = hideOverlay
@@ -411,44 +424,104 @@ async function refreshGameStateForRewards() {
   if (fresh.success) setState(fresh)
 }
 
+/* ── Group Supply Chest ──────────────────────────────────────────────────
+ * Same reward-reveal choreography as the personal Supply Chest above
+ * (rewardCard/playChestReveal are shared), but the thing filling the meter
+ * is the whole fandom's combined vote count, not this one agent's — every
+ * agent gets to claim the same milestone once it's reached, which is the
+ * entire point: it only unlocks faster if EVERYONE votes, not just you. */
+function communityChestSection(cc) {
+  const box = el('div', 'vma-community-chest')
+  const pct = Math.min(100, Math.round((cc.cumulativeVotes / cc.nextThreshold) * 100))
+
+  box.appendChild(el('div', 'eyebrow', '🎁 GROUP SUPPLY CHEST'))
+  box.appendChild(el('p', 'muted', "Unlocked for every agent once ARMY's combined votes cross each goal — the more people vote, the sooner the next one opens."))
+
+  const bar = el('div', 'vma-cc-bar')
+  bar.innerHTML = `<div class="vma-cc-bar-fill" style="width:${pct}%"></div>`
+  box.appendChild(bar)
+  box.appendChild(el('div', 'vma-cc-count', `${cc.cumulativeVotes.toLocaleString()} / ${cc.nextThreshold.toLocaleString()} overall votes`))
+
+  if (cc.claimableIndices.length > 0) {
+    // Same shake/burst chest visual the personal Supply Chest uses
+    // (playChestReveal looks for this exact class) — reused, not
+    // reinvented, so claiming either chest feels like the same game.
+    const visual = el('div', 'vma-chest-box stage-ready')
+    visual.innerHTML = `<div class="vma-chest-glow"></div><div class="vma-chest-icon">🎁</div>`
+    box.appendChild(visual)
+
+    const label = cc.claimableIndices.length > 1
+      ? `🎁 Claim Group Chest (${cc.claimableIndices.length} waiting)` : '🎁 Claim Group Chest'
+    const claim = el('button', 'btn btn-primary vma-add-btn', label)
+    claim.onclick = () => runCommunityChestOpen(box, cc.claimableIndices)
+    box.appendChild(claim)
+  } else {
+    const votesLeft = cc.nextRemaining
+    box.appendChild(el('p', 'muted', `${votesLeft.toLocaleString()} more overall vote${votesLeft === 1 ? '' : 's'} until the next Group Chest.`))
+  }
+  return box
+}
+
+/** Claims every currently-claimable milestone in one tap and reveals all
+ *  of their rewards together as one grid, rather than one milestone —
+ *  and one "Nice" tap — at a time. Each milestone is still its own atomic
+ *  claim server-side (sequential, not parallel, so a mid-batch failure
+ *  can't double-claim one already recorded), the batching is purely a
+ *  presentation choice. */
+async function runCommunityChestOpen(box, milestoneIndices) {
+  const btn = box.querySelector('.vma-add-btn')
+  if (btn) btn.disabled = true
+  const allRewards = []
+  let gotBadge = false
+  for (const milestoneIndex of milestoneIndices) {
+    const res = await call('openCommunityChest', { agentNo: getAgentNo(), milestoneIndex })
+    if (!res.success) {
+      if (res.error === 'already_claimed') continue // another tab/device beat us to it — keep going
+      toast("Couldn't open that right now.")
+      if (btn) btn.disabled = false
+      return
+    }
+    allRewards.push(...(res.rewards || []))
+    if ((res.rewards || []).some((r) => r.kind === 'badge')) gotBadge = true
+  }
+  await playChestReveal(box, allRewards)
+  if (gotBadge) refreshGameStateForRewards()
+}
+
 const REWARD_COPY = {
   charge_cell: { icon: '🔋', name: '+1 Charge Cell' },
   xp: { icon: '⚡', name: (d) => `+${d.amount || 10} XP` },
   streak_freeze: { icon: '🧊', name: '+1 Streak Freeze' },
   extension: { icon: '⏳', name: '+1 Deadline Extension' },
-  badge: { icon: '🎖️', name: 'Supply Chest Badge' },
+  wings: { icon: '🪽', name: (d) => `+${d.amount || 1} Wing${(d.amount || 1) === 1 ? '' : 's'}` },
+  badge: { icon: '🎖️', name: 'Badge' },
   backup_pass: { icon: '🤝', name: 'Backup Pass' },
 }
 
-function rewardCard(reward, index, total) {
-  const big = reward.kind === 'badge' || reward.kind === 'backup_pass'
+/** One small tile per reward — icon + name only, no per-reward blurb or
+ *  paging. A 1-2 item pull doesn't need a whole screen each; showing
+ *  every roll from this open at once, small, reads as "here's what you
+ *  got" instead of a drawn-out multi-step reveal. */
+function rewardTile(reward) {
   const copy = REWARD_COPY[reward.kind] || { icon: '🎁', name: 'Reward' }
   const name = typeof copy.name === 'function' ? copy.name(reward) : copy.name
-  const card = el('div', 'vma-chest-reward' + (big ? ' big' : ''))
-  card.innerHTML = `
-    ${total > 1 ? `<div class="vma-chest-reward-count">${index + 1} / ${total}</div>` : ''}
-    <div class="vma-chest-reward-icon">${copy.icon}</div>
-    <div class="vma-chest-reward-name">${esc(name)}</div>
-    ${reward.kind === 'backup_pass' ? '<p class="muted">Get help from another agent on one track or album mission. Find it in Pack when you\'re ready.</p>' : ''}
-    ${reward.kind === 'badge' ? '<p class="muted">Added to your Badge Collection.</p>' : ''}
-  `
-  return card
+  return el('div', 'vma-chest-reward-tile', `
+    <div class="vma-chest-reward-tile-icon">${copy.icon}</div>
+    <div class="vma-chest-reward-tile-name">${esc(name)}</div>
+  `)
 }
 
-/** Shake → purple light leaks out → flash once, then every reward from this
- *  open reveals one at a time (see migration 20260820120000 — a chest now
- *  grants several, not just one) with its own "Next"/"Nice" beat, so a
- *  3-reward open still reads as 3 distinct things worth noticing instead of
- *  one card that happens to list three items. Backup Pass and the event
- *  badge (the two rewards meant to feel special) get a longer, brighter
- *  burst than a plain resource tick. Respects reduced-motion by skipping
- *  straight to the cards. */
+/** Shake → purple light leaks out → flash once, then every reward from
+ *  this open shows at once as small tiles (see migration 20260820120000
+ *  — a chest can grant several) rather than paged one at a time — a 1-2
+ *  item pull reads better as "here's everything" than a multi-step
+ *  reveal. Respects reduced-motion by skipping straight to the tiles. */
 async function playChestReveal(box, rewards) {
   const visual = box.querySelector('.vma-chest-box')
   const big = rewards.some((r) => r.kind === 'badge' || r.kind === 'backup_pass')
   const buzz = (pattern) => { try { navigator.vibrate?.(pattern) } catch {} }
 
-  if (!REDUCED()) {
+  if (!REDUCED() && visual) {
     visual.classList.add('shaking')
     buzz(20)
     await new Promise((r) => setTimeout(r, big ? 900 : 550))
@@ -458,33 +531,19 @@ async function playChestReveal(box, rewards) {
     await new Promise((r) => setTimeout(r, 420))
   }
 
+  box.innerHTML = ''
   if (!rewards.length) {
-    box.innerHTML = ''
     box.appendChild(el('p', 'muted', 'Nothing left to award this time — everything in the pool is already yours.'))
-    const nice = el('button', 'btn btn-primary vma-add-btn', 'Nice')
-    nice.onclick = async () => { const fresh = await fetchStatus(); if (fresh.success) showMissionSheet(fresh) }
-    box.appendChild(nice)
-    return
+  } else {
+    const grid = el('div', 'vma-chest-reward-grid')
+    for (const r of rewards) grid.appendChild(rewardTile(r))
+    box.appendChild(grid)
+    if (rewards.some((r) => r.kind === 'backup_pass')) box.appendChild(el('p', 'muted', 'Backup Pass: get help from another agent on one track or album mission. Find it in Pack when you\'re ready.'))
+    if (rewards.some((r) => r.kind === 'badge')) box.appendChild(el('p', 'muted', 'Badge added to your Badge Collection.'))
   }
-
-  let i = 0
-  const showNext = () => {
-    box.innerHTML = ''
-    box.appendChild(rewardCard(rewards[i], i, rewards.length))
-    const isLast = i === rewards.length - 1
-    const btn = el('button', 'btn btn-primary vma-add-btn', isLast ? 'Nice' : 'Next reward →')
-    btn.onclick = async () => {
-      if (isLast) {
-        const fresh = await fetchStatus()
-        if (fresh.success) showMissionSheet(fresh)
-        return
-      }
-      i += 1
-      showNext()
-    }
-    box.appendChild(btn)
-  }
-  showNext()
+  const nice = el('button', 'btn btn-primary vma-add-btn', 'Nice')
+  nice.onclick = async () => { const fresh = await fetchStatus(); if (fresh.success) showMissionSheet(fresh) }
+  box.appendChild(nice)
 }
 
 /* ── step 1: choose category ───────────────────────────────────────────── */

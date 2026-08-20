@@ -10,6 +10,7 @@
 // cap calculation still prevent reuse and concurrent over-crediting.
 import type { GameContent, SupabaseDB } from './config.ts'
 import { addChestFill, getChestStatus } from './supply-chest.ts'
+import { getCommunityChestStatus } from './vma-community-chest.ts'
 import { evaluateVoteProof, validVoteTotals } from './vma-ocr.js'
 
 const BUCKET = 'vma-vote-proofs'
@@ -182,6 +183,11 @@ export async function getVmaBanner(supabase: SupabaseDB, content: GameContent, a
     .select('votes_logged').eq('event_id', eventId).eq('vote_day', day).eq('verify_status', 'verified')
   const communityVotesToday = (communityRows || []).reduce((s: number, r: any) => s + r.votes_logged, 0)
 
+  // Group Supply Chest — the fandom-wide milestone track (see
+  // vma-community-chest.ts), folded in here so the banner can nudge
+  // "claimable" without the World screen needing its own extra fetch.
+  const communityChest = await getCommunityChestStatus(supabase, content, { agentNo, eventId })
+
   return {
     eventId, title: cfg.title, ended: false,
     // (7) Both can be true on the same real-world day (e.g. a Double Day
@@ -194,6 +200,9 @@ export async function getVmaBanner(supabase: SupabaseDB, content: GameContent, a
     chestFill: chest.success ? chest.fillCount : 0,
     chestThreshold: chest.success ? chest.threshold : null,
     chestReady: chest.success ? chest.ready : false,
+    communityChestCumulative: communityChest.success ? communityChest.cumulativeVotes : 0,
+    communityChestNextThreshold: communityChest.success ? communityChest.nextThreshold : null,
+    communityChestClaimable: communityChest.success ? communityChest.claimableIndices.length > 0 : false,
   }
 }
 

@@ -3453,8 +3453,21 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .vma-banner-progress { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 8px; position: relative; }
 .vma-banner-progress.is-ready { color: var(--gold); font-weight: 700; }
 .vma-banner-community { font-family: var(--mono); font-size: 10.5px; color: var(--purple-lt); margin-top: 4px; position: relative; }
+.vma-banner-community.is-ready { color: var(--gold); font-weight: 700; }
 .vma-community-flag { font-family: var(--mono); font-size: 11px; color: var(--purple-lt); padding: 8px 10px;
   border-radius: 10px; background: var(--panel); border: 1px solid var(--border); margin-bottom: 10px; }
+.vma-tag.group { background: rgba(217,173,95,0.16); color: var(--gold); }
+/* Group Supply Chest — a shared meter, so its bar reads visually distinct
+   from the personal Supply Chest's box-icon meter above it (gold fill on
+   a plain track, not another box graphic — this one belongs to everyone,
+   not to the player looking at it). */
+.vma-community-chest { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
+.vma-community-chest .muted { font-size: 12px; line-height: 1.5; }
+.vma-cc-bar { height: 8px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border);
+  overflow: hidden; margin: 10px 0 6px; }
+.vma-cc-bar-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--gold), #f0d9a0);
+  transition: width 0.4s ease; }
+.vma-cc-count { font-family: var(--mono); font-size: 12px; color: var(--text); font-weight: 700; margin-bottom: 10px; }
 /* Power Hour countdown + reminder toggle — shown on the World-screen
    banner and again inside the mission sheet, same markup both places. */
 .vma-power-hour-next { display: flex; align-items: center; justify-content: space-between; gap: 8px;
@@ -3565,12 +3578,17 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .vma-chest-count.is-ready { color: var(--gold); font-family: var(--disp); font-size: 16px; }
 .vma-chest .muted { font-size: 12.5px; margin-bottom: 10px; }
 
-.vma-chest-reward { padding: 6px 0 4px; animation: vmaHeadlinePop 0.4s ease; }
-.vma-chest-reward-count { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: 0.5px; margin-bottom: 4px; }
-.vma-chest-reward-icon { font-size: 44px; margin-bottom: 8px; }
-.vma-chest-reward.big .vma-chest-reward-icon { font-size: 56px; filter: drop-shadow(0 0 14px rgba(217,173,95,0.6)); }
-.vma-chest-reward-name { font-family: var(--disp); font-weight: 800; font-size: 17px; color: var(--gold); margin-bottom: 6px; }
-.vma-chest-reward .muted { font-size: 13px; margin-bottom: 10px; }
+/* All rewards from one open shown at once, small — a 1-2 item pull
+   doesn't need a full-screen reveal each, and it reads faster as "here's
+   what you got" than paging through one card per roll. */
+.vma-chest-reward-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px;
+  padding: 6px 0 10px; animation: vmaHeadlinePop 0.4s ease; }
+.vma-chest-reward-tile { display: flex; flex-direction: column; align-items: center; gap: 4px;
+  width: 74px; padding: 10px 6px; border-radius: 10px; border: 1px solid var(--border-str);
+  background: linear-gradient(155deg, rgba(24,20,38,.9), rgba(9,8,16,.95)); }
+.vma-chest-reward-tile-icon { font-size: 24px; line-height: 1; }
+.vma-chest-reward-tile-name { font-family: var(--disp); font-weight: 700; font-size: 10px; color: var(--gold);
+  text-align: center; line-height: 1.25; }
 
 /* ── Backup Pass ── */
 /* Color-cleanup pass: same purple-wash-background pattern as the old VMA

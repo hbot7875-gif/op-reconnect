@@ -43,6 +43,7 @@ import { trackEngagement, adminGetEngagementReport } from './lib/engagement.ts'
 import { getVmaStatus, logVmaVote, adminListVmaPending, adminReviewVmaVote } from './lib/vma-voting.ts'
 import { getBackupStatus, listOpenBackupRequests, openBackupRequest, joinBackupRequest, leaveBackupHelper } from './lib/backup-pass.ts'
 import { getChestStatus, openChest } from './lib/supply-chest.ts'
+import { getCommunityChestStatus, openCommunityChest } from './lib/vma-community-chest.ts'
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -143,6 +144,9 @@ const ROUTES: Record<string, Route> = {
   // ── Supply Chest — see lib/supply-chest.ts and migration 20260819120000 ─
   getChestStatus: { auth: 'agent', handler: async (sb, p) => getChestStatus(sb, await loadContent(sb), p) },
   openChest: { auth: 'agent', handler: async (sb, p) => openChest(sb, await loadContent(sb), p) },
+  // ── Group Supply Chest — see lib/vma-community-chest.ts and migration 20260820140000 ─
+  getCommunityChestStatus: { auth: 'agent', handler: async (sb, p) => getCommunityChestStatus(sb, await loadContent(sb), p) },
+  openCommunityChest: { auth: 'agent', handler: async (sb, p) => openCommunityChest(sb, await loadContent(sb), p) },
   // Reconnect goal (sotd/cipher/memory puzzle variants).
   submitReconnectPuzzleAnswer: { auth: 'agent', handler: (sb, p) => submitReconnectPuzzleAnswer(sb, null, p) },
   // admin-gated inside the handler via SYNC_ADMIN_KEY
