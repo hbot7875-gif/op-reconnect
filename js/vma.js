@@ -56,6 +56,96 @@ function timeLeft(untilIso) {
   return `${hours}h ${mins}m left`
 }
 
+function countdownLabel(untilIso) {
+  const ms = new Date(untilIso).getTime() - Date.now()
+  if (ms <= 0) return 'starting now'
+  const hours = Math.floor(ms / 3_600_000)
+  const mins = Math.floor((ms % 3_600_000) / 60_000)
+  if (hours > 0) return `${hours}h ${mins}m`
+  if (mins > 0) return `${mins}m`
+  return `${Math.floor(ms / 1000)}s`
+}
+
+/* ── Power Hour reminder ────────────────────────────────────────────────
+ * Power Hour rewards fans who vote the MOMENT it opens, not sometime
+ * during it, so a countdown alone isn't enough — someone who isn't
+ * staring at the app when it flips needs an actual nudge. A real push
+ * notification needs a service worker + subscription backend, well past
+ * what this game-status banner needs; a local Notification scheduled via
+ * setTimeout covers the case that actually matters (the app's open
+ * somewhere in a background tab) without that infrastructure. The chosen
+ * reminder persists in localStorage so a reload during the wait re-arms
+ * the same timer instead of silently losing it. */
+const REMINDER_KEY_PREFIX = 'vma_power_hour_reminder_'
+let reminderTimer = null
+let reminderTargetIso = null
+
+function reminderKey(eventId) { return REMINDER_KEY_PREFIX + eventId }
+function isReminderSet(eventId, targetIso) { return localStorage.getItem(reminderKey(eventId)) === targetIso }
+
+function clearReminderTimer() {
+  if (reminderTimer) { clearTimeout(reminderTimer); reminderTimer = null }
+  reminderTargetIso = null
+}
+
+function fireReminder(eventId) {
+  localStorage.removeItem(reminderKey(eventId))
+  toast('⚡ Power Hour is LIVE — vote now for the biggest impact!', 6000)
+  try {
+    if (window.Notification && Notification.permission === 'granted') {
+      const n = new Notification('⚡ Power Hour is live', {
+        body: 'Vote now — this is when it counts most.',
+        tag: `vma-power-hour-${eventId}`,
+      })
+      n.onclick = () => { window.focus(); openVmaMission() }
+    }
+  } catch {
+    // Notifications are a nice-to-have; the toast above already covers it.
+  }
+}
+
+/** Re-arms the timer for the stored target — called on every banner
+ *  render, so a page reload mid-wait picks the countdown back up instead
+ *  of the reminder silently going stale. A no-op if already armed for the
+ *  same target. */
+function scheduleReminder(eventId, targetIso) {
+  if (reminderTargetIso === targetIso && reminderTimer) return
+  clearReminderTimer()
+  const delay = new Date(targetIso).getTime() - Date.now()
+  if (delay <= 0) return
+  reminderTargetIso = targetIso
+  reminderTimer = setTimeout(() => fireReminder(eventId), delay)
+}
+
+async function toggleReminder(eventId, targetIso, btn) {
+  if (isReminderSet(eventId, targetIso)) {
+    localStorage.removeItem(reminderKey(eventId))
+    clearReminderTimer()
+    btn.textContent = '🔔 Remind me'
+    btn.classList.remove('is-on')
+    return
+  }
+  if (window.Notification && Notification.permission === 'default') {
+    try { await Notification.requestPermission() } catch {}
+  }
+  localStorage.setItem(reminderKey(eventId), targetIso)
+  scheduleReminder(eventId, targetIso)
+  btn.textContent = '🔕 Reminder set'
+  btn.classList.add('is-on')
+  toast("We'll remind you right when Power Hour starts.")
+}
+
+/** A live "starts in Xh Xm" that ticks down without waiting on the next
+ *  ~90s state poll. Self-clears once its element leaves the DOM (the
+ *  banner re-renders wholesale on every poll). */
+function attachCountdownTicker(span, untilIso, prefix) {
+  const tick = () => {
+    if (!span.isConnected) { clearInterval(interval); return }
+    span.textContent = `${prefix}${countdownLabel(untilIso)}`
+  }
+  const interval = setInterval(tick, 1000)
+}
+
 /** Small event banner for the World screen. Empty (childless) when no
  *  event is live, so screen-world.js can append it unconditionally same as
  *  broadcastCards. */
@@ -94,6 +184,26 @@ export function vmaEventCard(state) {
     <p class="vma-banner-msg">Vote, send your proof, and earn Supply Chests.</p>
     ${progressLine}
   `
+
+  // Power Hour rewards voting the moment it opens, so a countdown + a
+  // reminder toggle here is worth more to a fan than only a badge once
+  // it's already live. Only shown when there's a real next window AND
+  // we're not already inside one (the tag above already covers that).
+  if (!v.isPowerHour && v.nextPowerHourStartUtc) {
+    const row = el('div', 'vma-power-hour-next')
+    const countdown = el('span', 'vma-ph-countdown', `⚡ Power Hour in ${countdownLabel(v.nextPowerHourStartUtc)}`)
+    row.appendChild(countdown)
+    attachCountdownTicker(countdown, v.nextPowerHourStartUtc, '⚡ Power Hour in ')
+
+    const alreadySet = isReminderSet(v.eventId, v.nextPowerHourStartUtc)
+    if (alreadySet) scheduleReminder(v.eventId, v.nextPowerHourStartUtc)
+    const remind = el('button', 'vma-ph-remind' + (alreadySet ? ' is-on' : ''), alreadySet ? '🔕 Reminder set' : '🔔 Remind me')
+    remind.type = 'button'
+    remind.onclick = () => toggleReminder(v.eventId, v.nextPowerHourStartUtc, remind)
+    row.appendChild(remind)
+    card.appendChild(row)
+  }
+
   const go = el('button', 'btn btn-primary vma-banner-btn' + (v.chestReady ? ' has-dot' : ''), 'ENTER MISSION')
   go.onclick = () => openVmaMission()
   card.appendChild(go)
@@ -145,6 +255,21 @@ function paintMissionSheet(sheet, status) {
   if (status.isPowerHour) tags.push('<div class="vma-flag power">⚡ POWER HOUR · voting is boosted right now</div>')
   if (status.isDoubleDay) tags.push('<div class="vma-flag double">🔥 DOUBLE DAY · up to double votes count today</div>')
   if (tags.length) sheet.appendChild(el('div', '', tags.join('')))
+
+  if (!status.isPowerHour && status.nextPowerHourStartUtc) {
+    const row = el('div', 'vma-power-hour-next in-sheet')
+    const countdown = el('span', 'vma-ph-countdown', `⚡ Next Power Hour in ${countdownLabel(status.nextPowerHourStartUtc)}`)
+    row.appendChild(countdown)
+    attachCountdownTicker(countdown, status.nextPowerHourStartUtc, '⚡ Next Power Hour in ')
+
+    const alreadySet = isReminderSet(status.eventId, status.nextPowerHourStartUtc)
+    if (alreadySet) scheduleReminder(status.eventId, status.nextPowerHourStartUtc)
+    const remind = el('button', 'vma-ph-remind' + (alreadySet ? ' is-on' : ''), alreadySet ? '🔕 Reminder set' : '🔔 Remind me')
+    remind.type = 'button'
+    remind.onclick = () => toggleReminder(status.eventId, status.nextPowerHourStartUtc, remind)
+    row.appendChild(remind)
+    sheet.appendChild(row)
+  }
 
   sheet.appendChild(el('div', 'vma-timer', `⏳ Voting ${esc(timeLeft(cfg.period_end_utc))}`))
 

@@ -53,6 +53,27 @@ function isPowerHour(cfg: VmaConfig, at: Date): boolean {
   return hm >= cfg.power_hour_utc_start && hm <= cfg.power_hour_utc_end
 }
 
+/** The next Power Hour start, so the client can show a countdown and offer
+ *  a reminder — fans coordinating a vote push get the most value voting
+ *  right as the window opens, not sometime during it. Checks today's UTC
+ *  occurrence first, then tomorrow's, each clamped against the campaign's
+ *  overall power_hour_first/last_utc range. Returns null once today's
+ *  window has already started (isPowerHour covers that case) or once
+ *  there's no further occurrence left in the campaign. */
+function nextPowerHourStart(cfg: VmaConfig, at: Date): Date | null {
+  const first = new Date(cfg.power_hour_first_utc)
+  const last = new Date(cfg.power_hour_last_utc)
+  for (let dayOffset = 0; dayOffset <= 1; dayOffset++) {
+    const day = new Date(at.getTime() + dayOffset * 86_400_000)
+    const dateStr = day.toISOString().slice(0, 10)
+    const candidate = new Date(`${dateStr}T${cfg.power_hour_utc_start}:00Z`)
+    if (candidate <= at) continue
+    if (candidate < first || candidate > last) continue
+    return candidate
+  }
+  return null
+}
+
 // (9) Each window is now pre-clamped to the real voting period end in the
 // migration itself, so no extra guard is needed here — but 'open' below is
 // still checked independently before any credit is given.
@@ -160,6 +181,7 @@ export async function getVmaBanner(supabase: SupabaseDB, content: GameContent, a
     // that also has a Power Hour window inside it) — the caller renders
     // both tags, not one-or-the-other.
     isPowerHour: isPowerHour(cfg, now), isDoubleDay: isDoubleDay(cfg, now),
+    nextPowerHourStartUtc: nextPowerHourStart(cfg, now)?.toISOString() || null,
     periodEndUtc: cfg.period_end_utc,
     todayVotes, todayCap,
     chestFill: chest.success ? chest.fillCount : 0,
@@ -199,10 +221,12 @@ export async function getVmaStatus(supabase: SupabaseDB, content: GameContent, p
 
   return {
     success: true,
+    eventId,
     config: cfg,
     open: now >= new Date(cfg.period_start_utc) && now <= new Date(cfg.period_end_utc),
     isPowerHour: isPowerHour(cfg, now),
     isDoubleDay: isDoubleDay(cfg, now),
+    nextPowerHourStartUtc: nextPowerHourStart(cfg, now)?.toISOString() || null,
     pendingTotal, pendingByCategory,
     dailyCap: cap,
     remaining: Object.fromEntries(cfg.categories.map((c) => [c, Math.max(0, cap - (usedByCategory[c] || 0))])),
