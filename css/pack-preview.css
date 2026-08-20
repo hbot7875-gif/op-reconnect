@@ -199,6 +199,67 @@
   text-transform: uppercase; }
 .pv-section-count { font-family: var(--mono); font-size: 11px; color: var(--muted); }
 
+/* ── Era Card deck — closed state reads as a physical stack, not a grid.
+   The front card is square, matching the real card tiles in the expanded
+   grid below (not a full-width banner). Two more real cards sit behind
+   it, stacked UPWARD — each pulled down under the layer below it, so only
+   its own top ~14px (icon + start of its name) stays exposed above —
+   a genuine readable sliver of a different card, not a rotated loose
+   sheet and not an icon pinned to a corner (both tried first). The hint
+   sits below the whole assembly. */
+.era-deck { position: relative; width: 100%; margin: 4px 0 10px;
+  padding: 0; border: none; background: none; cursor: pointer; text-align: left;
+  display: flex; flex-direction: column; align-items: center; }
+.era-deck-stack { position: relative; width: 136px; }
+.era-deck-face { position: relative; z-index: 6; width: 136px; height: 136px;
+  padding: 13px 7px 10px; display: flex;
+  flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+  border-radius: 12px;
+  border: 1px solid var(--border-str); background: linear-gradient(155deg, rgba(24,20,38,.94), rgba(9,8,16,.97));
+  color: var(--text); transition: transform 0.15s ease;
+  /* Raised top-edge highlight so the front card reads as physically
+     separate from what's peeking out behind it, plus the stack's own soft
+     shadow on the table it's resting on. */
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 10px 20px rgba(0,0,0,0.5); }
+.era-deck:hover .era-deck-face { transform: translateY(-2px); }
+/* Each strip is a full square card (136px), pulled down 18px under the
+   layer below it, so only its own top ~14px — icon + start of its name —
+   stays exposed above. Same width as the face beneath it (no side inset)
+   so the whole assembly reads as one continuous object stacked upward;
+   only the topmost strip gets rounded top corners, since every other
+   layer flows straight down into the one below it. */
+.era-deck-strip { position: relative; width: 136px; height: 32px; margin: 0 0 -18px; z-index: 4;
+  border-radius: 0; border: 1px solid var(--border-str); border-bottom: none;
+  background: linear-gradient(155deg, rgba(19,16,30,.95), rgba(8,7,13,.98));
+  /* Content sits at the TOP of the box, not centered — only the top
+     ~14px of this box is actually visible (the rest is tucked under the
+     layer below it), so centering would hide most of the icon/text under
+     it. Anchoring to the top edge keeps the sliver readable. */
+  display: flex; align-items: flex-start; gap: 7px; padding: 5px 11px 0; overflow: hidden;
+  box-shadow: inset 0 -1px 0 rgba(255,255,255,0.06), 0 -6px 12px rgba(0,0,0,0.3); }
+.era-deck-strip.s2 { z-index: 5; }
+.era-deck-strip.s3 { z-index: 4; border-radius: 10px 10px 0 0;
+  background: linear-gradient(155deg, rgba(15,13,24,.96), rgba(6,5,10,.98)); }
+.era-deck-strip .strip-icon { font-size: 13px; line-height: 1; flex: none; opacity: 0.9; }
+.era-deck-strip .strip-name { font-family: var(--mono); font-size: 9px; letter-spacing: 0.4px;
+  color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Cards deeper than the two visible strips (4th+) — a couple of thin
+   edges above the topmost strip, just enough to say "more, not shown". */
+.era-deck-strip.s3.has-more { margin-top: 7px; }
+.era-deck-strip.s3.has-more::before { content: ''; position: absolute; left: 6px; right: 6px; top: -4px;
+  height: 3px; border-radius: 6px 6px 0 0; border: 1px solid var(--border); border-bottom: none;
+  background: #0d0b14; opacity: 0.8; }
+.era-deck-face.era-lit { border-color: rgba(217,173,95,.5); }
+.era-deck-face .epc-status-line.era-lit,
+.era-deck-face.era-lit .epc-status-line { color: var(--gold); font-weight: 700; }
+.era-deck-face.era-used { opacity: 0.55; }
+.era-deck-hint { display: block; text-align: center; margin: 10px 0 0;
+  font-family: var(--mono); font-size: 9px; letter-spacing: 0.6px; color: var(--dim); }
+.era-deck-close { display: block; margin: 4px auto 26px; padding: 8px 16px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--panel); color: var(--muted);
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.5px; cursor: pointer; }
+.era-deck-close:hover { border-color: var(--border-str); color: var(--text); }
+
 .pv-era-card.era-lit .epc-status-line { color: var(--gold); font-weight: 700; }
 .pv-era-ready-banner { font-family: var(--mono); font-size: 9px; letter-spacing: 0.8px; color: var(--gold);
   text-align: center; margin-top: 2px; }

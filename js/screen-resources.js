@@ -23,8 +23,9 @@
 // Badge Drawer and Magic Shop are the two things that don't belong on any
 // other screen, so they stay here as Quick Access.
 
-import { el, esc, showOverlay, hideOverlay } from './state.js'
+import { el, esc, showOverlay, hideOverlay, getState, setState, toast } from './state.js'
 import { getAgentNo } from './session.js'
+import { call } from './api.js'
 import { badgeDrawerSheet } from './badge-drawer.js'
 import { magicShopSheet } from './magic-shop.js'
 import { itemArt, itemSheet, RARITY } from './items.js'
@@ -38,9 +39,21 @@ function agentIdCard(state) {
   card.appendChild(el('div', 'aid-scanline'))
   const top = el('div', 'aid-top')
   const photo = el('div', 'aid-photo')
-  photo.innerHTML = p.equippedBadgeArtwork?.artworkUrl
-    ? `<img src="${esc(p.equippedBadgeArtwork.artworkUrl)}" alt="">`
-    : '🛰️'
+  const artworkUrl = p.equippedBadgeArtwork?.artworkUrl
+  if (artworkUrl) {
+    const crop = p.avatarCrop || { x: 50, y: 50, zoom: 1 }
+    photo.innerHTML = `<img src="${esc(artworkUrl)}" alt="" style="object-position:${crop.x}% ${crop.y}%; transform:scale(${crop.zoom})">`
+    // A photo the player equipped themselves is worth letting them frame
+    // themselves — object-fit:cover on a 52x52 square can otherwise crop
+    // an arbitrary badge photo's interesting part right out of view.
+    const adjust = el('button', 'aid-photo-adjust', '✎')
+    adjust.type = 'button'
+    adjust.setAttribute('aria-label', 'Adjust photo framing')
+    adjust.onclick = (e) => { e.stopPropagation(); showOverlay(avatarAdjustSheet(artworkUrl, crop)) }
+    photo.appendChild(adjust)
+  } else {
+    photo.innerHTML = '🛰️'
+  }
   const info = el('div', 'aid-info')
   info.appendChild(el('div', 'aid-codename', esc(p.codename || '')))
   info.appendChild(el('div', 'aid-meta', `${esc(getAgentNo() || '')} · LV ${p.level?.level ?? '—'} · ${esc(p.rank?.title || '')}`))
@@ -65,12 +78,99 @@ function agentIdCard(state) {
   return card
 }
 
+/** Lets the player pan/zoom their equipped badge photo within the ID
+ *  card's small square frame — drag to reposition, slider to zoom.
+ *  Saved as object-position + scale, applied wherever the photo renders. */
+function avatarAdjustSheet(artworkUrl, initialCrop) {
+  let crop = { ...initialCrop }
+  const sheet = el('div', 'sheet')
+  sheet.appendChild(el('div', 'eyebrow', '✎ ADJUST PHOTO'))
+  sheet.appendChild(el('p', 'muted', 'Drag to reposition. Use the slider to zoom in.'))
+
+  const frame = el('div', 'avatar-crop-frame')
+  const img = document.createElement('img')
+  img.src = artworkUrl
+  img.alt = ''
+  img.draggable = false
+  frame.appendChild(img)
+  sheet.appendChild(frame)
+
+  const applyCrop = () => {
+    img.style.objectPosition = `${crop.x}% ${crop.y}%`
+    img.style.transform = `scale(${crop.zoom})`
+  }
+  applyCrop()
+
+  let dragging = false
+  let lastX = 0
+  let lastY = 0
+  const onPointerDown = (e) => {
+    dragging = true
+    lastX = e.clientX
+    lastY = e.clientY
+    frame.setPointerCapture(e.pointerId)
+  }
+  const onPointerMove = (e) => {
+    if (!dragging) return
+    const rect = frame.getBoundingClientRect()
+    const dx = e.clientX - lastX
+    const dy = e.clientY - lastY
+    lastX = e.clientX
+    lastY = e.clientY
+    crop.x = Math.min(100, Math.max(0, crop.x - (dx / rect.width) * 100))
+    crop.y = Math.min(100, Math.max(0, crop.y - (dy / rect.height) * 100))
+    applyCrop()
+  }
+  const onPointerUp = () => { dragging = false }
+  frame.addEventListener('pointerdown', onPointerDown)
+  frame.addEventListener('pointermove', onPointerMove)
+  frame.addEventListener('pointerup', onPointerUp)
+  frame.addEventListener('pointercancel', onPointerUp)
+
+  const zoomRow = el('div', 'avatar-crop-zoom')
+  zoomRow.innerHTML = '<span>Zoom</span>'
+  const zoomInput = document.createElement('input')
+  zoomInput.type = 'range'
+  zoomInput.min = '1'
+  zoomInput.max = '2'
+  zoomInput.step = '0.05'
+  zoomInput.value = String(crop.zoom)
+  zoomInput.oninput = () => { crop.zoom = Number(zoomInput.value); applyCrop() }
+  zoomRow.appendChild(zoomInput)
+  sheet.appendChild(zoomRow)
+
+  const reset = el('button', 'btn btn-ghost avatar-crop-reset', 'Reset')
+  reset.type = 'button'
+  reset.onclick = () => { crop = { x: 50, y: 50, zoom: 1 }; zoomInput.value = '1'; applyCrop() }
+  sheet.appendChild(reset)
+
+  const actions = el('div', 'avatar-crop-actions')
+  const cancel = el('button', 'btn btn-ghost', 'Cancel')
+  cancel.type = 'button'
+  cancel.onclick = hideOverlay
+  const save = el('button', 'btn btn-primary', 'Save')
+  save.type = 'button'
+  save.onclick = async () => {
+    save.disabled = true
+    const res = await call('setAvatarCrop', { agentNo: getAgentNo(), crop })
+    if (!res.success) { toast(res.error || "Couldn't save"); save.disabled = false; return }
+    const current = getState()
+    setState({ ...current, player: { ...current.player, avatarCrop: res.avatarCrop } })
+    toast('Photo framing saved')
+    hideOverlay()
+  }
+  actions.append(cancel, save)
+  sheet.appendChild(actions)
+
+  return sheet
+}
+
 /* ── Bag compartments ─────────────────────────────────────────────────── */
 const SLOT_DEFS = [
   { key: 'chargeCells', cls: 'slot-cell', icon: '⚡', label: 'Charge Cells',
     desc: 'Powers your ARMY Bomb. Earned from Album Goal streams.' },
   { key: 'wings', cls: 'slot-wing', icon: '🪽', label: 'Wings',
-    desc: 'Spent in the Magic Shop.' },
+    desc: 'Spent on the Candy Star Generator. Bought with XP in the Magic Shop.' },
   { key: 'streakFreezeCharges', cls: 'slot-freeze', icon: '🧊', label: 'Streak Freeze',
     desc: 'Protects your streak for one missed day.' },
   { key: 'deadlineExtensionCharges', cls: 'slot-ext', icon: '⏳', label: 'Extension',
@@ -220,6 +320,81 @@ const FILTERS = [
 // survives the poll-driven re-render so the chosen filter doesn't reset
 // every 90s.
 let activeFilter = 'all'
+let deckOpen = false
+
+/** The card the closed deck shows its face as: the most relevant one to
+ *  surface, not just the first in the list. A ready card is the most
+ *  actionable thing on the whole screen, so it wins outright; short of
+ *  that, whichever in-progress card is closest to activating is more
+ *  useful to see at a glance than an arbitrary fixed first card. */
+function frontCardFor(cards) {
+  const lit = cards.find((c) => c.status === 'lit')
+  if (lit) return lit
+  const inProgress = cards.filter((c) => c.status !== 'used')
+  if (!inProgress.length) return cards[0]
+  return inProgress.reduce((best, c) => (c.done / c.total > best.done / best.total ? c : best), inProgress[0])
+}
+
+function eraCardButton(card, newlyLit) {
+  const button = el('button', `era-pack-card era-${card.status}${newlyLit.has(card.id) ? ' just-lit' : ''}`)
+  button.type = 'button'
+  const status = card.status === 'lit' ? '+10H READY'
+    : card.status === 'used' ? 'USED'
+    : `${card.done}/${card.total}`
+  button.setAttribute('aria-label', `${card.name}. ${status}.`)
+  button.innerHTML = `
+    <span class="epc-icon">${card.icon}</span>
+    <span class="epc-name">${esc(card.name)}</span>
+    <span class="epc-status">${status}</span>
+    ${card.status === 'lit' ? '<i>USE</i>' : ''}
+  `
+  button.onclick = () => showOverlay(agentChargeSheet(card.id))
+  return button
+}
+
+/** Closed-deck state: reads as a physical stack, not a grid. The front
+ *  card is the real, tappable, currently-most-relevant card; two more
+ *  real cards sit behind it, stacked upward with just enough of each
+ *  exposed (icon + start of its name) to show this is a collection of
+ *  different eras, not identical layers. Tap anywhere to expand into the
+ *  same rack used when open. */
+function eraDeck(cards, ready, newlyLit, onOpen) {
+  const front = frontCardFor(cards)
+  const deck = el('button', 'era-deck')
+  deck.type = 'button'
+  deck.setAttribute('aria-label', `Lit Era Cards, ${cards.length} total, ${ready} ready. Tap to open.`)
+
+  const stack = el('div', 'era-deck-stack')
+
+  const rest = cards.filter((c) => c.id !== front.id)
+  const restLive = rest.filter((c) => c.status !== 'used')
+  const restOrdered = restLive.length >= 2 ? restLive : rest
+  const [strip2Card, strip3Card] = restOrdered
+  if (strip3Card) {
+    const s3 = el('div', 'era-deck-strip s3', `<span class="strip-icon">${strip3Card.icon}</span><span class="strip-name">${esc(strip3Card.name)}</span>`)
+    if (rest.length > 2) s3.classList.add('has-more')
+    stack.appendChild(s3)
+  }
+  if (strip2Card) {
+    const s2 = el('div', 'era-deck-strip s2', `<span class="strip-icon">${strip2Card.icon}</span><span class="strip-name">${esc(strip2Card.name)}</span>`)
+    stack.appendChild(s2)
+  }
+
+  const faceCls = `era-deck-face era-${front.status}${newlyLit.has(front.id) ? ' just-lit' : ''}`
+  const face = el('div', faceCls)
+  const statusText = front.status === 'lit' ? '+10H READY' : front.status === 'used' ? 'USED' : `${front.done}/${front.total}`
+  face.innerHTML = `
+    <span class="epc-icon">${front.icon}</span>
+    <span class="epc-name">${esc(front.name)}</span>
+    <span class="epc-status">${statusText}</span>
+  `
+  stack.appendChild(face)
+
+  deck.appendChild(stack)
+  deck.appendChild(el('div', 'era-deck-hint', `${cards.length} cards · tap to open`))
+  deck.onclick = onOpen
+  return deck
+}
 
 export function renderResources(container, state) {
   container.innerHTML = ''
@@ -245,25 +420,18 @@ export function renderResources(container, state) {
       <span class="ps-title">Lit Era Cards</span>
       <span class="ps-count">${ready} ready · reset Monday</span>
     `))
-    const rack = el('div', 'era-pack-rack')
-    for (const card of eraCards) {
-      const button = el('button', `era-pack-card era-${card.status}${newlyLit.has(card.id) ? ' just-lit' : ''}`)
-      button.type = 'button'
-      const status = card.status === 'lit' ? '+10H READY'
-        : card.status === 'used' ? 'USED'
-        : `${card.done}/${card.total}`
-      button.setAttribute('aria-label', `${card.name}. ${status}.`)
-      button.innerHTML = `
-        <span class="epc-icon">${card.icon}</span>
-        <span class="epc-name">${esc(card.name)}</span>
-        <span class="epc-status">${status}</span>
-        ${card.status === 'lit' ? '<i>USE</i>' : ''}
-      `
-      button.onclick = () => showOverlay(agentChargeSheet(card.id))
-      rack.appendChild(button)
+    if (deckOpen) {
+      const rack = el('div', 'era-pack-rack')
+      for (const card of eraCards) rack.appendChild(eraCardButton(card, newlyLit))
+      wrap.appendChild(rack)
+      const close = el('button', 'era-deck-close', '↑ Close deck')
+      close.type = 'button'
+      close.onclick = () => { deckOpen = false; renderResources(container, state) }
+      wrap.appendChild(close)
+      wrap.appendChild(el('p', 'era-pack-note', 'Complete every track in an era this week to activate its card. Use only when your ARMY Bomb needs emergency power.'))
+    } else {
+      wrap.appendChild(eraDeck(eraCards, ready, newlyLit, () => { deckOpen = true; renderResources(container, state) }))
     }
-    wrap.appendChild(rack)
-    wrap.appendChild(el('p', 'era-pack-note', 'Complete every track in an era this week to activate its card. Use only when your ARMY Bomb needs emergency power.'))
   }
 
   // ── Merch — Backup Pass/Tickets now live in the case's front pocket

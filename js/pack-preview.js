@@ -57,7 +57,7 @@ const SLOT_DEFS = [
   { key: 'chargeCells', cls: 'slot-cell', icon: '⚡', label: 'Charge Cells',
     desc: 'Powers your ARMY Bomb. Earned from Album Goal streams.' },
   { key: 'wings', cls: 'slot-wing', icon: '🪽', label: 'Wings',
-    desc: 'Spent in the Magic Shop.' },
+    desc: 'Spent on the Candy Star Generator. Bought with XP in the Magic Shop.' },
   { key: 'streakFreezeCharges', cls: 'slot-freeze', icon: '🧊', label: 'Streak Freeze',
     desc: 'Protects your streak for one missed day.' },
   { key: 'deadlineExtensionCharges', cls: 'slot-ext', icon: '⏳', label: 'Extension',
@@ -187,17 +187,75 @@ function eraCardDetailSheet(card) {
   `)
 }
 
-function eraCards(state) {
-  const cards = state.agentCharge?.eraCards || []
-  if (!cards.length) return null
-  const section = el('div', 'pv-section pv-after-bag')
-  const ready = cards.filter((c) => c.status === 'lit').length
-  const head = el('div', 'pv-section-head')
-  head.innerHTML = `<span class="pv-section-title">Lit Era Cards</span><span class="pv-section-count">${ready} ready</span>`
-  section.appendChild(head)
+// Module-level, same survives-a-rerender pattern activeFilter (below) and
+// screen-ranking.js's own activeTab already use — the deck stays open
+// across the ~90s poll re-render instead of snapping shut on you.
+let deckOpen = false
 
+/** The card the closed deck shows its face as: the most relevant one to
+ *  surface, not just cards[0]. A ready card is the most actionable thing on
+ *  the whole screen, so it wins outright; short of that, whichever
+ *  in-progress card is closest to activating is more useful to see at a
+ *  glance than an arbitrary fixed first card. */
+function frontCardFor(cards) {
+  const lit = cards.find((c) => c.status === 'lit')
+  if (lit) return lit
+  const inProgress = cards.filter((c) => c.status !== 'used')
+  if (!inProgress.length) return cards[0]
+  return inProgress.reduce((best, c) => (c.done / c.total > best.done / best.total ? c : best), inProgress[0])
+}
+
+function eraDeck(cards, ready, newlyLit) {
+  const front = frontCardFor(cards)
+  const deck = el('button', 'era-deck')
+  deck.type = 'button'
+  deck.setAttribute('aria-label', `Lit Era Cards, ${cards.length} total, ${ready} ready. Tap to open.`)
+
+  const stack = el('div', 'era-deck-stack')
+
+  // Two other real cards behind the front one, stacked upward — each
+  // pulled down under the layer below it, leaving only its own top strip
+  // (icon + the start of its name) exposed above. DOM order matters here:
+  // earliest-added paints lowest, so the deepest card goes in first and
+  // the dominant front card goes in last, sitting at the base of the pile.
+  const rest = cards.filter((c) => c.id !== front.id)
+  const restLive = rest.filter((c) => c.status !== 'used')
+  const restOrdered = restLive.length >= 2 ? restLive : rest
+  const [strip2Card, strip3Card] = restOrdered
+  if (strip3Card) {
+    const s3 = el('div', 'era-deck-strip s3', `<span class="strip-icon">${strip3Card.icon}</span><span class="strip-name">${esc(strip3Card.name)}</span>`)
+    // The remaining cards deeper in the stack (4th+) — a couple of thin
+    // edges above this one, just enough to say "more, not shown".
+    if (rest.length > 2) s3.classList.add('has-more')
+    stack.appendChild(s3)
+  }
+  if (strip2Card) {
+    const s2 = el('div', 'era-deck-strip s2', `<span class="strip-icon">${strip2Card.icon}</span><span class="strip-name">${esc(strip2Card.name)}</span>`)
+    stack.appendChild(s2)
+  }
+
+  const faceCls = `era-deck-face era-${front.status}${newlyLit.has(front.id) ? ' just-lit' : ''}`
+  const face = el('div', faceCls)
+  const statusText = front.status === 'lit' ? 'READY' : front.status === 'used' ? 'USED' : `${front.done}/${front.total}`
+  face.innerHTML = `
+    <span class="epc-icon">${front.icon}</span>
+    <span class="epc-name">${esc(front.name)}</span>
+    <span class="epc-status epc-status-line">${statusText}</span>
+  `
+  stack.appendChild(face)
+
+  deck.appendChild(stack)
+  // "N ready" already lives in the section header — no separate badge on
+  // the deck itself, just the stack + hint.
+  deck.appendChild(el('div', 'era-deck-hint', `${cards.length} cards · tap to open`))
+
+  deck.onclick = () => { deckOpen = true; rerenderEraSection() }
+  return deck
+}
+
+function eraExpanded(cards, newlyLit) {
+  const wrap = el('div', '')
   const rack = el('div', 'era-pack-rack')
-  const newlyLit = new Set(state.agentCharge?.newlyLitEraIds || [])
   for (const card of cards) {
     const button = el('button', `era-pack-card pv-era-card era-${card.status}${newlyLit.has(card.id) ? ' just-lit' : ''}`)
     button.type = 'button'
@@ -212,8 +270,36 @@ function eraCards(state) {
     button.onclick = () => showOverlay(eraCardDetailSheet(card))
     rack.appendChild(button)
   }
-  section.appendChild(rack)
-  if (ready) section.appendChild(el('div', 'pv-era-ready-banner', 'CARD ACTIVATED · READY TO USE'))
+  wrap.appendChild(rack)
+  const close = el('button', 'era-deck-close', '↑ Close deck')
+  close.type = 'button'
+  close.onclick = () => { deckOpen = false; rerenderEraSection() }
+  wrap.appendChild(close)
+  return wrap
+}
+
+// Set by eraCards() each time it renders, so the deck's own open/close
+// handlers can trigger a re-render of just this section without the caller
+// needing to know this section rebuilds itself.
+let rerenderEraSection = () => {}
+
+function eraCards(state) {
+  const cards = state.agentCharge?.eraCards || []
+  if (!cards.length) return null
+  const section = el('div', 'pv-section pv-after-bag')
+  const ready = cards.filter((c) => c.status === 'lit').length
+  const newlyLit = new Set(state.agentCharge?.newlyLitEraIds || [])
+  const head = el('div', 'pv-section-head')
+  head.innerHTML = `<span class="pv-section-title">Lit Era Cards</span><span class="pv-section-count">${ready} ready</span>`
+  section.appendChild(head)
+
+  rerenderEraSection = () => {
+    const fresh = eraCards(state)
+    section.replaceWith(fresh)
+  }
+
+  section.appendChild(deckOpen ? eraExpanded(cards, newlyLit) : eraDeck(cards, ready, newlyLit))
+  if (ready && deckOpen) section.appendChild(el('div', 'pv-era-ready-banner', 'CARD ACTIVATED · READY TO USE'))
   return section
 }
 

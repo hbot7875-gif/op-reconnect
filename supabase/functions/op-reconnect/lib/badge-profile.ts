@@ -101,6 +101,32 @@ export async function setEquippedBadge(supabase: SupabaseDB, content: GameConten
   return error ? { success: false, error: error.message } : { success: true, equippedBadgeId: badgeId }
 }
 
+/** Saves how a player wants their equipped badge photo framed in the Agent
+ *  ID card — a manual crop/adjust, since object-fit:cover alone can cut an
+ *  arbitrary photo's interesting part out of a small 52x52 frame. x/y are
+ *  0-100 object-position percentages, zoom is clamped to a sane 1.0-2.0
+ *  range. Passing null clears it back to the default centered crop. */
+export async function setAvatarCrop(supabase: SupabaseDB, params: Record<string, unknown>) {
+  const agentNo = String(params.agentNo || '').trim().toUpperCase()
+  const crop = params.crop as { x?: unknown; y?: unknown; zoom?: unknown } | null
+
+  let value: { x: number; y: number; zoom: number } | null = null
+  if (crop) {
+    const clamp = (n: unknown, min: number, max: number, fallback: number) => {
+      const v = Number(n)
+      return Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : fallback
+    }
+    value = {
+      x: clamp(crop.x, 0, 100, 50),
+      y: clamp(crop.y, 0, 100, 50),
+      zoom: clamp(crop.zoom, 1, 2, 1),
+    }
+  }
+
+  const { error } = await supabase.from('rc_players').update({ avatar_crop: value }).eq('agent_no', agentNo)
+  return error ? { success: false, error: error.message } : { success: true, avatarCrop: value }
+}
+
 /** (12) Badge Collection screen data for one agent: every catalog template
  *  (so locked ones can render as silhouettes) plus this agent's actual
  *  earned instances, each with its resolved artwork URL, parsed scope, and

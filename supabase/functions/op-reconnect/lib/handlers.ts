@@ -446,6 +446,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
       badges: (badgeRows || []).map((b: any) => b.badge_id),
       equippedBadgeId: player.equipped_badge_id || null,
       equippedBadgeArtwork,
+      avatarCrop: player.avatar_crop || null,
       // BOTZ redesign Phase 2 — see charge-economy.ts / magic-shop.ts.
       chargeCells: (player.charge_cells || 0) + chargeCellsEarnedNow,
       wings: player.wings || 0,

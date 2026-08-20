@@ -42,13 +42,20 @@ export const MOCK_STATE = {
     { id: 'i6', itemId: 'rug-1', kind: 'rug', name: 'Wave Rug', rarity: 'common',
       era: 'Indigo', blurb: 'Kept at Dazzledew Fountain.', districtId: 'mono-dazzledew-fountain', districtName: 'Dazzledew Fountain', usedAt: null },
   ],
+  // Matches the real 8 era cards live in the game (same names/icons/order
+  // as agent-charge.js's actual set), not a shortened preview subset — so
+  // the deck redesign is proven against the real card count.
   agentCharge: {
     eraCards: [
-      { id: 'e1', name: 'Wings', icon: '🦋', status: 'lit', done: 15, total: 15 },
-      { id: 'e2', name: 'Love Yourself', icon: '💫', status: 'used', done: 12, total: 12 },
-      { id: 'e3', name: 'Map of the Soul', icon: '🗺️', status: 'progress', done: 8, total: 12 },
-      { id: 'e4', name: 'BE', icon: '🌙', status: 'progress', done: 2, total: 8 },
+      { id: 'e1', name: 'School Trilogy', icon: '📚', status: 'progress', done: 0, total: 17 },
+      { id: 'e2', name: 'Dark & Wild / Bridge', icon: '🌙', status: 'lit', done: 12, total: 12 },
+      { id: 'e3', name: 'HYYH (The Youth Era)', icon: '🌸', status: 'progress', done: 4, total: 16 },
+      { id: 'e4', name: 'Wings / YNWA', icon: '🦋', status: 'used', done: 19, total: 19 },
+      { id: 'e5', name: 'Love Yourself Series', icon: '💜', status: 'progress', done: 6, total: 29 },
+      { id: 'e6', name: 'Map of the Soul', icon: '🗺️', status: 'progress', done: 8, total: 21 },
+      { id: 'e7', name: 'The Anthology (Chapter 1 Finale)', icon: '💎', status: 'progress', done: 0, total: 12 },
+      { id: 'e8', name: 'ARIRANG', icon: '🎆', status: 'progress', done: 2, total: 14 },
     ],
-    newlyLitEraIds: ['e1'],
+    newlyLitEraIds: ['e2'],
   },
 }
