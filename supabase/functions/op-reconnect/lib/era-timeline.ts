@@ -161,13 +161,25 @@ export const ERA_CATALOG: EraDef[] = [
   {
     id: 'wings', name: 'Wings / YNWA', icon: '🦋',
     description: 'Temptation, artistic high-concepts, and learning to fly.',
-    // Youth (Japanese) contributes only its exclusive originals below.
+    // Every track on all three releases (verified against the real
+    // Spotify tracklists), same "don't skip any track" treatment as HYYH
+    // above — Intro/Interlude/Outro fragments included, and Youth's
+    // Japanese re-recordings listed even though their base song belongs
+    // to a different era (they're still real, distinct content on THIS
+    // album). You Never Walk Alone is Wings' own repackage, so its first
+    // 14 tracks are exact duplicates of Wings' own — not re-listed twice.
     albums: ['Youth', 'Wings', 'You Never Walk Alone'],
     tracks: [
-      'Good Day', 'For You', 'Wishing On A Star',
+      'Introduction : Youth', 'Run -Japanese Ver.-', 'Fire -Japanese Ver.-',
+      'Dope -Japanese Ver.-', 'Good Day', 'Save Me -Japanese Ver.-',
+      'Boyz with Fun (Japanese Ver.)', 'Pepse (Japanese Ver.)', 'Wishing On A Star',
+      'Butterfly -Japanese Ver.-', 'For You', 'I Need U (Japanese Ver.)',
+      'Epilogue : Young Forever -Japanese Ver.-',
+      'Intro: Boy Meets Evil',
       'Blood Sweat & Tears', 'Begin', 'Lie', 'Stigma', 'First Love', 'Reflection', 'MAMA',
       'Awake', 'Lost', 'BTS Cypher 4', 'Am I Wrong', '21st Century Girl', '2! 3!',
-      'Spring Day', 'Not Today', 'A Supplementary Story: You Never Walk Alone',
+      'Interlude: Wings',
+      'Spring Day', 'Not Today', 'Outro: Wings', 'A Supplementary Story: You Never Walk Alone',
     ],
   },
   {
