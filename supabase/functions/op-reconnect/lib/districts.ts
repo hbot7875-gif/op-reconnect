@@ -64,13 +64,13 @@ export function freezeGoals(content: GameContent, mode: string, district: Distri
   // same target on easy/medium/hard. Everything else still scales by
   // multiplier as usual; this is the exception, not a new default.
   const trackGoals = assignedTracks
-    .map((g) => ({ id: g.id, label: g.label, artist: g.artist, target: g.config?.flatTarget ? g.target : g.target * multiplier, keys: goalKeys(g) }))
+    .map((g) => ({ id: g.id, label: g.label, artist: g.artist, target: g.config?.flatTarget ? g.target : Math.max(1, Math.round(g.target * multiplier)), keys: goalKeys(g) }))
 
   const albumGoals = assignedAlbums
     .map((g) => ({
       id: g.id,
       label: g.label,
-      target: g.config?.flatTarget ? g.target : g.target * multiplier,
+      target: g.config?.flatTarget ? g.target : Math.max(1, Math.round(g.target * multiplier)),
       tracks: (g.tracks || []).map((t) => ({ label: t.label, keys: goalKeys({ label: t.label, aliases: t.aliases || [] }) })),
     }))
 
