@@ -185,15 +185,28 @@ export const ERA_CATALOG: EraDef[] = [
   {
     id: 'ly', name: 'Love Yourself Series', icon: '💜',
     description: 'The global message of self-love and acceptance.',
-    // Face Yourself (Japanese) contributes only its exclusive originals below.
+    // Every track on all four releases, same "don't skip any track"
+    // treatment as the eras above — fragments and Japanese re-recordings
+    // included (verified against the real Spotify tracklists), even where
+    // the re-recording's base song formally belongs to a different era.
     albums: ['Love Yourself: Her', 'Face Yourself', 'Love Yourself: Tear', 'Love Yourself: Answer'],
     tracks: [
-      'DNA', 'Pied Piper', 'Best Of Me', 'Dimple', 'Go Go', 'MIC Drop',
-      "Don't Leave Me", 'Crystal Snow', 'Let Go',
+      'Intro: Serendipity',
+      'DNA', 'Pied Piper', 'Best Of Me', 'Dimple', 'Skit: Billboard Music Awards Speech', 'Go Go', 'MIC Drop',
+      'Outro: Her',
+      'INTRO : Ringwanderung',
+      'Best Of Me - Japanese ver.', '血、汗、涙 - Japanese ver.', 'DNA - Japanese ver.', 'Not Today - Japanese ver.',
+      'MIC Drop - Japanese ver.',
+      "Don't Leave Me",
+      'Go Go - Japanese ver.', 'Crystal Snow', 'Spring Day - Japanese ver.', 'Let Go', 'OUTRO : Crack',
+      'Intro: Singularity',
       'Fake Love', 'The Truth Untold', '134340', 'Paradise', 'Love Maze', 'Magic Shop',
       { title: 'Airplane Pt.2', aliases: ['Airplane, Pt. 2'] },
       'Anpanman', 'So What',
+      'Outro: Tear',
       'Idol', 'Euphoria',
+      'Serendipity (Full Length Edition)', 'DNA (Pedal 2 LA Mix)', 'FAKE LOVE (Rocking Vibe Mix)',
+      'MIC Drop (Steve Aoki Remix) (Full Length Edition)', 'IDOL (Featuring Nicki Minaj)',
       // Hanja ordinal markers (起/承/轉) in these three titles are a known
       // source of scrobble-source disagreement — same bug shape as BTS
       // Cypher Pt.3 / We Are Bulletproof Pt.2 above. AGENT046 reported Just
@@ -215,22 +228,37 @@ export const ERA_CATALOG: EraDef[] = [
   {
     id: 'mots', name: 'Map of the Soul', icon: '🗺️',
     description: 'The psychological journey into the Shadow and the Ego.',
-    // 7 ~The Journey~ (Japanese) contributes only its exclusive originals below.
+    // Every track on all three releases (verified against the real
+    // Spotify tracklists) — fragments, the "ON (Feat. Sia)" alternate
+    // cut, and 7 ~The Journey~'s Japanese re-recordings all included.
     albums: ['Map of the Soul: Persona', 'Map of the Soul: 7', 'Map of the Soul: 7 ~The Journey~'],
     tracks: [
+      'Intro : Persona',
       'Boy With Luv', 'Mikrokosmos', 'Make It Right', 'HOME', 'Jamais Vu', 'Dionysus',
+      'Interlude : Shadow',
       'Black Swan', 'Filter', 'My Time', 'Louder Than Bombs', 'ON', 'UGH!',
       "00:00 (Zero O'Clock)", 'Inner Child', 'Friends', 'Moon', 'Respect', 'We Are Bulletproof : The Eternal',
-      'Stay Gold', 'Lights', 'Your Eyes Tell',
+      'Outro : Ego', 'ON (Feat. Sia)',
+      'Intro : Calling',
+      'Stay Gold',
+      'Boy With Luv - Japanese ver.', 'Make It Right - Japanese ver.', 'Dionysus - Japanese ver.',
+      'IDOL - Japanese ver.', 'Airplane pt.2 - Japanese ver.', 'FAKE LOVE - Japanese ver.',
+      'Black Swan - Japanese ver.', 'ON - Japanese ver.',
+      'Lights', 'Your Eyes Tell', 'Outro : The Journey',
     ],
   },
   {
     id: 'anthology', name: 'The Anthology (Chapter 1 Finale)', icon: '💎',
     description: 'Retrospective of 9 years and comfort during the pandemic.',
-    // BE + the era's standalone singles + Proof's own exclusive additions
+    // BE + the era's standalone singles + Proof's own exclusive additions.
+    // BE's tracklist is fully verified against Spotify (its one fragment,
+    // 'Skit', is added below); Proof is a 3-disc compilation and the
+    // fetched tracklist only returned ~30 of its tracks before cutting
+    // off, so its entries below are unchanged from before rather than
+    // guessed at — still just the handful actually exclusive to it.
     albums: ['BE', 'Proof'],
     tracks: [
-      'Life Goes On', 'Fly To My Room', 'Blue & Grey', 'Telepathy', 'Dis-ease', 'Stay',
+      'Life Goes On', 'Fly To My Room', 'Blue & Grey', 'Skit', 'Telepathy', 'Dis-ease', 'Stay',
       'Dynamite', 'Butter', 'Yet To Come',
       'Born Singer', 'For Youth', 'Run BTS',
     ],
