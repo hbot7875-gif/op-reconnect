@@ -18,6 +18,7 @@ import { renderCandyStar } from './screen-candystar.js'
 import { renderRanking } from './screen-ranking.js'
 import { playLevelUp } from './celebrate.js'
 import { checkForBadgeUnlocks } from './badge-reveal.js'
+import { checkForExamModeAnnounce } from './exam-mode-announce.js'
 import { districtDisplayName } from './ward-tiles.js'
 import { trackEngagement } from './engagement.js'
 
@@ -125,6 +126,7 @@ subscribe((state) => {
     playLevelUp(state)
   }
   checkForBadgeUnlocks(state)
+  checkForExamModeAnnounce(state)
   for (const eraId of state.agentCharge?.newlyLitEraIds || []) {
     if (celebratedEraCards.has(eraId)) continue
     celebratedEraCards.add(eraId)
