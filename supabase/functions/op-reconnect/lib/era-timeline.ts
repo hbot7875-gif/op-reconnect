@@ -100,9 +100,15 @@ export const ERA_CATALOG: EraDef[] = [
   {
     id: 'darkwild', name: 'Dark & Wild / Bridge', icon: '🌙',
     description: 'The transition into a deeper, more mature identity.',
-    // Wake Up's own tracklist is otherwise Japanese re-recordings of Dark &
-    // Wild/earlier singles — only its exclusive original ("The Stars") is
-    // counted below, so it's still named here as a source.
+    // Most of Wake Up's tracklist is Japanese re-recordings of Dark &
+    // Wild/earlier singles (Jump/Danger/Boy In Luv/Just One Day/No More
+    // Dream/N.O, all "- Japanese Ver." of songs already counted below) —
+    // those don't get their own entries. It isn't ONLY a re-recording disc
+    // though: "The Stars", the "Wake Up" title track, and "line!"/"line!Pt.2
+    // - Ano Bashode -" have no Korean-language equivalent anywhere in this
+    // era's other albums, so all four are real exclusive content and are
+    // counted below same as any other track (confirmed against the actual
+    // Wake Up Standard Edition tracklist).
     albums: ['Dark & Wild', 'Wake Up'],
     tracks: [
       // Two genuinely different metadata variants exist for this one in the
@@ -121,7 +127,7 @@ export const ERA_CATALOG: EraDef[] = [
       // the whole time.
       { title: 'So 4 More', aliases: ['2nd Grade'] },
       'Could You Turn Off Your Cell Phone', '24/7=heaven', 'Rain', 'Embarrassed',
-      'The Stars',
+      'The Stars', 'Wake Up', 'line!', 'line!Pt.2 - Ano Bashode -',
     ],
   },
   {
