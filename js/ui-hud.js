@@ -138,6 +138,12 @@ export function renderHud(container, state) {
   const collectionBadge = p.equippedBadgeArtwork || null
   const badgeArt = collectionBadge?.artworkUrl || null
   const streakLabel = p.streak.current > 0 ? `🔥 ${p.streak.current}D` : '○ 0D'
+  // Authored pass: gold is reserved for things actually earned, so a
+  // streak of zero renders muted instead. rarity comes off the equipped
+  // badge payload (badge-profile.ts's resolveEquippedBadges) — an
+  // equipped RARE badge is the one thing the crest halo now reports.
+  const streakCold = p.streak.current > 0 ? '' : ' is-cold'
+  const crestRare = collectionBadge?.rarity === 'rare' ? ' is-rare' : ''
 
   const invites = state.invites || []
   const codenameHidden = isCodenameHidden()
@@ -147,7 +153,7 @@ export function renderHud(container, state) {
     <div class="hud-inner">
       <div class="hud-row">
         <div class="hud-identity" id="levelPill" role="button" tabindex="0" title="Open Agent Dossier">
-          <span class="hud-crest${agentBadge || collectionBadge ? ' has-badge' : ''}${badgeArt ? ' has-photo' : ''}" aria-hidden="true"><i></i>${
+          <span class="hud-crest${agentBadge || collectionBadge ? ' has-badge' : ''}${badgeArt ? ' has-photo' : ''}${crestRare}" aria-hidden="true"><i></i>${
             badgeArt ? `<img class="hud-crest-photo" src="${esc(badgeArt)}" alt="">` : `<b>${collectionBadge ? '🎖️' : agentBadge ? agentBadge.icon : '⟭⟬'}</b>`
           }</span>
           <span class="hud-who">
@@ -158,7 +164,7 @@ export function renderHud(container, state) {
             <span class="hud-meta"><em>${esc(p.rank.title)}</em><i>·</i><b>LV ${lvl.level}</b></span>
           </span>
         </div>
-        <div class="hud-streak" title="${p.streak.current} days in a row">${streakLabel}</div>
+        <div class="hud-streak${streakCold}" title="${p.streak.current} days in a row">${streakLabel}</div>
         <button class="hud-sync" id="syncBtn" type="button" title="Sync streams now" aria-label="Sync streams now">🔄</button>
         <button class="hud-bell" id="bellBtn" type="button" title="Invites"
           aria-label="${invites.length ? `${invites.length} pending invite${invites.length === 1 ? '' : 's'}` : 'No pending invites'}">

@@ -148,26 +148,40 @@ body {
   min-height: var(--hud-crest-size); max-height: var(--hud-crest-size); aspect-ratio: 1 / 1; flex: 0 0 var(--hud-crest-size);
   display: grid; place-items: center;
   border: 1px solid rgba(139,92,246,.62); border-radius: 50%; background: radial-gradient(circle, rgba(139,92,246,.28), rgba(20,18,30,.2) 68%);
-  color: var(--purple-lt); box-shadow: inset 0 0 14px rgba(139,92,246,.2), 0 0 12px rgba(139,92,246,.12); }
-.hud-crest::before { content: ''; position: absolute; inset: 4px; border: 1px dashed rgba(217,173,95,.42); border-radius: 50%; }
-.hud-crest i { position: absolute; width: 4px; height: 4px; top: -2px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 8px var(--gold); }
+  color: var(--purple-lt); }
+/* Authored pass: the crest used to carry a permanent purple halo, a gold
+   dashed ring and a glowing gold dot whether or not a badge was equipped —
+   so the glow reported nothing. Halo removed; the object (border, gradient,
+   size) is untouched. Gold now appears only on .has-badge, and the halo
+   comes back only on .is-rare, where it finally means something. */
+.hud-crest::before { content: ''; position: absolute; inset: 4px; border: 1px dashed rgba(255,255,255,.14); border-radius: 50%; }
+.hud-crest i { position: absolute; width: 4px; height: 4px; top: -2px; border-radius: 50%; background: rgba(255,255,255,.30); }
+.hud-crest.has-badge::before { border-color: rgba(217,173,95,.55); }
+.hud-crest.has-badge i { background: var(--gold); }
+/* The one earned glow: a rare badge is equipped. rarity comes straight off
+   player.equippedBadgeArtwork (badge-profile.ts's resolveEquippedBadges). */
+.hud-crest.is-rare { border-color: rgba(217,173,95,.75); box-shadow: 0 0 14px rgba(217,173,95,.30); }
+.hud-crest.is-rare::before { border-color: rgba(217,173,95,.7); }
 .hud-crest b { position: relative; font-family: var(--disp); font-size: 14px; letter-spacing: -3px; }
 .hud-crest.has-badge b { font-family: inherit; font-size: 23px; letter-spacing: 0; line-height: 1; }
-.hud-crest.has-badge::before { border-style: solid; border-color: rgba(217,173,95,.55); }
-.hud-crest.has-photo { border-color: rgba(217,173,95,.55);
-  background: radial-gradient(circle, rgba(139,92,246,.22), rgba(20,18,30,.62) 72%);
-  box-shadow: inset 0 0 10px rgba(139,92,246,.18), 0 0 8px rgba(217,173,95,.1); }
-.hud-crest.has-photo::before { inset: 2px; border: 1px solid rgba(139,92,246,.52); }
+.hud-crest.has-badge::before { border-style: solid; }
+/* A photo is not an achievement — neutral ring by default; gold returns
+   above via .has-badge, and the halo only on .is-rare. */
+.hud-crest.has-photo { border-color: rgba(255,255,255,.20);
+  background: radial-gradient(circle, rgba(139,92,246,.22), rgba(20,18,30,.62) 72%); }
+.hud-crest.has-badge.has-photo { border-color: rgba(217,173,95,.55); }
+.hud-crest.has-photo::before { inset: 2px; border: 1px solid rgba(255,255,255,.14); }
 .hud-crest.has-photo::after { content: '✦'; position: absolute; z-index: 3; right: -2px; bottom: -2px;
   width: 13px; height: 13px; display: grid; place-items: center; border: 1px solid rgba(217,173,95,.75);
   border-radius: 50%; background: #181426; color: var(--gold); font-size: 7px; line-height: 1;
   box-shadow: 0 1px 5px rgba(0,0,0,.65); }
 .hud-crest.has-photo i { z-index: 3; top: -1px; width: 3px; height: 3px; box-shadow: none; }
+.hud-crest.has-badge.has-photo .hud-crest-photo { border-color: rgba(217,173,95,.60); }
 .hud-crest-photo { position: relative; z-index: 1; display: block;
   width: calc(var(--hud-crest-size) - 10px); height: calc(var(--hud-crest-size) - 10px);
   min-width: calc(var(--hud-crest-size) - 10px); max-width: calc(var(--hud-crest-size) - 10px);
   min-height: calc(var(--hud-crest-size) - 10px); max-height: calc(var(--hud-crest-size) - 10px); aspect-ratio: 1 / 1;
-  border: 1px solid rgba(217,173,95,.72); border-radius: 50%; object-fit: cover; object-position: 50% 20%;
+  border: 1px solid rgba(255,255,255,.22); border-radius: 50%; object-fit: cover; object-position: 50% 20%;
   clip-path: circle(50%); box-shadow: 0 0 0 1px rgba(0,0,0,.5); }
 .hud-who { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .hud-code-row { display: flex; align-items: center; gap: 5px; min-width: 0; }
@@ -180,7 +194,7 @@ body {
 .hud-meta em { color: var(--gold); font-style: normal; }
 .hud-meta i { color: var(--dim); font-style: normal; }
 .hud-meta b { color: var(--purple-lt); }
-.hud-identity:hover .hud-crest { border-color: var(--purple-lt); box-shadow: inset 0 0 14px rgba(139,92,246,.3), 0 0 16px rgba(139,92,246,.24); }
+.hud-identity:hover .hud-crest { border-color: var(--purple-lt); }
 .hud-bell { position: relative; flex-shrink: 0; width: 34px; height: 34px; display: flex; align-items: center;
   justify-content: center; background: var(--panel); border: 1px solid var(--border); border-radius: 50%;
   font-size: 15px; cursor: pointer; transition: transform 0.15s, border-color 0.15s; }
@@ -193,6 +207,9 @@ body {
   font-weight: 700; display: flex; align-items: center; justify-content: center; }
 .hud-streak { flex-shrink: 0; padding: 5px 8px; border-bottom: 1px solid rgba(217,173,95,.38);
   color: var(--gold); font-family: var(--mono); font-size: 10px; letter-spacing: .8px; }
+/* Authored pass: a 0-day streak rendered gold, which is gold spent on
+   nothing. Gold returns the moment the streak is actually live. */
+.hud-streak.is-cold { color: var(--muted); border-bottom-color: var(--border); }
 /* Manual "sync now" — same shape as the bell, purple instead of neutral so
    it reads as an action, not a status indicator. */
 .hud-sync { flex-shrink: 0; width: 34px; height: 34px; display: flex; align-items: center;
@@ -381,11 +398,15 @@ body {
   letter-spacing: 1.8px; text-transform: uppercase; }
 .side-mission-head h3 { margin: 3px 0 0; font-family: var(--disp); font-size: 18px; letter-spacing: .8px; }
 .side-mission-status { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
-.side-mission-today { color: var(--gold); font-family: var(--mono); font-size: 10px; letter-spacing: 1px; white-space: nowrap; }
-.side-missions.is-cleared .side-mission-today { color: #64e6a5; }
+/* Authored pass: gold marks the achievement, it does not paint the
+   evidence for it. Purple while the day is in progress; gold only on the
+   one word that reports the day is actually cleared. */
+.side-mission-today { color: var(--purple-lt); font-family: var(--mono); font-size: 10px; letter-spacing: 1px; white-space: nowrap; }
+.side-missions.is-cleared .side-mission-today { color: var(--gold); }
 .side-mission-week-tag { color: var(--dim); font-family: var(--mono); font-size: 8.5px; letter-spacing: .6px;
   text-transform: uppercase; white-space: nowrap; }
-.side-mission-week-tag.is-done { color: #64e6a5; }
+/* secondary to today — neutral so it cannot compete with the headline */
+.side-mission-week-tag.is-done { color: var(--muted); }
 .side-mission-rule { margin: 7px 0 2px; color: var(--muted); font-size: 12px; }
 .side-mission-rule b { color: var(--text); }
 .side-mission-reset { margin: 0 0 12px; color: var(--dim); font-family: var(--mono); font-size: 9px;
@@ -397,18 +418,21 @@ body {
   text-align: left; cursor: pointer; }
 .side-track-check { width: 20px; height: 20px; display: grid; place-items: center; border: 1px solid var(--border-str);
   border-radius: 50%; color: var(--dim); font-family: var(--mono); font-size: 11px; }
-.side-mission-track.is-done .side-track-check { border-color: rgba(100,230,165,.55); color: #64e6a5; background: rgba(100,230,165,.08); }
+/* the mark, not a highlight: gold glyph on a hollow ring, no fill */
+.side-mission-track.is-done .side-track-check { border-color: rgba(217,173,95,.55); color: var(--gold); background: none; }
 .side-track-copy { min-width: 0; display: flex; flex-direction: column; }
 .side-track-copy b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
 .side-track-copy i { color: var(--dim); font-family: var(--mono); font-size: 8px; font-style: normal; letter-spacing: .5px; text-transform: uppercase; }
 .side-track-week { color: var(--muted); font-family: var(--mono); font-size: 10px; }
 .side-track-bar { position: absolute; left: 36px; right: 4px; bottom: 6px; height: 2px; overflow: hidden; background: rgba(255,255,255,.06); }
-.side-track-bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--purple), var(--gold)); }
-.side-mission-reward { padding-top: 10px; color: var(--gold); font-family: var(--mono); font-size: 9px; letter-spacing: .8px; text-align: right; text-transform: uppercase; }
-.side-missions.is-cleared .side-mission-reward { color: #64e6a5; }
+/* progress is purple. This was a purple-to-gold gradient, so every row
+   was part-gold at all times regardless of state. */
+.side-track-bar i { display: block; height: 100%; background: var(--purple); }
+.side-mission-reward { padding-top: 10px; color: var(--dim); font-family: var(--mono); font-size: 9px; letter-spacing: .8px; text-align: right; text-transform: uppercase; }
+.side-missions.is-cleared .side-mission-reward { color: var(--muted); }
 .side-mission-week-reward { padding-top: 4px; color: var(--dim); font-family: var(--mono); font-size: 9px;
   letter-spacing: .8px; text-align: right; text-transform: uppercase; }
-.side-mission-week-reward.is-done { color: #64e6a5; }
+.side-mission-week-reward.is-done { color: var(--muted); }
 
 .side-mission-sheet { max-width: 520px; }
 .side-sheet-status { display: flex; gap: 10px; margin: 10px 0 4px; }
@@ -416,21 +440,37 @@ body {
   display: flex; flex-direction: column; gap: 3px; }
 .side-sheet-stat span { color: var(--dim); font-family: var(--mono); font-size: 8.5px; letter-spacing: 1px; text-transform: uppercase; }
 .side-sheet-stat b { font-family: var(--mono); font-size: 12px; letter-spacing: .5px; }
-.side-sheet-stat b.ok { color: #64e6a5; }
-.side-sheet-stat b.warn { color: var(--gold); }
+.side-sheet-stat b.ok { color: var(--gold); }
+.side-sheet-stat b.warn { color: var(--purple-lt); }
 .side-sheet-track { padding: 11px 0; border-top: 1px solid var(--border); }
 .side-sheet-track.is-selected { margin-inline: -10px; padding-inline: 10px; background: rgba(139,92,246,.07); }
 .side-sheet-title { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
 .side-sheet-title b { font-size: 12px; }
-.side-sheet-title span { color: var(--gold); font-family: var(--mono); font-size: 10px; }
+.side-sheet-title span { color: var(--muted); font-family: var(--mono); font-size: 10px; }
 .side-sheet-today { font-family: var(--mono); font-size: 9.5px; letter-spacing: .4px; margin-bottom: 8px; }
-.side-sheet-today.ok { color: #64e6a5; }
+.side-sheet-today.ok { color: var(--muted); }
 .side-sheet-today.warn { color: var(--dim); }
 .side-sheet-days { display: grid; grid-template-columns: repeat(7,1fr); gap: 5px; }
-.side-sheet-days > span { min-width: 0; padding: 6px 2px; display: flex; flex-direction: column; align-items: center; gap: 2px;
+.side-sheet-days > span { position: relative; min-width: 0; padding: 6px 2px; display: flex; flex-direction: column; align-items: center; gap: 2px;
   border: 1px solid var(--border); border-radius: 7px; color: var(--dim); }
-.side-sheet-days > span.done { border-color: rgba(100,230,165,.38); color: #64e6a5; background: rgba(100,230,165,.06); }
-.side-sheet-days > span.miss { border-color: rgba(217,173,95,.25); color: var(--gold); }
+/* A cleared day is EVIDENCE of the achievement, so the cell is graphite
+   and the count stays legible. The entire gold budget for a day is one
+   3px dot — six filled gold tiles used to shout louder than the single
+   word that actually reports the week. */
+.side-sheet-days > span.done { border-color: rgba(255,255,255,.16); background: rgba(255,255,255,.05); color: var(--muted); }
+.side-sheet-days > span.done b { color: var(--text); }
+.side-sheet-days > span.done::after { content: ''; position: absolute; top: 4px; right: 4px;
+  width: 3px; height: 3px; border-radius: 50%; background: var(--gold); }
+/* A missed day is an absence — read by shape (hollow, dashed), never by
+   introducing another colour. Regression pass: this carried opacity .8,
+   which dropped the count to 3.10:1 against the sheet. The dashed edge
+   already carries "absence", so the text does not have to be faint too. */
+.side-sheet-days > span.miss { border-style: dashed; border-color: rgba(255,255,255,.13); background: none; color: var(--muted); }
+/* Not yet happened: quietest of the three, and solid so it can never be
+   mistaken for a miss. Regression pass: opacity .55 took this to 2.10:1 —
+   below anything readable. It sits at the same --dim tier the rest of the
+   app uses for its faintest text instead. */
+.side-sheet-days > span.future { border-color: rgba(255,255,255,.07); background: none; }
 .side-sheet-days i { font-family: var(--mono); font-size: 7px; font-style: normal; }
 .side-sheet-days b { font-family: var(--mono); font-size: 9px; }
 
@@ -1198,24 +1238,6 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 .op-note { font-size: 13px; line-height: 1.45; color: var(--muted); margin-top: 8px; }
 .btn.op-go { display: block; width: 100%; margin-top: 11px; padding: 12px 18px; font-size: 13px; }
 
-/* ── status tiles ── */
-.status-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
-.status-tile {
-  text-align: left; cursor: pointer; padding: 12px 13px 11px; border-radius: var(--r);
-  background: var(--surface); border: 1px solid var(--border); color: var(--text); font-family: inherit;
-  transition: border-color 0.2s;
-}
-.status-tile:hover { border-color: var(--border-str); }
-.st-head { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
-.st-label { font-size: 13.5px; font-weight: 700; }
-.st-val { font-family: var(--mono); font-size: 12.5px; color: var(--gold); }
-.st-bar { height: 5px; border-radius: 3px; background: rgba(255,255,255,0.08); overflow: hidden; margin: 9px 0 7px; }
-.st-fill { height: 100%; border-radius: 3px; background: var(--purple); transition: width 0.5s; }
-.st-fill.done { background: var(--gold); }
-.st-sub { font-family: var(--mono); font-size: 10px; letter-spacing: 0.5px; color: var(--dim);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.status-tile.done { border-color: rgba(217,173,95,0.4); }
-.status-tile.dim { opacity: 0.7; }
 
 /* ════════════════════════════════════════════════════════════════
    WARD
@@ -1467,23 +1489,6 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
    here" instead of reading as just the next section down. */
 .pack-after-bag { margin-top: 38px !important; }
 
-/* ── wallet — superseded by the case's compartments above; rules kept only
-   because nothing else references them yet, not for reuse. ── */
-.wallet-row { display: grid; grid-template-columns: repeat(4, 1fr); margin: 0 0 22px;
-  border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
-.wallet-tile { display: flex; flex-direction: column; align-items: center; gap: 3px;
-  position: relative; padding: 15px 7px 13px; color: var(--text); }
-.wallet-tile:not(:last-child)::after { content: ''; position: absolute; right: 0; top: 14px; bottom: 14px;
-  width: 1px; background: var(--border); }
-@media (max-width: 520px) {
-  .wallet-row { grid-template-columns: repeat(2, 1fr); }
-  .wallet-tile:nth-child(2)::after { display: none; }
-  .wallet-tile:nth-child(-n+2) { border-bottom: 1px solid var(--border); }
-}
-.wt-icon { font-size: 20px; line-height: 1; }
-.wt-val { font-family: var(--disp); font-weight: 900; font-size: 22px; line-height: 1.1; margin-top: 4px; }
-.wt-label { font-family: var(--mono); font-size: 10.5px; letter-spacing: 1.2px;
-  text-transform: uppercase; color: var(--dim); text-align: center; }
 .pack-hint { font-family: var(--mono); font-size: 12px; letter-spacing: 0.8px;
   color: var(--dim); text-align: center; margin: 10px 0 20px; }
 
@@ -1684,7 +1689,7 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 .bdr-summary { display: flex; align-items: center; gap: 11px; margin: 14px 0 18px; padding: 11px 13px;
   border: 1px solid rgba(217,173,95,.2); border-radius: var(--r); background: rgba(217,173,95,.055); }
 .bdr-summary-mark { display: grid; place-items: center; width: 34px; height: 34px; flex: 0 0 34px;
-  border-radius: 50%; background: var(--gold-soft); box-shadow: 0 0 14px rgba(217,173,95,.18); }
+  border-radius: 50%; background: var(--gold-soft); }
 .bdr-count { font-family: var(--mono); font-size: 11px; color: var(--gold); letter-spacing: .6px; }
 .bdr-summary-note { margin-top: 2px; font-size: 10.5px; color: var(--dim); }
 .bdr-grid { display: block; margin-bottom: 8px; }
@@ -2465,16 +2470,32 @@ body.overlay-open { overflow: hidden; }
   text-transform: uppercase; color: var(--dim); margin-top: 5px; }
 .bd-note { margin-top: 10px; text-align: center; font-size: 13.5px; }
 
-.bg-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
-  gap: 8px; margin-top: 16px; }
-.bg-stat { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r);
-  padding: 11px 10px; text-align: center; }
-.bs-v { display: block; font-family: var(--mono); font-size: 15px; color: var(--gold); }
+/* Authored pass: three equal bordered tiles became one surface with
+   dividers — the same treatment Settings already uses for its row groups.
+   The values are network telemetry, not something earned, so they no
+   longer render gold. */
+.bg-stats { display: flex; gap: 0; margin-top: 16px; overflow: hidden;
+  border: 1px solid var(--border); border-radius: var(--r); background: var(--panel); }
+.bg-stat { flex: 1; background: none; border: none; border-left: 1px solid var(--border);
+  border-radius: 0; padding: 11px 8px; text-align: center; }
+.bg-stat:first-child { border-left: none; }
+.bs-v { display: block; font-family: var(--mono); font-size: 15px; color: var(--text); }
 .bs-l { display: block; font-family: var(--mono); font-size: 9px; letter-spacing: 1.2px;
   text-transform: uppercase; color: var(--dim); margin-top: 4px; }
 
+/* Adjacent blocks join into one surface rather than stacking as separate
+   cards. Sibling logic, not :first-of-type — :first-of-type matches on
+   element TYPE, so in a sheet whose first <div> is the eyebrow no
+   .bd-block would ever match it. */
 .bd-block { margin-top: 16px; padding: 13px 14px; border: 1px solid var(--border);
   border-radius: var(--r); background: var(--panel); }
+.bd-block:has(+ .bd-block) { border-bottom-width: 0; border-radius: var(--r) var(--r) 0 0; }
+.bd-block + .bd-block { margin-top: 0; border-radius: 0 0 var(--r) var(--r); }
+.bd-block + .bd-block:has(+ .bd-block) { border-radius: 0; }
+/* an alert block is a real state, not chrome — it keeps its own edge */
+.bd-block.alert, .bd-block.alert:has(+ .bd-block) {
+  border-radius: var(--r); border-bottom-width: 1px; margin-top: 16px; }
+.bd-block.alert + .bd-block { margin-top: 16px; }
 .bd-block.alert { border-color: rgba(229,56,79,0.4); background: rgba(229,56,79,0.06); }
 .bd-block-head { font-family: var(--mono); font-size: 10px; letter-spacing: 2px;
   text-transform: uppercase; color: var(--muted); margin-bottom: 9px; }
@@ -2922,10 +2943,9 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--r-lg); padding: 20px; position: relative; overflow: hidden;
 }
-.archive-card::before {
-  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
-  background: linear-gradient(90deg, var(--purple), var(--gold)); opacity: 0.6;
-}
+/* Authored pass: a purple-to-gold bar used to sit on top of every card on
+   this screen, always, regardless of state — spending both semantic colours
+   at once on decoration. Removed, and deliberately not replaced. */
 
 .input-field {
   width: 100%; padding: 12px 14px; background: var(--surface-2);
@@ -3390,9 +3410,13 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
   font-size: 14px; color: var(--dim);
 }
 .rank-row.is-top .rank-place { font-size: 18px; }
+/* Authored pass: every row's avatar carried a gold ring and an inset purple
+   glow, so neither marked anything. Neutral by default — .is-top already
+   carries top-three emphasis on the row itself. */
 .rank-agent-icon { flex: none; width: 38px; height: 38px; display: grid; place-items: center; border-radius: 50%;
-  border: 1px solid rgba(217,173,95,.48); background: var(--panel); font-size: 19px;
-  box-shadow: inset 0 0 10px rgba(139,92,246,.12); overflow: hidden; }
+  border: 1px solid rgba(255,255,255,.16); background: var(--panel); font-size: 19px;
+  overflow: hidden; }
+.rank-row.is-top .rank-agent-icon { border-color: rgba(217,173,95,.48); }
 .rank-agent-photo { width: 100%; height: 100%; object-fit: cover; object-position: 50% 20%; border-radius: 50%; }
 .rank-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 /* Was font-family: var(--disp) (Orbitron) — the one place a codename
