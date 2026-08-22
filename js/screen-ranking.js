@@ -13,6 +13,7 @@ import { badgeById } from './badges.js'
 
 const TABS = [
   { key: 'all', label: 'All' },
+  { key: 'exam', label: 'School/Exam' },
   { key: 'easy', label: 'Easy' },
   { key: 'medium', label: 'Medium' },
   { key: 'hard', label: 'Hard' },
@@ -108,4 +109,4 @@ function paintList(body, agents, state) {
 }
 
 const MEDAL = { 1: '🥇', 2: '🥈', 3: '🥉' }
-const MODE_LABEL = { easy: 'Easy', medium: 'Medium', hard: 'Hard' }
+const MODE_LABEL = { exam: 'School/Exam', easy: 'Easy', medium: 'Medium', hard: 'Hard' }

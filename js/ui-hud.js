@@ -365,6 +365,7 @@ export function renderTabbar(container, state) {
 }
 
 const MODES = {
+  exam: { title: 'School/Exam', sub: 'Lighter goals for busy weeks · 5 goal streams = 1 XP' },
   easy: { title: 'Easy', sub: '1 device · normal targets · 10 goal streams = 1 XP' },
   medium: { title: 'Medium', sub: '2–4 accounts · 2× targets · 20 goal streams = 1 XP' },
   hard: { title: 'Hard', sub: '5–6 accounts · 4× targets · 30 goal streams = 1 XP' },
@@ -377,10 +378,10 @@ export function openModeSheet(state) {
   sheet.append(
     el('div', 'eyebrow', 'STREAMING MODE'),
     el('h3', '', 'How many accounts are you running?'),
-    el('p', 'muted', 'More accounts means bigger targets and slower XP from assigned goal streams — 10/20/30 for 1 XP on easy/medium/hard. Takes effect tomorrow (KST); today keeps whatever mode you started it on.'),
+    el('p', 'muted', 'More accounts means bigger targets and slower XP from assigned goal streams. School/Exam mode is here for busy weeks — smaller targets, fast XP — and can be switched into or out of anytime. A mode switch only applies to districts you activate after switching; anything already active keeps the targets it was frozen with.'),
   )
   const grid = el('div', 'mode-grid')
-  for (const key of ['easy', 'medium', 'hard']) {
+  for (const key of ['exam', 'easy', 'medium', 'hard']) {
     const m = MODES[key]
     const opt = el('button', 'mode-opt' + (state.player.mode === key ? ' sel' : ''),
       `<div class="t">${m.title}</div><div class="s">${m.sub}</div>`)

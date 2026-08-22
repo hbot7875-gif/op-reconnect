@@ -135,7 +135,10 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
       dedupKey: `stream:${player.agent_no}:${today}`,
     }).catch(() => {})
   }
-  const sideMissions = buildSideMissions(rollups, today)
+  // `allowlist` is this function's own bts_artists list (above); Signal
+  // Sweep's SWIM track is artist-guarded against it — see side-missions.ts's
+  // countTrack. The other three tracks ignore both arguments entirely.
+  const sideMissions = buildSideMissions(rollups, today, allowlist, trackArtistOverrides(content))
   await awardDailySideMissionXp(supabase, player.agent_no, today, sideMissions)
   await awardWeeklySideMissionXp(supabase, player.agent_no, sideMissions)
 
@@ -508,7 +511,7 @@ export async function joinGame(supabase: SupabaseDB, params: any) {
   const codename = String(params.codename || '').trim()
   const codenameErr = validateCodename(codename, agentNo, agent.handle)
   if (codenameErr) return { success: false, error: codenameErr }
-  const mode = ['easy', 'medium', 'hard'].includes(params.mode) ? params.mode : 'easy'
+  const mode = ['easy', 'medium', 'hard', 'exam'].includes(params.mode) ? params.mode : 'easy'
 
   const { error: insErr } = await supabase.from('rc_players')
     .insert({ agent_no: agentNo, codename, mode })
@@ -665,7 +668,7 @@ export async function setMode(supabase: SupabaseDB, params: any) {
   const agent = await getAgent(supabase, agentNo)
   const player = await getPlayer(supabase, agentNo)
   if (!agent || !player) return { success: false, error: 'Not joined' }
-  if (!['easy', 'medium', 'hard'].includes(params.mode)) return { success: false, error: 'mode_invalid' }
+  if (!['easy', 'medium', 'hard', 'exam'].includes(params.mode)) return { success: false, error: 'mode_invalid' }
   await supabase.from('rc_players').update({ mode: params.mode, updated_at: new Date().toISOString() })
     .eq('agent_no', agentNo)
   player.mode = params.mode

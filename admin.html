@@ -905,8 +905,8 @@ function renderDistrictFilterOptions() {
 }
 
 function modeTargets(base) {
-  const modes = goalsModes || { easy: { multiplier: 1 }, medium: { multiplier: 1 }, hard: { multiplier: 1 } }
-  return ['easy', 'medium', 'hard'].map((key) => ({
+  const modes = goalsModes || { exam: { multiplier: 1 }, easy: { multiplier: 1 }, medium: { multiplier: 1 }, hard: { multiplier: 1 } }
+  return ['exam', 'easy', 'medium', 'hard'].map((key) => ({
     key, label: modes[key]?.label || key,
     value: Math.max(1, Math.round((base || 0) * (modes[key]?.multiplier ?? 1))),
   }))

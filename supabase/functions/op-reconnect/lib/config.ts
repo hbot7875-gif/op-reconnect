@@ -104,7 +104,7 @@ export const PERSONAL_COUNT_CAP = 1_000_000
  *  stream-to-XP rate) so retuning one never silently moves the other.
  *  Admin-overridable per mode via rc_config's xp_rules.streamsPerXpByMode,
  *  same spread-over-defaults pattern as xpRules() itself. */
-const STREAMS_PER_XP_BY_MODE: Record<string, number> = { easy: 10, medium: 20, hard: 30 }
+const STREAMS_PER_XP_BY_MODE: Record<string, number> = { easy: 10, medium: 20, hard: 30, exam: 5 }
 export function streamsPerXpFor(content: GameContent, mode: string): number {
   const overrides = content.config.xp_rules?.streamsPerXpByMode || {}
   return overrides[mode] ?? STREAMS_PER_XP_BY_MODE[mode] ?? xpRules(content).streamsPerXp
