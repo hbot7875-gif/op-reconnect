@@ -61,16 +61,24 @@ export function freezeGoals(content: GameContent, mode: string, district: Distri
   // track goals now — a district can carry more than one (each is its own
   // full-album-pass checklist), not just a single one.
   // config.flatTarget opts a specific goal out of mode scaling entirely —
-  // same target on easy/medium/hard. Everything else still scales by
-  // multiplier as usual; this is the exception, not a new default.
+  // same target on easy/medium/hard. config.examTarget is narrower: only
+  // exam mode gets a hand-picked value (easy/medium/hard keep scaling off
+  // the base target as usual) — for a goal whose base is tuned for the
+  // 1.3x-scaled easy tier, exam's 1x multiplier alone doesn't always land
+  // where a "lighter than easy" mode should.
+  const goalTarget = (g: GoalRow) =>
+    g.config?.flatTarget ? g.target
+    : mode === 'exam' && g.config?.examTarget != null ? g.config.examTarget
+    : Math.max(1, Math.round(g.target * multiplier))
+
   const trackGoals = assignedTracks
-    .map((g) => ({ id: g.id, label: g.label, artist: g.artist, target: g.config?.flatTarget ? g.target : Math.max(1, Math.round(g.target * multiplier)), keys: goalKeys(g) }))
+    .map((g) => ({ id: g.id, label: g.label, artist: g.artist, target: goalTarget(g), keys: goalKeys(g) }))
 
   const albumGoals = assignedAlbums
     .map((g) => ({
       id: g.id,
       label: g.label,
-      target: g.config?.flatTarget ? g.target : Math.max(1, Math.round(g.target * multiplier)),
+      target: goalTarget(g),
       tracks: (g.tracks || []).map((t) => ({ label: t.label, keys: goalKeys({ label: t.label, aliases: t.aliases || [] }) })),
     }))
 
