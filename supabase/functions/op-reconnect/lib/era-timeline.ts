@@ -133,12 +133,29 @@ export const ERA_CATALOG: EraDef[] = [
   {
     id: 'hyyh', name: 'HYYH (The Youth Era)', icon: '🌸',
     description: 'The Most Beautiful Moment in Life: Fragility and growth.',
-    // pt.1 + pt.2 + Young Forever, deduped
+    // pt.1 + pt.2 + Young Forever — every track on all three releases,
+    // Intro/Skit/Outro/Epilogue fragments included this time (verified
+    // against the real Spotify tracklists), not deduped down to "real
+    // songs only" the way every other era here still is. The alternate
+    // mixes below (Prologue/Alternative/Ballad/Remix/Full Length Edition)
+    // still normalize down to the same key as their base track — a
+    // trailing "(...)" is stripped before matching, same as everywhere
+    // else in this catalog — so they can't require a separately-provable
+    // stream from that base version; they're listed anyway so the total
+    // reflects every track that's actually on the release, not a curated
+    // subset of it.
     albums: ['The Most Beautiful Moment in Life Pt.1', 'The Most Beautiful Moment in Life Pt.2', 'The Most Beautiful Moment in Life: Young Forever'],
     tracks: [
-      'I Need U', 'Hold Me Tight', 'Dope', 'Boyz With Fun', 'Converse High', 'Moving On',
-      'Run', 'Butterfly', 'Whalien 52', 'Ma City', 'Silver Spoon', 'Autumn Leaves',
+      'Intro: The Most Beautiful Moment in Life',
+      'I Need U', 'Hold Me Tight', 'Skit: Expectation!', 'Dope', 'Boyz With Fun', 'Converse High', 'Moving On',
+      'Outro: Love Is Not Over',
+      'Intro: Never Mind',
+      'Run', 'Butterfly', 'Whalien 52', 'Ma City', 'Silver Spoon', 'Skit: One Night in a Strange City', 'Autumn Leaves',
+      'Outro: House of Cards',
       'Save Me', 'Burning Up (Fire)', 'House Of Cards', 'Love Is Not Over',
+      'Epilogue: Young Forever',
+      'Butterfly (Prologue Mix)', 'House of Cards (Full Length Edition)', 'Love Is Not Over (Full Length Edition)',
+      'I Need U (Urban Mix)', 'I Need U (Remix)', 'Run (Ballad Mix)', 'Run (Alternative Mix)', 'Butterfly (Alternative Mix)',
     ],
   },
   {
