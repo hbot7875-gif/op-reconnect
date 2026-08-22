@@ -251,11 +251,11 @@ export const ERA_CATALOG: EraDef[] = [
     id: 'anthology', name: 'The Anthology (Chapter 1 Finale)', icon: '💎',
     description: 'Retrospective of 9 years and comfort during the pandemic.',
     // BE + the era's standalone singles + Proof's own exclusive additions.
-    // BE's tracklist is fully verified against Spotify (its one fragment,
-    // 'Skit', is added below); Proof is a 3-disc compilation and the
-    // fetched tracklist only returned ~30 of its tracks before cutting
-    // off, so its entries below are unchanged from before rather than
-    // guessed at — still just the handful actually exclusive to it.
+    // Both albums fully verified against Spotify (BE's one fragment, 'Skit',
+    // is added below); every one of Proof's 30 tracks is either a re-listing
+    // of a song already required by another era or one of the handful below
+    // that are actually exclusive to it (Born Singer, Yet To Come, Run BTS),
+    // so Proof adds no further entries here.
     albums: ['BE', 'Proof'],
     tracks: [
       'Life Goes On', 'Fly To My Room', 'Blue & Grey', 'Skit', 'Telepathy', 'Dis-ease', 'Stay',
