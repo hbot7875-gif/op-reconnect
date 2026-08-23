@@ -31,6 +31,12 @@ const ALLOWED_TYPES: Record<string, string> = {
   'image/png': 'png',
 }
 
+// `pool` used to be a free-text label nothing ever read back — now it's a
+// real style tag the Vault page filters the art grid by. Older rows
+// (set1/set2, from before this existed) just show up as untagged; the
+// fixed vocabulary is enforced here only for anything uploaded from now on.
+const POOL_TAGS = new Set(['cute', 'hot'])
+
 /** Always allowed regardless of config — the account that can already reach
  *  every other admin surface. Prevents a bad rc_config edit locking the
  *  vault for everyone including its owner. */
@@ -118,9 +124,10 @@ export async function addBadgeArt(supabase: SupabaseDB, params: any) {
   const agentNo = String(params.agentNo || '').toUpperCase()
   const contentType = String(params.contentType || '')
   const member = params.member ? String(params.member).trim().slice(0, 40) : null
-  const pool = params.pool ? String(params.pool).trim().slice(0, 40) : null
+  const pool = params.pool ? String(params.pool).trim().toLowerCase() : null
 
   if (!templateId) return { success: false, error: 'Pick a badge template first.' }
+  if (pool && !POOL_TAGS.has(pool)) return { success: false, error: 'Style must be Cute or Hot.' }
   const ext = ALLOWED_TYPES[contentType]
   if (!ext) return { success: false, error: 'Image must be WebP, JPEG or PNG.' }
   if (!params.imageBase64) return { success: false, error: 'No image data received.' }

@@ -63,6 +63,12 @@
   .bv-actions .btn { margin-top: 0; }
 
   /* ── existing art ── */
+  .bv-filter { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  .bv-chip { padding: 5px 12px; border-radius: 999px; border: 1px solid var(--border);
+    background: none; color: var(--muted); font-family: var(--mono); font-size: 10.5px;
+    letter-spacing: .5px; cursor: pointer; }
+  .bv-chip:hover { border-color: var(--border-str); color: var(--text); }
+  .bv-chip.sel { border-color: var(--gold); color: var(--gold); }
   .bv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 12px; }
   .bv-item { border: 1px solid var(--border); border-radius: var(--r); overflow: hidden;
     background: var(--surface-2); display: flex; flex-direction: column; }
@@ -135,10 +141,20 @@
       <input id="zoom" type="range" min="1" max="3" step="0.01" value="1" disabled>
     </div>
 
-    <label class="bv-field" style="margin-top:16px">
-      <span>Member (optional)</span>
-      <input class="input-field" id="member" placeholder="e.g. Jimin" maxlength="40">
-    </label>
+    <div class="bv-row two" style="margin-top:16px">
+      <label class="bv-field">
+        <span>Member (optional)</span>
+        <input class="input-field" id="member" placeholder="e.g. Jimin" maxlength="40">
+      </label>
+      <label class="bv-field">
+        <span>Style (optional)</span>
+        <select class="input-field" id="pool">
+          <option value="">—</option>
+          <option value="cute">Cute</option>
+          <option value="hot">Hot</option>
+        </select>
+      </label>
+    </div>
 
     <div class="bv-actions">
       <button class="btn btn-primary" id="save" type="button" disabled>Add to vault</button>
@@ -152,6 +168,12 @@
     <h2>In the vault</h2>
     <p class="bv-note">Deactivating stops a photo being handed out from now on;
       anyone already wearing it keeps it. A photo someone already wears can't be deleted.</p>
+    <div class="bv-filter" id="styleFilter" role="group" aria-label="Filter by style">
+      <button class="bv-chip sel" data-style="">All</button>
+      <button class="bv-chip" data-style="cute">Cute</button>
+      <button class="bv-chip" data-style="hot">Hot</button>
+      <button class="bv-chip" data-style="untagged">Untagged</button>
+    </div>
     <div class="bv-grid" id="grid"></div>
     <div class="bv-msg" id="gridMsg"></div>
   </div>
@@ -167,6 +189,7 @@ const TYPE = 'image/webp'
 
 let templates = []
 let art = []
+let styleFilter = '' // '' = all, 'cute' | 'hot' | 'untagged'
 // Crop state, in DISPLAY pixels relative to the frame. The export applies
 // the identical numbers scaled by (OUT / frame width), so the preview is a
 // true 1:1 representation of the file that gets uploaded.
@@ -223,16 +246,28 @@ function paintTemplates() {
   }
 }
 
+const STYLE_TAG = { cute: '🌸 Cute', hot: '🔥 Hot' }
+
 function paintGrid() {
   const grid = $('grid')
   grid.innerHTML = ''
+  const shown = art.filter((a) => {
+    if (!styleFilter) return true
+    if (styleFilter === 'untagged') return !STYLE_TAG[a.pool]
+    return a.pool === styleFilter
+  })
   if (!art.length) {
     $('gridMsg').className = 'bv-msg'
     $('gridMsg').textContent = 'Nothing uploaded through the vault yet.'
     return
   }
+  if (!shown.length) {
+    $('gridMsg').className = 'bv-msg'
+    $('gridMsg').textContent = 'Nothing matches this filter.'
+    return
+  }
   $('gridMsg').textContent = ''
-  for (const a of art) {
+  for (const a of shown) {
     const tpl = templates.find((t) => t.id === a.templateId)
     const el = document.createElement('div')
     el.className = 'bv-item' + (a.active ? '' : ' is-off')
@@ -241,7 +276,7 @@ function paintGrid() {
       <div class="bv-item-body">
         <div class="bv-item-tpl">${tpl ? tpl.name : a.templateId}</div>
         <div class="bv-item-meta">
-          ${a.member ? a.member + ' · ' : ''}${a.active ? 'active' : 'off'}${a.inUse ? ' · worn' : ''}
+          ${STYLE_TAG[a.pool] ? STYLE_TAG[a.pool] + ' · ' : ''}${a.member ? a.member + ' · ' : ''}${a.active ? 'active' : 'off'}${a.inUse ? ' · worn' : ''}
           ${a.uploadedBy ? '<br>by ' + a.uploadedBy : ''}
         </div>
         <div class="bv-item-btns">
@@ -374,6 +409,7 @@ $('save').onclick = async () => {
     agentNo: getAgentNo(),
     templateId: $('tpl').value,
     member: $('member').value.trim() || null,
+    pool: $('pool').value || null,
     contentType: TYPE,
     imageBase64: b64,
   })
@@ -386,7 +422,16 @@ $('save').onclick = async () => {
   paintGrid()
   $('file').value = ''
   $('member').value = ''
+  $('pool').value = ''
 }
+
+$('styleFilter').querySelectorAll('.bv-chip').forEach((btn) => {
+  btn.onclick = () => {
+    styleFilter = btn.dataset.style
+    $('styleFilter').querySelectorAll('.bv-chip').forEach((b) => b.classList.toggle('sel', b === btn))
+    paintGrid()
+  }
+})
 
 boot()
 </script>
