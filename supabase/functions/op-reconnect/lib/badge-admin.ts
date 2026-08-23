@@ -153,8 +153,17 @@ export async function addBadgeArt(supabase: SupabaseDB, params: any) {
   const rand = Math.random().toString(36).slice(2, 8)
   const storagePath = `vault/${templateId}/${stamp}-${rand}.${ext}`
 
+  // Intended as a 1-year cache (storagePath is unique per upload, so
+  // there's no staleness risk) to stop every repeat view across HUD crest/
+  // Agent ID/rank rows/Badge Drawer from hitting origin as billed egress.
+  // VERIFIED INEFFECTIVE on this Supabase project as of 2026-08-23 — a
+  // fresh upload with this set still serves `Cache-Control: no-cache`
+  // (checked live, CDN edge fully bypassed with a cache-busting query
+  // param, so it's not edge staleness). Matches known upstream bugs
+  // (supabase/storage#18, #250). Left in in case Supabase fixes it — it's
+  // a harmless no-op today, not a working fix. Don't rely on it.
   const { error: upErr } = await supabase.storage.from(BUCKET)
-    .upload(storagePath, bytes, { contentType, upsert: false })
+    .upload(storagePath, bytes, { contentType, upsert: false, cacheControl: '31536000' })
   if (upErr) return { success: false, error: `Upload failed: ${upErr.message}` }
 
   const { data: row, error: insErr } = await supabase.from('rc_badge_art')
