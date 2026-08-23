@@ -5,7 +5,7 @@
 // Clearing the weekly 20x target on all four tracks pays a separate,
 // one-time weekly bonus the same way — see awardWeeklySideMissionXp.
 
-import { normKeyFull } from './text.ts'
+import { normKeyFull, countedArtistPlays } from './text.ts'
 import { addDaysStr, kstDatesBetween, kstWeekKey } from './kst.ts'
 import type { SupabaseDB } from './config.ts'
 import type { DayBucket } from './transmission.ts'
@@ -30,16 +30,18 @@ type SideTrackDefinition = {
   name: string
   artist: string
   aliases: string[]
+  /** Opt-in per-track artist guard. Off by default, so every track without
+   *  it counts exactly as it always has (title only — see countTrack). Set
+   *  it only where the title genuinely collides with another artist's
+   *  catalog, which is the case for SWIM: BTS's "SWIM" and Chase Atlantic's
+   *  "Swim" normalise to the same bucket key. */
+  btsOnly?: boolean
 }
 
 const TRACKS: SideTrackDefinition[] = [
   {
     id: 'wild-flower', name: 'Wild Flower', artist: 'RM',
     aliases: ['Wild Flower', 'Wild Flower (with Youjeen)', 'Wild Flower (feat. Youjeen)', '야생화', '야생화 Wild Flower'],
-  },
-  {
-    id: 'dont-say-you-love-me', name: "Don't Say You Love Me", artist: 'Jin',
-    aliases: ["Don't Say You Love Me", 'Dont Say You Love Me', 'DSYLM'],
   },
   {
     id: 'haegeum', name: 'Haegeum', artist: 'Agust D',
@@ -49,14 +51,25 @@ const TRACKS: SideTrackDefinition[] = [
     id: 'killin-it-girl', name: "Killin' It Girl", artist: 'j-hope',
     aliases: ["Killin' It Girl", 'Killin It Girl', 'Killing It Girl', "Killin' It Girl (feat. GloRilla)", "Killin' It Girl (Solo Version)"],
   },
+  {
+    // Replaces Don't Say You Love Me (Jin), which finished the milestone it
+    // was here for. These four are the current Rapline + SWIM → 1B focus.
+    // Aliases stay deliberately narrow: stripVersionSuffix already maps
+    // "SWIM with RM (Chill Hip Hop Remix)" to its own `swim with rm` key, so
+    // the remixes never fold into this one and the goal stays about the
+    // original track's own streams.
+    id: 'swim', name: 'SWIM', artist: 'BTS',
+    aliases: ['SWIM'],
+    btsOnly: true,
+  },
 ]
 
 function trackKeys(track: SideTrackDefinition): string[] {
   return [...new Set(track.aliases.map(normKeyFull).filter(Boolean))]
 }
 
-// Title match only, no artist filter — matching Arirang Mission's own
-// findDailyTrackScrobbles/findTrackScrobbles (the reference this loop was
+// Title match only by default, no artist filter — matching Arirang Mission's
+// own findDailyTrackScrobbles/findTrackScrobbles (the reference this loop was
 // carried forward from) and this file's sibling transmission.ts, whose
 // equivalent per-key tally (frozen.keys' `bucket[k]?.n`) also trusts the
 // track key alone. This used to additionally require the play's own artist
@@ -64,14 +77,36 @@ function trackKeys(track: SideTrackDefinition): string[] {
 // for Wild Flower, etc.) — stricter than every other counting path in this
 // codebase, and it silently dropped real plays: plenty of scrobble sources
 // attribute a member's solo track to 'BTS' rather than the member's own
-// name, and that combination never matched. These four titles (Wild
-// Flower, Don't Say You Love Me, Haegeum, Killin' It Girl) don't collide
-// with any other artist's differently-named catalog, so there's no
-// collision risk an artist filter would actually be protecting against —
-// only lost plays for no benefit.
-function countTrack(bucket: DayBucket, track: SideTrackDefinition): number {
+// name, and that combination never matched.
+//
+// Wild Flower, Haegeum and Killin' It Girl don't collide with any other
+// artist's differently-named catalog, so for them there is still no
+// collision an artist filter would protect against — only lost plays. They
+// keep the untouched title-only path.
+//
+// SWIM is the exception this guard exists for: BTS's "SWIM" and Chase
+// Atlantic's "Swim" (that artist's most-streamed song) normalise to the
+// same `swim` bucket key, so without a filter another artist's track would
+// satisfy a BTS mission and pay its XP. Tracks marked `btsOnly` therefore
+// count through countedArtistPlays against the same admin-editable
+// bts_artists allowlist (plus per-track collaborator overrides) that Lit
+// Era Cards, the Era Timeline and the ARMY Bomb already use — reusing that
+// path rather than adding a second matching system. Note this inherits its
+// existing rule that a play with no artist string at all still counts
+// ("stats.fm rows carry no artist — trust linked sources", see
+// text.ts's artistAllowed); that global behaviour is deliberately unchanged
+// here.
+function countTrack(
+  bucket: DayBucket,
+  track: SideTrackDefinition,
+  allow: string[],
+  overrides: Record<string, string[]>,
+): number {
   let total = 0
-  for (const key of trackKeys(track)) total += bucket[key]?.n || 0
+  for (const key of trackKeys(track)) {
+    if (track.btsOnly) total += countedArtistPlays(bucket[key]?.a, allow, key, overrides)
+    else total += bucket[key]?.n || 0
+  }
   return total
 }
 
@@ -80,6 +115,11 @@ export type SideMissionView = ReturnType<typeof buildSideMissions>
 export function buildSideMissions(
   rows: { kst_date: string; track_counts: DayBucket }[],
   today: string,
+  // Required rather than defaulted: an omitted allowlist would silently
+  // zero every btsOnly track instead of failing loudly, so the compiler
+  // catches a missed caller.
+  allow: string[],
+  overrides: Record<string, string[]>,
 ) {
   const weekStart = kstWeekKey(today)
   const weekDates = kstDatesBetween(weekStart, addDaysStr(weekStart, 6))
@@ -87,7 +127,7 @@ export function buildSideMissions(
 
   const tracks = TRACKS.map((track) => {
     const days = weekDates.map((date) => {
-      const count = countTrack(byDate.get(date) || {}, track)
+      const count = countTrack(byDate.get(date) || {}, track, allow, overrides)
       return { date, count, done: count >= DAILY_REQUIRED, future: date > today }
     })
     const weeklyTotal = days.reduce((sum, day) => sum + day.count, 0)
