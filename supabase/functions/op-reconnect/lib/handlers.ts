@@ -22,6 +22,7 @@ import { awardBadge, resolveEquippedBadges } from './badge-profile.ts'
 import { districtBadgeProgress } from './badge-rules.js'
 import { getBackupOverlay } from './backup-pass.ts'
 import { getVmaBanner } from './vma-voting.ts'
+import { isBadgeEditor } from './badge-admin.ts'
 
 // rc_agents (migration 016) is this season's own account table — a clean
 // break from the old site's `agents`. Migrations 019/020 added the columns
@@ -430,6 +431,10 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
   const equippedBadgeArtwork = (await resolveEquippedBadges(
     supabase, [{ agentNo: player.agent_no, badgeId: player.equipped_badge_id || null }],
   )).get(player.agent_no) || null
+  // Lets Settings show the Badge Vault row to anyone who actually has
+  // access, not just agent000 — same check badge-admin.html's own gate
+  // does, just surfaced here too so the client doesn't need a second call.
+  const isBadgeVaultEditor = await isBadgeEditor(supabase, player.agent_no)
 
   return {
     success: true,
@@ -454,6 +459,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
       chargeCells: (player.charge_cells || 0) + chargeCellsEarnedNow,
       wings: player.wings || 0,
       tickets: player.tickets || 0,
+      isBadgeVaultEditor,
     },
     levelUp,
     map: { wards, districts },

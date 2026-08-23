@@ -192,6 +192,16 @@ function paintSections(body, state) {
         onClick: () => { window.location.href = 'badge-admin.html' },
       },
     ]))
+  } else if (state?.player?.isBadgeVaultEditor) {
+    // Not agent000, but the server already confirmed they're on
+    // badge_editors — same row without the rest of HT Access.
+    body.appendChild(section('Badge Vault', 'Upload badge art', [
+      {
+        icon: '🎖️', name: 'Badge Vault', value: '',
+        body: 'Upload and crop badge art for the badges you have access to.',
+        onClick: () => { window.location.href = 'badge-admin.html' },
+      },
+    ]))
   }
 
   body.appendChild(el('div', 'set-foot',
