@@ -33,6 +33,8 @@ import { getUserAccessToken } from './spotify-oauth.ts'
 import { getBTSCatalog, getAlbumsMap } from './spotify-catalog.ts'
 import { getFillerLibrary } from './spotify-filler.ts'
 import { todayKst, kstDayBounds } from './kst.ts'
+import { loadContent } from './config.ts'
+import { goalTargetForMode } from './districts.ts'
 import {
   analyzeTracklist, buildHumanPlaylistMeta, buildPlaylistOrder, buildPlaylistOrder2Focus,
   spreadFocusPlays, createUserPlaylist, uploadPlaylistCover,
@@ -401,11 +403,35 @@ const ALPACA_QUICK_PLAYS = 4
 const ALPACA_QUICK_MINUTES = 180
 const ALPACA_MAX_TOTAL_PLAYS = 120
 
-/** Playable catalog songs + album bundles for the agent-facing picker. */
-export async function getAlpacaOptions(supabase: SupabaseDB, _params: any): Promise<any> {
-  const [cat, albumsMap] = await Promise.all([
+/** Short, player-safe description of a ReConnect goal for playlist makers.
+ *  Puzzle prompts/answers deliberately stay out of this payload; only shared
+ *  streaming requirements can affect how somebody builds a playlist. */
+function reconnectGuide(goal: any) {
+  const cfg = goal.config || {}
+  const shared = cfg.sharedTrack || null
+  return {
+    id: goal.id,
+    label: goal.label,
+    variant: goal.variant,
+    requiredAgents: Number(cfg.requiredAgents) || null,
+    sharedTrack: shared ? {
+      label: String(shared.label || goal.label),
+      target: Number(shared.target) || null,
+    } : null,
+  }
+}
+
+/** Playable catalog songs + album bundles and the district goal guide for
+ *  the agent-facing picker. The guide is built from the same live rc_goals,
+ *  mode config and target function used when a district is activated. */
+export async function getAlpacaOptions(supabase: SupabaseDB, params: any): Promise<any> {
+  const [cat, albumsMap, content, activeRes] = await Promise.all([
     getBTSCatalog(supabase),
     getAlbumsMap(supabase),
+    loadContent(supabase),
+    supabase.from('rc_player_districts').select('district_id')
+      .eq('agent_no', String(params.agentNo || '').trim().toUpperCase())
+      .eq('status', 'active').maybeSingle(),
   ])
 
   const songs = (cat.songs || [])
@@ -418,7 +444,100 @@ export async function getAlpacaOptions(supabase: SupabaseDB, _params: any): Prom
     .map((a: any) => ({ id: a.id, name: a.name, trackKeys: a.trackKeys, count: a.trackKeys.length }))
     .sort((a: any, b: any) => a.name.localeCompare(b.name))
 
-  return { success: true, songs, albums }
+  const modeOrder = ['exam', 'easy', 'medium', 'hard']
+  const modes = Object.entries(content.config.modes || {})
+    .map(([id, value]: [string, any]) => ({
+      id,
+      label: String(value?.label || id),
+      multiplier: Number(value?.multiplier) || 1,
+    }))
+    .sort((a, b) => {
+      const ai = modeOrder.indexOf(a.id), bi = modeOrder.indexOf(b.id)
+      return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi)
+    })
+
+  // Match goal labels/aliases to the catalog once on the server. The client
+  // then gets a reliable Use-in-builder button even when a display label and
+  // Spotify title use different punctuation or a translated alias.
+  const songByExact = new Map<string, any>()
+  const songByBase = new Map<string, any>()
+  for (const song of songs) {
+    const exact = normalizeKey(song.name)
+    if (!songByExact.has(exact)) songByExact.set(exact, song)
+    const base = normalizeKey(stripVersionSuffix(song.name))
+    if (!songByBase.has(base)) songByBase.set(base, song)
+  }
+  const albumByName = new Map<string, any>()
+  for (const album of albums) albumByName.set(normalizeKey(album.name), album)
+
+  const catalogSong = (goal: any) => {
+    const names = [goal.label, ...(Array.isArray(goal.aliases) ? goal.aliases : [])]
+    for (const name of names) {
+      const hit = songByExact.get(normalizeKey(String(name || '')))
+      if (hit) return hit
+    }
+    for (const name of names) {
+      const hit = songByBase.get(normalizeKey(stripVersionSuffix(String(name || ''))))
+      if (hit) return hit
+    }
+    return null
+  }
+  const catalogAlbum = (goal: any) => {
+    for (const name of [goal.label, ...(Array.isArray(goal.aliases) ? goal.aliases : [])]) {
+      const hit = albumByName.get(normalizeKey(String(name || '')))
+      if (hit) return hit
+    }
+    return null
+  }
+  const targetsFor = (goal: any) => Object.fromEntries(
+    modes.map((mode) => [mode.id, goalTargetForMode(content, mode.id, goal)]),
+  )
+
+  const wardById = new Map(content.wards.map((ward: any) => [ward.id, ward]))
+  const goalsByDistrict = new Map<string, any[]>()
+  for (const goal of content.goals) {
+    if (!goal.district_id) continue
+    const list = goalsByDistrict.get(goal.district_id) || []
+    list.push(goal)
+    goalsByDistrict.set(goal.district_id, list)
+  }
+
+  const districtGuides = content.districts
+    .map((district: any) => {
+      const assigned = goalsByDistrict.get(district.id) || []
+      const tracks = assigned.filter((g: any) => g.kind === 'track').map((goal: any) => {
+        const match = catalogSong(goal)
+        return {
+          id: goal.id, label: goal.label, artist: goal.artist,
+          targets: targetsFor(goal), catalogKey: match?.key || null,
+        }
+      })
+      const albumGoals = assigned.filter((g: any) => g.kind === 'album').map((goal: any) => {
+        const match = catalogAlbum(goal)
+        return {
+          id: goal.id, label: goal.label, artist: goal.artist,
+          targets: targetsFor(goal), trackCount: (goal.tracks || []).length,
+          catalogAlbumId: match?.id || null,
+        }
+      })
+      const reconnect = assigned.filter((g: any) => g.kind === 'reconnect').map(reconnectGuide)
+      if (!tracks.length && !albumGoals.length && !reconnect.length) return null
+      return {
+        id: district.id,
+        name: district.name,
+        wardId: district.ward_id,
+        wardName: wardById.get(district.ward_id)?.name || '',
+        sequence: district.sequence,
+        isCurrent: activeRes.data?.district_id === district.id,
+        tracks,
+        albums: albumGoals,
+        reconnect,
+      }
+    })
+    .filter(Boolean)
+    .sort((a: any, b: any) => Number(b.isCurrent) - Number(a.isCurrent) || a.sequence - b.sequence)
+
+  return { success: true, songs, albums, modes, districtGuides }
 }
 
 /**

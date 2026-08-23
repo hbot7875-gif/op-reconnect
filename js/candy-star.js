@@ -65,6 +65,183 @@ function candyCurrentGoalNames() {
   return [...tracks, ...albums];
 }
 
+function candyGuideShortMode(label, fallback) {
+  return String(label || fallback || '').split(/\s+[—–]\s+/)[0].trim();
+}
+
+function candyGoalGuideMarkup() {
+  const cs = window._candyStar || {};
+  const guides = cs.districtGuides || [];
+  if (!guides.length) return '';
+  const selected = guides.find(d => d.id === cs.guideDistrictId) || guides[0];
+  const modes = cs.guideModes || [];
+  return `
+    <section class="cs-goal-guide" aria-labelledby="cs-goal-guide-title">
+      <button type="button" class="cs-goal-guide-toggle" id="cs-goal-guide-title" aria-expanded="false" aria-controls="cs-goal-guide-panel" onclick="candyToggleGoalGuide()">
+        <span class="cs-goal-guide-symbol" aria-hidden="true">◎</span>
+        <span class="cs-goal-guide-toggle-copy">
+          <b>District playlist guide</b>
+          <small>See what each district needs before you build.</small>
+        </span>
+        <span class="cs-goal-guide-open">View goals <span aria-hidden="true">▾</span></span>
+      </button>
+      <div class="cs-goal-guide-panel" id="cs-goal-guide-panel" hidden>
+        <div class="cs-goal-guide-controls">
+          <label>
+            <span>District</span>
+            <select id="cs-guide-district" onchange="candySelectGuideDistrict(this.value)">
+              ${guides.map(d => `<option value="${sanitize(d.id)}"${d.id === selected.id ? ' selected' : ''}>${sanitize(d.name)}${d.isCurrent ? ' · current' : ''}</option>`).join('')}
+            </select>
+          </label>
+          <label>
+            <span>Goal size for</span>
+            <select id="cs-guide-mode" onchange="candySelectGuideMode(this.value)">
+              ${modes.map(mode => `<option value="${sanitize(mode.id)}"${mode.id === cs.guideMode ? ' selected' : ''}>${sanitize(candyGuideShortMode(mode.label, mode.id))}</option>`).join('')}
+            </select>
+          </label>
+        </div>
+        <div id="cs-goal-guide-content"></div>
+      </div>
+    </section>`;
+}
+
+function candyReconnectGuideText(goal) {
+  const agents = goal.requiredAgents ? `${goal.requiredAgents} agents` : 'Team mission';
+  if (goal.sharedTrack) {
+    const target = goal.sharedTrack.target ? ` · ${goal.sharedTrack.target} streams together` : '';
+    return `${agents} · ${goal.sharedTrack.label}${target}`;
+  }
+  if (goal.variant === 'connect' || goal.variant === 'invite') {
+    return `${agents} · each person streams their own district goal`;
+  }
+  return 'Puzzle mission · no special playlist target';
+}
+
+function candyGoalGuideRow(kind, goal) {
+  const target = goal.targets?.[window._candyStar?.guideMode] ?? Object.values(goal.targets || {})[0] ?? '—';
+  const isTrack = kind === 'track';
+  const canUse = isTrack ? !!goal.catalogKey : !!goal.catalogAlbumId;
+  const detail = isTrack
+    ? (goal.artist || 'BTS')
+    : `${goal.trackCount || 0} tracks · every track needs ${target} play${Number(target) === 1 ? '' : 's'}`;
+  const targetUnit = isTrack ? 'streams' : 'full rounds';
+  const dataAttr = isTrack
+    ? `data-key="${sanitize(goal.catalogKey || '')}"`
+    : `data-album-id="${sanitize(goal.catalogAlbumId || '')}"`;
+  const handler = isTrack ? 'candyGuideUseTrack(this)' : 'candyGuideUseAlbum(this)';
+  return `<div class="cs-guide-goal-row">
+    <span class="cs-guide-goal-icon" aria-hidden="true">${isTrack ? candyIcon('music', 15) : candyIcon('disc', 15)}</span>
+    <span class="cs-guide-goal-copy"><b>${sanitize(goal.label)}</b><small>${sanitize(detail)}</small></span>
+    <span class="cs-guide-goal-target"><b>${sanitize(target)}</b><small>${targetUnit}</small></span>
+    <button type="button" class="cs-guide-use" ${dataAttr} onclick="${handler}"${canUse ? '' : ' disabled title="Not available in the Candy Star catalog yet"'}>${canUse ? 'Use' : 'Unavailable'}</button>
+  </div>`;
+}
+
+function candyRenderGoalGuide() {
+  const cs = window._candyStar || {};
+  const mount = $('cs-goal-guide-content');
+  if (!mount) return;
+  const district = (cs.districtGuides || []).find(d => d.id === cs.guideDistrictId) || cs.districtGuides?.[0];
+  if (!district) { mount.innerHTML = '<div class="cs-guide-empty">No district goals are configured yet.</div>'; return; }
+  cs.guideDistrictId = district.id;
+  const trackRows = (district.tracks || []).map(goal => candyGoalGuideRow('track', goal)).join('');
+  const albumRows = (district.albums || []).map(goal => candyGoalGuideRow('album', goal)).join('');
+  const reconnectRows = (district.reconnect || []).map(goal => `<div class="cs-guide-reconnect-row">
+    <span class="cs-guide-goal-icon" aria-hidden="true">⌁</span>
+    <span class="cs-guide-goal-copy"><b>${sanitize(goal.label)}</b><small>${sanitize(candyReconnectGuideText(goal))}</small></span>
+  </div>`).join('');
+  const counts = [
+    `${(district.tracks || []).length} song${district.tracks?.length === 1 ? '' : 's'}`,
+    `${(district.albums || []).length} album${district.albums?.length === 1 ? '' : 's'}`,
+    `${(district.reconnect || []).length} ReConnect`,
+  ].join(' · ');
+  mount.innerHTML = `
+    <div class="cs-guide-district-head">
+      <div>
+        <span class="cs-guide-ward">${sanitize(district.wardName || 'District')}</span>
+        <h3>${sanitize(district.name)}</h3>
+        <p>${counts}</p>
+      </div>
+      ${district.isCurrent ? '<span class="cs-guide-current"><i></i>Your current district</span>' : ''}
+    </div>
+    <div class="cs-guide-explainer">These are the <b>whole district targets</b>. Album rounds mean every listed track needs that many plays.</div>
+    ${trackRows ? `<div class="cs-guide-group"><div class="cs-guide-group-title"><span>Focus songs</span><small>${district.tracks.length}</small></div>${trackRows}</div>` : ''}
+    ${albumRows ? `<div class="cs-guide-group"><div class="cs-guide-group-title"><span>Albums</span><small>${district.albums.length}</small></div>${albumRows}</div>` : ''}
+    ${reconnectRows ? `<div class="cs-guide-group"><div class="cs-guide-group-title"><span>ReConnect</span><small>${district.reconnect.length > 1 ? 'one is assigned at activation' : 'team goal'}</small></div>${reconnectRows}</div>` : ''}
+    <div class="cs-guide-tip"><b>Playlist tip:</b> use 1–2 focus songs with 1–2 albums. For a large district, make several focused playlists instead of squeezing every goal into one.</div>`;
+}
+
+export function candyToggleGoalGuide() {
+  const panel = $('cs-goal-guide-panel');
+  const button = $('cs-goal-guide-title');
+  if (!panel || !button) return;
+  const opening = panel.hidden;
+  panel.hidden = !opening;
+  button.setAttribute('aria-expanded', opening ? 'true' : 'false');
+  button.classList.toggle('is-open', opening);
+  if (opening) candyRenderGoalGuide();
+}
+
+export function candySelectGuideDistrict(id) {
+  if (!window._candyStar) return;
+  window._candyStar.guideDistrictId = id;
+  candyRenderGoalGuide();
+}
+
+export function candySelectGuideMode(mode) {
+  if (!window._candyStar) return;
+  window._candyStar.guideMode = mode;
+  candyRenderGoalGuide();
+}
+
+function candyGuideOpenBuilder(anchor) {
+  candySwitchTab('custom');
+  requestAnimationFrame(() => {
+    (anchor || document.querySelector('#cs-panel-custom .archive-card'))?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+}
+
+export function candyGuideUseTrack(button) {
+  const key = button?.dataset?.key;
+  const cs = window._candyStar || {};
+  const label = cs.keyToLabel?.[key];
+  if (!key || !label) { showToast('This song is not available in the playlist maker yet.'); return; }
+  const rows = [...document.querySelectorAll('#cs-focus-rows .cs-focus-row')];
+  const existing = rows.find(row => row.querySelector('.cs-focus-sel')?.dataset?.resolvedKey === key);
+  if (existing) {
+    candyGuideOpenBuilder(existing);
+    showToast('That song is already in your setup.');
+    return;
+  }
+  let row = rows.find(item => !item.querySelector('.cs-focus-sel')?.value?.trim());
+  if (!row && rows.length < CS_MAX_FOCUS_ROWS) {
+    candyAddFocusRow();
+    row = document.querySelector('#cs-focus-rows .cs-focus-row:last-child');
+  }
+  if (!row) { showToast('This setup already has 2 focus songs — remove one first.'); return; }
+  const input = row.querySelector('.cs-focus-sel');
+  input.value = label;
+  input.dataset.resolvedKey = key;
+  input.classList.remove('cs-invalid');
+  candyAddRecent(key, label);
+  candyUpdateEstimate();
+  candyGuideOpenBuilder(row);
+  showToast('Goal song added — choose how many repeats this playlist needs.');
+}
+
+export function candyGuideUseAlbum(button) {
+  const albumId = button?.dataset?.albumId;
+  const checkbox = [...document.querySelectorAll('.cs-album-check')].find(input => input.dataset.albumId === albumId);
+  if (!checkbox) { showToast('This album is not available in the playlist maker yet.'); return; }
+  if (!checkbox.checked) {
+    checkbox.checked = true;
+    candyAlbumCheckChanged(checkbox);
+  }
+  if (!checkbox.checked) return;
+  candyGuideOpenBuilder(checkbox.closest('.cs-album-card'));
+  showToast('Album added to your setup.');
+}
+
 /**
  * Resolves a song field to a catalog key. Accepts either the input ELEMENT
  * (preferred — checks dataset.resolvedKey first, set the moment a dropdown
@@ -848,6 +1025,7 @@ export async function renderCandyStar() {
   window._candyStar = {
     songByLabel: {}, songByLabelLower: {}, songByNameLower: {}, keyToLabel: {},
     songList: opt.songs || [], albums: opt.albums || [], frequentSongs: [],
+    districtGuides: opt.districtGuides || [], guideModes: opt.modes || [],
   };
   // Names shared by 2+ catalog entries (e.g. a base track + its remixes) stay
   // ambiguous on purpose — songByNameLower only gets a key when exactly one
@@ -879,6 +1057,10 @@ export async function renderCandyStar() {
   window._candyStar.quickPicks = [];
   window._candyStar.quickAlbum = false;
   window._candyStar.arirangAlbum = (opt.albums || []).find(a => /arirang/i.test(a.name)) || null;
+  window._candyStar.guideMode = (opt.modes || []).some(mode => mode.id === window.__rcState?.player?.mode)
+    ? window.__rcState.player.mode
+    : (opt.modes?.[0]?.id || 'easy');
+  window._candyStar.guideDistrictId = (opt.districtGuides || []).find(d => d.isCurrent)?.id || opt.districtGuides?.[0]?.id || null;
 
   // Picking beats listing: all six goals in one playlist dilutes every one of
   // them, so Quick offers the same songs as choices with a hard cap.
@@ -898,6 +1080,8 @@ export async function renderCandyStar() {
       <button type="button" class="cs-tab" data-tab="custom" role="tab" aria-selected="false" onclick="candySwitchTab('custom')">${candyIcon('music')} Custom</button>
       <button type="button" class="cs-tab" data-tab="vault" role="tab" aria-selected="false" onclick="candySwitchTab('vault')">${candyIcon('sparkles')} Vault</button>
     </div>
+
+    ${candyGoalGuideMarkup()}
 
     <!-- QUICK -->
     <div class="cs-panel is-active" id="cs-panel-quick" role="tabpanel">

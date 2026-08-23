@@ -5,7 +5,7 @@
 
 import { goalKeys } from './transmission.ts'
 import type { DayBucket } from './transmission.ts'
-import type { GameContent, DistrictRow } from './config.ts'
+import type { GameContent, DistrictRow, GoalRow } from './config.ts'
 import { modeMultiplier, PERSONAL_COUNT_CAP } from './config.ts'
 import { kstDateOf, todayKst } from './kst.ts'
 
@@ -30,6 +30,16 @@ export interface RollupRow {
   kst_date: string
   track_counts: DayBucket
   transmission: { templateId?: number } | null
+}
+
+/** The exact target a goal will freeze at for a newly-started district.
+ *  Exported so player-facing planning tools can show the same numbers the
+ *  game will actually use instead of maintaining a second, drifting copy of
+ *  the mode/flat/exam rules. */
+export function goalTargetForMode(content: GameContent, mode: string, goal: GoalRow): number {
+  if (goal.config?.flatTarget) return goal.target
+  if (mode === 'exam' && goal.config?.examTarget != null) return goal.config.examTarget
+  return Math.max(1, Math.round(goal.target * modeMultiplier(content, mode)))
 }
 
 /** Freeze the current era's goals for a district activation. */
@@ -66,19 +76,14 @@ export function freezeGoals(content: GameContent, mode: string, district: Distri
   // the base target as usual) — for a goal whose base is tuned for the
   // 1.3x-scaled easy tier, exam's 1x multiplier alone doesn't always land
   // where a "lighter than easy" mode should.
-  const goalTarget = (g: GoalRow) =>
-    g.config?.flatTarget ? g.target
-    : mode === 'exam' && g.config?.examTarget != null ? g.config.examTarget
-    : Math.max(1, Math.round(g.target * multiplier))
-
   const trackGoals = assignedTracks
-    .map((g) => ({ id: g.id, label: g.label, artist: g.artist, target: goalTarget(g), keys: goalKeys(g) }))
+    .map((g) => ({ id: g.id, label: g.label, artist: g.artist, target: goalTargetForMode(content, mode, g), keys: goalKeys(g) }))
 
   const albumGoals = assignedAlbums
     .map((g) => ({
       id: g.id,
       label: g.label,
-      target: goalTarget(g),
+      target: goalTargetForMode(content, mode, g),
       tracks: (g.tracks || []).map((t) => ({ label: t.label, keys: goalKeys({ label: t.label, aliases: t.aliases || [] }) })),
     }))
 
