@@ -135,16 +135,10 @@
       <input id="zoom" type="range" min="1" max="3" step="0.01" value="1" disabled>
     </div>
 
-    <div class="bv-row two" style="margin-top:16px">
-      <label class="bv-field">
-        <span>Member (optional)</span>
-        <input class="input-field" id="member" placeholder="e.g. Jimin" maxlength="40">
-      </label>
-      <label class="bv-field">
-        <span>Pool label (optional)</span>
-        <input class="input-field" id="pool" placeholder="e.g. arirang_era" maxlength="40">
-      </label>
-    </div>
+    <label class="bv-field" style="margin-top:16px">
+      <span>Member (optional)</span>
+      <input class="input-field" id="member" placeholder="e.g. Jimin" maxlength="40">
+    </label>
 
     <div class="bv-actions">
       <button class="btn btn-primary" id="save" type="button" disabled>Add to vault</button>
@@ -380,7 +374,6 @@ $('save').onclick = async () => {
     agentNo: getAgentNo(),
     templateId: $('tpl').value,
     member: $('member').value.trim() || null,
-    pool: $('pool').value.trim() || null,
     contentType: TYPE,
     imageBase64: b64,
   })
