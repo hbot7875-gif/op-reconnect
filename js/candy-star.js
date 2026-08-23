@@ -1308,6 +1308,14 @@ export async function candyGenerate(mode) {
       <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">${res.trackCount} tracks${res.savedToVault === false ? ' · Vault save is retrying later' : ' · saved to the Community Vault'}</div></span>`);
     showToast('Alpaca created 🦙', 'success');
   } else {
-    candySetStatus('error', `<span style="font-size:16px;">⚠️</span><span>${sanitize(res?.error || 'Generation failed.')}</span>`);
+    // The backend's real message is a rule-by-rule breakdown meant for
+    // debugging a stuck generation, not something a player needs to parse —
+    // this failure mode is a known, safely-retryable one (no Wing spent,
+    // the playlist that failed validation is already deleted), so just say
+    // that plainly instead.
+    const simple = /^Spotify copy (failed live validation|could not be verified)/.test(res?.error || '')
+      ? "Spotify hiccuped building this one — no Wing was spent. Just hit Generate again."
+      : (res?.error || 'Generation failed.');
+    candySetStatus('error', `<span style="font-size:16px;">⚠️</span><span>${sanitize(simple)}</span>`);
   }
 }
