@@ -186,6 +186,11 @@ function paintSections(body, state) {
         body: 'Red Zone events, broadcasts, district goals, agent lookup.',
         onClick: () => { window.location.href = 'admin.html' },
       },
+      {
+        icon: '🎖️', name: 'Badge Vault', value: '',
+        body: 'Upload and crop badge art. Open to agent000 plus anyone listed in badge_editors.',
+        onClick: () => { window.location.href = 'badge-admin.html' },
+      },
     ]))
   }
 
