@@ -12,7 +12,7 @@ import {
   planGapCounts, planFocusGapCounts, shuffle, artistInterleave,
   buildBurstSkeleton, buildFocusOrder, buildDistributedFocusOrder,
   buildPlaylistOrder2Focus, dedupeTracksByIdentity, excludeTracksByIdentity,
-  mergeSavedTracksWithPlan,
+  mergeSavedTracksWithPlan, hasHeavyFocusConflict,
 } from './candy-star-planner.js'
 
 const MIN_GAP_MS = 480000 // matches spotify-shared.ts's MIN_GAP_MS — duplicated because that's a
@@ -181,6 +181,19 @@ test('mergeSavedTracksWithPlan keeps live metadata and restores focus roles and 
     { id: 'live-filler', isrc: 'FILL456', durationMs: 250456, key: undefined, isBTS: false, isFocus: false, isAlbumTrack: false },
   ])
   assert.throws(() => mergeSavedTracksWithPlan(saved.slice(0, 1), planned), /saved 1 of 2/)
+})
+
+test('15x focus is exclusive while lower-count and duplicate-key input remain valid', () => {
+  assert.equal(hasHeavyFocusConflict([
+    { key: 'swim', multiplier: 15 }, { key: 'winter-ahead', multiplier: 10 },
+  ]), true)
+  assert.equal(hasHeavyFocusConflict([
+    { key: 'home', multiplier: 12 }, { key: 'astronaut', multiplier: 10 },
+  ]), false)
+  assert.equal(hasHeavyFocusConflict([{ key: 'swim', multiplier: 15 }]), false)
+  assert.equal(hasHeavyFocusConflict([
+    { key: 'swim', multiplier: 15 }, { key: 'swim', multiplier: 2 },
+  ]), false)
 })
 
 test('planGapCounts sums exactly to a feasible total', () => {
@@ -444,6 +457,27 @@ test('buildPlaylistOrder2Focus enforces the requested 10:10, 10:9, and 10:5 patt
       assert.ok(pct(histB, [7, 8]) >= 0.90, `10:5 B is not spread wider than A: ${JSON.stringify(histB)}`)
     }
   }
+})
+
+test('12x + 10x uses a varied repeat pattern instead of continuous threes', () => {
+  const observedA = new Set(), observedB = new Set()
+  for (let seed = 1; seed <= 300; seed++) {
+    const { order } = buildPlaylistOrder2Focus(
+      [mkFocusSong('home', 12, 200000), mkFocusSong('astronaut', 10, 195000)],
+      mkDeterministicSpacerPool(), mkDeterministicFillerPool(), mkDeterministicAlbum(),
+      180 * 60000, 20, MIN_GAP_MS, { rng: seededRng(seed) },
+    )
+    for (const window of repeatWindows(order, 'home')) {
+      observedA.add(window.length)
+      assert.ok(window.reduce((sum, track) => sum + (track.durationMs || 0), 0) >= MIN_GAP_MS)
+    }
+    for (const window of repeatWindows(order, 'astronaut')) {
+      observedB.add(window.length)
+      assert.ok(window.reduce((sum, track) => sum + (track.durationMs || 0), 0) >= MIN_GAP_MS)
+    }
+  }
+  assert.ok(observedA.has(3) && observedA.has(4), `Home pattern was too rigid: ${[...observedA]}`)
+  assert.ok(observedB.has(3) && observedB.has(4), `Astronaut pattern was too rigid: ${[...observedB]}`)
 })
 
 test('a true two-filler selection uses two individually 4:00+ BTS tracks', () => {

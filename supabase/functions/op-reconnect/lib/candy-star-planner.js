@@ -75,6 +75,16 @@ export function excludeTracksByIdentity(tracks, excludedTracks) {
     !trackIdentityTokens(track).some((identity) => blocked.has(identity)))
 }
 
+/** A high-repeat focus is already dense enough to fill a playlist by itself.
+ * Shared with the backend so direct API calls cannot bypass the UI rule. */
+export function hasHeavyFocusConflict(focus, threshold = 15) {
+  const valid = (Array.isArray(focus) ? focus : []).filter((entry) =>
+    (entry?.key || entry?.isrc) && Number.parseInt(entry?.multiplier ?? entry?.plays) > 0)
+  const distinctKeys = new Set(valid.map((entry) => entry.key || entry.isrc))
+  return distinctKeys.size > 1 && valid.some((entry) =>
+    Number.parseInt(entry.multiplier ?? entry.plays) >= threshold)
+}
+
 /** Apply Spotify's saved recording metadata to the planner's positional
  * roles. Spotify supplies the authoritative ID/ISRC/duration, while only the
  * planner knows which occurrences are focus plays, album tracks, spacers, or

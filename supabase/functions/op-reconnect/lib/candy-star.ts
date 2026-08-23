@@ -39,6 +39,7 @@ import {
 } from './candy-star-rules.ts'
 import {
   dedupeTracksByIdentity, excludeTracksByIdentity, mergeSavedTracksWithPlan,
+  hasHeavyFocusConflict,
 } from './candy-star-planner.js'
 
 /** Shared by both validate paths: run the rule engine, then layer the
@@ -484,6 +485,8 @@ async function alpacaQuickPlan(supabase: SupabaseDB): Promise<{ focus: any[]; al
 
 const ALPACA_DAILY_LIMIT = 5
 const ALPACA_WING_COST = 1
+const HEAVY_FOCUS_PLAYS = 15
+const HEAVY_FOCUS_ERROR = `A ${HEAVY_FOCUS_PLAYS}× focus song needs its own playlist — remove the other focus song. You can still add albums.`
 
 // Custom-tab combo lock: an agent picking their own focus songs/albums may
 // only land on one of these three shapes — nothing else. Quick mode is
@@ -592,6 +595,10 @@ export async function generateAlpaca(supabase: SupabaseDB, params: any): Promise
     return { success: false, error: `${banned.name} can't be used for generated playlists — pick a different album.` }
   }
 
+  if (!isQuick && hasHeavyFocusConflict(focus, HEAVY_FOCUS_PLAYS)) {
+    return { success: false, error: HEAVY_FOCUS_ERROR }
+  }
+
   if (!isQuick) {
     const comboKey = `${validFocusKeys.size}:${selectedAlbums.length}`
     if (!ALLOWED_CUSTOM_COMBOS.has(comboKey)) {
@@ -664,6 +671,10 @@ export async function previewAlpaca(supabase: SupabaseDB, params: any): Promise<
     .filter((f: any) => (f.key || f.isrc) && f.multiplier > 0)
     .map((f: any) => ({ ...f, isrc: f.key || f.isrc }))
   if (!focusInput.length) return { success: false, error: 'Pick at least one song with a count.' }
+
+  if (params.mode !== 'quick' && hasHeavyFocusConflict(focusInput, HEAVY_FOCUS_PLAYS)) {
+    return { success: false, error: HEAVY_FOCUS_ERROR }
+  }
 
   // Same combo/banned-album gate generateAlpaca enforces — checked here too
   // so the builder can show the real rejection reason live, while typing,

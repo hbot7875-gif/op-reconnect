@@ -3251,7 +3251,7 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .cs-vault-recipe { margin: 4px 0 2px; overflow: hidden; color: var(--muted); font-size: 11.5px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
 .cs-vault-by { overflow: hidden; color: var(--dim); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .cs-vault-actions { display: flex; align-items: center; gap: 6px; margin-top: 9px; flex-wrap: wrap; }
-.cs-vault-open, .cs-vault-action, .cs-vault-report {
+.cs-vault-open, .cs-vault-action, .cs-vault-report, .cs-vault-delete {
   display: inline-flex; align-items: center; justify-content: center; padding: 6px 10px; border-radius: 8px;
   font: 800 10px var(--body); cursor: pointer; text-decoration: none;
 }
@@ -3262,6 +3262,8 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .cs-vault-report { margin-left: auto; padding-inline: 4px; border: 0; background: transparent; color: var(--dim); font-weight: 600; }
 .cs-vault-report:hover:not(:disabled) { color: var(--crimson); }
 .cs-vault-report:disabled { cursor: default; opacity: .55; }
+.cs-vault-delete { margin-left: auto; padding-inline: 6px; border: 0; background: transparent; color: var(--dim); font-weight: 700; }
+.cs-vault-delete:hover { color: var(--crimson); background: rgba(244,63,94,.08); }
 .cs-vault-empty, .cs-vault-loading {
   min-height: 150px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px;
   padding: 24px; text-align: center; border: 1px dashed var(--border); border-radius: var(--r-lg); color: var(--muted);
@@ -3290,6 +3292,7 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
   .cs-vault-kicker { font-size: 8.5px; }
   .cs-vault-actions { margin-left: -76px; padding-top: 6px; }
   .cs-vault-report { margin-left: 0; }
+  .cs-vault-delete { margin-left: 0; }
 }
 .auth-link {
   display: block; width: 100%; margin-top: 14px; padding: 4px; background: none; border: 0;

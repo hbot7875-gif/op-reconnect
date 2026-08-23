@@ -253,9 +253,20 @@ export function candyRowKeydown(e) {
 // already filled the whole thing in.
 const CS_MAX_FOCUS_ROWS = 2;
 const CS_MAX_ALBUMS = 2;
+const CS_HEAVY_FOCUS_PLAYS = 15;
+const CS_HEAVY_FOCUS_ERROR = `A ${CS_HEAVY_FOCUS_PLAYS}× focus song needs its own playlist — remove the other focus song. You can still add albums.`;
+
+function candyHasHeavyFocusConflict(focus) {
+  const valid = Array.isArray(focus) ? focus.filter(entry => entry?.key && Number(entry.multiplier) > 0) : [];
+  return new Set(valid.map(entry => entry.key)).size > 1 &&
+    valid.some(entry => Number(entry.multiplier) >= CS_HEAVY_FOCUS_PLAYS);
+}
 
 export function candyAddFocusRow() {
   const wrap = $('cs-focus-rows');
+  const hasHeavy = [...(wrap?.querySelectorAll('.cs-focus-mult') || [])]
+    .some(input => (parseInt(input.value) || 0) >= CS_HEAVY_FOCUS_PLAYS);
+  if (hasHeavy) { showToast(`${CS_HEAVY_FOCUS_PLAYS}× needs to be your only focus song.`); return; }
   if (!wrap || wrap.children.length >= CS_MAX_FOCUS_ROWS) return;
   wrap.insertAdjacentHTML('beforeend', candyFocusRow(4));
   wrap.lastElementChild?.querySelector('.cs-focus-sel')?.focus();
@@ -270,7 +281,9 @@ export function candyRemoveRow(btn) {
 function candySyncRowControls() {
   const wrap = $('cs-focus-rows');
   const addBtn = document.querySelector('.cs-add-row');
-  if (wrap && addBtn) addBtn.style.display = wrap.children.length >= CS_MAX_FOCUS_ROWS ? 'none' : '';
+  const hasHeavy = [...(wrap?.querySelectorAll('.cs-focus-mult') || [])]
+    .some(input => (parseInt(input.value) || 0) >= CS_HEAVY_FOCUS_PLAYS);
+  if (wrap && addBtn) addBtn.style.display = wrap.children.length >= CS_MAX_FOCUS_ROWS || hasHeavy ? 'none' : '';
 }
 export function candyValidateRow(el) {
   const row = el.closest('.cs-focus-row');
@@ -342,6 +355,7 @@ export function candyUpdateEstimate() {
     albumCountEl.textContent = checkedAlbums.length ? `${checkedAlbums.length} selected` : '';
   }
 
+  candySyncRowControls();
   candyQueuePreview();
 }
 
@@ -408,7 +422,7 @@ async function candyRunPreview() {
     // A rule rejection (banned album, wrong song/album combo) is something
     // the agent can act on right now — show it in place of the generic
     // fallback so they don't have to hit Generate just to find out why.
-    const msg = res?.error && /^(Pick exactly one of|.+ can't be used for generated playlists)/.test(res.error)
+    const msg = res?.error && /^(Pick exactly one of|A 15× focus song|.+ can't be used for generated playlists)/.test(res.error)
       ? res.error
       : 'Preview unavailable right now — generate to see the real order.';
     candySetHTML('cs-preview-list', `<div class="cs-preview-empty">${sanitize(msg)}</div>`);
@@ -620,7 +634,9 @@ function candyVaultCard(item) {
         ${item.source === 'generated' && Array.isArray(item.config?.focus) && item.config.focus.length
           ? `<button type="button" class="cs-vault-action" onclick="candyRemixPlaylist('${sanitize(item.playlistId)}')">Use setup</button>` : ''}
         <button type="button" class="cs-vault-action ${item.saved ? 'is-saved' : ''}" aria-pressed="${item.saved ? 'true' : 'false'}" onclick="candyToggleVaultSave('${sanitize(item.playlistId)}')">${item.saved ? 'Saved ✓' : 'Save'}</button>
-        <button type="button" class="cs-vault-report" ${item.reported ? 'disabled' : ''} onclick="candyReportVaultPlaylist('${sanitize(item.playlistId)}')">${item.reported ? 'Reported' : 'Broken link?'}</button>
+        ${item.isMine
+          ? `<button type="button" class="cs-vault-delete" onclick="candyDeleteVaultPlaylist('${sanitize(item.playlistId)}')">Delete</button>`
+          : `<button type="button" class="cs-vault-report" ${item.reported ? 'disabled' : ''} onclick="candyReportVaultPlaylist('${sanitize(item.playlistId)}')">${item.reported ? 'Reported' : 'Broken link?'}</button>`}
       </div>
     </div>
   </article>`;
@@ -753,6 +769,21 @@ export async function candyReportVaultPlaylist(playlistId) {
   else item.reported = true;
   candyRenderVault();
   showToast(res.hidden ? 'Broken playlist removed from the Vault.' : 'Report sent. Thank you.');
+}
+
+export async function candyDeleteVaultPlaylist(playlistId) {
+  const state = candyVaultState();
+  const item = state.items.find(entry => entry.playlistId === playlistId);
+  if (!item?.isMine) return;
+  const message = item.source === 'generated'
+    ? 'Delete this playlist from the Vault and the connected Spotify library? This cannot be undone.'
+    : 'Delete this shared playlist from the Vault? This cannot be undone.';
+  if (!window.confirm(message)) return;
+  const res = await Api.call('deleteCandyPlaylist', { playlistId });
+  if (!res?.success) { showToast(res?.error || 'Could not delete that playlist.'); return; }
+  state.items = state.items.filter(entry => entry.playlistId !== playlistId);
+  candyRenderVault();
+  showToast(res.warning || 'Playlist deleted.', res.warning ? undefined : 'success');
 }
 
 export function candyRemixPlaylist(playlistId) {
@@ -1070,6 +1101,10 @@ export async function candyGenerate(mode) {
     }
     if (!focus.length) {
       candySetStatus('error', '⚠️ Add at least one song with a count.');
+      return;
+    }
+    if (candyHasHeavyFocusConflict(focus)) {
+      candySetStatus('error', `⚠️ ${sanitize(CS_HEAVY_FOCUS_ERROR)}`);
       return;
     }
     payload.focus = focus;

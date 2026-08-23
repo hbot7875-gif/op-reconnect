@@ -8,6 +8,7 @@
 // deno-lint-ignore-file no-explicit-any
 import type { SupabaseDB } from './spotify-shared.ts'
 import { parseSpotifyId, utcNow } from './spotify-shared.ts'
+import { getUserAccessToken } from './spotify-oauth.ts'
 
 const PAGE_SIZE = 24
 const MAX_PAGE_SIZE = 48
@@ -121,6 +122,54 @@ export async function setCandyPlaylistSaved(supabase: SupabaseDB, params: any): 
     { onConflict: 'agent_no,playlist_id' },
   )
   return error ? { success: false, error: error.message } : { success: true, saved: true }
+}
+
+/** Remove an agent's own entry. Generated playlists are also unfollowed from
+ * the connected Spotify account; shared links are only removed from Vault. */
+export async function deleteCandyPlaylist(supabase: SupabaseDB, params: any): Promise<any> {
+  const agentNo = agentNoOf(params)
+  const playlistId = parseSpotifyId(String(params.playlistId || ''), 'playlist')
+  if (!playlistId) return { success: false, error: 'Playlist id required.' }
+
+  const { data: row, error: lookupError } = await supabase.from('generated_playlists')
+    .select('agent_no, source, status').eq('playlist_id', playlistId).maybeSingle()
+  if (lookupError) return { success: false, error: lookupError.message }
+  if (!row || row.status !== 'active') return { success: false, error: 'That playlist is no longer in the Vault.' }
+  if (String(row.agent_no || '').toUpperCase() !== agentNo) {
+    return { success: false, error: 'You can only delete playlists you added.' }
+  }
+
+  const { error: hideError } = await supabase.from('generated_playlists')
+    .update({ status: 'hidden', updated_at: utcNow() })
+    .eq('playlist_id', playlistId).eq('agent_no', agentNo).eq('status', 'active')
+  if (hideError) return { success: false, error: hideError.message }
+
+  const cleanup = await Promise.all([
+    supabase.from('rc_playlist_saves').delete().eq('playlist_id', playlistId),
+    supabase.from('rc_playlist_reports').delete().eq('playlist_id', playlistId),
+  ])
+  for (const result of cleanup) {
+    if (result.error) console.warn('[playlist-vault] cleanup failed', result.error.message)
+  }
+
+  let spotifyRemoved: boolean | null = null
+  let warning: string | null = null
+  if (row.source === 'generated') {
+    try {
+      const { token } = await getUserAccessToken(supabase)
+      const response = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/followers`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      spotifyRemoved = response.ok
+      if (!response.ok) warning = 'Removed from the Vault, but Spotify could not remove it from the connected library.'
+    } catch (_) {
+      spotifyRemoved = false
+      warning = 'Removed from the Vault, but Spotify could not remove it from the connected library.'
+    }
+  }
+
+  return { success: true, deleted: true, spotifyRemoved, warning }
 }
 
 /** Share an existing public Spotify playlist. oEmbed safely supplies its real title. */
