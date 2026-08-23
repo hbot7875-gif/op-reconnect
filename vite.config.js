@@ -104,6 +104,12 @@ export default defineConfig({
         // own comment above already documents. Not linked from anywhere
         // in-game on purpose.
         admin: resolve(__dirname, 'admin.html'),
+        // Badge Vault — upload/crop badge photos. Unlike the two above it is
+        // NOT SYNC_ADMIN_KEY-gated: it authorises per agent number against
+        // rc_config.badge_editors, so trusted members can add badges without
+        // holding the admin key. Registered here for the same reason those
+        // two comments spell out — omit it and it 404s on every deploy.
+        badgeAdmin: resolve(__dirname, 'badge-admin.html'),
       },
     },
   },

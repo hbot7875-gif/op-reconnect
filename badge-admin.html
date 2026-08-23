@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OP: ReConnect — Badge Vault</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/reconnect.css">
+<style>
+  /* Badge Vault — its own page, styled from reconnect.css's tokens so it
+     belongs to the game rather than inventing a second admin look. */
+  body { background: var(--bg); color: var(--text); font-family: var(--body); }
+  .bv-wrap { max-width: 900px; margin: 0 auto; padding: 24px 16px 80px; }
+
+  .bv-head { margin-bottom: 6px; }
+  .bv-eyebrow { font-family: var(--mono); font-size: 10.5px; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--purple-lt); }
+  .bv-title { font-family: var(--disp); font-weight: 900; font-size: 25px; margin-top: 5px; }
+  .bv-sub { color: var(--muted); font-size: 13.5px; line-height: 1.6; margin: 8px 0 22px; }
+  .bv-who { font-family: var(--mono); font-size: 11px; color: var(--dim); }
+
+  .bv-card { background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--r-lg); padding: 18px; margin-bottom: 18px; }
+  .bv-card h2 { font-family: var(--disp); font-size: 15px; font-weight: 800;
+    letter-spacing: .4px; margin-bottom: 4px; }
+  .bv-note { color: var(--muted); font-size: 12.5px; line-height: 1.6; margin-bottom: 14px; }
+
+  .bv-field { display: block; margin-bottom: 12px; }
+  .bv-field span { display: block; font-family: var(--mono); font-size: 10px;
+    letter-spacing: 1.4px; text-transform: uppercase; color: var(--dim); margin-bottom: 6px; }
+  .bv-row { display: grid; gap: 12px; }
+  @media (min-width: 620px) { .bv-row.two { grid-template-columns: 1fr 1fr; } }
+
+  select.input-field { appearance: none; }
+
+  /* ── the cropper ── square frame, drag to pan, slider to zoom.
+     The preview transform and the export transform are the same numbers
+     scaled by (OUT / frame width), so what you see is exactly what lands. */
+  .bv-crop { position: relative; width: 100%; max-width: 300px; aspect-ratio: 1;
+    margin: 0 auto; border-radius: var(--r); overflow: hidden; background: var(--surface-2);
+    border: 1px solid var(--border-str); cursor: grab; touch-action: none; }
+  .bv-crop.is-dragging { cursor: grabbing; }
+  .bv-crop img { position: absolute; transform-origin: 0 0; user-select: none;
+    -webkit-user-drag: none; pointer-events: none; max-width: none; }
+  .bv-crop-empty { position: absolute; inset: 0; display: grid; place-items: center;
+    color: var(--dim); font-family: var(--mono); font-size: 11px; letter-spacing: 1px;
+    text-align: center; padding: 20px; }
+  .bv-crop-grid { position: absolute; inset: 0; pointer-events: none;
+    background:
+      linear-gradient(rgba(255,255,255,.10) 1px, transparent 1px) 0 33.33% / 100% 33.33%,
+      linear-gradient(90deg, rgba(255,255,255,.10) 1px, transparent 1px) 33.33% 0 / 33.33% 100%; }
+
+  .bv-zoom { display: flex; align-items: center; gap: 10px; margin: 12px auto 0; max-width: 300px; }
+  .bv-zoom span { font-family: var(--mono); font-size: 10px; letter-spacing: 1.2px;
+    text-transform: uppercase; color: var(--dim); }
+  .bv-zoom input { flex: 1; }
+
+  .bv-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+  .bv-actions .btn { margin-top: 0; }
+
+  /* ── existing art ── */
+  .bv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 12px; }
+  .bv-item { border: 1px solid var(--border); border-radius: var(--r); overflow: hidden;
+    background: var(--surface-2); display: flex; flex-direction: column; }
+  .bv-item.is-off { opacity: .5; }
+  .bv-item img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
+  .bv-item-body { padding: 8px 9px 10px; display: flex; flex-direction: column; gap: 4px; }
+  .bv-item-tpl { font-size: 11.5px; font-weight: 700; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; }
+  .bv-item-meta { font-family: var(--mono); font-size: 9px; color: var(--dim); line-height: 1.5; }
+  .bv-item-btns { display: flex; gap: 6px; margin-top: 4px; }
+  .bv-mini { flex: 1; padding: 5px 6px; border-radius: 7px; border: 1px solid var(--border);
+    background: none; color: var(--muted); font-family: var(--mono); font-size: 9px;
+    letter-spacing: .5px; cursor: pointer; }
+  .bv-mini:hover { border-color: var(--border-str); color: var(--text); }
+  .bv-mini.danger:hover { border-color: var(--crimson); color: var(--crimson); }
+  .bv-mini[disabled] { opacity: .35; cursor: not-allowed; }
+
+  .bv-msg { margin-top: 12px; font-size: 12.5px; line-height: 1.6; }
+  .bv-msg.ok { color: var(--gold); }
+  .bv-msg.err { color: var(--crimson); }
+
+  .bv-gate { max-width: 460px; margin: 60px auto; text-align: center; }
+  .bv-gate h1 { font-family: var(--disp); font-size: 20px; margin-bottom: 10px; }
+  .bv-gate p { color: var(--muted); font-size: 14px; line-height: 1.7; }
+  .bv-gate code { font-family: var(--mono); color: var(--purple-lt); font-size: 13px; }
+</style>
+</head>
+<body>
+
+<!-- Gate: shown until we know the signed-in agent is allowed in. -->
+<div class="bv-gate" id="gate">
+  <h1>Badge Vault</h1>
+  <p id="gateMsg">Checking your access…</p>
+</div>
+
+<div class="bv-wrap" id="app" hidden>
+  <div class="bv-head">
+    <span class="bv-eyebrow">🎖️ Badge Vault</span>
+    <div class="bv-title">Add badge photos</div>
+  </div>
+  <p class="bv-sub">
+    Upload a photo, frame it square, and attach it to a badge. Once it's active it goes
+    straight into that badge's pool — anyone who earns the badge from then on can be given
+    this photo. Existing badges keep whatever photo they already have.
+    <br><span class="bv-who" id="whoami"></span>
+  </p>
+
+  <!-- ── upload ── -->
+  <div class="bv-card">
+    <h2>New photo</h2>
+    <p class="bv-note">Square crop, saved at 512×512. Keep the face roughly centred —
+      the same image is used small (HUD crest), medium (Agent ID) and large (Badge Drawer).</p>
+
+    <label class="bv-field">
+      <span>Badge</span>
+      <select class="input-field" id="tpl"></select>
+    </label>
+
+    <label class="bv-field">
+      <span>Photo file</span>
+      <input class="input-field" id="file" type="file" accept="image/png,image/jpeg,image/webp">
+    </label>
+
+    <div class="bv-crop" id="crop">
+      <div class="bv-crop-empty" id="cropEmpty">Pick a photo to frame it</div>
+      <div class="bv-crop-grid" id="cropGrid" hidden></div>
+    </div>
+    <div class="bv-zoom">
+      <span>Zoom</span>
+      <input id="zoom" type="range" min="1" max="3" step="0.01" value="1" disabled>
+    </div>
+
+    <div class="bv-row two" style="margin-top:16px">
+      <label class="bv-field">
+        <span>Member (optional)</span>
+        <input class="input-field" id="member" placeholder="e.g. Jimin" maxlength="40">
+      </label>
+      <label class="bv-field">
+        <span>Pool label (optional)</span>
+        <input class="input-field" id="pool" placeholder="e.g. arirang_era" maxlength="40">
+      </label>
+    </div>
+
+    <div class="bv-actions">
+      <button class="btn btn-primary" id="save" type="button" disabled>Add to vault</button>
+      <button class="btn btn-ghost" id="reset" type="button">Reset frame</button>
+    </div>
+    <div class="bv-msg" id="msg"></div>
+  </div>
+
+  <!-- ── existing ── -->
+  <div class="bv-card">
+    <h2>In the vault</h2>
+    <p class="bv-note">Deactivating stops a photo being handed out from now on;
+      anyone already wearing it keeps it. A photo someone already wears can't be deleted.</p>
+    <div class="bv-grid" id="grid"></div>
+    <div class="bv-msg" id="gridMsg"></div>
+  </div>
+</div>
+
+<script type="module">
+import { call } from './js/api.js'
+import { getAgentNo, getSession } from './js/session.js'
+
+const $ = (id) => document.getElementById(id)
+const OUT = 512                 // exported square, px
+const TYPE = 'image/webp'
+
+let templates = []
+let art = []
+// Crop state, in DISPLAY pixels relative to the frame. The export applies
+// the identical numbers scaled by (OUT / frame width), so the preview is a
+// true 1:1 representation of the file that gets uploaded.
+let img = null, natW = 0, natH = 0, zoom = 1, ox = 0, oy = 0, baseScale = 1
+
+/* ── gate ─────────────────────────────────────────────────────────── */
+async function boot() {
+  const agentNo = getAgentNo()
+  if (!agentNo || !getSession()?.sessionToken) {
+    $('gateMsg').innerHTML = 'Sign in to OP: ReConnect first, then come back to this page.<br><br>'
+      + '<a class="btn btn-primary" href="game.html">Go to the game</a>'
+    return
+  }
+  const res = await call('amIBadgeEditor', { agentNo })
+  if (!res.success) {
+    $('gateMsg').textContent = res.error || "Couldn't check your access."
+    return
+  }
+  if (!res.allowed) {
+    $('gateMsg').innerHTML = `<code>${agentNo}</code> isn't a badge editor yet.<br><br>`
+      + 'Ask HT to add your agent number to <code>badge_editors</code>.'
+    return
+  }
+  $('gate').hidden = true
+  $('app').hidden = false
+  $('whoami').textContent = `Signed in as ${agentNo}`
+  await load()
+}
+
+async function load() {
+  const res = await call('getBadgeVault', { agentNo: getAgentNo() })
+  if (!res.success) { $('gridMsg').className = 'bv-msg err'; $('gridMsg').textContent = res.error; return }
+  templates = res.templates || []
+  art = res.art || []
+  paintTemplates()
+  paintGrid()
+}
+
+function paintTemplates() {
+  const sel = $('tpl')
+  sel.innerHTML = ''
+  const bySection = {}
+  for (const t of templates) (bySection[t.section] ||= []).push(t)
+  for (const section of Object.keys(bySection)) {
+    const g = document.createElement('optgroup')
+    g.label = section
+    for (const t of bySection[section]) {
+      const o = document.createElement('option')
+      o.value = t.id
+      o.textContent = `${t.name}${t.rarity === 'rare' ? ' (rare)' : ''}`
+      g.appendChild(o)
+    }
+    sel.appendChild(g)
+  }
+}
+
+function paintGrid() {
+  const grid = $('grid')
+  grid.innerHTML = ''
+  if (!art.length) {
+    $('gridMsg').className = 'bv-msg'
+    $('gridMsg').textContent = 'Nothing uploaded through the vault yet.'
+    return
+  }
+  $('gridMsg').textContent = ''
+  for (const a of art) {
+    const tpl = templates.find((t) => t.id === a.templateId)
+    const el = document.createElement('div')
+    el.className = 'bv-item' + (a.active ? '' : ' is-off')
+    el.innerHTML = `
+      <img src="${a.url}" alt="" loading="lazy">
+      <div class="bv-item-body">
+        <div class="bv-item-tpl">${tpl ? tpl.name : a.templateId}</div>
+        <div class="bv-item-meta">
+          ${a.member ? a.member + ' · ' : ''}${a.active ? 'active' : 'off'}${a.inUse ? ' · worn' : ''}
+          ${a.uploadedBy ? '<br>by ' + a.uploadedBy : ''}
+        </div>
+        <div class="bv-item-btns">
+          <button class="bv-mini" data-toggle="${a.id}">${a.active ? 'Deactivate' : 'Activate'}</button>
+          <button class="bv-mini danger" data-del="${a.id}" ${a.inUse ? 'disabled title="Someone wears this"' : ''}>Delete</button>
+        </div>
+      </div>`
+    grid.appendChild(el)
+  }
+  grid.querySelectorAll('[data-toggle]').forEach((b) => {
+    b.onclick = () => toggle(Number(b.dataset.toggle))
+  })
+  grid.querySelectorAll('[data-del]').forEach((b) => {
+    b.onclick = () => del(Number(b.dataset.del))
+  })
+}
+
+async function toggle(id) {
+  const a = art.find((x) => x.id === id)
+  const res = await call('setBadgeArtActive', { agentNo: getAgentNo(), artId: id, active: !a.active })
+  if (!res.success) { $('gridMsg').className = 'bv-msg err'; $('gridMsg').textContent = res.error; return }
+  a.active = res.active
+  paintGrid()
+}
+
+async function del(id) {
+  if (!window.confirm('Delete this photo permanently?')) return
+  const res = await call('deleteBadgeArt', { agentNo: getAgentNo(), artId: id })
+  if (!res.success) { $('gridMsg').className = 'bv-msg err'; $('gridMsg').textContent = res.error; return }
+  art = art.filter((x) => x.id !== id)
+  paintGrid()
+}
+
+/* ── cropper ──────────────────────────────────────────────────────── */
+const frameW = () => $('crop').clientWidth
+
+function clamp() {
+  const w = natW * baseScale * zoom
+  const h = natH * baseScale * zoom
+  const F = frameW()
+  ox = Math.min(0, Math.max(F - w, ox))
+  oy = Math.min(0, Math.max(F - h, oy))
+}
+
+function paintCrop() {
+  if (!img) return
+  clamp()
+  img.style.width = (natW * baseScale * zoom) + 'px'
+  img.style.height = (natH * baseScale * zoom) + 'px'
+  img.style.left = ox + 'px'
+  img.style.top = oy + 'px'
+}
+
+$('file').onchange = (e) => {
+  const f = e.target.files?.[0]
+  if (!f) return
+  const url = URL.createObjectURL(f)
+  const im = new Image()
+  im.onload = () => {
+    natW = im.naturalWidth; natH = im.naturalHeight
+    const F = frameW()
+    baseScale = F / Math.min(natW, natH)   // cover
+    zoom = 1
+    ox = (F - natW * baseScale) / 2
+    oy = (F - natH * baseScale) / 2
+    $('crop').querySelectorAll('img').forEach((n) => n.remove())
+    img = im
+    $('crop').insertBefore(im, $('cropGrid'))
+    $('cropEmpty').hidden = true
+    $('cropGrid').hidden = false
+    $('zoom').disabled = false
+    $('zoom').value = '1'
+    $('save').disabled = false
+    paintCrop()
+  }
+  im.onerror = () => { $('msg').className = 'bv-msg err'; $('msg').textContent = "Couldn't open that file." }
+  im.src = url
+}
+
+$('zoom').oninput = () => { zoom = Number($('zoom').value); paintCrop() }
+$('reset').onclick = () => {
+  if (!img) return
+  const F = frameW()
+  zoom = 1; $('zoom').value = '1'
+  ox = (F - natW * baseScale) / 2
+  oy = (F - natH * baseScale) / 2
+  paintCrop()
+}
+
+let dragging = false, lastX = 0, lastY = 0
+const crop = $('crop')
+crop.addEventListener('pointerdown', (e) => {
+  if (!img) return
+  dragging = true; lastX = e.clientX; lastY = e.clientY
+  crop.classList.add('is-dragging'); crop.setPointerCapture(e.pointerId)
+})
+crop.addEventListener('pointermove', (e) => {
+  if (!dragging) return
+  ox += e.clientX - lastX; oy += e.clientY - lastY
+  lastX = e.clientX; lastY = e.clientY
+  paintCrop()
+})
+const endDrag = () => { dragging = false; crop.classList.remove('is-dragging') }
+crop.addEventListener('pointerup', endDrag)
+crop.addEventListener('pointercancel', endDrag)
+
+/* ── save ─────────────────────────────────────────────────────────── */
+$('save').onclick = async () => {
+  if (!img) return
+  const btn = $('save')
+  btn.disabled = true
+  $('msg').className = 'bv-msg'
+  $('msg').textContent = 'Uploading…'
+
+  // Same transform as the preview, scaled from frame px to output px.
+  const k = OUT / frameW()
+  const canvas = document.createElement('canvas')
+  canvas.width = OUT; canvas.height = OUT
+  const ctx = canvas.getContext('2d')
+  ctx.imageSmoothingQuality = 'high'
+  ctx.drawImage(img, ox * k, oy * k, natW * baseScale * zoom * k, natH * baseScale * zoom * k)
+
+  const blob = await new Promise((r) => canvas.toBlob(r, TYPE, 0.9))
+  if (!blob) { $('msg').className = 'bv-msg err'; $('msg').textContent = "Couldn't encode the image."; btn.disabled = false; return }
+  const b64 = await new Promise((r) => {
+    const fr = new FileReader(); fr.onload = () => r(String(fr.result)); fr.readAsDataURL(blob)
+  })
+
+  const res = await call('addBadgeArt', {
+    agentNo: getAgentNo(),
+    templateId: $('tpl').value,
+    member: $('member').value.trim() || null,
+    pool: $('pool').value.trim() || null,
+    contentType: TYPE,
+    imageBase64: b64,
+  })
+  btn.disabled = false
+  if (!res.success) { $('msg').className = 'bv-msg err'; $('msg').textContent = res.error; return }
+
+  $('msg').className = 'bv-msg ok'
+  $('msg').textContent = 'Added. It\'s in the pool for that badge from now on.'
+  art.unshift(res.art)
+  paintGrid()
+  $('file').value = ''
+  $('member').value = ''
+}
+
+boot()
+</script>
+</body>
+</html>

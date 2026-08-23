@@ -35,6 +35,9 @@ import {
 import { submitReconnectPuzzleAnswer } from './lib/reconnect-puzzle.ts'
 import { getLeaderboard } from './lib/leaderboard.ts'
 import { setEquippedBadge, getBadgeCollection, setAvatarCrop } from './lib/badge-profile.ts'
+import {
+  isBadgeEditor, amIBadgeEditor, getBadgeVault, addBadgeArt, setBadgeArtActive, deleteBadgeArt,
+} from './lib/badge-admin.ts'
 import { getMagicShop, buyWings, claimTicket } from './lib/magic-shop.ts'
 import { feedCharge, setAutoFeed, getAgentCharge, useLitEra } from './lib/agent-charge.ts'
 import { submitSuggestion } from './lib/suggestions.ts'
@@ -64,7 +67,10 @@ type Handler = (supabase: unknown, params: Record<string, unknown>) => Promise<u
 // same shared-secret pattern handlers.ts's adminLaunchDefuse already uses,
 // just generalized to a route-table flag instead of repeating the check
 // inside every one of the dozen-plus Candy Star admin handlers.
-interface Route { auth: 'public' | 'agent' | 'admin'; handler: Handler }
+// 'badge' = a verified agent session PLUS membership of rc_config.badge_editors
+// (AGENT000 always). It unlocks the Badge Vault routes and nothing else — it
+// is deliberately not a general admin role. See lib/badge-admin.ts.
+interface Route { auth: 'public' | 'agent' | 'admin' | 'badge'; handler: Handler }
 
 const ROUTES: Record<string, Route> = {
   ping: { auth: 'public', handler: async () => ({ success: true, pong: true, at: new Date().toISOString() }) },
@@ -103,6 +109,13 @@ const ROUTES: Record<string, Route> = {
   setEquippedBadge: { auth: 'agent', handler: async (sb, p) => setEquippedBadge(sb, await loadContent(sb), p) },
   setAvatarCrop: { auth: 'agent', handler: (sb, p) => setAvatarCrop(sb, p) },
   getBadgeCollection: { auth: 'agent', handler: (sb, p) => getBadgeCollection(sb, p) },
+
+  // ── Badge Vault (badge-admin.html) ──
+  amIBadgeEditor:   { auth: 'agent', handler: (sb, p) => amIBadgeEditor(sb, p) },
+  getBadgeVault:    { auth: 'badge', handler: (sb, p) => getBadgeVault(sb, p) },
+  addBadgeArt:      { auth: 'badge', handler: (sb, p) => addBadgeArt(sb, p) },
+  setBadgeArtActive:{ auth: 'badge', handler: (sb, p) => setBadgeArtActive(sb, p) },
+  deleteBadgeArt:   { auth: 'badge', handler: (sb, p) => deleteBadgeArt(sb, p) },
   // BOTZ redesign Phase 2 — see lib/magic-shop.ts.
   getMagicShop: { auth: 'agent', handler: async (sb, p) => getMagicShop(sb, await loadContent(sb), p) },
   buyWings: { auth: 'agent', handler: async (sb, p) => buyWings(sb, await loadContent(sb), p) },
@@ -260,10 +273,16 @@ Deno.serve(async (req) => {
     const route = ROUTES[action]
     if (!route) return jsonResponse({ success: false, error: `Action "${action}" not found` }, 404)
 
-    if (route.auth === 'agent') {
+    if (route.auth === 'agent' || route.auth === 'badge') {
       if (!params.agentNo) return jsonResponse({ success: false, error: 'Agent number required' }, 401)
       const ok = await verifySession(supabase, String(params.agentNo), params.sessionToken)
       if (!ok) return jsonResponse({ success: false, error: 'invalid_session' }, 401)
+    }
+
+    // Checked only AFTER the session is proven, so this can never be used to
+    // probe who is or isn't a badge editor without a valid login.
+    if (route.auth === 'badge' && !(await isBadgeEditor(supabase, String(params.agentNo)))) {
+      return jsonResponse({ success: false, error: 'not_badge_editor' }, 403)
     }
 
     if (route.auth === 'admin' && !isAdminAuthorized(params)) {
