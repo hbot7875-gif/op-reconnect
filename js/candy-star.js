@@ -1314,7 +1314,7 @@ export async function candyGenerate(mode) {
     // the playlist that failed validation is already deleted), so just say
     // that plainly instead.
     const simple = /^Spotify copy (failed live validation|could not be verified)/.test(res?.error || '')
-      ? "Spotify hiccuped building this one — no Wing was spent. Just hit Generate again."
+      ? "That didn't work — no Wing was spent. Just hit Generate again."
       : (res?.error || 'Generation failed.');
     candySetStatus('error', `<span style="font-size:16px;">⚠️</span><span>${sanitize(simple)}</span>`);
   }
