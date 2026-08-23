@@ -4,7 +4,7 @@
 // rows can remain as harmless audit history without showing up to players.
 const COLLECTION_TEMPLATES = new Set([
   'district_frag_1', 'district_frag_2', 'district_frag_3',
-  'district_restored', 'ward', 'mission_bond', 'quiz_perfect',
+  'district_restored', 'ward', 'mission_bond',
   'event_vma_voter', 'event_vma_power_hour', 'event_vma_double_day',
   'event_vma_supply_chest',
 ])
