@@ -20,6 +20,11 @@ import { agentManualSheet } from './agent-manual.js'
 
 let account = null
 
+const COMMUNITY_LINKS = {
+  updates: 'https://ig.me/j/AbZZsW13xRAgMb_D/',
+  discussion: 'https://ig.me/j/AbZYVFwKMMuh1zzV/',
+}
+
 export function renderSettings(container, state) {
   container.innerHTML = ''
   const wrap = el('div', 'set-screen')
@@ -176,6 +181,23 @@ function paintSections(body, state) {
     },
   ]))
 
+  // ── Community — the same purpose split used by the Arirang mission:
+  // one chat stays readable for official updates, while doubts and player
+  // conversation have a separate home. Real links are anchors so mobile
+  // browsers can hand ig.me URLs to Instagram without a popup blocker.
+  body.appendChild(section('Group chats', 'Updates, questions, and other agents', [
+    {
+      icon: '📣', name: 'Main GC', value: 'Join',
+      body: 'Mission updates and important announcements.',
+      href: COMMUNITY_LINKS.updates,
+    },
+    {
+      icon: '💬', name: 'ReConnect Discussion GC', value: 'Join',
+      body: 'Ask questions, clear doubts, and talk with other agents.',
+      href: COMMUNITY_LINKS.discussion,
+    },
+  ]))
+
   // ── HT access — agent000 only. Not a real security boundary (admin.html
   // is still gated by its own SYNC_ADMIN_KEY), just keeps the entry point
   // out of every other agent's settings screen.
@@ -215,7 +237,12 @@ function section(title, sub, rows) {
     <span class="sh-sub">${esc(sub)}</span>
   `))
   for (const r of rows) {
-    const row = el(r.onClick ? 'button' : 'div', 'set-row' + (r.muted ? ' is-static' : ''))
+    const row = el(r.href ? 'a' : r.onClick ? 'button' : 'div', 'set-row' + (r.muted ? ' is-static' : ''))
+    if (r.href) {
+      row.href = r.href
+      row.target = '_blank'
+      row.rel = 'noopener noreferrer'
+    }
     row.innerHTML = `
       <span class="sr-icon">${r.icon}</span>
       <span class="sr-main">
@@ -224,7 +251,7 @@ function section(title, sub, rows) {
       </span>
       <span class="sr-tail">
         ${r.value ? `<span class="sr-value">${esc(r.value)}</span>` : ''}
-        ${r.onClick ? '<span class="sr-go">›</span>' : ''}
+        ${r.onClick || r.href ? '<span class="sr-go">›</span>' : ''}
       </span>
     `
     if (r.onClick) row.onclick = r.onClick
