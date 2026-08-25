@@ -172,10 +172,29 @@ export const ERA_CATALOG: EraDef[] = [
     // album). You Never Walk Alone is Wings' own repackage, so its first
     // 14 tracks are exact duplicates of Wings' own — not re-listed twice.
     albums: ['Youth', 'Wings', 'You Never Walk Alone'],
+    // Dope and Pepse below both had zero real plays ever recorded under
+    // their configured keys (network-wide audit, 2026-08-25) despite every
+    // other Japanese re-recording here having real history — checked
+    // Spotify's actual Youth tracklist directly and both titles were
+    // simply wrong. Dope's real title bakes in a Japanese subtitle
+    // ("DOPE‐超ヤベー!‐(Japanese Ver.)") that changes its normalized key
+    // entirely, not just a formatting difference. Pepse is the Japanese
+    // reading of "Baepsae," written "ペップセ‐Japanese Ver.‐" in katakana
+    // on Spotify — no scrobble evidence exists yet for either (unlike the
+    // Iine! fix, there's no real agent history to confirm the exact string
+    // a scrobble source reports), so both list several plausible forms
+    // rather than gambling on one guess a second time.
     tracks: [
       'Introduction : Youth', 'Run -Japanese Ver.-', 'Fire -Japanese Ver.-',
-      'Dope -Japanese Ver.-', 'Good Day', 'Save Me -Japanese Ver.-',
-      'Boyz with Fun (Japanese Ver.)', 'Pepse (Japanese Ver.)', 'Wishing On A Star',
+      // NOT 'Dope (Japanese Ver.)' as an alias — it strips down to bare
+      // "dope", which collides with HYYH's own (Korean) "Dope" above and
+      // would let that already-required stream silently satisfy this
+      // supposedly-distinct Japanese re-recording too.
+      { title: 'Dope -Japanese Ver.-', aliases: ['DOPE‐超ヤベー!‐(Japanese Ver.)', 'DOPE-超ヤベー!-(Japanese Ver.)', '超ヤベー'] },
+      'Good Day', 'Save Me -Japanese Ver.-',
+      'Boyz with Fun (Japanese Ver.)',
+      { title: 'Pepse (Japanese Ver.)', aliases: ['ペップセ‐Japanese Ver.‐', 'ペップセ-Japanese Ver.-', 'ペップセ', 'Pepse -Japanese Ver.-', 'Baepsae (Japanese Ver.)', 'Baepsae -Japanese Ver.-'] },
+      'Wishing On A Star',
       'Butterfly -Japanese Ver.-', 'For You', 'I Need U (Japanese Ver.)',
       'Epilogue : Young Forever -Japanese Ver.-',
       'Intro: Boy Meets Evil',
