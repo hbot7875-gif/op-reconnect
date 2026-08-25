@@ -34,7 +34,16 @@ function resolveNonLbSource(pref: string, hasStatsFm: boolean, hasMusicat: boole
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
-async function fetchListenBrainz(lbUser: string, fromTs: number, toTs: number, maxPages: number): Promise<StreamRow[]> {
+// ok:false means a page request itself failed (network error, non-429
+// non-ok status, or unparseable body) — as opposed to a page that
+// succeeded and simply came back with zero listens, which is a real,
+// trustworthy "nothing more here" signal and keeps ok:true. This
+// distinction is what lets ensureDailyRollups tell "genuinely no streams
+// today" apart from "ListenBrainz hiccuped" — collapsing them was a real
+// bug: a transient failure produced the same empty bucket as a real zero,
+// silently overwriting and erasing whatever real streams that day already
+// had recorded from an earlier, successful poll.
+async function fetchListenBrainz(lbUser: string, fromTs: number, toTs: number, maxPages: number): Promise<{ rows: StreamRow[]; ok: boolean }> {
   const rows: StreamRow[] = []
   let cursor = toTs
   for (let page = 0; page < maxPages; page++) {
@@ -45,8 +54,9 @@ async function fetchListenBrainz(lbUser: string, fromTs: number, toTs: number, m
       await delay(2000)
       res = await fetch(url, { headers: { 'User-Agent': 'HopeTracker/1.0' } }).catch(() => null)
     }
-    if (!res || !res.ok) break
+    if (!res || !res.ok) return { rows, ok: false }
     const data = await res.json().catch(() => null)
+    if (data === null) return { rows, ok: false }
     const listens: any[] = data?.payload?.listens || []
     if (listens.length === 0) break
     let oldest = cursor
@@ -62,7 +72,7 @@ async function fetchListenBrainz(lbUser: string, fromTs: number, toTs: number, m
     cursor = oldest - 1
     if (cursor < fromTs) break
   }
-  return rows
+  return { rows, ok: true }
 }
 
 // Both direct-scrobble protocols (Web Scrobbler's webhook, the
@@ -200,13 +210,16 @@ export async function fetchStreamRows(
   fromTs: number,
   toTs: number,
   lbMaxPages: number,
-): Promise<StreamRow[]> {
+): Promise<{ rows: StreamRow[]; ok: boolean }> {
   const pref = agent.stream_source_preference || 'lb'
   const lbUser = NON_LB_PREFS.has(pref) ? null : (agent.lb_username || '').trim() || null
 
   let rows: StreamRow[]
+  let ok = true
   if (lbUser) {
-    rows = await fetchListenBrainz(lbUser, fromTs, toTs, lbMaxPages)
+    const lb = await fetchListenBrainz(lbUser, fromTs, toTs, lbMaxPages)
+    rows = lb.rows
+    ok = lb.ok
   } else {
     const source = resolveNonLbSource(pref, !!agent.statsfm_username, !!agent.musicat_public_id)
     if (source === 'statsfm' && agent.statsfm_username) {
@@ -233,5 +246,5 @@ export async function fetchStreamRows(
     seen.add(key)
     out.push(r)
   }
-  return out
+  return { rows: out, ok }
 }

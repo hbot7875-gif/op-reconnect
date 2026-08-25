@@ -207,7 +207,16 @@ export async function ensureDailyRollups(
   if (needed.length > 0) {
     const fromTs = kstDayBounds(needed[0]).fromTs
     const toTs = Math.min(kstDayBounds(needed[needed.length - 1]).toTs, Math.floor(Date.now() / 1000))
-    const rows = await fetchStreamRows(supabase, agent, fromTs, toTs, lim.lbMaxPages)
+    const { rows, ok } = await fetchStreamRows(supabase, agent, fromTs, toTs, lim.lbMaxPages)
+    // A failed fetch (network error, non-ok status, unparseable body — see
+    // fetchListenBrainz) returns the same shape as "genuinely zero streams
+    // this window." Trusting that here used to silently overwrite whatever
+    // a day already had recorded from an earlier, successful poll — a real
+    // agent's whole day of real streams disappearing because THIS ONE poll
+    // happened to hit a ListenBrainz hiccup. Skip the write entirely on
+    // failure instead; the next successful poll picks needed dates back up
+    // exactly the same way (nothing here marks them finalized in between).
+    if (!ok) return [...byDate.values()].sort((a, b) => String(a.kst_date).localeCompare(String(b.kst_date)))
     const byDay = bucketRows(rows)
 
     for (const date of needed) {

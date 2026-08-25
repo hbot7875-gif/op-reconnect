@@ -21,7 +21,7 @@ export async function getSignalLog(supabase: SupabaseDB, params: Record<string, 
   const now = Math.floor(Date.now() / 1000)
   const from = now - 86400 // last 24h — "recent," not a full history browser
 
-  const rows = await fetchStreamRows(supabase, agentRow, from, now, 5)
+  const { rows } = await fetchStreamRows(supabase, agentRow, from, now, 5)
   rows.sort((a, b) => b.listened_at - a.listened_at)
 
   // Every row in the window gets flagged and counted here — the 50-row
@@ -74,7 +74,7 @@ export async function getMySelfCheck(supabase: SupabaseDB, params: Record<string
 
   const content = await loadContent(supabase)
   const lim = limits(content)
-  const [rows, possibleAlts] = await Promise.all([
+  const [{ rows }, possibleAlts] = await Promise.all([
     fetchStreamRows(supabase, agent, fromTs, toTs, lim.lbMaxPages),
     findPossibleAlts(supabase, agent),
   ])

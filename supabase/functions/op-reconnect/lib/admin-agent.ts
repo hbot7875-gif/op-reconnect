@@ -191,7 +191,7 @@ export async function adminGetAgentTracks(supabase: SupabaseDB, params: any) {
 
   const content = await loadContent(supabase)
   const lim = limits(content)
-  const [rows, possibleAlts, playerRow] = await Promise.all([
+  const [{ rows }, possibleAlts, playerRow] = await Promise.all([
     fetchStreamRows(supabase, {
       agent_no: agent.agent_no,
       lb_username: agent.lb_username,
