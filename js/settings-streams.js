@@ -187,6 +187,10 @@ export function pinSheet(account, onChanged) {
   }
   paint(null)
 
+  const howTo = el('button', 'btn btn-ghost', "How do I set this up?")
+  howTo.onclick = () => showOverlay(webScrobblerGuideSheet())
+  sheet.appendChild(howTo)
+
   const reveal = el('button', 'btn btn-ghost', account.hasPin ? 'Reveal my PIN' : 'No PIN yet')
   reveal.disabled = !account.hasPin
   reveal.onclick = async () => {
@@ -220,6 +224,44 @@ export function pinSheet(account, onChanged) {
 
   sheet.append(reveal, gen)
   const close = el('button', 'btn btn-ghost', 'Done')
+  close.onclick = hideOverlay
+  sheet.appendChild(close)
+  return sheet
+}
+
+/** Web Scrobbler is a browser extension, not a service with its own
+ *  account — the PIN sheet gives the URL to paste in, but never walked
+ *  through where that paste actually goes. Same numbered-step look as the
+ *  Agent Manual's quick-start (.am-step), so a setup walkthrough reads the
+ *  same way the core-loop one already does. */
+function webScrobblerGuideSheet() {
+  const sheet = el('div', 'sheet set-sheet')
+  sheet.append(
+    el('div', 'eyebrow', '🧩 WEB SCROBBLER SETUP'),
+    el('h3', '', 'Connect the extension'),
+    el('p', 'muted', 'Generate your PIN first (previous screen) — you\'ll need the Webhook URL it gives you.'),
+  )
+
+  const steps = [
+    ['1', 'Install the extension', 'Get Web Scrobbler from the Chrome Web Store or Firefox Add-ons for whichever browser you actually stream from.'],
+    ['2', 'Open its settings', 'Click the Web Scrobbler icon in your browser toolbar, then the gear icon to open its Options page.'],
+    ['3', 'Go to Accounts', 'In Options, open the "Accounts" tab — it lists every service Web Scrobbler can send plays to.'],
+    ['4', 'Turn on Webhook', 'Find "Webhook" in that list and enable it. A field appears asking for a webhook URL.'],
+    ['5', 'Paste your Webhook URL', 'Paste the Webhook URL from your PIN screen here (not the ListenBrainz-style URL — that one\'s for Pano Scrobbler instead) and save.'],
+    ['6', 'Just play music', 'Web Scrobbler already recognizes Spotify Web Player, YouTube Music, and most other web players — no per-site setup needed. Streams start arriving automatically.'],
+  ]
+  const list = el('section', 'am-section am-quick')
+  for (const [number, title, body] of steps) {
+    list.appendChild(el('div', 'am-step', `
+      <span class="am-step-number">${number}</span>
+      <span><b>${esc(title)}</b><small>${esc(body)}</small></span>
+    `))
+  }
+  sheet.appendChild(list)
+
+  sheet.appendChild(el('p', 'muted', 'Not seeing streams come through? Use "Stream check" on the Settings screen — it shows exactly what the network just heard from you.'))
+
+  const close = el('button', 'btn btn-ghost', 'Close')
   close.onclick = hideOverlay
   sheet.appendChild(close)
   return sheet
