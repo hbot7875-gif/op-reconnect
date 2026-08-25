@@ -248,6 +248,19 @@ export async function adminDeleteAgent(supabase: SupabaseDB, params: any) {
     ['generated_playlists', 'agent_no'],
     ['rc_scrobbles', 'agent_no'],
     ['rc_password_resets', 'agent_no'],
+    // Added 2026-08-24 — cross-checked every real FK pointing at rc_agents
+    // and found these seven missing from both this list and the scheduled
+    // cleanup's own copy (rc_delete_inactive_agents_scheduled), which is
+    // what broke the 14-day auto-delete cron for 3 nights straight on
+    // rc_vma_votes specifically. Each is a feature added after this list
+    // was first written.
+    ['rc_backup_requests', 'owner_agent_no'],
+    ['rc_playlist_reports', 'agent_no'],
+    ['rc_playlist_saves', 'agent_no'],
+    ['rc_supply_chest_opens', 'agent_no'],
+    ['rc_supply_chest_progress', 'agent_no'],
+    ['rc_vma_community_chest_claims', 'agent_no'],
+    ['rc_vma_votes', 'agent_no'],
     ['rc_players', 'agent_no'],
   ]
   for (const [table, column] of deletes) {
@@ -255,8 +268,12 @@ export async function adminDeleteAgent(supabase: SupabaseDB, params: any) {
     if (error) return { success: false, error: `delete_failed:${table}:${error.message}` }
   }
 
-  // Invites sent by the deleted tester should no longer name a missing agent.
+  // Invites sent by the deleted tester should no longer name a missing
+  // agent, and neither should a backup-pass helper slot that isn't theirs
+  // to delete (the request row belongs to its owner, deleted above only
+  // when THEY'RE the one being removed).
   await supabase.from('rc_reconnect_participants').update({ invited_by: null }).eq('invited_by', agentNo)
+  await supabase.from('rc_backup_requests').update({ helper_agent_no: null }).eq('helper_agent_no', agentNo)
   const { error } = await supabase.from('rc_agents').delete().eq('agent_no', agentNo)
   if (error) return { success: false, error: `delete_failed:rc_agents:${error.message}` }
   return { success: true, deleted: { agentNo, handle: agent.handle } }
