@@ -599,7 +599,7 @@ async function candyRunPreview() {
     // A rule rejection (banned album, wrong song/album combo) is something
     // the agent can act on right now — show it in place of the generic
     // fallback so they don't have to hit Generate just to find out why.
-    const msg = res?.error && /^(Pick exactly one of|A 15× focus song|.+ can't be used for generated playlists)/.test(res.error)
+    const msg = res?.error && /^(Pick one of|A 15× focus song|.+ can't be used for generated playlists)/.test(res.error)
       ? res.error
       : 'Preview unavailable right now — generate to see the real order.';
     candySetHTML('cs-preview-list', `<div class="cs-preview-empty">${sanitize(msg)}</div>`);
@@ -1116,7 +1116,7 @@ export async function renderCandyStar() {
             <div style="font-size:13px; font-weight:900; color:var(--red-core); letter-spacing:0.04em; margin-bottom:6px; text-transform:uppercase;">${candyIcon('disc')} What do you want on repeat?</div>
             <div style="font-size:11px; color:var(--text-muted); margin-bottom:14px; line-height:1.5;">
               Pick a song and how many times you want to hear it (e.g. 12× Swim · 6× Come Over) — we'll weave in enough extra tracks so it still plays like a real playlist.
-              Every playlist needs exactly <b>2 songs + 1 album</b>, <b>1 song + 2 albums</b>, or <b>1 song + 1 album</b> — nothing else.
+              You can make a playlist with <b>2 focus songs only</b>, or add albums: <b>2 songs + 1 album</b>, <b>1 song + 2 albums</b>, or <b>1 song + 1 album</b>.
             </div>
 
             <div class="cs-col-headers"><span>Song</span><span>Times</span><span></span></div>

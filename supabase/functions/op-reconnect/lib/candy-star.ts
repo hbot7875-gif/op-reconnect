@@ -41,8 +41,56 @@ import {
 } from './candy-star-rules.ts'
 import {
   dedupeTracksByIdentity, excludeTracksByIdentity, mergeSavedTracksWithPlan,
-  hasHeavyFocusConflict,
+  hasHeavyFocusConflict, isAllowedCustomCombo, mergeGoalAlbums,
 } from './candy-star-planner.js'
+
+// Curated by the playlist team specifically for gaps that should contain
+// only two BTS/member fillers. Reading the source playlist keeps the pool in
+// sync when they improve it without baking 160+ Spotify recordings into the
+// function bundle. Cache it per warm Edge instance to avoid two extra
+// Spotify requests on every generation.
+const TWO_FILLER_PLAYLIST_ID = '5i6EojUkAABe0I97FFHL3l'
+const TWO_FILLER_CACHE_MS = 30 * 60000
+const BTS_CREDIT_NAMES = new Set([
+  'bts', 'rm', 'rap monster', 'jin', 'suga', 'agust d', 'j-hope',
+  'jimin', 'v', 'jung kook', 'jungkook', '정국',
+])
+let twoFillerCache: { expiresAt: number; tracks: any[] } = { expiresAt: 0, tracks: [] }
+
+async function getCuratedTwoFillerSpacers(token: string): Promise<any[]> {
+  const now = Date.now()
+  if (twoFillerCache.expiresAt > now && twoFillerCache.tracks.length) {
+    return twoFillerCache.tracks
+  }
+
+  try {
+    const playlistTracks = await fetchAllPlaylistTracks(token, TWO_FILLER_PLAYLIST_ID)
+    const curated = dedupeTracksByIdentity(playlistTracks
+      .filter((track: any) => {
+        const creditNames = (track.artists || []).map((artist: any) =>
+          String(artist?.name || '').trim().toLowerCase())
+        // The list is curated, but this guard prevents an accidental recent
+        // unrelated addition from entering a BTS spacer slot. Name matching
+        // supplements Spotify IDs because some member pages have historical
+        // alternate artist IDs.
+        const isBtsCredit = track.isBTS || creditNames.some((name: string) => BTS_CREDIT_NAMES.has(name))
+        return isBtsCredit && track.id && track.uri && (track.durationMs || 0) >= 235000
+      })
+      .map((track: any) => ({
+        id: track.id, uri: track.uri, name: track.name,
+        artists: (track.artists || []).map((artist: any) => artist.name).filter(Boolean),
+        album: track.album || '', durationMs: track.durationMs || 0,
+        isrc: track.isrc || null, isBTS: true, twoFillerSource: true,
+      })))
+    if (curated.length) {
+      twoFillerCache = { expiresAt: now + TWO_FILLER_CACHE_MS, tracks: curated }
+      return curated
+    }
+  } catch (error) {
+    console.warn('Candy Star two-filler playlist unavailable; using catalog fallback.', error)
+  }
+  return twoFillerCache.tracks
+}
 
 /** Shared by both validate paths: run the rule engine, then layer the
  *  K-pop-filler genre check on top (needs a token for `/v1/artists` —
@@ -116,9 +164,10 @@ export async function validatePlaylistFromTracks(supabase: SupabaseDB, params: {
 export async function generatePlaylist(supabase: SupabaseDB, params: any): Promise<any> {
   const targetMs = Math.min((params.targetMinutes || 180), 180) * 60000
   const fillerEvery = Math.max(5, Math.min(parseInt(params.fillerEvery) || 20, 30))
-  const cat = await getBTSCatalog(supabase)
-  const lib = await getFillerLibrary(supabase)
-  const albumsMap = await getAlbumsMap(supabase)
+  const [cat, lib, storedAlbums, content] = await Promise.all([
+    getBTSCatalog(supabase), getFillerLibrary(supabase), getAlbumsMap(supabase), loadContent(supabase),
+  ])
+  const albumsMap = mergeGoalAlbums(storedAlbums, cat.songs || [], content.goals || [])
   const keyOf = (s: any) => s.key || s.isrc || (s.versions?.[0]?.id ? `TID:${s.versions[0].id}` : null)
   const byKey = new Map<string, any>((cat.songs || []).map((s: any) => [keyOf(s), s]))
 
@@ -129,44 +178,60 @@ export async function generatePlaylist(supabase: SupabaseDB, params: any): Promi
 
   const { token, userId } = await getUserAccessToken(supabase)
 
+  const resolveCatalogVersion = async (s: any): Promise<any> => {
+    const artist = (s.artists || ['BTS'])[0]
+    const queries = [`${s.name} ${artist}`, `${s.name} BTS`, s.name]
+    let match: any = null
+    for (let qi = 0; qi < queries.length; qi++) {
+      const d = qi === 0
+        ? await spotifyGetJsonOrThrow(`https://api.spotify.com/v1/search?q=${encodeURIComponent(queries[qi])}&type=track&limit=10`, token)
+        : await spotifyGetJson(`https://api.spotify.com/v1/search?q=${encodeURIComponent(queries[qi])}&type=track&limit=10`, token)
+      match = (d?.tracks?.items ?? []).find((item: any) => isBTSArtists(item.artists ?? []))
+      if (match) break
+    }
+    if (!match) {
+      for (const q of queries) {
+        const d = await spotifyGetJson(`https://api.spotify.com/v1/search?q=${encodeURIComponent(q)}&type=track&limit=1`, token)
+        match = d?.tracks?.items?.[0] ?? null
+        if (match) break
+      }
+    }
+    if (!match) throw new Error(`Could not find "${s.name}" on Spotify. Refresh the catalog — it may be missing this song.`)
+    return {
+      id: match.id, uri: `spotify:track:${match.id}`,
+      album: match.album?.name || '', durationMs: match.duration_ms || s.durationMs || 0,
+    }
+  }
+
   const focusSongs = await Promise.all(focusInput.map(async (f: any) => {
     const s = byKey.get(f.isrc)
     if (!s) throw new Error(`Focus song not in catalog (${f.isrc}). Refresh the catalog.`)
     let versions = [...(s.versions || [])]
-    if (!versions.length) {
-      const artist = (s.artists || ['BTS'])[0]
-      const queries = [`${s.name} ${artist}`, `${s.name} BTS`, s.name]
-      let match: any = null
-      for (let qi = 0; qi < queries.length; qi++) {
-        const d = qi === 0
-          ? await spotifyGetJsonOrThrow(`https://api.spotify.com/v1/search?q=${encodeURIComponent(queries[qi])}&type=track&limit=10`, token)
-          : await spotifyGetJson(`https://api.spotify.com/v1/search?q=${encodeURIComponent(queries[qi])}&type=track&limit=10`, token)
-        match = (d?.tracks?.items ?? []).find((item: any) => isBTSArtists(item.artists ?? []))
-        if (match) break
-      }
-      if (!match) {
-        for (const q of queries) {
-          const d = await spotifyGetJson(`https://api.spotify.com/v1/search?q=${encodeURIComponent(q)}&type=track&limit=1`, token)
-          match = d?.tracks?.items?.[0] ?? null
-          if (match) break
-        }
-      }
-      if (!match) throw new Error(`Could not find "${s.name}" on Spotify. Refresh the catalog — it may be missing this song.`)
-      versions = [{ id: match.id, uri: `spotify:track:${match.id}`, album: match.album?.name || '', durationMs: match.duration_ms || 0 }]
-    }
+    if (!versions.length) versions = [await resolveCatalogVersion(s)]
     return { key: keyOf(s), isrc: s.isrc, name: s.name, artists: s.artists, versions, durationMs: versions[0]?.durationMs || s.durationMs, plays: Math.floor(f.multiplier) }
   }))
 
   const focusKeys = new Set<string>(focusSongs.map((s: any) => s.key))
   const albumKeys = new Set<string>(params.album || [])
 
-  const albumOnce = (params.album || [])
+  const albumSongs = (params.album || [])
     .filter((k: string) => !focusKeys.has(k))
-    .map((k: string) => byKey.get(k))
-    .filter((s: any) => s && s.versions?.length > 0)
-    .map((s: any) => ({ key: keyOf(s), uri: s.versions[0].uri, id: s.versions[0].id, name: s.name, isrc: s.versions[0].isrc || s.isrc, durationMs: s.versions[0].durationMs || s.durationMs, album: s.versions[0].album }))
+    .map((k: string) => {
+      const song = byKey.get(k)
+      if (!song) throw new Error(`Album track is missing from the BTS catalog (${k}).`)
+      return song
+    })
+  const albumOnce = await Promise.all(albumSongs.map(async (s: any) => {
+    const version = s.versions?.[0] || await resolveCatalogVersion(s)
+    return {
+      key: keyOf(s), uri: version.uri, id: version.id, name: s.name,
+      isrc: version.isrc || s.isrc, durationMs: version.durationMs || s.durationMs,
+      album: version.album,
+    }
+  }))
 
   const totalFocusPlays = focusSongs.reduce((n: number, s: any) => n + s.plays, 0) + albumOnce.length
+  const is2Focus = focusSongs.length === 2
 
   let albumLabel: string | null = null
   if ((params.album || []).length > 0) {
@@ -197,7 +262,24 @@ export async function generatePlaylist(supabase: SupabaseDB, params: any): Promi
   )
   const btsSpacers = (cat.songs || [])
     .filter((s: any) => !focusKeys.has(keyOf(s)) && !albumKeys.has(keyOf(s)) && s.versions?.[0]?.uri && (s.versions[0].durationMs || s.durationMs || 0) >= 90000)
-    .map((s: any) => ({ key: keyOf(s), uri: s.versions[0].uri, id: s.versions[0].id, name: s.name, isrc: s.versions[0].isrc || s.isrc, durationMs: s.versions[0].durationMs || s.durationMs, isBTS: true, album: s.versions[0].album }))
+    .map((s: any) => ({ key: keyOf(s), uri: s.versions[0].uri, id: s.versions[0].id, name: s.name, artists: s.artists || ['BTS'], isrc: s.versions[0].isrc || s.isrc, durationMs: s.versions[0].durationMs || s.durationMs, isBTS: true, album: s.versions[0].album }))
+
+  const excludedTwoFillerRecordings = [
+    ...focusSongs.flatMap((song: any) => song.versions || []), ...albumOnce,
+  ]
+  const liveTwoFillerPool = is2Focus ? await getCuratedTwoFillerSpacers(token) : []
+  // A temporary Spotify read failure must not block playlist creation. The
+  // catalog's own long BTS tracks preserve the same two-track/8-minute rule
+  // until the curated source can be refreshed on a later request.
+  const twoFillerSpacers = is2Focus
+    ? excludeTracksByIdentity(
+      liveTwoFillerPool.length
+        ? liveTwoFillerPool
+        : btsSpacers.filter((track: any) => (track.durationMs || 0) >= 235000)
+          .map((track: any) => ({ ...track, twoFillerSource: true })),
+      excludedTwoFillerRecordings,
+    )
+    : []
 
   // A filler must also be unique against every BTS-side recording, not only
   // against other fillers. Using both stored ID and ISRC catches stale
@@ -206,15 +288,13 @@ export async function generatePlaylist(supabase: SupabaseDB, params: any): Promi
   // market-relinked edge cases remain guarded by the post-create live check.
   const btsRecordings = [
     ...focusSongs.flatMap((s: any) => s.versions || []),
-    ...albumOnce, ...btsSpacers,
+    ...albumOnce, ...btsSpacers, ...twoFillerSpacers,
   ]
   nonBtsFillers = excludeTracksByIdentity(nonBtsFillers, btsRecordings)
 
   const avgMs = (focusSongs.reduce((n: number, s: any) => n + s.durationMs, 0) / Math.max(1, focusSongs.length)) || 200000
   const focusTotalMs = focusSongs.reduce((n: number, s: any) => n + s.durationMs * s.plays, 0)
   const tracksByTime = Math.floor(targetMs / avgMs)
-  const is2Focus = focusSongs.length === 2
-
   let approxTracks: number
   if (is2Focus) {
     const totalPlays = focusSongs.reduce((n: number, s: any) => n + s.plays, 0)
@@ -237,7 +317,10 @@ export async function generatePlaylist(supabase: SupabaseDB, params: any): Promi
 
   const focusPlays = is2Focus ? [] : spreadFocusPlays(focusSongs)
   const { order } = is2Focus
-    ? buildPlaylistOrder2Focus(focusSongs, btsSpacers, nonBtsFillers, albumOnce, targetMs, fillerEvery)
+    ? buildPlaylistOrder2Focus(
+      focusSongs, btsSpacers, nonBtsFillers, albumOnce,
+      targetMs, fillerEvery, { twoFillerSpacers },
+    )
     : buildPlaylistOrder(focusPlays, btsSpacers, nonBtsFillers, albumOnce, targetMs, fillerEvery)
 
   // Safety net: assert the builder actually delivered every requested play.
@@ -425,7 +508,7 @@ function reconnectGuide(goal: any) {
  *  the agent-facing picker. The guide is built from the same live rc_goals,
  *  mode config and target function used when a district is activated. */
 export async function getAlpacaOptions(supabase: SupabaseDB, params: any): Promise<any> {
-  const [cat, albumsMap, content, activeRes] = await Promise.all([
+  const [cat, storedAlbums, content, activeRes] = await Promise.all([
     getBTSCatalog(supabase),
     getAlbumsMap(supabase),
     loadContent(supabase),
@@ -433,6 +516,7 @@ export async function getAlpacaOptions(supabase: SupabaseDB, params: any): Promi
       .eq('agent_no', String(params.agentNo || '').trim().toUpperCase())
       .eq('status', 'active').maybeSingle(),
   ])
+  const albumsMap = mergeGoalAlbums(storedAlbums, cat.songs || [], content.goals || [])
 
   const songs = (cat.songs || [])
     .filter((s: any) => s?.name && (s.key || s.isrc))
@@ -548,11 +632,12 @@ export async function getAlpacaOptions(supabase: SupabaseDB, params: any): Promi
  * source read here.
  */
 async function alpacaQuickPlan(supabase: SupabaseDB): Promise<{ focus: any[]; album: string[] }> {
-  const [cat, albumsMap, goalsRes] = await Promise.all([
+  const [cat, storedAlbums, goalsRes] = await Promise.all([
     getBTSCatalog(supabase),
     getAlbumsMap(supabase),
-    supabase.from('rc_goals').select('kind, label, aliases').eq('active', true),
+    supabase.from('rc_goals').select('id, kind, label, aliases, tracks').eq('active', true),
   ])
+  const albumsMap = mergeGoalAlbums(storedAlbums, cat.songs || [], goalsRes.data || [])
 
   const goals: { target_type: string; target_name: string; aliases?: any }[] =
     (goalsRes.data || []).map((g: any) => ({ target_type: g.kind, target_name: g.label, aliases: g.aliases }))
@@ -608,14 +693,13 @@ const HEAVY_FOCUS_PLAYS = 15
 const HEAVY_FOCUS_ERROR = `A ${HEAVY_FOCUS_PLAYS}× focus song needs its own playlist — remove the other focus song. You can still add albums.`
 
 // Custom-tab combo lock: an agent picking their own focus songs/albums may
-// only land on one of these three shapes — nothing else. Quick mode is
+// use two focused songs on their own, or one of the existing song+album
+// shapes. Quick mode is
 // exempt (checked separately, mode !== 'quick' below): it pulls every
 // active goal for the week in one go, which routinely adds up to far more
 // than 2 songs or 2 albums, and that's by design, not something a player
 // chose. "song"/"album" counts here mean distinct picks, not play counts —
 // picking one song ×10 is still 1 song.
-const ALLOWED_CUSTOM_COMBOS = new Set(['2:1', '1:2', '1:1'])
-
 // Never eligible for a generated playlist, in any mode — full-length
 // live/anthology/compilation releases that either re-use previously
 // released masters or run far longer than a normal era album, neither of
@@ -706,7 +790,10 @@ export async function generateAlpaca(supabase: SupabaseDB, params: any): Promise
     focus.filter((f: any) => (f.key || f.isrc) && parseInt(f.multiplier) > 0).map((f: any) => f.key || f.isrc),
   )
 
-  const albumsMap = await getAlbumsMap(supabase)
+  const [storedAlbums, comboCatalog, comboContent] = await Promise.all([
+    getAlbumsMap(supabase), getBTSCatalog(supabase), loadContent(supabase),
+  ])
+  const albumsMap = mergeGoalAlbums(storedAlbums, comboCatalog.songs || [], comboContent.goals || [])
   const selectedAlbums = detectSelectedAlbums(albumsMap, album, params.albumIds)
 
   const banned = selectedAlbums.find((a) => BANNED_ALBUM_NAMES.has(normalizeKey(a.name)))
@@ -719,9 +806,8 @@ export async function generateAlpaca(supabase: SupabaseDB, params: any): Promise
   }
 
   if (!isQuick) {
-    const comboKey = `${validFocusKeys.size}:${selectedAlbums.length}`
-    if (!ALLOWED_CUSTOM_COMBOS.has(comboKey)) {
-      return { success: false, error: 'Pick exactly one of: 2 songs + 1 album, 1 song + 2 albums, or 1 song + 1 album.' }
+    if (!isAllowedCustomCombo(validFocusKeys.size, selectedAlbums.length)) {
+      return { success: false, error: 'Pick one of: 2–3 songs, 2 songs + 1 album, or 1 song + 1–2 albums.' }
     }
   }
 
@@ -798,7 +884,12 @@ export async function previewAlpaca(supabase: SupabaseDB, params: any): Promise<
   // Same combo/banned-album gate generateAlpaca enforces — checked here too
   // so the builder can show the real rejection reason live, while typing,
   // instead of only at the final "Generate" tap.
-  const albumsMapForCheck = await getAlbumsMap(supabase)
+  const [storedAlbumsForCheck, previewCatalog, previewContent] = await Promise.all([
+    getAlbumsMap(supabase), getBTSCatalog(supabase), loadContent(supabase),
+  ])
+  const albumsMapForCheck = mergeGoalAlbums(
+    storedAlbumsForCheck, previewCatalog.songs || [], previewContent.goals || [],
+  )
   const selectedAlbumsForCheck = detectSelectedAlbums(albumsMapForCheck, album, params.albumIds)
   const bannedPreview = selectedAlbumsForCheck.find((a) => BANNED_ALBUM_NAMES.has(normalizeKey(a.name)))
   if (bannedPreview) {
@@ -806,15 +897,14 @@ export async function previewAlpaca(supabase: SupabaseDB, params: any): Promise<
   }
   if (params.mode !== 'quick') {
     const distinctFocusKeys = new Set<string>(focusInput.map((f: any) => f.isrc))
-    const comboKey = `${distinctFocusKeys.size}:${selectedAlbumsForCheck.length}`
-    if (!ALLOWED_CUSTOM_COMBOS.has(comboKey)) {
-      return { success: false, error: 'Pick exactly one of: 2 songs + 1 album, 1 song + 2 albums, or 1 song + 1 album.' }
+    if (!isAllowedCustomCombo(distinctFocusKeys.size, selectedAlbumsForCheck.length)) {
+      return { success: false, error: 'Pick one of: 2–3 songs, 2 songs + 1 album, or 1 song + 1–2 albums.' }
     }
   }
 
   const targetMs = 180 * 60000
   const fillerEvery = 20
-  const cat = await getBTSCatalog(supabase)
+  const cat = previewCatalog
   const lib = await getFillerLibrary(supabase)
   const keyOf = (s: any) => s.key || s.isrc || (s.versions?.[0]?.id ? `TID:${s.versions[0].id}` : null)
   const byKey = new Map<string, any>((cat.songs || []).map((s: any) => [keyOf(s), s]))
@@ -834,13 +924,21 @@ export async function previewAlpaca(supabase: SupabaseDB, params: any): Promise<
   const albumOnce = album
     .filter((k: string) => !focusKeys.has(k))
     .map((k: string) => byKey.get(k))
-    .filter((s: any) => s && s.versions?.length > 0)
-    .map((s: any) => ({ key: keyOf(s), uri: s.versions[0].uri, id: s.versions[0].id, name: s.name, isrc: s.isrc, durationMs: s.durationMs, album: s.versions[0].album }))
+    .filter(Boolean)
+    .map((s: any) => {
+      const version = s.versions?.[0]
+      return {
+        key: keyOf(s), uri: version?.uri || `preview:${keyOf(s)}`,
+        id: version?.id || `preview:${keyOf(s)}`, name: s.name,
+        isrc: version?.isrc || s.isrc, durationMs: version?.durationMs || s.durationMs || 210000,
+        album: version?.album || '', previewOnly: !version,
+      }
+    })
 
   const nonBtsFillers = (lib.fillers || []).map((f: any) => ({ uri: f.uri, id: f.track_id, name: f.name, artists: f.artists, isrc: f.isrc, durationMs: f.duration_ms, isBTS: false }))
   const btsSpacers = (cat.songs || [])
     .filter((s: any) => !focusKeys.has(keyOf(s)) && !album.includes(keyOf(s)) && s.versions?.[0]?.uri && (s.durationMs || 0) >= 90000)
-    .map((s: any) => ({ key: keyOf(s), uri: s.versions[0].uri, id: s.versions[0].id, name: s.name, isrc: s.isrc, durationMs: s.durationMs, isBTS: true, album: s.versions[0].album }))
+    .map((s: any) => ({ key: keyOf(s), uri: s.versions[0].uri, id: s.versions[0].id, name: s.name, artists: s.artists || ['BTS'], isrc: s.isrc, durationMs: s.durationMs, isBTS: true, album: s.versions[0].album }))
 
   if (btsSpacers.length === 0 || nonBtsFillers.length < 2) {
     return { success: false, error: 'Catalog not ready for a preview yet.' }
@@ -869,7 +967,7 @@ export async function previewAlpaca(supabase: SupabaseDB, params: any): Promise<
     albumTrackCount: albumOnce.length,
     nonKpopCount: order.filter((t: any) => t.isBTS === false).length,
     preview,
-    partial: focusSongs.length < focusInput.length,
+    partial: focusSongs.length < focusInput.length || albumOnce.some((track: any) => track.previewOnly),
   }
 }
 

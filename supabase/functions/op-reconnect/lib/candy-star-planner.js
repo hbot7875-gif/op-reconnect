@@ -14,6 +14,90 @@ export function shuffle(arr, rng = Math.random) {
   return a
 }
 
+/** Pick a duration-compatible track without letting the exact same
+ * best-fitting recording win every generation. Candidates that can satisfy
+ * the requested duration are ranked by overshoot, then one of the closest
+ * few is chosen randomly. When none can satisfy it, choose among the longest
+ * few instead. This keeps the eight-minute rule intact while giving equally
+ * useful fillers a real chance to rotate. */
+export function pickVariedDurationIndex(
+  tracks, start = 0, remainingMs = 0, minDurationMs = 0,
+  rng = Math.random, scanLimit = Infinity, candidateCount = 5,
+) {
+  const end = Math.min(tracks?.length || 0, start + scanLimit)
+  const eligible = []
+  for (let i = start; i < end; i++) {
+    const durationMs = tracks[i]?.durationMs || 0
+    if (durationMs >= minDurationMs) eligible.push({ index: i, durationMs })
+  }
+  if (!eligible.length) return -1
+
+  const fitting = eligible.filter((entry) => entry.durationMs >= remainingMs)
+  const ranked = fitting.length
+    ? fitting.sort((a, b) => (a.durationMs - remainingMs) - (b.durationMs - remainingMs))
+    : eligible.sort((a, b) => b.durationMs - a.durationMs)
+  const poolSize = Math.max(1, Math.min(candidateCount, ranked.length))
+  return ranked[Math.floor(rng() * poolSize)].index
+}
+
+/** Merge the manually-maintained album catalog with album goals already in
+ * ReConnect. A goal album is exposed only when every listed track resolves
+ * to a catalog song, so the picker never offers a partial album. Spotify
+ * versions may still be unresolved here; the real generator resolves those
+ * server-side before building while previews use catalog duration estimates.
+ * This makes new district albums available automatically without weakening
+ * the existing admin catalog or trusting client-supplied track lists. */
+export function mergeGoalAlbums(storedAlbums, catalogSongs, goals) {
+  const merged = { ...(storedAlbums || {}) }
+  const normalize = (value) => String(value || '').toLowerCase().normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim()
+  const stripVersion = (value) => normalize(value)
+    .replace(/\b(?:live|remix|version|ver|instrumental|acoustic|edit|mix)\b.*$/g, '').trim()
+  const keyOf = (song) => song?.key || song?.isrc || (song?.versions?.[0]?.id ? `TID:${song.versions[0].id}` : null)
+  const exact = new Map()
+  const base = new Map()
+  for (const song of catalogSongs || []) {
+    const key = keyOf(song)
+    if (!key || !song?.name) continue
+    const exactName = normalize(song.name)
+    const baseName = stripVersion(song.name)
+    if (!exact.has(exactName)) exact.set(exactName, key)
+    if (!base.has(baseName)) base.set(baseName, key)
+  }
+
+  const existingNames = new Set(Object.values(merged).flatMap((album) =>
+    [album?.name, ...(album?.aliases || [])].map(normalize).filter(Boolean)))
+  for (const goal of goals || []) {
+    if (goal?.kind !== 'album' || !goal?.id || !goal?.label || !Array.isArray(goal?.tracks) || !goal.tracks.length) continue
+    const names = [goal.label, ...(Array.isArray(goal.aliases) ? goal.aliases : [])]
+    if (names.some((name) => existingNames.has(normalize(name)))) continue
+
+    const trackKeys = []
+    let complete = true
+    for (const track of goal.tracks) {
+      const candidates = [track?.label, ...(Array.isArray(track?.aliases) ? track.aliases : [])]
+      let key = null
+      for (const name of candidates) { key = exact.get(normalize(name)); if (key) break }
+      if (!key) for (const name of candidates) { key = base.get(stripVersion(name)); if (key) break }
+      if (!key) { complete = false; break }
+      if (!trackKeys.includes(key)) trackKeys.push(key)
+    }
+    if (!complete || trackKeys.length !== goal.tracks.length) continue
+
+    const id = `goal:${goal.id}`
+    merged[id] = {
+      id, name: goal.label, aliases: goal.aliases || [], image: null,
+      trackKeys, count: trackKeys.length, source: 'district_goal',
+    }
+    for (const name of names) existingNames.add(normalize(name))
+  }
+  return merged
+}
+
+export function isAllowedCustomCombo(focusCount, albumCount) {
+  return new Set(['3:0', '2:0', '2:1', '1:2', '1:1']).has(`${focusCount}:${albumCount}`)
+}
+
 // Interleave songs by primary artist so no more than ~1 consecutive track
 // from the same member.
 export function artistInterleave(songs) {
@@ -265,11 +349,24 @@ export function buildPlaylistOrder2Focus(
   focusSongs, btsSpacers, nonBtsFillers, albumOnce, targetMs, fillerEvery, MIN_GAP_MS, options = {},
 ) {
   const rng = options.rng || Math.random
-  const btsQ = artistInterleave(shuffle(btsSpacers, rng)); let bi = 0
+  // A curated 4-minute-ish pool may be supplied for the special two-filler
+  // shape. Keep those tracks out of the ordinary spacer queue when there is
+  // another choice, so they are saved for the exact place their length is
+  // useful and do not become the same filler heard in every kind of gap.
+  const twoFillerTracks = dedupeTracksByIdentity(options.twoFillerSpacers || [])
+  const twoFillerIds = new Set(twoFillerTracks.flatMap(trackIdentityTokens))
+  const regularTracks = (btsSpacers || []).filter((track) =>
+    !trackIdentityTokens(track).some((identity) => twoFillerIds.has(identity)))
+  const makePool = (tracks) => ({
+    queue: artistInterleave(shuffle(tracks, rng)), index: 0,
+  })
+  const btsPool = makePool(regularTracks.length ? regularTracks : btsSpacers)
+  const twoFillerPool = makePool(twoFillerTracks)
   const nbQ = shuffle(nonBtsFillers, rng); let fi = 0
   const order = []
   let ms = 0
   let sinceVarietyBreak = 0
+  let usedBtsSpacers = 0
   const truncated = false
 
   const push = (t) => {
@@ -279,13 +376,13 @@ export function buildPlaylistOrder2Focus(
     else sinceVarietyBreak++
   }
 
-  const btsRecycle = () => {
-    if (bi < btsQ.length || btsQ.length === 0) return
-    const mid = Math.ceil(btsQ.length / 2)
-    btsQ.splice(0, btsQ.length,
-      ...shuffle(btsQ.slice(0, mid), rng),
-      ...shuffle(btsQ.slice(mid), rng))
-    bi = 0
+  const recyclePool = (pool) => {
+    if (pool.index < pool.queue.length || pool.queue.length === 0) return
+    const mid = Math.ceil(pool.queue.length / 2)
+    pool.queue.splice(0, pool.queue.length,
+      ...shuffle(pool.queue.slice(0, mid), rng),
+      ...shuffle(pool.queue.slice(mid), rng))
+    pool.index = 0
   }
 
   // Aim early enough inside the window to absorb a planned two-track spacer
@@ -306,15 +403,10 @@ export function buildPlaylistOrder2Focus(
 
   const pushNonBts = (consumeCheckpoint, remainingMs = 0, requireMinDuration = false) => {
     if (fi >= nbQ.length) return false
-    let pick = -1, bestDuration = Infinity
-    for (let i = fi; i < nbQ.length; i++) {
-      const duration = nbQ[i].durationMs || 0
-      if (duration >= remainingMs && duration < bestDuration) {
-        pick = i
-        bestDuration = duration
-      }
-    }
-    if (pick < 0 && requireMinDuration) return false
+    const pick = pickVariedDurationIndex(
+      nbQ, fi, remainingMs, requireMinDuration ? remainingMs : 0, rng,
+    )
+    if (pick < 0) return false
     if (pick > fi) { const tmp = nbQ[fi]; nbQ[fi] = nbQ[pick]; nbQ[pick] = tmp }
     push({ ...nbQ[fi++], isBTS: false })
     if (consumeCheckpoint) {
@@ -326,23 +418,19 @@ export function buildPlaylistOrder2Focus(
     return true
   }
 
-  // Duration-aware BTS selection. When a gap needs exactly two new filler
-  // tracks, minDurationMs is 4:00+ for BOTH selections, matching the user's
-  // explicit two-filler rule rather than merely reaching eight minutes in
-  // aggregate with one short track and one long track.
-  const pushBtsFiller = (remainingMs = 0, minDurationMs = 0) => {
-    btsRecycle()
-    let bestIdx = -1, bestDur = Infinity
-    let longestIdx = -1, longestDur = -1
-    for (let i = bi; i < btsQ.length; i++) {
-      const d = btsQ[i].durationMs || 0
-      if (d < minDurationMs) continue
-      if (d >= remainingMs && d < bestDur) { bestDur = d; bestIdx = i }
-      if (d > longestDur) { longestDur = d; longestIdx = i }
-    }
-    const pick = bestIdx >= 0 ? bestIdx : longestIdx
+  // Duration-aware BTS selection. Exact two-filler gaps prefer the user's
+  // curated long-track playlist, while the remainingMs target still proves
+  // the pair reaches the real eight-minute floor in aggregate (including a
+  // Spotify-rounded 3:59 track paired with a slightly longer one).
+  const pushBtsFiller = (remainingMs = 0, minDurationMs = 0, preferTwoFillerPool = false) => {
+    const pool = preferTwoFillerPool && twoFillerPool.queue.length
+      ? twoFillerPool : btsPool
+    recyclePool(pool)
+    const pick = pickVariedDurationIndex(
+      pool.queue, pool.index, remainingMs, minDurationMs, rng,
+    )
     if (pick < 0) return false
-    const pickedDuration = btsQ[pick].durationMs || 210000
+    const pickedDuration = pool.queue[pick].durationMs || 210000
     if (checkpointWouldBeLate(pickedDuration)) {
       // This replaces the already-planned neutral slot. When the slot is a
       // two-filler pair, require this checkpoint track to satisfy that same
@@ -350,8 +438,13 @@ export function buildPlaylistOrder2Focus(
       const minimum = Math.max(remainingMs, minDurationMs)
       if (pushNonBts(true, minimum, minDurationMs > 0)) return true
     }
-    if (pick > bi) { const tmp = btsQ[bi]; btsQ[bi] = btsQ[pick]; btsQ[pick] = tmp }
-    push({ ...btsQ[bi++], isBTS: true })
+    if (pick > pool.index) {
+      const tmp = pool.queue[pool.index]
+      pool.queue[pool.index] = pool.queue[pick]
+      pool.queue[pick] = tmp
+    }
+    push({ ...pool.queue[pool.index++], isBTS: true })
+    usedBtsSpacers++
     return true
   }
 
@@ -360,13 +453,13 @@ export function buildPlaylistOrder2Focus(
   // never add extra other-artist songs between those two planned placements.
   // Four-minute two-filler slots stay BTS-only so both selected tracks still
   // satisfy that separate duration promise.
-  const pushNeutral = (remainingMs = 0, minDurationMs = 0) => {
+  const pushNeutral = (remainingMs = 0, minDurationMs = 0, preferTwoFillerPool = false) => {
     const due = checkpointDue()
     if (due && fi < nbQ.length) {
       const minimum = Math.max(remainingMs, minDurationMs)
       if (pushNonBts(true, minimum, minDurationMs > 0)) return true
     }
-    return pushBtsFiller(remainingMs, minDurationMs)
+    return pushBtsFiller(remainingMs, minDurationMs, preferTwoFillerPool)
   }
   const pushNeutralTracks = (count) => {
     for (let i = 0; i < count; i++) if (!pushNeutral()) break
@@ -404,8 +497,11 @@ export function buildPlaylistOrder2Focus(
     gapPlanB = [...gapPlanB.slice(1), gapPlanB[0]]
   }
 
-  const avgSpacerMs = btsQ.length > 0
-    ? btsQ.reduce((s, t) => s + (t.durationMs || 210000), 0) / btsQ.length
+  const budgetSpacerPool = dedupeTracksByIdentity([
+    ...btsPool.queue, ...twoFillerPool.queue,
+  ])
+  const avgSpacerMs = budgetSpacerPool.length > 0
+    ? budgetSpacerPool.reduce((s, t) => s + (t.durationMs || 210000), 0) / budgetSpacerPool.length
     : 210000
   const HARD_CAP_MS = 179 * 60000
   const softTargetMs = Math.min(targetMs, 145 * 60000, HARD_CAP_MS)
@@ -431,19 +527,45 @@ export function buildPlaylistOrder2Focus(
   const roomForSpacer = (focusIdx) =>
     ms + focusSuffixMs[focusIdx] + albumSuffixMs[albumIdx] +
       checkpointReserveMs() + closingReserveMs + avgSpacerMs <= softTargetMs
+  const roomForRequiredSpacer = (focusIdx) =>
+    ms + focusSuffixMs[focusIdx] + albumSuffixMs[albumIdx] +
+      checkpointReserveMs() + closingReserveMs + avgSpacerMs <= HARD_CAP_MS
 
   let seenA = false, seenB = false
   let remainingA = m, remainingB = n
   let windowCountA = 0, windowCountB = 0
+  let windowNeutralCountA = 0, windowNeutralCountB = 0
+  let windowNeutralDurationA = 0, windowNeutralDurationB = 0
   let windowDurationA = 0, windowDurationB = 0
   const hardCapA = m === n ? 5 : 4
   const hardCapB = m === n ? 5 : ratio <= 1.2 ? 5 : 7
   const activeA = () => seenA && remainingA > 0
   const activeB = () => seenB && remainingB > 0
+  const shouldPreferCuratedNeutral = () => twoFillerPool.queue.length > 0 && (
+    (activeA() && windowNeutralCountA < 2) ||
+    (activeB() && windowNeutralCountB < 2)
+  )
+  const curatedPairRequirement = () => {
+    let remainingMs = 0
+    let slots = 0
+    if (activeA() && windowNeutralCountA < 2) {
+      remainingMs = Math.max(remainingMs, MIN_GAP_MS - windowNeutralDurationA)
+      slots = Math.max(slots, 2 - windowNeutralCountA)
+    }
+    if (activeB() && windowNeutralCountB < 2) {
+      remainingMs = Math.max(remainingMs, MIN_GAP_MS - windowNeutralDurationB)
+      slots = Math.max(slots, 2 - windowNeutralCountB)
+    }
+    return { remainingMs: Math.max(0, remainingMs), slots: Math.max(1, slots) }
+  }
   const addNeutralTrack = (track) => {
     const duration = track.durationMs || 0
-    if (activeA()) { windowCountA++; windowDurationA += duration }
-    if (activeB()) { windowCountB++; windowDurationB += duration }
+    if (activeA()) {
+      windowCountA++; windowNeutralCountA++; windowNeutralDurationA += duration; windowDurationA += duration
+    }
+    if (activeB()) {
+      windowCountB++; windowNeutralCountB++; windowNeutralDurationB += duration; windowDurationB += duration
+    }
   }
   const passCheckpointBefore = (durationMs) => {
     if (!checkpointWouldBeLate(durationMs)) return false
@@ -494,7 +616,7 @@ export function buildPlaylistOrder2Focus(
           : Math.max(0, MIN_GAP_MS - windowDurationB)
         const placedVariety = due
           ? pushNonBts(true, remainingForClosingWindow)
-          : pushBtsFiller(remainingForClosingWindow)
+          : pushBtsFiller(remainingForClosingWindow, 0, shouldPreferCuratedNeutral())
         if (placedVariety) {
           addNeutralTrack(order[order.length - 1])
           sinceVarietyBreak = 0
@@ -507,7 +629,8 @@ export function buildPlaylistOrder2Focus(
         const remainingForClosingWindow = nextKey === songA.key
           ? Math.max(0, MIN_GAP_MS - windowDurationA)
           : Math.max(0, MIN_GAP_MS - windowDurationB)
-        if (capRoomBeforeFocus(nextKey) < 2 || !pushNeutral(remainingForClosingWindow)) break
+        if (capRoomBeforeFocus(nextKey) < 2 ||
+            !pushNeutral(remainingForClosingWindow, 0, shouldPreferCuratedNeutral())) break
         addNeutralTrack(order[order.length - 1])
       }
       if (capRoomBeforeFocus(nextKey) <= 0) break
@@ -550,7 +673,7 @@ export function buildPlaylistOrder2Focus(
           : Math.max(0, MIN_GAP_MS - windowDurationB)
         const placedVariety = due
           ? pushNonBts(true, remainingForCurrent)
-          : pushBtsFiller(remainingForCurrent)
+          : pushBtsFiller(remainingForCurrent, 0, shouldPreferCuratedNeutral())
         if (placedVariety) {
           addNeutralTrack(order[order.length - 1])
           sinceVarietyBreak = 0
@@ -559,18 +682,40 @@ export function buildPlaylistOrder2Focus(
 
       const ownWindowCount = isSongA ? windowCountA : windowCountB
       const stillNeeded = Math.max(0, plannedGap - ownWindowCount)
-      const effectiveGap = Math.min(stillNeeded, capRoomBeforeFocus(curr.key))
+      // A partner focus play can satisfy part of the visible gap target, but
+      // it is not a filler. Always leave at least two actual neutral tracks
+      // (BTS spacer, album track, or timed other-artist checkpoint) between
+      // repeats so a valid eight-minute window never looks like a single-
+      // filler mistake to the listener.
+      const ownNeutralCount = isSongA ? windowNeutralCountA : windowNeutralCountB
+      const minimumNeutralNeeded = Math.max(0, 2 - ownNeutralCount)
+      const effectiveGap = Math.min(Math.max(stillNeeded, minimumNeutralNeeded), capRoomBeforeFocus(curr.key))
       let gapAccumMs = Math.max(0, ms - prev.ms)
-      const requireLongPair = effectiveGap === 2
+      const fallbackPairMinDuration = effectiveGap === 2 && twoFillerPool.queue.length === 0 ? 240001 : 0
 
-      for (let g = 0; g < effectiveGap && roomForSpacer(k); g++) {
+      for (let g = 0; g < effectiveGap; g++) {
+        // The preferred 145-minute target is soft. A missing second neutral
+        // filler is a correctness problem, so that small required top-up may
+        // use the remaining room under the real 179-minute hard ceiling.
+        const requiredForMinimum = g < minimumNeutralNeeded
+        if (!(requiredForMinimum ? roomForRequiredSpacer(k) : roomForSpacer(k))) break
         const stepsLeft = effectiveGap - g
-        const remainingToFloor = Math.max(0, MIN_GAP_MS - gapAccumMs)
-        const perStepTarget = stepsLeft > 0 ? Math.ceil(remainingToFloor / stepsLeft) : 0
-        const ok = pushNeutral(perStepTarget, requireLongPair ? 240001 : 0)
+        // The curated list promises that the TWO fillers themselves clear
+        // eight minutes; do not count the partner focus song toward that
+        // promise. This also pairs a rounded 3:59 track with a sufficiently
+        // longer selection instead of allowing 3:59 + 3:59.
+        const preferCurated = shouldPreferCuratedNeutral()
+        const curatedNeed = preferCurated ? curatedPairRequirement() : null
+        const remainingToFloor = preferCurated
+          ? curatedNeed.remainingMs
+          : Math.max(0, MIN_GAP_MS - gapAccumMs)
+        const durationSteps = preferCurated ? curatedNeed.slots : stepsLeft
+        const perStepTarget = durationSteps > 0 ? Math.ceil(remainingToFloor / durationSteps) : 0
+        const ok = pushNeutral(perStepTarget, fallbackPairMinDuration, preferCurated)
         if (!ok) break
         addNeutralTrack(order[order.length - 1])
-        gapAccumMs += order[order.length - 1].durationMs || 0
+        const pushedDuration = order[order.length - 1].durationMs || 0
+        gapAccumMs += pushedDuration
       }
 
       // Time compliance outranks the cosmetic count target. With the
@@ -595,12 +740,16 @@ export function buildPlaylistOrder2Focus(
       remainingA--
       seenA = true
       windowCountA = 0
+      windowNeutralCountA = 0
+      windowNeutralDurationA = 0
       windowDurationA = 0
       if (activeB()) { windowCountB++; windowDurationB += curr.durationMs || 0 }
     } else {
       remainingB--
       seenB = true
       windowCountB = 0
+      windowNeutralCountB = 0
+      windowNeutralDurationB = 0
       windowDurationB = 0
       if (activeA()) { windowCountA++; windowDurationA += curr.durationMs || 0 }
     }
@@ -621,5 +770,5 @@ export function buildPlaylistOrder2Focus(
   pushNeutralTracks(2)
   while (remainingCheckpoints > 0 && fi < nbQ.length) pushNonBts(true)
 
-  return { order, usedFillers: fi, usedSpacers: bi, truncated }
+  return { order, usedFillers: fi, usedSpacers: usedBtsSpacers, truncated }
 }

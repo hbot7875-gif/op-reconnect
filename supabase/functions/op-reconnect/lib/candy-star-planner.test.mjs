@@ -12,7 +12,8 @@ import {
   planGapCounts, planFocusGapCounts, shuffle, artistInterleave,
   buildBurstSkeleton, buildFocusOrder, buildDistributedFocusOrder,
   buildPlaylistOrder2Focus, dedupeTracksByIdentity, excludeTracksByIdentity,
-  mergeSavedTracksWithPlan, hasHeavyFocusConflict,
+  mergeSavedTracksWithPlan, hasHeavyFocusConflict, pickVariedDurationIndex,
+  mergeGoalAlbums, isAllowedCustomCombo,
 } from './candy-star-planner.js'
 
 const MIN_GAP_MS = 480000 // matches spotify-shared.ts's MIN_GAP_MS — duplicated because that's a
@@ -194,6 +195,61 @@ test('15x focus is exclusive while lower-count and duplicate-key input remain va
   assert.equal(hasHeavyFocusConflict([
     { key: 'swim', multiplier: 15 }, { key: 'swim', multiplier: 2 },
   ]), false)
+})
+
+test('custom combinations allow two focus songs without forcing an album', () => {
+  assert.equal(isAllowedCustomCombo(2, 0), true)
+  assert.equal(isAllowedCustomCombo(3, 0), true) // Quick picker promises this shape
+  assert.equal(isAllowedCustomCombo(1, 1), true)
+  assert.equal(isAllowedCustomCombo(1, 0), false)
+  assert.equal(isAllowedCustomCombo(2, 2), false)
+})
+
+test('duration-aware selection rotates among equally safe fillers', () => {
+  const candidates = Array.from({ length: 8 }, (_, i) => ({
+    id: `candidate-${i}`, durationMs: 481000 + i * 1000,
+  }))
+  const rng = seededRng(91827)
+  const picked = new Set()
+  for (let i = 0; i < 100; i++) {
+    picked.add(pickVariedDurationIndex(candidates, 0, 480000, 0, rng))
+  }
+  assert.ok(picked.size >= 4, `duration picker stayed too repetitive: ${[...picked]}`)
+  for (const index of picked) assert.ok(candidates[index].durationMs >= 480000)
+})
+
+test('fully-matched district album goals automatically join the album picker', () => {
+  // Live Persona catalog rows currently have keys but unresolved versions;
+  // matching the album must not depend on those versions already existing.
+  const catalogSong = (name, key) => ({ name, key, versions: [] })
+  const catalog = [
+    catalogSong('Intro : Persona', 'intro-persona'),
+    catalogSong('Boy With Luv (feat. Halsey)', 'boy-with-luv'),
+    catalogSong('Mikrokosmos', 'mikrokosmos'),
+    catalogSong('Make It Right', 'make-it-right'),
+    catalogSong('HOME', 'home'),
+    catalogSong('Jamais Vu', 'jamais-vu'),
+    catalogSong('Dionysus', 'dionysus'),
+  ]
+  const goals = [{
+    id: 'persona', kind: 'album', label: 'MAP OF THE SOUL : PERSONA',
+    tracks: [
+      { label: 'Intro : Persona', aliases: [] },
+      { label: 'Boy With Luv (Feat. Halsey)', aliases: ['Boy With Luv'] },
+      { label: 'Mikrokosmos', aliases: [] },
+      { label: 'Make It Right', aliases: [] },
+      { label: 'HOME', aliases: [] },
+      { label: 'Jamais Vu', aliases: [] },
+      { label: 'Dionysus', aliases: [] },
+    ],
+  }]
+  const merged = mergeGoalAlbums({}, catalog, goals)
+  assert.deepEqual(merged['goal:persona'].trackKeys, [
+    'intro-persona', 'boy-with-luv', 'mikrokosmos', 'make-it-right', 'home', 'jamais-vu', 'dionysus',
+  ])
+
+  const incomplete = mergeGoalAlbums({}, catalog.slice(0, 6), goals)
+  assert.equal(incomplete['goal:persona'], undefined, 'partial album should never be offered')
 })
 
 test('planGapCounts sums exactly to a feasible total', () => {
@@ -480,19 +536,61 @@ test('12x + 10x uses a varied repeat pattern instead of continuous threes', () =
   assert.ok(observedB.has(3) && observedB.has(4), `Astronaut pattern was too rigid: ${[...observedB]}`)
 })
 
-test('a true two-filler selection uses two individually 4:00+ BTS tracks', () => {
-  const { order } = buildPlaylistOrder2Focus(
-    [mkFocusSong('A', 2, 200000), mkFocusSong('B', 2, 195000)],
-    mkDeterministicSpacerPool(), mkDeterministicFillerPool(), [],
-    180 * 60000, 20, MIN_GAP_MS, { rng: seededRng(41) },
-  )
-  const twoFillerWindows = [...repeatWindows(order, 'A'), ...repeatWindows(order, 'B')]
-    .map((window) => window.filter((track) => !track.isFocus))
-    .filter((fillers) => fillers.length === 2)
-  assert.ok(twoFillerWindows.length > 0, 'fixture did not produce a two-filler window')
-  for (const fillers of twoFillerWindows) {
-    assert.ok(fillers.every((track) => track.isBTS && track.durationMs > 240000),
-      `two-filler window contained a short/non-BTS track: ${fillers.map((t) => t.durationMs)}`)
+test('a true two-filler selection uses the curated long-track pool and reaches eight minutes', () => {
+  const curated = Array.from({ length: 40 }, (_, i) => ({
+    id: `curated-${i}`, uri: `curated-${i}`, name: `Curated ${i}`,
+    // Include Spotify's common 3:59 rounding edge. It is safe only when the
+    // duration-aware partner makes the pair total at least eight minutes.
+    durationMs: i % 5 === 0 ? 239000 : 243000 + (i % 4) * 3000,
+    isBTS: true, artists: [`member-${i % 7}`], twoFillerSource: true,
+  }))
+  let observedPairs = 0
+  for (let seed = 1; seed <= 100; seed++) {
+    const { order } = buildPlaylistOrder2Focus(
+      [mkFocusSong('A', 10, 200000), mkFocusSong('B', 10, 195000)],
+      mkDeterministicSpacerPool(), mkDeterministicFillerPool(), [],
+      180 * 60000, 20, MIN_GAP_MS, {
+        rng: seededRng(seed), twoFillerSpacers: curated,
+      },
+    )
+    const twoFillerWindows = [...repeatWindows(order, 'A'), ...repeatWindows(order, 'B')]
+      .map((window) => window.filter((track) => !track.isFocus))
+      // A due timed checkpoint may legitimately occupy one of the two
+      // neutral slots. This assertion targets two-BTS-filler windows.
+      .filter((fillers) => fillers.length === 2 && fillers.every((track) => track.isBTS !== false))
+    observedPairs += twoFillerWindows.length
+    for (const fillers of twoFillerWindows) {
+      assert.ok(fillers.every((track) => track.twoFillerSource),
+        `two-filler window escaped the curated pool: ${fillers.map((t) => t.name)}`)
+      assert.ok(fillers.reduce((sum, track) => sum + track.durationMs, 0) >= MIN_GAP_MS,
+        `curated pair fell under eight minutes: ${fillers.map((t) => t.durationMs)}`)
+    }
+  }
+  assert.ok(observedPairs > 100, `fixture produced too few two-filler windows: ${observedPairs}`)
+})
+
+test('every repeated focus song has at least two real neutral fillers', () => {
+  const scenarios = [
+    { pA: 10, pB: 10, album: 0 },
+    { pA: 10, pB: 9, album: 14 },
+    { pA: 10, pB: 5, album: 0 },
+  ]
+  for (const scenario of scenarios) {
+    for (let seed = 1; seed <= 250; seed++) {
+      const { order } = buildPlaylistOrder2Focus(
+        [mkFocusSong('A', scenario.pA, 200000), mkFocusSong('B', scenario.pB, 195000)],
+        mkDeterministicSpacerPool(), mkDeterministicFillerPool(), mkDeterministicAlbum(scenario.album),
+        180 * 60000, 20, MIN_GAP_MS, { rng: seededRng(seed) },
+      )
+      for (const [key, window] of [
+        ...repeatWindows(order, 'A').map((window) => ['A', window]),
+        ...repeatWindows(order, 'B').map((window) => ['B', window]),
+      ]) {
+        const neutralCount = window.filter((track) => !track.isFocus).length
+        assert.ok(neutralCount >= 2,
+          `${scenario.pA}:${scenario.pB} ${key} had ${neutralCount} neutral filler(s), seed ${seed}`)
+      }
+    }
   }
 })
 

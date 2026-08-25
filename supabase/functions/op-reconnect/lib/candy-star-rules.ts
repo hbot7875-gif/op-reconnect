@@ -15,6 +15,7 @@ import { MAX_RUNTIME_MS, MIN_GAP_MS, SHORT_SONG_MS } from './spotify-shared.ts'
 import {
   shuffle, artistInterleave, planGapCounts, buildFocusOrder,
   buildPlaylistOrder2Focus as buildPlaylistOrder2FocusImpl, trackIdentityTokens,
+  pickVariedDurationIndex,
 } from './candy-star-planner.js'
 
 /** Analyse an ordered tracklist against the ruleset. Returns per-rule findings. */
@@ -315,15 +316,11 @@ export function buildPlaylistOrder(
       btsQ.splice(0, btsQ.length, ...rnd(btsQ.slice(0, mid)), ...rnd(btsQ.slice(mid)))
       bi = 0
     }
-    const end = Math.min(bi + 20, btsQ.length)
-    let bestIdx = -1, bestDur = Infinity
-    let longestIdx = -1, longestDur = -1
-    for (let i = bi; i < end; i++) {
-      const d = btsQ[i].durationMs || 0
-      if (d >= remainingMs && d < bestDur) { bestDur = d; bestIdx = i }
-      if (d > longestDur) { longestDur = d; longestIdx = i }
-    }
-    const pick = bestIdx >= 0 ? bestIdx : longestIdx
+    // Choose among several equally-useful duration matches instead of always
+    // selecting the single closest track. The old deterministic best-fit is
+    // why the same skits/outros kept reappearing across generated playlists.
+    const pick = pickVariedDurationIndex(btsQ, bi, remainingMs, 0, Math.random, 20)
+    if (pick < 0) return false
     if (pick > bi) { const tmp = btsQ[bi]; btsQ[bi] = btsQ[pick]; btsQ[pick] = tmp }
     if (bi < btsQ.length) {
       const candidate = btsQ[bi]
@@ -472,9 +469,12 @@ export function buildPlaylistOrder(
  */
 export function buildPlaylistOrder2Focus(
   focusSongs: any[], btsSpacers: any[], nonBtsFillers: any[], albumOnce: any[],
-  targetMs: number, fillerEvery = 10,
+  targetMs: number, fillerEvery = 10, options: any = {},
 ): { order: any[]; usedFillers: number; usedSpacers: number; truncated: boolean } {
-  return buildPlaylistOrder2FocusImpl(focusSongs, btsSpacers, nonBtsFillers, albumOnce, targetMs, fillerEvery, MIN_GAP_MS)
+  return buildPlaylistOrder2FocusImpl(
+    focusSongs, btsSpacers, nonBtsFillers, albumOnce,
+    targetMs, fillerEvery, MIN_GAP_MS, options,
+  )
 }
 
 /** Create the playlist in the connected account and add the tracks. */
