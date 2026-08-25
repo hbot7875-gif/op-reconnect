@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OP: ReConnect — Web Scrobbler on Mobile</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/reconnect.css">
+<style>
+  body { background: var(--bg); color: var(--text); font-family: var(--body); }
+  .sm-wrap { max-width: 520px; margin: 0 auto; padding: 24px 16px 80px; }
+  .sm-head { margin-bottom: 6px; }
+  .sm-eyebrow { font-family: var(--mono); font-size: 10.5px; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--purple-lt); }
+  .sm-title { font-family: var(--disp); font-weight: 900; font-size: 23px; margin-top: 5px; }
+  .sm-sub { color: var(--muted); font-size: 13.5px; line-height: 1.6; margin: 8px 0 22px; }
+
+  .sm-why { background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--r-lg); padding: 16px; margin-bottom: 22px; font-size: 13px;
+    line-height: 1.6; color: var(--muted); }
+  .sm-why b { color: var(--text); }
+
+  .sm-step { display: grid; grid-template-columns: 30px 1fr; gap: 12px;
+    padding: 16px 0; border-bottom: 1px solid var(--border); }
+  .sm-step:last-of-type { border-bottom: none; }
+  .sm-step-number { display: grid; place-items: center; width: 26px; height: 26px;
+    border-radius: 50%; background: var(--purple); color: #fff; font-family: var(--disp);
+    font-weight: 800; font-size: 12.5px; }
+  .sm-step-title { display: block; font-size: 14.5px; color: var(--text); margin-bottom: 3px; }
+  .sm-step p { font-size: 13px; line-height: 1.6; color: var(--muted); }
+  .sm-step a.btn { display: inline-block; margin-top: 10px; }
+
+  .sm-warn { background: color-mix(in srgb, var(--crimson) 12%, var(--surface));
+    border: 1px solid color-mix(in srgb, var(--crimson) 40%, var(--border));
+    border-radius: var(--r); padding: 14px; margin: 10px 0; font-size: 13px; line-height: 1.6; }
+  .sm-warn b { color: var(--crimson); }
+
+  .sm-gate { max-width: 460px; margin: 60px auto; text-align: center; }
+  .sm-gate h1 { font-family: var(--disp); font-size: 20px; margin-bottom: 10px; }
+  .sm-gate p { color: var(--muted); font-size: 14px; line-height: 1.7; }
+  .sm-gate .btn { margin-top: 16px; }
+</style>
+</head>
+<body>
+
+<div class="sm-gate" id="gate">
+  <h1>Web Scrobbler on Mobile</h1>
+  <p id="gateMsg">Checking your session…</p>
+</div>
+
+<div class="sm-wrap" id="app" hidden>
+  <div class="sm-head">
+    <span class="sm-eyebrow">🧩 MOBILE SETUP</span>
+    <div class="sm-title">Web Scrobbler on your phone</div>
+  </div>
+  <p class="sm-sub">
+    Most phone browsers can't run extensions at all — Chrome and Safari on mobile
+    don't support them. Firefox for Android does, and Web Scrobbler runs on it the
+    same way it does on desktop.
+  </p>
+
+  <div class="sm-why">
+    <b>Why this matters:</b> Web Scrobbler only sees what plays inside the browser
+    tab. Music played through the <b>native Spotify app</b> is invisible to it —
+    you have to actually open Spotify's <b>web player</b> inside Firefox itself for
+    any of this to count.
+  </div>
+
+  <div class="sm-step">
+    <span class="sm-step-number">1</span>
+    <div>
+      <b class="sm-step-title">Install Firefox for Android</b>
+      <p>From the Play Store, if you don't already have it. Any other mobile browser won't work for this.</p>
+      <a class="btn btn-ghost" href="https://play.google.com/store/apps/details?id=org.mozilla.firefox" target="_blank" rel="noopener noreferrer">Get Firefox ↗</a>
+    </div>
+  </div>
+
+  <div class="sm-step">
+    <span class="sm-step-number">2</span>
+    <div>
+      <b class="sm-step-title">Add the Web Scrobbler extension</b>
+      <p>In Firefox, tap the <b>⋮</b> menu → <b>Add-ons</b> (sometimes labeled "Extensions"). Search for
+        "Web Scrobbler" and tap <b>Add to Firefox</b>. If search comes up empty, open the link below directly.</p>
+      <a class="btn btn-ghost" href="https://addons.mozilla.org/firefox/addon/web-scrobbler/" target="_blank" rel="noopener noreferrer">Web Scrobbler on AMO ↗</a>
+    </div>
+  </div>
+
+  <div class="sm-step">
+    <span class="sm-step-number">3</span>
+    <div>
+      <b class="sm-step-title">Open the extension's settings</b>
+      <p>Tap the Web Scrobbler icon (in Firefox's menu or the toolbar), then find its Settings/Options
+        screen, and open the <b>Accounts</b> tab.</p>
+    </div>
+  </div>
+
+  <div class="sm-step">
+    <span class="sm-step-number">4</span>
+    <div>
+      <b class="sm-step-title">Enable Webhook and paste your URL</b>
+      <p>Turn on <b>Webhook</b> in the Accounts list, then paste the URL below into it.</p>
+      <div class="pin-box" id="pinBox">
+        <div class="dim" id="pinMsg">Loading your PIN…</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sm-step">
+    <span class="sm-step-number">5</span>
+    <div>
+      <b class="sm-step-title">Play music inside Firefox itself</b>
+      <p>Open <b>open.spotify.com</b> (or another supported web player) as a tab in Firefox for Android
+        and play from there — not the Spotify app. Web Scrobbler picks it up automatically from then on.</p>
+    </div>
+  </div>
+
+  <div class="sm-warn">
+    <b>Not seeing streams come through?</b> Go to Settings → Stream check in the main game — it shows
+    exactly what the network just heard from you in the last 24 hours.
+  </div>
+</div>
+
+<script type="module">
+import { call, API_URL } from './js/api.js'
+import { getAgentNo, getSession } from './js/session.js'
+
+const $ = (id) => document.getElementById(id)
+
+function copyRow(label, value) {
+  const row = document.createElement('div')
+  row.className = 'copy-row'
+  row.innerHTML = `<span class="cr-label">${label}</span><code class="cr-val"></code>`
+  row.querySelector('.cr-val').textContent = value
+  const btn = document.createElement('button')
+  btn.className = 'cr-btn'
+  btn.textContent = 'Copy'
+  btn.onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(value)
+      btn.textContent = 'Copied'
+      setTimeout(() => { btn.textContent = 'Copy' }, 1600)
+    } catch {
+      btn.textContent = "Can't copy — select it"
+    }
+  }
+  row.appendChild(btn)
+  return row
+}
+
+async function boot() {
+  const agentNo = getAgentNo()
+  if (!agentNo || !getSession()?.sessionToken) {
+    $('gateMsg').innerHTML = 'Sign in to OP: ReConnect first, then come back to this page.<br><br>'
+      + '<a class="btn btn-primary" href="game.html">Go to the game</a>'
+    return
+  }
+  $('gate').hidden = true
+  $('app').hidden = false
+
+  let res = await call('getWebhookPin', { agentNo })
+  if (!res.success || !res.pin) {
+    // No PIN yet — generate one so this page works standalone, without a
+    // detour through Settings first.
+    res = await call('generateScrobblePin', { agentNo })
+  }
+  const box = $('pinBox')
+  box.innerHTML = ''
+  if (!res.success || !res.pin) {
+    box.appendChild(Object.assign(document.createElement('div'), {
+      className: 'dim', textContent: res.error || "Couldn't load your PIN — open Settings → Scrobbler PIN instead.",
+    }))
+    return
+  }
+  box.appendChild(copyRow('Webhook URL', `${API_URL}?pin=${encodeURIComponent(res.pin)}`))
+}
+
+boot()
+</script>
+</body>
+</html>

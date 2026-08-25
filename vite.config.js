@@ -110,6 +110,10 @@ export default defineConfig({
         // holding the admin key. Registered here for the same reason those
         // two comments spell out — omit it and it 404s on every deploy.
         badgeAdmin: resolve(__dirname, 'badge-admin.html'),
+        // Mobile Web Scrobbler walkthrough — same 'register here or it
+        // 404s' lesson as the three above. Unlike them, this one IS meant
+        // to be linked in-game (Settings → Scrobbler PIN).
+        scrobblerMobile: resolve(__dirname, 'scrobbler-mobile.html'),
       },
     },
   },

@@ -191,6 +191,10 @@ export function pinSheet(account, onChanged) {
   howTo.onclick = () => showOverlay(webScrobblerGuideSheet())
   sheet.appendChild(howTo)
 
+  const onPhone = el('a', 'btn btn-ghost', 'On your phone? Use Firefox →')
+  onPhone.href = 'scrobbler-mobile.html'
+  sheet.appendChild(onPhone)
+
   const reveal = el('button', 'btn btn-ghost', account.hasPin ? 'Reveal my PIN' : 'No PIN yet')
   reveal.disabled = !account.hasPin
   reveal.onclick = async () => {
