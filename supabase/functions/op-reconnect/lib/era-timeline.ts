@@ -104,11 +104,14 @@ export const ERA_CATALOG: EraDef[] = [
     // Wild/earlier singles (Jump/Danger/Boy In Luv/Just One Day/No More
     // Dream/N.O, all "- Japanese Ver." of songs already counted below) —
     // those don't get their own entries. It isn't ONLY a re-recording disc
-    // though: "The Stars", the "Wake Up" title track, and "line!"/"line!Pt.2
-    // - Ano Bashode -" have no Korean-language equivalent anywhere in this
-    // era's other albums, so all four are real exclusive content and are
-    // counted below same as any other track (confirmed against the actual
-    // Wake Up Standard Edition tracklist).
+    // though: "The Stars", the "Wake Up" title track, and "Iine!"/"Iine!Pt.2
+    // - Ano Bashode -" (Japanese いいね, "nice!" — misread as "line!" when
+    // this era was first configured, a real config bug confirmed against
+    // AGENT074's actual scrobbles, which reported the normalized keys
+    // "iine"/"iinept2 ano bashode", not "line"/"line pt2...") have no
+    // Korean-language equivalent anywhere in this era's other albums, so
+    // all four are real exclusive content and are counted below same as
+    // any other track.
     albums: ['Dark & Wild', 'Wake Up'],
     tracks: [
       // Two genuinely different metadata variants exist for this one in the
@@ -127,7 +130,7 @@ export const ERA_CATALOG: EraDef[] = [
       // the whole time.
       { title: 'So 4 More', aliases: ['2nd Grade'] },
       'Could You Turn Off Your Cell Phone', '24/7=heaven', 'Rain', 'Embarrassed',
-      'The Stars', 'Wake Up', 'line!', 'line!Pt.2 - Ano Bashode -',
+      'The Stars', 'Wake Up', 'Iine!', 'Iine!Pt.2 - Ano Bashode -',
     ],
   },
   {
