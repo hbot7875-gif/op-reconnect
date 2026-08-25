@@ -194,13 +194,26 @@ function windowedPlays(
   return total
 }
 
-/** Real (uncapped) plays of a track's keys today specifically — the 148
- *  Protocol's "have you already hit today's pace" checkbox needs this, not
- *  the windowed cumulative total. */
-function todayCountFor(keys: string[], rollups: RollupRow[], todayDate: string): number {
+/** Plays credited to this district today specifically — the 148 Protocol's
+ *  "have you already hit today's pace" checkbox must use the same activation
+ *  baseline and album-day multiplier as the progress bar. Using the raw KST
+ *  bucket here used to mark a newly-activated district's queue complete with
+ *  streams that happened before the player tapped Begin Restoration. */
+function todayCountFor(
+  keys: string[],
+  rollups: RollupRow[],
+  todayDate: string,
+  activationDate: string,
+  baseline: number,
+  cap: number,
+  albumDouble: boolean,
+): number {
   const row = rollups.find((r) => r.kst_date === todayDate)
   if (!row) return 0
-  return keys.reduce((s, k) => s + (row.track_counts[k]?.n || 0), 0)
+  let today = Math.min(keys.reduce((s, k) => s + (row.track_counts[k]?.n || 0), 0), cap)
+  if (todayDate === activationDate) today = Math.max(0, today - baseline)
+  if (albumDouble && row.transmission?.templateId === 5) today *= 2
+  return today
 }
 
 export function districtProgress(
@@ -225,7 +238,9 @@ export function districtProgress(
 
   const trackGoals = frozen.trackGoals.map((g) => {
     const total = windowedPlays(g.keys, inWindow, activationDate, baseline[`t:${g.id}`] || 0, cap, false)
-    const today = todayCountFor(g.keys, inWindow, todayDate)
+    const today = todayCountFor(
+      g.keys, inWindow, todayDate, activationDate, baseline[`t:${g.id}`] || 0, cap, false,
+    )
     const backup = backupOverlay[g.id]
     const effectiveTarget = backup?.target || g.target
     const pooled = total + (backup?.bonus || 0)
@@ -267,7 +282,15 @@ export function districtProgress(
     const nextPassTracks = perTrack
       .filter((t) => t.total < originalTarget)
       .sort((a2, b2) => a2.total - b2.total)
-      .map((t) => ({ label: t.label, have: t.total, need: originalTarget - t.total, today: todayCountFor(t.keys, inWindow, todayDate) }))
+      .map((t) => ({
+        label: t.label,
+        have: t.total,
+        need: originalTarget - t.total,
+        today: todayCountFor(
+          t.keys, inWindow, todayDate, activationDate,
+          baseline[`a:${a.id}:${t.label}`] || 0, cap, true,
+        ),
+      }))
     // Full roster, done tracks included — lets the UI expand an album's
     // "X passes" summary into every track's own progress, not just the
     // ones still short (site owner: "expanded to all tracks in that album").

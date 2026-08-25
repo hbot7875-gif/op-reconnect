@@ -15,6 +15,18 @@
 
 import { el, esc, hideOverlay } from './state.js'
 import { districtDisplayName } from './ward-tiles.js'
+import { tickCountdowns } from './countdown.js'
+
+/** Browser-local activation/deadline moment. Agents are worldwide, so an
+ *  absolute server time is clearer in their own phone timezone than a hard-
+ *  coded KST/IST label. */
+export function formatLocalDateTime(value) {
+  const date = new Date(value)
+  if (!value || Number.isNaN(date.getTime())) return ''
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+  }).format(date)
+}
 
 /** [{ label, need, today }] — everything still owed, biggest debt first.
  *  today is how many real plays of that track already landed today (server-
@@ -27,7 +39,8 @@ export function remaining(state) {
 
   for (const g of d.trackGoals || []) {
     const need = Math.max(0, (g.target || 0) - (g.progress || 0))
-    if (need > 0) out.push({ label: g.label, need, today: g.today || 0, kind: 'track' })
+    const today = Math.max(0, g.today || 0)
+    if (need > 0) out.push({ label: g.label, need, today, dayStartNeed: need + today, kind: 'track' })
   }
 
   // Each album only contributes the tracks its *next* pass is missing.
@@ -36,9 +49,19 @@ export function remaining(state) {
     for (const t of a.nextPassTracks || []) {
       const need = Math.max(0, t.need || 0)
       if (!need) continue
+      const today = Math.max(0, t.today || 0)
+      const dayStartNeed = need + today
       const hit = out.find((x) => x.label === t.label)
-      if (hit) { hit.need = Math.max(hit.need, need); hit.today = Math.max(hit.today, t.today || 0) }
-      else out.push({ label: t.label, need, today: t.today || 0, kind: 'album' })
+      if (hit) {
+        // One stream can satisfy both a track goal and the same song inside
+        // an album goal, so take the larger debt rather than adding them.
+        // Preserve the larger start-of-day debt independently: max(need) +
+        // max(today) can combine two different obligations and overstate it.
+        hit.need = Math.max(hit.need, need)
+        hit.today = Math.max(hit.today, today)
+        hit.dayStartNeed = Math.max(hit.dayStartNeed || 0, dayStartNeed)
+        if (hit.kind !== 'album') hit.kind = 'both'
+      } else out.push({ label: t.label, need, today, dayStartNeed, kind: 'album' })
     }
   }
 
@@ -54,11 +77,22 @@ export function dailyPace(state) {
   const d = state.activeDistrict
   const debts = remaining(state)
   const daysLeft = typeof d?.daysLeft === 'number' ? d.daysLeft : null
-  if (!debts.length || daysLeft === null) return { daysLeft, perTrack: [], totalPerDay: 0 }
+  if (!debts.length || daysLeft === null) return { daysLeft, perTrack: [], totalPerDay: 0, totalMoreToday: 0 }
   const days = Math.max(1, daysLeft)
-  const perTrack = debts.map((x) => ({ ...x, perDay: Math.ceil(x.need / days) }))
+  // `need` already excludes today's credited plays. Comparing `today`
+  // against ceil(need / days) therefore subtracts today twice and can tick
+  // a row early. Reconstruct the debt at the start of today, set that day's
+  // quota once, then show how much of the quota is still outstanding.
+  const perTrack = debts.map((x) => {
+    const perDay = Math.ceil(Math.max(x.need, x.dayStartNeed || (x.need + x.today)) / days)
+    return { ...x, perDay, moreToday: Math.max(0, perDay - x.today) }
+  }).sort((a, b) =>
+    Number(a.moreToday <= 0) - Number(b.moreToday <= 0)
+      || b.moreToday - a.moreToday
+      || b.need - a.need)
   const totalPerDay = perTrack.reduce((s, x) => s + x.perDay, 0)
-  return { daysLeft, perTrack, totalPerDay }
+  const totalMoreToday = perTrack.reduce((s, x) => s + x.moreToday, 0)
+  return { daysLeft, perTrack, totalPerDay, totalMoreToday }
 }
 
 export function openPlaylist(state) {
@@ -87,6 +121,15 @@ export function openPlaylist(state) {
     return sheet
   }
 
+  const activated = formatLocalDateTime(d.activatedAt)
+  const expires = formatLocalDateTime(d.expiresAt)
+  if (activated || expires) {
+    sheet.appendChild(el('div', 'pl-window', `
+      ${activated ? `<span><i>Activated</i>${esc(activated)}</span>` : ''}
+      ${expires ? `<span><i>Deadline</i>${esc(expires)} <small>your time</small></span>` : ''}
+    `))
+  }
+
   const totalNeed = debts.reduce((s, x) => s + x.need, 0)
   sheet.appendChild(el('div', 'pl-sum',
     `${totalNeed} ${totalNeed === 1 ? 'play' : 'plays'} left &middot; ${debts.length} ${debts.length === 1 ? 'track' : 'tracks'}`))
@@ -94,9 +137,17 @@ export function openPlaylist(state) {
   const pace = dailyPace(state)
   if (pace.daysLeft !== null) {
     const urgent = pace.daysLeft <= 2
-    const left = pace.daysLeft <= 0 ? 'Last day' : pace.daysLeft === 1 ? '1 day left' : `${pace.daysLeft} days left`
+    // While an attempt is alive, ceil(msLeft / day) is never 0. The old
+    // `daysLeft <= 0` "Last day" branch was unreachable; the final 24 hours
+    // are represented by daysLeft === 1.
+    const finalDay = pace.daysLeft <= 1
+    const left = finalDay ? 'Final day' : `${pace.daysLeft} days left`
+    const today = pace.totalMoreToday > 0 ? `<b>${pace.totalMoreToday} more today</b>` : '<b>Today\'s pace complete</b>'
+    const clock = finalDay && d.expiresAt
+      ? ` &middot; <b class="pl-deadline-clock" data-deadline="${esc(d.expiresAt)}">--:--:--</b> left`
+      : ''
     sheet.appendChild(el('div', 'pl-pace' + (urgent ? ' is-urgent' : ''),
-      `<div class="pl-pace-head">⏳ ${left} &middot; <b>${pace.totalPerDay}/day</b> to finish on time</div>`))
+      `<div class="pl-pace-head">⏳ ${left}${clock} &middot; ${today}</div>`))
   }
 
   // One row per remaining track, how many more plays it needs — no repeated
@@ -106,12 +157,16 @@ export function openPlaylist(state) {
   const perTrack = pace.perTrack.length ? pace.perTrack : debts
   const list = el('div', 'pl-list')
   for (const x of perTrack) {
-    const hitToday = typeof x.perDay === 'number' && x.today >= x.perDay
-    const row = el('div', 'pl-item' + (x.kind === 'album' ? ' album' : '') + (hitToday ? ' is-done-today' : ''), `
+    const hitToday = typeof x.moreToday === 'number' && x.moreToday <= 0
+    const todayText = typeof x.moreToday === 'number'
+      ? (hitToday ? 'today done' : `${x.moreToday} more today`)
+      : ''
+    const hasAlbum = x.kind === 'album' || x.kind === 'both'
+    const row = el('div', 'pl-item' + (hasAlbum ? ' album' : '') + (hitToday ? ' is-done-today' : ''), `
       <span class="pl-check">${hitToday ? '✓' : ''}</span>
       <span class="pl-name">${esc(x.label)}</span>
-      <span class="pl-need">${x.need} left${x.perDay ? ` &middot; ${x.today}/${x.perDay} today` : ''}</span>
-      ${x.kind === 'album' ? '<span class="pl-tag">album</span>' : ''}
+      <span class="pl-need">${x.need} left${todayText ? ` &middot; ${todayText}` : ''}</span>
+      ${hasAlbum ? `<span class="pl-tag">${x.kind === 'both' ? 'track + album' : 'album'}</span>` : ''}
     `)
     list.appendChild(row)
   }
@@ -120,5 +175,9 @@ export function openPlaylist(state) {
   const close = el('button', 'btn btn-ghost', 'Close')
   close.onclick = hideOverlay
   sheet.appendChild(close)
+  // The caller appends this sheet to #overlay after openPlaylist returns.
+  // Paint on the following microtask so the first frame never flashes the
+  // --:--:-- placeholder before the shared 1-second interval catches up.
+  queueMicrotask(tickCountdowns)
   return sheet
 }

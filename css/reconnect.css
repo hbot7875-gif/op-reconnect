@@ -1633,6 +1633,13 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 .pl-sub { font-family: var(--mono); font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase;
   color: var(--purple-lt); margin-top: 6px; }
 .playlist .pl-title { font-family: var(--disp); font-weight: 900; font-size: 22px; margin-top: 5px; }
+.pl-window { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;
+  margin: 10px 0 0; padding: 9px 11px; border: 1px solid var(--border); border-radius: var(--r);
+  background: rgba(255,255,255,0.018); font-family: var(--mono); font-size: 10.5px; color: var(--text); }
+.pl-window span { min-width: 0; }
+.pl-window i { display: block; margin-bottom: 2px; color: var(--dim); font-style: normal;
+  font-size: 8.5px; letter-spacing: 1px; text-transform: uppercase; }
+.pl-window small { color: var(--dim); font-size: 8.5px; white-space: nowrap; }
 .pl-sum { font-family: var(--mono); font-size: 10.5px; letter-spacing: 1px;
   text-transform: uppercase; color: var(--dim); margin: 10px 0 12px; }
 .pl-done { font-size: 34px; color: var(--gold); text-align: center; margin: 14px 0 6px; }
@@ -1670,6 +1677,12 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 .pl-pace.is-urgent .pl-pace-head { color: var(--crimson); }
 .pl-pace-head b { color: var(--text); }
 .pl-pace.is-urgent .pl-pace-head b { color: var(--crimson); }
+.pl-deadline-clock { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+@media (max-width: 430px) {
+  .pl-window { grid-template-columns: 1fr; gap: 6px; }
+  .pl-window i { display: inline; margin-right: 6px; }
+}
 
 .invite-body { margin: 4px 0 10px; }
 .invite-actions { display: flex; gap: 8px; }

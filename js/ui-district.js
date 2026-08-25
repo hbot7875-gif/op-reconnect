@@ -4,7 +4,7 @@
 // its own full screen there.
 
 import { el, esc, showOverlay, hideOverlay, getState, setState, toast } from './state.js'
-import { openPlaylist, remaining, dailyPace } from './playlist.js'
+import { openPlaylist, remaining, dailyPace, formatLocalDateTime } from './playlist.js'
 import { call } from './api.js'
 import { getAgentNo } from './session.js'
 import { openProgressSheet } from './ui-hud.js'
@@ -116,9 +116,14 @@ export function renderBoard(board, d, opts = {}) {
   if (left.length) {
     const totalNeed = left.reduce((a, x) => a + x.need, 0)
     const bits = [`${totalNeed} play${totalNeed === 1 ? '' : 's'} remaining`]
-    if (pace.perTrack.length) bits.push(`Aim for ${pace.totalPerDay}/day`)
+    if (pace.perTrack.length) {
+      bits.push(pace.totalMoreToday > 0 ? `${pace.totalMoreToday} more today` : "Today's pace complete")
+    }
     if (typeof d.daysLeft === 'number') {
-      bits.push(d.daysLeft <= 0 ? 'District deadline: last day' : d.daysLeft === 1 ? 'District deadline: 1 day left' : `District deadline: ${d.daysLeft} days left`)
+      const exact = formatLocalDateTime(d.expiresAt)
+      bits.push(d.daysLeft <= 1
+        ? `Final day${exact ? ` — ends ${exact}` : ''}`
+        : `District deadline: ${d.daysLeft} days left`)
     }
     const urgent = typeof pace.daysLeft === 'number' && pace.daysLeft <= 2
     const q = el('button', 'queue-btn' + (urgent ? ' is-urgent' : ''), `
@@ -135,8 +140,8 @@ export function renderBoard(board, d, opts = {}) {
     // reconnect goal) — the deadline still matters, just with no CTA to ride
     // along with.
     const urgent = d.daysLeft <= 2
-    const text = d.daysLeft <= 0 ? 'Last day to restore this district'
-      : d.daysLeft === 1 ? '<b>1 day</b> left to restore this district'
+    const exact = formatLocalDateTime(d.expiresAt)
+    const text = d.daysLeft <= 1 ? `<b>Final day</b>${exact ? ` — ends ${esc(exact)} (your time)` : ''}`
       : `<b>${d.daysLeft} days</b> left to restore this district`
     board.appendChild(el('div', 'board-deadline' + (urgent ? ' is-urgent' : ''), `<span class="deadline-kind">District deadline</span><span>⏳ ${text}</span>`))
   }
