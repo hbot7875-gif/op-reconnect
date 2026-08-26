@@ -187,20 +187,21 @@ export interface AgentChargeView {
   deletionWarning: { daysInactive: number; daysLeft: number } | null
 }
 
-/** Same "last bomb_fed feed event, else join date" rule
- *  rc_inactive_agent_candidates() uses server-side for the actual deletion
- *  — kept in sync by hand since one lives in SQL (for the cron job with no
- *  access to this file) and this one needs to run inside the normal poll
- *  response. AGENT001 is not special-cased here the way the SQL version
- *  special-cases it out of deletion; showing the test account its own
- *  (harmless, since it's excluded from actual deletion) warning is fine and
- *  simpler than threading an exception through every caller. */
+/** Same authoritative rc_agent_charge.last_fed_at rule used by
+ *  rc_inactive_agent_candidates() for the actual deletion. The timestamp is
+ *  written inside each charge RPC's transaction, so a successful manual
+ *  feed, auto-feed, or Lit Era use cannot be missed because a later activity
+ *  feed insert failed (the bug that could falsely delete an active agent).
+ *  The old bomb_fed event is retained only as a legacy fallback for rows that
+ *  predate the atomic timestamp migration. */
 async function bombDeletionWarning(supabase: SupabaseDB, agentNo: string): Promise<{ daysInactive: number; daysLeft: number } | null> {
-  const { data: lastFed } = await supabase.from('rc_feed_events')
+  const { data: charge } = await supabase.from('rc_agent_charge')
+    .select('last_fed_at').eq('agent_no', agentNo).maybeSingle()
+  const { data: legacyLastFed } = await supabase.from('rc_feed_events')
     .select('created_at').eq('agent_no', agentNo).eq('event_type', 'bomb_fed')
     .order('created_at', { ascending: false }).limit(1).maybeSingle()
   const { data: agent } = await supabase.from('rc_agents').select('created_at').eq('agent_no', agentNo).maybeSingle()
-  const sinceIso = lastFed?.created_at || agent?.created_at
+  const sinceIso = charge?.last_fed_at || legacyLastFed?.created_at || agent?.created_at
   if (!sinceIso) return null
   const daysInactive = (Date.now() - new Date(sinceIso).getTime()) / 86400000
   if (daysInactive < 7 || daysInactive >= 14) return null
