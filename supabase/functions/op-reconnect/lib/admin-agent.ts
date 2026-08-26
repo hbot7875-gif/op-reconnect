@@ -237,6 +237,21 @@ export async function adminDeleteAgent(supabase: SupabaseDB, params: any) {
     ['rc_reconnect_participants', 'agent_no'],
     ['rc_reconnect_missions', 'created_by'],
     ['rc_defuse_contrib', 'agent_no'],
+    // Added 2026-08-24 — cross-checked every real FK pointing at rc_agents
+    // and found these seven missing from both this list and the scheduled
+    // cleanup's own copy (rc_delete_inactive_agents_scheduled), which is
+    // what broke the 14-day auto-delete cron for 3 nights straight on
+    // rc_vma_votes specifically. Each is a feature added after this list
+    // was first written.
+    //
+    // rc_backup_requests has to come BEFORE rc_player_items below —
+    // rc_backup_requests.spent_player_item_id is a second-order FK onto
+    // rc_player_items (not onto rc_agents directly, so the audit above
+    // missed it the first time), and broke a real scheduled run
+    // (2026-08-24) the same way rc_vma_votes broke this exact function a
+    // day earlier: "violates foreign key constraint
+    // rc_backup_requests_spent_player_item_id_fkey."
+    ['rc_backup_requests', 'owner_agent_no'],
     ['rc_player_items', 'agent_no'],
     ['rc_streak_freeze_log', 'agent_no'],
     ['rc_badges', 'agent_no'],
@@ -248,13 +263,6 @@ export async function adminDeleteAgent(supabase: SupabaseDB, params: any) {
     ['generated_playlists', 'agent_no'],
     ['rc_scrobbles', 'agent_no'],
     ['rc_password_resets', 'agent_no'],
-    // Added 2026-08-24 — cross-checked every real FK pointing at rc_agents
-    // and found these seven missing from both this list and the scheduled
-    // cleanup's own copy (rc_delete_inactive_agents_scheduled), which is
-    // what broke the 14-day auto-delete cron for 3 nights straight on
-    // rc_vma_votes specifically. Each is a feature added after this list
-    // was first written.
-    ['rc_backup_requests', 'owner_agent_no'],
     ['rc_playlist_reports', 'agent_no'],
     ['rc_playlist_saves', 'agent_no'],
     ['rc_supply_chest_opens', 'agent_no'],
