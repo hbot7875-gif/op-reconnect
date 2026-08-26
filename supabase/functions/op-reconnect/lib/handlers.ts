@@ -24,6 +24,14 @@ import { getBackupOverlay } from './backup-pass.ts'
 import { getVmaBanner } from './vma-voting.ts'
 import { isBadgeEditor } from './badge-admin.ts'
 
+/** Administrative grace time is stored separately from activated_at so a
+ * support extension never shifts the stream-counting window or its frozen
+ * baseline. Player-bought extensions remain the existing one-time +3 days. */
+function districtDeadlineExtraDays(activePd: any): number {
+  const supportHours = Math.max(0, Number(activePd?.deadline_extension_hours) || 0)
+  return (activePd?.deadline_extended ? DEADLINE_EXTENSION_DAYS : 0) + supportHours / 24
+}
+
 // rc_agents (migration 016) is this season's own account table — a clean
 // break from the old site's `agents`. Migrations 019/020 added the columns
 // that let an agent pick lb / direct-scrobble (webhook + ListenBrainz-like)
@@ -169,7 +177,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     const chargeCellStreams = albumGoalStreams % STREAMS_PER_CHARGE_CELL
     const backupOverlay = await getBackupOverlay(supabase, player.agent_no, activePd.district_id)
     const progress = districtProgress(activePd.goals, activePd.baseline || {}, windowRollups || [], activePd.activated_at, content, backupOverlay)
-    const deadline = districtDeadline(activePd.activated_at, restorationDays(content), activePd.deadline_extended ? DEADLINE_EXTENSION_DAYS : 0)
+    const deadline = districtDeadline(activePd.activated_at, restorationDays(content), districtDeadlineExtraDays(activePd))
     // districtProgress().complete only covers solo track+album goals — the
     // reconnect goal (if any was frozen in) needs its own live resolution
     // (mission/puzzle-attempt rows), so it's layered on here rather than
@@ -302,6 +310,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
       expiresAt: deadline.expiresAt,
       daysLeft: Math.ceil(deadline.msLeft / 86400000),
       deadlineExtended: !!activePd.deadline_extended,
+      deadlineExtensionHours: Number(activePd.deadline_extension_hours) || 0,
       restoredNow,
       xpAwarded,
       itemDropped,
@@ -627,7 +636,7 @@ export async function extendDistrictDeadline(supabase: SupabaseDB, params: any) 
   if (!activePd) return { success: false, error: 'not_eligible' }
   if (activePd.deadline_extended) return { success: false, error: 'already_extended' }
 
-  const deadline = districtDeadline(activePd.activated_at, restorationDays(content), 0)
+  const deadline = districtDeadline(activePd.activated_at, restorationDays(content), districtDeadlineExtraDays(activePd))
   if (deadline.msLeft > 2 * 86400000) return { success: false, error: 'too_early' }
   if (deadline.expired) return { success: false, error: 'already_expired' }
 
@@ -657,7 +666,11 @@ export async function extendDistrictDeadline(supabase: SupabaseDB, params: any) 
     return { success: false, error: error?.message || 'already_extended' }
   }
 
-  const newDeadline = districtDeadline(activePd.activated_at, restorationDays(content), DEADLINE_EXTENSION_DAYS)
+  const newDeadline = districtDeadline(
+    activePd.activated_at,
+    restorationDays(content),
+    districtDeadlineExtraDays({ ...activePd, deadline_extended: true }),
+  )
   return { success: true, expiresAt: newDeadline.expiresAt, daysLeft: Math.ceil(newDeadline.msLeft / 86400000), chargesRemaining: charges - 1 }
 }
 
