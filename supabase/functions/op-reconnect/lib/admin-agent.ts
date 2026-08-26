@@ -10,6 +10,7 @@ import { totalXp } from './derive.ts'
 import { levelFor } from './leveling.ts'
 import { fetchStreamRows } from './streams.ts'
 import { flagStreamRows, findPossibleAlts, modesByAgentNo, IDENTITY_FIELDS } from './police-check.ts'
+import { sendMail, bombReminderEmail, mailerConfigured } from './mailer.ts'
 
 /** j***@gmail.com — enough to confirm "yes that's their address" without
  *  displaying it in full. This is sensitive, support-only data. */
@@ -338,6 +339,43 @@ export async function adminDeleteInactiveAgents(supabase: SupabaseDB, params: an
     else failed.push({ agentNo: r.agent_no, error: result.error })
   }
   return { success: true, dryRun: false, deletedCount: deleted.length, deleted, failed }
+}
+
+/** Reminder email for agents approaching (but not yet past) the 14-day
+ *  auto-delete cutoff — the only channel that can reach someone who
+ *  hasn't opened the app in that long. minDays/maxDays bound the "getting
+ *  close" band; default 9-14 catches anyone within 5 days of the cutoff
+ *  without re-emailing someone who still has weeks of runway. Deliberately
+ *  a separate query from rc_inactive_agent_candidates (which is p_inactive_days
+ *  and up, no upper bound) rather than reusing it with a smaller threshold —
+ *  this must never overlap with who the cron is about to actually delete. */
+export async function sendInactiveReminders(supabase: SupabaseDB, params: any) {
+  if (!mailerConfigured()) return { success: false, error: 'mail_not_configured' }
+  const minDays = Number.isFinite(parseInt(params.minDays)) ? parseInt(params.minDays) : 9
+  const maxDays = Number.isFinite(parseInt(params.maxDays)) ? parseInt(params.maxDays) : 14
+
+  const { data: candidates, error } = await supabase.rpc('rc_inactive_agent_candidates', { p_inactive_days: minDays })
+  if (error) return { success: false, error: error.message }
+  const rows = (candidates || []).filter((r: any) => r.days_inactive < maxDays)
+  if (rows.length === 0) return { success: true, sent: [], failed: [], skipped: [] }
+
+  const agentNos = rows.map((r: any) => r.agent_no)
+  const { data: agents } = await supabase.from('rc_agents').select('agent_no, handle, email').in('agent_no', agentNos)
+  const byAgent = new Map((agents || []).map((a: any) => [a.agent_no, a]))
+
+  const sent: string[] = []
+  const failed: { agentNo: string; error: string }[] = []
+  const skipped: string[] = []
+  for (const r of rows) {
+    const agent = byAgent.get(r.agent_no)
+    if (!agent?.email) { skipped.push(r.agent_no); continue }
+    const daysLeft = Math.max(1, Math.round(maxDays - r.days_inactive))
+    const { subject, text, html } = bombReminderEmail(r.agent_no, agent.handle || r.agent_no, daysLeft)
+    const result = await sendMail(agent.email, subject, html, text)
+    if (result.ok) sent.push(r.agent_no)
+    else failed.push({ agentNo: r.agent_no, error: result.error || 'unknown' })
+  }
+  return { success: true, sent, failed, skipped }
 }
 
 /** Reset visible XP without deleting historical reward rows. A compensating

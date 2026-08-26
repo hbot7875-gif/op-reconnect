@@ -23,7 +23,7 @@ import { generatePlaylist, validatePlaylist, validatePlaylistFromTracks, getAlpa
 import { deleteCandyPlaylist, getCandyPlaylistLibrary, setCandyPlaylistSaved, shareCandyPlaylist, reportCandyPlaylist } from './lib/playlist-vault.ts'
 import { adminGetActiveDefuse } from './lib/bomb.ts'
 import { adminCreateBroadcast, adminListBroadcasts, adminDeleteBroadcast } from './lib/broadcasts.ts'
-import { adminDeleteAgent, adminGetAgent, adminGetAgentTracks, adminScanAltAccounts, adminResetAgentXp, adminDeleteInactiveAgents } from './lib/admin-agent.ts'
+import { adminDeleteAgent, adminGetAgent, adminGetAgentTracks, adminScanAltAccounts, adminResetAgentXp, adminDeleteInactiveAgents, sendInactiveReminders } from './lib/admin-agent.ts'
 import { adminSyncAllStreams } from './lib/sync-all.ts'
 import { adminListGoals, adminAddGoal, adminUpdateGoal, adminDeleteGoal } from './lib/goals.ts'
 import {
@@ -216,6 +216,7 @@ const ROUTES: Record<string, Route> = {
   adminScanAltAccounts: { auth: 'admin', handler: (sb, p) => adminScanAltAccounts(sb, p) },
   adminDeleteAgent: { auth: 'admin', handler: (sb, p) => adminDeleteAgent(sb, p) },
   adminDeleteInactiveAgents: { auth: 'admin', handler: (sb, p) => adminDeleteInactiveAgents(sb, p) },
+  sendInactiveReminders: { auth: 'admin', handler: (sb, p) => sendInactiveReminders(sb, p) },
   adminResetAgentXp: { auth: 'admin', handler: (sb, p) => adminResetAgentXp(sb, p) },
   adminSyncAllStreams: { auth: 'admin', handler: (sb, p) => adminSyncAllStreams(sb, p) },
   adminGetEngagementReport: { auth: 'admin', handler: (sb, p) => adminGetEngagementReport(sb, p) },
