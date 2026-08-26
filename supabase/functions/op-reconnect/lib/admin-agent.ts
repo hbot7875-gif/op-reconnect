@@ -227,8 +227,20 @@ export async function adminDeleteAgent(supabase: SupabaseDB, params: any) {
   if (!/^AGENT\d{3,}$/.test(agentNo)) return { success: false, error: 'agent_no_invalid' }
 
   const { data: agent } = await supabase.from('rc_agents')
-    .select('agent_no, handle').eq('agent_no', agentNo).maybeSingle()
+    .select('agent_no, handle, email, lb_username, created_at').eq('agent_no', agentNo).maybeSingle()
   if (!agent) return { success: false, error: 'agent_not_found' }
+
+  // Same "who was this" gap the 14-day cron hit -- deleting rc_agents below
+  // destroys the only record of who this agent even was. Logged here too,
+  // not just the scheduled path, since this same function is what the
+  // scheduled cleanup calls under the hood.
+  const { data: playerRow } = await supabase.from('rc_players')
+    .select('codename').eq('agent_no', agentNo).maybeSingle()
+  await supabase.from('rc_deleted_agent_log').insert({
+    agent_no: agent.agent_no, handle: agent.handle, email: agent.email,
+    codename: playerRow?.codename || null, lb_username: agent.lb_username,
+    joined_at: agent.created_at, reason: params.reason || 'manual_admin',
+  })
 
   // Remove references with no FK cascade first. Missions created by this test
   // account disappear too; their participant rows cascade from the mission.
@@ -321,7 +333,7 @@ export async function adminDeleteInactiveAgents(supabase: SupabaseDB, params: an
   const deleted: string[] = []
   const failed: { agentNo: string; error: string }[] = []
   for (const r of rows) {
-    const result = await adminDeleteAgent(supabase, { agentNo: r.agent_no })
+    const result = await adminDeleteAgent(supabase, { agentNo: r.agent_no, reason: 'inactive_14d' })
     if (result.success) deleted.push(r.agent_no)
     else failed.push({ agentNo: r.agent_no, error: result.error })
   }
