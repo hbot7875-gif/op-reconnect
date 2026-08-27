@@ -5,9 +5,10 @@
 // trusting a caller's own session.
 
 import type { SupabaseDB } from './config.ts'
-import { loadContent, rankFor, limits } from './config.ts'
+import { loadContent, rankFor, limits, restorationDays } from './config.ts'
 import { totalXp } from './derive.ts'
 import { levelFor } from './leveling.ts'
+import { districtDeadline, DEADLINE_EXTENSION_DAYS } from './districts.ts'
 import { fetchStreamRows } from './streams.ts'
 import { flagStreamRows, findPossibleAlts, modesByAgentNo, IDENTITY_FIELDS } from './police-check.ts'
 import { sendMail, bombReminderEmail, mailerConfigured } from './mailer.ts'
@@ -60,16 +61,32 @@ async function findAgentByQuery(supabase: SupabaseDB, rawQuery: string): Promise
  *  included, so "how many agents do we actually have and who are they" has
  *  a real answer without a SQL console. */
 export async function adminListAgents(supabase: SupabaseDB, _params: any) {
-  const { data, error } = await supabase.rpc('rc_agent_roster')
+  const [{ data, error }, content] = await Promise.all([
+    supabase.rpc('rc_agent_roster'),
+    loadContent(supabase),
+  ])
   if (error) return { success: false, error: error.message }
   return {
     success: true,
-    agents: (data || []).map((r: any) => ({
-      agentNo: r.agent_no, handle: r.handle, email: maskEmail(r.email),
-      codename: r.codename, mode: r.mode, joinedAt: r.joined_at,
-      lastFedAt: r.last_fed_at, daysInactive: r.days_inactive,
-      retiredAt: r.retired_at,
-    })),
+    agents: (data || []).map((r: any) => {
+      const supportHours = Math.max(0, Number(r.deadline_extension_hours) || 0)
+      const extraDays = (r.deadline_extended ? DEADLINE_EXTENSION_DAYS : 0) + supportHours / 24
+      const deadline = r.district_activated_at
+        ? districtDeadline(r.district_activated_at, restorationDays(content), extraDays)
+        : null
+      return {
+        agentNo: r.agent_no, handle: r.handle, email: maskEmail(r.email),
+        codename: r.codename, mode: r.mode, joinedAt: r.joined_at,
+        lastFedAt: r.last_fed_at, daysSinceFeed: r.days_since_feed,
+        retiredAt: r.retired_at, lastSeenAt: r.last_seen_at,
+        appearOffline: !!r.appear_offline, lastStreamAt: r.last_stream_at,
+        currentDistrictId: r.current_district_id,
+        currentDistrictName: r.current_district_name,
+        districtActivatedAt: r.district_activated_at,
+        districtExpiresAt: deadline?.expiresAt || null,
+        districtExpired: deadline?.expired || false,
+      }
+    }),
   }
 }
 

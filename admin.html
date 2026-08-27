@@ -105,13 +105,76 @@
   .adm-card > .muted { font-size: 15px; line-height: 1.65; margin-bottom: 18px; }
   .adm-card .btn-ghost { padding: 8px 13px; font-size: 12.5px; }
 
-  .adm-roster-table { width: 100%; border-collapse: collapse; font-size: 12.5px; white-space: nowrap; }
-  .adm-roster-table th { text-align: left; font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.6px;
-    text-transform: uppercase; color: var(--dim); padding: 8px 10px; border-bottom: 1px solid var(--border-str); }
-  .adm-roster-table td { padding: 7px 10px; border-bottom: 1px solid var(--border); color: var(--text); }
-  .adm-roster-table tr:hover td { background: var(--surface-2); }
-  .adm-roster-table .is-risk td { color: var(--crimson); }
-  .adm-roster-table .is-retired td { color: var(--dim); opacity: .6; }
+  /* ── Agent command log ── this is an action queue, not a raw database
+     table. Identity, risk and deadline lead; secondary timestamps stay
+     readable without forcing a nine-column horizontal scroll. */
+  .adm-roster-intro { max-width: 760px; margin: 0 0 14px; }
+  .adm-roster-toolbar { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(160px, 220px) auto;
+    gap: 8px; align-items: center; margin-bottom: 12px; }
+  .adm-roster-toolbar .ob-input { width: 100%; }
+  .adm-roster-summary { display: grid; grid-template-columns: repeat(6, minmax(105px, 1fr)); gap: 7px;
+    margin: 2px 0 14px; }
+  .adm-roster-chip { appearance: none; text-align: left; background: var(--surface-2); color: var(--muted);
+    border: 1px solid var(--border); border-radius: var(--r); padding: 9px 10px; cursor: pointer; min-width: 0; }
+  .adm-roster-chip:hover { border-color: var(--border-str); color: var(--text); }
+  .adm-roster-chip.is-active { border-color: var(--purple); background: var(--purple-soft); color: var(--purple-lt); }
+  .adm-roster-chip b { display: block; font-family: var(--disp); font-size: 19px; line-height: 1; color: var(--text); }
+  .adm-roster-chip span { display: block; font-family: var(--mono); font-size: 9.5px; letter-spacing: .45px;
+    text-transform: uppercase; margin-top: 5px; overflow: hidden; text-overflow: ellipsis; }
+  .adm-roster-meta { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    margin-bottom: 8px; }
+  .adm-roster-list { display: flex; flex-direction: column; gap: 7px; }
+  .adm-roster-row { appearance: none; width: 100%; display: grid;
+    grid-template-columns: minmax(190px, 1.25fr) 125px minmax(180px, 1fr) minmax(210px, 1.15fr) 20px;
+    gap: 13px; align-items: center; text-align: left; background: rgba(255,255,255,.015); color: var(--text);
+    border: 1px solid var(--border); border-radius: var(--r); padding: 11px 12px; cursor: pointer;
+    transition: border-color .15s, background .15s, transform .15s; }
+  .adm-roster-row:hover { border-color: var(--border-str); background: var(--surface-2); transform: translateY(-1px); }
+  .adm-roster-row:focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; }
+  .arr-name { display: block; font-size: 15.5px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .arr-id { display: block; font-family: var(--mono); font-size: 10.5px; color: var(--dim); margin-top: 2px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .arr-cell { min-width: 0; }
+  .arr-label { display: block; font-family: var(--mono); font-size: 9.5px; letter-spacing: .7px;
+    text-transform: uppercase; color: var(--dim); margin-bottom: 3px; }
+  .arr-main { display: block; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .arr-sub { display: block; font-size: 11.5px; color: var(--muted); margin-top: 2px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .arr-activity { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+  .arr-activity span { min-width: 0; }
+  .arr-activity b { display: block; font-family: var(--mono); font-size: 9px; letter-spacing: .5px;
+    text-transform: uppercase; color: var(--dim); font-weight: 400; }
+  .arr-activity i { display: block; font-style: normal; font-size: 11.5px; margin-top: 2px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .arr-go { color: var(--dim); font-size: 20px; text-align: right; }
+  .arr-badges { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+  .arr-mini { font-family: var(--mono); font-size: 9px; letter-spacing: .35px; border: 1px solid var(--border);
+    color: var(--muted); border-radius: 999px; padding: 2px 6px; text-transform: uppercase; }
+  .arr-status { display: inline-flex; align-items: center; gap: 5px; width: fit-content; font-family: var(--mono);
+    font-size: 10px; letter-spacing: .45px; font-weight: 700; text-transform: uppercase; border: 1px solid var(--border);
+    border-radius: 999px; padding: 4px 8px; }
+  .arr-status::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .arr-status.is-healthy { color: #75dcae; border-color: rgba(43,190,126,.38); }
+  .arr-status.is-due { color: var(--gold); border-color: rgba(217,173,95,.42); }
+  .arr-status.is-risk, .arr-status.is-overdue { color: var(--crimson); border-color: rgba(229,56,79,.45); }
+  .arr-status.is-never { color: var(--purple-lt); border-color: rgba(139,92,246,.42); }
+  .arr-status.is-retired { color: var(--dim); }
+  .arr-status.is-protected { color: var(--purple-lt); border-color: rgba(139,92,246,.42); }
+
+  .adm-roster-drawer { position: fixed; inset: 0; z-index: 80; display: flex; justify-content: flex-end;
+    background: rgba(3,3,8,.7); backdrop-filter: blur(5px); }
+  .adm-roster-drawer[hidden] { display: none; }
+  .adm-roster-drawer-panel { width: min(560px, 100%); height: 100%; overflow-y: auto; background: #0e0c17;
+    border-left: 1px solid var(--border-str); box-shadow: -18px 0 45px rgba(0,0,0,.5); animation: admDrawerIn .2s ease; }
+  @keyframes admDrawerIn { from { transform: translateX(24px); opacity: .5; } to { transform: translateX(0); opacity: 1; } }
+  .adm-roster-drawer-head { position: sticky; top: 0; z-index: 2; display: flex; justify-content: space-between;
+    align-items: center; gap: 12px; padding: 14px 18px; background: rgba(14,12,23,.96); border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(12px); }
+  .adm-roster-drawer-title { font-family: var(--disp); font-size: 15px; }
+  .adm-roster-drawer-close { appearance: none; background: var(--surface-2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 999px; width: 34px; height: 34px; font-size: 19px; cursor: pointer; }
+  .adm-roster-drawer-body { padding: 0 18px 30px; }
+  .adm-roster-drawer-body .adm-agent-card { margin-top: 18px; }
 
   .adm-field { display: block; margin-bottom: 12px; }
   .adm-field > span { display: block; font-family: var(--mono); font-size: 11px; letter-spacing: 0.8px;
@@ -272,6 +335,16 @@
     .adm-goal-input-row .adm-target-input { flex: 1 1 100%; max-width: none; }
     .adm-goal-form-grid { grid-template-columns: 1fr; }
     .adm-card { padding: 16px; }
+    .adm-roster-toolbar { grid-template-columns: 1fr auto; }
+    .adm-roster-toolbar select { grid-column: 1 / -1; grid-row: 2; }
+    .adm-roster-summary { display: flex; overflow-x: auto; padding-bottom: 3px; scrollbar-width: thin; }
+    .adm-roster-chip { flex: 0 0 112px; }
+    .adm-roster-row { grid-template-columns: minmax(0,1fr) auto; gap: 10px; padding: 12px; }
+    .adm-roster-row .arr-status-cell { text-align: right; }
+    .adm-roster-row .arr-district, .adm-roster-row .arr-activity { grid-column: 1 / -1; }
+    .adm-roster-row .arr-district { border-top: 1px solid var(--border); padding-top: 9px; }
+    .adm-roster-row .arr-go { display: none; }
+    .adm-roster-drawer-panel { border-left: 0; }
   }
 
   @media (max-width: 480px) {
@@ -336,7 +409,7 @@
   <button class="adm-tab" data-tab="broadcast" type="button">📡 Broadcasts</button>
   <button class="adm-tab" data-tab="goals" type="button">🎯 Goals</button>
   <button class="adm-tab" data-tab="lookup" type="button">🔎 Agent Lookup</button>
-  <button class="adm-tab" data-tab="roster" type="button">📋 All Agents</button>
+  <button class="adm-tab" data-tab="roster" type="button">👥 Agent Log</button>
   <button class="adm-tab" data-tab="vma" type="button">🎫 VMA Review</button>
   <button class="adm-tab" data-tab="reconnect" type="button">🔗 Reconnect</button>
 </div>
@@ -546,25 +619,37 @@
 <div class="adm-panel" id="panel-roster" data-panel="roster" hidden>
   <section class="adm-card">
     <div class="adm-card-head">
-      <h2>Every agent</h2>
-      <div class="adm-row" style="gap:8px;">
-        <input id="rosterFilter" class="ob-input" type="text" placeholder="Filter by handle, agent#, or codename" autocomplete="off" style="max-width:260px;">
-        <button class="btn btn-ghost" id="btnLoadRoster" type="button">↻ Load</button>
-      </div>
+      <h2>Agent command log</h2>
+      <button class="btn btn-ghost" id="btnLoadRoster" type="button">↻ Refresh</button>
     </div>
-    <p class="muted" id="rosterCount">—</p>
-    <div style="overflow-x:auto;">
-      <table class="adm-roster-table" id="rosterTable">
-        <thead>
-          <tr>
-            <th>Agent</th><th>Handle</th><th>Codename</th><th>Email</th>
-            <th>Mode</th><th>Joined</th><th>Last fed</th><th>Days inactive</th><th>Status</th>
-          </tr>
-        </thead>
-        <tbody id="rosterBody"></tbody>
-      </table>
+    <p class="muted adm-roster-intro">See who needs help without confusing Bomb feeding, streaming and opening the app. Tap an agent for their full file.</p>
+    <div class="adm-roster-toolbar">
+      <input id="rosterFilter" class="ob-input" type="search" placeholder="Search agent, handle, codename or district" autocomplete="off">
+      <select id="rosterSort" class="ob-input" aria-label="Sort agents">
+        <option value="attention">Needs attention first</option>
+        <option value="deadline">Deadline soon</option>
+        <option value="recent">Recently active</option>
+        <option value="newest">Newest agents</option>
+        <option value="agent">Agent number</option>
+      </select>
     </div>
+    <div class="adm-roster-summary" id="rosterSummary" aria-label="Agent filters"></div>
+    <div class="adm-roster-meta">
+      <p class="muted" id="rosterCount">Not loaded yet.</p>
+      <span class="muted" style="font-size:11px;">Auto-delete: 14 days without feeding</span>
+    </div>
+    <div class="adm-roster-list" id="rosterList"></div>
   </section>
+
+  <div class="adm-roster-drawer" id="rosterDrawer" role="dialog" aria-modal="true" aria-labelledby="rosterDrawerTitle" hidden>
+    <div class="adm-roster-drawer-panel">
+      <div class="adm-roster-drawer-head">
+        <span class="adm-roster-drawer-title" id="rosterDrawerTitle">Agent file</span>
+        <button class="adm-roster-drawer-close" id="btnCloseRosterDrawer" type="button" aria-label="Close agent file">×</button>
+      </div>
+      <div class="adm-roster-drawer-body" id="rosterDrawerBody"></div>
+    </div>
+  </div>
 </div>
 
 <!-- ── VMA Review ── -->
@@ -1384,54 +1469,208 @@ $('lkQuery').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btnL
 
 /* ── All Agents ── */
 let rosterCache = []
+let rosterScope = 'needs'
+const DELETE_AFTER_DAYS = 14
+
+function feedDays(a) {
+  const n = Number(a.daysSinceFeed)
+  return Number.isFinite(n) ? n : 0
+}
+
+function rosterStatus(a) {
+  if (a.retiredAt) return { key: 'retired', label: 'Retired' }
+  if (a.agentNo === 'AGENT001') return { key: 'protected', label: 'Protected' }
+  const days = feedDays(a)
+  if (days >= DELETE_AFTER_DAYS) return { key: 'overdue', label: 'Overdue' }
+  if (days >= 9) return { key: 'risk', label: 'At risk' }
+  if (days >= 7) return { key: 'due', label: 'Feed soon' }
+  if (!a.lastFedAt) return { key: 'never', label: 'Never fed' }
+  return { key: 'healthy', label: 'Healthy' }
+}
+
+function isNeedsAttention(a) {
+  return ['due', 'risk', 'overdue'].includes(rosterStatus(a).key)
+}
+
+function relativeTime(iso) {
+  if (!iso) return 'Never'
+  const ms = new Date(iso).getTime() - Date.now()
+  if (!Number.isFinite(ms)) return 'Unknown'
+  const future = ms > 0
+  const abs = Math.abs(ms)
+  const mins = Math.max(1, Math.round(abs / 60000))
+  let value
+  if (mins < 60) value = `${mins}m`
+  else if (mins < 1440) value = `${Math.round(mins / 60)}h`
+  else value = `${Math.round(mins / 1440)}d`
+  return future ? `in ${value}` : `${value} ago`
+}
+
+function recentActivityTime(a) {
+  return Math.max(...[a.lastSeenAt, a.lastStreamAt, a.lastFedAt]
+    .map((v) => v ? new Date(v).getTime() : 0))
+}
+
+function paintRosterSummary() {
+  const summary = $('rosterSummary')
+  const counts = {
+    all: rosterCache.length,
+    needs: rosterCache.filter(isNeedsAttention).length,
+    healthy: rosterCache.filter((a) => ['healthy', 'protected'].includes(rosterStatus(a).key)).length,
+    risk: rosterCache.filter((a) => ['risk', 'overdue'].includes(rosterStatus(a).key)).length,
+    never: rosterCache.filter((a) => !a.retiredAt && !a.lastFedAt).length,
+    retired: rosterCache.filter((a) => !!a.retiredAt).length,
+  }
+  const filters = [
+    ['all', 'All'], ['needs', 'Needs help'], ['healthy', 'Healthy'],
+    ['risk', 'At risk'], ['never', 'Never fed'], ['retired', 'Retired'],
+  ]
+  summary.innerHTML = ''
+  for (const [key, label] of filters) {
+    const chip = document.createElement('button')
+    chip.type = 'button'
+    chip.className = `adm-roster-chip${rosterScope === key ? ' is-active' : ''}`
+    chip.setAttribute('aria-pressed', rosterScope === key ? 'true' : 'false')
+    chip.innerHTML = `<b>${counts[key]}</b><span>${esc(label)}</span>`
+    chip.onclick = () => { rosterScope = key; applyRosterFilter() }
+    summary.appendChild(chip)
+  }
+}
+
+function rosterMatchesScope(a) {
+  const key = rosterStatus(a).key
+  if (rosterScope === 'all') return true
+  if (rosterScope === 'needs') return isNeedsAttention(a)
+  if (rosterScope === 'healthy') return key === 'healthy' || key === 'protected'
+  if (rosterScope === 'risk') return key === 'risk' || key === 'overdue'
+  if (rosterScope === 'never') return !a.retiredAt && !a.lastFedAt
+  if (rosterScope === 'retired') return !!a.retiredAt
+  return true
+}
+
+function sortRoster(list) {
+  const sort = $('rosterSort').value
+  const urgency = { overdue: 6, risk: 5, due: 4, never: 2, healthy: 1, protected: 1, retired: 0 }
+  return [...list].sort((a, b) => {
+    if (sort === 'agent') return a.agentNo.localeCompare(b.agentNo, undefined, { numeric: true })
+    if (sort === 'newest') return new Date(b.joinedAt || 0) - new Date(a.joinedAt || 0)
+    if (sort === 'recent') return recentActivityTime(b) - recentActivityTime(a)
+    if (sort === 'deadline') {
+      const aDeadline = a.districtExpiresAt ? new Date(a.districtExpiresAt).getTime() : Number.MAX_SAFE_INTEGER
+      const bDeadline = b.districtExpiresAt ? new Date(b.districtExpiresAt).getTime() : Number.MAX_SAFE_INTEGER
+      return aDeadline - bDeadline
+    }
+    const statusDiff = urgency[rosterStatus(b).key] - urgency[rosterStatus(a).key]
+    return statusDiff || feedDays(b) - feedDays(a)
+  })
+}
 
 function paintRoster(list) {
-  const body = $('rosterBody')
+  const body = $('rosterList')
   body.innerHTML = ''
   if (!list.length) {
-    body.innerHTML = `<tr><td colspan="9" class="muted">No agents match.</td></tr>`
+    body.innerHTML = `<div class="adm-empty">No agents match this view.</div>`
     return
   }
   for (const a of list) {
-    const row = document.createElement('tr')
-    const risk = !a.retiredAt && a.daysInactive >= 9
-    row.className = a.retiredAt ? 'is-retired' : (risk ? 'is-risk' : '')
+    const status = rosterStatus(a)
+    const row = document.createElement('button')
+    row.type = 'button'
+    row.className = 'adm-roster-row'
+    row.setAttribute('aria-label', `Open ${a.codename || a.handle || a.agentNo}`)
+    const handle = a.handle ? `@${a.handle}` : 'No handle'
+    const district = a.currentDistrictName || 'No active district'
+    const deadline = a.districtExpiresAt
+      ? `${a.districtExpired ? 'Expired' : 'Due'} ${relativeTime(a.districtExpiresAt)}`
+      : 'No deadline running'
     row.innerHTML = `
-      <td>${esc(a.agentNo)}</td>
-      <td>${esc(a.handle || '—')}</td>
-      <td>${esc(a.codename || '—')}</td>
-      <td>${esc(a.email || '—')}</td>
-      <td>${esc(a.mode || '—')}</td>
-      <td>${fmtDate(a.joinedAt)}</td>
-      <td>${a.lastFedAt ? fmtDate(a.lastFedAt) : '—'}</td>
-      <td>${a.daysInactive ?? '—'}</td>
-      <td>${a.retiredAt ? 'Retired' : (risk ? '⚠ At risk' : 'Active')}</td>
+      <span class="arr-cell arr-identity">
+        <span class="arr-name">${esc(a.codename || a.handle || a.agentNo)}</span>
+        <span class="arr-id">${esc(handle)} · ${esc(a.agentNo)}</span>
+        <span class="arr-badges">
+          <span class="arr-mini">${esc(a.mode || 'no mode')}</span>
+          ${a.appearOffline ? '<span class="arr-mini">Private status</span>' : ''}
+        </span>
+      </span>
+      <span class="arr-cell arr-status-cell">
+        <span class="arr-label">Bomb</span>
+        <span class="arr-status is-${status.key}">${esc(status.label)}</span>
+        <span class="arr-sub">${a.lastFedAt ? `${feedDays(a)}d since feed` : `${feedDays(a)}d since joining`}</span>
+      </span>
+      <span class="arr-cell arr-district">
+        <span class="arr-label">Current district</span>
+        <span class="arr-main">${esc(district)}</span>
+        <span class="arr-sub">${esc(deadline)}</span>
+      </span>
+      <span class="arr-cell arr-activity">
+        <span><b>App</b><i>${esc(relativeTime(a.lastSeenAt))}</i></span>
+        <span><b>Stream</b><i>${esc(relativeTime(a.lastStreamAt))}</i></span>
+        <span><b>Bomb</b><i>${esc(relativeTime(a.lastFedAt))}</i></span>
+      </span>
+      <span class="arr-go">›</span>
     `
+    row.onclick = () => openRosterAgent(a)
     body.appendChild(row)
   }
 }
 
 function applyRosterFilter() {
   const q = $('rosterFilter').value.trim().toLowerCase()
-  if (!q) { paintRoster(rosterCache); return }
-  paintRoster(rosterCache.filter((a) =>
+  let list = rosterCache.filter(rosterMatchesScope)
+  if (q) list = list.filter((a) =>
     a.agentNo.toLowerCase().includes(q) ||
     (a.handle || '').toLowerCase().includes(q) ||
-    (a.codename || '').toLowerCase().includes(q)))
+    (a.codename || '').toLowerCase().includes(q) ||
+    (a.currentDistrictName || '').toLowerCase().includes(q) ||
+    (a.email || '').toLowerCase().includes(q))
+  list = sortRoster(list)
+  paintRosterSummary()
+  $('rosterCount').textContent = `Showing ${list.length} of ${rosterCache.length} agents`
+  paintRoster(list)
 }
+
+async function openRosterAgent(agent) {
+  $('rosterDrawerTitle').textContent = `${agent.codename || agent.handle || agent.agentNo} · ${agent.agentNo}`
+  $('rosterDrawerBody').innerHTML = `<div class="adm-empty"><span class="adm-spin"></span> Opening agent file…</div>`
+  $('rosterDrawer').hidden = false
+  document.body.style.overflow = 'hidden'
+  $('btnCloseRosterDrawer').focus()
+  const res = await call('adminGetAgent', { query: agent.agentNo })
+  if (!res || !res.success) {
+    $('rosterDrawerBody').innerHTML = `<div class="adm-empty">${esc(res?.error || 'Could not open this agent file.')}</div>`
+    return
+  }
+  $('rosterDrawerBody').innerHTML = renderAgent(res.agent)
+  wireAgentDangerButton($('rosterDrawerBody'), res.agent)
+  if (sessionUnauthorized) setMutationButtonsDisabled(true)
+}
+
+function closeRosterDrawer() {
+  $('rosterDrawer').hidden = true
+  document.body.style.overflow = ''
+}
+
+$('btnCloseRosterDrawer').onclick = closeRosterDrawer
+$('rosterDrawer').addEventListener('click', (event) => { if (event.target === $('rosterDrawer')) closeRosterDrawer() })
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !$('rosterDrawer').hidden) closeRosterDrawer()
+})
 
 $('btnLoadRoster').onclick = async () => {
   $('rosterCount').textContent = 'Loading…'
+  $('rosterList').innerHTML = `<div class="adm-empty"><span class="adm-spin"></span> Reading agent signals…</div>`
   const res = await call('adminListAgents', {})
   if (!res || !res.success) {
     $('rosterCount').textContent = res?.error || 'Load failed'
+    $('rosterList').innerHTML = `<div class="adm-empty">Could not load the agent log. Tap Refresh to try again.</div>`
     return
   }
   rosterCache = res.agents
-  $('rosterCount').textContent = `${res.agents.length} agent${res.agents.length === 1 ? '' : 's'} total`
+  if (rosterScope === 'needs' && !rosterCache.some(isNeedsAttention)) rosterScope = 'all'
   applyRosterFilter()
 }
 $('rosterFilter').addEventListener('input', applyRosterFilter)
+$('rosterSort').addEventListener('change', applyRosterFilter)
 document.querySelector('[data-tab="roster"]').addEventListener('click', () => { if (!rosterCache.length) $('btnLoadRoster').click() })
 
 /* ── VMA Review ── */
