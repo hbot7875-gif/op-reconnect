@@ -378,7 +378,7 @@ export function openModeSheet(state) {
   sheet.append(
     el('div', 'eyebrow', 'STREAMING MODE'),
     el('h3', '', 'How many accounts are you running?'),
-    el('p', 'muted', 'More accounts means bigger targets and slower XP from assigned goal streams. School/Exam mode is here for busy weeks — smaller targets, fast XP — and can be switched into or out of anytime. A mode switch only applies to districts you activate after switching; anything already active keeps the targets it was frozen with.'),
+    el('p', 'muted', 'Pick what fits you. School/Exam gives lighter goals for busy weeks. Changes start with your next district; your current targets stay the same.'),
   )
   const grid = el('div', 'mode-grid')
   for (const key of ['exam', 'easy', 'medium', 'hard']) {
