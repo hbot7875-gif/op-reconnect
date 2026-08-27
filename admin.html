@@ -105,6 +105,14 @@
   .adm-card > .muted { font-size: 15px; line-height: 1.65; margin-bottom: 18px; }
   .adm-card .btn-ghost { padding: 8px 13px; font-size: 12.5px; }
 
+  .adm-roster-table { width: 100%; border-collapse: collapse; font-size: 12.5px; white-space: nowrap; }
+  .adm-roster-table th { text-align: left; font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.6px;
+    text-transform: uppercase; color: var(--dim); padding: 8px 10px; border-bottom: 1px solid var(--border-str); }
+  .adm-roster-table td { padding: 7px 10px; border-bottom: 1px solid var(--border); color: var(--text); }
+  .adm-roster-table tr:hover td { background: var(--surface-2); }
+  .adm-roster-table .is-risk td { color: var(--crimson); }
+  .adm-roster-table .is-retired td { color: var(--dim); opacity: .6; }
+
   .adm-field { display: block; margin-bottom: 12px; }
   .adm-field > span { display: block; font-family: var(--mono); font-size: 11px; letter-spacing: 0.8px;
     text-transform: uppercase; color: var(--dim); margin-bottom: 6px; }
@@ -328,6 +336,7 @@
   <button class="adm-tab" data-tab="broadcast" type="button">📡 Broadcasts</button>
   <button class="adm-tab" data-tab="goals" type="button">🎯 Goals</button>
   <button class="adm-tab" data-tab="lookup" type="button">🔎 Agent Lookup</button>
+  <button class="adm-tab" data-tab="roster" type="button">📋 All Agents</button>
   <button class="adm-tab" data-tab="vma" type="button">🎫 VMA Review</button>
   <button class="adm-tab" data-tab="reconnect" type="button">🔗 Reconnect</button>
 </div>
@@ -530,6 +539,31 @@
       <button class="btn btn-primary" id="btnLookup" type="button">Search</button>
     </div>
     <div id="lkOut"></div>
+  </section>
+</div>
+
+<!-- ── All Agents ── -->
+<div class="adm-panel" id="panel-roster" data-panel="roster" hidden>
+  <section class="adm-card">
+    <div class="adm-card-head">
+      <h2>Every agent</h2>
+      <div class="adm-row" style="gap:8px;">
+        <input id="rosterFilter" class="ob-input" type="text" placeholder="Filter by handle, agent#, or codename" autocomplete="off" style="max-width:260px;">
+        <button class="btn btn-ghost" id="btnLoadRoster" type="button">↻ Load</button>
+      </div>
+    </div>
+    <p class="muted" id="rosterCount">—</p>
+    <div style="overflow-x:auto;">
+      <table class="adm-roster-table" id="rosterTable">
+        <thead>
+          <tr>
+            <th>Agent</th><th>Handle</th><th>Codename</th><th>Email</th>
+            <th>Mode</th><th>Joined</th><th>Last fed</th><th>Days inactive</th><th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="rosterBody"></tbody>
+      </table>
+    </div>
   </section>
 </div>
 
@@ -1347,6 +1381,58 @@ $('btnLookup').onclick = async () => {
   if (sessionUnauthorized) setMutationButtonsDisabled(true)
 }
 $('lkQuery').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btnLookup').click() })
+
+/* ── All Agents ── */
+let rosterCache = []
+
+function paintRoster(list) {
+  const body = $('rosterBody')
+  body.innerHTML = ''
+  if (!list.length) {
+    body.innerHTML = `<tr><td colspan="9" class="muted">No agents match.</td></tr>`
+    return
+  }
+  for (const a of list) {
+    const row = document.createElement('tr')
+    const risk = !a.retiredAt && a.daysInactive >= 9
+    row.className = a.retiredAt ? 'is-retired' : (risk ? 'is-risk' : '')
+    row.innerHTML = `
+      <td>${esc(a.agentNo)}</td>
+      <td>${esc(a.handle || '—')}</td>
+      <td>${esc(a.codename || '—')}</td>
+      <td>${esc(a.email || '—')}</td>
+      <td>${esc(a.mode || '—')}</td>
+      <td>${fmtDate(a.joinedAt)}</td>
+      <td>${a.lastFedAt ? fmtDate(a.lastFedAt) : '—'}</td>
+      <td>${a.daysInactive ?? '—'}</td>
+      <td>${a.retiredAt ? 'Retired' : (risk ? '⚠ At risk' : 'Active')}</td>
+    `
+    body.appendChild(row)
+  }
+}
+
+function applyRosterFilter() {
+  const q = $('rosterFilter').value.trim().toLowerCase()
+  if (!q) { paintRoster(rosterCache); return }
+  paintRoster(rosterCache.filter((a) =>
+    a.agentNo.toLowerCase().includes(q) ||
+    (a.handle || '').toLowerCase().includes(q) ||
+    (a.codename || '').toLowerCase().includes(q)))
+}
+
+$('btnLoadRoster').onclick = async () => {
+  $('rosterCount').textContent = 'Loading…'
+  const res = await call('adminListAgents', {})
+  if (!res || !res.success) {
+    $('rosterCount').textContent = res?.error || 'Load failed'
+    return
+  }
+  rosterCache = res.agents
+  $('rosterCount').textContent = `${res.agents.length} agent${res.agents.length === 1 ? '' : 's'} total`
+  applyRosterFilter()
+}
+$('rosterFilter').addEventListener('input', applyRosterFilter)
+document.querySelector('[data-tab="roster"]').addEventListener('click', () => { if (!rosterCache.length) $('btnLoadRoster').click() })
 
 /* ── VMA Review ── */
 let vmaOffset = 0

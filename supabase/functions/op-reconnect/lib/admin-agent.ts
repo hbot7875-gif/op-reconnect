@@ -53,6 +53,26 @@ async function findAgentByQuery(supabase: SupabaseDB, rawQuery: string): Promise
   return data || null
 }
 
+/** Admin: every agent, one row each — the "All Agents" tab. Distinct from
+ *  adminGetAgent (one agent, deep diagnostic detail) and from
+ *  rc_inactive_agent_candidates (a deletion-risk shortlist, excludes
+ *  AGENT001/retired) — this is the plain browse/audit log, everyone
+ *  included, so "how many agents do we actually have and who are they" has
+ *  a real answer without a SQL console. */
+export async function adminListAgents(supabase: SupabaseDB, _params: any) {
+  const { data, error } = await supabase.rpc('rc_agent_roster')
+  if (error) return { success: false, error: error.message }
+  return {
+    success: true,
+    agents: (data || []).map((r: any) => ({
+      agentNo: r.agent_no, handle: r.handle, email: maskEmail(r.email),
+      codename: r.codename, mode: r.mode, joinedAt: r.joined_at,
+      lastFedAt: r.last_fed_at, daysInactive: r.days_inactive,
+      retiredAt: r.retired_at,
+    })),
+  }
+}
+
 /** Admin: look up one agent by handle or agent number for support purposes.
  *  Returns enough to actually diagnose "why isn't this working for them" —
  *  account basics, level/XP/rank, which stream source is configured (or
