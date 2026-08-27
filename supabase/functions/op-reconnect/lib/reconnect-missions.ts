@@ -828,7 +828,8 @@ export async function getInviteCandidates(supabase: SupabaseDB, content: GameCon
   // the odds instead of guessing from a name alone.
   const since = new Date(Date.now() - ONLINE_WINDOW_MS).toISOString()
   const { data: onlineRows } = await supabase.from('rc_players')
-    .select('agent_no').in('agent_no', free.map((f) => f.agentNo)).gte('last_seen_at', since)
+    .select('agent_no').in('agent_no', free.map((f) => f.agentNo))
+    .eq('appear_offline', false).gte('last_seen_at', since)
   const online = new Set<string>((onlineRows || []).map((r: any) => r.agent_no as string))
 
   // Online first — that's the whole point — then longest-waiting within each

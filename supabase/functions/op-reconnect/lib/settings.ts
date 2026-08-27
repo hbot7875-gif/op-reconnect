@@ -20,6 +20,8 @@ const SOURCES = ['lb', 'direct', 'statsfm', 'musicat']
 export async function getAccount(supabase: SupabaseDB, params: Record<string, unknown>) {
   const agent = await getRcAgent(supabase, String(params.agentNo || ''))
   if (!agent) return { success: false, error: 'agent_not_found' }
+  const { data: player } = await supabase.from('rc_players')
+    .select('appear_offline').eq('agent_no', agent.agent_no).maybeSingle()
   return {
     success: true,
     account: {
@@ -33,8 +35,21 @@ export async function getAccount(supabase: SupabaseDB, params: Record<string, un
       statsfmUsername: agent.statsfm_username ?? null,
       musicatPublicId: agent.musicat_public_id ?? null,
       hasPin: !!agent.scrobble_pin,
+      appearOffline: !!player?.appear_offline,
     },
   }
+}
+
+/** Presence privacy changes only what other players see. We keep recording
+ *  last_seen_at for support/security diagnostics and merely exclude hidden
+ *  players from public presence counts and ReConnect online indicators. */
+export async function setAppearOffline(supabase: SupabaseDB, params: Record<string, unknown>) {
+  const agentNo = String(params.agentNo || '').trim().toUpperCase()
+  const appearOffline = params.appearOffline === true
+  const { error } = await supabase.from('rc_players')
+    .update({ appear_offline: appearOffline }).eq('agent_no', agentNo)
+  if (error) return { success: false, error: error.message }
+  return { success: true, appearOffline }
 }
 
 /** Add or change the recovery address. Password-gated: whoever controls the

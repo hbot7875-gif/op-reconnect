@@ -63,6 +63,7 @@ export async function getOnlineNow(supabase: SupabaseDB, sampleSize = 6): Promis
   const since = new Date(Date.now() - ONLINE_WINDOW_MS).toISOString()
   const { data, count } = await supabase.from('rc_players')
     .select('codename', { count: 'exact' })
+    .eq('appear_offline', false)
     .gte('last_seen_at', since)
     .order('last_seen_at', { ascending: false })
     .limit(sampleSize)

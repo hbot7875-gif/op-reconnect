@@ -5,7 +5,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0'
 import { getGameState, joinGame, startDistrict, setMode, updateCodename, adminLaunchDefuse, extendDistrictDeadline } from './lib/handlers.ts'
 import { registerAgent, loginAgent, logoutAgent, checkHandle, verifySession } from './lib/auth.ts'
-import { getAccount, updateEmail, changePassword, generateScrobblePin, getWebhookPin, setStreamSource, retireAccount } from './lib/settings.ts'
+import { getAccount, updateEmail, changePassword, generateScrobblePin, getWebhookPin, setStreamSource, setAppearOffline, retireAccount } from './lib/settings.ts'
 import { requestPasswordReset, resetPassword } from './lib/recovery.ts'
 import { handleWebScrobblerWebhook, handleListenBrainzLike } from './lib/scrobble-inbound.ts'
 import { placeItem, useItem } from './lib/items.ts'
@@ -88,6 +88,7 @@ const ROUTES: Record<string, Route> = {
   logoutAgent: { auth: 'agent', handler: (sb, p) => logoutAgent(sb, p) },
   // Settings screen
   getAccount: { auth: 'agent', handler: (sb, p) => getAccount(sb, p) },
+  setAppearOffline: { auth: 'agent', handler: (sb, p) => setAppearOffline(sb, p) },
   updateEmail: { auth: 'agent', handler: (sb, p) => updateEmail(sb, p) },
   changePassword: { auth: 'agent', handler: (sb, p) => changePassword(sb, p) },
   retireAccount: { auth: 'agent', handler: (sb, p) => retireAccount(sb, p) },

@@ -181,6 +181,20 @@ function paintSections(body, state) {
     },
   ]))
 
+  // Presence privacy hides only the player-facing green dot/count. The
+  // account keeps syncing and playing normally, and support diagnostics keep
+  // their real last-seen time so hiding never weakens account safety.
+  body.appendChild(section('Privacy', 'Choose when others can see you', [
+    {
+      icon: account.appearOffline ? '◯' : '●',
+      name: 'Online status', value: account.appearOffline ? 'Hidden' : 'Visible',
+      body: account.appearOffline
+        ? "You're playing normally, but other agents see you as offline."
+        : "Other agents can see when you're active now.",
+      onClick: () => showOverlay(presenceSheet(account, refresh)),
+    },
+  ]))
+
   // ── Community — the same purpose split used by the Arirang mission:
   // one chat stays readable for official updates, while doubts and player
   // conversation have a separate home. Real links are anchors so mobile
@@ -267,6 +281,39 @@ function fmtDate(iso) {
 }
 
 /* ── Sheets ───────────────────────────────────────────────────────────── */
+
+function presenceSheet(acct, onSaved) {
+  const hiding = !acct.appearOffline
+  const sheet = el('div', 'sheet set-sheet')
+  sheet.append(
+    el('div', 'eyebrow', 'ONLINE STATUS'),
+    el('h3', '', hiding ? 'Appear offline?' : 'Appear online again?'),
+    el('p', 'muted', hiding
+      ? "You can still stream, sync and play normally. Other agents won't see you in Active now or with an online dot in ReConnect invites."
+      : 'Other agents will be able to see when you are active in ReConnect.'),
+  )
+  const save = el('button', 'btn btn-primary', hiding ? 'Appear offline' : 'Appear online')
+  save.onclick = async () => {
+    save.disabled = true
+    save.textContent = 'SAVING…'
+    const res = await call('setAppearOffline', {
+      agentNo: getAgentNo(),
+      appearOffline: hiding,
+    })
+    save.disabled = false
+    save.textContent = hiding ? 'Appear offline' : 'Appear online'
+    if (!res.success) { toast(errText(res.error)); return }
+    acct.appearOffline = res.appearOffline
+    hideOverlay()
+    toast(res.appearOffline ? 'You now appear offline' : 'You now appear online')
+    onSaved?.()
+  }
+  sheet.appendChild(save)
+  const close = el('button', 'btn btn-ghost', 'Cancel')
+  close.onclick = hideOverlay
+  sheet.appendChild(close)
+  return sheet
+}
 
 function emailSheet(acct, onSaved) {
   const sheet = el('div', 'sheet set-sheet')
