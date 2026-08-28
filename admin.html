@@ -176,6 +176,46 @@
   .adm-roster-drawer-body { padding: 0 18px 30px; }
   .adm-roster-drawer-body .adm-agent-card { margin-top: 18px; }
 
+  /* ── ReConnect Health ── one action queue, not a wall of raw mission rows. */
+  .rh-intro { max-width: 760px; margin: 0 0 14px; }
+  .rh-summary { display: flex; gap: 7px; overflow-x: auto; padding: 2px 0 12px; scrollbar-width: thin; }
+  .rh-chip { flex: 0 0 120px; appearance: none; text-align: left; background: var(--surface-2); color: var(--muted);
+    border: 1px solid var(--border); border-radius: var(--r); padding: 9px 10px; cursor: pointer; }
+  .rh-chip.is-active { color: var(--purple-lt); border-color: var(--purple); background: var(--purple-soft); }
+  .rh-chip b { display: block; color: var(--text); font-family: var(--disp); font-size: 19px; line-height: 1; }
+  .rh-chip span { display: block; font-family: var(--mono); font-size: 9px; text-transform: uppercase; letter-spacing: .55px; margin-top: 5px; }
+  .rh-toolbar { display: grid; grid-template-columns: minmax(180px,1fr) minmax(170px,220px) auto; gap: 8px; margin-bottom: 12px; }
+  .rh-list { display: flex; flex-direction: column; gap: 10px; }
+  .rh-card { border: 1px solid var(--border); border-radius: var(--r-lg); background: rgba(255,255,255,.018); padding: 14px; }
+  .rh-card.is-urgent { border-color: rgba(229,56,79,.42); }
+  .rh-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+  .rh-head h3 { margin: 0; font-size: 16px; }
+  .rh-head p { margin: 3px 0 0; color: var(--muted); font-size: 13px; }
+  .rh-status { flex-shrink: 0; border: 1px solid var(--border); border-radius: 999px; padding: 4px 8px;
+    color: var(--purple-lt); font-family: var(--mono); font-size: 9px; text-transform: uppercase; letter-spacing: .45px; }
+  .rh-card.is-urgent .rh-status { color: var(--crimson); border-color: rgba(229,56,79,.4); }
+  .rh-meta { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 7px; margin: 11px 0; }
+  .rh-meta span { padding: 8px 9px; background: var(--surface-2); border-radius: var(--r); min-width: 0; }
+  .rh-meta small { display: block; color: var(--dim); font-family: var(--mono); font-size: 8.5px; text-transform: uppercase; letter-spacing: .5px; }
+  .rh-meta b { display: block; margin-top: 2px; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rh-agents { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+  .rh-agent { border: 1px solid var(--border); border-radius: 999px; padding: 5px 8px; font-size: 12px; color: var(--muted); }
+  .rh-agent.is-online { color: #75dcae; border-color: rgba(43,190,126,.35); }
+  .rh-action { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 11px;
+    padding-top: 11px; border-top: 1px solid var(--border); }
+  .rh-action-copy { min-width: 0; }
+  .rh-action-copy small { display: block; color: var(--dim); font-family: var(--mono); font-size: 8.5px; text-transform: uppercase; }
+  .rh-action-copy b { display: block; font-size: 13px; margin-top: 2px; }
+  .rh-roster { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 10px; }
+  .rh-roster summary { color: var(--purple-lt); cursor: pointer; font-size: 12.5px; }
+  .rh-roster-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 6px; margin-top: 8px; }
+  .rh-pick { display: flex; gap: 7px; align-items: center; min-width: 0; padding: 7px 8px; border: 1px solid var(--border);
+    border-radius: var(--r); font-size: 12px; }
+  .rh-pick span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rh-drawer-card { border: 1px solid var(--border); border-radius: var(--r); padding: 10px 11px; margin-top: 8px; }
+  .rh-drawer-card b { display: block; }
+  .rh-drawer-card span { display: block; color: var(--muted); font-size: 12px; margin-top: 3px; }
+
   .adm-field { display: block; margin-bottom: 12px; }
   .adm-field > span { display: block; font-family: var(--mono); font-size: 11px; letter-spacing: 0.8px;
     text-transform: uppercase; color: var(--dim); margin-bottom: 6px; }
@@ -345,6 +385,12 @@
     .adm-roster-row .arr-district { border-top: 1px solid var(--border); padding-top: 9px; }
     .adm-roster-row .arr-go { display: none; }
     .adm-roster-drawer-panel { border-left: 0; }
+    .rh-toolbar { grid-template-columns: 1fr auto; }
+    .rh-toolbar select { grid-column: 1 / -1; grid-row: 2; }
+    .rh-meta { grid-template-columns: 1fr 1fr; }
+    .rh-action { align-items: flex-start; flex-direction: column; }
+    .rh-action .btn { width: 100%; }
+    .rh-roster-list { grid-template-columns: 1fr; }
   }
 
   @media (max-width: 480px) {
@@ -677,13 +723,19 @@
 <div class="adm-panel" id="panel-reconnect" data-panel="reconnect" hidden>
   <section class="adm-card">
     <div class="adm-card-head">
-      <h2>Agents stuck waiting for a partner</h2>
-      <button class="btn btn-ghost" id="btnLoadReconnect" type="button">↻ Load</button>
+      <h2>ReConnect Health</h2>
+      <button class="btn btn-ghost" id="btnLoadReconnect" type="button">↻ Refresh</button>
     </div>
-    <p class="muted">Alone in an open reconnect mission with no live invite pending — nothing else in the
-      game surfaces these, so they can sit unpaired for their whole restoration window. Select two agents
-      in the same group below, then connect them directly (skips the invite/accept step, same as batch
-      auto-assign does).</p>
+    <p class="muted rh-intro">See who needs people, whose invite is getting old, inactive teams, deadlines,
+      and blocked puzzles in one place. Suggested fixes never run until you confirm them.</p>
+    <div class="rh-summary" id="reconnectSummary" aria-label="ReConnect health filters"></div>
+    <div class="rh-toolbar">
+      <input class="ob-input" id="reconnectFilter" type="search" placeholder="Search agent or district…" autocomplete="off">
+      <select class="ob-input" id="reconnectDistrictFilter" aria-label="Filter by district">
+        <option value="">All districts</option>
+      </select>
+      <span class="muted" id="reconnectCount">—</span>
+    </div>
     <div id="reconnectList"></div>
   </section>
 </div>
@@ -1366,6 +1418,35 @@ $('btnAddReconnectGoal').onclick = async () => {
 function progressBar(pct) {
   return `<div class="pbar"><div class="pfill${pct >= 100 ? ' done' : ''}" style="width:${Math.min(100, pct)}%"></div></div>`
 }
+const RECONNECT_STATUS_COPY = {
+  expired: 'Deadline passed', mission_expired: 'Mission expired', deadline_soon: 'Deadline soon',
+  puzzle_blocked: 'Puzzle blocked', cipher_blocked: 'Cipher blocked', invite_overdue: 'Invite unanswered',
+  idle_teammate: 'Inactive teammate', needs_people: 'Needs people', active: 'Team active',
+}
+const RECONNECT_ACTION_COPY = {
+  extend_or_reset: 'Review deadline or restart', open_agent_file: 'Help with this puzzle',
+  reset_cipher: 'Reset cipher attempts', replace_invite: 'Replace old invite',
+  check_teammate: 'Check inactive teammate', fill_team: 'Complete the team', monitor: 'No action needed',
+}
+function reconnectStatusCopy(value) { return RECONNECT_STATUS_COPY[value] || String(value || 'Needs attention').replaceAll('_', ' ') }
+function reconnectActionCopy(value) { return RECONNECT_ACTION_COPY[value] || String(value || 'Review').replaceAll('_', ' ') }
+function renderAgentReconnectHealth(items = [], agentNo = '') {
+  if (!items.length) return `
+    <div class="adm-agent-section">
+      <h3>ReConnect</h3>
+      <div class="rh-drawer-card"><b>✓ No active issue</b><span>This agent is not waiting, blocked, or near a ReConnect deadline.</span></div>
+    </div>`
+  return `
+    <div class="adm-agent-section">
+      <h3>ReConnect</h3>
+      ${items.map((item) => `
+        <div class="rh-drawer-card">
+          <b>${esc(item.districtName)} · ${esc(reconnectStatusCopy(item.primaryStatus))}</b>
+          <span>${esc(item.goalLabel)} · ${esc(reconnectActionCopy(item.recommendedAction))}</span>
+        </div>`).join('')}
+      <button class="btn btn-ghost" type="button" data-act="open-reconnect-health" data-agent="${esc(agentNo)}" style="margin-top:9px;">Open in ReConnect Health</button>
+    </div>`
+}
 function renderAgent(a) {
   const uplinkOk = !a.uplinkBroken
   const sourceLabel = { lb: 'ListenBrainz', direct: 'Scrobbler app (direct)', statsfm: 'stats.fm', musicat: 'musicat.fm' }[a.streamSource] || a.streamSource
@@ -1410,6 +1491,8 @@ function renderAgent(a) {
         </div>
       </div>` : ''}
 
+      ${a.joined ? renderAgentReconnectHealth(a.reconnectHealth || [], a.agentNo) : ''}
+
       <div class="adm-agent-section">
         <h3>Uplink source</h3>
         <div class="adm-agent-grid">
@@ -1451,6 +1534,16 @@ function wireAgentDangerButton(container, agent) {
     }
   }
 }
+function wireAgentReconnectButton(container, agent) {
+  const btn = container.querySelector('[data-act="open-reconnect-health"]')
+  if (!btn) return
+  btn.onclick = async () => {
+    selectTab('reconnect')
+    $('reconnectFilter').value = agent.agentNo
+    closeRosterDrawer()
+    await loadReconnectList()
+  }
+}
 $('btnLookup').onclick = async () => {
   const q = $('lkQuery').value.trim()
   const out = $('lkOut')
@@ -1463,6 +1556,7 @@ $('btnLookup').onclick = async () => {
   }
   out.innerHTML = renderAgent(res.agent)
   wireAgentDangerButton(out, res.agent)
+  wireAgentReconnectButton(out, res.agent)
   if (sessionUnauthorized) setMutationButtonsDisabled(true)
 }
 $('lkQuery').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btnLookup').click() })
@@ -1642,6 +1736,7 @@ async function openRosterAgent(agent) {
   }
   $('rosterDrawerBody').innerHTML = renderAgent(res.agent)
   wireAgentDangerButton($('rosterDrawerBody'), res.agent)
+  wireAgentReconnectButton($('rosterDrawerBody'), res.agent)
   if (sessionUnauthorized) setMutationButtonsDisabled(true)
 }
 
@@ -1858,28 +1953,23 @@ $('btnVmaNext').onclick = () => { vmaOffset += VMA_PAGE_SIZE; loadVmaPage() }
 document.querySelector('[data-tab="vma"]').addEventListener('click', () => loadVmaPage())
 
 /* ── Reconnect ── */
-// At most 2 selections at once, both from the same district+goal group —
-// picking a third or a mismatched group replaces the selection instead of
-// erroring, so the admin never has to explicitly "clear" first.
-let reconnectSelected = []
+let reconnectCases = []
+let reconnectScope = 'attention'
 
 function fmtWait(iso) {
+  if (!iso) return '—'
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000)
   return days <= 0 ? 'today' : `${days}d`
 }
 
 function fmtDeadline(iso) {
-  if (!iso) return ''
+  if (!iso) return 'Not set'
   const msLeft = new Date(iso).getTime() - Date.now()
-  if (msLeft <= 0) return ' · deadline passed'
-  const days = Math.floor(msLeft / 86400000)
-  return days <= 1 ? ' · deadline in <1d' : ` · deadline in ${days}d`
+  if (msLeft <= 0) return `Passed · ${fmtDate(iso)}`
+  const hours = Math.ceil(msLeft / 3600000)
+  return `${hours < 24 ? `${hours}h left` : `${Math.ceil(hours / 24)}d left`} · ${fmtDate(iso)}`
 }
 
-// last_seen_at is null for a real chunk of accounts — quietDays (real
-// streaming activity, computed server-side) is the more trustworthy
-// reachability signal, so it leads; last_seen_at is shown alongside as a
-// second data point, not the only one.
 function fmtLastSeen(agent) {
   const seenPart = agent.lastSeenAt
     ? `seen ${fmtWait(agent.lastSeenAt) === 'today' ? 'today' : fmtWait(agent.lastSeenAt) + ' ago'}`
@@ -1890,135 +1980,167 @@ function fmtLastSeen(agent) {
   return `${seenPart} · ${activePart}`
 }
 
-// Reachable-first: recently-streamed beats "online right now" (a stale
-// online flag from a null last_seen_at shouldn't outrank someone who
-// streamed an hour ago), then online, then who's been waiting longest —
-// same ordering principle getInviteCandidates already uses for the
-// player-facing invite list, just applied to picking a PAIR instead of
-// ranking a single list.
-function reachabilityRank(agent) {
-  return agent.quietDays * 2 - (agent.online ? 1 : 0)
+const RECONNECT_FILTERS = [
+  ['attention', 'Needs attention'], ['needs_people', 'Needs people'],
+  ['invite_overdue', 'Old invites'], ['idle_teammate', 'Inactive team'],
+  ['deadline_soon', 'Deadline soon'], ['puzzle_blocked', 'Blocked'], ['all', 'All cases'],
+]
+
+function reconnectMatchesScope(item) {
+  if (reconnectScope === 'all') return true
+  if (reconnectScope === 'attention') return !['active', 'invite_pending'].includes(item.primaryStatus)
+  return (item.flags || []).includes(reconnectScope)
 }
 
-function smartPairs(agents) {
-  const sorted = agents.slice().sort((a, b) => reachabilityRank(a) - reachabilityRank(b) || a.waitingSince.localeCompare(b.waitingSince))
-  const pairs = []
-  for (let i = 0; i + 1 < sorted.length; i += 2) pairs.push([sorted[i], sorted[i + 1]])
-  const leftover = sorted.length % 2 ? sorted[sorted.length - 1] : null
-  return { pairs, leftover }
+function reconnectCaseMatches(item) {
+  if (!reconnectMatchesScope(item)) return false
+  const district = $('reconnectDistrictFilter').value
+  if (district && item.districtId !== district) return false
+  const q = $('reconnectFilter').value.trim().toLowerCase()
+  if (!q) return true
+  const searchable = [item.districtName, item.goalLabel, item.goalId,
+    ...(item.agents || []).flatMap((a) => [a.agentNo, a.codename]),
+    ...(item.invites || []).flatMap((a) => [a.agentNo, a.codename])]
+  return searchable.some((value) => String(value || '').toLowerCase().includes(q))
 }
 
-function reconnectRow(agent) {
-  const row = document.createElement('div')
-  row.className = 'adm-row'
-  row.style.cssText = 'justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border);'
-  const isSelected = reconnectSelected.some((s) => s.agentNo === agent.agentNo)
-  row.innerHTML = `
-    <label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1;">
-      <input type="checkbox" class="reconnect-pick" ${isSelected ? 'checked' : ''}>
-      <span>${agent.online ? '🟢' : '⚪'} ${esc(agent.codename)} <span class="muted">(${esc(agent.agentNo)})</span></span>
-      <span class="muted">waiting ${fmtWait(agent.waitingSince)}${fmtDeadline(agent.deadline)} · ${fmtLastSeen(agent)}</span>
-    </label>
-  `
-  row.querySelector('.reconnect-pick').onchange = (e) => {
-    if (e.currentTarget.checked) {
-      // Drop any prior pick from a different district/goal group — a pair
-      // only ever makes sense within the same one.
-      reconnectSelected = reconnectSelected.filter((s) => s.districtId === agent.districtId && s.goalId === agent.goalId)
-      if (reconnectSelected.length >= 2) reconnectSelected.shift()
-      reconnectSelected.push(agent)
-    } else {
-      reconnectSelected = reconnectSelected.filter((s) => s.agentNo !== agent.agentNo)
-    }
-    paintReconnectList(window.__reconnectStuck || [])
-  }
-  return row
-}
-
-async function connectPair(btn, a, b) {
-  btn.disabled = true
-  const res = await call('adminPairReconnect', {
-    districtId: a.districtId, goalId: a.goalId, agentA: a.agentNo, agentB: b.agentNo,
+function paintReconnectSummary(summary = {}) {
+  const attention = reconnectCases.filter((item) => !['active', 'invite_pending'].includes(item.primaryStatus)).length
+  $('reconnectSummary').innerHTML = RECONNECT_FILTERS.map(([key, label]) => {
+    const count = key === 'attention' ? attention : key === 'all' ? reconnectCases.length : (summary[key] || 0)
+    return `<button class="rh-chip${reconnectScope === key ? ' is-active' : ''}" type="button" data-rh-scope="${key}">
+      <b>${count}</b><span>${esc(label)}</span></button>`
+  }).join('')
+  $('reconnectSummary').querySelectorAll('[data-rh-scope]').forEach((button) => {
+    button.onclick = () => { reconnectScope = button.dataset.rhScope; paintReconnectSummary(summary); paintReconnectList() }
   })
+}
+
+function populateReconnectDistricts() {
+  const current = $('reconnectDistrictFilter').value
+  const districts = [...new Map(reconnectCases.map((item) => [item.districtId, item.districtName])).entries()]
+    .sort((a, b) => a[1].localeCompare(b[1]))
+  $('reconnectDistrictFilter').innerHTML = '<option value="">All districts</option>'
+    + districts.map(([id, name]) => `<option value="${esc(id)}">${esc(name)}</option>`).join('')
+  $('reconnectDistrictFilter').value = districts.some(([id]) => id === current) ? current : ''
+}
+
+async function connectReconnectRoster(btn, item, agentNos) {
+  if (agentNos.length !== item.requiredAgents) return
+  const names = agentNos.map((agentNo) => {
+    const agent = [...(item.agents || []), ...(item.availableAgents || [])].find((a) => a.agentNo === agentNo)
+    return agent?.codename || agentNo
+  })
+  if (!confirm(`Connect this ${item.requiredAgents}-agent team in ${item.districtName}?\n\n${names.join(', ')}\n\nExisting team members will be kept.`)) return
+  btn.disabled = true
+  const original = btn.textContent
+  btn.textContent = 'Connecting…'
+  const res = await call('adminPairReconnect', { missionId: item.missionId,
+    districtId: item.districtId, goalId: item.goalId, agentNos })
   if (res?.success) {
-    reconnectSelected = []
-    loadReconnectList()
+    await loadReconnectList()
   } else {
-    btn.textContent = res?.error || 'Failed — try again'
+    btn.textContent = ({ team_protected: 'Another real team is protected', roster_size_mismatch: 'Choose the full team',
+      player_not_eligible: 'One agent is no longer eligible', already_completed: 'An agent already completed this mission' }[res?.error]
+      || res?.error || 'Failed — try again')
     btn.disabled = false
+    setTimeout(() => { btn.textContent = original }, 2600)
   }
 }
 
-function paintReconnectList(stuck) {
-  window.__reconnectStuck = stuck
+function agentPill(agent, extra = '') {
+  return `<span class="rh-agent${agent.online ? ' is-online' : ''}">${agent.online ? '●' : '○'} ${esc(agent.codename)}${extra ? ` · ${esc(extra)}` : ''}</span>`
+}
+
+function makeReconnectCard(item) {
+  const card = document.createElement('article')
+  const urgent = (item.flags || []).some((flag) => ['expired', 'deadline_soon', 'puzzle_blocked'].includes(flag))
+  card.className = `rh-card${urgent ? ' is-urgent' : ''}`
+  const joinedLabel = item.kind === 'puzzle' ? 'Solo puzzle' : `${item.joinedCount}/${item.requiredAgents} joined`
+  card.innerHTML = `
+    <div class="rh-head">
+      <div><h3>${esc(item.districtName)}</h3><p>${esc(item.goalLabel)}</p></div>
+      <span class="rh-status">${esc(reconnectStatusCopy(item.primaryStatus))}</span>
+    </div>
+    <div class="rh-meta">
+      <span><small>Team</small><b>${esc(joinedLabel)}</b></span>
+      <span><small>Waiting</small><b>${esc(fmtWait(item.waitingSince))}</b></span>
+      <span><small>District deadline</small><b>${esc(fmtDeadline(item.districtExpiresAt))}</b></span>
+    </div>
+    <div class="rh-agents">
+      ${(item.agents || []).map((a) => agentPill(a, a.quietDays > 0 ? `${a.quietDays}d quiet` : 'active')).join('')}
+      ${(item.invites || []).map((a) => agentPill(a, 'invited')).join('')}
+    </div>`
+
+  const action = document.createElement('div')
+  action.className = 'rh-action'
+  action.innerHTML = `<div class="rh-action-copy"><small>Recommended next step</small><b>${esc(item.recommendedAction)}</b></div>`
+  if (item.kind === 'puzzle') {
+    const btn = document.createElement('button')
+    btn.className = 'btn btn-ghost'; btn.type = 'button'; btn.textContent = 'Open agent file'
+    btn.onclick = () => {
+      selectTab('lookup'); $('lkQuery').value = item.agents?.[0]?.agentNo || ''; $('btnLookup').click()
+    }
+    action.appendChild(btn)
+  } else if (item.suggestedAgentNos?.length === item.requiredAgents && !(item.flags || []).includes('expired')) {
+    const btn = document.createElement('button')
+    btn.className = 'btn btn-primary adm-mutate-btn'; btn.type = 'button'
+    btn.textContent = `Complete ${item.requiredAgents}-agent team`
+    btn.onclick = () => connectReconnectRoster(btn, item, item.suggestedAgentNos)
+    action.appendChild(btn)
+  }
+  card.appendChild(action)
+
+  if (item.kind === 'mission' && !(item.flags || []).includes('expired')) {
+    const details = document.createElement('details')
+    details.className = 'rh-roster'
+    details.innerHTML = `<summary>Choose a different roster</summary><div class="rh-roster-list"></div>`
+    const roster = details.querySelector('.rh-roster-list')
+    for (const agent of item.agents || []) {
+      const label = document.createElement('label')
+      label.className = 'rh-pick'; label.innerHTML = `<input type="checkbox" checked disabled value="${esc(agent.agentNo)}"><span>${esc(agent.codename)} · already joined</span>`
+      roster.appendChild(label)
+    }
+    for (const agent of item.availableAgents || []) {
+      const label = document.createElement('label')
+      label.className = 'rh-pick'; label.innerHTML = `<input type="checkbox" value="${esc(agent.agentNo)}"><span>${agent.online ? '● ' : ''}${esc(agent.codename)} · ${agent.quietDays ? `${agent.quietDays}d quiet` : 'active'}</span>`
+      roster.appendChild(label)
+    }
+    const manualBtn = document.createElement('button')
+    manualBtn.className = 'btn btn-ghost adm-mutate-btn'; manualBtn.type = 'button'; manualBtn.style.marginTop = '8px'
+    const updateManual = () => {
+      const selected = [...details.querySelectorAll('input:checked')].map((input) => input.value)
+      manualBtn.disabled = selected.length !== item.requiredAgents || sessionUnauthorized
+      manualBtn.textContent = selected.length === item.requiredAgents
+        ? `Connect selected ${item.requiredAgents}` : `Choose ${item.requiredAgents - selected.length} more`
+    }
+    roster.querySelectorAll('input:not(:disabled)').forEach((input) => input.onchange = () => {
+      const checked = [...roster.querySelectorAll('input:checked')]
+      if (checked.length > item.requiredAgents) input.checked = false
+      updateManual()
+    })
+    manualBtn.onclick = () => connectReconnectRoster(manualBtn, item,
+      [...details.querySelectorAll('input:checked')].map((input) => input.value))
+    details.appendChild(manualBtn)
+    updateManual()
+    card.appendChild(details)
+  }
+  return card
+}
+
+function paintReconnectList() {
   const list = $('reconnectList')
   list.innerHTML = ''
-  if (!stuck.length) { list.innerHTML = '<div class="adm-empty">Nobody stuck right now.</div>'; return }
-
-  const groups = new Map()
-  for (const a of stuck) {
-    const key = `${a.districtId}::${a.goalId}`
-    if (!groups.has(key)) groups.set(key, [])
-    groups.get(key).push(a)
+  const cases = reconnectCases.filter(reconnectCaseMatches)
+  $('reconnectCount').textContent = `Showing ${cases.length} of ${reconnectCases.length}`
+  if (!cases.length) {
+    list.innerHTML = '<div class="adm-empty">No ReConnect cases match this view.</div>'
+    return
   }
-
-  for (const [key, agents] of groups) {
-    const card = document.createElement('div')
-    card.className = 'adm-card'
-    card.style.marginTop = '10px'
-    const head = document.createElement('div')
-    head.className = 'adm-card-head'
-    head.innerHTML = `<h2>${esc(agents[0].districtName)}</h2><span class="muted">${agents.length} waiting</span>`
-    card.appendChild(head)
-
-    // Smart suggestions first — the most reachable agents paired together,
-    // ready to connect with one click. Manual override list stays below for
-    // when the admin wants a different combination.
-    const { pairs, leftover } = smartPairs(agents)
-    if (pairs.length) {
-      const suggestBox = document.createElement('div')
-      suggestBox.innerHTML = '<div class="muted" style="margin:8px 0 4px;">Suggested (most reachable paired first)</div>'
-      for (const [a, b] of pairs) {
-        const sRow = document.createElement('div')
-        sRow.className = 'adm-row'
-        sRow.style.cssText = 'justify-content:space-between; align-items:center; margin-bottom:6px;'
-        const label = document.createElement('span')
-        label.innerHTML = `${a.online ? '🟢' : '⚪'} ${esc(a.codename)} <span class="muted">(${esc(a.agentNo)})</span> ↔ ${b.online ? '🟢' : '⚪'} ${esc(b.codename)} <span class="muted">(${esc(b.agentNo)})</span>`
-        const btn = document.createElement('button')
-        btn.className = 'btn btn-primary adm-mutate-btn'
-        btn.type = 'button'
-        btn.textContent = 'Connect'
-        btn.onclick = () => connectPair(btn, a, b)
-        sRow.append(label, btn)
-        suggestBox.appendChild(sRow)
-      }
-      if (leftover) {
-        const oddOut = document.createElement('div')
-        oddOut.className = 'muted'
-        oddOut.textContent = `${leftover.codename} (${leftover.agentNo}) has no match yet — odd one out this round.`
-        suggestBox.appendChild(oddOut)
-      }
-      card.appendChild(suggestBox)
-      card.appendChild(document.createElement('hr'))
-    }
-
-    for (const a of agents) card.appendChild(reconnectRow(a))
-
-    const picked = reconnectSelected.filter((s) => `${s.districtId}::${s.goalId}` === key)
-    if (picked.length === 2) {
-      const connectRow = document.createElement('div')
-      connectRow.className = 'adm-row'
-      connectRow.style.marginTop = '10px'
-      const btn = document.createElement('button')
-      btn.className = 'btn btn-primary adm-mutate-btn'
-      btn.type = 'button'
-      btn.textContent = `Connect ${picked[0].codename} ↔ ${picked[1].codename} (manual pick)`
-      btn.onclick = () => connectPair(btn, picked[0], picked[1])
-      connectRow.appendChild(btn)
-      card.appendChild(connectRow)
-    }
-    list.appendChild(card)
-  }
+  const wrap = document.createElement('div'); wrap.className = 'rh-list'
+  for (const item of cases) wrap.appendChild(makeReconnectCard(item))
+  list.appendChild(wrap)
+  if (sessionUnauthorized) setMutationButtonsDisabled(true)
 }
 
 async function loadReconnectList() {
@@ -2026,9 +2148,14 @@ async function loadReconnectList() {
   list.innerHTML = `<div class="adm-empty"><span class="adm-spin"></span> Loading…</div>`
   const res = await call('adminListStuckReconnects')
   if (!res?.success) { list.innerHTML = `<div class="adm-empty">${esc(res?.error || 'Failed to load')}</div>`; return }
-  paintReconnectList(res.stuck)
+  reconnectCases = res.cases || []
+  populateReconnectDistricts()
+  paintReconnectSummary(res.summary || {})
+  paintReconnectList()
 }
 $('btnLoadReconnect').onclick = () => loadReconnectList()
+$('reconnectFilter').oninput = () => paintReconnectList()
+$('reconnectDistrictFilter').onchange = () => paintReconnectList()
 document.querySelector('[data-tab="reconnect"]').addEventListener('click', () => loadReconnectList())
 
 tryStoredKey()

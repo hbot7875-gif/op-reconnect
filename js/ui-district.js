@@ -9,15 +9,7 @@ import { call } from './api.js'
 import { getAgentNo } from './session.js'
 import { openProgressSheet } from './ui-hud.js'
 import { trackEngagement } from './engagement.js'
-
-/** Overall restoration fraction (0..1) driving the scene's lights. */
-export function districtFraction(d) {
-  if (!d) return 0
-  let got = 0, need = 0
-  for (const g of d.trackGoals || []) { got += Math.min(g.progress, g.target); need += g.target }
-  for (const a of d.albums || []) { got += Math.min(a.passesDone, a.target); need += a.target }
-  return need === 0 ? 0 : Math.max(0, Math.min(1, got / need))
-}
+export { districtFraction } from './district-progress.js'
 
 /** One "stream this, n of m times" row — the whole game's core loop in a
  *  single component. Flat and identical for tracks and album passes, because

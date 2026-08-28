@@ -33,6 +33,9 @@ export async function getPuzzleStatus(supabase: SupabaseDB, agentNo: string, dis
   return {
     variant: frozenReconnect.variant,
     done: !!row.solved,
+    // Puzzle ReConnect goals are one completion step in the district meter;
+    // no prompt/answer detail is needed to keep 100% reserved for a solve.
+    restorationProgress: { progress: row.solved ? 1 : 0, target: 1 },
     attempts: row.attempts,
     attemptsLeft: Math.max(0, MAX_ATTEMPTS - row.attempts),
     prompt: frozenReconnect.config.prompt as string,

@@ -15,7 +15,7 @@
 
 import { call } from './api.js'
 import { el, esc, toast, setState, showOverlay, hideOverlay } from './state.js'
-import { getScreen, goWorld, goResources, goSettings, goCandyStar, goRanking } from './router.js'
+import { getScreen, goWorld, goResources, goSettings, goCandyStar, goRanking, goDistrict } from './router.js'
 import { getAgentNo } from './session.js'
 import { earnedBadgeCount, equippedBadge } from './badges.js'
 import { openMoonStation } from './settings-streams.js'
@@ -64,6 +64,35 @@ function countedTotal(state) {
   const t = (d.trackGoals || []).reduce((s, g) => s + Math.min(g.progress, g.target), 0)
   const a = (d.albums || []).reduce((s, x) => s + Math.min(x.passesDone, x.target), 0)
   return t + a
+}
+
+function reconnectHudStatus(state) {
+  const district = state?.activeDistrict
+  const reconnect = district?.reconnect
+  if (!district || !reconnect || reconnect.done) return null
+  const mission = reconnect.mission
+  const availableAlert = (state.reconnectAlerts || []).some((alert) => alert.districtId === district.id)
+  const districtHours = district.expiresAt ? (new Date(district.expiresAt).getTime() - Date.now()) / 3600000 : Infinity
+  if (districtHours > 0 && districtHours <= 24) return { label: 'District deadline is today', urgent: true }
+  if (!mission) return { label: availableAlert ? 'Partner available' : 'Find your team', urgent: availableAlert }
+
+  const joined = (mission.participants || []).filter((p) => p.status === 'joined' && !p.leftDistrict)
+  const pending = (mission.participants || []).filter((p) => p.status === 'invited' && !p.inviteExpired)
+  const need = Math.max(0, Number(mission.requiredAgents || 0) - joined.length)
+  if (need > 0) {
+    if (availableAlert) return { label: 'Partner available', urgent: true }
+    if (pending.length) return { label: `${pending.length} invite${pending.length === 1 ? '' : 's'} pending` }
+    return { label: `Need ${need} more agent${need === 1 ? '' : 's'}`, urgent: true }
+  }
+  if (joined.some((participant) => participant.idle)) return { label: 'A teammate has gone quiet', urgent: true }
+  const missionHours = mission.expiresAt ? (new Date(mission.expiresAt).getTime() - Date.now()) / 3600000 : Infinity
+  if (missionHours > 0 && missionHours <= 24) return { label: 'Mission ends today', urgent: true }
+  if (mission.cipher) return { label: `Cipher ${mission.cipher.index + 1}/${mission.cipher.total}` }
+  if (mission.sharedTrack) {
+    const left = Math.max(0, mission.sharedTrack.target - mission.sharedTrack.progress)
+    return { label: `${left} shared stream${left === 1 ? '' : 's'} left` }
+  }
+  return { label: 'Team ready · stream now' }
 }
 
 async function syncNow(state) {
@@ -146,6 +175,9 @@ export function renderHud(container, state) {
   const crestRare = collectionBadge?.rarity === 'rare' ? ' is-rare' : ''
 
   const invites = state.invites || []
+  const reconnectAlerts = state.reconnectAlerts || []
+  const signalCount = invites.length + reconnectAlerts.length
+  const reconnectStatus = reconnectHudStatus(state)
   const codenameHidden = isCodenameHidden()
   const displayCode = codenameHidden ? 'Agent' : esc(p.codename)
 
@@ -167,8 +199,8 @@ export function renderHud(container, state) {
         <div class="hud-streak${streakCold}" title="${p.streak.current} days in a row">${streakLabel}</div>
         <button class="hud-sync" id="syncBtn" type="button" title="Sync streams now" aria-label="Sync streams now">🔄</button>
         <button class="hud-bell" id="bellBtn" type="button" title="Invites"
-          aria-label="${invites.length ? `${invites.length} pending invite${invites.length === 1 ? '' : 's'}` : 'No pending invites'}">
-          🔔${invites.length ? `<span class="hud-bell-count">${invites.length}</span>` : ''}
+          aria-label="${signalCount ? `${signalCount} ReConnect signal${signalCount === 1 ? '' : 's'}` : 'No ReConnect signals'}">
+          🔔${signalCount ? `<span class="hud-bell-count">${signalCount}</span>` : ''}
         </button>
       </div>
     </div>
@@ -177,6 +209,7 @@ export function renderHud(container, state) {
       <div class="xp-bar" role="progressbar" aria-label="Level ${lvl.level} XP progress" aria-valuemin="0" aria-valuemax="${lvl.xpForNextLevel}" aria-valuenow="${lvl.xpIntoLevel}"><div class="xp-fill" style="width:${pct}%"></div></div>
       ${boost ? `<span class="hud-boost">${boost.multiplier}&times; BOOST &middot; ${boost.minsLeft}m</span>` : ''}
     </div>
+    ${reconnectStatus ? `<button class="hud-reconnect-status${reconnectStatus.urgent ? ' is-urgent' : ''}" id="hudReconnectStatus" type="button"><span>🤝 ReConnect</span><b>${esc(reconnectStatus.label)}</b><i>›</i></button>` : ''}
   `
   const levelPill = container.querySelector('#levelPill')
   levelPill.onclick = () => showOverlay(progressSheet(state))
@@ -189,6 +222,11 @@ export function renderHud(container, state) {
     renderHud(container, state)
   }
   container.querySelector('#bellBtn').onclick = () => showOverlay(invitesSheet(state))
+  const reconnectButton = container.querySelector('#hudReconnectStatus')
+  if (reconnectButton) reconnectButton.onclick = () => {
+    const d = state.activeDistrict
+    goDistrict(d.wardId, d.id)
+  }
   container.querySelector('#syncBtn').onclick = () => syncNow(state)
   paintSyncButton()
   wireHudScrollCollapse()
@@ -260,11 +298,39 @@ export function openProgressSheet(state) {
  *  that's exactly the kind of derived state not worth hand-patching. */
 function invitesSheet(state) {
   const sheet = el('div', 'sheet')
-  sheet.appendChild(el('div', 'eyebrow', '🔔 INVITES'))
+  sheet.appendChild(el('div', 'eyebrow', '🔔 RECONNECT SIGNALS'))
   const invites = state.invites || []
+  const alerts = state.reconnectAlerts || []
 
-  if (!invites.length) {
-    sheet.appendChild(el('p', 'muted', "No pending invites. If another agent invites you to help restore their district, it shows up here."))
+  if (!invites.length && !alerts.length) {
+    sheet.appendChild(el('p', 'muted', "No pending invites or partner alerts. If another agent becomes available, it can show up here."))
+  }
+
+  for (const alert of alerts) {
+    const row = el('div', 'bd-block reconnect-alert-block')
+    row.innerHTML = `
+      <div class="bd-block-head">${esc(alert.districtName)}</div>
+      <p class="muted invite-body">${alert.available} compatible agent${alert.available === 1 ? ' is' : 's are'} free now.</p>
+    `
+    const actions = el('div', 'invite-actions')
+    const open = el('button', 'btn btn-primary', 'Open district')
+    open.onclick = () => {
+      const district = (state.map?.districts || []).find((d) => d.id === alert.districtId)
+      hideOverlay()
+      if (district) goDistrict(district.wardId, district.id)
+    }
+    const dismiss = el('button', 'btn btn-ghost', 'Stop alert')
+    dismiss.onclick = async () => {
+      dismiss.disabled = true
+      const res = await call('setReconnectMatchAlert', { agentNo: getAgentNo(), districtId: alert.districtId, active: false })
+      if (!res.success) { dismiss.disabled = false; toast("Couldn't update that alert"); return }
+      state.reconnectAlerts = alerts.filter((item) => item.districtId !== alert.districtId)
+      hideOverlay()
+      toast('Partner alert turned off')
+    }
+    actions.append(open, dismiss)
+    row.appendChild(actions)
+    sheet.appendChild(row)
   }
 
   for (const inv of invites) {

@@ -30,7 +30,7 @@ import {
   getReconnectMission, getInviteCandidates, openReconnectMission,
   inviteReconnectMission, removeReconnectParticipant, respondReconnectInvite, adminAutoAssignMissions,
   getMyInvites, sendReconnectMessage, submitReconnectMissionCipherAnswer,
-  adminListStuckReconnects, adminPairReconnect,
+  adminListStuckReconnects, adminPairReconnect, setReconnectMatchAlert,
 } from './lib/reconnect-missions.ts'
 import { submitReconnectPuzzleAnswer } from './lib/reconnect-puzzle.ts'
 import { getLeaderboard } from './lib/leaderboard.ts'
@@ -134,6 +134,7 @@ const ROUTES: Record<string, Route> = {
   // (rc_player_districts), never anyone else's.
   getReconnectMission: { auth: 'agent', handler: async (sb, p) => getReconnectMission(sb, await loadContent(sb), p) },
   getInviteCandidates: { auth: 'agent', handler: async (sb, p) => getInviteCandidates(sb, await loadContent(sb), p) },
+  setReconnectMatchAlert: { auth: 'agent', handler: async (sb, p) => setReconnectMatchAlert(sb, await loadContent(sb), p) },
   openReconnectMission: { auth: 'agent', handler: async (sb, p) => openReconnectMission(sb, await loadContent(sb), p) },
   inviteReconnectMission: { auth: 'agent', handler: async (sb, p) => inviteReconnectMission(sb, await loadContent(sb), p) },
   removeReconnectParticipant: { auth: 'agent', handler: async (sb, p) => removeReconnectParticipant(sb, await loadContent(sb), p) },

@@ -23,6 +23,7 @@
 import { el, esc, showOverlay, hideOverlay, unlockAfter } from './state.js'
 import { goWard, goDistrict, goCandyStar } from './router.js'
 import { districtFraction } from './ui-district.js'
+import { districtGoalsLeft, districtPercent } from './district-progress.js'
 import { renderWardTiles, glanceStrip, wardDisplayName, districtDisplayName, HOME_BASE_WARD } from './ward-tiles.js'
 import { renderCityMap } from './city-map.js'
 import { districtIcon } from './landmarks.js'
@@ -232,12 +233,30 @@ function recoverySignal(state) {
   // this is what actually answers "is anyone else here right now."
   const n = state.onlineNow?.count || 0
   if (n > 0) {
-    const names = state.onlineNow.codenames || []
-    const shown = names.slice(0, 3).map(esc).join(', ')
-    const more = names.length > 3 ? ` +${n - 3} more` : ''
-    const line = el('div', 'active-now')
+    const agents = state.onlineNow.agents || (state.onlineNow.codenames || []).map((codename) => ({ codename }))
+    const shown = agents.slice(0, 2).map((agent) =>
+      `${esc(agent.codename)}${agent.districtName ? ` · ${esc(agent.districtName)}` : ''}`).join(' • ')
+    const more = n > 2 ? ` +${n - 2}` : ''
+    const line = el('button', 'active-now is-button')
+    line.type = 'button'
     line.innerHTML = `<i class="active-now-dot"></i>${n} agent${n === 1 ? '' : 's'} active now`
       + (shown ? `<span class="active-now-names">${shown}${more}</span>` : '')
+    line.onclick = () => {
+      const sheet = el('div', 'sheet active-area-sheet')
+      sheet.append(el('div', 'eyebrow', '● ACTIVE NOW'), el('h3', '', 'Where signals are gathering'))
+      sheet.appendChild(el('p', 'muted', 'This shows the district each visible agent is restoring—not their exact screen or activity.'))
+      for (const agent of agents) {
+        sheet.appendChild(el('div', 'active-area-row', `
+          <span><i class="active-now-dot"></i><b>${esc(agent.codename)}</b></span>
+          <span class="active-area-place"><b>${esc(agent.districtName || 'Between districts')}</b>${agent.wardName ? `<small>${esc(agent.wardName)}</small>` : ''}</span>
+        `))
+      }
+      if (n > agents.length) sheet.appendChild(el('div', 'dim', `+${n - agents.length} more active agent${n - agents.length === 1 ? '' : 's'}`))
+      const close = el('button', 'btn btn-ghost', 'Close')
+      close.onclick = hideOverlay
+      sheet.appendChild(close)
+      showOverlay(sheet)
+    }
     wrap.appendChild(line)
   }
   return wrap
@@ -342,7 +361,7 @@ const PEEK_STATE = {
 function peekSheet(d, ward, state) {
   const live = state.activeDistrict?.id === d.id ? state.activeDistrict : null
   const pct = d.status === 'restored' || d.status === 'centerpiece_lit' ? 100
-    : d.status === 'active' ? Math.round(districtFraction(live) * 100)
+    : d.status === 'active' ? districtPercent(live)
     : 0
 
   const sheet = el('div', 'sheet peek')
@@ -592,13 +611,6 @@ function redZoneCard(state) {
 
 /* ── The one thing the player is here to do ─────────────────────────────── */
 
-function goalsLeft(d) {
-  let left = 0
-  for (const g of d.trackGoals || []) if (!g.done) left++
-  for (const a of d.albums || []) if (!a.done) left++
-  return left
-}
-
 function opCard(state) {
   const wards = state.map?.wards || []
   const districts = state.map?.districts || []
@@ -608,8 +620,8 @@ function opCard(state) {
   if (active) {
     const ward = wards.find((w) => w.id === active.wardId)
     const live = state.activeDistrict?.id === active.id ? state.activeDistrict : null
-    const pct = Math.round((live ? districtFraction(live) : 0) * 100)
-    const left = live ? goalsLeft(live) : null
+    const pct = live ? districtPercent(live) : 0
+    const left = live ? districtGoalsLeft(live) : null
 
     // Home base's single district carries the same raw name as the ward
     // around it, so the two lines below would render "Relay Zero" twice —

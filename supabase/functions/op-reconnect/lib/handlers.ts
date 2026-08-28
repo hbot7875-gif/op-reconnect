@@ -11,7 +11,7 @@ import { resolveReconnectStatus } from './reconnect-goal.ts'
 import { todayKst, nextKstMidnightUtc, kstDateOf } from './kst.ts'
 import { getBombView, launchDefuse } from './bomb.ts'
 import { getEraTimeline } from './era-timeline.ts'
-import { getMyInvites, countWaitingAgents } from './reconnect-missions.ts'
+import { getMyInvites, countWaitingAgents, getReconnectMatchAlerts } from './reconnect-missions.ts'
 import { creditChargeCells, STREAMS_PER_CHARGE_CELL } from './charge-economy.ts'
 import { getAgentChargeView } from './agent-charge.ts'
 import { levelFor, applyLevelUpIfNeeded, nextLevelRewards } from './leveling.ts'
@@ -127,6 +127,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
   // recompute every poll (unlike eraTimeline's network-wide scan, this is
   // just this one agent's own rc_reconnect_participants rows).
   const { invites } = await getMyInvites(supabase, content, player.agent_no)
+  const reconnectAlerts = await getReconnectMatchAlerts(supabase, content, player.agent_no)
   const { data: pdRows } = await supabase.from('rc_player_districts').select('*')
     .eq('agent_no', player.agent_no).order('activated_at')
   const restored = new Set<string>((pdRows || []).filter((r: any) => r.status === 'restored').map((r: any) => r.district_id))
@@ -432,7 +433,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
   // rather than a scrolling log of past moments — the two are meant to be
   // read together: "12 online now" says the city is occupied at THIS
   // instant, the ticker says what those agents have been doing recently.
-  const onlineNow = await getOnlineNow(supabase)
+  const onlineNow = await getOnlineNow(supabase, content)
   // (13) Resolves real Badge Collection artwork server-side so the client
   // doesn't have to guess via its own hardcoded badges.js catalog — that
   // catalog still owns legacy ids (streak/level/xp/districts), which
@@ -480,6 +481,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     agentCharge,
     eraTimeline,
     invites,
+    reconnectAlerts,
     broadcasts,
     vma: await getVmaBanner(supabase, content, player.agent_no),
     cityFeed,

@@ -36,10 +36,15 @@
 import type { SupabaseDB, GameContent } from './config.ts'
 import { restorationDays } from './config.ts'
 import type { FrozenReconnectGoal } from './districts.ts'
+import { districtDeadline, DEADLINE_EXTENSION_DAYS } from './districts.ts'
 import { kstDateOf, todayKst, addDaysStr } from './kst.ts'
 import { ONLINE_WINDOW_MS } from './feed.ts'
 import { normKeyFull } from './text.ts'
 import { logEngagementEvent } from './engagement.ts'
+import {
+  reconnectHealthFlags, reconnectPrimaryStatus, reconnectRecommendedAction,
+  suggestedReconnectRoster,
+} from './reconnect-health.js'
 
 /** Wrong-guess budget for a mission's cipher phase (see submitReconnect
  *  MissionCipherAnswer) — one shared pool per cipher, not per agent, so the
@@ -96,7 +101,8 @@ async function myActivePd(supabase: SupabaseDB, agentNo: string, districtId: str
   const { data } = await supabase.from('rc_player_districts')
     // activated_at drives the restoration deadline, which decides how long
     // this agent can afford to wait on a quiet teammate — see idleThresholdFor.
-    .select('status, goals, activated_at').eq('agent_no', agentNo).eq('district_id', districtId).maybeSingle()
+    .select('status, goals, activated_at, deadline_extended, deadline_extension_hours')
+    .eq('agent_no', agentNo).eq('district_id', districtId).maybeSingle()
   return data || null
 }
 
@@ -108,9 +114,11 @@ async function myActivePd(supabase: SupabaseDB, agentNo: string, districtId: str
  *
  *  It never reaches zero: a teammate who has streamed today is protected no
  *  matter how close the deadline is, because they are helping. */
-function idleThresholdFor(pd: { activated_at?: string } | null, restoreDays: number): number {
+function idleThresholdFor(pd: { activated_at?: string; deadline_extended?: boolean; deadline_extension_hours?: number } | null, restoreDays: number): number {
   if (!pd?.activated_at) return IDLE_DAYS
-  const msLeft = new Date(pd.activated_at).getTime() + restoreDays * 86400000 - Date.now()
+  const extraDays = (pd.deadline_extended ? DEADLINE_EXTENSION_DAYS : 0)
+    + Math.max(0, Number(pd.deadline_extension_hours) || 0) / 24
+  const msLeft = districtDeadline(pd.activated_at, restoreDays, extraDays).msLeft
   return msLeft <= 86400000 ? 1 : IDLE_DAYS
 }
 
@@ -560,8 +568,19 @@ export async function getMissionStatus(supabase: SupabaseDB, agentNo: string, di
     || await findMyMission(supabase, agentNo, districtId, { goalId: frozenReconnect.id })
   if (mission) mission = await refreshMission(supabase, mission, variant, frozenReconnect.config)
   const participants = await participantsFor(supabase, mission)
+  const done = mission?.status === 'complete'
+  const sharedTarget = Number(frozenReconnect.config.sharedTrack?.target) || 0
+  const sharedProgress = Number(mission?.sharedTrackProgress?.progress) || 0
   return {
-    variant, done: mission?.status === 'complete',
+    variant, done,
+    // The district's main restoration meter used to omit ReConnect entirely,
+    // so it could announce 100% with pooled streams still outstanding. Keep
+    // this small, answer-free summary beside the live mission data so every
+    // client surface can measure the same blocker. Non-numeric invite/cipher
+    // work is a single 0/1 completion unit.
+    restorationProgress: sharedTarget > 0
+      ? { progress: done ? sharedTarget : Math.min(sharedProgress, sharedTarget), target: sharedTarget }
+      : { progress: done ? 1 : 0, target: 1 },
     mission: mission ? await shape(supabase, mission, participants, agentNo, IDLE_DAYS, frozenReconnect.config.ciphers) : null,
   }
 }
@@ -788,9 +807,12 @@ export async function getInviteCandidates(supabase: SupabaseDB, content: GameCon
   if (!districtId) return { success: false, error: 'district_required' }
 
   const pd = await myActivePd(supabase, agentNo, districtId)
-  if (pd?.status !== 'active') return { success: true, candidates: [] }
+  if (pd?.status !== 'active') return { success: true, candidates: [], emptyReason: 'district_not_active', alertActive: false }
   const reconnect = myReconnectGoal(pd)
-  if (!reconnect) return { success: true, candidates: [] }
+  if (!reconnect) return { success: true, candidates: [], emptyReason: 'no_team_goal', alertActive: false }
+  const { data: alertRow } = await supabase.from('rc_reconnect_match_alerts')
+    .select('active').eq('agent_no', agentNo).eq('district_id', districtId).eq('goal_id', reconnect.id).maybeSingle()
+  const alertActive = !!alertRow?.active
 
   // Nearly every agent's very first district — auto-activated at join (see
   // handlers.ts's joinGame) — so almost the whole population passes through
@@ -811,13 +833,19 @@ export async function getInviteCandidates(supabase: SupabaseDB, content: GameCon
   const eligible = (activeRows || [])
     .filter((r: any) => r.agent_no !== agentNo && r.goals?.reconnect?.id === reconnect.id)
     .map((r: any) => r.agent_no as string)
-  if (!eligible.length) return { success: true, candidates: [], stillOnHomeBase }
+  if (!eligible.length) return {
+    success: true, candidates: [], stillOnHomeBase, alertActive,
+    emptyReason: stillOnHomeBase ? 'agents_still_on_home_base' : 'no_matching_agents',
+  }
 
   const rosters = await openMissionRosters(supabase, districtId, reconnect.id)
   const done = await agentsDoneWithGoal(supabase, districtId, reconnect.id)
   const stillOn = new Set<string>((activeRows || []).map((r: any) => r.agent_no as string))
   const free = freeAgentsWithWait(rosters, eligible, done, stillOn)
-  if (!free.length) return { success: true, candidates: [], stillOnHomeBase }
+  if (!free.length) return {
+    success: true, candidates: [], stillOnHomeBase, alertActive,
+    emptyReason: eligible.every((candidate: string) => done.has(candidate)) ? 'everyone_completed' : 'everyone_busy',
+  }
 
   const names = await codenameMap(supabase, free.map((f) => f.agentNo))
   // Who's actually online right now (same last_seen_at cutoff "N agents
@@ -844,7 +872,42 @@ export async function getInviteCandidates(supabase: SupabaseDB, content: GameCon
       if (b.waitingSince) return 1
       return a.codename.localeCompare(b.codename)
     })
-  return { success: true, candidates, stillOnHomeBase }
+  return { success: true, candidates, stillOnHomeBase, alertActive, emptyReason: null }
+}
+
+/** Opt-in only: remember that this agent wants a bell alert when someone
+ *  compatible becomes free. This never auto-pairs or exposes them to another
+ *  player; it only makes their existing HUD poll say "someone is available". */
+export async function setReconnectMatchAlert(supabase: SupabaseDB, content: GameContent, params: any) {
+  const agentNo = String(params.agentNo || '').trim().toUpperCase()
+  const districtId = String(params.districtId || '')
+  const active = params.active !== false
+  const pd = await myActivePd(supabase, agentNo, districtId)
+  const reconnect = myReconnectGoal(pd)
+  if (pd?.status !== 'active' || !reconnect) return { success: false, error: 'not_available' }
+
+  const { error } = await supabase.from('rc_reconnect_match_alerts').upsert({
+    agent_no: agentNo, district_id: districtId, goal_id: reconnect.id,
+    active, updated_at: new Date().toISOString(),
+  }, { onConflict: 'agent_no,district_id,goal_id' })
+  return error ? { success: false, error: error.message } : { success: true, active }
+}
+
+/** Alerts that have become actionable since the last normal game poll. */
+export async function getReconnectMatchAlerts(supabase: SupabaseDB, content: GameContent, agentNo: string) {
+  const { data: rows } = await supabase.from('rc_reconnect_match_alerts')
+    .select('district_id, goal_id').eq('agent_no', agentNo).eq('active', true)
+  const alerts: any[] = []
+  for (const row of rows || []) {
+    const result = await getInviteCandidates(supabase, content, { agentNo, districtId: row.district_id })
+    if (!result?.candidates?.length) continue
+    alerts.push({
+      districtId: row.district_id,
+      districtName: content.districts.find((d: any) => d.id === row.district_id)?.name || row.district_id,
+      available: result.candidates.length,
+    })
+  }
+  return alerts
 }
 
 /** Opens a fresh mission for the caller's own frozen reconnect goal and
@@ -948,6 +1011,8 @@ export async function inviteReconnectMission(supabase: SupabaseDB, content: unkn
   // agent-numbers-stay-server-side rule as everywhere else in this file,
   // and a friendlier confirmation ("Invited Euphoria") than an echo.
   const { data: inviteePlayer } = await supabase.from('rc_players').select('codename').eq('agent_no', inviteeAgentNo).maybeSingle()
+  await supabase.from('rc_reconnect_match_alerts').update({ active: false, updated_at: new Date().toISOString() })
+    .eq('agent_no', agentNo).eq('district_id', districtId).eq('goal_id', reconnect.id)
   await logEngagementEvent(supabase, { agentNo, eventType: 'invite_sent', districtId })
   return { success: true, inviteeCodename: inviteePlayer?.codename || inviteeAgentNo }
 }
@@ -1167,6 +1232,8 @@ export async function respondReconnectInvite(supabase: SupabaseDB, content: unkn
   const result = !rpcError && Array.isArray(rpcData) ? rpcData[0] : null
   if (rpcError || !result?.joined) return { success: false, error: result?.error || rpcError?.message || 'join_failed' }
   await foldAwayDanglingMissions(supabase, agentNo, mission.id, mission.goal_id)
+  await supabase.from('rc_reconnect_match_alerts').update({ active: false, updated_at: new Date().toISOString() })
+    .eq('agent_no', agentNo).eq('district_id', districtId)
   await refreshMission(supabase, mission, variant, goal?.config)
   await logEngagementEvent(supabase, { agentNo, eventType: 'invite_accepted', districtId })
   return { success: true, joined: true }
@@ -1334,147 +1401,220 @@ export async function adminAutoAssignMissions(supabase: SupabaseDB, params: any)
   return { success: true, missionsCreated: created.length, agentsAssigned: groups.length * requiredAgents, agentsLeftOver: leftover }
 }
 
-/** Admin: every agent across every district currently stuck alone in an open
- *  'connect' reconnect mission — no live pending invite, not already done via
- *  a completed mission elsewhere, and still actively restoring that district.
- *  Nothing else surfaces this: an open mission never expires just because
- *  nobody's watching it (see INVITE_TTL_MS's own doc comment for why), so an
- *  agent who opened one and never got a partner can sit invisible for the
- *  district's entire restoration window with no signal anywhere that they
- *  need help. Built for the admin panel's Reconnect tab so a human can see
- *  who's actually waiting and pair specific people, not just run a random
- *  batch shuffle (see adminAutoAssignMissions above for that alternative). */
-export async function adminListStuckReconnects(supabase: SupabaseDB, content: GameContent) {
-  const { data: openMissions } = await supabase.from('rc_reconnect_missions')
-    .select('id, district_id, goal_id').eq('status', 'open')
-  if (!openMissions?.length) return { success: true, stuck: [] }
+function playerDistrictDeadline(pd: any, restoreDays: number) {
+  if (!pd?.activated_at) return null
+  const extraDays = (pd.deadline_extended ? DEADLINE_EXTENSION_DAYS : 0)
+    + Math.max(0, Number(pd.deadline_extension_hours) || 0) / 24
+  return districtDeadline(pd.activated_at, restoreDays, extraDays)
+}
 
-  const missionIds = openMissions.map((m: any) => m.id)
-  const { data: allParticipants } = await supabase.from('rc_reconnect_participants')
-    .select('mission_id, agent_no, status, joined_at').in('mission_id', missionIds)
+/** Admin's complete ReConnect health picture: incomplete co-op rosters,
+ * unanswered invites, idle teammates, deadlines, active healthy teams, and
+ * solo puzzles that have exhausted their attempts. Unlike the old endpoint,
+ * a 2-of-3 or 4-of-5 team remains visible until it actually completes. */
+export async function adminListStuckReconnects(supabase: SupabaseDB, content: GameContent) {
+  const [{ data: openMissions }, { data: activeDistricts }] = await Promise.all([
+    supabase.from('rc_reconnect_missions')
+      .select('id, district_id, goal_id, required_agents, created_at, expires_at, phase, cipher_index, cipher_attempts_left')
+      .eq('status', 'open'),
+    supabase.from('rc_player_districts')
+      .select('agent_no, district_id, status, goals, activated_at, deadline_extended, deadline_extension_hours')
+      .eq('status', 'active'),
+  ])
+  const missions = openMissions || []
+  const missionIds = missions.map((m: any) => m.id)
+  const { data: participantRows } = missionIds.length
+    ? await supabase.from('rc_reconnect_participants')
+      .select('mission_id, agent_no, status, joined_at, streamed_at').in('mission_id', missionIds)
+    : { data: [] }
+  const participants = participantRows || []
   const byMission = new Map<string, any[]>()
-  for (const p of allParticipants || []) {
+  for (const p of participants) {
     if (!byMission.has(p.mission_id)) byMission.set(p.mission_id, [])
     byMission.get(p.mission_id)!.push(p)
   }
 
-  // Solo missions only: exactly one joined participant and no live invite —
-  // a mission still mid-negotiation (an unanswered invite less than
-  // INVITE_TTL_MS old) isn't "stuck," it's just waiting on a normal response.
-  const soloAgents: { agentNo: string; districtId: string; goalId: string; waitingSince: string }[] = []
-  for (const m of openMissions) {
-    const rows = byMission.get(m.id) || []
-    const joined = rows.filter((r: any) => r.status === 'joined')
-    const liveInvited = rows.filter((r: any) => r.status === 'invited' && !inviteExpired(r))
-    if (joined.length === 1 && liveInvited.length === 0) {
-      soloAgents.push({ agentNo: joined[0].agent_no, districtId: m.district_id, goalId: m.goal_id, waitingSince: joined[0].joined_at })
-    }
-  }
-  if (!soloAgents.length) return { success: true, stuck: [] }
+  const pdRows = activeDistricts || []
+  const pdByAgentDistrict = new Map<string, any>()
+  for (const pd of pdRows) pdByAgentDistrict.set(`${pd.agent_no}::${pd.district_id}`, pd)
+  const allAgentNos = [...new Set<string>(pdRows.map((pd: any) => pd.agent_no as string))]
+  const [names, quietDays, playerRows] = await Promise.all([
+    codenameMap(supabase, allAgentNos),
+    quietDaysByAgent(supabase, allAgentNos),
+    allAgentNos.length
+      ? supabase.from('rc_players').select('agent_no, last_seen_at, appear_offline').in('agent_no', allAgentNos)
+      : Promise.resolve({ data: [] }),
+  ])
+  const since = new Date(Date.now() - ONLINE_WINDOW_MS).toISOString()
+  const lastSeenByAgent = new Map((playerRows.data || []).map((r: any) => [r.agent_no, r.last_seen_at]))
+  const onlineSet = new Set((playerRows.data || [])
+    .filter((r: any) => !r.appear_offline && r.last_seen_at && r.last_seen_at >= since)
+    .map((r: any) => r.agent_no))
+  const districtNames = new Map(content.districts.map((d: any) => [d.id, d.name]))
+  const goalById = new Map(content.goals.map((g: any) => [g.id, g]))
+  const restoreDays = restorationDays(content)
 
-  // Drop anyone who already finished this exact goal via a different mission
-  // (a dangling duplicate — see findMyCompletedMission's doc comment) or who
-  // is no longer actively restoring that district at all.
-  const goalKeys = [...new Set(soloAgents.map((s) => `${s.districtId}::${s.goalId}`))]
+  const goalKeys = [...new Set<string>(pdRows
+    .filter((pd: any) => pd.goals?.reconnect?.id)
+    .map((pd: any) => `${pd.district_id}::${pd.goals.reconnect.id}`))]
   const doneSets = new Map<string, Set<string>>()
   for (const key of goalKeys) {
     const [districtId, goalId] = key.split('::')
     doneSets.set(key, await agentsDoneWithGoal(supabase, districtId, goalId))
   }
-  const agentNos = [...new Set(soloAgents.map((s) => s.agentNo))]
-  const { data: pdRows } = await supabase.from('rc_player_districts')
-    .select('agent_no, district_id, status, activated_at').in('agent_no', agentNos)
-  const pdByKey = new Map<string, any>()
-  for (const r of pdRows || []) pdByKey.set(`${r.agent_no}::${r.district_id}`, r)
 
-  const filtered = soloAgents.filter((s) => {
-    if (doneSets.get(`${s.districtId}::${s.goalId}`)?.has(s.agentNo)) return false
-    return pdByKey.get(`${s.agentNo}::${s.districtId}`)?.status === 'active'
-  })
-  if (!filtered.length) return { success: true, stuck: [] }
-
-  const names = await codenameMap(supabase, filtered.map((s) => s.agentNo))
-  const since = new Date(Date.now() - ONLINE_WINDOW_MS).toISOString()
-  const { data: onlineRows } = await supabase.from('rc_players')
-    .select('agent_no, last_seen_at').in('agent_no', filtered.map((s) => s.agentNo))
-  const lastSeenByAgent = new Map((onlineRows || []).map((r: any) => [r.agent_no as string, r.last_seen_at as string | null]))
-  const onlineSet = new Set((onlineRows || [])
-    .filter((r: any) => r.last_seen_at && r.last_seen_at >= since)
-    .map((r: any) => r.agent_no as string))
-  // last_seen_at is null for a meaningful chunk of agents (older accounts,
-  // or whatever screen sets it never got opened) — real streaming activity
-  // is a truer "can this person actually be reached" signal than that one
-  // field alone, and it's what quietDaysByAgent already computes for the
-  // idle-teammate check above, just reused here for a different purpose.
-  const quietDays = await quietDaysByAgent(supabase, filtered.map((s) => s.agentNo))
-
-  const districtNames = new Map(content.districts.map((d: any) => [d.id, d.name]))
-  const restoreDays = restorationDays(content)
-
-  const stuck = filtered.map((s) => {
-    const pd = pdByKey.get(`${s.agentNo}::${s.districtId}`)
-    // When they'll be dropped from the district entirely for missing the
-    // deadline — the "no active member gets suffered" number this feature
-    // exists to make visible before that happens, not after.
-    const deadline = pd?.activated_at
-      ? new Date(new Date(pd.activated_at).getTime() + restoreDays * 86400000).toISOString()
-      : null
-    return {
-      agentNo: s.agentNo,
-      codename: names.get(s.agentNo) || s.agentNo,
-      districtId: s.districtId,
-      districtName: districtNames.get(s.districtId) || s.districtId,
-      goalId: s.goalId,
-      waitingSince: s.waitingSince,
-      deadline,
-      online: onlineSet.has(s.agentNo),
-      lastSeenAt: lastSeenByAgent.get(s.agentNo) || null,
-      quietDays: quietDays.get(s.agentNo) ?? IDLE_DAYS + 1,
-    }
-  }).sort((a, b) => a.waitingSince.localeCompare(b.waitingSince))
-
-  return { success: true, stuck }
-}
-
-/** Admin: directly pair two currently-stuck agents (same district + goal)
- *  into one fresh mission, both already 'joined' — the same "admin already
- *  did the assigning" shortcut adminAutoAssignMissions uses for its shuffled
- *  batch groups above, just for one hand-picked pair instead of a random
- *  one. Their old dangling solo missions are left in place rather than
- *  deleted: harmless, since findMyMission already prefers a genuinely
- *  paired mission over a solo one (see its own doc comment) — same
- *  never-destructive-just-outranked pattern every other dangling-mission
- *  case in this file follows. */
-export async function adminPairReconnect(supabase: SupabaseDB, params: any) {
-  const districtId = String(params.districtId || '')
-  const goalId = String(params.goalId || '')
-  const agentA = String(params.agentA || '').trim().toUpperCase()
-  const agentB = String(params.agentB || '').trim().toUpperCase()
-  if (!districtId || !goalId || !agentA || !agentB) return { success: false, error: 'missing_params' }
-  if (agentA === agentB) return { success: false, error: 'same_agent' }
-
-  const { data: pdRows } = await supabase.from('rc_player_districts')
-    .select('agent_no, status, goals').eq('district_id', districtId).in('agent_no', [agentA, agentB])
-  for (const agentNo of [agentA, agentB]) {
-    const pd = (pdRows || []).find((r: any) => r.agent_no === agentNo)
-    if (!pd || pd.status !== 'active' || pd.goals?.reconnect?.id !== goalId) {
-      return { success: false, error: 'agent_not_eligible', agentNo }
+  // Agents safe to place are either not in a mission or waiting alone. A
+  // genuine multi-member team is protected from every suggested roster.
+  const busyInTeam = new Set<string>()
+  const liveInvitees = new Set<string>()
+  for (const mission of missions) {
+    const rows = byMission.get(mission.id) || []
+    const joined = rows.filter((p: any) => p.status === 'joined'
+      && pdByAgentDistrict.has(`${p.agent_no}::${mission.district_id}`))
+    if (joined.length > 1) for (const p of joined) busyInTeam.add(`${p.agent_no}::${mission.district_id}::${mission.goal_id}`)
+    for (const p of rows.filter((r: any) => r.status === 'invited' && !inviteExpired(r))) {
+      liveInvitees.add(`${p.agent_no}::${mission.district_id}::${mission.goal_id}`)
     }
   }
 
-  const requiredAgents = (pdRows || [])[0]?.goals?.reconnect?.config?.requiredAgents || 2
-  const { data: mission, error } = await supabase.from('rc_reconnect_missions').insert({
-    district_id: districtId, goal_id: goalId, required_agents: requiredAgents,
-    track_label: 'reconnect:connect', track_artist: null, track_aliases: [],
-    created_by: '__admin__',
-  }).select().single()
-  if (error || !mission) return { success: false, error: error?.message || 'insert_failed' }
+  const cases: any[] = []
+  for (const mission of missions) {
+    const key = `${mission.district_id}::${mission.goal_id}`
+    const done = doneSets.get(key) || new Set<string>()
+    const rows = byMission.get(mission.id) || []
+    const joined = rows.filter((p: any) => p.status === 'joined'
+      && pdByAgentDistrict.has(`${p.agent_no}::${mission.district_id}`)
+      && !done.has(p.agent_no))
+    const invited = rows.filter((p: any) => p.status === 'invited' && !inviteExpired(p))
+    if (!joined.length && !invited.length) continue
+    const missingSeats = Math.max(0, mission.required_agents - joined.length)
+    const oldestInviteHours = invited.length
+      ? (Date.now() - Math.min(...invited.map((p: any) => new Date(p.joined_at).getTime()))) / 3600000
+      : 0
+    const activeDeadlines = joined
+      .map((p: any) => playerDistrictDeadline(pdByAgentDistrict.get(`${p.agent_no}::${mission.district_id}`), restoreDays))
+      .filter(Boolean)
+    const earliestDeadline = activeDeadlines.sort((a: any, b: any) => a.expiresAt.localeCompare(b.expiresAt))[0] || null
+    const deadlineHours = earliestDeadline ? earliestDeadline.msLeft / 3600000 : Number.POSITIVE_INFINITY
+    const idle = joined.filter((p: any) => (quietDays.get(p.agent_no) ?? IDLE_DAYS + 1) >= IDLE_DAYS)
+    const flags = reconnectHealthFlags({
+      missionExpired: new Date(mission.expires_at).getTime() <= Date.now(),
+      districtExpired: !!earliestDeadline?.expired,
+      deadlineHours, idleTeammates: idle.length,
+      missingSeats, pendingInvites: invited.length, oldestInviteHours,
+      puzzleBlocked: mission.phase === 'cipher' && Number(mission.cipher_attempts_left) <= 0,
+    })
 
-  const { error: partErr } = await supabase.from('rc_reconnect_participants').insert([
-    { mission_id: mission.id, agent_no: agentA, status: 'joined' },
-    { mission_id: mission.id, agent_no: agentB, status: 'joined' },
-  ])
-  if (partErr) return { success: false, error: partErr.message }
+    const eligible = pdRows
+      .filter((pd: any) => pd.district_id === mission.district_id && pd.goals?.reconnect?.id === mission.goal_id)
+      .map((pd: any) => pd.agent_no as string)
+      .filter((agentNo: string) => !done.has(agentNo))
+      .filter((agentNo: string) => !busyInTeam.has(`${agentNo}::${mission.district_id}::${mission.goal_id}`)
+        || joined.some((p: any) => p.agent_no === agentNo))
+      .filter((agentNo: string) => !liveInvitees.has(`${agentNo}::${mission.district_id}::${mission.goal_id}`))
+      .sort((a: string, b: string) => {
+        const onlineDiff = Number(onlineSet.has(b)) - Number(onlineSet.has(a))
+        return onlineDiff || (quietDays.get(a) ?? 99) - (quietDays.get(b) ?? 99)
+      })
+    const suggestion = invited.length === 0
+      ? suggestedReconnectRoster(joined.map((p: any) => p.agent_no), eligible, mission.required_agents)
+      : []
 
-  return { success: true, missionId: mission.id }
+    cases.push({
+      kind: 'mission', missionId: mission.id, districtId: mission.district_id,
+      districtName: districtNames.get(mission.district_id) || mission.district_id,
+      goalId: mission.goal_id,
+      goalLabel: (goalById.get(mission.goal_id) as any)?.label || 'ReConnect Mission',
+      requiredAgents: mission.required_agents, joinedCount: joined.length,
+      missingSeats, pendingInvites: invited.length,
+      waitingSince: joined.map((p: any) => p.joined_at).sort()[0] || mission.created_at,
+      missionExpiresAt: mission.expires_at, districtExpiresAt: earliestDeadline?.expiresAt || null,
+      flags, primaryStatus: reconnectPrimaryStatus(flags),
+      recommendedAction: reconnectRecommendedAction({ flags, missingSeats }),
+      suggestedAgentNos: suggestion,
+      suggestedAgents: suggestion.map((agentNo: string) => ({
+        agentNo, codename: names.get(agentNo) || agentNo, online: onlineSet.has(agentNo),
+      })),
+      availableAgents: eligible
+        .filter((agentNo: string) => !joined.some((p: any) => p.agent_no === agentNo))
+        .map((agentNo: string) => ({
+          agentNo, codename: names.get(agentNo) || agentNo, online: onlineSet.has(agentNo),
+          quietDays: quietDays.get(agentNo) ?? IDLE_DAYS + 1,
+        })),
+      agents: joined.map((p: any) => ({
+        agentNo: p.agent_no, codename: names.get(p.agent_no) || p.agent_no,
+        online: onlineSet.has(p.agent_no), lastSeenAt: lastSeenByAgent.get(p.agent_no) || null,
+        quietDays: quietDays.get(p.agent_no) ?? IDLE_DAYS + 1, streamed: !!p.streamed_at,
+      })),
+      invites: invited.map((p: any) => ({
+        agentNo: p.agent_no, codename: names.get(p.agent_no) || p.agent_no,
+        waitingSince: p.joined_at, online: onlineSet.has(p.agent_no),
+      })),
+    })
+  }
+
+  const { data: puzzleRows } = await supabase.from('rc_reconnect_puzzle_attempts')
+    .select('agent_no, district_id, goal_id, attempts, updated_at').eq('solved', false).gte('attempts', 2)
+  for (const puzzle of puzzleRows || []) {
+    const pd = pdByAgentDistrict.get(`${puzzle.agent_no}::${puzzle.district_id}`)
+    if (!pd || pd.goals?.reconnect?.id !== puzzle.goal_id) continue
+    const deadline = playerDistrictDeadline(pd, restoreDays)
+    const flags = reconnectHealthFlags({ puzzleBlocked: true, districtExpired: !!deadline?.expired, deadlineHours: deadline ? deadline.msLeft / 3600000 : Infinity })
+    cases.push({
+      kind: 'puzzle', missionId: null, districtId: puzzle.district_id,
+      districtName: districtNames.get(puzzle.district_id) || puzzle.district_id,
+      goalId: puzzle.goal_id, goalLabel: (goalById.get(puzzle.goal_id) as any)?.label || 'ReConnect Puzzle',
+      requiredAgents: 1, joinedCount: 1, missingSeats: 0, pendingInvites: 0,
+      waitingSince: puzzle.updated_at, districtExpiresAt: deadline?.expiresAt || null,
+      flags, primaryStatus: reconnectPrimaryStatus(flags),
+      recommendedAction: reconnectRecommendedAction({ flags }), suggestedAgentNos: [],
+      suggestedAgents: [], availableAgents: [],
+      agents: [{
+        agentNo: puzzle.agent_no, codename: names.get(puzzle.agent_no) || puzzle.agent_no,
+        online: onlineSet.has(puzzle.agent_no), lastSeenAt: lastSeenByAgent.get(puzzle.agent_no) || null,
+        quietDays: quietDays.get(puzzle.agent_no) ?? IDLE_DAYS + 1,
+      }], invites: [],
+    })
+  }
+
+  const summary: Record<string, number> = { all: cases.length }
+  for (const item of cases) for (const flag of item.flags) summary[flag] = (summary[flag] || 0) + 1
+  cases.sort((a, b) => {
+    const aDeadline = a.districtExpiresAt ? new Date(a.districtExpiresAt).getTime() : Number.MAX_SAFE_INTEGER
+    const bDeadline = b.districtExpiresAt ? new Date(b.districtExpiresAt).getTime() : Number.MAX_SAFE_INTEGER
+    return aDeadline - bDeadline || a.waitingSince.localeCompare(b.waitingSince)
+  })
+
+  // Legacy shape retained for any older cached admin page while the new
+  // panel consumes `cases` and `summary`.
+  const stuck = cases
+    .filter((item) => item.kind === 'mission' && item.joinedCount === 1 && item.pendingInvites === 0)
+    .map((item) => ({ ...item.agents[0], districtId: item.districtId, districtName: item.districtName,
+      goalId: item.goalId, waitingSince: item.waitingSince, deadline: item.districtExpiresAt }))
+  return { success: true, cases, summary, stuck }
+}
+
+export async function adminReconnectHealthForAgent(supabase: SupabaseDB, content: GameContent, agentNo: string) {
+  const health = await adminListStuckReconnects(supabase, content)
+  return (health.cases || []).filter((item: any) =>
+    item.agents?.some((agent: any) => agent.agentNo === agentNo)
+    || item.invites?.some((agent: any) => agent.agentNo === agentNo))
+}
+
+/** Admin: atomically complete a full required roster. `agentNos` must contain
+ * every member (2, 3, 5, etc.); the database RPC protects real teams and
+ * folds only solo leftovers. Old pair-shaped params remain compatible. */
+export async function adminPairReconnect(supabase: SupabaseDB, params: any) {
+  const districtId = String(params.districtId || '')
+  const goalId = String(params.goalId || '')
+  const agentNos = (Array.isArray(params.agentNos) ? params.agentNos : [params.agentA, params.agentB])
+    .map((value: any) => String(value || '').trim().toUpperCase()).filter(Boolean)
+  if (!districtId || !goalId || agentNos.length < 2) return { success: false, error: 'missing_params' }
+  const { data, error } = await supabase.rpc('rc_admin_fill_reconnect_team', {
+    p_district_id: districtId, p_goal_id: goalId,
+    p_target_mission_id: params.missionId || null, p_agent_nos: agentNos,
+  })
+  const result = !error && Array.isArray(data) ? data[0] : null
+  if (error || !result?.success) return { success: false, error: result?.error || error?.message || 'pair_failed' }
+  return { success: true, missionId: result.mission_id, agentsAssigned: agentNos.length }
 }

@@ -11,6 +11,7 @@ import { goWard } from './router.js'
 import { wardDisplayName, districtDisplayName } from './ward-tiles.js'
 import { mountScene } from './scene.js'
 import { districtFraction, renderBoard } from './ui-district.js'
+import { districtPercent } from './district-progress.js'
 import { playRestoration } from './celebrate.js'
 import { itemTile, itemSheet, itemsAt, itemsInPack } from './items.js'
 import { trackEngagementOnce } from './engagement.js'
@@ -86,7 +87,7 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
   if (isLiveActive) {
     const d = state.activeDistrict
     const frac = districtFraction(d)
-    const pct = Math.round(frac * 100)
+    const pct = districtPercent(d)
     container.querySelector('.pw-val').textContent = pct + '%'
     container.querySelector('.stage-meter-fill').style.width = pct + '%'
     container.querySelector('.stage-meter').setAttribute('aria-valuenow', String(pct))
@@ -278,6 +279,11 @@ function paintPuzzlePanel(box, d, r) {
   }
   if (r.attemptsLeft <= 0) {
     box.appendChild(el('div', 'dim', "Out of attempts — this one's stuck for this attempt."))
+    const help = el('a', 'btn btn-ghost reconnect-help-link', 'Ask for help in ReConnect GC')
+    help.href = 'https://ig.me/j/AbZYVFwKMMuh1zzV/'
+    help.target = '_blank'
+    help.rel = 'noopener noreferrer'
+    box.appendChild(help)
     return
   }
 
@@ -347,11 +353,14 @@ function paintMissionPanel(box, d, res) {
 
   if (!m || m.status !== 'open') {
     const st = res.config.sharedTrack
-    box.appendChild(el('p', 'muted', res.variant === 'invite'
-      ? `Invite ${res.config.requiredAgents} agents who are also restoring ${esc(districtDisplayName(d))} to help out — no streaming needed from them, just a yes.`
+    box.appendChild(el('p', 'muted', `Build a team of ${res.config.requiredAgents} agents restoring ${esc(districtDisplayName(d))}.`))
+    const how = el('details', 'reconnect-how')
+    how.innerHTML = `<summary>How this mission works</summary><p>${res.variant === 'invite'
+      ? 'Invite active agents here. Their acceptance completes the team step—no extra streaming is needed.'
       : st
-        ? `Team up with ${res.config.requiredAgents} agents also restoring ${esc(districtDisplayName(d))}. Open a mission, then invite someone specific — once they accept, stream ${esc(st.label)} — everyone's own plays add up together until you hit ${st.target}.`
-        : `Team up with ${res.config.requiredAgents} agents also restoring ${esc(districtDisplayName(d))} — open a mission, then invite someone specific. Once they accept, everyone needs to keep streaming toward their own goals here.`))
+        ? `After everyone accepts, stream ${esc(st.label)}. Every team member's plays add up until the shared total reaches ${st.target}.`
+        : 'After everyone accepts, each team member streams at least one of their own active district goals.'}</p>`
+    box.appendChild(how)
     // Who's already standing here, BEFORE committing to open anything. The
     // pickable list used to appear only after opening a mission, so this
     // screen — the one everybody sees first — could never say whether
@@ -483,6 +492,11 @@ function paintMissionPanel(box, d, res) {
     box.appendChild(el('p', 'muted', m.cipher.prompt))
     if (m.cipher.attemptsLeft <= 0) {
       box.appendChild(el('div', 'dim', "Out of attempts — this one's stuck for this attempt."))
+      const help = el('a', 'btn btn-ghost reconnect-help-link', 'Ask for help in ReConnect GC')
+      help.href = 'https://ig.me/j/AbZYVFwKMMuh1zzV/'
+      help.target = '_blank'
+      help.rel = 'noopener noreferrer'
+      box.appendChild(help)
     } else {
       const cipherRow = el('div', 'reconnect-invite-row')
       const cipherInput = el('input', 'ob-input')
@@ -673,28 +687,30 @@ function paintMissionPanel(box, d, res) {
       call('getInviteCandidates', { agentNo: me, districtId: d.id }).then((res2) => {
         if (!res2?.success) { intro.textContent = "Couldn't load who's free — try again."; return }
         if (!res2.candidates?.length) {
-          // The list already excludes anyone already invited, joined, or not
-          // actively restoring this district — empty means there's genuinely
-          // nobody free right now, not a filter mistake. Said plainly: every
-          // real report of this turned out to be true (see bug-resolution-log
-          // — "Can't invite anyone... Not a bug"), so the fix was never the
-          // logic, it was that "No free agents" reads like an error when it's
-          // actually just population math. Spelling out WHY (already teamed
-          // up, or already finished) is what makes that legible instead of
-          // sounding broken.
           intro.remove()
           noteInput.remove()
-          // Home Base is almost everyone's first district, auto-activated at
-          // join — so agents still working through it haven't reached this
-          // one yet, but will. Naming that pipeline turns "nobody's free" from
-          // a dead end into "not yet", which is what's actually true.
-          const pipeline = res2?.stillOnHomeBase
-            ? ` ${res2.stillOnHomeBase} more ${res2.stillOnHomeBase === 1 ? 'agent is' : 'agents are'} still restoring Home Base — once they finish there and start this district, they'll be able to team up with you too.`
-            : ''
-          waitList.appendChild(el('p', 'muted',
-            "Nobody's free to invite right now — everyone else restoring this district has either already teamed up with someone or already finished this together."
-            + pipeline
-            + ' New agents open up here often, so check back in a bit.'))
+          const emptyCopy = {
+            agents_still_on_home_base: `${res2.stillOnHomeBase} ${res2.stillOnHomeBase === 1 ? 'agent is' : 'agents are'} still at Home Base. They can join after reaching this district.`,
+            no_matching_agents: 'Nobody else has this ReConnect goal here yet.',
+            everyone_completed: 'Everyone else with this goal has already completed it.',
+            everyone_busy: 'Compatible agents are already teamed up or answering another invite.',
+          }[res2.emptyReason] || "Nobody's free to invite right now."
+          waitList.appendChild(el('p', 'muted reconnect-empty-reason', emptyCopy))
+
+          const alertBtn = el('button', `btn ${res2.alertActive ? 'btn-ghost' : 'btn-primary'} reconnect-alert-toggle`,
+            res2.alertActive ? '🔔 Partner alert is on' : '🔔 Tell me when someone is free')
+          alertBtn.onclick = async () => {
+            alertBtn.disabled = true
+            const active = !res2.alertActive
+            const r = await call('setReconnectMatchAlert', { agentNo: me, districtId: d.id, active })
+            if (!r.success) { alertBtn.disabled = false; inviteMsg.textContent = reconnectError(r.error); return }
+            res2.alertActive = active
+            alertBtn.disabled = false
+            alertBtn.className = `btn ${active ? 'btn-ghost' : 'btn-primary'} reconnect-alert-toggle`
+            alertBtn.textContent = active ? '🔔 Partner alert is on' : '🔔 Tell me when someone is free'
+            toast(active ? "We'll ring the bell when a partner is available." : 'Partner alert turned off')
+          }
+          waitList.appendChild(alertBtn)
           return
         }
         const n = res2.candidates.length
@@ -707,6 +723,22 @@ function paintMissionPanel(box, d, res) {
           ? '1 agent is waiting for a partner here.'
           : `${n} agents are waiting for a partner here.`)
           + onlineNote + ' Invite one and they get a notification to accept.'
+        const sendInvite = async (candidate) => {
+          for (const b of waitList.querySelectorAll('.rw-invite, .reconnect-best-invite')) b.disabled = true
+          inviteMsg.textContent = ''
+          inviteMsg.classList.remove('is-error')
+          const r = await call('inviteReconnectMission',
+            { agentNo: me, districtId: d.id, inviteeAgentNo: candidate.agentNo, message: noteInput.value.trim() })
+          if (r.success) { toast(`Invited ${r.inviteeCodename || candidate.codename}`); refresh(); return }
+          inviteMsg.textContent = reconnectError(r.error)
+          inviteMsg.classList.add('is-error')
+          for (const b of waitList.querySelectorAll('.rw-invite, .reconnect-best-invite')) b.disabled = false
+        }
+        const best = res2.candidates[0]
+        const bestBtn = el('button', 'btn btn-primary reconnect-best-invite',
+          `Invite best available · ${best.codename}${best.online ? ' · online' : ''}`)
+        bestBtn.onclick = () => sendInvite(best)
+        waitList.appendChild(bestBtn)
         for (const c of res2.candidates) {
           // Online first (server already sorts the list this way) — flagged
           // here too, since an invite to someone actually in the app right
@@ -716,21 +748,8 @@ function paintMissionPanel(box, d, res) {
             + `<span class="rw-name">${esc(c.codename)}</span>`
             + `<span class="rw-since">${c.online ? 'Online now' : esc(waitedLabel(c.waitingSince))}</span>`
           const btn = el('button', 'btn btn-ghost rw-invite', 'Invite')
-          btn.onclick = async () => {
-            // Agent numbers are never shown to players — the number rides
-            // along on the row's own data, never rendered.
-            for (const b of waitList.querySelectorAll('.rw-invite')) b.disabled = true
-            inviteMsg.textContent = ''
-            inviteMsg.classList.remove('is-error')
-            const r = await call('inviteReconnectMission',
-              { agentNo: me, districtId: d.id, inviteeAgentNo: c.agentNo, message: noteInput.value.trim() })
-            if (r.success) { toast(`Invited ${r.inviteeCodename || c.codename}`); refresh() }
-            else {
-              inviteMsg.textContent = reconnectError(r.error)
-              inviteMsg.classList.add('is-error')
-              for (const b of waitList.querySelectorAll('.rw-invite')) b.disabled = false
-            }
-          }
+          // Agent numbers ride along as data and are never rendered.
+          btn.onclick = () => sendInvite(c)
           row.appendChild(btn)
           waitList.appendChild(row)
         }

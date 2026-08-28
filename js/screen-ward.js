@@ -7,7 +7,7 @@
 
 import { el, esc, unlockAfter, joinNames } from './state.js'
 import { goWorld, goDistrict } from './router.js'
-import { districtFraction } from './ui-district.js'
+import { districtPercent } from './district-progress.js'
 import { districtDisplayName } from './ward-tiles.js'
 // The district's name decides what kind of place it is (landmarks.js reads it
 // to draw the scene) — the same lookup gives the list its icons, so a row is
@@ -118,7 +118,7 @@ function districtList(state, ward, districts) {
     const live = state.activeDistrict?.id === d.id ? state.activeDistrict : null
 
     const power = d.status === 'restored' || d.status === 'centerpiece_lit' ? 100
-      : d.status === 'active' ? Math.round(districtFraction(live) * 100)
+      : d.status === 'active' ? districtPercent(live)
       : 0
 
     const row = el('button', `d-row ${d.status}`)

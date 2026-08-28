@@ -189,8 +189,8 @@ function paintSections(body, state) {
       icon: account.appearOffline ? '◯' : '●',
       name: 'Online status', value: account.appearOffline ? 'Hidden' : 'Visible',
       body: account.appearOffline
-        ? "You're playing normally, but other agents see you as offline."
-        : "Other agents can see when you're active now.",
+        ? "You're playing normally, but other agents won't see you or your current district."
+        : "Other agents can see your codename and which district you're restoring while you're active.",
       onClick: () => showOverlay(presenceSheet(account, refresh)),
     },
   ]))
@@ -289,8 +289,8 @@ function presenceSheet(acct, onSaved) {
     el('div', 'eyebrow', 'ONLINE STATUS'),
     el('h3', '', hiding ? 'Appear offline?' : 'Appear online again?'),
     el('p', 'muted', hiding
-      ? "You can still stream, sync and play normally. Other agents won't see you in Active now or with an online dot in ReConnect invites."
-      : 'Other agents will be able to see when you are active in ReConnect.'),
+      ? "You can still stream, sync and play normally. Other agents won't see you in Active now, your current district, or with an online dot in ReConnect invites."
+      : 'Other agents can see your codename and current district while you are active, plus your online dot in ReConnect invites.'),
   )
   const save = el('button', 'btn btn-primary', hiding ? 'Appear offline' : 'Appear online')
   save.onclick = async () => {

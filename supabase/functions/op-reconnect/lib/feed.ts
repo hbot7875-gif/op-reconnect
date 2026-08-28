@@ -11,7 +11,7 @@
 // ever carry codename-safe, already-public data (ward names are already
 // shown in the existing share card, so those are fine).
 
-import type { SupabaseDB } from './config.ts'
+import type { SupabaseDB, GameContent } from './config.ts'
 
 export type FeedEventType =
   | 'district_restored' | 'ward_progress' | 'ward_completed'
@@ -54,20 +54,39 @@ export async function markOnline(supabase: SupabaseDB, agentNo: string): Promise
 export interface OnlineNow {
   count: number
   codenames: string[]
+  agents: { codename: string; districtId: string | null; districtName: string | null; wardName: string | null }[]
 }
 
-/** Who's genuinely here right now — count plus a few real codenames to name,
- *  not just a number. Ordered most-recent-first so the names shown are the
- *  agents who polled most recently, not an arbitrary sample. */
-export async function getOnlineNow(supabase: SupabaseDB, sampleSize = 6): Promise<OnlineNow> {
+/** Who's genuinely here right now — count plus enough rows for the City
+ *  sheet to name every normally-sized live group and show each one's active
+ *  district. Ordered most-recent-first, capped defensively at 50. */
+export async function getOnlineNow(supabase: SupabaseDB, content: GameContent, sampleSize = 50): Promise<OnlineNow> {
   const since = new Date(Date.now() - ONLINE_WINDOW_MS).toISOString()
   const { data, count } = await supabase.from('rc_players')
-    .select('codename', { count: 'exact' })
+    .select('agent_no, codename', { count: 'exact' })
     .eq('appear_offline', false)
     .gte('last_seen_at', since)
     .order('last_seen_at', { ascending: false })
     .limit(sampleSize)
-  return { count: count || 0, codenames: (data || []).map((r: any) => r.codename) }
+  const agentNos = (data || []).map((r: any) => r.agent_no)
+  const { data: districtRows } = agentNos.length
+    ? await supabase.from('rc_player_districts')
+      .select('agent_no, district_id').in('agent_no', agentNos).eq('status', 'active')
+    : { data: [] }
+  const districtByAgent = new Map((districtRows || []).map((r: any) => [r.agent_no, r.district_id]))
+  const districtById = new Map(content.districts.map((d: any) => [d.id, d]))
+  const wardById = new Map(content.wards.map((w: any) => [w.id, w]))
+  const agents = (data || []).map((r: any) => {
+    const districtId = districtByAgent.get(r.agent_no) as string | undefined
+    const district = districtId ? districtById.get(districtId) as any : null
+    return {
+      codename: r.codename,
+      districtId: districtId || null,
+      districtName: district?.name || null,
+      wardName: district?.ward_id ? (wardById.get(district.ward_id) as any)?.name || null : null,
+    }
+  })
+  return { count: count || 0, codenames: agents.map((r) => r.codename), agents }
 }
 
 export interface FeedEntry {

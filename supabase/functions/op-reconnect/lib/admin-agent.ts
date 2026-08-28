@@ -12,6 +12,7 @@ import { districtDeadline, DEADLINE_EXTENSION_DAYS } from './districts.ts'
 import { fetchStreamRows } from './streams.ts'
 import { flagStreamRows, findPossibleAlts, modesByAgentNo, IDENTITY_FIELDS } from './police-check.ts'
 import { sendMail, bombReminderEmail, mailerConfigured } from './mailer.ts'
+import { adminReconnectHealthForAgent } from './reconnect-missions.ts'
 
 /** j***@gmail.com — enough to confirm "yes that's their address" without
  *  displaying it in full. This is sensitive, support-only data. */
@@ -107,6 +108,7 @@ export async function adminGetAgent(supabase: SupabaseDB, params: any) {
   let xp = 0
   let level = 1
   let rank: string | null = null
+  let reconnectHealth: any[] = []
 
   if (player) {
     const content = await loadContent(supabase)
@@ -135,6 +137,7 @@ export async function adminGetAgent(supabase: SupabaseDB, params: any) {
       wardsTotal,
       activeDistrict: active ? (content.districts.find((d) => d.id === active.district_id)?.name || active.district_id) : null,
     }
+    reconnectHealth = await adminReconnectHealthForAgent(supabase, content, agent.agent_no)
   }
 
   return {
@@ -153,7 +156,7 @@ export async function adminGetAgent(supabase: SupabaseDB, params: any) {
       musicatPublicId: agent.musicat_public_id,
       hasPin: !!agent.scrobble_pin,
       uplinkBroken: uplinkBroken(agent),
-      progress,
+      progress, reconnectHealth,
     },
   }
 }
