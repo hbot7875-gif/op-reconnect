@@ -21,6 +21,7 @@
 import type { SupabaseDB, GameContent } from './config.ts'
 import { trackArtistOverrides } from './config.ts'
 import { normKeyFull, countedArtistPlays } from './text.ts'
+import { allocateTrackHits } from './era-match.js'
 
 /** A plain string is the common case (one real title, normalizes cleanly).
  *  {title, aliases} is for the rare case where different scrobble sources
@@ -46,6 +47,29 @@ export function eraTrackKeys(t: EraTrackEntry): string[] {
     if (k) keys.add(k)
   }
   return [...keys]
+}
+
+/** Stable catalog-wide matching ids are intentionally global rather than
+ * per-era: one ambiguous bare title must not satisfy an original recording
+ * in one era and its Japanese re-recording in another. */
+function eraMatchId(eraId: string, trackIndex: number): string {
+  return `${eraId}:${trackIndex}`
+}
+
+export function allocateEraCatalogMatches(totals: Map<string, number>, threshold = 1): Map<string, number> {
+  const entries = ERA_CATALOG.flatMap((era) => era.tracks.map((track, index) => {
+    const keys = eraTrackKeys(track)
+    return {
+      id: eraMatchId(era.id, index),
+      canonicalKey: normKeyFull(eraTrackTitle(track)),
+      keys,
+    }
+  }))
+  return allocateTrackHits(entries, totals, threshold)
+}
+
+export function eraCatalogTrackDone(matches: Map<string, number>, eraId: string, trackIndex: number, threshold = 1): boolean {
+  return (matches.get(eraMatchId(eraId, trackIndex)) || 0) >= threshold
 }
 
 // Real BTS discography, grouped the way the arirang-btsbackend project's own
@@ -190,10 +214,22 @@ export const ERA_CATALOG: EraDef[] = [
       // "dope", which collides with HYYH's own (Korean) "Dope" above and
       // would let that already-required stream silently satisfy this
       // supposedly-distinct Japanese re-recording too.
-      { title: 'Dope -Japanese Ver.-', aliases: ['DOPE‐超ヤベー!‐(Japanese Ver.)', 'DOPE-超ヤベー!-(Japanese Ver.)', '超ヤベー'] },
+      { title: 'Dope -Japanese Ver.-', aliases: [
+        'DOPE‐超ヤベー!‐(Japanese Ver.)', 'DOPE-超ヤベー!-(Japanese Ver.)', '超ヤベー',
+        // Apple Music via Musicat romanizes 超ヤベー instead of retaining
+        // the Japanese characters (confirmed from a real stored play).
+        'DOPE -Chou Yabee! (Japanese Ver.)', 'DOPE Chou Yabee Japanese Ver.',
+      ] },
       'Good Day', 'Save Me -Japanese Ver.-',
       'Boyz with Fun (Japanese Ver.)',
-      { title: 'Pepse (Japanese Ver.)', aliases: ['ペップセ‐Japanese Ver.‐', 'ペップセ-Japanese Ver.-', 'ペップセ', 'Pepse -Japanese Ver.-', 'Baepsae (Japanese Ver.)', 'Baepsae -Japanese Ver.-'] },
+      { title: 'Pepse (Japanese Ver.)', aliases: [
+        'ペップセ‐Japanese Ver.‐', 'ペップセ-Japanese Ver.-', 'ペップセ',
+        'Pepse -Japanese Ver.-', 'Baepsae (Japanese Ver.)', 'Baepsae -Japanese Ver.-',
+        // Apple Music localizes this Japanese recording to the same English
+        // title as the Korean original. The allocator above requires a
+        // separate play before this alias can fill the Japanese slot.
+        'Silver Spoon',
+      ] },
       'Wishing On A Star',
       'Butterfly -Japanese Ver.-', 'For You', 'I Need U (Japanese Ver.)',
       'Epilogue : Young Forever -Japanese Ver.-',
@@ -263,9 +299,18 @@ export const ERA_CATALOG: EraDef[] = [
       'Outro : Ego', 'ON (Feat. Sia)',
       'Intro : Calling',
       'Stay Gold',
-      'Boy With Luv - Japanese ver.', 'Make It Right - Japanese ver.', 'Dionysus - Japanese ver.',
-      'IDOL - Japanese ver.', 'Airplane pt.2 - Japanese ver.', 'FAKE LOVE - Japanese ver.',
-      'Black Swan - Japanese ver.', 'ON - Japanese ver.',
+      // Apple Music/Musicat drops the Japanese-version suffix from these
+      // eight titles. Bare aliases are safe because catalog matching now
+      // consumes plays one-to-one globally: a single ambiguous play cannot
+      // unlock both the original and Japanese recording.
+      { title: 'Boy With Luv - Japanese ver.', aliases: ['Boy With Luv'] },
+      { title: 'Make It Right - Japanese ver.', aliases: ['Make It Right'] },
+      { title: 'Dionysus - Japanese ver.', aliases: ['Dionysus'] },
+      { title: 'IDOL - Japanese ver.', aliases: ['IDOL'] },
+      { title: 'Airplane pt.2 - Japanese ver.', aliases: ['Airplane pt.2'] },
+      { title: 'FAKE LOVE - Japanese ver.', aliases: ['FAKE LOVE'] },
+      { title: 'Black Swan - Japanese ver.', aliases: ['Black Swan'] },
+      { title: 'ON - Japanese ver.', aliases: ['ON'] },
       'Lights', 'Your Eyes Tell', 'Outro : The Journey',
     ],
   },
@@ -342,11 +387,13 @@ export async function getEraTimeline(supabase: SupabaseDB, content: GameContent)
     }
   }
 
-  const trackTotal = (t: EraTrackEntry) => eraTrackKeys(t).reduce((s, k) => s + (totals.get(k) || 0), 0)
-  const trackDone = (t: EraTrackEntry) => trackTotal(t) >= cfg.trackThreshold
+  const matches = allocateEraCatalogMatches(totals, cfg.trackThreshold)
 
   const eras: EraProgress[] = ERA_CATALOG.map((e) => {
-    const tracks = e.tracks.map((t) => ({ title: eraTrackTitle(t), done: trackDone(t) }))
+    const tracks = e.tracks.map((t, index) => ({
+      title: eraTrackTitle(t),
+      done: eraCatalogTrackDone(matches, e.id, index, cfg.trackThreshold),
+    }))
     return {
       id: e.id, name: e.name, icon: e.icon, description: e.description, albums: e.albums,
       total: tracks.length, done: tracks.filter((t) => t.done).length, tracks,
