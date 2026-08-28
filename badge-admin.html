@@ -16,7 +16,11 @@
   body { background: var(--bg); color: var(--text); font-family: var(--body); }
   .bv-wrap { max-width: 900px; margin: 0 auto; padding: 24px 16px 80px; }
 
-  .bv-head { margin-bottom: 6px; }
+  .bv-head { display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 14px; margin-bottom: 6px; }
+  .bv-back { flex: 0 0 auto; color: var(--muted); font-family: var(--mono);
+    font-size: 10px; letter-spacing: .8px; text-decoration: none; }
+  .bv-back:hover { color: var(--text); }
   .bv-eyebrow { font-family: var(--mono); font-size: 10.5px; letter-spacing: 2px;
     text-transform: uppercase; color: var(--purple-lt); }
   .bv-title { font-family: var(--disp); font-weight: 900; font-size: 25px; margin-top: 5px; }
@@ -59,6 +63,21 @@
     text-transform: uppercase; color: var(--dim); }
   .bv-zoom input { flex: 1; }
 
+  .bv-previews { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 9px; max-width: 360px; margin: 16px auto 2px; }
+  .bv-preview { min-width: 0; padding: 10px 6px 8px; text-align: center;
+    border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); }
+  .bv-preview.is-match { border-color: rgba(217,173,95,.52); background: var(--gold-soft); }
+  .bv-preview canvas { display: block; margin: 0 auto 7px; background: var(--panel);
+    border: 2px solid var(--border-str); object-fit: cover; }
+  .bv-preview.common canvas { width: 74px; height: 74px; border-radius: 50%; }
+  .bv-preview.rare canvas { width: 60px; height: 75px; border-radius: 9px; border-color: var(--gold); }
+  .bv-preview.hud canvas { width: 38px; height: 38px; margin-top: 18px; margin-bottom: 18px;
+    border-radius: 50%; border-color: rgba(217,173,95,.7); }
+  .bv-preview span { display: block; overflow: hidden; color: var(--dim); font-family: var(--mono);
+    font-size: 8px; letter-spacing: .8px; text-transform: uppercase; text-overflow: ellipsis; white-space: nowrap; }
+  .bv-pool-hint { margin: -6px 0 10px; color: var(--dim); font-size: 11px; line-height: 1.45; }
+
   .bv-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
   .bv-actions .btn { margin-top: 0; }
 
@@ -85,6 +104,42 @@
   .bv-mini:hover { border-color: var(--border-str); color: var(--text); }
   .bv-mini.danger:hover { border-color: var(--crimson); color: var(--crimson); }
   .bv-mini[disabled] { opacity: .35; cursor: not-allowed; }
+  .bv-readonly { display: block; margin-top: 5px; color: var(--dim); font-family: var(--mono);
+    font-size: 8px; line-height: 1.4; }
+
+  .bv-filter-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 9px;
+    margin: 10px 0 12px; }
+  .bv-filter-grid label { min-width: 0; }
+  .bv-filter-grid span { display: block; margin-bottom: 5px; color: var(--dim);
+    font-family: var(--mono); font-size: 8px; letter-spacing: .8px; text-transform: uppercase; }
+  .bv-filter-grid select { width: 100%; min-width: 0; padding: 9px 8px; font-size: 11px; }
+  .bv-result-count { margin: -3px 0 11px; color: var(--dim); font-family: var(--mono); font-size: 9px; }
+  .bv-coverage { margin: 0 0 14px; padding: 10px 11px; border: 1px solid var(--border);
+    border-radius: 10px; background: var(--surface-2); }
+  .bv-coverage summary { cursor: pointer; color: var(--text); font-family: var(--mono);
+    font-size: 10px; letter-spacing: .7px; }
+  .bv-coverage-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr));
+    gap: 7px; margin-top: 10px; }
+  .bv-cover-row { min-width: 0; padding: 8px; border: 1px solid var(--border); border-radius: 8px; }
+  .bv-cover-row.is-empty { border-color: rgba(196,53,76,.42); }
+  .bv-cover-row b { display: block; overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+  .bv-cover-row small { color: var(--dim); font-family: var(--mono); font-size: 8px; line-height: 1.4; }
+
+  .bv-confirm { width: min(92vw, 390px); padding: 0; border: 1px solid var(--border-str);
+    border-radius: var(--r-lg); background: var(--surface); color: var(--text); }
+  .bv-confirm::backdrop { background: rgba(4,3,8,.78); backdrop-filter: blur(3px); }
+  .bv-confirm-body { padding: 20px; }
+  .bv-confirm-art { display: grid; place-items: center; width: 126px; height: 126px;
+    margin: 16px auto; overflow: hidden; border: 4px solid var(--gold); border-radius: 50%;
+    background: var(--panel); box-shadow: 0 0 24px rgba(217,173,95,.28); }
+  .bv-confirm-art.is-rare { width: 112px; height: 140px; border-radius: 14px; }
+  .bv-confirm-art img { width: 100%; height: 100%; object-fit: cover; }
+  .bv-confirm-art.is-rare img { object-position: 50% 20%; }
+  .bv-confirm-meta { padding: 10px 12px; border-radius: 10px; background: var(--surface-2);
+    color: var(--muted); font-size: 12px; line-height: 1.65; }
+  .bv-confirm-meta b { color: var(--text); }
+  .bv-confirm-actions { display: grid; gap: 8px; margin-top: 15px; }
+  .bv-confirm-actions .btn { width: 100%; margin: 0; }
 
   .bv-msg { margin-top: 12px; font-size: 12.5px; line-height: 1.6; }
   .bv-msg.ok { color: var(--gold); }
@@ -94,6 +149,15 @@
   .bv-gate h1 { font-family: var(--disp); font-size: 20px; margin-bottom: 10px; }
   .bv-gate p { color: var(--muted); font-size: 14px; line-height: 1.7; }
   .bv-gate code { font-family: var(--mono); color: var(--purple-lt); font-size: 13px; }
+
+  @media (max-width: 560px) {
+    .bv-wrap { padding-left: 12px; padding-right: 12px; }
+    .bv-card { padding: 15px; }
+    .bv-filter-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .bv-coverage-grid { grid-template-columns: 1fr; }
+    .bv-preview.common canvas { width: 66px; height: 66px; }
+    .bv-preview.rare canvas { width: 54px; height: 68px; }
+  }
 </style>
 </head>
 <body>
@@ -106,21 +170,23 @@
 
 <div class="bv-wrap" id="app" hidden>
   <div class="bv-head">
-    <span class="bv-eyebrow">🎖️ Badge Vault</span>
-    <div class="bv-title">Add badge photos</div>
+    <div>
+      <span class="bv-eyebrow">🎖️ Badge Vault</span>
+      <div class="bv-title">Add badge photos</div>
+    </div>
+    <a class="bv-back" href="game.html">← Back to game</a>
   </div>
   <p class="bv-sub">
-    Upload a photo, frame it square, and attach it to a badge. Once it's active it goes
-    straight into that badge's pool — anyone who earns the badge from then on can be given
-    this photo. Existing badges keep whatever photo they already have.
+    Frame the photo, check how it looks in-game, then publish it to that badge's pool.
+    Existing awards keep their original photo.
     <br><span class="bv-who" id="whoami"></span>
   </p>
 
   <!-- ── upload ── -->
   <div class="bv-card">
     <h2>New photo</h2>
-    <p class="bv-note">Square crop, saved at 512×512. Keep the face roughly centred —
-      the same image is used small (HUD crest), medium (Agent ID) and large (Badge Drawer).</p>
+    <p class="bv-note">Drag to frame and use Zoom. The previews below show the real circle,
+      rare card and small Agent icon crops.</p>
 
     <label class="bv-field">
       <span>Badge</span>
@@ -141,23 +207,49 @@
       <input id="zoom" type="range" min="1" max="3" step="0.01" value="1" disabled>
     </div>
 
+    <div class="bv-previews" aria-label="In-game crop previews">
+      <div class="bv-preview common" id="previewCommonWrap">
+        <canvas id="previewCommon" width="148" height="148"></canvas>
+        <span>Common circle</span>
+      </div>
+      <div class="bv-preview rare" id="previewRareWrap">
+        <canvas id="previewRare" width="120" height="150"></canvas>
+        <span>Rare card</span>
+      </div>
+      <div class="bv-preview hud">
+        <canvas id="previewHud" width="76" height="76"></canvas>
+        <span>Agent icon</span>
+      </div>
+    </div>
+
     <div class="bv-row two" style="margin-top:16px">
       <label class="bv-field">
-        <span>Member (optional)</span>
-        <input class="input-field" id="member" placeholder="e.g. Jimin" maxlength="40">
+        <span>Who is in the photo?</span>
+        <select class="input-field" id="member" required>
+          <option value="">Choose BTS or a member…</option>
+          <option value="BTS">BTS</option>
+          <option value="RM">RM</option>
+          <option value="Jin">Jin</option>
+          <option value="SUGA">SUGA</option>
+          <option value="j-hope">j-hope</option>
+          <option value="Jimin">Jimin</option>
+          <option value="V">V</option>
+          <option value="Jung Kook">Jung Kook</option>
+        </select>
       </label>
       <label class="bv-field">
-        <span>Style (optional)</span>
-        <select class="input-field" id="pool">
-          <option value="">—</option>
+        <span>Photo style</span>
+        <select class="input-field" id="pool" required>
+          <option value="">Choose Cute or Hot…</option>
           <option value="cute">Cute</option>
           <option value="hot">Hot</option>
         </select>
       </label>
     </div>
+    <p class="bv-pool-hint" id="poolHint">Common badges prefer Cute photos. Rare badges prefer Hot photos.</p>
 
     <div class="bv-actions">
-      <button class="btn btn-primary" id="save" type="button" disabled>Add to vault</button>
+      <button class="btn btn-primary" id="save" type="button" disabled>Review badge</button>
       <button class="btn btn-ghost" id="reset" type="button">Reset frame</button>
     </div>
     <div class="bv-msg" id="msg"></div>
@@ -167,21 +259,52 @@
   <div class="bv-card">
     <h2>In the vault</h2>
     <p class="bv-note">Deactivating stops a photo being handed out from now on;
-      anyone already wearing it keeps it. A photo someone already wears can't be deleted.</p>
+      existing owners keep it. You can manage your uploads; AGENT000 can manage the full vault.</p>
+    <details class="bv-coverage">
+      <summary>Pool coverage · <span id="coverageSummary">loading…</span></summary>
+      <div class="bv-coverage-grid" id="coverageGrid"></div>
+    </details>
     <div class="bv-filter" id="styleFilter" role="group" aria-label="Filter by style">
       <button class="bv-chip sel" data-style="">All</button>
       <button class="bv-chip" data-style="cute">Cute</button>
       <button class="bv-chip" data-style="hot">Hot</button>
       <button class="bv-chip" data-style="untagged">Untagged</button>
     </div>
+    <div class="bv-filter-grid">
+      <label><span>Badge</span><select class="input-field" id="filterTemplate"><option value="">All badges</option></select></label>
+      <label><span>Rarity</span><select class="input-field" id="filterRarity"><option value="">All rarities</option><option value="common">Common</option><option value="rare">Rare</option></select></label>
+      <label><span>Member</span><select class="input-field" id="filterMember"><option value="">All members</option></select></label>
+      <label><span>Uploader</span><select class="input-field" id="filterUploader"><option value="">All makers</option></select></label>
+      <label><span>Status</span><select class="input-field" id="filterStatus"><option value="">Active + inactive</option><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
+    </div>
+    <div class="bv-result-count" id="resultCount"></div>
     <div class="bv-grid" id="grid"></div>
     <div class="bv-msg" id="gridMsg"></div>
   </div>
 </div>
 
+<dialog class="bv-confirm" id="confirmDialog">
+  <div class="bv-confirm-body">
+    <span class="bv-eyebrow">Final check</span>
+    <div class="bv-title" style="font-size:19px">Publish this badge?</div>
+    <div class="bv-confirm-art" id="confirmArt"><img id="confirmImage" alt="Final badge crop"></div>
+    <div class="bv-confirm-meta" id="confirmMeta"></div>
+    <div class="bv-confirm-actions">
+      <button class="btn btn-primary" id="publish" type="button">Publish to vault</button>
+      <button class="btn btn-ghost" id="cancelPublish" type="button">Go back and adjust</button>
+    </div>
+  </div>
+</dialog>
+
 <script type="module">
 import { call } from './js/api.js'
 import { getAgentNo, getSession } from './js/session.js'
+import {
+  badgeArtMatches,
+  badgeCoverage,
+  escapeBadgeText,
+  preferredPoolForRarity,
+} from './js/badge-vault.js'
 
 const $ = (id) => document.getElementById(id)
 const OUT = 512                 // exported square, px
@@ -190,6 +313,10 @@ const TYPE = 'image/webp'
 let templates = []
 let art = []
 let styleFilter = '' // '' = all, 'cute' | 'hot' | 'untagged'
+let pendingUpload = null
+let publishing = false
+let objectUrl = ''
+const filters = { templateId: '', rarity: '', member: '', uploader: '', status: '' }
 // Crop state, in DISPLAY pixels relative to the frame. The export applies
 // the identical numbers scaled by (OUT / frame width), so the preview is a
 // true 1:1 representation of the file that gets uploaded.
@@ -209,7 +336,7 @@ async function boot() {
     return
   }
   if (!res.allowed) {
-    $('gateMsg').innerHTML = `<code>${agentNo}</code> isn't a badge editor yet.<br><br>`
+    $('gateMsg').innerHTML = `<code>${escapeBadgeText(agentNo)}</code> isn't a badge editor yet.<br><br>`
       + 'Ask HT to add your agent number to <code>badge_editors</code>.'
     return
   }
@@ -225,14 +352,22 @@ async function load() {
   templates = res.templates || []
   art = res.art || []
   paintTemplates()
+  paintFilterOptions()
+  paintCoverage()
   paintGrid()
 }
 
 function paintTemplates() {
   const sel = $('tpl')
   sel.innerHTML = ''
+  const first = document.createElement('option')
+  first.value = ''
+  first.textContent = 'Choose a badge…'
+  sel.appendChild(first)
   const bySection = {}
-  for (const t of templates) (bySection[t.section] ||= []).push(t)
+  for (const t of templates.filter((template) => template.active !== false)) {
+    (bySection[t.section] ||= []).push(t)
+  }
   for (const section of Object.keys(bySection)) {
     const g = document.createElement('optgroup')
     g.label = section
@@ -244,18 +379,61 @@ function paintTemplates() {
     }
     sel.appendChild(g)
   }
+  paintTemplateGuidance()
 }
 
 const STYLE_TAG = { cute: '🌸 Cute', hot: '🔥 Hot' }
+const templateMap = () => new Map(templates.map((template) => [template.id, template]))
+const selectedTemplate = () => templates.find((template) => template.id === $('tpl').value) || null
+
+function addOptions(select, values, label) {
+  const current = select.value
+  select.innerHTML = ''
+  const all = document.createElement('option')
+  all.value = ''
+  all.textContent = label
+  select.appendChild(all)
+  for (const value of values) {
+    const option = document.createElement('option')
+    option.value = value
+    option.textContent = value
+    select.appendChild(option)
+  }
+  if (values.includes(current)) select.value = current
+}
+
+function paintFilterOptions() {
+  const activeTemplates = templates.filter((template) => template.active !== false)
+  const templateSelect = $('filterTemplate')
+  const currentTemplate = templateSelect.value
+  templateSelect.innerHTML = '<option value="">All badges</option>'
+  for (const template of activeTemplates) {
+    const option = document.createElement('option')
+    option.value = template.id
+    option.textContent = `${template.name}${template.rarity === 'rare' ? ' · Rare' : ''}`
+    templateSelect.appendChild(option)
+  }
+  if (activeTemplates.some((template) => template.id === currentTemplate)) templateSelect.value = currentTemplate
+  addOptions($('filterMember'), [...new Set(art.map((item) => item.member).filter(Boolean))].sort(), 'All members')
+  addOptions($('filterUploader'), [...new Set(art.map((item) => item.uploadedBy).filter(Boolean))].sort(), 'All makers')
+}
+
+function paintCoverage() {
+  const rows = badgeCoverage(templates, art)
+  $('coverageSummary').textContent = `${rows.filter((row) => row.preferred > 0).length}/${rows.length} ready`
+  $('coverageGrid').innerHTML = rows.map((row) => `
+    <div class="bv-cover-row${row.preferred ? '' : ' is-empty'}">
+      <b>${escapeBadgeText(row.name)}${row.rarity === 'rare' ? ' · Rare' : ''}</b>
+      <small>${row.active} active · ${row.preferred} ${row.preferredPool}<br>${row.preferred ? 'preferred pool ready' : `needs ${row.preferredPool} art`}</small>
+    </div>`).join('')
+}
 
 function paintGrid() {
   const grid = $('grid')
   grid.innerHTML = ''
-  const shown = art.filter((a) => {
-    if (!styleFilter) return true
-    if (styleFilter === 'untagged') return !STYLE_TAG[a.pool]
-    return a.pool === styleFilter
-  })
+  const byTemplate = templateMap()
+  const shown = art.filter((item) => badgeArtMatches(item, { ...filters, style: styleFilter }, byTemplate))
+  $('resultCount').textContent = `${shown.length} of ${art.length} photos`
   if (!art.length) {
     $('gridMsg').className = 'bv-msg'
     $('gridMsg').textContent = 'Nothing uploaded through the vault yet.'
@@ -269,22 +447,25 @@ function paintGrid() {
   $('gridMsg').textContent = ''
   for (const a of shown) {
     const tpl = templates.find((t) => t.id === a.templateId)
-    const el = document.createElement('div')
-    el.className = 'bv-item' + (a.active ? '' : ' is-off')
-    el.innerHTML = `
-      <img src="${a.url}" alt="" loading="lazy">
+    const card = document.createElement('div')
+    card.className = 'bv-item' + (a.active ? '' : ' is-off')
+    const controls = a.canManage
+      ? `<div class="bv-item-btns">
+          <button class="bv-mini" data-toggle="${Number(a.id)}">${a.active ? 'Deactivate' : 'Activate'}</button>
+          <button class="bv-mini danger" data-del="${Number(a.id)}" ${a.inUse ? 'disabled title="Someone wears this"' : ''}>Delete</button>
+        </div>`
+      : `<span class="bv-readonly">View only · managed by ${escapeBadgeText(a.uploadedBy || 'HT')}</span>`
+    card.innerHTML = `
+      <img src="${escapeBadgeText(a.url)}" alt="" loading="lazy">
       <div class="bv-item-body">
-        <div class="bv-item-tpl">${tpl ? tpl.name : a.templateId}</div>
+        <div class="bv-item-tpl">${escapeBadgeText(tpl ? tpl.name : a.templateId)}</div>
         <div class="bv-item-meta">
-          ${STYLE_TAG[a.pool] ? STYLE_TAG[a.pool] + ' · ' : ''}${a.member ? a.member + ' · ' : ''}${a.active ? 'active' : 'off'}${a.inUse ? ' · worn' : ''}
-          ${a.uploadedBy ? '<br>by ' + a.uploadedBy : ''}
+          ${STYLE_TAG[a.pool] ? STYLE_TAG[a.pool] + ' · ' : ''}${a.member ? escapeBadgeText(a.member) + ' · ' : ''}${a.active ? 'active' : 'off'}${a.inUse ? ` · worn by ${Number(a.usedCount) || 1}` : ''}
+          ${a.uploadedBy ? '<br>by ' + escapeBadgeText(a.uploadedBy) : ''}
         </div>
-        <div class="bv-item-btns">
-          <button class="bv-mini" data-toggle="${a.id}">${a.active ? 'Deactivate' : 'Activate'}</button>
-          <button class="bv-mini danger" data-del="${a.id}" ${a.inUse ? 'disabled title="Someone wears this"' : ''}>Delete</button>
-        </div>
+        ${controls}
       </div>`
-    grid.appendChild(el)
+    grid.appendChild(card)
   }
   grid.querySelectorAll('[data-toggle]').forEach((b) => {
     b.onclick = () => toggle(Number(b.dataset.toggle))
@@ -299,6 +480,7 @@ async function toggle(id) {
   const res = await call('setBadgeArtActive', { agentNo: getAgentNo(), artId: id, active: !a.active })
   if (!res.success) { $('gridMsg').className = 'bv-msg err'; $('gridMsg').textContent = res.error; return }
   a.active = res.active
+  paintCoverage()
   paintGrid()
 }
 
@@ -307,6 +489,8 @@ async function del(id) {
   const res = await call('deleteBadgeArt', { agentNo: getAgentNo(), artId: id })
   if (!res.success) { $('gridMsg').className = 'bv-msg err'; $('gridMsg').textContent = res.error; return }
   art = art.filter((x) => x.id !== id)
+  paintFilterOptions()
+  paintCoverage()
   paintGrid()
 }
 
@@ -322,18 +506,70 @@ function clamp() {
 }
 
 function paintCrop() {
-  if (!img) return
+  if (!img) { clearMiniPreviews(); return }
   clamp()
   img.style.width = (natW * baseScale * zoom) + 'px'
   img.style.height = (natH * baseScale * zoom) + 'px'
   img.style.left = ox + 'px'
   img.style.top = oy + 'px'
+  paintMiniPreviews()
+}
+
+function clearMiniPreviews() {
+  for (const id of ['previewCommon', 'previewRare', 'previewHud']) {
+    const canvas = $(id)
+    const ctx = canvas.getContext('2d')
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+  }
+}
+
+function drawPreview(canvas, visibleRatio = 1) {
+  const ctx = canvas.getContext('2d')
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  if (!img) return
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
+  const F = frameW()
+  const visibleW = F * visibleRatio
+  const cropX = (F - visibleW) / 2
+  const scale = canvas.height / F
+  ctx.drawImage(
+    img,
+    (ox - cropX) * scale,
+    oy * scale,
+    natW * baseScale * zoom * scale,
+    natH * baseScale * zoom * scale,
+  )
+}
+
+function paintMiniPreviews() {
+  drawPreview($('previewCommon'), 1)
+  drawPreview($('previewHud'), 1)
+  drawPreview($('previewRare'), 4 / 5)
+}
+
+function paintTemplateGuidance() {
+  const template = selectedTemplate()
+  const rarity = template?.rarity || 'common'
+  const preferred = preferredPoolForRarity(rarity)
+  $('previewCommonWrap').classList.toggle('is-match', !!template && rarity !== 'rare')
+  $('previewRareWrap').classList.toggle('is-match', !!template && rarity === 'rare')
+  $('poolHint').textContent = template
+    ? `${template.name} is ${rarity}. ${rarity === 'rare' ? 'Hot' : 'Cute'} photos are preferred; the other style is only a fallback.`
+    : 'Common badges prefer Cute photos. Rare badges prefer Hot photos.'
+  if (template && !$('pool').value) $('pool').value = preferred
+  updateReviewEnabled()
+}
+
+function updateReviewEnabled() {
+  $('save').disabled = !(img && $('tpl').value && $('member').value && $('pool').value)
 }
 
 $('file').onchange = (e) => {
   const f = e.target.files?.[0]
   if (!f) return
-  const url = URL.createObjectURL(f)
+  if (objectUrl) URL.revokeObjectURL(objectUrl)
+  objectUrl = URL.createObjectURL(f)
   const im = new Image()
   im.onload = () => {
     natW = im.naturalWidth; natH = im.naturalHeight
@@ -349,11 +585,11 @@ $('file').onchange = (e) => {
     $('cropGrid').hidden = false
     $('zoom').disabled = false
     $('zoom').value = '1'
-    $('save').disabled = false
     paintCrop()
+    updateReviewEnabled()
   }
   im.onerror = () => { $('msg').className = 'bv-msg err'; $('msg').textContent = "Couldn't open that file." }
-  im.src = url
+  im.src = objectUrl
 }
 
 $('zoom').oninput = () => { zoom = Number($('zoom').value); paintCrop() }
@@ -364,6 +600,25 @@ $('reset').onclick = () => {
   ox = (F - natW * baseScale) / 2
   oy = (F - natH * baseScale) / 2
   paintCrop()
+}
+
+function clearComposer() {
+  pendingUpload = null
+  $('file').value = ''
+  $('tpl').value = ''
+  $('member').value = ''
+  $('pool').value = ''
+  $('zoom').value = '1'
+  $('zoom').disabled = true
+  $('crop').querySelectorAll('img').forEach((node) => node.remove())
+  $('cropEmpty').hidden = false
+  $('cropGrid').hidden = true
+  if (objectUrl) URL.revokeObjectURL(objectUrl)
+  objectUrl = ''
+  img = null
+  natW = 0; natH = 0; zoom = 1; ox = 0; oy = 0; baseScale = 1
+  clearMiniPreviews()
+  paintTemplateGuidance()
 }
 
 let dragging = false, lastX = 0, lastY = 0
@@ -384,46 +639,112 @@ crop.addEventListener('pointerup', endDrag)
 crop.addEventListener('pointercancel', endDrag)
 
 /* ── save ─────────────────────────────────────────────────────────── */
-$('save').onclick = async () => {
-  if (!img) return
-  const btn = $('save')
-  btn.disabled = true
-  $('msg').className = 'bv-msg'
-  $('msg').textContent = 'Uploading…'
-
-  // Same transform as the preview, scaled from frame px to output px.
+async function buildCroppedImage() {
   const k = OUT / frameW()
   const canvas = document.createElement('canvas')
   canvas.width = OUT; canvas.height = OUT
   const ctx = canvas.getContext('2d')
+  ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
   ctx.drawImage(img, ox * k, oy * k, natW * baseScale * zoom * k, natH * baseScale * zoom * k)
 
   const blob = await new Promise((r) => canvas.toBlob(r, TYPE, 0.9))
-  if (!blob) { $('msg').className = 'bv-msg err'; $('msg').textContent = "Couldn't encode the image."; btn.disabled = false; return }
+  if (!blob) return null
   const b64 = await new Promise((r) => {
     const fr = new FileReader(); fr.onload = () => r(String(fr.result)); fr.readAsDataURL(blob)
   })
-
-  const res = await call('addBadgeArt', {
-    agentNo: getAgentNo(),
-    templateId: $('tpl').value,
-    member: $('member').value.trim() || null,
-    pool: $('pool').value || null,
-    contentType: TYPE,
-    imageBase64: b64,
-  })
-  btn.disabled = false
-  if (!res.success) { $('msg').className = 'bv-msg err'; $('msg').textContent = res.error; return }
-
-  $('msg').className = 'bv-msg ok'
-  $('msg').textContent = 'Added. It\'s in the pool for that badge from now on.'
-  art.unshift(res.art)
-  paintGrid()
-  $('file').value = ''
-  $('member').value = ''
-  $('pool').value = ''
+  return b64
 }
+
+$('save').onclick = async () => {
+  const template = selectedTemplate()
+  const member = $('member').value
+  const pool = $('pool').value
+  if (!img || !template || !member || !pool) {
+    $('msg').className = 'bv-msg err'
+    $('msg').textContent = 'Choose a badge, member and style, then pick a photo.'
+    updateReviewEnabled()
+    return
+  }
+
+  const btn = $('save')
+  btn.disabled = true
+  $('msg').className = 'bv-msg'
+  $('msg').textContent = 'Preparing preview…'
+  const imageBase64 = await buildCroppedImage()
+  if (!imageBase64) {
+    $('msg').className = 'bv-msg err'
+    $('msg').textContent = "Couldn't prepare that image."
+    updateReviewEnabled()
+    return
+  }
+
+  pendingUpload = { template, member, pool, imageBase64 }
+  $('confirmImage').src = imageBase64
+  $('confirmArt').classList.toggle('is-rare', template.rarity === 'rare')
+  $('confirmMeta').innerHTML = `
+    <b>${escapeBadgeText(template.name)}</b> · ${template.rarity === 'rare' ? 'Rare card' : 'Common circle'}<br>
+    ${escapeBadgeText(member)} · ${escapeBadgeText(STYLE_TAG[pool] || pool)}<br>
+    Publishes immediately to this badge's active pool.`
+  $('msg').textContent = ''
+  $('confirmDialog').showModal()
+  updateReviewEnabled()
+}
+
+$('cancelPublish').onclick = () => {
+  if (publishing) return
+  pendingUpload = null
+  $('confirmDialog').close()
+}
+
+$('publish').onclick = async () => {
+  if (!pendingUpload || publishing) return
+  publishing = true
+  const btn = $('publish')
+  const cancelBtn = $('cancelPublish')
+  btn.disabled = true
+  cancelBtn.disabled = true
+  btn.textContent = 'PUBLISHING…'
+  const upload = pendingUpload
+
+  let res
+  try {
+    res = await call('addBadgeArt', {
+      agentNo: getAgentNo(),
+      templateId: upload.template.id,
+      member: upload.member,
+      pool: upload.pool,
+      contentType: TYPE,
+      imageBase64: upload.imageBase64,
+    })
+  } catch {
+    res = { success: false, error: "Couldn't reach the vault. Please try again." }
+  }
+  publishing = false
+  btn.disabled = false
+  cancelBtn.disabled = false
+  btn.textContent = 'Publish to vault'
+  if (!res.success) {
+    if ($('confirmDialog').open) $('confirmDialog').close()
+    $('msg').className = 'bv-msg err'
+    $('msg').textContent = res.error
+    updateReviewEnabled()
+    return
+  }
+
+  if ($('confirmDialog').open) $('confirmDialog').close()
+  $('msg').className = 'bv-msg ok'
+  $('msg').textContent = 'Published. Pick a new photo when you are ready.'
+  art.unshift(res.art)
+  clearComposer()
+  paintFilterOptions()
+  paintCoverage()
+  paintGrid()
+}
+
+$('tpl').onchange = paintTemplateGuidance
+$('member').onchange = updateReviewEnabled
+$('pool').onchange = updateReviewEnabled
 
 $('styleFilter').querySelectorAll('.bv-chip').forEach((btn) => {
   btn.onclick = () => {
@@ -432,6 +753,22 @@ $('styleFilter').querySelectorAll('.bv-chip').forEach((btn) => {
     paintGrid()
   }
 })
+
+for (const [id, key] of [
+  ['filterTemplate', 'templateId'],
+  ['filterRarity', 'rarity'],
+  ['filterMember', 'member'],
+  ['filterUploader', 'uploader'],
+  ['filterStatus', 'status'],
+]) {
+  $(id).onchange = () => { filters[key] = $(id).value; paintGrid() }
+}
+
+$('confirmDialog').addEventListener('cancel', (event) => {
+  if (publishing) event.preventDefault()
+})
+$('confirmDialog').addEventListener('close', () => { pendingUpload = null })
+clearMiniPreviews()
 
 boot()
 </script>

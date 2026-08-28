@@ -809,10 +809,9 @@ function checkText(text, cfg, category, expectedCode, allowedVoteTotals = null) 
       ['BTS', proof.hasBts, false],
       ['SWIM', proof.hasSong, true],
       [cfg.category_labels?.[category] || 'Category', hasAny(cfg.category_match_keywords?.[category]), false],
-      // Informational only now — the on-screen counter is the flakiest
-      // thing to OCR and isn't needed for proof; song + BTS + today's code
-      // already establish a real vote was cast today.
-      [proof.displayedTotal != null ? `${proof.displayedTotal} votes` : 'Vote total', proof.voteTotalOk, false],
+      // The screenshot decides whether this is a completed 10/20-vote proof;
+      // the player is never asked to type a vote amount themselves.
+      [proof.displayedTotal != null ? `${proof.displayedTotal} votes` : 'Vote total', proof.voteTotalOk, true],
       ["Today's code", proof.watermarkOk, true],
     ],
     displayedTotal: proof.displayedTotal,

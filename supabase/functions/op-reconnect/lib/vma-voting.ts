@@ -132,6 +132,7 @@ function checkProofText(text: string, cfg: VmaConfig, category: string, expected
 
   const missing: string[] = []
   if (!proof.hasSong) missing.push('song title')
+  if (!proof.voteTotalOk) missing.push(`valid ${dailyCap}-vote total`)
   if (!proof.watermarkOk) missing.push('watermark code')
 
   if (proof.passed) {
@@ -302,12 +303,10 @@ export async function logVmaVote(supabase: SupabaseDB, content: GameContent, par
   const imageHash = await sha256Hex(bytes)
   const expectedCode = dailyWatermarkCode(cfg, day)
   const check = checkProofText(ocrText, cfg, category, expectedCode, cap)
-  // The on-screen vote counter is no longer part of the proof — song +
-  // BTS + today's watermark code passing is what "this screenshot is
-  // real" means now. A verified proof credits the full boosted cap
-  // outright (10 normally, 20 during Power Hour or a Double Day); an
-  // unclear one still stores whatever OCR could read (0 if nothing) and
-  // waits for an admin to check the actual screenshot.
+  // A verified proof has independently shown the configured song, today's
+  // watermark and the full valid counter (10 normally, 20 during Power Hour
+  // or a Double Day). An unclear proof stores whatever OCR could read (0 if
+  // nothing) and waits for an admin to check the actual screenshot.
   const displayedTotal = check.status === 'verified' ? cap : (check.displayedTotal ?? 0)
 
   const path = `${agentNo}/${Date.now()}.${imageMime.includes('png') ? 'png' : 'jpg'}`

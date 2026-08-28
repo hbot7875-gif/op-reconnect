@@ -126,8 +126,8 @@ export function validVoteTotals(dailyCap) {
 
 /** One shared auto-approval decision for the browser and Edge Function.
  * The stylized VMA logo and category heading are not reliably present in a
- * mobile screenshot, so the proof-bearing fields are BTS, the configured
- * song title, the day's valid vote counter and today's watermark code. */
+ * mobile screenshot, so the proof-bearing fields are the configured song,
+ * the day's valid vote counter and today's watermark code. */
 export function evaluateVoteProof(text, {
   expectedCode = '', songKeywords = [], displayedTotal = null, allowedVoteTotals = null,
 } = {}) {
@@ -141,13 +141,12 @@ export function evaluateVoteProof(text, {
   // block the same fact twice and caused the live false-review backlog.
   const identityOk = songKeywords.length > 0 ? hasSong : hasBts
 
-  // The on-screen vote counter is the flakiest thing to OCR (small text
-  // sitting over a photo) and isn't needed for proof anyway — the song +
-  // BTS + today's watermark code already establish "this is a real vote
-  // cast today by this agent." voteTotalOk/displayedTotal are still
-  // returned for the checklist/admin view, just no longer required to pass.
+  // Automatic credit must come from the screenshot, not from a claimed
+  // amount. The OCR total therefore has to be one of today's allowed totals
+  // (10 normally, 20 on boosted days). If OCR cannot confirm it, the proof
+  // remains pending for the admin to inspect rather than receiving credit.
   return {
-    passed: identityOk && watermarkOk,
+    passed: identityOk && voteTotalOk && watermarkOk,
     hasBts,
     hasSong,
     voteTotalOk,

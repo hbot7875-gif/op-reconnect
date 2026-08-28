@@ -5,10 +5,11 @@
 // once, unworkable when several people are adding badges every week. These
 // routes let a named agent upload a photo and register it in one action.
 //
-// Nothing downstream needs to change: rc_award_badge already picks a random
-// photo from the template's ACTIVE pool at award time, so a row added here
-// enters circulation immediately for every badge earned afterwards. Awards
-// already handed out keep the photo they were given — that's by design (see
+// Nothing downstream needs to change: rc_award_badge picks from the
+// template's ACTIVE preferred pool at award time (Cute for common, Hot for
+// rare), then falls back to any active photo. A row added here therefore enters
+// circulation immediately for every badge earned afterwards. Awards already
+// handed out keep the photo they were given — that's by design (see
 // badge-profile.ts), not something this file works around.
 //
 // PERMISSION MODEL — deliberately narrow.
@@ -20,6 +21,11 @@
 // as always-allowed so a malformed config row can never lock everyone out.
 
 import type { SupabaseDB } from './config.ts'
+import {
+  canonicalBadgeMember,
+  canonicalBadgePool,
+  canManageBadgeArt,
+} from './badge-admin-rules.js'
 
 const BUCKET = 'badge-art'
 const MAX_BYTES = 2 * 1024 * 1024 // 2 MB after decode — the client crops and
@@ -67,7 +73,8 @@ export async function amIBadgeEditor(supabase: SupabaseDB, params: any) {
 /** Everything the vault page renders: the templates art can attach to, and
  *  the art that already exists, newest first. inUse tells the UI which rows
  *  can't be deleted (see deleteBadgeArt). */
-export async function getBadgeVault(supabase: SupabaseDB, _params: any) {
+export async function getBadgeVault(supabase: SupabaseDB, params: any) {
+  const viewer = String(params.agentNo || '').trim().toUpperCase()
   const [tplRes, artRes, usedRes] = await Promise.all([
     supabase.from('rc_badge_catalog')
       .select('id, section, rarity, name, unlock_hint, sort_order, active')
@@ -79,9 +86,14 @@ export async function getBadgeVault(supabase: SupabaseDB, _params: any) {
   ])
   if (tplRes.error) return { success: false, error: tplRes.error.message }
   if (artRes.error) return { success: false, error: artRes.error.message }
+  if (usedRes.error) return { success: false, error: usedRes.error.message }
 
   const base = Deno.env.get('SUPABASE_URL') || ''
-  const inUse = new Set((usedRes.data || []).map((r: any) => r.artwork_id))
+  const usedCount = new Map<number, number>()
+  for (const row of usedRes.data || []) {
+    const id = Number((row as any).artwork_id)
+    if (Number.isFinite(id)) usedCount.set(id, (usedCount.get(id) || 0) + 1)
+  }
 
   return {
     success: true,
@@ -96,7 +108,12 @@ export async function getBadgeVault(supabase: SupabaseDB, _params: any) {
       active: a.active,
       uploadedBy: a.uploaded_by,
       createdAt: a.created_at,
-      inUse: inUse.has(a.id),
+      inUse: (usedCount.get(a.id) || 0) > 0,
+      usedCount: usedCount.get(a.id) || 0,
+      // Editors can browse the shared pool, but only the uploader can alter
+      // their own rows. AGENT000 remains the vault curator and can fix any
+      // row, including legacy art with no uploaded_by value.
+      canManage: canManageBadgeArt(viewer, a.uploaded_by),
     })),
   }
 }
@@ -123,11 +140,12 @@ export async function addBadgeArt(supabase: SupabaseDB, params: any) {
   const templateId = String(params.templateId || '').trim()
   const agentNo = String(params.agentNo || '').toUpperCase()
   const contentType = String(params.contentType || '')
-  const member = params.member ? String(params.member).trim().slice(0, 40) : null
-  const pool = params.pool ? String(params.pool).trim().toLowerCase() : null
+  const member = canonicalBadgeMember(params.member)
+  const pool = canonicalBadgePool(params.pool)
 
   if (!templateId) return { success: false, error: 'Pick a badge template first.' }
-  if (pool && !POOL_TAGS.has(pool)) return { success: false, error: 'Style must be Cute or Hot.' }
+  if (!member) return { success: false, error: 'Choose BTS or a member.' }
+  if (!pool || !POOL_TAGS.has(pool)) return { success: false, error: 'Choose Cute or Hot.' }
   const ext = ALLOWED_TYPES[contentType]
   if (!ext) return { success: false, error: 'Image must be WebP, JPEG or PNG.' }
   if (!params.imageBase64) return { success: false, error: 'No image data received.' }
@@ -135,9 +153,10 @@ export async function addBadgeArt(supabase: SupabaseDB, params: any) {
   // The template has to exist — a typo'd id would otherwise insert a row
   // that violates the FK with a much less readable error.
   const { data: tpl, error: tplErr } = await supabase
-    .from('rc_badge_catalog').select('id').eq('id', templateId).maybeSingle()
+    .from('rc_badge_catalog').select('id, active').eq('id', templateId).maybeSingle()
   if (tplErr) return { success: false, error: tplErr.message }
   if (!tpl) return { success: false, error: `No badge template called "${templateId}".` }
+  if (!tpl.active) return { success: false, error: 'That badge is currently inactive.' }
 
   let bytes: Uint8Array
   try { bytes = decodeBase64(String(params.imageBase64)) }
@@ -189,7 +208,7 @@ export async function addBadgeArt(supabase: SupabaseDB, params: any) {
       id: row.id, templateId, storagePath,
       url: `${base}/storage/v1/object/public/${BUCKET}/${storagePath}`,
       member, pool, active: params.active !== false,
-      uploadedBy: agentNo || null, inUse: false,
+      uploadedBy: agentNo || null, inUse: false, usedCount: 0, canManage: true,
     },
   }
 }
@@ -198,10 +217,22 @@ export async function addBadgeArt(supabase: SupabaseDB, params: any) {
  *  award that already used it. This is the safe alternative to deleting. */
 export async function setBadgeArtActive(supabase: SupabaseDB, params: any) {
   const id = Number(params.artId)
+  const agentNo = String(params.agentNo || '').trim().toUpperCase()
   if (!Number.isFinite(id)) return { success: false, error: 'Which photo?' }
-  const { error } = await supabase.from('rc_badge_art')
+
+  const { data: row, error: rowErr } = await supabase.from('rc_badge_art')
+    .select('id, uploaded_by').eq('id', id).maybeSingle()
+  if (rowErr) return { success: false, error: rowErr.message }
+  if (!row) return { success: false, error: 'That photo no longer exists.' }
+  if (!canManageBadgeArt(agentNo, row.uploaded_by)) {
+    return { success: false, error: 'Only the person who uploaded this photo can change it.' }
+  }
+
+  const { data: changed, error } = await supabase.from('rc_badge_art')
     .update({ active: !!params.active }).eq('id', id)
+    .select('id').maybeSingle()
   if (error) return { success: false, error: error.message }
+  if (!changed) return { success: false, error: 'That photo no longer exists.' }
   return { success: true, artId: id, active: !!params.active }
 }
 
@@ -212,7 +243,16 @@ export async function setBadgeArtActive(supabase: SupabaseDB, params: any) {
  *  which leaves existing wearers untouched). */
 export async function deleteBadgeArt(supabase: SupabaseDB, params: any) {
   const id = Number(params.artId)
+  const agentNo = String(params.agentNo || '').trim().toUpperCase()
   if (!Number.isFinite(id)) return { success: false, error: 'Which photo?' }
+
+  const { data: row, error: rowErr } = await supabase.from('rc_badge_art')
+    .select('storage_path, uploaded_by').eq('id', id).maybeSingle()
+  if (rowErr) return { success: false, error: rowErr.message }
+  if (!row) return { success: false, error: 'That photo no longer exists.' }
+  if (!canManageBadgeArt(agentNo, row.uploaded_by)) {
+    return { success: false, error: 'Only the person who uploaded this photo can delete it.' }
+  }
 
   const { count, error: useErr } = await supabase
     .from('rc_badges').select('artwork_id', { count: 'exact', head: true }).eq('artwork_id', id)
@@ -223,9 +263,6 @@ export async function deleteBadgeArt(supabase: SupabaseDB, params: any) {
       error: `${count} agent${count === 1 ? '' : 's'} already wear this photo, so it can't be deleted. Deactivate it instead — it stops being handed out and everyone who has it keeps it.`,
     }
   }
-
-  const { data: row } = await supabase.from('rc_badge_art')
-    .select('storage_path').eq('id', id).maybeSingle()
 
   const { error } = await supabase.from('rc_badge_art').delete().eq('id', id)
   if (error) return { success: false, error: error.message }
