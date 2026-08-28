@@ -36,7 +36,8 @@ import { submitReconnectPuzzleAnswer } from './lib/reconnect-puzzle.ts'
 import { getLeaderboard } from './lib/leaderboard.ts'
 import { setEquippedBadge, getBadgeCollection, setAvatarCrop } from './lib/badge-profile.ts'
 import {
-  isBadgeEditor, amIBadgeEditor, getBadgeVault, addBadgeArt, setBadgeArtActive, deleteBadgeArt,
+  isBadgeEditor, amIBadgeEditor, getBadgeVault, addBadgeArt, setBadgeArtActive,
+  deleteBadgeArt, undoBadgeArtUpload,
 } from './lib/badge-admin.ts'
 import { getMagicShop, buyWings, claimTicket } from './lib/magic-shop.ts'
 import { feedCharge, setAutoFeed, getAgentCharge, useLitEra } from './lib/agent-charge.ts'
@@ -117,6 +118,7 @@ const ROUTES: Record<string, Route> = {
   addBadgeArt:      { auth: 'badge', handler: (sb, p) => addBadgeArt(sb, p) },
   setBadgeArtActive:{ auth: 'badge', handler: (sb, p) => setBadgeArtActive(sb, p) },
   deleteBadgeArt:   { auth: 'badge', handler: (sb, p) => deleteBadgeArt(sb, p) },
+  undoBadgeArtUpload:{ auth: 'badge', handler: (sb, p) => undoBadgeArtUpload(sb, p) },
   // BOTZ redesign Phase 2 — see lib/magic-shop.ts.
   getMagicShop: { auth: 'agent', handler: async (sb, p) => getMagicShop(sb, await loadContent(sb), p) },
   buyWings: { auth: 'agent', handler: async (sb, p) => buyWings(sb, await loadContent(sb), p) },

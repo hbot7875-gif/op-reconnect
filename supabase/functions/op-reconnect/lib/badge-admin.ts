@@ -22,7 +22,8 @@
 
 import type { SupabaseDB } from './config.ts'
 import {
-  canonicalBadgeMember,
+  badgeMembersLabel,
+  canonicalBadgeMembers,
   canonicalBadgePool,
   canManageBadgeArt,
 } from './badge-admin-rules.js'
@@ -80,7 +81,7 @@ export async function getBadgeVault(supabase: SupabaseDB, params: any) {
       .select('id, section, rarity, name, unlock_hint, sort_order, active')
       .order('section').order('sort_order'),
     supabase.from('rc_badge_art')
-      .select('id, template_id, storage_path, member, pool, active, uploaded_by, created_at')
+      .select('id, template_id, storage_path, member, members, pool, active, uploaded_by, created_at, image_hash')
       .order('id', { ascending: false }).limit(500),
     supabase.from('rc_badges').select('artwork_id').not('artwork_id', 'is', null),
   ])
@@ -104,10 +105,12 @@ export async function getBadgeVault(supabase: SupabaseDB, params: any) {
       url: `${base}/storage/v1/object/public/${BUCKET}/${a.storage_path}`,
       storagePath: a.storage_path,
       member: a.member,
+      members: canonicalBadgeMembers(a.members?.length ? a.members : a.member) || [],
       pool: a.pool,
       active: a.active,
       uploadedBy: a.uploaded_by,
       createdAt: a.created_at,
+      imageHash: a.image_hash,
       inUse: (usedCount.get(a.id) || 0) > 0,
       usedCount: usedCount.get(a.id) || 0,
       // Editors can browse the shared pool, but only the uploader can alter
@@ -128,6 +131,11 @@ function decodeBase64(b64: string): Uint8Array {
   return out
 }
 
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', bytes)
+  return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
 /** Upload one already-cropped photo and register it.
  *
  *  The crop happens in the browser (canvas → re-encode) and this receives
@@ -140,11 +148,12 @@ export async function addBadgeArt(supabase: SupabaseDB, params: any) {
   const templateId = String(params.templateId || '').trim()
   const agentNo = String(params.agentNo || '').toUpperCase()
   const contentType = String(params.contentType || '')
-  const member = canonicalBadgeMember(params.member)
+  const members = canonicalBadgeMembers(params.members ?? params.member)
+  const member = badgeMembersLabel(members)
   const pool = canonicalBadgePool(params.pool)
 
   if (!templateId) return { success: false, error: 'Pick a badge template first.' }
-  if (!member) return { success: false, error: 'Choose BTS or a member.' }
+  if (!members?.length || !member) return { success: false, error: 'Choose BTS or everyone visible in the photo.' }
   if (!pool || !POOL_TAGS.has(pool)) return { success: false, error: 'Choose Cute or Hot.' }
   const ext = ALLOWED_TYPES[contentType]
   if (!ext) return { success: false, error: 'Image must be WebP, JPEG or PNG.' }
@@ -164,6 +173,20 @@ export async function addBadgeArt(supabase: SupabaseDB, params: any) {
   if (!bytes.length) return { success: false, error: 'That image was empty.' }
   if (bytes.length > MAX_BYTES) {
     return { success: false, error: `Image is ${(bytes.length / 1048576).toFixed(1)} MB — 2 MB max.` }
+  }
+
+
+  const imageHash = await sha256Hex(bytes)
+  const { data: duplicate, error: duplicateErr } = await supabase.from('rc_badge_art')
+    .select('id, template_id, active').eq('template_id', templateId).eq('image_hash', imageHash).maybeSingle()
+  if (duplicateErr) return { success: false, error: duplicateErr.message }
+  if (duplicate) {
+    return {
+      success: false,
+      error: 'This exact crop is already in this badge pool.',
+      code: 'duplicate_badge_art',
+      duplicateArtId: duplicate.id,
+    }
   }
 
   // Path carries the template so the bucket stays browsable by hand, and a
@@ -189,7 +212,7 @@ export async function addBadgeArt(supabase: SupabaseDB, params: any) {
     .insert({
       template_id: templateId,
       storage_path: storagePath,
-      member, pool,
+      member, members, pool, image_hash: imageHash,
       active: params.active === false ? false : true,
       uploaded_by: agentNo || null,
     })
@@ -198,6 +221,9 @@ export async function addBadgeArt(supabase: SupabaseDB, params: any) {
   if (insErr) {
     // Don't leave an orphan file in the bucket if the row failed to land.
     await supabase.storage.from(BUCKET).remove([storagePath])
+    if ((insErr as any).code === '23505') {
+      return { success: false, error: 'This exact crop is already in this badge pool.', code: 'duplicate_badge_art' }
+    }
     return { success: false, error: insErr.message }
   }
 
@@ -207,7 +233,7 @@ export async function addBadgeArt(supabase: SupabaseDB, params: any) {
     art: {
       id: row.id, templateId, storagePath,
       url: `${base}/storage/v1/object/public/${BUCKET}/${storagePath}`,
-      member, pool, active: params.active !== false,
+      member, members, pool, active: params.active !== false, imageHash,
       uploadedBy: agentNo || null, inUse: false, usedCount: 0, canManage: true,
     },
   }
@@ -268,4 +294,45 @@ export async function deleteBadgeArt(supabase: SupabaseDB, params: any) {
   if (error) return { success: false, error: error.message }
   if (row?.storage_path) await supabase.storage.from(BUCKET).remove([row.storage_path])
   return { success: true, artId: id }
+}
+
+/** One-tap recovery immediately after publishing. If nobody owns the art yet,
+ * remove it completely. If an award claimed it during that small window, keep
+ * the historical artwork intact and deactivate it so it is never handed out
+ * again. */
+export async function undoBadgeArtUpload(supabase: SupabaseDB, params: any) {
+  const id = Number(params.artId)
+  const agentNo = String(params.agentNo || '').trim().toUpperCase()
+  if (!Number.isFinite(id)) return { success: false, error: 'Which photo?' }
+
+  const { data: row, error: rowErr } = await supabase.from('rc_badge_art')
+    .select('id, storage_path, uploaded_by').eq('id', id).maybeSingle()
+  if (rowErr) return { success: false, error: rowErr.message }
+  if (!row) return { success: true, artId: id, outcome: 'deleted' }
+  if (!canManageBadgeArt(agentNo, row.uploaded_by)) {
+    return { success: false, error: 'Only the person who uploaded this photo can undo it.' }
+  }
+
+  const { count, error: useErr } = await supabase
+    .from('rc_badges').select('artwork_id', { count: 'exact', head: true }).eq('artwork_id', id)
+  if (useErr) return { success: false, error: useErr.message }
+  if ((count || 0) > 0) {
+    const { error } = await supabase.from('rc_badge_art').update({ active: false }).eq('id', id)
+    if (error) return { success: false, error: error.message }
+    return { success: true, artId: id, outcome: 'deactivated', usedCount: count }
+  }
+
+  const { error: deleteErr } = await supabase.from('rc_badge_art').delete().eq('id', id)
+  if (deleteErr) {
+    // A badge may have claimed this row between the count and delete. Preserve
+    // it and fall back to the same safe deactivation behavior.
+    if ((deleteErr as any).code === '23503') {
+      const { error } = await supabase.from('rc_badge_art').update({ active: false }).eq('id', id)
+      if (error) return { success: false, error: error.message }
+      return { success: true, artId: id, outcome: 'deactivated', usedCount: 1 }
+    }
+    return { success: false, error: deleteErr.message }
+  }
+  if (row.storage_path) await supabase.storage.from(BUCKET).remove([row.storage_path])
+  return { success: true, artId: id, outcome: 'deleted' }
 }

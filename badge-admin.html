@@ -78,12 +78,52 @@
     font-size: 8px; letter-spacing: .8px; text-transform: uppercase; text-overflow: ellipsis; white-space: nowrap; }
   .bv-pool-hint { margin: -6px 0 10px; color: var(--dim); font-size: 11px; line-height: 1.45; }
 
+  .bv-quality { max-width: 300px; margin: 9px auto 0; min-height: 18px; color: var(--dim);
+    font-size: 11px; line-height: 1.45; }
+  .bv-quality.warn { color: var(--gold); }
+  .bv-quality.bad { color: #ef8b9a; }
+
+  .bv-file-picker { position: relative; display: grid; grid-template-columns: auto minmax(0,1fr);
+    gap: 10px; align-items: center; min-height: 48px; padding: 7px; border: 1px solid var(--border);
+    border-radius: 10px; background: var(--surface-2); cursor: pointer; }
+  .bv-file-picker:focus-within { border-color: var(--purple-lt); box-shadow: 0 0 0 2px rgba(139,92,246,.15); }
+  .bv-file-picker input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+  .bv-file-button { display: inline-flex; align-items: center; justify-content: center; min-height: 34px;
+    padding: 0 12px; border-radius: 8px; background: var(--purple-soft); color: var(--text);
+    font: 600 10px var(--mono); letter-spacing: .4px; }
+  .bv-file-name { min-width: 0; overflow: hidden; color: var(--muted); font-size: 11px;
+    text-overflow: ellipsis; white-space: nowrap; }
+
+  .bv-member-picker { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 7px; }
+  .bv-member-chip { min-height: 44px; padding: 8px 5px; border: 1px solid var(--border);
+    border-radius: 10px; background: var(--surface-2); color: var(--muted); font: 600 11px var(--body);
+    cursor: pointer; }
+  .bv-member-chip:first-child { grid-column: span 2; }
+  .bv-member-chip[aria-pressed="true"] { border-color: var(--purple-lt); color: var(--text);
+    background: var(--purple-soft); box-shadow: inset 0 0 0 1px rgba(139,92,246,.14); }
+  .bv-member-summary { margin: 7px 0 0; min-height: 17px; color: var(--purple-lt);
+    font-family: var(--mono); font-size: 10px; line-height: 1.45; }
+
   .bv-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
   .bv-actions .btn { margin-top: 0; }
 
+  .bv-success { display: grid; grid-template-columns: 54px 1fr; gap: 11px; align-items: center;
+    margin-top: 14px; padding: 11px; border: 1px solid rgba(91,191,148,.35); border-radius: 12px;
+    background: rgba(35,112,81,.12); }
+  .bv-success[hidden] { display: none; }
+  .bv-success img { width: 54px; height: 54px; border-radius: 50%; object-fit: cover;
+    border: 2px solid var(--gold); }
+  .bv-success.is-rare img { height: 68px; border-radius: 8px; }
+  .bv-success-copy b { display: block; margin-bottom: 2px; font-size: 12px; }
+  .bv-success-copy span { display: block; color: var(--muted); font-size: 10.5px; line-height: 1.4; }
+  .bv-success-actions { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3,1fr); gap: 7px; }
+  .bv-success-actions button { min-height: 40px; padding: 7px 5px; border: 1px solid var(--border);
+    border-radius: 9px; background: transparent; color: var(--text); font: 600 9px var(--mono); cursor: pointer; }
+  .bv-success-actions button:first-child { border-color: rgba(239,139,154,.45); color: #ef8b9a; }
+
   /* ── existing art ── */
   .bv-filter { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
-  .bv-chip { padding: 5px 12px; border-radius: 999px; border: 1px solid var(--border);
+  .bv-chip { min-height: 42px; padding: 8px 13px; border-radius: 999px; border: 1px solid var(--border);
     background: none; color: var(--muted); font-family: var(--mono); font-size: 10.5px;
     letter-spacing: .5px; cursor: pointer; }
   .bv-chip:hover { border-color: var(--border-str); color: var(--text); }
@@ -98,7 +138,7 @@
     text-overflow: ellipsis; white-space: nowrap; }
   .bv-item-meta { font-family: var(--mono); font-size: 9px; color: var(--dim); line-height: 1.5; }
   .bv-item-btns { display: flex; gap: 6px; margin-top: 4px; }
-  .bv-mini { flex: 1; padding: 5px 6px; border-radius: 7px; border: 1px solid var(--border);
+  .bv-mini { flex: 1; min-height: 40px; padding: 7px 6px; border-radius: 7px; border: 1px solid var(--border);
     background: none; color: var(--muted); font-family: var(--mono); font-size: 9px;
     letter-spacing: .5px; cursor: pointer; }
   .bv-mini:hover { border-color: var(--border-str); color: var(--text); }
@@ -114,6 +154,13 @@
     font-family: var(--mono); font-size: 8px; letter-spacing: .8px; text-transform: uppercase; }
   .bv-filter-grid select { width: 100%; min-width: 0; padding: 9px 8px; font-size: 11px; }
   .bv-result-count { margin: -3px 0 11px; color: var(--dim); font-family: var(--mono); font-size: 9px; }
+  .bv-more-filters { margin: 0 0 12px; border: 1px solid var(--border); border-radius: 10px;
+    background: var(--surface-2); }
+  .bv-more-filters summary { min-height: 42px; display: flex; align-items: center; padding: 0 11px;
+    color: var(--muted); font-family: var(--mono); font-size: 10px; cursor: pointer; }
+  .bv-more-body { padding: 0 10px 10px; }
+  .bv-clear-filters { min-height: 40px; width: 100%; border: 1px solid var(--border); border-radius: 9px;
+    background: transparent; color: var(--muted); font: 10px var(--mono); cursor: pointer; }
   .bv-coverage { margin: 0 0 14px; padding: 10px 11px; border: 1px solid var(--border);
     border-radius: 10px; background: var(--surface-2); }
   .bv-coverage summary { cursor: pointer; color: var(--text); font-family: var(--mono);
@@ -157,6 +204,11 @@
     .bv-coverage-grid { grid-template-columns: 1fr; }
     .bv-preview.common canvas { width: 66px; height: 66px; }
     .bv-preview.rare canvas { width: 54px; height: 68px; }
+    .bv-member-picker { grid-template-columns: repeat(3, minmax(0,1fr)); }
+    .bv-member-chip:first-child { grid-column: span 3; }
+    .bv-actions .btn { min-height: 46px; flex: 1 1 45%; }
+    .bv-success-actions { grid-template-columns: 1fr; }
+    .bv-success-actions button { min-height: 44px; }
   }
 </style>
 </head>
@@ -193,10 +245,14 @@
       <select class="input-field" id="tpl"></select>
     </label>
 
-    <label class="bv-field">
+    <div class="bv-field">
       <span>Photo file</span>
-      <input class="input-field" id="file" type="file" accept="image/png,image/jpeg,image/webp">
-    </label>
+      <label class="bv-file-picker" for="file">
+        <span class="bv-file-button">Choose photo</span>
+        <span class="bv-file-name" id="fileName">No photo selected</span>
+        <input id="file" type="file" accept="image/png,image/jpeg,image/webp">
+      </label>
+    </div>
 
     <div class="bv-crop" id="crop">
       <div class="bv-crop-empty" id="cropEmpty">Pick a photo to frame it</div>
@@ -206,6 +262,7 @@
       <span>Zoom</span>
       <input id="zoom" type="range" min="1" max="3" step="0.01" value="1" disabled>
     </div>
+    <div class="bv-quality" id="qualityMsg" aria-live="polite"></div>
 
     <div class="bv-previews" aria-label="In-game crop previews">
       <div class="bv-preview common" id="previewCommonWrap">
@@ -222,21 +279,22 @@
       </div>
     </div>
 
-    <div class="bv-row two" style="margin-top:16px">
-      <label class="bv-field">
-        <span>Who is in the photo?</span>
-        <select class="input-field" id="member" required>
-          <option value="">Choose BTS or a member…</option>
-          <option value="BTS">BTS</option>
-          <option value="RM">RM</option>
-          <option value="Jin">Jin</option>
-          <option value="SUGA">SUGA</option>
-          <option value="j-hope">j-hope</option>
-          <option value="Jimin">Jimin</option>
-          <option value="V">V</option>
-          <option value="Jung Kook">Jung Kook</option>
-        </select>
-      </label>
+    <div class="bv-field" style="margin-top:16px">
+      <span>Who is in the photo?</span>
+      <div class="bv-member-picker" id="memberPicker" role="group" aria-label="People in this photo">
+        <button class="bv-member-chip" type="button" data-member="BTS" aria-pressed="false">BTS group</button>
+        <button class="bv-member-chip" type="button" data-member="RM" aria-pressed="false">RM</button>
+        <button class="bv-member-chip" type="button" data-member="Jin" aria-pressed="false">Jin</button>
+        <button class="bv-member-chip" type="button" data-member="SUGA" aria-pressed="false">SUGA</button>
+        <button class="bv-member-chip" type="button" data-member="j-hope" aria-pressed="false">j-hope</button>
+        <button class="bv-member-chip" type="button" data-member="Jimin" aria-pressed="false">Jimin</button>
+        <button class="bv-member-chip" type="button" data-member="V" aria-pressed="false">V</button>
+        <button class="bv-member-chip" type="button" data-member="Jung Kook" aria-pressed="false">Jung Kook</button>
+      </div>
+      <div class="bv-member-summary" id="memberSummary">Choose everyone visible. You can select two or more members.</div>
+    </div>
+
+    <div class="bv-row">
       <label class="bv-field">
         <span>Photo style</span>
         <select class="input-field" id="pool" required>
@@ -251,8 +309,21 @@
     <div class="bv-actions">
       <button class="btn btn-primary" id="save" type="button" disabled>Review badge</button>
       <button class="btn btn-ghost" id="reset" type="button">Reset frame</button>
+      <button class="btn btn-ghost" id="discard" type="button" disabled>Discard draft</button>
     </div>
     <div class="bv-msg" id="msg"></div>
+    <div class="bv-success" id="publishSuccess" hidden aria-live="polite">
+      <img id="successImage" alt="Uploaded badge artwork">
+      <div class="bv-success-copy">
+        <b id="successTitle">Photo added</b>
+        <span id="successText"></span>
+      </div>
+      <div class="bv-success-actions">
+        <button id="undoUpload" type="button">Cancel this upload</button>
+        <button id="uploadAnother" type="button">Upload another</button>
+        <button id="viewUpload" type="button">View in vault</button>
+      </div>
+    </div>
   </div>
 
   <!-- ── existing ── -->
@@ -264,19 +335,26 @@
       <summary>Pool coverage · <span id="coverageSummary">loading…</span></summary>
       <div class="bv-coverage-grid" id="coverageGrid"></div>
     </details>
-    <div class="bv-filter" id="styleFilter" role="group" aria-label="Filter by style">
-      <button class="bv-chip sel" data-style="">All</button>
-      <button class="bv-chip" data-style="cute">Cute</button>
-      <button class="bv-chip" data-style="hot">Hot</button>
-      <button class="bv-chip" data-style="untagged">Untagged</button>
+    <div class="bv-filter" id="quickFilters" role="group" aria-label="Quick vault filters">
+      <button class="bv-chip" data-quick="mine" aria-pressed="false">My uploads</button>
+      <button class="bv-chip" data-quick="active" aria-pressed="false">Active only</button>
+      <button class="bv-chip" data-quick="cute" aria-pressed="false">Cute</button>
+      <button class="bv-chip" data-quick="hot" aria-pressed="false">Hot</button>
     </div>
-    <div class="bv-filter-grid">
-      <label><span>Badge</span><select class="input-field" id="filterTemplate"><option value="">All badges</option></select></label>
-      <label><span>Rarity</span><select class="input-field" id="filterRarity"><option value="">All rarities</option><option value="common">Common</option><option value="rare">Rare</option></select></label>
-      <label><span>Member</span><select class="input-field" id="filterMember"><option value="">All members</option></select></label>
-      <label><span>Uploader</span><select class="input-field" id="filterUploader"><option value="">All makers</option></select></label>
-      <label><span>Status</span><select class="input-field" id="filterStatus"><option value="">Active + inactive</option><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
-    </div>
+    <details class="bv-more-filters" id="moreFilters">
+      <summary id="moreFilterSummary">More filters</summary>
+      <div class="bv-more-body">
+        <div class="bv-filter-grid">
+          <label><span>Badge</span><select class="input-field" id="filterTemplate"><option value="">All badges</option></select></label>
+          <label><span>Rarity</span><select class="input-field" id="filterRarity"><option value="">All rarities</option><option value="common">Common</option><option value="rare">Rare</option></select></label>
+          <label><span>Member</span><select class="input-field" id="filterMember"><option value="">All members</option></select></label>
+          <label><span>Uploader</span><select class="input-field" id="filterUploader"><option value="">All makers</option></select></label>
+          <label><span>Status</span><select class="input-field" id="filterStatus"><option value="">Active + inactive</option><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
+          <label><span>Style</span><select class="input-field" id="filterStyle"><option value="">Cute + Hot</option><option value="cute">Cute</option><option value="hot">Hot</option><option value="untagged">Legacy/untagged</option></select></label>
+        </div>
+        <button class="bv-clear-filters" id="clearFilters" type="button">Clear all filters</button>
+      </div>
+    </details>
     <div class="bv-result-count" id="resultCount"></div>
     <div class="bv-grid" id="grid"></div>
     <div class="bv-msg" id="gridMsg"></div>
@@ -300,9 +378,12 @@
 import { call } from './js/api.js'
 import { getAgentNo, getSession } from './js/session.js'
 import {
+  artMembers,
   badgeArtMatches,
   badgeCoverage,
+  duplicateBadgeArt,
   escapeBadgeText,
+  imageQuality,
   preferredPoolForRarity,
 } from './js/badge-vault.js'
 
@@ -312,11 +393,16 @@ const TYPE = 'image/webp'
 
 let templates = []
 let art = []
-let styleFilter = '' // '' = all, 'cute' | 'hot' | 'untagged'
 let pendingUpload = null
 let publishing = false
 let objectUrl = ''
-const filters = { templateId: '', rarity: '', member: '', uploader: '', status: '' }
+let lastPublished = null
+let selectedMembers = new Set()
+const SOLO_MEMBERS = ['RM', 'Jin', 'SUGA', 'j-hope', 'Jimin', 'V', 'Jung Kook']
+const filters = {
+  templateId: '', rarity: '', member: '', uploader: '', status: '', style: '',
+  mine: false, activeOnly: false,
+}
 // Crop state, in DISPLAY pixels relative to the frame. The export applies
 // the identical numbers scaled by (OUT / frame width), so the preview is a
 // true 1:1 representation of the file that gets uploaded.
@@ -353,6 +439,7 @@ async function load() {
   art = res.art || []
   paintTemplates()
   paintFilterOptions()
+  paintFilterState()
   paintCoverage()
   paintGrid()
 }
@@ -386,6 +473,34 @@ const STYLE_TAG = { cute: '🌸 Cute', hot: '🔥 Hot' }
 const templateMap = () => new Map(templates.map((template) => [template.id, template]))
 const selectedTemplate = () => templates.find((template) => template.id === $('tpl').value) || null
 
+function selectedMemberList() {
+  return [...selectedMembers]
+}
+
+function paintMemberPicker() {
+  $('memberPicker').querySelectorAll('[data-member]').forEach((button) => {
+    const selected = selectedMembers.has(button.dataset.member)
+    button.setAttribute('aria-pressed', String(selected))
+  })
+  const members = selectedMemberList()
+  $('memberSummary').textContent = members.length
+    ? `Selected: ${members.join(' + ')}`
+    : 'Choose everyone visible. You can select two or more members.'
+  updateReviewEnabled()
+}
+
+function togglePhotoMember(member) {
+  if (member === 'BTS') {
+    selectedMembers = selectedMembers.has('BTS') ? new Set() : new Set(['BTS'])
+  } else {
+    if (selectedMembers.has('BTS')) selectedMembers.clear()
+    if (selectedMembers.has(member)) selectedMembers.delete(member)
+    else selectedMembers.add(member)
+    if (SOLO_MEMBERS.every((name) => selectedMembers.has(name))) selectedMembers = new Set(['BTS'])
+  }
+  paintMemberPicker()
+}
+
 function addOptions(select, values, label) {
   const current = select.value
   select.innerHTML = ''
@@ -414,8 +529,28 @@ function paintFilterOptions() {
     templateSelect.appendChild(option)
   }
   if (activeTemplates.some((template) => template.id === currentTemplate)) templateSelect.value = currentTemplate
-  addOptions($('filterMember'), [...new Set(art.map((item) => item.member).filter(Boolean))].sort(), 'All members')
+  addOptions($('filterMember'), [...new Set(art.flatMap(artMembers).filter(Boolean))].sort(), 'All members')
   addOptions($('filterUploader'), [...new Set(art.map((item) => item.uploadedBy).filter(Boolean))].sort(), 'All makers')
+}
+
+function paintFilterState() {
+  $('quickFilters').querySelectorAll('[data-quick]').forEach((button) => {
+    const key = button.dataset.quick
+    const selected = key === 'mine' ? filters.mine
+      : key === 'active' ? filters.activeOnly
+      : filters.style === key
+    button.classList.toggle('sel', selected)
+    button.setAttribute('aria-pressed', String(selected))
+  })
+  $('filterTemplate').value = filters.templateId
+  $('filterRarity').value = filters.rarity
+  $('filterMember').value = filters.member
+  $('filterUploader').value = filters.uploader
+  $('filterStatus').value = filters.status
+  $('filterStyle').value = filters.style
+  const advancedCount = ['templateId', 'rarity', 'member', 'uploader', 'status']
+    .filter((key) => filters[key]).length + (filters.style === 'untagged' ? 1 : 0)
+  $('moreFilterSummary').textContent = advancedCount ? `More filters · ${advancedCount} on` : 'More filters'
 }
 
 function paintCoverage() {
@@ -432,7 +567,9 @@ function paintGrid() {
   const grid = $('grid')
   grid.innerHTML = ''
   const byTemplate = templateMap()
-  const shown = art.filter((item) => badgeArtMatches(item, { ...filters, style: styleFilter }, byTemplate))
+  const shown = art.filter((item) => badgeArtMatches(item, {
+    ...filters, viewer: getAgentNo(),
+  }, byTemplate))
   $('resultCount').textContent = `${shown.length} of ${art.length} photos`
   if (!art.length) {
     $('gridMsg').className = 'bv-msg'
@@ -452,7 +589,7 @@ function paintGrid() {
     const controls = a.canManage
       ? `<div class="bv-item-btns">
           <button class="bv-mini" data-toggle="${Number(a.id)}">${a.active ? 'Deactivate' : 'Activate'}</button>
-          <button class="bv-mini danger" data-del="${Number(a.id)}" ${a.inUse ? 'disabled title="Someone wears this"' : ''}>Delete</button>
+          <button class="bv-mini danger" data-del="${Number(a.id)}" ${a.inUse ? 'disabled title="Someone wears this"' : ''}>Remove</button>
         </div>`
       : `<span class="bv-readonly">View only · managed by ${escapeBadgeText(a.uploadedBy || 'HT')}</span>`
     card.innerHTML = `
@@ -485,7 +622,7 @@ async function toggle(id) {
 }
 
 async function del(id) {
-  if (!window.confirm('Delete this photo permanently?')) return
+  if (!window.confirm('Remove this unused photo permanently?')) return
   const res = await call('deleteBadgeArt', { agentNo: getAgentNo(), artId: id })
   if (!res.success) { $('gridMsg').className = 'bv-msg err'; $('gridMsg').textContent = res.error; return }
   art = art.filter((x) => x.id !== id)
@@ -562,14 +699,24 @@ function paintTemplateGuidance() {
 }
 
 function updateReviewEnabled() {
-  $('save').disabled = !(img && $('tpl').value && $('member').value && $('pool').value)
+  const hasDraft = !!(img || $('tpl').value || selectedMembers.size || $('pool').value)
+  $('save').disabled = !(img && $('tpl').value && selectedMembers.size && $('pool').value)
+  $('discard').disabled = !hasDraft || publishing
 }
 
 $('file').onchange = (e) => {
   const f = e.target.files?.[0]
   if (!f) return
+  if (f.size > 15 * 1024 * 1024) {
+    $('file').value = ''
+    $('fileName').textContent = 'No photo selected'
+    $('msg').className = 'bv-msg err'
+    $('msg').textContent = 'That source photo is over 15 MB. Choose a smaller copy so it does not freeze a phone.'
+    return
+  }
   if (objectUrl) URL.revokeObjectURL(objectUrl)
   objectUrl = URL.createObjectURL(f)
+  $('fileName').textContent = f.name
   const im = new Image()
   im.onload = () => {
     natW = im.naturalWidth; natH = im.naturalHeight
@@ -585,10 +732,23 @@ $('file').onchange = (e) => {
     $('cropGrid').hidden = false
     $('zoom').disabled = false
     $('zoom').value = '1'
+    const quality = imageQuality(natW, natH)
+    $('qualityMsg').className = `bv-quality${quality.level === 'good' ? '' : ' ' + quality.level}`
+    $('qualityMsg').textContent = quality.message
     paintCrop()
     updateReviewEnabled()
   }
-  im.onerror = () => { $('msg').className = 'bv-msg err'; $('msg').textContent = "Couldn't open that file." }
+  im.onerror = () => {
+    $('file').value = ''
+    $('fileName').textContent = 'No photo selected'
+    if (objectUrl) URL.revokeObjectURL(objectUrl)
+    objectUrl = ''
+    $('qualityMsg').className = 'bv-quality bad'
+    $('qualityMsg').textContent = 'That file could not be opened. Try a JPG, PNG or WebP photo.'
+    $('msg').className = 'bv-msg err'
+    $('msg').textContent = "Couldn't open that file."
+    updateReviewEnabled()
+  }
   im.src = objectUrl
 }
 
@@ -605,9 +765,12 @@ $('reset').onclick = () => {
 function clearComposer() {
   pendingUpload = null
   $('file').value = ''
+  $('fileName').textContent = 'No photo selected'
   $('tpl').value = ''
-  $('member').value = ''
+  selectedMembers = new Set()
   $('pool').value = ''
+  $('qualityMsg').className = 'bv-quality'
+  $('qualityMsg').textContent = ''
   $('zoom').value = '1'
   $('zoom').disabled = true
   $('crop').querySelectorAll('img').forEach((node) => node.remove())
@@ -618,6 +781,7 @@ function clearComposer() {
   img = null
   natW = 0; natH = 0; zoom = 1; ox = 0; oy = 0; baseScale = 1
   clearMiniPreviews()
+  paintMemberPicker()
   paintTemplateGuidance()
 }
 
@@ -656,13 +820,22 @@ async function buildCroppedImage() {
   return b64
 }
 
+async function hashDataUrl(dataUrl) {
+  const encoded = String(dataUrl).slice(String(dataUrl).indexOf(',') + 1)
+  const binary = atob(encoded)
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
+  const digest = await crypto.subtle.digest('SHA-256', bytes)
+  return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
 $('save').onclick = async () => {
   const template = selectedTemplate()
-  const member = $('member').value
+  const members = selectedMemberList()
+  const member = members.join(' + ')
   const pool = $('pool').value
-  if (!img || !template || !member || !pool) {
+  if (!img || !template || !members.length || !pool) {
     $('msg').className = 'bv-msg err'
-    $('msg').textContent = 'Choose a badge, member and style, then pick a photo.'
+    $('msg').textContent = 'Choose a badge, everyone in the photo, and a style.'
     updateReviewEnabled()
     return
   }
@@ -679,13 +852,28 @@ $('save').onclick = async () => {
     return
   }
 
-  pendingUpload = { template, member, pool, imageBase64 }
+  const imageHash = await hashDataUrl(imageBase64)
+  const exactDuplicate = duplicateBadgeArt(art, imageHash, template.id)
+  if (exactDuplicate) {
+    $('msg').className = 'bv-msg err'
+    $('msg').textContent = 'This exact crop is already in that badge pool. Open My uploads below if you want to manage it.'
+    filters.mine = true
+    filters.templateId = template.id
+    paintFilterState()
+    paintGrid()
+    updateReviewEnabled()
+    return
+  }
+  const reusedElsewhere = art.find((item) => item.imageHash === imageHash)
+
+  pendingUpload = { template, member, members, pool, imageBase64, imageHash }
   $('confirmImage').src = imageBase64
   $('confirmArt').classList.toggle('is-rare', template.rarity === 'rare')
   $('confirmMeta').innerHTML = `
     <b>${escapeBadgeText(template.name)}</b> · ${template.rarity === 'rare' ? 'Rare card' : 'Common circle'}<br>
     ${escapeBadgeText(member)} · ${escapeBadgeText(STYLE_TAG[pool] || pool)}<br>
-    Publishes immediately to this badge's active pool.`
+    Publishes immediately to this badge's active pool.
+    ${reusedElsewhere ? '<br><b>Note:</b> this same crop is already used by another badge.' : ''}`
   $('msg').textContent = ''
   $('confirmDialog').showModal()
   updateReviewEnabled()
@@ -712,7 +900,7 @@ $('publish').onclick = async () => {
     res = await call('addBadgeArt', {
       agentNo: getAgentNo(),
       templateId: upload.template.id,
-      member: upload.member,
+      members: upload.members,
       pool: upload.pool,
       contentType: TYPE,
       imageBase64: upload.imageBase64,
@@ -728,28 +916,111 @@ $('publish').onclick = async () => {
     if ($('confirmDialog').open) $('confirmDialog').close()
     $('msg').className = 'bv-msg err'
     $('msg').textContent = res.error
+    if (res.code === 'duplicate_badge_art') {
+      filters.mine = true
+      filters.templateId = upload.template.id
+      paintFilterState()
+      paintGrid()
+      document.getElementById('grid').scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
     updateReviewEnabled()
     return
   }
 
   if ($('confirmDialog').open) $('confirmDialog').close()
-  $('msg').className = 'bv-msg ok'
-  $('msg').textContent = 'Published. Pick a new photo when you are ready.'
+  $('msg').textContent = ''
   art.unshift(res.art)
+  lastPublished = res.art
+  $('publishSuccess').hidden = false
+  $('publishSuccess').classList.toggle('is-rare', upload.template.rarity === 'rare')
+  $('successImage').src = res.art.url
+  $('successTitle').textContent = 'Photo added to the vault'
+  $('successText').textContent = `${upload.template.name} · ${upload.member}. Undo it here if anything looks wrong.`
+  $('undoUpload').hidden = false
+  $('undoUpload').disabled = false
+  $('undoUpload').textContent = 'Cancel this upload'
   clearComposer()
   paintFilterOptions()
   paintCoverage()
   paintGrid()
+  $('publishSuccess').scrollIntoView({ behavior: 'smooth', block: 'nearest' })
 }
 
 $('tpl').onchange = paintTemplateGuidance
-$('member').onchange = updateReviewEnabled
 $('pool').onchange = updateReviewEnabled
 
-$('styleFilter').querySelectorAll('.bv-chip').forEach((btn) => {
+$('memberPicker').querySelectorAll('[data-member]').forEach((button) => {
+  button.onclick = () => togglePhotoMember(button.dataset.member)
+})
+
+$('discard').onclick = () => {
+  if (!img && !$('tpl').value && !selectedMembers.size && !$('pool').value) return
+  if (!window.confirm('Discard this unfinished badge photo?')) return
+  clearComposer()
+  $('msg').className = 'bv-msg'
+  $('msg').textContent = 'Draft discarded.'
+}
+
+$('undoUpload').onclick = async () => {
+  if (!lastPublished) return
+  const button = $('undoUpload')
+  button.disabled = true
+  button.textContent = 'Cancelling…'
+  let res
+  try {
+    res = await call('undoBadgeArtUpload', { agentNo: getAgentNo(), artId: lastPublished.id })
+  } catch {
+    res = { success: false, error: "Couldn't reach the vault. Please try again." }
+  }
+  if (!res.success) {
+    button.disabled = false
+    button.textContent = 'Try cancel again'
+    $('successText').textContent = res.error || "Couldn't undo that upload."
+    return
+  }
+
+  const id = lastPublished.id
+  if (res.outcome === 'deleted') {
+    art = art.filter((item) => item.id !== id)
+    $('successTitle').textContent = 'Upload cancelled'
+    $('successText').textContent = 'The photo and its vault entry were removed.'
+  } else {
+    const item = art.find((candidate) => candidate.id === id)
+    if (item) { item.active = false; item.inUse = true; item.usedCount = res.usedCount || 1 }
+    $('successTitle').textContent = 'Photo deactivated'
+    $('successText').textContent = 'Someone already received it, so their badge stays intact. It will not be handed out again.'
+  }
+  button.hidden = true
+  lastPublished = null
+  paintFilterOptions()
+  paintFilterState()
+  paintCoverage()
+  paintGrid()
+}
+
+$('uploadAnother').onclick = () => {
+  $('publishSuccess').hidden = true
+  lastPublished = null
+  document.querySelector('.bv-card').scrollIntoView({ behavior: 'smooth', block: 'start' })
+  $('file').focus()
+}
+
+$('viewUpload').onclick = () => {
+  filters.mine = true
+  filters.activeOnly = false
+  filters.templateId = lastPublished?.templateId || filters.templateId
+  paintFilterState()
+  paintGrid()
+  document.getElementById('grid').scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+$('quickFilters').querySelectorAll('[data-quick]').forEach((btn) => {
   btn.onclick = () => {
-    styleFilter = btn.dataset.style
-    $('styleFilter').querySelectorAll('.bv-chip').forEach((b) => b.classList.toggle('sel', b === btn))
+    const key = btn.dataset.quick
+    if (key === 'mine') filters.mine = !filters.mine
+    else if (key === 'active') filters.activeOnly = !filters.activeOnly
+    else filters.style = filters.style === key ? '' : key
+    paintFilterState()
     paintGrid()
   }
 })
@@ -760,15 +1031,32 @@ for (const [id, key] of [
   ['filterMember', 'member'],
   ['filterUploader', 'uploader'],
   ['filterStatus', 'status'],
+  ['filterStyle', 'style'],
 ]) {
-  $(id).onchange = () => { filters[key] = $(id).value; paintGrid() }
+  $(id).onchange = () => { filters[key] = $(id).value; paintFilterState(); paintGrid() }
+}
+
+$('clearFilters').onclick = () => {
+  Object.assign(filters, {
+    templateId: '', rarity: '', member: '', uploader: '', status: '', style: '',
+    mine: false, activeOnly: false,
+  })
+  $('moreFilters').open = false
+  paintFilterState()
+  paintGrid()
 }
 
 $('confirmDialog').addEventListener('cancel', (event) => {
   if (publishing) event.preventDefault()
 })
 $('confirmDialog').addEventListener('close', () => { pendingUpload = null })
+window.addEventListener('beforeunload', (event) => {
+  if (!img && !pendingUpload && !publishing) return
+  event.preventDefault()
+  event.returnValue = ''
+})
 clearMiniPreviews()
+paintMemberPicker()
 
 boot()
 </script>
