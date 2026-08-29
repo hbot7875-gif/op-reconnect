@@ -3106,6 +3106,67 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
   font-weight: 700; cursor: pointer; }
 .cs-my-playlists:hover { border-color: var(--purple); background: var(--purple-soft); }
 
+.cs-goal-guide { margin: 0 0 16px; border: 1px solid var(--border); border-radius: var(--r-lg);
+  background: var(--surface); overflow: hidden; }
+.cs-goal-guide-toggle { width: 100%; display: grid; grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center; gap: 11px; padding: 13px 14px; border: 0; background: transparent; color: var(--text);
+  text-align: left; font-family: inherit; cursor: pointer; }
+.cs-goal-guide-toggle:hover { background: var(--panel); }
+.cs-goal-guide-symbol { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%;
+  border: 1px solid rgba(139,92,246,0.42); background: var(--purple-soft); color: var(--purple-lt);
+  font-family: var(--mono); font-size: 18px; }
+.cs-goal-guide-toggle-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cs-goal-guide-toggle-copy b { font-size: 14px; }
+.cs-goal-guide-toggle-copy small { color: var(--muted); font-size: 11.5px; line-height: 1.35; }
+.cs-goal-guide-open { display: flex; align-items: center; gap: 5px; color: var(--purple-lt); font-size: 11px;
+  font-weight: 800; white-space: nowrap; }
+.cs-goal-guide-open span { display: inline-block; transition: transform 0.18s ease; }
+.cs-goal-guide-toggle.is-open .cs-goal-guide-open span { transform: rotate(180deg); }
+.cs-goal-guide-panel { padding: 0 14px 14px; border-top: 1px solid var(--border); }
+.cs-goal-guide-controls { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(125px, 0.8fr); gap: 10px;
+  padding: 13px 0; }
+.cs-goal-guide-controls label { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.cs-goal-guide-controls label > span { color: var(--muted); font-family: var(--mono); font-size: 10.5px;
+  letter-spacing: 0.08em; text-transform: uppercase; }
+.cs-goal-guide-controls select { width: 100%; min-width: 0; padding: 10px 30px 10px 10px; border: 1px solid var(--border);
+  border-radius: var(--r); background: var(--surface-2); color: var(--text); font-family: inherit; font-size: 13px; }
+.cs-guide-district-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  padding: 13px; border-radius: var(--r); background: var(--surface-2); }
+.cs-guide-ward { color: var(--purple-lt); font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.12em;
+  text-transform: uppercase; }
+.cs-guide-district-head h3 { margin: 5px 0 3px; font-family: var(--disp); font-size: 16px; line-height: 1.25; }
+.cs-guide-district-head p { color: var(--muted); font-size: 11px; }
+.cs-guide-current { display: inline-flex; align-items: center; gap: 5px; flex: none; padding: 5px 7px;
+  border: 1px solid rgba(139,92,246,0.35); border-radius: 999px; color: var(--purple-lt); font-size: 10px; font-weight: 800; }
+.cs-guide-current i { width: 6px; height: 6px; border-radius: 50%; background: var(--purple); }
+.cs-guide-explainer { margin: 10px 1px 2px; color: var(--muted); font-size: 11.5px; line-height: 1.5; }
+.cs-guide-group { margin-top: 13px; }
+.cs-guide-group-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;
+  color: var(--text); font-size: 11px; font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; }
+.cs-guide-group-title small { color: var(--dim); font-family: var(--mono); font-size: 10px; font-weight: 400;
+  letter-spacing: 0; text-transform: none; }
+.cs-guide-goal-row, .cs-guide-reconnect-row { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto auto;
+  align-items: center; gap: 9px; padding: 9px 10px; border-bottom: 1px solid var(--border); background: var(--panel); }
+.cs-guide-goal-row:first-of-type, .cs-guide-reconnect-row:first-of-type { border-radius: var(--r) var(--r) 0 0; }
+.cs-guide-goal-row:last-child, .cs-guide-reconnect-row:last-child { border-bottom: 0; border-radius: 0 0 var(--r) var(--r); }
+.cs-guide-goal-icon { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px;
+  background: var(--purple-soft); color: var(--purple-lt); font-family: var(--mono); }
+.cs-guide-goal-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cs-guide-goal-copy b { overflow: hidden; color: var(--text); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.cs-guide-goal-copy small { overflow: hidden; color: var(--muted); font-size: 10.5px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.cs-guide-goal-target { display: flex; flex-direction: column; align-items: flex-end; min-width: 54px; }
+.cs-guide-goal-target b { color: var(--purple-lt); font-family: var(--mono); font-size: 15px; line-height: 1; }
+.cs-guide-goal-target small { margin-top: 2px; color: var(--dim); font-size: 9px; }
+.cs-guide-use { min-width: 48px; padding: 7px 8px; border: 1px solid var(--border-str); border-radius: 9px;
+  background: transparent; color: var(--text); font-family: inherit; font-size: 10.5px; font-weight: 800; cursor: pointer; }
+.cs-guide-use:hover:not(:disabled) { border-color: var(--purple); background: var(--purple-soft); color: var(--purple-lt); }
+.cs-guide-use:disabled { min-width: 74px; color: var(--dim); cursor: not-allowed; opacity: 0.65; }
+.cs-guide-reconnect-row { grid-template-columns: 28px minmax(0, 1fr); border-radius: var(--r); }
+.cs-guide-tip { margin-top: 13px; padding: 10px 11px; border-left: 2px solid var(--gold); border-radius: 0 var(--r) var(--r) 0;
+  background: var(--gold-soft); color: var(--muted); font-size: 11.5px; line-height: 1.5; }
+.cs-guide-tip b { color: var(--text); }
+.cs-guide-empty { padding: 16px; color: var(--muted); font-size: 12px; text-align: center; }
+
 .cs-panel { display: none; }
 .cs-panel.is-active { display: block; animation: csFadeIn 0.2s ease; }
 @keyframes csFadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
