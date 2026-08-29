@@ -12,6 +12,25 @@ function injectConcertVoyageCSS() {
   const s = document.createElement('style');
   s.id = 'concert-voyage-extra-css';
   s.textContent = `
+    /* #voyage-overlay (.vy-root) had no positioning rule at all — every
+       child inside it (the ship, the concert, the ARMY Bomb) is itself
+       position:absolute, so without this the whole thing laid out relative
+       to the document's initial containing block instead of the viewport:
+       position:static, zero height, sitting whatever the page's normal
+       scroll flow put it at. It only ever looked right by accident, when
+       launched from a page still scrolled to the very top. Scroll down
+       first (exactly what happens reaching the ticket in Agent Pack's Front
+       Pocket, which sits well below the fold) and the entire concert —
+       ship, video, ARMY Bomb — rendered off-screen or torn across the
+       scroll position instead of as a fixed full-screen overlay. */
+    .vy-root { position:fixed; inset:0; z-index:9999; background:#000; overflow:hidden; }
+    /* .cs-bomb (sphere + handle) never had a layout rule of its own — two
+       plain block divs, so the 22px-wide handle sat flush left under the
+       100px sphere instead of centered beneath it, same lightstick-stacking
+       bug .rc-bomb (the World-screen ARMY Bomb, reconnect.css) already
+       solved with exactly this rule. Matching it here instead of inventing
+       a second approach. */
+    .cs-bomb { display:flex; flex-direction:column; align-items:center; }
     .vy-phase1-bg { position:absolute; inset:0; background:radial-gradient(ellipse at 50% 35%, #1a1040, #060612 55%, #000); }
     .vy-portal-ring { position:absolute; width:min(70vw,340px); height:min(70vw,340px); border-radius:50%; border:2px solid rgba(168,85,247,0.45); animation:vySpin 10s linear infinite; opacity:0.5; }
     .vy-portal-ring--2 { width:min(55vw,260px); height:min(55vw,260px); border-color:rgba(255,255,255,0.2); animation-direction:reverse; animation-duration:7s; }
@@ -216,6 +235,14 @@ function injectConcertVoyageCSS() {
             bottom: -64px;
             opacity: 0.5;
         }
+        /* The controls panel sits 13px lower here than on desktop (12px vs
+           25px) and its two button rows + toggle tab reach further up than
+           #vy-army-bond ever accounted for — its bottom:115px is a fixed
+           desktop value with no mobile override, so on a real phone the
+           panel's top edge lands right on top of the ARMY counter text,
+           overlapping it. Pushing the counter up clears the panel's actual
+           stacked height (toggle tab + 2 rows + padding) with room to spare. */
+        #vy-army-bond { bottom: 150px; }
         .panel-toggle-btn {
             top: -24px;
             padding: 3px 10px;
