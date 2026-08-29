@@ -33,7 +33,7 @@ import { getUserAccessToken } from './spotify-oauth.ts'
 import { getBTSCatalog, getAlbumsMap } from './spotify-catalog.ts'
 import { getFillerLibrary } from './spotify-filler.ts'
 import { todayKst, kstDayBounds } from './kst.ts'
-import { loadContent } from './config.ts'
+import { loadContent, type GameContent } from './config.ts'
 import { goalTargetForMode } from './districts.ts'
 import {
   analyzeTracklist, buildHumanPlaylistMeta, buildPlaylistOrder, buildPlaylistOrder2Focus,
@@ -504,45 +504,14 @@ function reconnectGuide(goal: any) {
   }
 }
 
-/** Playable catalog songs + album bundles and the district goal guide for
- *  the agent-facing picker. The guide is built from the same live rc_goals,
- *  mode config and target function used when a district is activated. */
-export async function getAlpacaOptions(supabase: SupabaseDB, params: any): Promise<any> {
-  const [cat, storedAlbums, content, activeRes] = await Promise.all([
-    getBTSCatalog(supabase),
-    getAlbumsMap(supabase),
-    loadContent(supabase),
-    supabase.from('rc_player_districts').select('district_id')
-      .eq('agent_no', String(params.agentNo || '').trim().toUpperCase())
-      .eq('status', 'active').maybeSingle(),
-  ])
-  const albumsMap = mergeGoalAlbums(storedAlbums, cat.songs || [], content.goals || [])
-
-  const songs = (cat.songs || [])
-    .filter((s: any) => s?.name && (s.key || s.isrc))
-    .map((s: any) => ({ key: s.key || s.isrc, name: s.name, artists: s.artists || ['BTS'] }))
-    .sort((a: any, b: any) => a.name.localeCompare(b.name))
-
-  const albums = Object.values(albumsMap || {})
-    .filter((a: any) => a?.name && (a.trackKeys || []).length > 0 && !BANNED_ALBUM_NAMES.has(normalizeKey(a.name)))
-    .map((a: any) => ({ id: a.id, name: a.name, trackKeys: a.trackKeys, count: a.trackKeys.length }))
-    .sort((a: any, b: any) => a.name.localeCompare(b.name))
-
-  const modeOrder = ['exam', 'easy', 'medium', 'hard']
-  const modes = Object.entries(content.config.modes || {})
-    .map(([id, value]: [string, any]) => ({
-      id,
-      label: String(value?.label || id),
-      multiplier: Number(value?.multiplier) || 1,
-    }))
-    .sort((a, b) => {
-      const ai = modeOrder.indexOf(a.id), bi = modeOrder.indexOf(b.id)
-      return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi)
-    })
-
-  // Match goal labels/aliases to the catalog once on the server. The client
-  // then gets a reliable Use-in-builder button even when a display label and
-  // Spotify title use different punctuation or a translated alias.
+// Match goal labels/aliases to the catalog once on the server. The client
+// then gets a reliable Use-in-builder button even when a display label and
+// Spotify title use different punctuation or a translated alias. Shared by
+// getAlpacaOptions (every district, full guide incl. targets) and
+// getDistrictGoalCatalogMatch (one district, just the catalogKey/
+// catalogAlbumId a Playlist Vault relevance check needs) so the two callers
+// can never quietly drift on which song a goal resolves to.
+function buildDistrictGuides(content: GameContent, songs: any[], albums: any[], modes: any[], currentDistrictId: string | null): any[] {
   const songByExact = new Map<string, any>()
   const songByBase = new Map<string, any>()
   for (const song of songs) {
@@ -586,7 +555,7 @@ export async function getAlpacaOptions(supabase: SupabaseDB, params: any): Promi
     goalsByDistrict.set(goal.district_id, list)
   }
 
-  const districtGuides = content.districts
+  return content.districts
     .map((district: any) => {
       const assigned = goalsByDistrict.get(district.id) || []
       const tracks = assigned.filter((g: any) => g.kind === 'track').map((goal: any) => {
@@ -612,7 +581,7 @@ export async function getAlpacaOptions(supabase: SupabaseDB, params: any): Promi
         wardId: district.ward_id,
         wardName: wardById.get(district.ward_id)?.name || '',
         sequence: district.sequence,
-        isCurrent: activeRes.data?.district_id === district.id,
+        isCurrent: currentDistrictId === district.id,
         tracks,
         albums: albumGoals,
         reconnect,
@@ -620,8 +589,78 @@ export async function getAlpacaOptions(supabase: SupabaseDB, params: any): Promi
     })
     .filter(Boolean)
     .sort((a: any, b: any) => Number(b.isCurrent) - Number(a.isCurrent) || a.sequence - b.sequence)
+}
+
+/** Playable catalog songs + album bundles and the district goal guide for
+ *  the agent-facing picker. The guide is built from the same live rc_goals,
+ *  mode config and target function used when a district is activated. */
+export async function getAlpacaOptions(supabase: SupabaseDB, params: any): Promise<any> {
+  const [cat, storedAlbums, content, activeRes] = await Promise.all([
+    getBTSCatalog(supabase),
+    getAlbumsMap(supabase),
+    loadContent(supabase),
+    supabase.from('rc_player_districts').select('district_id')
+      .eq('agent_no', String(params.agentNo || '').trim().toUpperCase())
+      .eq('status', 'active').maybeSingle(),
+  ])
+  const albumsMap = mergeGoalAlbums(storedAlbums, cat.songs || [], content.goals || [])
+
+  const songs = (cat.songs || [])
+    .filter((s: any) => s?.name && (s.key || s.isrc))
+    .map((s: any) => ({ key: s.key || s.isrc, name: s.name, artists: s.artists || ['BTS'] }))
+    .sort((a: any, b: any) => a.name.localeCompare(b.name))
+
+  const albums = Object.values(albumsMap || {})
+    .filter((a: any) => a?.name && (a.trackKeys || []).length > 0 && !BANNED_ALBUM_NAMES.has(normalizeKey(a.name)))
+    .map((a: any) => ({ id: a.id, name: a.name, trackKeys: a.trackKeys, count: a.trackKeys.length }))
+    .sort((a: any, b: any) => a.name.localeCompare(b.name))
+
+  const modeOrder = ['exam', 'easy', 'medium', 'hard']
+  const modes = Object.entries(content.config.modes || {})
+    .map(([id, value]: [string, any]) => ({
+      id,
+      label: String(value?.label || id),
+      multiplier: Number(value?.multiplier) || 1,
+    }))
+    .sort((a, b) => {
+      const ai = modeOrder.indexOf(a.id), bi = modeOrder.indexOf(b.id)
+      return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi)
+    })
+
+  const districtGuides = buildDistrictGuides(content, songs, albums, modes, activeRes.data?.district_id || null)
 
   return { success: true, songs, albums, modes, districtGuides }
+}
+
+/** Just enough of one district's goal guide for a Playlist Vault relevance
+ *  check: which catalog song/album a generated playlist's `config.focus`/
+ *  `config.albumIds` would need to hit to count as "for" this district's
+ *  goals right now. Reuses buildDistrictGuides — the exact same matching a
+ *  player already sees in Candy Star — instead of a second, looser notion of
+ *  "relevant" that could quietly disagree with it. No targets/modes needed
+ *  here, so modes is passed empty to skip that (harmless) extra work. */
+export async function getDistrictGoalCatalogMatch(
+  supabase: SupabaseDB, districtId: string,
+): Promise<{ trackKeyToGoal: Record<string, string>; albumIdToGoal: Record<string, string>; districtName: string | null }> {
+  const [cat, storedAlbums, content] = await Promise.all([
+    getBTSCatalog(supabase),
+    getAlbumsMap(supabase),
+    loadContent(supabase),
+  ])
+  const albumsMap = mergeGoalAlbums(storedAlbums, cat.songs || [], content.goals || [])
+  const songs = (cat.songs || [])
+    .filter((s: any) => s?.name && (s.key || s.isrc))
+    .map((s: any) => ({ key: s.key || s.isrc, name: s.name, artists: s.artists || ['BTS'] }))
+  const albums = Object.values(albumsMap || {})
+    .filter((a: any) => a?.name && (a.trackKeys || []).length > 0 && !BANNED_ALBUM_NAMES.has(normalizeKey(a.name)))
+    .map((a: any) => ({ id: a.id, name: a.name, trackKeys: a.trackKeys, count: a.trackKeys.length }))
+
+  const guide = buildDistrictGuides(content, songs, albums, [], districtId).find((g: any) => g.id === districtId) || null
+  const trackKeyToGoal: Record<string, string> = {}
+  const albumIdToGoal: Record<string, string> = {}
+  for (const t of guide?.tracks || []) if (t.catalogKey) trackKeyToGoal[t.catalogKey] = t.label
+  for (const a of guide?.albums || []) if (a.catalogAlbumId) albumIdToGoal[a.catalogAlbumId] = a.label
+  return { trackKeyToGoal, albumIdToGoal, districtName: guide?.name || null }
 }
 
 /**

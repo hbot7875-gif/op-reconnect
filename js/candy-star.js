@@ -65,183 +65,6 @@ function candyCurrentGoalNames() {
   return [...tracks, ...albums];
 }
 
-function candyGuideShortMode(label, fallback) {
-  return String(label || fallback || '').split(/\s+[—–]\s+/)[0].trim();
-}
-
-function candyGoalGuideMarkup() {
-  const cs = window._candyStar || {};
-  const guides = cs.districtGuides || [];
-  if (!guides.length) return '';
-  const selected = guides.find(d => d.id === cs.guideDistrictId) || guides[0];
-  const modes = cs.guideModes || [];
-  return `
-    <section class="cs-goal-guide" aria-labelledby="cs-goal-guide-title">
-      <button type="button" class="cs-goal-guide-toggle" id="cs-goal-guide-title" aria-expanded="false" aria-controls="cs-goal-guide-panel" onclick="candyToggleGoalGuide()">
-        <span class="cs-goal-guide-symbol" aria-hidden="true">◎</span>
-        <span class="cs-goal-guide-toggle-copy">
-          <b>District playlist guide</b>
-          <small>See what each district needs before you build.</small>
-        </span>
-        <span class="cs-goal-guide-open">View goals <span aria-hidden="true">▾</span></span>
-      </button>
-      <div class="cs-goal-guide-panel" id="cs-goal-guide-panel" hidden>
-        <div class="cs-goal-guide-controls">
-          <label>
-            <span>District</span>
-            <select id="cs-guide-district" onchange="candySelectGuideDistrict(this.value)">
-              ${guides.map(d => `<option value="${sanitize(d.id)}"${d.id === selected.id ? ' selected' : ''}>${sanitize(d.name)}${d.isCurrent ? ' · current' : ''}</option>`).join('')}
-            </select>
-          </label>
-          <label>
-            <span>Goal size for</span>
-            <select id="cs-guide-mode" onchange="candySelectGuideMode(this.value)">
-              ${modes.map(mode => `<option value="${sanitize(mode.id)}"${mode.id === cs.guideMode ? ' selected' : ''}>${sanitize(candyGuideShortMode(mode.label, mode.id))}</option>`).join('')}
-            </select>
-          </label>
-        </div>
-        <div id="cs-goal-guide-content"></div>
-      </div>
-    </section>`;
-}
-
-function candyReconnectGuideText(goal) {
-  const agents = goal.requiredAgents ? `${goal.requiredAgents} agents` : 'Team mission';
-  if (goal.sharedTrack) {
-    const target = goal.sharedTrack.target ? ` · ${goal.sharedTrack.target} streams together` : '';
-    return `${agents} · ${goal.sharedTrack.label}${target}`;
-  }
-  if (goal.variant === 'connect' || goal.variant === 'invite') {
-    return `${agents} · each person streams their own district goal`;
-  }
-  return 'Puzzle mission · no special playlist target';
-}
-
-function candyGoalGuideRow(kind, goal) {
-  const target = goal.targets?.[window._candyStar?.guideMode] ?? Object.values(goal.targets || {})[0] ?? '—';
-  const isTrack = kind === 'track';
-  const canUse = isTrack ? !!goal.catalogKey : !!goal.catalogAlbumId;
-  const detail = isTrack
-    ? (goal.artist || 'BTS')
-    : `${goal.trackCount || 0} tracks · every track needs ${target} play${Number(target) === 1 ? '' : 's'}`;
-  const targetUnit = isTrack ? 'streams' : 'full rounds';
-  const dataAttr = isTrack
-    ? `data-key="${sanitize(goal.catalogKey || '')}"`
-    : `data-album-id="${sanitize(goal.catalogAlbumId || '')}"`;
-  const handler = isTrack ? 'candyGuideUseTrack(this)' : 'candyGuideUseAlbum(this)';
-  return `<div class="cs-guide-goal-row">
-    <span class="cs-guide-goal-icon" aria-hidden="true">${isTrack ? candyIcon('music', 15) : candyIcon('disc', 15)}</span>
-    <span class="cs-guide-goal-copy"><b>${sanitize(goal.label)}</b><small>${sanitize(detail)}</small></span>
-    <span class="cs-guide-goal-target"><b>${sanitize(target)}</b><small>${targetUnit}</small></span>
-    <button type="button" class="cs-guide-use" ${dataAttr} onclick="${handler}"${canUse ? '' : ' disabled title="Not available in the Candy Star catalog yet"'}>${canUse ? 'Use' : 'Unavailable'}</button>
-  </div>`;
-}
-
-function candyRenderGoalGuide() {
-  const cs = window._candyStar || {};
-  const mount = $('cs-goal-guide-content');
-  if (!mount) return;
-  const district = (cs.districtGuides || []).find(d => d.id === cs.guideDistrictId) || cs.districtGuides?.[0];
-  if (!district) { mount.innerHTML = '<div class="cs-guide-empty">No district goals are configured yet.</div>'; return; }
-  cs.guideDistrictId = district.id;
-  const trackRows = (district.tracks || []).map(goal => candyGoalGuideRow('track', goal)).join('');
-  const albumRows = (district.albums || []).map(goal => candyGoalGuideRow('album', goal)).join('');
-  const reconnectRows = (district.reconnect || []).map(goal => `<div class="cs-guide-reconnect-row">
-    <span class="cs-guide-goal-icon" aria-hidden="true">⌁</span>
-    <span class="cs-guide-goal-copy"><b>${sanitize(goal.label)}</b><small>${sanitize(candyReconnectGuideText(goal))}</small></span>
-  </div>`).join('');
-  const counts = [
-    `${(district.tracks || []).length} song${district.tracks?.length === 1 ? '' : 's'}`,
-    `${(district.albums || []).length} album${district.albums?.length === 1 ? '' : 's'}`,
-    `${(district.reconnect || []).length} ReConnect`,
-  ].join(' · ');
-  mount.innerHTML = `
-    <div class="cs-guide-district-head">
-      <div>
-        <span class="cs-guide-ward">${sanitize(district.wardName || 'District')}</span>
-        <h3>${sanitize(district.name)}</h3>
-        <p>${counts}</p>
-      </div>
-      ${district.isCurrent ? '<span class="cs-guide-current"><i></i>Your current district</span>' : ''}
-    </div>
-    <div class="cs-guide-explainer">These are the <b>whole district targets</b>. Album rounds mean every listed track needs that many plays.</div>
-    ${trackRows ? `<div class="cs-guide-group"><div class="cs-guide-group-title"><span>Focus songs</span><small>${district.tracks.length}</small></div>${trackRows}</div>` : ''}
-    ${albumRows ? `<div class="cs-guide-group"><div class="cs-guide-group-title"><span>Albums</span><small>${district.albums.length}</small></div>${albumRows}</div>` : ''}
-    ${reconnectRows ? `<div class="cs-guide-group"><div class="cs-guide-group-title"><span>ReConnect</span><small>${district.reconnect.length > 1 ? 'one is assigned at activation' : 'team goal'}</small></div>${reconnectRows}</div>` : ''}
-    <div class="cs-guide-tip"><b>Playlist tip:</b> use 1–2 focus songs with 1–2 albums. For a large district, make several focused playlists instead of squeezing every goal into one.</div>`;
-}
-
-export function candyToggleGoalGuide() {
-  const panel = $('cs-goal-guide-panel');
-  const button = $('cs-goal-guide-title');
-  if (!panel || !button) return;
-  const opening = panel.hidden;
-  panel.hidden = !opening;
-  button.setAttribute('aria-expanded', opening ? 'true' : 'false');
-  button.classList.toggle('is-open', opening);
-  if (opening) candyRenderGoalGuide();
-}
-
-export function candySelectGuideDistrict(id) {
-  if (!window._candyStar) return;
-  window._candyStar.guideDistrictId = id;
-  candyRenderGoalGuide();
-}
-
-export function candySelectGuideMode(mode) {
-  if (!window._candyStar) return;
-  window._candyStar.guideMode = mode;
-  candyRenderGoalGuide();
-}
-
-function candyGuideOpenBuilder(anchor) {
-  candySwitchTab('custom');
-  requestAnimationFrame(() => {
-    (anchor || document.querySelector('#cs-panel-custom .archive-card'))?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  });
-}
-
-export function candyGuideUseTrack(button) {
-  const key = button?.dataset?.key;
-  const cs = window._candyStar || {};
-  const label = cs.keyToLabel?.[key];
-  if (!key || !label) { showToast('This song is not available in the playlist maker yet.'); return; }
-  const rows = [...document.querySelectorAll('#cs-focus-rows .cs-focus-row')];
-  const existing = rows.find(row => row.querySelector('.cs-focus-sel')?.dataset?.resolvedKey === key);
-  if (existing) {
-    candyGuideOpenBuilder(existing);
-    showToast('That song is already in your setup.');
-    return;
-  }
-  let row = rows.find(item => !item.querySelector('.cs-focus-sel')?.value?.trim());
-  if (!row && rows.length < CS_MAX_FOCUS_ROWS) {
-    candyAddFocusRow();
-    row = document.querySelector('#cs-focus-rows .cs-focus-row:last-child');
-  }
-  if (!row) { showToast('This setup already has 2 focus songs — remove one first.'); return; }
-  const input = row.querySelector('.cs-focus-sel');
-  input.value = label;
-  input.dataset.resolvedKey = key;
-  input.classList.remove('cs-invalid');
-  candyAddRecent(key, label);
-  candyUpdateEstimate();
-  candyGuideOpenBuilder(row);
-  showToast('Goal song added — choose how many repeats this playlist needs.');
-}
-
-export function candyGuideUseAlbum(button) {
-  const albumId = button?.dataset?.albumId;
-  const checkbox = [...document.querySelectorAll('.cs-album-check')].find(input => input.dataset.albumId === albumId);
-  if (!checkbox) { showToast('This album is not available in the playlist maker yet.'); return; }
-  if (!checkbox.checked) {
-    checkbox.checked = true;
-    candyAlbumCheckChanged(checkbox);
-  }
-  if (!checkbox.checked) return;
-  candyGuideOpenBuilder(checkbox.closest('.cs-album-card'));
-  showToast('Album added to your setup.');
-}
-
 /**
  * Resolves a song field to a catalog key. Accepts either the input ELEMENT
  * (preferred — checks dataset.resolvedKey first, set the moment a dropdown
@@ -661,10 +484,6 @@ export function candySwitchTab(tab) {
   document.querySelectorAll('.cs-panel').forEach(p => {
     p.classList.toggle('is-active', p.id === `cs-panel-${tab}`);
   });
-  if (tab === 'vault') {
-    if (candyVaultState().items.length) candyRenderVault();
-    else candyLoadVault(true);
-  }
 }
 function candySetStatus(kind, html) {
   const el = $('cs-status');
@@ -725,246 +544,15 @@ function candyQuickRefresh() {
   if (btn) btn.disabled = !picked;
 }
 
-// ==================== PLAYLIST VAULT ====================
-
-function candyVaultState() {
-  if (!window._candyVault) {
-    window._candyVault = { view: 'community', items: [], offset: 0, hasMore: false, loading: false, query: '' };
-  }
-  return window._candyVault;
-}
-
-function candyVaultDate(value) {
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return '';
-  const days = Math.floor((Date.now() - date.getTime()) / 86400000);
-  if (days <= 0) return 'Today';
-  if (days === 1) return 'Yesterday';
-  if (days < 7) return `${days} days ago`;
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
-
-function candyVaultFocus(config) {
-  const display = Array.isArray(config?.display?.focus) ? config.display.focus : [];
-  if (display.length) {
-    return display.map(item => ({
-      name: item.name || 'Focus song',
-      plays: Number(item.plays || item.multiplier) || 0,
-    }));
-  }
-  return (Array.isArray(config?.focus) ? config.focus : []).map(item => {
-    const key = item.key || item.isrc;
-    const label = window._candyStar?.keyToLabel?.[key] || 'Focus song';
-    return { name: label.split(' — ')[0], plays: Number(item.multiplier) || 0 };
-  });
-}
-
-function candyVaultAlbums(config) {
-  if (Array.isArray(config?.display?.albums) && config.display.albums.length) return config.display.albums;
-  const ids = new Set(Array.isArray(config?.albumIds) ? config.albumIds : []);
-  if (ids.size) return (window._candyStar?.albums || []).filter(album => ids.has(album.id)).map(album => album.name);
-  const wanted = new Set(Array.isArray(config?.album) ? config.album : []);
-  if (!wanted.size) return [];
-  return (window._candyStar?.albums || [])
-    .filter(album => album.trackKeys?.length && album.trackKeys.every(key => wanted.has(key)))
-    .slice(0, 2)
-    .map(album => album.name);
-}
-
-function candyVaultRuntime(config) {
-  const ms = Number(config?.runtimeMs) || 0;
-  if (!ms) return '';
-  const mins = Math.round(ms / 60000);
-  return `${Math.floor(mins / 60)}h ${mins % 60}m`;
-}
-
-function candyVaultRecipe(item) {
-  if (item.source === 'shared') return 'Shared by an agent';
-  const focus = candyVaultFocus(item.config);
-  const albums = candyVaultAlbums(item.config);
-  const parts = [
-    ...focus.map(song => `${song.name}${song.plays ? ` ×${song.plays}` : ''}`),
-    ...albums.map(name => `${name} album`),
-  ];
-  return parts.length ? parts.join(' · ') : 'Candy Star mix';
-}
-
-function candyVaultCard(item) {
-  const thumb = typeof item.config?.thumbnailUrl === 'string' && /^https:\/\//.test(item.config.thumbnailUrl)
-    ? `<img src="${sanitize(item.config.thumbnailUrl)}" alt="" loading="lazy">`
-    : `<span aria-hidden="true">${item.source === 'shared' ? '♫' : '🦙'}</span>`;
-  const runtime = candyVaultRuntime(item.config);
-  const meta = [
-    item.trackCount ? `${item.trackCount} tracks` : '',
-    runtime,
-    item.saveCount ? `${item.saveCount} saved` : '',
-  ].filter(Boolean);
-  return `<article class="cs-vault-card" data-playlist-id="${sanitize(item.playlistId)}">
-    <div class="cs-vault-art">${thumb}</div>
-    <div class="cs-vault-body">
-      <div class="cs-vault-kicker"><span>${item.source === 'shared' ? 'Shared playlist' : 'Candy Star mix'}</span><span>${sanitize(candyVaultDate(item.createdAt))}</span></div>
-      <h3>${sanitize(item.name)}</h3>
-      <p class="cs-vault-recipe">${sanitize(candyVaultRecipe(item))}</p>
-      <div class="cs-vault-by">By ${sanitize(item.creator)}${meta.length ? ` · ${sanitize(meta.join(' · '))}` : ''}</div>
-      <div class="cs-vault-actions">
-        <a class="cs-vault-open" href="${sanitize(item.url)}" target="_blank" rel="noopener noreferrer">Open in Spotify ↗</a>
-        ${item.source === 'generated' && Array.isArray(item.config?.focus) && item.config.focus.length
-          ? `<button type="button" class="cs-vault-action" onclick="candyRemixPlaylist('${sanitize(item.playlistId)}')">Use setup</button>` : ''}
-        <button type="button" class="cs-vault-action ${item.saved ? 'is-saved' : ''}" aria-pressed="${item.saved ? 'true' : 'false'}" onclick="candyToggleVaultSave('${sanitize(item.playlistId)}')">${item.saved ? 'Saved ✓' : 'Save'}</button>
-        ${item.isMine
-          ? `<button type="button" class="cs-vault-delete" onclick="candyDeleteVaultPlaylist('${sanitize(item.playlistId)}')">Delete</button>`
-          : `<button type="button" class="cs-vault-report" ${item.reported ? 'disabled' : ''} onclick="candyReportVaultPlaylist('${sanitize(item.playlistId)}')">${item.reported ? 'Reported' : 'Broken link?'}</button>`}
-      </div>
-    </div>
-  </article>`;
-}
-
-function candyRenderVault() {
-  const state = candyVaultState();
-  const list = $('cs-vault-list');
-  if (!list) return;
-  const query = state.query.trim().toLowerCase();
-  const visible = query
-    ? state.items.filter(item => `${item.name} ${candyVaultRecipe(item)} ${item.creator}`.toLowerCase().includes(query))
-    : state.items;
-
-  if (!visible.length && !state.loading) {
-    const label = state.view === 'mine' ? 'You have not added a playlist yet.'
-      : state.view === 'saved' ? 'Your saved playlists will wait here.'
-      : query ? 'No playlists match that search.' : 'The Vault is waiting for its first playlist.';
-    list.innerHTML = `<div class="cs-vault-empty"><span>♫</span><b>${sanitize(label)}</b><small>${state.view === 'community' ? 'Generate one or share a Spotify link above.' : 'Browse Community to find one.'}</small></div>`;
-  } else {
-    list.innerHTML = visible.map(candyVaultCard).join('');
-  }
-  const more = $('cs-vault-more');
-  if (more) {
-    more.hidden = !state.hasMore || !!query;
-    more.disabled = state.loading;
-    more.textContent = state.loading ? 'Loading…' : 'Load more';
-  }
-}
-
-export async function candyLoadVault(reset = true) {
-  const state = candyVaultState();
-  if (state.loading) return;
-  state.loading = true;
-  if (reset) {
-    state.items = [];
-    state.offset = 0;
-    const list = $('cs-vault-list');
-    if (list) list.innerHTML = `<div class="cs-vault-loading"><span class="cs-spinner"></span>Opening the Vault…</div>`;
-  }
-  const res = await Api.call('getCandyPlaylistLibrary', {
-    view: state.view,
-    offset: state.offset,
-    limit: 24,
-  });
-  state.loading = false;
-  if (!res?.success) {
-    const list = $('cs-vault-list');
-    if (list) list.innerHTML = `<div class="cs-vault-empty"><b>Couldn't open the Vault.</b><small>${sanitize(res?.error || 'Please try again.')}</small><button type="button" class="cs-vault-action" onclick="candyLoadVault(true)">Try again</button></div>`;
-    return;
-  }
-  state.items = reset ? (res.playlists || []) : [...state.items, ...(res.playlists || [])];
-  state.offset = Number(res.nextOffset) || state.items.length;
-  state.hasMore = !!res.hasMore;
-  candyRenderVault();
-}
-
-export function candyVaultView(view) {
-  const state = candyVaultState();
-  if (!['community', 'mine', 'saved'].includes(view) || state.view === view) return;
-  state.view = view;
-  document.querySelectorAll('.cs-vault-filter').forEach(button => {
-    const active = button.dataset.view === view;
-    button.classList.toggle('is-active', active);
-    button.setAttribute('aria-selected', active ? 'true' : 'false');
-  });
-  candyLoadVault(true);
-}
-
-export function candyVaultSearch(input) {
-  candyVaultState().query = input.value || '';
-  candyRenderVault();
-}
-
-export function candyLoadVaultMore() { candyLoadVault(false); }
-
-export function candyToggleVaultShare() {
-  const form = $('cs-vault-share-form');
-  const button = $('cs-vault-share-toggle');
-  if (!form) return;
-  form.hidden = !form.hidden;
-  if (button) button.setAttribute('aria-expanded', form.hidden ? 'false' : 'true');
-  if (!form.hidden) $('cs-vault-url')?.focus();
-}
-
-export async function candyShareVaultPlaylist() {
-  const input = $('cs-vault-url');
-  const button = $('cs-vault-share-btn');
-  const message = $('cs-vault-share-message');
-  const url = input?.value?.trim() || '';
-  if (!url) { if (message) message.textContent = 'Paste a Spotify playlist link first.'; return; }
-  if (button) { button.disabled = true; button.textContent = 'Checking Spotify…'; }
-  if (message) message.textContent = '';
-  const res = await Api.call('shareCandyPlaylist', { url });
-  if (button) { button.disabled = false; button.textContent = 'Add to Vault'; }
-  if (!res?.success) { if (message) message.textContent = res?.error || 'Could not add that playlist.'; return; }
-  if (input) input.value = '';
-  if (message) message.textContent = res.alreadyThere ? 'That playlist is already in the Vault.' : `${res.name} was added for everyone.`;
-  const state = candyVaultState();
-  state.view = 'community';
-  document.querySelectorAll('.cs-vault-filter').forEach(b => b.classList.toggle('is-active', b.dataset.view === 'community'));
-  await candyLoadVault(true);
-}
-
-export async function candyToggleVaultSave(playlistId) {
-  const state = candyVaultState();
-  const item = state.items.find(entry => entry.playlistId === playlistId);
-  if (!item) return;
-  const next = !item.saved;
-  const res = await Api.call('setCandyPlaylistSaved', { playlistId, saved: next });
-  if (!res?.success) { showToast(res?.error || 'Could not update that save.'); return; }
-  state.items.forEach(entry => {
-    if (entry.playlistId === playlistId) {
-      entry.saved = next;
-      entry.saveCount = Math.max(0, (Number(entry.saveCount) || 0) + (next ? 1 : -1));
-    }
-  });
-  if (!next && state.view === 'saved') state.items = state.items.filter(entry => entry.playlistId !== playlistId);
-  candyRenderVault();
-}
-
-export async function candyReportVaultPlaylist(playlistId) {
-  const state = candyVaultState();
-  const item = state.items.find(entry => entry.playlistId === playlistId);
-  if (!item || item.reported) return;
-  if (!window.confirm('Report this only if the Spotify link no longer opens. Continue?')) return;
-  const res = await Api.call('reportCandyPlaylist', { playlistId });
-  if (!res?.success) { showToast(res?.error || 'Could not send that report.'); return; }
-  if (res.hidden) state.items = state.items.filter(entry => entry.playlistId !== playlistId);
-  else item.reported = true;
-  candyRenderVault();
-  showToast(res.hidden ? 'Broken playlist removed from the Vault.' : 'Report sent. Thank you.');
-}
-
-export async function candyDeleteVaultPlaylist(playlistId) {
-  const state = candyVaultState();
-  const item = state.items.find(entry => entry.playlistId === playlistId);
-  if (!item?.isMine) return;
-  const message = item.source === 'generated'
-    ? 'Delete this playlist from the Vault and the connected Spotify library? This cannot be undone.'
-    : 'Delete this shared playlist from the Vault? This cannot be undone.';
-  if (!window.confirm(message)) return;
-  const res = await Api.call('deleteCandyPlaylist', { playlistId });
-  if (!res?.success) { showToast(res?.error || 'Could not delete that playlist.'); return; }
-  state.items = state.items.filter(entry => entry.playlistId !== playlistId);
-  candyRenderVault();
-  showToast(res.warning || 'Playlist deleted.', res.warning ? undefined : 'success');
-}
-
-export function candyRemixPlaylist(playlistId) {
-  const item = candyVaultState().items.find(entry => entry.playlistId === playlistId);
+// Loads one Vault playlist's setup into the Custom tab — same idea as the
+// old site's "remix" (see js/playlist-vault-sheet.js's header comment), just
+// taking the playlist object directly instead of looking it up from a
+// Vault-tab list that no longer lives in this screen. Applied either right
+// away (renderCandyStar picks up window.__pendingCandyRemix on load, the
+// hand-off the Vault sheet uses since it can open from other screens too)
+// or, in principle, straight from within this screen if something here ever
+// calls it directly.
+export function candyApplyRemix(item) {
   const focus = Array.isArray(item?.config?.focus) ? item.config.focus.slice(0, CS_MAX_FOCUS_ROWS) : [];
   if (!item || !focus.length) return;
   const rows = $('cs-focus-rows');
@@ -1025,7 +613,6 @@ export async function renderCandyStar() {
   window._candyStar = {
     songByLabel: {}, songByLabelLower: {}, songByNameLower: {}, keyToLabel: {},
     songList: opt.songs || [], albums: opt.albums || [], frequentSongs: [],
-    districtGuides: opt.districtGuides || [], guideModes: opt.modes || [],
   };
   // Names shared by 2+ catalog entries (e.g. a base track + its remixes) stay
   // ambiguous on purpose — songByNameLower only gets a key when exactly one
@@ -1057,10 +644,6 @@ export async function renderCandyStar() {
   window._candyStar.quickPicks = [];
   window._candyStar.quickAlbum = false;
   window._candyStar.arirangAlbum = (opt.albums || []).find(a => /arirang/i.test(a.name)) || null;
-  window._candyStar.guideMode = (opt.modes || []).some(mode => mode.id === window.__rcState?.player?.mode)
-    ? window.__rcState.player.mode
-    : (opt.modes?.[0]?.id || 'easy');
-  window._candyStar.guideDistrictId = (opt.districtGuides || []).find(d => d.isCurrent)?.id || opt.districtGuides?.[0]?.id || null;
 
   // Picking beats listing: all six goals in one playlist dilutes every one of
   // them, so Quick offers the same songs as choices with a hard cap.
@@ -1075,13 +658,13 @@ export async function renderCandyStar() {
 
   container.innerHTML = `
   <div class="cs-wrap">
-    <div class="cs-tabs" role="tablist">
-      <button type="button" class="cs-tab is-active" data-tab="quick" role="tab" aria-selected="true" onclick="candySwitchTab('quick')">${candyIcon('wand')} Quick</button>
-      <button type="button" class="cs-tab" data-tab="custom" role="tab" aria-selected="false" onclick="candySwitchTab('custom')">${candyIcon('music')} Custom</button>
-      <button type="button" class="cs-tab" data-tab="vault" role="tab" aria-selected="false" onclick="candySwitchTab('vault')">${candyIcon('sparkles')} Vault</button>
+    <div class="cs-tabs-row">
+      <div class="cs-tabs" role="tablist">
+        <button type="button" class="cs-tab is-active" data-tab="quick" role="tab" aria-selected="true" onclick="candySwitchTab('quick')">${candyIcon('wand')} Quick</button>
+        <button type="button" class="cs-tab" data-tab="custom" role="tab" aria-selected="false" onclick="candySwitchTab('custom')">${candyIcon('music')} Custom</button>
+      </div>
+      <button type="button" class="cs-my-playlists" id="cs-my-playlists">My Playlists →</button>
     </div>
-
-    ${candyGoalGuideMarkup()}
 
     <!-- QUICK -->
     <div class="cs-panel is-active" id="cs-panel-quick" role="tabpanel">
@@ -1206,57 +789,27 @@ export async function renderCandyStar() {
       </div>
     </div>
 
-    <!-- PLAYLIST VAULT -->
-    <div class="cs-panel" id="cs-panel-vault" role="tabpanel">
-      <section class="cs-vault-hero">
-        <div>
-          <span class="cs-vault-eyebrow">Community playlist library</span>
-          <h2>One playlist can help everyone.</h2>
-          <p>Open a ready-made mix, save it for later, or share a public Spotify playlist with the city.</p>
-        </div>
-        <button type="button" class="cs-vault-share-toggle" id="cs-vault-share-toggle" aria-expanded="false" onclick="candyToggleVaultShare()">+ Share playlist</button>
-      </section>
-
-      <div class="cs-vault-share" id="cs-vault-share-form" hidden>
-        <label class="cs-field-label" for="cs-vault-url">Spotify playlist link</label>
-        <div class="cs-vault-share-row">
-          <input id="cs-vault-url" class="input-field" type="url" inputmode="url" autocomplete="off" placeholder="https://open.spotify.com/playlist/…">
-          <button type="button" id="cs-vault-share-btn" class="btn-red" onclick="candyShareVaultPlaylist()">Add to Vault</button>
-        </div>
-        <div class="cs-vault-share-note">Spotify checks the title and public link before it appears. Up to 5 shares a day.</div>
-        <div class="cs-vault-share-message" id="cs-vault-share-message" role="status"></div>
-      </div>
-
-      <div class="cs-vault-tools">
-        <div class="cs-vault-filters" role="tablist" aria-label="Playlist library view">
-          <button type="button" class="cs-vault-filter is-active" data-view="community" role="tab" aria-selected="true" onclick="candyVaultView('community')">Community</button>
-          <button type="button" class="cs-vault-filter" data-view="mine" role="tab" aria-selected="false" onclick="candyVaultView('mine')">Mine</button>
-          <button type="button" class="cs-vault-filter" data-view="saved" role="tab" aria-selected="false" onclick="candyVaultView('saved')">Saved</button>
-        </div>
-        <label class="cs-vault-search">
-          <span aria-hidden="true">⌕</span>
-          <input type="search" placeholder="Search song or album" aria-label="Search playlists" oninput="candyVaultSearch(this)">
-        </label>
-      </div>
-
-      <div class="cs-vault-list" id="cs-vault-list">
-        <div class="cs-vault-empty"><span>♫</span><b>Open the Vault to see community playlists.</b></div>
-      </div>
-      <button type="button" class="cs-vault-more" id="cs-vault-more" onclick="candyLoadVaultMore()" hidden>Load more</button>
-    </div>
-
     <div id="cs-status" class="cs-status-card"></div>
   </div>`;
 
   candySyncRowControls();
   candyQuickRefresh();
-  const vaultState = candyVaultState();
-  document.querySelectorAll('.cs-vault-filter').forEach(button => {
-    const active = button.dataset.view === vaultState.view;
-    button.classList.toggle('is-active', active);
-    button.setAttribute('aria-selected', active ? 'true' : 'false');
-  });
   candyUpdateEstimate();
+
+  const myPlaylists = $('cs-my-playlists');
+  if (myPlaylists) myPlaylists.onclick = async () => {
+    const { openPlaylistVault } = await import('./playlist-vault-sheet.js');
+    openPlaylistVault();
+  };
+
+  // Hand-off from the Vault sheet's "Use setup" (see playlist-vault-sheet.js)
+  // — it can't apply this itself since it may have been opened from a screen
+  // that never mounts Candy's own builder DOM at all.
+  if (window.__pendingCandyRemix) {
+    const pending = window.__pendingCandyRemix;
+    window.__pendingCandyRemix = null;
+    candyApplyRemix(pending);
+  }
 }
 
 export async function candyGenerate(mode) {
@@ -1301,9 +854,6 @@ export async function candyGenerate(mode) {
   const res = await Api.call('generateAlpaca', payload, { dedupe: false, cache: false, timeout: 180000 });
 
   if (res && res.success) {
-    const vault = candyVaultState();
-    vault.items = [];
-    vault.offset = 0;
     candySetStatus('success', `<span style="font-size:16px;">✅</span><span><b>${sanitize(res.name)}</b> is ready — <a href="${sanitize(res.url)}" target="_blank" rel="noopener noreferrer" style="color:#1DB954; font-weight:800;">open in Spotify ↗</a>
       <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">${res.trackCount} tracks${res.savedToVault === false ? ' · Vault save is retrying later' : ' · saved to the Community Vault'}</div></span>`);
     showToast('Alpaca created 🦙', 'success');

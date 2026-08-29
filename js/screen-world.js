@@ -231,32 +231,19 @@ function recoverySignal(state) {
   // "this district's power is back on," a completely different thing).
   // Genuine presence (feed.ts's markOnline/getOnlineNow), not a proxy —
   // this is what actually answers "is anyone else here right now."
+  //
+  // Codenames only, on purpose: City is a lightweight "other agents are
+  // around" signal, not a locator. Where each agent actually is now lives on
+  // the district screen instead (screen-district.js's agents-here row) —
+  // the one place that information is actually useful, right where you'd
+  // act on it.
   const n = state.onlineNow?.count || 0
   if (n > 0) {
-    const agents = state.onlineNow.agents || (state.onlineNow.codenames || []).map((codename) => ({ codename }))
-    const shown = agents.slice(0, 2).map((agent) =>
-      `${esc(agent.codename)}${agent.districtName ? ` · ${esc(agent.districtName)}` : ''}`).join(' • ')
-    const more = n > 2 ? ` +${n - 2}` : ''
-    const line = el('button', 'active-now is-button')
-    line.type = 'button'
-    line.innerHTML = `<i class="active-now-dot"></i>${n} agent${n === 1 ? '' : 's'} active now`
-      + (shown ? `<span class="active-now-names">${shown}${more}</span>` : '')
-    line.onclick = () => {
-      const sheet = el('div', 'sheet active-area-sheet')
-      sheet.append(el('div', 'eyebrow', '● ACTIVE NOW'), el('h3', '', 'Where signals are gathering'))
-      sheet.appendChild(el('p', 'muted', 'This shows the district each visible agent is restoring—not their exact screen or activity.'))
-      for (const agent of agents) {
-        sheet.appendChild(el('div', 'active-area-row', `
-          <span><i class="active-now-dot"></i><b>${esc(agent.codename)}</b></span>
-          <span class="active-area-place"><b>${esc(agent.districtName || 'Between districts')}</b>${agent.wardName ? `<small>${esc(agent.wardName)}</small>` : ''}</span>
-        `))
-      }
-      if (n > agents.length) sheet.appendChild(el('div', 'dim', `+${n - agents.length} more active agent${n - agents.length === 1 ? '' : 's'}`))
-      const close = el('button', 'btn btn-ghost', 'Close')
-      close.onclick = hideOverlay
-      sheet.appendChild(close)
-      showOverlay(sheet)
-    }
+    const codenames = state.onlineNow.codenames || (state.onlineNow.agents || []).map((a) => a.codename)
+    const shown = codenames.slice(0, 3).map((name) => esc(name)).join(' · ')
+    const more = n > 3 ? ` +${n - 3}` : ''
+    const line = el('div', 'active-now', `<i class="active-now-dot"></i>${n} agent${n === 1 ? '' : 's'} active now`
+      + (shown ? `<span class="active-now-names">${shown}${more}</span>` : ''))
     wrap.appendChild(line)
   }
   return wrap

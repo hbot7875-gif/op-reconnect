@@ -9,11 +9,18 @@
 import type { SupabaseDB } from './spotify-shared.ts'
 import { parseSpotifyId, utcNow } from './spotify-shared.ts'
 import { getUserAccessToken } from './spotify-oauth.ts'
+import { getDistrictGoalCatalogMatch } from './candy-star.ts'
 
 const PAGE_SIZE = 24
 const MAX_PAGE_SIZE = 48
 const SHARE_DAILY_LIMIT = 5
 const REPORTS_TO_HIDE = 3
+// 'relevant' scores every active generated playlist against one district's
+// goals (see districtMatch below) rather than paging through the table, so
+// this bounds how many rows that scoring pass ever reads at once. Generous
+// for this game's actual scale (dozens to low hundreds of generated
+// playlists) — well short of a real pagination concern.
+const RELEVANT_SCAN_LIMIT = 500
 
 function agentNoOf(params: any): string {
   return String(params.agentNo || '').trim().toUpperCase()
@@ -27,12 +34,43 @@ function safeConfig(value: any): Record<string, any> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {}
 }
 
-/** Agent-scoped, paged list. Agent numbers never leave the backend. */
+/** Which of a playlist's real focus songs/albums land on this district's
+ *  actual goal catalog keys right now — never a guess. Shared (non-generated)
+ *  playlists carry no config.focus/albumIds at all, so they always score
+ *  zero matches here rather than being assigned a fake one. */
+function districtMatch(row: any, trackKeyToGoal: Record<string, string>, albumIdToGoal: Record<string, string>): string[] {
+  const config = safeConfig(row.config)
+  const labels = new Set<string>()
+  const focus = Array.isArray(config.display?.focus) ? config.display.focus : Array.isArray(config.focus) ? config.focus : []
+  for (const f of focus) {
+    const key = f?.key || f?.isrc
+    const label = key && trackKeyToGoal[key]
+    if (label) labels.add(label)
+  }
+  const albumIds = Array.isArray(config.albumIds) ? config.albumIds : []
+  for (const id of albumIds) {
+    const label = albumIdToGoal[id]
+    if (label) labels.add(label)
+  }
+  return [...labels]
+}
+
+/** Agent-scoped, paged list. Agent numbers never leave the backend.
+ *  `districtId` is optional context, not a hard filter: when present, every
+ *  returned playlist (any view) also carries `matchedGoalLabels`/
+ *  `matchCount` for that district, and view `relevant` additionally narrows
+ *  + sorts by that real match instead of just recency. */
 export async function getCandyPlaylistLibrary(supabase: SupabaseDB, params: any): Promise<any> {
   const agentNo = agentNoOf(params)
-  const view = ['community', 'mine', 'saved'].includes(String(params.view)) ? String(params.view) : 'community'
+  const districtId = params.districtId ? String(params.districtId) : null
+  const requestedView = String(params.view)
+  const view = districtId
+    ? (['relevant', 'community', 'mine'].includes(requestedView) ? requestedView : 'relevant')
+    : (['community', 'mine', 'saved'].includes(requestedView) ? requestedView : 'mine')
   const limit = clampPageSize(params.limit)
   const offset = Math.max(0, Number(params.offset) || 0)
+
+  const districtCatalog = districtId ? await getDistrictGoalCatalogMatch(supabase, districtId) : null
 
   let savedIds: string[] | null = null
   if (view === 'saved') {
@@ -40,19 +78,46 @@ export async function getCandyPlaylistLibrary(supabase: SupabaseDB, params: any)
       .select('playlist_id').eq('agent_no', agentNo).order('created_at', { ascending: false })
     if (error) return { success: false, error: error.message }
     savedIds = (data || []).map((r: any) => String(r.playlist_id)).filter(Boolean)
-    if (!savedIds.length) return { success: true, playlists: [], hasMore: false, nextOffset: 0 }
+    if (!savedIds || !savedIds.length) return { success: true, playlists: [], total: 0, hasMore: false, nextOffset: 0, districtName: districtCatalog?.districtName || null }
   }
 
-  let query = supabase.from('generated_playlists')
-    .select('name, playlist_id, url, agent_no, config, track_count, created_at, source, status', { count: 'exact' })
-    .eq('status', 'active')
-    .order('created_at', { ascending: false })
-  if (view === 'mine') query = query.eq('agent_no', agentNo)
-  if (savedIds) query = query.in('playlist_id', savedIds)
+  let rows: any[]
+  let total: number
+  const selectCols = 'name, playlist_id, url, agent_no, config, track_count, created_at, source, status'
 
-  const { data, error, count } = await query.range(offset, offset + limit - 1)
-  if (error) return { success: false, error: error.message }
-  const rows = data || []
+  if (view === 'relevant' && districtCatalog) {
+    // No district_id column on generated_playlists (see file header) and no
+    // SQL-side way to test a jsonb config against a goal's catalog key, so
+    // relevance is scored in memory over a bounded recent window rather than
+    // filtered in the query — see RELEVANT_SCAN_LIMIT above. Shared links
+    // never have config.focus, so they naturally score 0 and drop out here.
+    const { data, error } = await supabase.from('generated_playlists')
+      .select(selectCols)
+      .eq('status', 'active').eq('source', 'generated')
+      .order('created_at', { ascending: false })
+      .limit(RELEVANT_SCAN_LIMIT)
+    if (error) return { success: false, error: error.message }
+    const scored = (data || [])
+      .map((row: any) => ({ row, labels: districtMatch(row, districtCatalog.trackKeyToGoal, districtCatalog.albumIdToGoal) }))
+      .filter((entry: any) => entry.labels.length > 0)
+      .sort((a: any, b: any) =>
+        b.labels.length - a.labels.length || +new Date(b.row.created_at) - +new Date(a.row.created_at))
+    total = scored.length
+    rows = scored.slice(offset, offset + limit).map((entry: any) => entry.row)
+  } else {
+    let query = supabase.from('generated_playlists')
+      .select(selectCols, { count: 'exact' })
+      .eq('status', 'active')
+      .order('created_at', { ascending: false })
+    if (view === 'mine') query = query.eq('agent_no', agentNo)
+    if (savedIds) query = query.in('playlist_id', savedIds)
+
+    const { data, error, count } = await query.range(offset, offset + limit - 1)
+    if (error) return { success: false, error: error.message }
+    rows = data || []
+    total = Number(count) || rows.length
+  }
+
   const playlistIds = [...new Set(rows.map((r: any) => String(r.playlist_id)).filter(Boolean))]
   const creatorIds = [...new Set(rows.map((r: any) => String(r.agent_no || '')).filter(Boolean))]
 
@@ -90,14 +155,19 @@ export async function getCandyPlaylistLibrary(supabase: SupabaseDB, params: any)
     saved: savedByMe.has(row.playlist_id),
     saveCount: saveCounts.get(row.playlist_id) || 0,
     reported: reportedByMe.has(row.playlist_id),
+    ...(districtCatalog ? (() => {
+      const labels = districtMatch(row, districtCatalog.trackKeyToGoal, districtCatalog.albumIdToGoal)
+      return { matchedGoalLabels: labels, matchCount: labels.length }
+    })() : {}),
   }))
 
-  const total = Number(count) || playlists.length
   return {
     success: true,
     playlists,
+    total,
     hasMore: offset + playlists.length < total,
     nextOffset: offset + playlists.length,
+    districtName: districtCatalog?.districtName || null,
   }
 }
 

@@ -15,6 +15,8 @@ import { districtPercent } from './district-progress.js'
 import { playRestoration } from './celebrate.js'
 import { itemTile, itemSheet, itemsAt, itemsInPack } from './items.js'
 import { trackEngagementOnce } from './engagement.js'
+import { reconnectPlayerNext } from './reconnect-player-ui.js'
+import { openPlaylistVault } from './playlist-vault-sheet.js'
 
 let teardown = null
 let sceneFor = null
@@ -47,7 +49,10 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
       <div class="stage-top">
         <div class="stage-eyebrow"></div>
         <div class="stage-name"></div>
-        <div class="stage-echo"></div>
+        <div class="stage-echo-row">
+          <div class="stage-echo"></div>
+          <button type="button" class="stage-agents" hidden></button>
+        </div>
       </div>
       <div class="stage-bottom">
         <div class="stage-power"><span class="pw-val">0%</span><span class="pw-lbl">RESTORED</span></div>
@@ -79,6 +84,7 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
   container.querySelector('.stage-name').textContent = districtDisplayName(mapD)
   // The agent this place is named for, on the hero — not hidden until you finish.
   container.querySelector('.stage-echo').textContent = mapD.echoOf ? `👤 ${mapD.echoOf}` : ''
+  paintAgentsHere(container.querySelector('.stage-agents'), state, districtId)
 
   container.querySelector('.stage-eyebrow').textContent = eyebrowText
 
@@ -99,7 +105,8 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
     // goal to actually show; a finished one gets a quiet compact row from
     // renderBoard itself with nothing left to interact with.
     const reconnectBox = d.reconnect && !d.reconnect.done ? reconnectPanel(d) : null
-    renderBoard(board, d, { reconnectBox })
+    const vaultBox = districtVaultCard(districtId, districtDisplayName(mapD))
+    renderBoard(board, d, { reconnectBox, vaultBox })
     const cellAward = d.chargeCellProgress?.earnedNow || 0
     const cellAwardKey = `${d.id}:${d.chargeCellProgress?.earnedThisDistrict || 0}`
     if (cellAward > 0 && celebratedCellAward !== cellAwardKey) {
@@ -192,6 +199,84 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
   board.appendChild(card)
 }
 
+/* ── Who's here ─────────────────────────────────────────────────────────
+   Real presence (feed.ts's getOnlineNow — same last-90s-poll signal City's
+   own "active now" already uses), filtered to this one district instead of
+   the whole map. Already respects appear_offline server-side: an agent
+   hiding never reaches state.onlineNow at all, so there's nothing extra to
+   filter here for that. No agent numbers ever shown, only codenames. */
+
+function districtAgentsHere(state, districtId) {
+  const myCodename = state.player?.codename || null
+  return (state.onlineNow?.agents || [])
+    .filter((a) => a.districtId === districtId)
+    .map((a) => ({ codename: a.codename, isMe: myCodename != null && a.codename === myCodename }))
+}
+
+function paintAgentsHere(button, state, districtId) {
+  if (!button) return
+  const agents = districtAgentsHere(state, districtId)
+  if (!agents.length) { button.hidden = true; return }
+  button.hidden = false
+  button.textContent = `👥 ${agents.length} agent${agents.length === 1 ? '' : 's'} here ›`
+  button.onclick = () => showOverlay(agentsHereSheet(state, districtId))
+}
+
+function agentsHereSheet(state, districtId) {
+  const agents = districtAgentsHere(state, districtId)
+  const sheet = el('div', 'sheet agents-here-sheet')
+  sheet.appendChild(el('div', 'eyebrow', 'AGENTS IN THIS DISTRICT'))
+  if (agents.length <= 1 && agents[0]?.isMe) {
+    sheet.appendChild(el('p', 'muted', 'Just you here'))
+  } else {
+    // Solo-and-not-you can't actually happen (onlineNow always carries the
+    // caller's own poll), but guarding it costs nothing and keeps this
+    // reading correctly if that ever changes.
+    for (const agent of agents) {
+      sheet.appendChild(el('div', 'agent-here-row', `
+        <span class="agent-here-dot"></span>
+        <b>${esc(agent.codename)}</b>${agent.isMe ? '<span class="agent-here-you">You</span>' : ''}
+      `))
+    }
+  }
+  const close = el('button', 'btn btn-ghost', 'Close')
+  close.onclick = hideOverlay
+  sheet.appendChild(close)
+  return sheet
+}
+
+/* ── District Playlist Vault ────────────────────────────────────────────
+   A compact entry into the shared Vault sheet (playlist-vault-sheet.js),
+   pre-scoped to this district's real goal catalog keys. The count is fetched
+   once per district visit and cached for the session — it's a real number
+   (candy-star.ts's district match, not a guess), not worth re-fetching on
+   every 90s poll re-render the way the rest of this screen refreshes. */
+
+const vaultCountCache = new Map()
+
+function districtVaultCard(districtId, districtName) {
+  const card = el('button', 'district-vault-card')
+  card.type = 'button'
+  const cached = vaultCountCache.get(districtId)
+  const countLabel = (n) => `${n} community playlist${n === 1 ? '' : 's'}`
+  card.innerHTML = `
+    <div class="dv-head"><span class="dv-icon">🎧</span><span class="dv-title">PLAYLIST VAULT</span></div>
+    <div class="dv-sub">Playlists for ${esc(districtName)}</div>
+    <div class="dv-foot"><span class="dv-count">${typeof cached === 'number' ? esc(countLabel(cached)) : 'Loading…'}</span><span class="dv-open">OPEN VAULT →</span></div>
+  `
+  card.onclick = () => openPlaylistVault({ districtId, districtName })
+  if (typeof cached !== 'number') {
+    call('getCandyPlaylistLibrary', { agentNo: getAgentNo(), view: 'relevant', districtId, limit: 1 }).then((res) => {
+      if (!res?.success) return
+      const total = Number(res.total) || 0
+      vaultCountCache.set(districtId, total)
+      const countEl = card.querySelector('.dv-count')
+      if (countEl) countEl.textContent = countLabel(total)
+    })
+  }
+  return card
+}
+
 /* ── Reconnect goal ─────────────────────────────────────────────────────
    The third restoration goal, when the district has one — one of five
    flavors, frozen at random per agent (see districts.ts's freezeGoals()):
@@ -264,6 +349,27 @@ function reconnectPanel(d) {
   return box
 }
 
+function reconnectMissionBlock(title, body) {
+  return el('section', 'reconnect-core reconnect-mission-core', `
+    <span>MISSION</span><b>${esc(title || 'ReConnect Quest')}</b>
+    ${body ? `<p>${body}</p>` : ''}`)
+}
+
+function reconnectTeamBlock(body) {
+  return el('section', 'reconnect-core reconnect-team-core', `<span>TEAM</span><b>${body}</b>`)
+}
+
+function reconnectNextBlock(title, body = '') {
+  return el('div', 'reconnect-next', `<span>NEXT STEP</span><b>${title}</b>${body ? `<p>${body}</p>` : ''}`)
+}
+
+function reconnectDisclosure(label, content, open = false) {
+  const details = el('details', 'reconnect-disclosure')
+  details.open = open
+  details.append(el('summary', '', label), content)
+  return details
+}
+
 /* — Puzzle variants (sotd / cipher / memory) — */
 
 const PUZZLE_EYEBROW = { sotd: 'SONG OF THE DAY', cipher: 'CIPHER', memory: 'MEMORY FRAGMENT' }
@@ -271,14 +377,15 @@ const PUZZLE_EYEBROW = { sotd: 'SONG OF THE DAY', cipher: 'CIPHER', memory: 'MEM
 function paintPuzzlePanel(box, d, r) {
   box.innerHTML = ''
   box.appendChild(el('div', 'eyebrow', PUZZLE_EYEBROW[r.variant] || 'ReConnect SIGNAL'))
-  box.appendChild(el('p', 'muted', r.prompt || ''))
+  box.appendChild(reconnectMissionBlock(d.reconnect?.label || 'ReConnect Quest', esc(r.prompt || 'Crack the signal.')))
+  box.appendChild(reconnectTeamBlock('Solo signal'))
 
   if (r.done) {
-    box.appendChild(el('div', 'dim', '✓ Cracked.'))
+    box.appendChild(reconnectNextBlock('Quest complete — finish the district'))
     return
   }
   if (r.attemptsLeft <= 0) {
-    box.appendChild(el('div', 'dim', "Out of attempts — this one's stuck for this attempt."))
+    box.appendChild(reconnectNextBlock('No attempts left — ask for help'))
     const help = el('a', 'btn btn-ghost reconnect-help-link', 'Ask for help in ReConnect GC')
     help.href = 'https://ig.me/j/AbZYVFwKMMuh1zzV/'
     help.target = '_blank'
@@ -287,6 +394,7 @@ function paintPuzzlePanel(box, d, r) {
     return
   }
 
+  box.appendChild(reconnectNextBlock('Submit your answer', `${r.attemptsLeft} ${r.attemptsLeft === 1 ? 'try' : 'tries'} left`))
   const row = el('div', 'reconnect-invite-row')
   const input = el('input', 'ob-input')
   input.placeholder = r.variant === 'sotd' ? 'Paste the YouTube link' : 'Your answer'
@@ -303,8 +411,7 @@ function paintPuzzlePanel(box, d, r) {
     if (fresh.success) setState(fresh)
   }
   row.append(input, submitBtn)
-  box.appendChild(row)
-  box.appendChild(el('div', 'dim', `${r.attemptsLeft} ${r.attemptsLeft === 1 ? 'try' : 'tries'} left`))
+  box.appendChild(el('div', 'reconnect-primary-action')).appendChild(row)
 }
 
 /* — Co-op variants (connect / invite) — */
@@ -342,10 +449,13 @@ function paintMissionPanel(box, d, res) {
     // makes the other half of the flow visible after the fact.
     const others = (m.participants || []).filter((p) => !p.isMe && p.status === 'joined')
     const withWho = others.length ? ` with ${others.map((p) => esc(p.codename)).join(' and ')}` : ''
-    const done = m.sharedTrack
-      ? `Done — you teamed up${withWho} and ${esc(m.sharedTrack.label)} hit ${m.sharedTrack.target} between you. Reward lands once the district finishes.`
-      : `Done — you teamed up${withWho}. Reward lands once the district finishes.`
-    box.appendChild(el('p', 'muted', done))
+    const missionBody = m.sharedTrack
+      ? `Team up and take ${esc(m.sharedTrack.label)} to ${m.sharedTrack.target} combined plays.`
+      : 'Complete this district ReConnect Quest together.'
+    box.appendChild(reconnectMissionBlock(d.reconnect?.label || 'ReConnect Quest', missionBody))
+    box.appendChild(reconnectTeamBlock(`${esc(m.participants.filter((p) => p.status === 'joined').map((p) => p.isMe ? 'You' : p.codename).join(' + ') || 'Team complete')}`))
+    box.appendChild(reconnectNextBlock('Quest complete — finish the district',
+      m.sharedTrack ? `${esc(m.sharedTrack.label)} reached ${m.sharedTrack.target} combined plays${withWho}.` : `You teamed up${withWho}.`))
     return
   }
 
@@ -353,21 +463,29 @@ function paintMissionPanel(box, d, res) {
 
   if (!m || m.status !== 'open') {
     const st = res.config.sharedTrack
-    box.appendChild(el('p', 'muted', `Build a team of ${res.config.requiredAgents} agents restoring ${esc(districtDisplayName(d))}.`))
+    const missionBody = res.variant === 'invite'
+      ? `Build a ${res.config.requiredAgents}-agent team in ${esc(districtDisplayName(d))}.`
+      : st
+        ? `Build a ${res.config.requiredAgents}-agent team, then stream ${esc(st.label)} to ${st.target} combined plays.`
+        : `Build a ${res.config.requiredAgents}-agent team and stream your active district goals.`
+    box.appendChild(reconnectMissionBlock(d.reconnect?.label || 'ReConnect Quest', missionBody))
+    box.appendChild(reconnectTeamBlock(`You · ${Math.max(0, res.config.requiredAgents - 1)} open seat${res.config.requiredAgents - 1 === 1 ? '' : 's'}`))
+    box.appendChild(reconnectNextBlock('Open this quest to find teammates'))
+    const moreBody = el('div', 'reconnect-details-body')
     const how = el('details', 'reconnect-how')
     how.innerHTML = `<summary>How this mission works</summary><p>${res.variant === 'invite'
       ? 'Invite active agents here. Their acceptance completes the team step—no extra streaming is needed.'
       : st
         ? `After everyone accepts, stream ${esc(st.label)}. Every team member's plays add up until the shared total reaches ${st.target}.`
         : 'After everyone accepts, each team member streams at least one of their own active district goals.'}</p>`
-    box.appendChild(how)
+    moreBody.appendChild(how)
     // Who's already standing here, BEFORE committing to open anything. The
     // pickable list used to appear only after opening a mission, so this
     // screen — the one everybody sees first — could never say whether
     // anyone was actually around to team up with. "Open a mission" reads as
     // a shot in the dark without it, and as answering someone with it.
     const waiting = el('p', 'muted reconnect-waiting-now')
-    box.appendChild(waiting)
+    moreBody.appendChild(waiting)
     call('getInviteCandidates', { agentNo: me, districtId: d.id }).then((res2) => {
       const n = res2?.success ? (res2.candidates?.length || 0) : 0
       if (n) {
@@ -394,7 +512,8 @@ function paintMissionPanel(box, d, res) {
       if (r.success) paintMissionPanel(box, d, { success: true, available: true, variant: res.variant, config: res.config, mission: r.mission })
       else { toast(reconnectError(r.error)); openBtn.disabled = false }
     }
-    box.appendChild(openBtn)
+    box.appendChild(el('div', 'reconnect-primary-action')).appendChild(openBtn)
+    box.appendChild(reconnectDisclosure('Details', moreBody))
     return
   }
 
@@ -415,6 +534,19 @@ function paintMissionPanel(box, d, res) {
   const pending = m.participants.filter((p) => p.status === 'invited' && !p.inviteExpired)
   const expired = m.participants.filter((p) => p.status === 'invited' && p.inviteExpired)
   const need = Math.max(0, m.requiredAgents - joined.length)
+  const idlers = m.participants.filter((p) => p.status === 'joined' && p.idle && !p.isMe && !p.leftDistrict)
+  const teamNames = joined.map((p) => p.isMe ? 'You' : esc(p.codename))
+  const teamOpen = Math.max(0, m.requiredAgents - joined.length)
+  const teamCopy = `${teamNames.join(' + ') || 'You'}${teamOpen ? ` · ${teamOpen} open seat${teamOpen === 1 ? '' : 's'}` : ''}`
+  const missionBody = res.variant === 'invite'
+    ? `Build a ${m.requiredAgents}-agent team in ${esc(districtDisplayName(d))}.`
+    : m.sharedTrack
+      ? `Team up and take ${esc(m.sharedTrack.label)} to ${m.sharedTrack.target} combined plays.`
+      : `Team up and stream active goals in ${esc(districtDisplayName(d))}.`
+  box.appendChild(reconnectMissionBlock(d.reconnect?.label || 'ReConnect Quest', missionBody))
+  box.appendChild(reconnectTeamBlock(teamCopy))
+  const problemHost = el('div', 'reconnect-problems')
+  box.appendChild(problemHost)
 
   // The mission's own 7-day clock — returned by the server (m.expiresAt) but
   // never shown anywhere until now. The DISTRICT's deadline already gets a
@@ -435,33 +567,22 @@ function paintMissionPanel(box, d, res) {
       const text = daysLeft <= 0 ? 'Last day for this mission'
         : daysLeft === 1 ? '<b>1 day</b> left for this mission'
         : `<b>${daysLeft} days</b> left for this mission`
-      box.appendChild(el('div', 'board-deadline' + (urgent ? ' is-urgent' : ''), `<span class="deadline-kind">Team mission expires</span><span>⏳ ${text} — after that it expires and any invites are lost.</span>`))
+      problemHost.appendChild(el('div', 'board-deadline' + (urgent ? ' is-urgent' : ''), `<span class="deadline-kind">Team mission expires</span><span>⏳ ${text} — after that it expires and any invites are lost.</span>`))
     }
   }
 
-  let nextTitle = 'Review the team mission'
-  let nextBody = 'Check the mission status and complete the remaining step.'
-  if (myRow?.status === 'invited') {
-    nextTitle = 'Accept or decline the invitation'
-    nextBody = res.variant === 'invite' ? 'Accepting completes this ReConnect mission for both agents.' : 'Accept to join this team before streaming toward its goal.'
-  } else if (need > 0 && pending.length) {
-    nextTitle = 'Waiting for an invited agent'
-    nextBody = `${pending.map((p) => esc(p.codename)).join(' and ')} ${pending.length === 1 ? 'has' : 'have'} 24 hours to respond. You can cancel a pending invite below.`
-  } else if (need > 0) {
-    nextTitle = 'Invite one waiting agent'
-    nextBody = 'Choose someone from the live waiting list below. The mission starts together after they accept.'
-  } else if (m.cipher) {
-    nextTitle = `Solve cipher ${m.cipher.index + 1} of ${m.cipher.total}`
-    nextBody = 'Discuss it in team chat, then submit one shared answer below.'
-  } else if (res.variant === 'connect' && m.sharedTrack && m.sharedTrack.progress < m.sharedTrack.target) {
-    const streamsLeft = Math.max(0, m.sharedTrack.target - m.sharedTrack.progress)
-    nextTitle = `Stream ${esc(m.sharedTrack.label)} together`
-    nextBody = `${streamsLeft} combined play${streamsLeft === 1 ? '' : 's'} remaining. Both agents’ plays count after they join.`
-  } else if (res.variant === 'connect') {
-    nextTitle = 'Stream an active district goal'
-    nextBody = 'Each ready agent needs at least one qualifying play after joining.'
-  }
-  box.appendChild(el('div', 'reconnect-next', `<span>Next step</span><b>${nextTitle}</b><p>${nextBody}</p>`))
+  const next = reconnectPlayerNext({
+    variant: res.variant, myStatus: myRow?.status, need,
+    pendingNames: pending.map((p) => p.codename), expiredCount: expired.length,
+    idleCount: idlers.length, isCreator: m.isCreator, cipher: m.cipher,
+    sharedTrack: m.sharedTrack,
+  })
+  const nextTitle = esc(next.title)
+  const nextBody = esc(next.body)
+  const nextBlock = reconnectNextBlock(nextTitle, nextBody)
+  box.appendChild(nextBlock)
+  const primaryHost = el('div', 'reconnect-primary-action')
+  box.appendChild(primaryHost)
 
   box.appendChild(el('div', 'team-status', `
     <b>Team: ${joined.length} of ${m.requiredAgents} ready</b>
@@ -487,18 +608,18 @@ function paintMissionPanel(box, d, res) {
   // placed right above the team chat: solving it is meant to happen there,
   // not alone.
   if (res.variant === 'connect' && m.cipher) {
-    box.appendChild(el('div', 'eyebrow', 'CIPHER'))
-    box.appendChild(el('p', 'muted', `Cipher ${m.cipher.index + 1} of ${m.cipher.total} — talk it out below, then submit your best answer together.`))
-    box.appendChild(el('p', 'muted', m.cipher.prompt))
+    const cipherPanel = el('div', 'reconnect-cipher-panel')
+    cipherPanel.appendChild(el('div', 'eyebrow', 'CIPHER'))
+    cipherPanel.appendChild(el('p', 'muted', `Cipher ${m.cipher.index + 1} of ${m.cipher.total} — talk it out, then submit one answer together.`))
+    cipherPanel.appendChild(el('p', 'muted', m.cipher.prompt))
     if (m.cipher.attemptsLeft <= 0) {
-      box.appendChild(el('div', 'dim', "Out of attempts — this one's stuck for this attempt."))
       const help = el('a', 'btn btn-ghost reconnect-help-link', 'Ask for help in ReConnect GC')
       help.href = 'https://ig.me/j/AbZYVFwKMMuh1zzV/'
       help.target = '_blank'
       help.rel = 'noopener noreferrer'
-      box.appendChild(help)
+      cipherPanel.appendChild(help)
     } else {
-      const cipherRow = el('div', 'reconnect-invite-row')
+      const cipherRow = el('div', 'reconnect-invite-row reconnect-cipher-action')
       const cipherInput = el('input', 'ob-input')
       cipherInput.placeholder = 'Your answer'
       const cipherSubmit = el('button', 'btn btn-primary', 'Submit')
@@ -514,9 +635,10 @@ function paintMissionPanel(box, d, res) {
         refresh()
       }
       cipherRow.append(cipherInput, cipherSubmit)
-      box.appendChild(cipherRow)
-      box.appendChild(el('div', 'dim', `${m.cipher.attemptsLeft} ${m.cipher.attemptsLeft === 1 ? 'try' : 'tries'} left on this cipher, shared across the team`))
+      cipherPanel.appendChild(cipherRow)
+      cipherPanel.appendChild(el('div', 'dim', `${m.cipher.attemptsLeft} ${m.cipher.attemptsLeft === 1 ? 'try' : 'tries'} left on this cipher, shared across the team`))
     }
+    primaryHost.appendChild(cipherPanel)
   }
 
   // The one thing the sender would otherwise never learn: their invite ran
@@ -525,7 +647,7 @@ function paintMissionPanel(box, d, res) {
   // inviting anyone. Says plainly that the slot is theirs to use again.
   if (expired.length && need > 0) {
     const who = expired.map((p) => esc(p.codename)).join(', ')
-    box.appendChild(el('p', 'muted reconnect-expired-note',
+    problemHost.appendChild(el('p', 'muted reconnect-expired-note',
       expired.length === 1
         ? `${who} didn't reply within a day, so that invite expired — the slot's free again, invite someone else below.`
         : `${who} didn't reply within a day, so those invites expired — the slots are free again, invite someone else below.`))
@@ -537,7 +659,7 @@ function paintMissionPanel(box, d, res) {
   // partner just watches the shared total stop moving forever.
   if (dropped.length) {
     const who = dropped.map((p) => esc(p.codename)).join(', ')
-    box.appendChild(el('p', 'muted reconnect-expired-note',
+    problemHost.appendChild(el('p', 'muted reconnect-expired-note',
       `${who} ran out of time restoring this district, so they can't contribute here until they start it again. You're free to team up with someone else${need > 0 ? ' below' : ''}.`))
   }
 
@@ -546,14 +668,13 @@ function paintMissionPanel(box, d, res) {
   // them (creator) or leave (anyone). Deliberately never says anything about
   // someone streaming *less*: only silence is called out, so nobody gets
   // pressured for playing at their own pace.
-  const idlers = m.participants.filter((p) => p.status === 'joined' && p.idle && !p.isMe && !p.leftDistrict)
   if (idlers.length) {
     const who = idlers.map((p) => esc(p.codename)).join(', ')
     // On the final day the bar for "gone quiet" drops to a single day (see
     // idleThresholdFor) — say so, otherwise dropping someone who only missed
     // yesterday looks arbitrary next to the usual couple-of-days wording.
     const urgent = res.idleThreshold === 1
-    box.appendChild(el('p', 'muted reconnect-expired-note',
+    problemHost.appendChild(el('p', 'muted reconnect-expired-note',
       `${who} ${idlers.length === 1 ? "hasn't" : "haven't"} streamed ${urgent ? 'today' : 'in a couple of days'}. `
       + (urgent ? "You're on the last day here, so you don't have to wait them out. " : '')
       + (m.isCreator
@@ -641,11 +762,12 @@ function paintMissionPanel(box, d, res) {
   box.appendChild(list)
 
   if (myRow?.status === 'invited') {
-    box.appendChild(el('p', 'muted', res.variant === 'invite'
+    const inviteNote = el('p', 'muted', res.variant === 'invite'
       ? "You've been invited to team up here — accepting alone completes your part, no streaming needed."
       : m.sharedTrack
         ? `You've been invited to team up here. Accept to join — once you do, stream ${esc(m.sharedTrack.label)} along with everyone else here until you've hit ${m.sharedTrack.target} between you.`
-        : "You've been invited to team up here. Accept to join — once you do, stream toward your own goals here at least once."))
+        : "You've been invited to team up here. Accept to join — once you do, stream toward your own goals here at least once.")
+    box.appendChild(inviteNote)
     const row = el('div', 'reconnect-invite-actions')
     const accept = el('button', 'btn btn-primary', 'Accept')
     accept.onclick = async () => {
@@ -660,10 +782,15 @@ function paintMissionPanel(box, d, res) {
       const r = await call('respondReconnectInvite', { agentNo: me, districtId: d.id, accept: false })
       if (r.success) refresh(); else { decline.disabled = false }
     }
-    row.append(accept, decline)
+    accept.classList.add('reconnect-main-action')
+    primaryHost.appendChild(accept)
+    row.appendChild(decline)
     box.appendChild(row)
   } else if (myRow?.status === 'joined') {
-    if (need > 0) {
+    // A live pending invite already reserves that open seat. Do not offer a
+    // second primary invite action while the screen says to wait for the
+    // first response; only recruit when uncovered seats remain.
+    if (need > pending.length) {
       // A <select> of codenames read as "pick an option from a menu," which
       // is why 20 agents could sit here for days each waiting on a partner
       // while every one of them was visible to all the others the whole
@@ -710,7 +837,7 @@ function paintMissionPanel(box, d, res) {
             alertBtn.textContent = active ? '🔔 Partner alert is on' : '🔔 Tell me when someone is free'
             toast(active ? "We'll ring the bell when a partner is available." : 'Partner alert turned off')
           }
-          waitList.appendChild(alertBtn)
+          primaryHost.appendChild(alertBtn)
           return
         }
         const n = res2.candidates.length
@@ -724,7 +851,7 @@ function paintMissionPanel(box, d, res) {
           : `${n} agents are waiting for a partner here.`)
           + onlineNote + ' Invite one and they get a notification to accept.'
         const sendInvite = async (candidate) => {
-          for (const b of waitList.querySelectorAll('.rw-invite, .reconnect-best-invite')) b.disabled = true
+          for (const b of box.querySelectorAll('.rw-invite, .reconnect-best-invite')) b.disabled = true
           inviteMsg.textContent = ''
           inviteMsg.classList.remove('is-error')
           const r = await call('inviteReconnectMission',
@@ -732,14 +859,19 @@ function paintMissionPanel(box, d, res) {
           if (r.success) { toast(`Invited ${r.inviteeCodename || candidate.codename}`); refresh(); return }
           inviteMsg.textContent = reconnectError(r.error)
           inviteMsg.classList.add('is-error')
-          for (const b of waitList.querySelectorAll('.rw-invite, .reconnect-best-invite')) b.disabled = false
+          for (const b of box.querySelectorAll('.rw-invite, .reconnect-best-invite')) b.disabled = false
         }
         const best = res2.candidates[0]
+        const bestMeta = el('div', 'reconnect-best-meta',
+          `Best available &middot; ${best.online ? 'Online' : esc(waitedLabel(best.waitingSince))}`)
         const bestBtn = el('button', 'btn btn-primary reconnect-best-invite',
-          `Invite best available · ${best.codename}${best.online ? ' · online' : ''}`)
+          `Invite ${best.codename}`)
         bestBtn.onclick = () => sendInvite(best)
-        waitList.appendChild(bestBtn)
-        for (const c of res2.candidates) {
+        primaryHost.append(bestMeta, bestBtn)
+        const otherAgents = el('details', 'reconnect-other-agents')
+        otherAgents.appendChild(el('summary', '', 'See other agents'))
+        const otherList = el('div', 'reconnect-waitlist')
+        for (const c of res2.candidates.slice(1)) {
           // Online first (server already sorts the list this way) — flagged
           // here too, since an invite to someone actually in the app right
           // now has real odds of getting answered in the next few minutes.
@@ -751,8 +883,10 @@ function paintMissionPanel(box, d, res) {
           // Agent numbers ride along as data and are never rendered.
           btn.onclick = () => sendInvite(c)
           row.appendChild(btn)
-          waitList.appendChild(row)
+          otherList.appendChild(row)
         }
+        otherAgents.appendChild(otherList)
+        if (res2.candidates.length > 1) waitList.appendChild(otherAgents)
       })
     }
   }
@@ -761,7 +895,23 @@ function paintMissionPanel(box, d, res) {
   // reaching this panel with an open mission and no row of your own is no
   // longer possible. That was the "Join this mission" matchmaking button.
 
-  box.appendChild(chatPanel(d, m, refresh))
+  // Everything outside the three player questions becomes secondary. The
+  // controls still exist for recovery/support, but no longer compete with
+  // Mission → Team → Next Step on first glance.
+  const detailsBody = el('div', 'reconnect-details-body')
+  const keep = new Set([
+    box.querySelector(':scope > .eyebrow'),
+    box.querySelector(':scope > .reconnect-mission-core'),
+    box.querySelector(':scope > .reconnect-team-core'),
+    problemHost, nextBlock, primaryHost,
+  ].filter(Boolean))
+  for (const child of [...box.children]) {
+    if (!keep.has(child)) detailsBody.appendChild(child)
+  }
+  if (detailsBody.childElementCount) box.appendChild(reconnectDisclosure('Details', detailsBody))
+
+  const chat = chatPanel(d, m, refresh)
+  box.appendChild(reconnectDisclosure('Team Chat', chat, !!m.cipher))
 }
 
 /** The mission's shared thread — an invite's optional note and the ongoing

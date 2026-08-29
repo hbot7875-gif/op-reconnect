@@ -182,6 +182,8 @@ export function renderBoard(board, d, opts = {}) {
     board.appendChild(extendRow)
   }
 
+  if (opts.vaultBox) board.appendChild(opts.vaultBox)
+
   if (goals.length) {
     const trackCard = el('div', 'card goal-card')
     renderMissionGroup(trackCard, '🎵', 'Track Mission', goals,
