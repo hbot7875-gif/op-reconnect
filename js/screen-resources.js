@@ -20,14 +20,18 @@
 //     inventory
 //   - Personal Charge → tapping the ARMY Bomb itself on the World screen
 //     (screen-world.js's coreBlock)
-// Badge Drawer and Magic Shop are the two things that don't belong on any
-// other screen, so they stay here as Quick Access.
+//   - Magic Shop → the City Map, as its own special location beside Candy
+//     Star (city-map.js's toolMarker) — it's somewhere you GO to get/spend
+//     things, not inventory you already hold. What you already own (Wings
+//     included) still shows here as a read-only compartment below; only the
+//     buy/claim actions moved.
+// Badge Drawer is the one thing left that doesn't belong on any other
+// screen, so it stays here as Quick Access.
 
 import { el, esc, showOverlay, hideOverlay, getState, setState, toast } from './state.js'
 import { getAgentNo } from './session.js'
 import { call } from './api.js'
 import { badgeDrawerSheet } from './badge-drawer.js'
-import { magicShopSheet } from './magic-shop.js'
 import { itemArt, itemSheet, RARITY } from './items.js'
 import { agentChargeSheet } from './agent-charge.js'
 import { openBackupPassFlow } from './backup-pass.js'
@@ -475,15 +479,12 @@ export function renderResources(container, state) {
     }
   }
 
-  // ── Quick access — the two things that don't live anywhere else ──
+  // ── Quick access — the one thing that doesn't live anywhere else ──
   const quick = el('div', 'quick-links')
-  const shop = el('button', 'quick-link')
-  shop.innerHTML = '<span class="ql-icon">🏪</span><span class="ql-name">Magic Shop</span><span class="ql-go">›</span>'
-  shop.onclick = () => showOverlay(magicShopSheet())
   const badges = el('button', 'quick-link')
   badges.innerHTML = '<span class="ql-icon">🎖️</span><span class="ql-name">Badge Drawer</span><span class="ql-go">›</span>'
   badges.onclick = () => showOverlay(badgeDrawerSheet(state))
-  quick.append(shop, badges)
+  quick.append(badges)
   wrap.appendChild(quick)
 
   container.appendChild(wrap)

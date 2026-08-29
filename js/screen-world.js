@@ -34,6 +34,7 @@ import { agentChargeSheet } from './agent-charge.js'
 import { broadcastCards } from './broadcasts.js'
 import { cityFeedCard } from './city-feed.js'
 import { openSuggestions } from './suggestions.js'
+import { openMagicShop } from './magic-shop.js'
 import { vmaEventCard, openVmaMission } from './vma.js'
 
 export function renderWorld(container, state) {
@@ -260,9 +261,14 @@ function commandTools(state) {
     share.onclick = () => showOverlay(openShare(state))
     const find = el('button', 'btn btn-ghost', '🔍 Find an agent or district')
     find.onclick = () => { hideOverlay(); openFinder(state) }
+    // Moved off the map (city-map.js's toolMarker cluster is now Candy Star
+    // + Magic Shop only, two real places — a feedback form was never a
+    // place). Still one tap away, just not competing for map real estate.
+    const suggest = el('button', 'btn btn-ghost', '💡 Suggestions')
+    suggest.onclick = () => { hideOverlay(); openSuggestions() }
     const close = el('button', 'btn btn-ghost', 'Close')
     close.onclick = hideOverlay
-    sheet.append(share, find, close)
+    sheet.append(share, find, suggest, close)
     showOverlay(sheet)
   }
   return button
@@ -321,7 +327,7 @@ function cityPlan(state) {
   box.appendChild(renderCityMap(wards, state.map?.districts || [],
     (w, origin) => goWard(w.id, origin), homeFraction,
     (origin) => goCandyStar(origin),
-    () => openSuggestions(),
+    () => openMagicShop(),
     state.vma ? () => openVmaMission() : null,
     !!(state.vma?.isPowerHour || state.vma?.isDoubleDay)))
   return box

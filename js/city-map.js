@@ -332,17 +332,17 @@ function toolMarker(angle, icon, label, onClick, extraClass) {
  *                      "NOW RESTORING" card's own percentage.
  * @param onCandyStar  ({x,y}) => void — optional. Draws the Candy Star tool
  *                     marker (see toolMarker above) when passed.
- * @param onSuggestions ({x,y}) => void — optional. Same tool-marker treatment
- *                     for the Suggestions board: a small, opt-in symbol on
- *                     the map rather than a card sitting open on City for
- *                     every agent whether they want it or not.
+ * @param onMagicShop  ({x,y}) => void — optional. Same tool-marker treatment,
+ *                     flanking Candy Star on the other side of the seam: a
+ *                     real world destination you GO to (buy Wings, claim a
+ *                     Ticket), not inventory — that stays in Agent Pack.
  * @param onVma        ({x,y}) => void — optional. A temporary live-event
  *                     marker, not a permanent tool like the two above — see
  *                     its own placement comment below.
  * @param vmaPulse     whether to pulse the VMA marker gold (Power Hour /
  *                     Double Day) rather than its plain resting purple.
  */
-export function renderCityMap(wards, districts, onSelect, homeFraction, onCandyStar, onSuggestions, onVma, vmaPulse) {
+export function renderCityMap(wards, districts, onSelect, homeFraction, onCandyStar, onMagicShop, onVma, vmaPulse) {
   const PAD = 5
   const svg = n('svg', {
     class: 'city-map', 'aria-hidden': 'true',
@@ -514,13 +514,16 @@ export function renderCityMap(wards, districts, onSelect, homeFraction, onCandyS
 
   // The seam where the ward ring closes (Old Grid back to Mono) is the one
   // angle guaranteed not to cut across the middle of a wedge's label — same
-  // reasoning wardless placement gets elsewhere in this file.
-  if (onCandyStar) svg.appendChild(toolMarker(-Math.PI / 2, '🍬', 'Candy Star', onCandyStar))
-  // Same seam, offset just enough to sit beside Candy Star rather than under
-  // it — this is the one angle in the ring proven clear of a wedge label
-  // (see the comment above), so a second marker stays in that same safe
-  // strip instead of risking a new angle that might cut across one.
-  if (onSuggestions) svg.appendChild(toolMarker(-Math.PI / 2 - 0.3, '💡', 'Suggestions', onSuggestions))
+  // reasoning wardless placement gets elsewhere in this file. Candy Star and
+  // Magic Shop flank that seam symmetrically (equal offset each side) rather
+  // than stacking both to one side — two real "go here" world locations,
+  // clearly a pair, with enough angular gap between their halos/labels not
+  // to crowd each other (0.64rad total vs. the ~0.23rad that would actually
+  // touch at this radius). Suggestions used to sit in this cluster too; it
+  // moved to the City ••• menu (screen-world.js's commandTools) since it was
+  // never a place, just a feedback form — see suggestions.js.
+  if (onCandyStar) svg.appendChild(toolMarker(-Math.PI / 2 - 0.32, '🍬', 'Candy Star', onCandyStar))
+  if (onMagicShop) svg.appendChild(toolMarker(-Math.PI / 2 + 0.32, '🏪', 'Magic Shop', onMagicShop))
 
   // The opposite seam from Candy Star/Suggestions, deliberately — a
   // temporary event marker sitting beside two permanent utilities would
