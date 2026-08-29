@@ -27,7 +27,7 @@ const XP_SOURCES = [
 ]
 
 const TEAM_STEPS = [
-  ['Open the mission', 'A ReConnect mission does not pair you automatically.'],
+  ['Open the mission', 'A ReConnect quest does not pair you automatically.'],
   ['Invite or accept', 'Choose one waiting agent, or accept an invite you received. Accepting is enough—you do not also need to invite someone.'],
   ['Follow the mission card', 'Some missions complete when the invite is accepted; others combine both agents’ streams toward one shared target. Either way, completion counts for both.'],
 ]

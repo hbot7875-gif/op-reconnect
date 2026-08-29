@@ -128,7 +128,7 @@ export function badgeStory(e, state) {
   if (e.templateId === 'district_frag_3') return `Reached 75% restoration progress in ${place}.`
   if (e.templateId === 'district_restored') return `Fully restored ${place}.`
   if (e.templateId === 'ward') return `Restored every district in ${ward?.name || e.scopeId || 'a ward'}.`
-  if (e.templateId === 'mission_bond') return 'Completed a ReConnect mission with another agent.'
+  if (e.templateId === 'mission_bond') return 'Completed a ReConnect quest with another agent.'
   if (e.templateId === 'event_vma_voter') return 'Voted for BTS in the 2026 MTV VMAs mission.'
   if (e.templateId === 'event_vma_power_hour') return 'Voted for BTS during a VMA Power Hour.'
   if (e.templateId === 'event_vma_double_day') return 'Voted for BTS on a VMA Double Day.'

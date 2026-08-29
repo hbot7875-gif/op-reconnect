@@ -33,7 +33,7 @@ function goalRow(label, sub, progress, target, done, unit) {
 }
 
 /** A mission-group header inline in the checklist itself — "Track Mission",
- *  "Album Mission", "ReConnect Mission" — so the grouping that used to live
+ *  "Album Mission", "ReConnect Quest" — so the grouping that used to live
  *  behind a separate Weekly Mission Board tap (now removed: it only ever
  *  repeated the same three counts a scroll down already shows) is visible
  *  in the one place a player is actually looking. */
@@ -240,11 +240,11 @@ export function renderBoard(board, d, opts = {}) {
       const others = (reconnect.mission?.participants || []).filter((p) => !p.isMe && p.status === 'joined')
       const withWho = others.length ? `With ${others.map((p) => esc(p.codename)).join(' and ')}` : ''
       const doneCard = el('div', 'card goal-card')
-      doneCard.appendChild(missionSection('🤝', 'ReConnect Mission', 1, 1))
-      doneCard.appendChild(goalRow('🤝 ReConnect Mission', withWho, 1, 1, true))
+      doneCard.appendChild(missionSection('🤝', 'ReConnect Quest', 1, 1))
+      doneCard.appendChild(goalRow('🤝 ReConnect Quest', withWho, 1, 1, true))
       board.appendChild(doneCard)
     } else if (opts.reconnectBox) {
-      board.appendChild(missionSection('🤝', 'ReConnect Mission', 0, 1))
+      board.appendChild(missionSection('🤝', 'ReConnect Quest', 0, 1))
       board.appendChild(opts.reconnectBox)
     }
   }

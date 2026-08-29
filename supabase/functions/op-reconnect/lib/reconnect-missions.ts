@@ -1524,7 +1524,7 @@ export async function adminListStuckReconnects(supabase: SupabaseDB, content: Ga
       kind: 'mission', missionId: mission.id, districtId: mission.district_id,
       districtName: districtNames.get(mission.district_id) || mission.district_id,
       goalId: mission.goal_id,
-      goalLabel: (goalById.get(mission.goal_id) as any)?.label || 'ReConnect Mission',
+      goalLabel: (goalById.get(mission.goal_id) as any)?.label || 'ReConnect Quest',
       requiredAgents: mission.required_agents, joinedCount: joined.length,
       missingSeats, pendingInvites: invited.length,
       waitingSince: joined.map((p: any) => p.joined_at).sort()[0] || mission.created_at,
