@@ -33,6 +33,7 @@ import { goalKeys } from './transmission.ts'
 
 const RED_ZONE_DEFAULT_XP_POOL = 500
 const RED_ZONE_MIN_STREAMS = 7
+const RED_ZONE_FULL_CHARGE_HOURS = 48
 const RED_ZONE_REFRESH_MS = 3_000
 const RED_ZONE_PAGE_SIZE = 1_000
 const MAX_DEFENDER_MESSAGE_LEN = 240
@@ -105,6 +106,11 @@ export interface BombView {
     targetAlbum: string | null
     targetKind: 'track' | 'album' | null
     targetNames: { name: string; kind: 'track' | 'album' }[] | null
+    defenderRanking: {
+      leaders: { rank: number; codename: string; streams: number; isMe: boolean }[]
+      yourRank: { rank: number; codename: string; streams: number; isMe: boolean } | null
+      total: number
+    }
   } | null
   // The most recently CONCLUDED event, once only — resolved.status is
   // 'active' while getBombView's own `defuse` field above is the one still
@@ -189,6 +195,33 @@ async function communityStreams(
   return total
 }
 
+/** Event-only standings for the ARMY Bomb sheet. These are the exact counted
+ * contributions already persisted by refreshDefuse, not XP, lifetime
+ * streams or an estimate. Every Defender is returned in rank order; the
+ * client keeps the long list inside its own compact scroll area. */
+async function buildDefenderRanking(supabase: SupabaseDB, eventId: string, agentNo: string) {
+  const { data, error } = await supabase.from('rc_defuse_contrib')
+    .select('agent_no, streams').eq('event_id', eventId).gte('streams', 1)
+    .order('streams', { ascending: false }).order('agent_no', { ascending: true })
+  if (error || !data?.length) return { leaders: [], yourRank: null, total: 0 }
+
+  const agentNos = data.map((row: any) => String(row.agent_no))
+  const { data: players } = await supabase.from('rc_players')
+    .select('agent_no, codename').in('agent_no', agentNos)
+  const names = new Map((players || []).map((p: any) => [String(p.agent_no), String(p.codename || p.agent_no)]))
+  const ranked = data.map((row: any, index: number) => ({
+    rank: index + 1,
+    codename: names.get(String(row.agent_no)) || String(row.agent_no),
+    streams: Number(row.streams) || 0,
+    isMe: String(row.agent_no) === agentNo,
+  }))
+  return {
+    leaders: ranked,
+    yourRank: ranked.find((row: any) => row.isMe) || null,
+    total: ranked.length,
+  }
+}
+
 /**
  * Read bomb state, refresh the active defuse event's progress from real
  * community activity, and resolve it if it hit target or ran out of time.
@@ -227,10 +260,9 @@ export async function getBombView(
   if (ev && ev.status === 'active') {
     const resolved = await refreshDefuse(supabase, content, ev, caps, cfg, manualSync)
     if (resolved.stillActive) {
-      const [{ data: mine }, { count: defenderAgents }] = await Promise.all([
+      const [{ data: mine }, defenderRanking] = await Promise.all([
         supabase.from('rc_defuse_contrib').select('streams').eq('event_id', ev.id).eq('agent_no', agentNo).maybeSingle(),
-        supabase.from('rc_defuse_contrib').select('agent_no', { count: 'exact', head: true })
-          .eq('event_id', ev.id).gte('streams', 1),
+        buildDefenderRanking(supabase, ev.id, agentNo),
       ])
       const yourStreams = mine?.streams || 0
       const minimumStreams = ev.minimum_streams || RED_ZONE_MIN_STREAMS
@@ -241,7 +273,7 @@ export async function getBombView(
         rewardXp: ev.reward_xp || RED_ZONE_DEFAULT_XP_POOL,
         minimumStreams,
         qualifiedAgents: resolved.qualifiedAgents,
-        defenderAgents: defenderAgents || 0,
+        defenderAgents: defenderRanking.total,
         yourStreams,
         isDefender: isDefender(yourStreams),
         isQualified: isQualifiedDefender(yourStreams, minimumStreams),
@@ -249,6 +281,7 @@ export async function getBombView(
         targetAlbum: ev.target_kind === 'album' ? ev.target_label : null,
         targetKind: ev.target_kind || null,
         targetNames: Array.isArray(ev.target_names) && ev.target_names.length ? ev.target_names : null,
+        defenderRanking,
       }
     } else {
       resolvedDefuse = await buildResolvedDefuseView(supabase, ev, agentNo)
@@ -568,6 +601,15 @@ async function awardDefuseRewards(
   const pool = Math.max(0, Number(ev.reward_xp) || RED_ZONE_DEFAULT_XP_POOL)
   const baseShare = Math.floor(pool / qualified.length)
   const remainder = pool % qualified.length
+  // Winning visibly restores the thing the event asked players to protect:
+  // every qualified defender's personal Bomb is filled to 48 hours. The RPC
+  // uses greatest(), so this reward can never shorten a Bomb already charged
+  // further into the future by Cells or a Lit Era.
+  const { error: chargeError } = await supabase.rpc('rc_red_zone_full_charge', {
+    p_agent_nos: qualified.map((c) => c.agent_no),
+    p_hours: RED_ZONE_FULL_CHARGE_HOURS,
+  })
+  if (chargeError) console.error('Red Zone full-charge reward failed:', chargeError.message)
   for (let i = 0; i < qualified.length; i++) {
     const c = qualified[i]
     const amount = baseShare + (i < remainder ? 1 : 0)

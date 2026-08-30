@@ -285,6 +285,21 @@
           defenderAgents: s.defenderAgents, rewardXp: 500,
           activeUntil: new Date(Date.now() + (2 * 3600 + 47 * 60 + 12) * 1000).toISOString(),
           isDefender: s.yourStreams >= 1, isQualified: s.yourStreams >= 7,
+          defenderRanking: {
+            total: s.defenderAgents,
+            leaders: [
+              { rank: 1, codename: 'signalbloom', streams: 76, isMe: false },
+              { rank: 2, codename: 'violetorbit', streams: 61, isMe: false },
+              { rank: 3, codename: 'starrykoo', streams: 43, isMe: false },
+              { rank: 4, codename: 'AGENT VIOLET', streams: s.yourStreams, isMe: true },
+              { rank: 5, codename: 'namjooning', streams: 16, isMe: false },
+              ...Array.from({ length: Math.max(0, s.defenderAgents - 5) }, (_, i) => ({
+                rank: i + 6, codename: `defender${String(i + 6).padStart(2, '0')}`,
+                streams: Math.max(1, 15 - i), isMe: false,
+              })),
+            ],
+            yourRank: { rank: 4, codename: 'AGENT VIOLET', streams: s.yourStreams, isMe: true },
+          },
         }
         // PREVIEW ONLY: #track / #album attaches a per-event streaming
         // target so the generated instruction can be reviewed in both

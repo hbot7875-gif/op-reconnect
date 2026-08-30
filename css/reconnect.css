@@ -1371,6 +1371,28 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 .rz-comms-btn { display: block; width: 100%; margin-top: 16px; }
 .rz-comms-btn:disabled { opacity: 0.55; cursor: default; }
 .rz-comms-hint { margin-top: 6px; font-size: 11.5px; line-height: 1.45; }
+.rz-ranking-btn { display: block; width: 100%; margin-top: 9px; }
+.rz-ranking-sheet { display: flex; flex-direction: column; overflow: hidden; }
+.rz-ranking-list { flex: 1 1 auto; min-height: 150px; margin-top: 10px; overflow-y: auto;
+  overscroll-behavior: contain; scrollbar-width: thin;
+  scrollbar-color: rgba(139,92,246,.55) rgba(255,255,255,.035); }
+.rz-ranking-row { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center;
+  gap: 8px; min-height: 34px; padding: 5px 8px; border-bottom: 1px solid rgba(255,255,255,.055); }
+.rz-ranking-row:last-child { border-bottom: 0; }
+.rz-ranking-row.is-me { border-radius: 8px; background: rgba(139,92,246,.10); }
+.rz-ranking-row .rz-rank { color: var(--gold); font-family: var(--mono); font-size: 11px; }
+.rz-ranking-row > span { overflow: hidden; color: var(--text); font-weight: 650; font-size: 12.5px;
+  text-overflow: ellipsis; white-space: nowrap; }
+.rz-ranking-row i { margin-left: 5px; color: var(--purple-lt); font-family: var(--mono); font-size: 8px;
+  font-style: normal; letter-spacing: 1px; }
+.rz-ranking-row strong { color: var(--muted); font-family: var(--mono); font-size: 10px; font-weight: 600; white-space: nowrap; }
+.rz-ranking-mine { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin-top: 7px; padding: 9px 10px; border: 1px solid rgba(139,92,246,.26); border-radius: 8px;
+  background: rgba(139,92,246,.07); color: var(--muted); font-size: 11.5px; }
+.rz-ranking-mine b { color: var(--purple-lt); }
+.rz-ranking-mine strong { color: var(--text); font-family: var(--mono); font-size: 10px; }
+.rz-ranking-empty { margin: 8px 0 0; font-size: 11.5px; }
+.rz-ranking-sheet > .btn:last-child { display: block; width: 100%; margin-top: 14px; }
 .rz-how-body p { margin: 0 0 8px; }
 .rz-how-body p:last-child { margin-bottom: 0; }
 /* An admin's free-text note for this event — secondary to the generated

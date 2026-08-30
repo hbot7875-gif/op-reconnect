@@ -23,6 +23,40 @@ function statLine(label, value) {
   return el('div', 'rz-stat-line', `<span>${esc(label)}</span><b>${value}</b>`)
 }
 
+function defenderRankingSheet(ranking) {
+  const sheet = el('div', 'sheet rz-ranking-sheet')
+  sheet.append(
+    el('div', 'eyebrow', '🏆 RED ZONE'),
+    el('h3', '', 'Defender Ranking'),
+    el('p', 'muted', `${Number(ranking?.total || 0).toLocaleString()} ARMY defenders · ranked by counted streams in this event.`),
+  )
+  const rows = ranking?.leaders || []
+  if (!rows.length) {
+    sheet.appendChild(el('p', 'dim rz-ranking-empty', 'Rankings appear as streams arrive.'))
+  } else {
+    const mine = ranking?.yourRank
+    if (mine) {
+      sheet.appendChild(el('div', 'rz-ranking-mine', `
+        <span>Your rank <b>#${Number(mine.rank)}</b></span>
+        <strong>${Number(mine.streams).toLocaleString()} streams</strong>
+      `))
+    }
+    const list = el('div', 'rz-ranking-list')
+    for (const row of rows) {
+      list.appendChild(el('div', `rz-ranking-row${row.isMe ? ' is-me' : ''}`, `
+        <b class="rz-rank">#${Number(row.rank)}</b>
+        <span>${esc(row.codename)}${row.isMe ? ' <i>YOU</i>' : ''}</span>
+        <strong>${Number(row.streams).toLocaleString()} stream${Number(row.streams) === 1 ? '' : 's'}</strong>
+      `))
+    }
+    sheet.appendChild(list)
+  }
+  const close = el('button', 'btn btn-ghost', 'Close')
+  close.onclick = hideOverlay
+  sheet.appendChild(close)
+  return sheet
+}
+
 /** Player-friendly Red Zone details — no diagnostic/admin terminology, no
  *  event ids, no raw backend state names. Only real data already on
  *  state.bomb.defuse; nothing here is estimated. */
@@ -70,7 +104,7 @@ export function redZoneSheet(state) {
   stats.appendChild(statLine('ARMY DEFENDERS', defenders === earning
     ? `${defenders.toLocaleString()} streaming`
     : `${defenders.toLocaleString()} streaming &middot; ${earning.toLocaleString()} earning XP`))
-  stats.appendChild(statLine('REWARD', `${d.rewardXp.toLocaleString()} XP shared`))
+  stats.appendChild(statLine('REWARD', `${d.rewardXp.toLocaleString()} XP shared &middot; Full personal Bomb charge`))
   sheet.appendChild(stats)
 
   // The one stake worth surfacing without a tap — see the brief's own
@@ -101,11 +135,27 @@ export function redZoneSheet(state) {
     sheet.appendChild(el('p', 'dim rz-comms-hint', `Stream once during this Red Zone to join ARMY Comms. Earning a share of the XP takes ${d.minimumStreams} streams — the two are separate.`))
   }
 
+  const rankingBtn = el('button', 'btn btn-ghost rz-ranking-btn',
+    `🏆 Defender Ranking · ${Number(d.defenderRanking?.total || 0).toLocaleString()}`)
+  rankingBtn.onclick = () => {
+    const rankingSheet = defenderRankingSheet(d.defenderRanking)
+    showOverlay(rankingSheet)
+    // This sheet's only button is Close at the bottom. The shared overlay
+    // normally focuses its first button, which would scroll a long ranking
+    // straight to the end and hide #1. Keep initial focus and scroll at the
+    // top; the list remains independently scrollable.
+    requestAnimationFrame(() => {
+      rankingSheet.scrollTop = 0
+      rankingSheet.focus({ preventScroll: true })
+    })
+  }
+  sheet.appendChild(rankingBtn)
+
   const how = el('details', 'reconnect-disclosure')
   how.appendChild(el('summary', '', 'How this works ▾'))
   how.appendChild(el('div', 'muted rz-how-body', `
     <p>Stream ${esc(goal.short)}. Everyone's streams add up to one shared goal of ${d.target.toLocaleString()}. Your first ${d.minimumStreams} show as your own progress — hitting ${d.minimumStreams} releases them into the city total and earns you a share of the XP.</p>
-    <p>Reach the goal before the timer runs out and the ARMY Bomb is saved: everyone who streamed ${d.minimumStreams} or more shares ${d.rewardXp.toLocaleString()} XP. Run out of time and the City goes dark — every ARMY Bomb charge drops to 0. Nothing else is lost.</p>
+    <p>Reach the goal before the timer runs out and the ARMY Bomb is saved: everyone who streamed ${d.minimumStreams} or more shares ${d.rewardXp.toLocaleString()} XP and gets a fully charged personal ARMY Bomb. Run out of time and the City goes dark — every ARMY Bomb charge drops to 0. Nothing else is lost.</p>
   `))
   sheet.appendChild(how)
 
@@ -189,6 +239,7 @@ export function defuseResultSheet(resolved) {
     sheet.appendChild(el('p', 'muted', resolved.yourXpAwarded > 0
       ? `Your reward: <b>+${resolved.yourXpAwarded.toLocaleString()} XP</b>`
       : `You needed ${resolved.minimumStreams} streams to earn a share — this time you had ${resolved.yourStreams}.`))
+    if (resolved.isQualified) sheet.appendChild(el('p', 'muted', 'Your personal ARMY Bomb is now <b>fully charged</b>.'))
   } else {
     sheet.appendChild(el('p', 'muted', 'The City has gone dark and your ARMY Bomb charge is now <b>0</b>.'))
     sheet.appendChild(el('p', 'dim', 'Feed your Bomb to bring it back online. Nothing else was lost.'))
