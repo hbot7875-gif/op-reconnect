@@ -3,7 +3,7 @@ import test from 'node:test'
 import {
   countRedZoneRows, redZoneUnixBounds, isDefender, isQualifiedDefender, redZoneBand,
   interpolateBombColor, blackoutChargeValue, blackoutShouldReset, validateDefuseLaunch,
-  redZoneTargetKeySet, redZoneTrackCounts, validateRedZoneTarget,
+  redZoneTargetKeySet, redZoneTrackCounts, validateRedZoneTarget, normalizeTargetNames,
 } from './red-zone.js'
 
 test('window excludes streams from the launch second that happened before launch', () => {
@@ -168,16 +168,46 @@ test('a targeted event counts only its own frozen keys', () => {
 test('a target is all-or-nothing, matching the DB constraint', () => {
   const none = validateRedZoneTarget(null)
   assert.equal(none.valid, true)
-  assert.deepEqual(none.value, { kind: null, label: null, keys: null })
+  assert.deepEqual(none.value, { kind: null, label: null, keys: null, names: null })
 
   const ok = validateRedZoneTarget({ kind: 'album', label: 'ARIRANG', keys: ['arirang', 'track two'] })
   assert.equal(ok.valid, true)
-  assert.deepEqual(ok.value, { kind: 'album', label: 'ARIRANG', keys: ['arirang', 'track two'] })
+  assert.deepEqual(ok.value, { kind: 'album', label: 'ARIRANG', keys: ['arirang', 'track two'], names: null })
 
   // Keys that all normalize away would silently count nothing — refuse the
   // launch instead of shipping an unwinnable event.
   assert.equal(validateRedZoneTarget({ kind: 'track', label: 'Haegeum', keys: [] }).valid, false)
   assert.equal(validateRedZoneTarget({ kind: 'track', label: '', keys: ['haegeum'] }).valid, false)
   assert.equal(validateRedZoneTarget({ kind: 'reconnect', label: 'Cipher', keys: ['x'] }).valid, false)
-  assert.equal(validateRedZoneTarget({ kind: 'track', label: 'x'.repeat(200), keys: ['x'] }).valid, false)
+  // The cap is 240 now, not 120: several picks join into one stored label
+  // ("ARIRANG + Keep Swimming + …") and 120 cut real combinations off.
+  assert.equal(validateRedZoneTarget({ kind: 'track', label: 'x'.repeat(200), keys: ['x'] }).valid, true)
+  assert.equal(validateRedZoneTarget({ kind: 'track', label: 'x'.repeat(241), keys: ['x'] }).valid, false)
+})
+
+test('several picks roll up into one target, and only all-albums stays "album"', () => {
+  const mixed = validateRedZoneTarget({
+    label: 'ARIRANG + Keep Swimming',
+    keys: ['arirang', 'track two', 'keep swimming'],
+    names: [{ name: 'ARIRANG', kind: 'album' }, { name: 'Keep Swimming', kind: 'track' }],
+  })
+  assert.equal(mixed.valid, true)
+  // One track in the set means the event is not counting "album streams".
+  assert.equal(mixed.value.kind, 'track')
+  assert.deepEqual(mixed.value.names, [{ name: 'ARIRANG', kind: 'album' }, { name: 'Keep Swimming', kind: 'track' }])
+
+  const albums = validateRedZoneTarget({
+    label: 'ARIRANG + Proof',
+    keys: ['a', 'b'],
+    names: [{ name: 'ARIRANG', kind: 'album' }, { name: 'Proof', kind: 'album' }],
+  })
+  assert.equal(albums.value.kind, 'album')
+
+  // Junk entries never reach the database.
+  assert.deepEqual(normalizeTargetNames([{ name: ' X ', kind: 'ep' }, { name: '', kind: 'album' }, null]),
+    [{ name: 'X', kind: 'track' }])
+  assert.deepEqual(normalizeTargetNames(null), [])
+
+  // Names still cannot stand in for the keys that actually do the counting.
+  assert.equal(validateRedZoneTarget({ label: 'X', keys: [], names: [{ name: 'X', kind: 'track' }] }).valid, false)
 })

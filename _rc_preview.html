@@ -291,7 +291,16 @@
         // shapes (see redZoneTarget() in js/red-zone-ui.js). No such column
         // exists yet — with neither hash the fixture matches production,
         // where any eligible BTS play counts and the copy says exactly that.
-        if (location.hash.includes('album')) STATE.bomb.defuse.targetAlbum = 'ARIRANG'
+        // #mix is the shape a real multi-pick launch produces: several
+        // entries, kinds allowed to differ. #album/#track keep exercising
+        // the older single-target fields an in-flight event may still have.
+        if (location.hash.includes('mix')) {
+          STATE.bomb.defuse.targetKind = 'track'
+          STATE.bomb.defuse.targetNames = [
+            { name: 'ARIRANG', kind: 'album' },
+            { name: 'Keep Swimming', kind: 'track' },
+          ]
+        } else if (location.hash.includes('album')) STATE.bomb.defuse.targetAlbum = 'ARIRANG'
         else if (location.hash.includes('track')) STATE.bomb.defuse.targetTrack = 'Haegeum'
       }
     }

@@ -2,7 +2,8 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { redZoneBand, interpolateBombColor, redZonePercent, personalSignalCopy, countdownText,
   corruptionOpacity, sparkOpacity, arcPath, pointOnCircle, tendrilPath,
-  redZoneHeadline, redZoneTarget, redZoneGoalCopy, defusedLine } from './red-zone-ui.js'
+  redZoneHeadline, redZoneTarget, redZoneGoalCopy, defusedLine,
+  redZoneTargetEntries, joinNames } from './red-zone-ui.js'
 
 test('progress bands match the backend thresholds', () => {
   assert.equal(redZoneBand(0, 1000), 'compromised')
@@ -147,4 +148,55 @@ test('tendrilPath reaches from the outer radius in to the inner radius at the sa
   assert.ok(Math.abs(Number(start[1]) - 12) < 0.01)
   assert.equal(Number(end[0]), 110) // inner point is back on the same 0deg spoke
   assert.ok(Math.abs(Number(end[1]) - 44) < 0.01)
+})
+
+test('several picks read as one sentence, each phrased by its own kind', () => {
+  // The real launch this was built for: one album plus one loose track.
+  const mixed = redZoneTarget({
+    targetKind: 'track',
+    targetNames: [{ name: 'ARIRANG', kind: 'album' }, { name: 'Keep Swimming', kind: 'track' }],
+  })
+  assert.equal(mixed.name, 'the ARIRANG album and Keep Swimming')
+  assert.equal(mixed.short, 'ARIRANG and Keep Swimming')
+  // Mixed picks are never "album streams" — that would misdescribe the track.
+  assert.equal(mixed.unit, 'streams')
+
+  const albumsOnly = redZoneTarget({
+    targetNames: [{ name: 'ARIRANG', kind: 'album' }, { name: 'Proof', kind: 'album' }],
+  })
+  assert.equal(albumsOnly.name, 'the ARIRANG album and the Proof album')
+  assert.equal(albumsOnly.unit, 'album streams')
+
+  const three = redZoneTarget({
+    targetNames: [{ name: 'A', kind: 'track' }, { name: 'B', kind: 'track' }, { name: 'C', kind: 'track' }],
+  })
+  assert.equal(three.name, 'A, B and C')
+
+  assert.equal(joinNames([]), '')
+  assert.equal(joinNames(['A']), 'A')
+  assert.equal(joinNames(['A', 'B']), 'A and B')
+})
+
+test('the single-target shape still works, and junk entries are dropped', () => {
+  // An event launched before multi-target (or by an older backend) carries
+  // only targetAlbum/targetTrack — it must keep reading exactly as it did.
+  assert.equal(redZoneTarget({ targetAlbum: 'ARIRANG' }).name, 'the ARIRANG album')
+  assert.equal(redZoneTarget({ targetTrack: 'Haegeum' }).name, 'Haegeum')
+  assert.equal(redZoneTarget({}).name, 'any BTS song')
+
+  // A nameless entry must never render as "the  album".
+  assert.deepEqual(redZoneTargetEntries({ targetNames: [{ name: '  ', kind: 'album' }] }), [])
+  assert.equal(redZoneTarget({ targetNames: [{ name: '', kind: 'album' }] }).name, 'any BTS song')
+  // An unknown kind falls back to track rather than inventing album grammar.
+  assert.deepEqual(redZoneTargetEntries({ targetNames: [{ name: 'X', kind: 'ep' }] }), [{ name: 'X', kind: 'track' }])
+})
+
+test('goal copy carries a multi-target instruction end to end', () => {
+  const goal = redZoneGoalCopy({
+    progress: 1200, target: 5000,
+    targetNames: [{ name: 'ARIRANG', kind: 'album' }, { name: 'Keep Swimming', kind: 'track' }],
+  }, 'restoring')
+  assert.equal(goal.instruction, 'Protect the ARMY Bomb by streaming the ARIRANG album and Keep Swimming')
+  assert.equal(goal.goal, 'Goal: 5,000 streams')
+  assert.equal(goal.progressLine, '1,200 / 5,000 streams')
 })

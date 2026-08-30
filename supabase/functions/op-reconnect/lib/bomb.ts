@@ -95,12 +95,16 @@ export interface BombView {
     // already owns (isDefender/isQualifiedDefender).
     isDefender: boolean
     isQualified: boolean
-    // What this event asks players to stream, frozen at launch. Exactly one
-    // of these is ever set; both null means every eligible BTS play counts,
-    // which is what the client copy then says (redZoneTarget() in
+    // What this event asks players to stream, frozen at launch. targetNames
+    // is the full picked list ([{name, kind}], possibly mixing a track with
+    // an album); targetTrack/targetAlbum stay for the single-target case an
+    // older client may still be reading. All null means every eligible BTS
+    // play counts, which is what the copy then says (redZoneTarget() in
     // js/red-zone-ui.js). The client never needs the raw keys.
     targetTrack: string | null
     targetAlbum: string | null
+    targetKind: 'track' | 'album' | null
+    targetNames: { name: string; kind: 'track' | 'album' }[] | null
   } | null
   // The most recently CONCLUDED event, once only — resolved.status is
   // 'active' while getBombView's own `defuse` field above is the one still
@@ -243,6 +247,8 @@ export async function getBombView(
         isQualified: isQualifiedDefender(yourStreams, minimumStreams),
         targetTrack: ev.target_kind === 'track' ? ev.target_label : null,
         targetAlbum: ev.target_kind === 'album' ? ev.target_label : null,
+        targetKind: ev.target_kind || null,
+        targetNames: Array.isArray(ev.target_names) && ev.target_names.length ? ev.target_names : null,
       }
     } else {
       resolvedDefuse = await buildResolvedDefuseView(supabase, ev, agentNo)
@@ -648,31 +654,60 @@ export async function sendDefuseMessage(supabase: SupabaseDB, params: any) {
   return { success: true }
 }
 
-/** Resolve an admin's picked goal into the frozen {kind, label, keys} the
- *  event stores. Album goals pool every track's keys — "stream the album"
- *  means any track on it counts, the same rule Backup Pass already uses for
- *  album goals (backup-pass.ts). A goal that resolves to no usable keys is
- *  refused rather than launched: it would produce an unwinnable event that
- *  counts nothing. */
-async function freezeRedZoneTarget(supabase: SupabaseDB, goalId: unknown) {
-  const id = String(goalId || '').trim()
-  if (!id) return { valid: true as const, goalId: null, value: { kind: null, label: null, keys: null } }
-
-  const { data: goal, error } = await supabase.from('rc_goals')
-    .select('id, kind, label, aliases, tracks').eq('id', id).maybeSingle()
-  if (error) return { valid: false as const, error: error.message }
-  if (!goal) return { valid: false as const, error: 'target goal not found' }
-  if (goal.kind !== 'track' && goal.kind !== 'album') {
-    return { valid: false as const, error: 'a Red Zone target must be a track or album goal' }
+/** Resolve an admin's picked goals into the one frozen target the event
+ *  stores. Several can be picked and they can mix kinds — "the ARIRANG
+ *  album and Keep Swimming" is one event with one shared goal — so every
+ *  pick's keys are pooled into a single list. Album goals contribute every
+ *  track's keys ("stream the album" means any track on it counts), the same
+ *  rule Backup Pass already uses for album goals (backup-pass.ts). A pick
+ *  that resolves to no usable keys is refused rather than launched: it
+ *  would produce an event that counts nothing.
+ *
+ *  target_goal_id stays the single-goal provenance link and is null once
+ *  several are picked — target_keys is, as always, the only thing matching
+ *  actually reads. */
+async function freezeRedZoneTarget(supabase: SupabaseDB, goalIds: unknown) {
+  const ids = (Array.isArray(goalIds) ? goalIds : [goalIds])
+    .map((g) => String(g || '').trim())
+    .filter(Boolean)
+  // De-duplicated, but the admin's own order is what the copy reads back.
+  const unique = [...new Set(ids)]
+  if (!unique.length) {
+    return { valid: true as const, goalId: null, value: { kind: null, label: null, keys: null, names: null } }
   }
 
-  const keys = goal.kind === 'album'
-    ? (goal.tracks || []).flatMap((t: any) => goalKeys({ label: t.label, aliases: t.aliases || [] }))
-    : goalKeys({ label: goal.label, aliases: goal.aliases || [] })
+  const { data: goals, error } = await supabase.from('rc_goals')
+    .select('id, kind, label, aliases, tracks').in('id', unique)
+  if (error) return { valid: false as const, error: error.message }
 
-  const checked = validateRedZoneTarget({ kind: goal.kind, label: goal.label, keys })
+  const byId = new Map((goals || []).map((g: any) => [String(g.id), g]))
+  const keys: string[] = []
+  const names: { name: string; kind: 'track' | 'album' }[] = []
+  for (const id of unique) {
+    const goal = byId.get(id)
+    if (!goal) return { valid: false as const, error: `target goal not found: ${id}` }
+    if (goal.kind !== 'track' && goal.kind !== 'album') {
+      return { valid: false as const, error: `a Red Zone target must be a track or album goal: ${goal.label}` }
+    }
+    const goalOwnKeys = goal.kind === 'album'
+      ? (goal.tracks || []).flatMap((t: any) => goalKeys({ label: t.label, aliases: t.aliases || [] }))
+      : goalKeys({ label: goal.label, aliases: goal.aliases || [] })
+    // Refused per pick, not just in aggregate: an album with an empty track
+    // list would otherwise ride along invisibly on a second, valid pick and
+    // count nothing, which is exactly the surprise this check exists for.
+    if (!goalOwnKeys.length) {
+      return { valid: false as const, error: `no matchable track names on: ${goal.label}` }
+    }
+    keys.push(...goalOwnKeys)
+    names.push({ name: goal.label, kind: goal.kind })
+  }
+
+  // The stored label is for the admin panel and older clients; the player
+  // copy composes its own phrase from `names` (js/red-zone-ui.js).
+  const label = names.map((n) => n.name).join(' + ')
+  const checked = validateRedZoneTarget({ label, keys, names })
   if (!checked.valid) return { valid: false as const, error: checked.error }
-  return { valid: true as const, goalId: goal.id, value: checked.value }
+  return { valid: true as const, goalId: unique.length === 1 ? unique[0] : null, value: checked.value }
 }
 
 /** Admin: launch a red-zone attack. Rejects bad input outright — a typo'd
@@ -705,7 +740,7 @@ export async function launchDefuse(supabase: SupabaseDB, params: any) {
   // An optional streaming target: one existing goal, frozen into the event.
   // No goal picked keeps the original behavior — every eligible BTS play
   // counts — and the player copy says exactly that.
-  const frozen = await freezeRedZoneTarget(supabase, params.targetGoalId)
+  const frozen = await freezeRedZoneTarget(supabase, params.targetGoalIds ?? params.targetGoalId)
   if (!frozen.valid) return { success: false, error: 'invalid_launch_params', details: [frozen.error] }
 
   const activeFrom = new Date()
@@ -722,6 +757,7 @@ export async function launchDefuse(supabase: SupabaseDB, params: any) {
     p_target_kind: frozen.value.kind,
     p_target_label: frozen.value.label,
     p_target_keys: frozen.value.keys,
+    p_target_names: frozen.value.names,
   })
   if (error) {
     const message = String(error.message || '')
@@ -751,6 +787,7 @@ export async function adminGetActiveDefuse(supabase: SupabaseDB) {
       // So the panel can show what the live event is actually counting,
       // not just how far along it is.
       targetTrack: bomb.defuse.targetTrack, targetAlbum: bomb.defuse.targetAlbum,
+      targetKind: bomb.defuse.targetKind, targetNames: bomb.defuse.targetNames,
     } : null,
     charge: bomb.charge,
     brownout: bomb.brownout,

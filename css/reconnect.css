@@ -1227,6 +1227,14 @@ body.red-zone .wtb.now { fill: var(--crimson); filter: drop-shadow(0 0 3px rgba(
 /* What ARMY Comms actually is, in words that need no decoding. Sentence
    case and lower contrast than the button above it: an explanation, not a
    second thing to tap. */
+/* Admin: the Red Zone target picker. A multi-select needs real row height
+   to be usable with ctrl/cmd-click, and the echo under it spells out the
+   sentence players will actually read before anything is launched. */
+.adm-rz-targets { height: auto; min-height: 150px; padding: 6px; }
+.adm-rz-targets option { padding: 5px 7px; border-radius: 4px; }
+.adm-rz-echo { margin: 8px 0 2px; padding: 9px 11px; border: 1px dashed var(--border);
+  border-radius: var(--r); color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+.adm-rz-echo b { color: var(--text); }
 .core-comms-sub { margin-top: 5px; color: var(--dim); font-size: 11px; line-height: 1.4;
   text-align: center; }
 .rz-comms-sub { margin-top: 8px; text-align: center; }

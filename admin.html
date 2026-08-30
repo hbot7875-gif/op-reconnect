@@ -505,12 +505,14 @@
         <input id="rzHours" class="ob-input" type="number" min="1" max="72" value="24"></label>
     </div>
     <label class="adm-field"><span>What counts</span>
-      <select id="rzTargetGoal" class="ob-input">
-        <option value="">Any BTS song</option>
+      <select id="rzTargetGoal" class="ob-input adm-rz-targets" multiple size="7">
+        <option value="" selected>Any BTS song</option>
       </select></label>
-    <p class="muted">Players are told exactly this — "stream Haegeum", "stream the ARIRANG album", or
-      "stream any BTS song". Picking a track counts only that track; picking an album counts any track on
-      it. The choice is frozen when you launch, so editing the goal afterwards can't change a running event.</p>
+    <p class="muted">Pick one, or several — ctrl/cmd-click to add, and a track and an album can be mixed.
+      Players are told exactly what you pick: "stream the ARIRANG album and Keep Swimming", "stream Haegeum",
+      or "stream any BTS song". A track counts only that track; an album counts any track on it. The choice
+      is frozen when you launch, so editing a goal afterwards can't change a running event.</p>
+    <div id="rzTargetEcho" class="adm-rz-echo"></div>
     <label class="adm-field"><span>Title</span>
       <input id="rzTitle" class="ob-input" type="text" placeholder="INCOMING: RED ZONE"></label>
     <label class="adm-field"><span>Message</span>
@@ -802,6 +804,7 @@ import {
   reconnectPlainReason, reconnectTeamLabel,
   redZoneTargetOptions,
 } from './js/reconnect-admin-ui.js'
+import { redZoneTarget } from './js/red-zone-ui.js'
 
 const $ = (id) => document.getElementById(id)
 const KEY_STORAGE = 'rc_admin_key' // shared with candy-star-admin.html on purpose
@@ -988,7 +991,7 @@ function paintRZStatus(res) {
       <div class="rz-goal-top"><span>Qualified streams</span><span class="rz-num">${d.progress.toLocaleString()}<i>/${d.target.toLocaleString()}</i></span></div>
       <div class="rz-bar"><i style="width:${pct}%"></i></div>
       <div class="rz-timer"><span>Ends</span><b style="font-size:13px;letter-spacing:0;">${esc(ends)}</b></div>
-      <div class="rz-foot">Counting: ${esc(d.targetAlbum ? `the ${d.targetAlbum} album` : d.targetTrack || 'any BTS song')}</div>
+      <div class="rz-foot">Counting: ${esc(redZoneTarget(d).name)}</div>
       <div class="rz-foot">${d.rewardXp.toLocaleString()} XP pool &middot; ${d.qualifiedAgents} qualified agent${d.qualifiedAgents === 1 ? '' : 's'} &middot; minimum ${d.minimumStreams} streams each</div>
     </div>
   `
@@ -1027,11 +1030,42 @@ async function loadRZTargets() {
       openGroup = opt.group
       if (openGroup) html += `<optgroup label="${esc(openGroup)}">`
     }
-    html += `<option value="${esc(opt.value)}">${esc(opt.label)}</option>`
+    const g = (res.goals || []).find((row) => row.id === opt.value)
+    html += `<option value="${esc(opt.value)}" data-label="${esc(g?.label || opt.label)}" data-kind="${esc(g?.kind || '')}"${opt.value ? '' : ' selected'}>${esc(opt.label)}</option>`
   }
   if (openGroup) html += '</optgroup>'
   sel.innerHTML = html
+  paintRZTargetEcho()
 }
+
+/** Every picked goal id, minus the "Any BTS song" entry — that one is the
+ *  absence of a target, so it can never be combined with a real pick. */
+function rzPickedTargets() {
+  return [...$('rzTargetGoal').selectedOptions].map((o) => o.value).filter(Boolean)
+}
+
+/** Shows the admin the exact phrase players will read, composed by the same
+ *  helper the game itself uses — so "what will this say?" is answered here
+ *  rather than after launching it at everyone. */
+function paintRZTargetEcho() {
+  const sel = $('rzTargetGoal')
+  const picked = rzPickedTargets()
+  // "Any BTS song" and a real pick are mutually exclusive: keep whichever
+  // the admin touched last rather than silently ignoring one of them.
+  const anyOpt = [...sel.options].find((o) => !o.value)
+  if (anyOpt) anyOpt.selected = picked.length === 0
+  const entries = picked.map((id) => {
+    const opt = [...sel.options].find((o) => o.value === id)
+    return { name: opt?.dataset.label || '', kind: opt?.dataset.kind === 'album' ? 'album' : 'track' }
+  })
+  const target = redZoneTarget({ targetNames: entries })
+  $('rzTargetEcho').innerHTML = `Players will read: <b>Protect the ARMY Bomb by streaming ${esc(target.name)}</b>`
+}
+
+// Bound once, not re-bound every time the goal list reloads — the control
+// itself is in the static markup, so this works before any load and after
+// every one.
+$('rzTargetGoal').addEventListener('change', paintRZTargetEcho)
 
 async function refreshRZ() {
   $('rzStatus').innerHTML = `<span class="adm-spin"></span> Checking…`
@@ -1055,7 +1089,7 @@ $('btnLaunchRZ').onclick = async () => {
     title: $('rzTitle').value.trim() || undefined,
     message: $('rzMessage').value.trim() || undefined,
     rewardXp: parseInt($('rzReward').value) || 500,
-    targetGoalId: $('rzTargetGoal').value || undefined,
+    targetGoalIds: rzPickedTargets(),
   })
   btn.disabled = sessionUnauthorized
   btn.textContent = '🛡️ Launch Red Zone'

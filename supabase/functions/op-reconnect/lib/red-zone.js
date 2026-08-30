@@ -166,20 +166,36 @@ export function redZoneTrackCounts(keySet, trackKey) {
 
 /** A target is all-or-nothing (the same check the DB constraint enforces):
  *  a kind with no keys silently counts nothing, and keys with no label
- *  leave the player UI with no name to show. Returns the normalized triple
- *  to store, or an error to refuse the launch with. */
+ *  leave the player UI with no name to show. Returns the normalized value
+ *  to store, or an error to refuse the launch with.
+ *
+ *  `names` is the per-entry [{name, kind}] list — several things can be
+ *  picked for one event ("the ARIRANG album and Keep Swimming"), and the
+ *  player copy needs each entry's own kind to phrase it. The rolled-up
+ *  `kind` is album only when every entry is one, because "album streams"
+ *  would misdescribe a mixed set. */
 export function validateRedZoneTarget(target) {
-  if (!target || (!target.kind && !target.label && !target.keys)) {
-    return { valid: true, value: { kind: null, label: null, keys: null } }
+  if (!target || (!target.kind && !target.label && !target.keys && !target.names)) {
+    return { valid: true, value: { kind: null, label: null, keys: null, names: null } }
   }
-  const kind = String(target.kind || '')
   const label = String(target.label || '').trim()
   const keys = redZoneTargetKeySet(target.keys)
+  const names = normalizeTargetNames(target.names)
+  const kind = String(target.kind || (names.length && names.every((n) => n.kind === 'album') ? 'album' : names.length ? 'track' : ''))
   if (kind !== 'track' && kind !== 'album') return { valid: false, error: 'target must be a track or an album' }
   if (!label) return { valid: false, error: 'target needs a display name' }
-  if (label.length > 120) return { valid: false, error: 'target name must be 120 characters or fewer' }
+  if (label.length > 240) return { valid: false, error: 'target name must be 240 characters or fewer' }
   if (!keys) return { valid: false, error: 'target has no matchable track names' }
-  return { valid: true, value: { kind, label, keys: [...keys] } }
+  return { valid: true, value: { kind, label, keys: [...keys], names: names.length ? names : null } }
+}
+
+/** Drop anything unnamed or of an unknown kind rather than storing a shape
+ *  the player copy would have to defend itself against later. */
+export function normalizeTargetNames(names) {
+  if (!Array.isArray(names)) return []
+  return names
+    .map((n) => ({ name: String(n?.name || '').trim(), kind: n?.kind === 'album' ? 'album' : 'track' }))
+    .filter((n) => n.name)
 }
 
 export function validateDefuseLaunch(params) {

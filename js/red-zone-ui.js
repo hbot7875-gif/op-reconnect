@@ -81,17 +81,52 @@ export function redZoneHeadline(band) {
   return { icon: '🚨', title: 'CITY UNDER ATTACK' }
 }
 
-/** What actually counts, named from the event itself rather than hard-coded
- *  in four places. An event can name a single track or a whole album; with
- *  neither set, every eligible BTS play counts and the copy says exactly
- *  that instead of inventing a song the backend isn't filtering on.
- *  See refreshDefuse() in bomb.ts for the eligibility this describes. */
-export function redZoneTarget(defuse) {
+/** The picked list as [{name, kind}], from whichever shape the event
+ *  carries: the multi-target `targetNames` when it has one, otherwise the
+ *  single targetTrack/targetAlbum an older event (or an older backend)
+ *  stored. Empty means nothing was named. */
+export function redZoneTargetEntries(defuse) {
+  const names = defuse?.targetNames || defuse?.target_names
+  if (Array.isArray(names) && names.length) {
+    return names
+      .map((n) => ({ name: String(n?.name || '').trim(), kind: n?.kind === 'album' ? 'album' : 'track' }))
+      .filter((n) => n.name)
+  }
   const album = defuse?.targetAlbum || defuse?.target_album
-  if (album) return { name: `the ${album} album`, short: album, unit: 'album streams' }
+  if (album) return [{ name: String(album), kind: 'album' }]
   const track = defuse?.targetTrack || defuse?.target_track
-  if (track) return { name: track, short: track, unit: 'streams' }
-  return { name: 'any BTS song', short: 'any BTS song', unit: 'streams' }
+  if (track) return [{ name: String(track), kind: 'track' }]
+  return []
+}
+
+/** "A", "A and B", "A, B and C" — the list read out as a sentence, because
+ *  this lands mid-instruction ("…by streaming X") and commas alone would
+ *  read as a data field rather than something to go and do. */
+export function joinNames(parts) {
+  if (parts.length <= 1) return parts[0] || ''
+  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`
+}
+
+/** What actually counts, named from the event itself rather than hard-coded
+ *  in four places. An event can name any mix of tracks and albums — "the
+ *  ARIRANG album and Keep Swimming" is one event — and each entry is
+ *  phrased by its own kind. With nothing named, every eligible BTS play
+ *  counts and the copy says exactly that instead of inventing a song the
+ *  backend isn't filtering on. See refreshDefuse() in bomb.ts for the
+ *  eligibility this describes. */
+export function redZoneTarget(defuse) {
+  const entries = redZoneTargetEntries(defuse)
+  if (!entries.length) return { name: 'any BTS song', short: 'any BTS song', unit: 'streams', entries }
+  const phrase = joinNames(entries.map((e) => (e.kind === 'album' ? `the ${e.name} album` : e.name)))
+  // "album streams" only when every pick is an album — on a mixed event it
+  // would misdescribe half of what counts.
+  const allAlbums = entries.every((e) => e.kind === 'album')
+  return {
+    name: phrase,
+    short: joinNames(entries.map((e) => e.name)),
+    unit: allAlbums ? 'album streams' : 'streams',
+    entries,
+  }
 }
 
 /** "Protect the ARMY Bomb by streaming ARIRANG" + "Goal: 1,000 streams" —
