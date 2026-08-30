@@ -67,6 +67,18 @@ function vaultRecipe(item) {
   return parts.length ? parts.join(' · ') : 'Candy Star mix'
 }
 
+// The rules a Candy Star playlist was built under. Playlists made before
+// the current generator can still be perfectly good, so this warns rather
+// than hides — nothing is removed from the Vault on a version alone. Maker
+// playlists are hand-picked and carry no version, so they show nothing.
+const CURRENT_GENERATOR_VERSION = 2
+function vaultRuleBadge(item) {
+  if (item.source === 'shared') return ''
+  return Number(item.generatorVersion) >= CURRENT_GENERATOR_VERSION
+    ? '<p class="cs-vault-rules is-current">✓ Current rules passed</p>'
+    : '<p class="cs-vault-rules is-older">Older generator — check before use</p>'
+}
+
 function vaultCard(item, opts) {
   const card = el('article', 'cs-vault-card')
   const thumbOk = typeof item.config?.thumbnailUrl === 'string' && /^https:\/\//.test(item.config.thumbnailUrl)
@@ -87,6 +99,7 @@ function vaultCard(item, opts) {
     <h3>${esc(item.name)}</h3>
     <p class="cs-vault-recipe">${esc(vaultRecipe(item))}</p>
     ${item.matchCount > 0 ? `<p class="cs-vault-match">Matches ${item.matchCount} district goal${item.matchCount === 1 ? '' : 's'}</p>` : ''}
+    ${vaultRuleBadge(item)}
     <div class="cs-vault-by">By ${esc(item.creator)}${meta.length ? ` · ${esc(meta.join(' · '))}` : ''}</div>
   `
   const actions = el('div', 'cs-vault-actions')
@@ -163,8 +176,13 @@ export function openPlaylistVault({ districtId = null, districtName = null } = {
       <div class="eyebrow">${districtId ? 'PLAYLIST VAULT' : 'MY PLAYLISTS'}</div>
       <h3>${esc(districtId ? `Playlists for ${districtName || 'this district'}` : 'Your playlist library')}</h3>
     </div>`
-  const shareToggle = el('button', 'cs-vault-share-toggle', '+ Share')
+  // Adding to the Vault is a playlist-maker action now: a shared playlist
+  // has to be attached to a district, and only approved makers may do it.
+  // The control stays hidden until the backend confirms this agent is one,
+  // rather than offering a button whose only outcome would be a refusal.
+  const shareToggle = el('button', 'cs-vault-share-toggle', '+ Add playlist')
   shareToggle.type = 'button'
+  shareToggle.hidden = true
   shareToggle.setAttribute('aria-expanded', 'false')
   head.appendChild(shareToggle)
   sheet.appendChild(head)
@@ -172,14 +190,17 @@ export function openPlaylistVault({ districtId = null, districtName = null } = {
   const shareForm = el('div', 'cs-vault-share')
   shareForm.hidden = true
   shareForm.innerHTML = `
+    <label class="cs-field-label" for="vs-share-district">District this playlist is for</label>
+    <select id="vs-share-district" class="input-field cs-vault-share-district"></select>
     <label class="cs-field-label" for="vs-share-url">Spotify playlist link</label>
     <div class="cs-vault-share-row">
       <input id="vs-share-url" class="input-field" type="url" inputmode="url" autocomplete="off" placeholder="https://open.spotify.com/playlist/…">
       <button type="button" class="btn-red">Add to Vault</button>
     </div>
-    <div class="cs-vault-share-note">Spotify checks the title and public link before it appears. Up to 5 shares a day.</div>
+    <div class="cs-vault-share-note">Spotify checks the title and public link before it appears. It lands at the top of that district's list. Up to 5 shares a day.</div>
     <div class="cs-vault-share-message" role="status"></div>`
   sheet.appendChild(shareForm)
+  const shareDistrict = shareForm.querySelector('#vs-share-district')
   const shareUrlInput = shareForm.querySelector('#vs-share-url')
   const shareMessage = shareForm.querySelector('.cs-vault-share-message')
   const shareBtn = shareForm.querySelector('.btn-red')
@@ -188,13 +209,28 @@ export function openPlaylistVault({ districtId = null, districtName = null } = {
     shareToggle.setAttribute('aria-expanded', shareForm.hidden ? 'false' : 'true')
     if (!shareForm.hidden) shareUrlInput.focus()
   }
+  // One round trip, on open: is this agent a maker, and what districts can
+  // they choose from? A non-maker never sees the control at all.
+  ;(async () => {
+    const hub = await call('getPlaylistMakerHub', { agentNo: getAgentNo() })
+    if (!hub?.success) return
+    const list = hub.districts || []
+    if (!list.length) return
+    shareDistrict.innerHTML = list
+      .map((d) => `<option value="${esc(d.id)}"${d.id === districtId ? ' selected' : ''}>${esc(d.name)}</option>`)
+      .join('')
+    shareToggle.hidden = false
+  })()
+
   shareBtn.onclick = async () => {
     const url = shareUrlInput.value.trim()
     if (!url) { shareMessage.textContent = 'Paste a Spotify playlist link first.'; return }
     shareBtn.disabled = true
     shareBtn.textContent = 'Checking Spotify…'
     shareMessage.textContent = ''
-    const res = await call('shareCandyPlaylist', { agentNo: getAgentNo(), url })
+    const chosenDistrict = shareDistrict.value
+    if (!chosenDistrict) { shareMessage.textContent = 'Choose the district this playlist is for.'; return }
+    const res = await call('shareCandyPlaylist', { agentNo: getAgentNo(), url, districtId: chosenDistrict })
     shareBtn.disabled = false
     shareBtn.textContent = 'Add to Vault'
     if (!res?.success) { shareMessage.textContent = res?.error || 'Could not add that playlist.'; return }

@@ -42,6 +42,7 @@ import {
 import {
   dedupeTracksByIdentity, excludeTracksByIdentity, mergeSavedTracksWithPlan,
   hasHeavyFocusConflict, isAllowedCustomCombo, mergeGoalAlbums,
+  isOptionalTransitionTrack, preferFreshTracks, trackIdentityTokens, goalAlbumGaps,
 } from './candy-star-planner.js'
 
 // Curated by the playlist team specifically for gaps that should contain
@@ -260,9 +261,30 @@ export async function generatePlaylist(supabase: SupabaseDB, params: any): Promi
       .filter((f: any) => !(f.artists || []).some((a: string) => btsMemberNames.has(String(a || '').toLowerCase())))
       .map((f: any) => ({ uri: f.uri, id: f.track_id, name: f.name, isrc: f.isrc, durationMs: f.duration_ms, isBTS: false })),
   )
-  const btsSpacers = (cat.songs || [])
+  let btsSpacers = (cat.songs || [])
     .filter((s: any) => !focusKeys.has(keyOf(s)) && !albumKeys.has(keyOf(s)) && s.versions?.[0]?.uri && (s.versions[0].durationMs || s.durationMs || 0) >= 90000)
     .map((s: any) => ({ key: keyOf(s), uri: s.versions[0].uri, id: s.versions[0].id, name: s.name, artists: s.artists || ['BTS'], isrc: s.versions[0].isrc || s.isrc, durationMs: s.versions[0].durationMs || s.durationMs, isBTS: true, album: s.versions[0].album }))
+
+  // A generated playlist now records the optional recordings it used. Give
+  // the next builds first pick of recordings not heard in the recent Vault
+  // history. This is a preference, never a hard exclusion: a sufficiently
+  // large fallback pool remains available so rotation cannot break a build.
+  const { data: recentRows } = await supabase.from('generated_playlists')
+    .select('config').eq('source', 'generated').eq('status', 'active')
+    .order('created_at', { ascending: false }).limit(8)
+  const recentBts = (recentRows || []).map((row: any) => row?.config?.rotation?.btsSpacers || [])
+  const recentOther = (recentRows || []).map((row: any) => row?.config?.rotation?.otherArtist || [])
+
+  // Spoken skits/outros/interludes can add texture once, but should not
+  // become the default filler sound. Keep at most one optional transition
+  // in the candidate pool whenever the full-song catalog is healthy.
+  const fullSongSpacers = btsSpacers.filter((track: any) => !isOptionalTransitionTrack(track))
+  const transitionSpacers = btsSpacers.filter((track: any) => isOptionalTransitionTrack(track))
+  if (fullSongSpacers.length >= 12) {
+    btsSpacers = [...fullSongSpacers, ...transitionSpacers.slice(0, 1)]
+  }
+  btsSpacers = preferFreshTracks(btsSpacers, recentBts, Math.min(36, btsSpacers.length))
+  nonBtsFillers = preferFreshTracks(nonBtsFillers, recentOther, Math.min(12, nonBtsFillers.length))
 
   const excludedTwoFillerRecordings = [
     ...focusSongs.flatMap((song: any) => song.versions || []), ...albumOnce,
@@ -443,12 +465,21 @@ export async function generatePlaylist(supabase: SupabaseDB, params: any): Promi
     ? [...new Set(params.albumNames.map((value: any) => String(value).trim()).filter(Boolean))]
     : (albumLabel ? [albumLabel] : [])
   const vaultConfig = {
+    generatorVersion: 2,
     focus: focusInput,
     album: params.album || [],
     albumIds: Array.isArray(params.albumIds) ? params.albumIds : [],
     targetMinutes: params.targetMinutes || 180,
     fillerEvery,
     runtimeMs,
+    rotation: {
+      btsSpacers: [...new Set(order
+        .filter((track: any) => track.isBTS !== false && !track.isFocus && !track.isAlbumTrack)
+        .flatMap((track: any) => trackIdentityTokens(track)))],
+      otherArtist: [...new Set(order
+        .filter((track: any) => track.isBTS === false)
+        .flatMap((track: any) => trackIdentityTokens(track)))],
+    },
     display: {
       focus: focusSongs.map((song: any) => ({
         key: song.key,
@@ -629,7 +660,12 @@ export async function getAlpacaOptions(supabase: SupabaseDB, params: any): Promi
 
   const districtGuides = buildDistrictGuides(content, songs, albums, modes, activeRes.data?.district_id || null)
 
-  return { success: true, songs, albums, modes, districtGuides }
+  // District album goals that could not be offered, with the exact tracks
+  // that failed to match. Previously such an album simply never appeared
+  // and there was nothing to tell an agent why (the Persona report).
+  const albumGaps = goalAlbumGaps(albumsMap)
+
+  return { success: true, songs, albums, modes, districtGuides, albumGaps }
 }
 
 /** Just enough of one district's goal guide for a Playlist Vault relevance

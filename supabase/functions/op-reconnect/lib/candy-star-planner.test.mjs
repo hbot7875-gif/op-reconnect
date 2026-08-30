@@ -13,7 +13,7 @@ import {
   buildBurstSkeleton, buildFocusOrder, buildDistributedFocusOrder,
   buildPlaylistOrder2Focus, dedupeTracksByIdentity, excludeTracksByIdentity,
   mergeSavedTracksWithPlan, hasHeavyFocusConflict, pickVariedDurationIndex,
-  mergeGoalAlbums, isAllowedCustomCombo,
+  mergeGoalAlbums, isAllowedCustomCombo, goalAlbumGaps,
 } from './candy-star-planner.js'
 
 const MIN_GAP_MS = 480000 // matches spotify-shared.ts's MIN_GAP_MS — duplicated because that's a
@@ -131,11 +131,26 @@ function pct(hist, values) {
 }
 
 let passed = 0
+let failed = 0
+// Every test runs even after one fails. The previous version let the first
+// assertion abort the whole module, so `node --test` reported 13 of 27 tests
+// and stayed silent about the other 13 — including the play-count-loss
+// regression guard. A red suite must never be able to hide what else broke.
 function test(name, fn) {
-  fn()
-  passed++
-  console.log(`ok - ${name}`)
+  try {
+    fn()
+    passed++
+    console.log(`ok - ${name}`)
+  } catch (error) {
+    failed++
+    console.log(`not ok - ${name}`)
+    console.log(String(error && error.message).split('\n').map((line) => `    ${line}`).join('\n'))
+  }
 }
+process.on('exit', () => {
+  console.log(`# ${passed} passed, ${failed} failed`)
+  if (failed > 0) process.exitCode = 1
+})
 
 test('dedupeTracksByIdentity treats alternate Spotify IDs with one ISRC as one filler', () => {
   const first = { id: 'track-a', isrc: 'us-abc-12-34567', name: 'Original' }
@@ -612,3 +627,36 @@ test('buildPlaylistOrder2Focus never stacks more than 1 album track back-to-back
 })
 
 console.log(`\n${passed} tests passed`)
+
+test('an album goal that cannot fully match names its missing tracks instead of vanishing', () => {
+  const catalog = [
+    { key: 'k1', name: 'Intro: Persona' },
+    { key: 'k2', name: 'Boy With Luv' },
+  ]
+  const goals = [{
+    kind: 'album', id: 'persona', label: 'Map of the Soul: Persona',
+    tracks: [
+      { label: 'Intro: Persona' },
+      { label: 'Boy With Luv' },
+      { label: 'Mikrokosmos' },
+      { label: 'Make It Right' },
+    ],
+  }]
+  const map = mergeGoalAlbums({}, catalog, goals)
+  // Still all-or-nothing: a partial album would generate a playlist that
+  // silently omits songs, so it must not reach the picker.
+  assert.equal(map['goal:persona'], undefined)
+  const gaps = goalAlbumGaps(map)
+  assert.equal(gaps.length, 1)
+  assert.equal(gaps[0].name, 'Map of the Soul: Persona')
+  assert.equal(gaps[0].reason, 'unmatched_tracks')
+  assert.deepEqual(gaps[0].missing, ['Mikrokosmos', 'Make It Right'])
+
+  // A fully matched goal album still joins the picker and reports no gap.
+  const full = mergeGoalAlbums({}, [...catalog, { key: 'k3', name: 'Mikrokosmos' }, { key: 'k4', name: 'Make It Right' }], goals)
+  assert.equal(full['goal:persona'].count, 4)
+  assert.deepEqual(goalAlbumGaps(full), [])
+
+  // The gaps list must never leak into album iteration.
+  assert.equal(Object.values(full).length, 1)
+})

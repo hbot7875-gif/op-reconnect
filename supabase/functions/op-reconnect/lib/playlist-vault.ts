@@ -21,6 +21,7 @@ const REPORTS_TO_HIDE = 3
 // for this game's actual scale (dozens to low hundreds of generated
 // playlists) — well short of a real pagination concern.
 const RELEVANT_SCAN_LIMIT = 500
+const ALWAYS_PLAYLIST_MAKER = 'AGENT000'
 
 function agentNoOf(params: any): string {
   return String(params.agentNo || '').trim().toUpperCase()
@@ -32,6 +33,38 @@ function clampPageSize(raw: any): number {
 
 function safeConfig(value: any): Record<string, any> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+}
+
+export async function isPlaylistMaker(supabase: SupabaseDB, agentNo: string): Promise<boolean> {
+  const no = String(agentNo || '').trim().toUpperCase()
+  if (!no) return false
+  if (no === ALWAYS_PLAYLIST_MAKER) return true
+  const { data, error } = await supabase.from('rc_config')
+    .select('value').eq('key', 'playlist_makers').maybeSingle()
+  if (error || !data) return false
+  return (Array.isArray(data.value) ? data.value : [])
+    .some((entry: any) => String(entry || '').trim().toUpperCase() === no)
+}
+
+export async function amIPlaylistMaker(supabase: SupabaseDB, params: any): Promise<any> {
+  return { success: true, allowed: await isPlaylistMaker(supabase, agentNoOf(params)) }
+}
+
+export async function getPlaylistMakerHub(supabase: SupabaseDB, params: any): Promise<any> {
+  const agentNo = agentNoOf(params)
+  if (!(await isPlaylistMaker(supabase, agentNo))) return { success: false, error: 'not_playlist_maker' }
+  const [districtsRes, mineRes] = await Promise.all([
+    supabase.from('rc_districts').select('id, name, ward_id, sequence')
+      .eq('active', true).order('sequence'),
+    supabase.from('generated_playlists')
+      .select('name, playlist_id, url, district_id, config, created_at, status')
+      .eq('agent_no', agentNo).eq('source', 'shared')
+      .order('created_at', { ascending: false }).limit(100),
+  ])
+  if (districtsRes.error || mineRes.error) {
+    return { success: false, error: districtsRes.error?.message || mineRes.error?.message }
+  }
+  return { success: true, districts: districtsRes.data || [], playlists: mineRes.data || [] }
 }
 
 /** Which of a playlist's real focus songs/albums land on this district's
@@ -83,24 +116,26 @@ export async function getCandyPlaylistLibrary(supabase: SupabaseDB, params: any)
 
   let rows: any[]
   let total: number
-  const selectCols = 'name, playlist_id, url, agent_no, config, track_count, created_at, source, status'
+  const selectCols = 'name, playlist_id, url, agent_no, config, track_count, created_at, source, status, district_id'
 
   if (view === 'relevant' && districtCatalog) {
-    // No district_id column on generated_playlists (see file header) and no
-    // SQL-side way to test a jsonb config against a goal's catalog key, so
-    // relevance is scored in memory over a bounded recent window rather than
-    // filtered in the query — see RELEVANT_SCAN_LIMIT above. Shared links
-    // never have config.focus, so they naturally score 0 and drop out here.
+    // Trusted district picks are explicit and come first. Candy Star rows
+    // follow, scored from their saved recipe against the district's real
+    // goals. The UI never needs to expose these implementation categories.
     const { data, error } = await supabase.from('generated_playlists')
       .select(selectCols)
-      .eq('status', 'active').eq('source', 'generated')
+      .eq('status', 'active')
       .order('created_at', { ascending: false })
       .limit(RELEVANT_SCAN_LIMIT)
     if (error) return { success: false, error: error.message }
-    const scored = (data || [])
-      .map((row: any) => ({ row, labels: districtMatch(row, districtCatalog.trackKeyToGoal, districtCatalog.albumIdToGoal) }))
-      .filter((entry: any) => entry.labels.length > 0)
+    const scored = (data || []).map((row: any) => ({
+      row,
+      labels: districtMatch(row, districtCatalog.trackKeyToGoal, districtCatalog.albumIdToGoal),
+      districtPick: row.source === 'shared' && row.district_id === districtId,
+    }))
+      .filter((entry: any) => entry.districtPick || entry.labels.length > 0)
       .sort((a: any, b: any) =>
+        Number(b.districtPick) - Number(a.districtPick) ||
         b.labels.length - a.labels.length || +new Date(b.row.created_at) - +new Date(a.row.created_at))
     total = scored.length
     rows = scored.slice(offset, offset + limit).map((entry: any) => entry.row)
@@ -108,6 +143,7 @@ export async function getCandyPlaylistLibrary(supabase: SupabaseDB, params: any)
     let query = supabase.from('generated_playlists')
       .select(selectCols, { count: 'exact' })
       .eq('status', 'active')
+      .order('source', { ascending: false })
       .order('created_at', { ascending: false })
     if (view === 'mine') query = query.eq('agent_no', agentNo)
     if (savedIds) query = query.in('playlist_id', savedIds)
@@ -150,6 +186,12 @@ export async function getCandyPlaylistLibrary(supabase: SupabaseDB, params: any)
     trackCount: Math.max(0, Number(row.track_count) || 0),
     createdAt: row.created_at,
     source: row.source === 'shared' ? 'shared' : 'generated',
+    districtId: row.district_id || safeConfig(row.config).districtId || null,
+    // Which generator rules a Candy Star playlist was built under. Rows made
+    // before the rules were stamped carry no version at all, which is
+    // exactly the "check this one before you use it" case the Vault flags.
+    // Maker-added playlists are hand-picked and never carry a version.
+    generatorVersion: row.source === 'shared' ? null : (Number(safeConfig(row.config).generatorVersion) || 0),
     creator: row.agent_no === agentNo ? 'You' : (codenames.get(row.agent_no) || 'Another agent'),
     isMine: row.agent_no === agentNo,
     saved: savedByMe.has(row.playlist_id),
@@ -245,6 +287,15 @@ export async function deleteCandyPlaylist(supabase: SupabaseDB, params: any): Pr
 /** Share an existing public Spotify playlist. oEmbed safely supplies its real title. */
 export async function shareCandyPlaylist(supabase: SupabaseDB, params: any): Promise<any> {
   const agentNo = agentNoOf(params)
+  if (!(await isPlaylistMaker(supabase, agentNo))) {
+    return { success: false, error: 'Only approved playlist makers can add district playlists.' }
+  }
+  const districtId = String(params.districtId || '').trim()
+  if (!districtId) return { success: false, error: 'Choose the district this playlist is for.' }
+  const { data: district, error: districtError } = await supabase.from('rc_districts')
+    .select('id, name').eq('id', districtId).eq('active', true).maybeSingle()
+  if (districtError) return { success: false, error: districtError.message }
+  if (!district) return { success: false, error: 'That district is not available.' }
   const playlistId = parseSpotifyId(String(params.url || ''), 'playlist')
   if (!playlistId) return { success: false, error: 'Paste a Spotify playlist link.' }
   const url = `https://open.spotify.com/playlist/${playlistId}`
@@ -283,6 +334,9 @@ export async function shareCandyPlaylist(supabase: SupabaseDB, params: any): Pro
   const config = {
     source: 'shared',
     thumbnailUrl: typeof meta?.thumbnail_url === 'string' ? meta.thumbnail_url : null,
+    districtId,
+    districtName: district.name,
+    note: String(params.note || '').trim().slice(0, 180),
   }
   const { error } = await supabase.from('generated_playlists').insert({
     name,
@@ -291,6 +345,7 @@ export async function shareCandyPlaylist(supabase: SupabaseDB, params: any): Pro
     agent_no: agentNo,
     config,
     track_count: 0,
+    district_id: districtId,
     source: 'shared',
     status: 'active',
     created_at: utcNow(),

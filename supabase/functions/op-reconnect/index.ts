@@ -20,7 +20,7 @@ import {
 } from './lib/spotify-catalog.ts'
 import { importFillerPlaylist, addFillerManual, getFillerLibrary, removeFiller } from './lib/spotify-filler.ts'
 import { generatePlaylist, validatePlaylist, validatePlaylistFromTracks, getAlpacaOptions, generateAlpaca, previewAlpaca, adminDeleteAlpacaPlaylist } from './lib/candy-star.ts'
-import { deleteCandyPlaylist, getCandyPlaylistLibrary, setCandyPlaylistSaved, shareCandyPlaylist, reportCandyPlaylist } from './lib/playlist-vault.ts'
+import { amIPlaylistMaker, deleteCandyPlaylist, getCandyPlaylistLibrary, getPlaylistMakerHub, setCandyPlaylistSaved, shareCandyPlaylist, reportCandyPlaylist } from './lib/playlist-vault.ts'
 import { adminGetActiveDefuse, getDefuseMessages, sendDefuseMessage } from './lib/bomb.ts'
 import { adminCreateBroadcast, adminListBroadcasts, adminDeleteBroadcast } from './lib/broadcasts.ts'
 import { adminDeleteAgent, adminGetAgent, adminGetAgentTracks, adminScanAltAccounts, adminResetAgentXp, adminDeleteInactiveAgents, sendInactiveReminders, adminListAgents } from './lib/admin-agent.ts'
@@ -179,6 +179,8 @@ const ROUTES: Record<string, Route> = {
   generateAlpaca: { auth: 'agent', handler: (sb, p) => generateAlpaca(sb, p) },
   previewAlpaca: { auth: 'agent', handler: (sb, p) => previewAlpaca(sb, p) },
   getCandyPlaylistLibrary: { auth: 'agent', handler: (sb, p) => getCandyPlaylistLibrary(sb, p) },
+  amIPlaylistMaker: { auth: 'agent', handler: (sb, p) => amIPlaylistMaker(sb, p) },
+  getPlaylistMakerHub: { auth: 'agent', handler: (sb, p) => getPlaylistMakerHub(sb, p) },
   setCandyPlaylistSaved: { auth: 'agent', handler: (sb, p) => setCandyPlaylistSaved(sb, p) },
   deleteCandyPlaylist: { auth: 'agent', handler: (sb, p) => deleteCandyPlaylist(sb, p) },
   shareCandyPlaylist: { auth: 'agent', handler: (sb, p) => shareCandyPlaylist(sb, p) },

@@ -366,11 +366,19 @@ export function buildPlaylistOrder(
   // last real focus play and only resets when a real focus track lands.
   const MAX_GAP = 6
   let windowCount = 0
-  const lastPlayed: Record<string, { ms: number; durationMs: number }> = {}
+  const lastPlayed: Record<string, { ms: number; durationMs: number; index: number }> = {}
   const ensureGap = (key: string, durationMs: number): number => {
     const prev = lastPlayed[key]
     if (!prev) return 0
     let pushed = 0
+    // A compliant duration window should also look sensible to a listener.
+    // Always leave at least two visible neutral tracks between repeats; this
+    // closes the remaining one-filler cases in the generic (non-2-focus)
+    // builder without changing focus counts or album placement.
+    while (order.length - prev.index - 1 < 2) {
+      if (!pushGapFiller(Math.max(0, MIN_GAP_MS - (ms - prev.ms)))) break
+      pushed++
+    }
     // MIN_GAP_MS (flat 8min) is the actual validated, MANDATORY floor —
     // padding this randomly to 8-10min (an even earlier version) just
     // forced unplanned extra fillers for no compliance benefit. This loop
@@ -435,7 +443,7 @@ export function buildPlaylistOrder(
     push(focusSeq[k])
     if (focusSeq[k].isAlbumTrack) windowCount++
     else windowCount = 0
-    lastPlayed[ck] = { ms, durationMs: focusSeq[k].durationMs }
+    lastPlayed[ck] = { ms, durationMs: focusSeq[k].durationMs, index: order.length - 1 }
     const beforeCheckpointFi = fi
     passCheckpoints()
     totalDelivered += fi - beforeCheckpointFi

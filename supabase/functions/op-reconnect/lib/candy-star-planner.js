@@ -14,6 +14,36 @@ export function shuffle(arr, rng = Math.random) {
   return a
 }
 
+/** Optional spoken transitions are useful occasionally, but they made the
+ * generator feel repetitive when they won ordinary spacer slots over and
+ * over. Keep the classification deliberately narrow: mandatory album tracks
+ * are never filtered by this helper. */
+export function isOptionalTransitionTrack(track) {
+  return /(^|\b)(skit|interlude|outro)(\b|[.:])/i.test(String(track?.name || ''))
+}
+
+/** Prefer recordings that did not appear in the most recent generated
+ * playlists. The caller supplies identity lists saved with those playlists;
+ * older rows simply contribute nothing. We retain a healthy minimum pool so
+ * rotation can never make a valid generation impossible. */
+export function preferFreshTracks(tracks, recentIdentityLists = [], minKeep = 12, rng = Math.random) {
+  const usage = new Map()
+  for (let age = 0; age < recentIdentityLists.length; age++) {
+    const weight = Math.max(1, recentIdentityLists.length - age)
+    for (const identity of recentIdentityLists[age] || []) {
+      const key = String(identity || '')
+      if (key) usage.set(key, (usage.get(key) || 0) + weight)
+    }
+  }
+  const scored = shuffle(tracks || [], rng).map((track) => {
+    const identities = trackIdentityTokens(track)
+    return { track, score: Math.max(0, ...identities.map((id) => usage.get(id) || 0)) }
+  }).sort((a, b) => a.score - b.score)
+  const fresh = scored.filter((entry) => entry.score === 0).map((entry) => entry.track)
+  if (fresh.length >= Math.min(minKeep, scored.length)) return fresh
+  return scored.slice(0, Math.max(Math.min(minKeep, scored.length), fresh.length)).map((entry) => entry.track)
+}
+
 /** Pick a duration-compatible track without letting the exact same
  * best-fitting recording win every generation. Candidates that can satisfy
  * the requested duration are ranked by overshoot, then one of the closest
@@ -67,22 +97,38 @@ export function mergeGoalAlbums(storedAlbums, catalogSongs, goals) {
 
   const existingNames = new Set(Object.values(merged).flatMap((album) =>
     [album?.name, ...(album?.aliases || [])].map(normalize).filter(Boolean)))
+  const gaps = []
   for (const goal of goals || []) {
     if (goal?.kind !== 'album' || !goal?.id || !goal?.label || !Array.isArray(goal?.tracks) || !goal.tracks.length) continue
     const names = [goal.label, ...(Array.isArray(goal.aliases) ? goal.aliases : [])]
     if (names.some((name) => existingNames.has(normalize(name)))) continue
 
     const trackKeys = []
-    let complete = true
+    // Every unmatched track is collected, not just the first. An album is
+    // still all-or-nothing for the picker — a partial album would quietly
+    // generate a playlist missing songs — but "which tracks are missing"
+    // is now answerable instead of the whole album vanishing in silence.
+    const missing = []
     for (const track of goal.tracks) {
       const candidates = [track?.label, ...(Array.isArray(track?.aliases) ? track.aliases : [])]
       let key = null
       for (const name of candidates) { key = exact.get(normalize(name)); if (key) break }
       if (!key) for (const name of candidates) { key = base.get(stripVersion(name)); if (key) break }
-      if (!key) { complete = false; break }
+      if (!key) { missing.push(String(track?.label || 'Untitled track')); continue }
       if (!trackKeys.includes(key)) trackKeys.push(key)
     }
-    if (!complete || trackKeys.length !== goal.tracks.length) continue
+    if (missing.length || trackKeys.length !== goal.tracks.length) {
+      gaps.push({
+        id: `goal:${goal.id}`,
+        name: goal.label,
+        missing,
+        // A duplicate key (two goal tracks resolving to one catalog song)
+        // fails the same containment check with nothing "missing" — say so
+        // rather than reporting an empty list.
+        reason: missing.length ? 'unmatched_tracks' : 'duplicate_track_keys',
+      })
+      continue
+    }
 
     const id = `goal:${goal.id}`
     merged[id] = {
@@ -91,7 +137,19 @@ export function mergeGoalAlbums(storedAlbums, catalogSongs, goals) {
     }
     for (const name of names) existingNames.add(normalize(name))
   }
+  Object.defineProperty(merged, GOAL_ALBUM_GAPS, { value: gaps, enumerable: false })
   return merged
+}
+
+/** Non-enumerable so every existing `Object.values(albumsMap)` consumer is
+ *  untouched by this — the gaps ride along with the map instead of forcing
+ *  a new return shape through three call sites. */
+export const GOAL_ALBUM_GAPS = Symbol.for('candyStar.goalAlbumGaps')
+
+/** District album goals that could NOT join the picker, and why. */
+export function goalAlbumGaps(albumsMap) {
+  const gaps = albumsMap && albumsMap[GOAL_ALBUM_GAPS]
+  return Array.isArray(gaps) ? gaps : []
 }
 
 export function isAllowedCustomCombo(focusCount, albumCount) {
@@ -234,10 +292,15 @@ export function planFocusGapCounts(n, profile, rng = Math.random) {
     for (let i = 0; i < Math.max(1, Math.round(n * 0.22)); i++) plan[i] = 3
   } else if (profile === 'tight') {
     plan = new Array(n).fill(3)
-    for (let i = 0; i < Math.max(1, Math.round(n * 0.22)); i++) plan[i] = 4
+    for (let i = 0; i < Math.max(1, Math.round(n * (0.12 + rng() * 0.22))); i++) plan[i] = 4
   } else if (profile === 'balanced') {
     plan = new Array(n).fill(3)
-    for (let i = 0; i < Math.round(n * 0.45); i++) plan[i] = 4
+    // Vary HOW MANY of the windows widen to four — that is what stopped two
+    // runs of the same recipe coming out identical. The 2/5 anchor stays
+    // unconditional: it is the balanced profile's defining shape (one close
+    // pair, one wide one), and making it a coin flip meant 45% of balanced
+    // playlists silently collapsed to a flat 3/4 pattern instead.
+    for (let i = 0; i < Math.round(n * (0.28 + rng() * 0.34)); i++) plan[i] = 4
     if (n >= 7) { plan[0] = 2; plan[1] = 5 }
   } else if (profile === 'spread') {
     plan = new Array(n).fill(4)
@@ -247,12 +310,21 @@ export function planFocusGapCounts(n, profile, rng = Math.random) {
     // In a 10:9 pairing, mandatory partner/album tracks already create an
     // occasional five-track window. Plan four with one three so the final
     // result remains mostly four without turning five into a common case.
+    // Variety here comes from how many windows tighten to three — planting a
+    // five directly contradicted the line above and pushed 10:9's second
+    // song onto a five-gap ~16% of the time, outside its promised pattern.
     plan = new Array(n).fill(4)
     if (n >= 3) plan[0] = 3
+    for (let i = 1; i < Math.round(n * (0.10 + rng() * 0.22)); i++) plan[i] = 3
   } else {
-    plan = new Array(n).fill(5)
-    if (n >= 3) plan[0] = 4
-    if (n >= 4) plan[1] = 6
+    // Lopsided pairs need wider spacing for the less-frequent focus, but a
+    // fixed [4,6,5,5…] multiset made every 10:5 playlist audibly identical.
+    // Vary the number of 4/5/6 windows while keeping the same safe bounds.
+    plan = Array.from({ length: n }, () => {
+      const roll = rng()
+      return roll < 0.28 ? 4 : roll < 0.78 ? 5 : 6
+    })
+    if (n >= 3 && !plan.includes(4)) plan[0] = 4
   }
   return shuffle(plan, rng)
 }
