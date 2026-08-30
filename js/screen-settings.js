@@ -227,6 +227,11 @@ function paintSections(body, state) {
         body: 'Upload and crop badge art. Open to agent000 plus anyone listed in badge_editors.',
         onClick: () => { window.location.href = 'badge-admin.html' },
       },
+      {
+        icon: '🎧', name: 'Playlist Makers', value: '',
+        body: 'Add a playlist to a district Vault. Open to agent000 plus anyone listed in playlist_makers.',
+        onClick: () => { window.location.href = 'playlist-maker.html' },
+      },
     ]))
   } else if (state?.player?.isBadgeVaultEditor) {
     // Not agent000, but the server already confirmed they're on

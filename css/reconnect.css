@@ -1235,6 +1235,13 @@ body.red-zone .wtb.now { fill: var(--crimson); filter: drop-shadow(0 0 3px rgba(
 .adm-rz-echo { margin: 8px 0 2px; padding: 9px 11px; border: 1px dashed var(--border);
   border-radius: var(--r); color: var(--muted); font-size: 12.5px; line-height: 1.5; }
 .adm-rz-echo b { color: var(--text); }
+/* Unread count on the ARMY Comms button. Crimson against the button's
+   purple so it reads as "something happened" rather than as part of the
+   label, and inline so the button keeps its single-line shape. */
+.core-comms-badge { display: inline-block; min-width: 17px; margin-left: 7px; padding: 1px 5px;
+  border-radius: 9px; background: var(--crimson); color: #fff; font-family: var(--mono);
+  font-size: 9.5px; font-weight: 800; letter-spacing: 0; line-height: 15px; text-align: center;
+  vertical-align: text-bottom; }
 .core-comms-sub { margin-top: 5px; color: var(--dim); font-size: 11px; line-height: 1.4;
   text-align: center; }
 .rz-comms-sub { margin-top: 8px; text-align: center; }

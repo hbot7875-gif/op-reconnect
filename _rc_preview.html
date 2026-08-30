@@ -285,6 +285,9 @@
           defenderAgents: s.defenderAgents, rewardXp: 500,
           activeUntil: new Date(Date.now() + (2 * 3600 + 47 * 60 + 12) * 1000).toISOString(),
           isDefender: s.yourStreams >= 1, isQualified: s.yourStreams >= 7,
+          // Matches DC_MESSAGES below, so the unread badge has something
+          // real to count against whatever this device has already seen.
+          messageCount: 6,
           defenderRanking: {
             total: s.defenderAgents,
             leaders: [

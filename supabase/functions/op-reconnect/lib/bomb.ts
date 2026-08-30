@@ -106,6 +106,11 @@ export interface BombView {
     targetAlbum: string | null
     targetKind: 'track' | 'album' | null
     targetNames: { name: string; kind: 'track' | 'album' }[] | null
+    // Total lines in this event's ARMY Comms thread, system lines included.
+    // The client keeps its own "last seen" mark and shows the difference as
+    // an unread count, so nobody has to open the room to find out whether
+    // anything happened in it.
+    messageCount: number
     defenderRanking: {
       leaders: { rank: number; codename: string; streams: number; isMe: boolean }[]
       yourRank: { rank: number; codename: string; streams: number; isMe: boolean } | null
@@ -260,9 +265,13 @@ export async function getBombView(
   if (ev && ev.status === 'active') {
     const resolved = await refreshDefuse(supabase, content, ev, caps, cfg, manualSync)
     if (resolved.stillActive) {
-      const [{ data: mine }, defenderRanking] = await Promise.all([
+      const [{ data: mine }, defenderRanking, { count: messageCount }] = await Promise.all([
         supabase.from('rc_defuse_contrib').select('streams').eq('event_id', ev.id).eq('agent_no', agentNo).maybeSingle(),
         buildDefenderRanking(supabase, ev.id, agentNo),
+        // head:true — the count only, never the bodies. This rides along on
+        // the existing 90s poll, so it must stay cheap.
+        supabase.from('rc_defuse_messages').select('id', { count: 'exact', head: true })
+          .eq('event_id', ev.id),
       ])
       const yourStreams = mine?.streams || 0
       const minimumStreams = ev.minimum_streams || RED_ZONE_MIN_STREAMS
@@ -279,6 +288,7 @@ export async function getBombView(
         isQualified: isQualifiedDefender(yourStreams, minimumStreams),
         targetTrack: ev.target_kind === 'track' ? ev.target_label : null,
         targetAlbum: ev.target_kind === 'album' ? ev.target_label : null,
+        messageCount: messageCount || 0,
         targetKind: ev.target_kind || null,
         targetNames: Array.isArray(ev.target_names) && ev.target_names.length ? ev.target_names : null,
         defenderRanking,

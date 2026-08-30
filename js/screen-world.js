@@ -35,9 +35,10 @@ import { cityFeedCard } from './city-feed.js'
 import { openSuggestions } from './suggestions.js'
 import { openMagicShop } from './magic-shop.js'
 import { vmaEventCard, openVmaMission } from './vma.js'
-import { redZoneSheet, defuseResultSheet, defenderCommsSheet } from './bomb-sheet.js'
+import { redZoneSheet, defuseResultSheet, defenderCommsSheet, getCommsSeen } from './bomb-sheet.js'
 import { tickCountdowns } from './countdown.js'
-import { redZonePercent, personalSignalCopy, redZoneHeadline, redZoneGoalCopy } from './red-zone-ui.js'
+import { redZonePercent, personalSignalCopy, redZoneHeadline, redZoneGoalCopy,
+  unreadCommsCount, unreadBadgeText } from './red-zone-ui.js'
 
 export function renderWorld(container, state) {
   container.innerHTML = ''
@@ -520,14 +521,26 @@ function coreBlock(state) {
     // streaming while the event is running. Locked state stays visible
     // rather than hidden: "there's a room here, one stream gets you in" is
     // the more useful message than showing nothing at all.
-    const comms = el('button', 'core-comms' + (defuse.isDefender ? '' : ' is-locked'),
-      defuse.isDefender
-        ? `💬 ARMY Comms · ${(defuse.defenderAgents || 0).toLocaleString()}`
-        : '🔒 Stream once to join ARMY Comms')
+    // Unread lines since this agent last had the room open. A count rather
+    // than a plain dot: "2 new" is a reason to look, an anonymous dot is
+    // just decoration. Only for agents who can actually open it.
+    const unread = defuse.isDefender
+      ? unreadCommsCount(defuse.messageCount, getCommsSeen(defuse.id))
+      : 0
+    const badge = unreadBadgeText(unread)
+    const comms = el('button', 'core-comms' + (defuse.isDefender ? '' : ' is-locked'), '')
+    comms.innerHTML = defuse.isDefender
+      ? `💬 ARMY Comms &middot; ${(defuse.defenderAgents || 0).toLocaleString()}`
+        + (badge ? `<span class="core-comms-badge">${esc(badge)}</span>` : '')
+      : '🔒 Stream once to join ARMY Comms'
+    if (badge) {
+      comms.setAttribute('aria-label',
+        `ARMY Comms, ${unread} new message${unread === 1 ? '' : 's'}. ${defuse.defenderAgents || 0} ARMY defenders.`)
+    }
     comms.disabled = !defuse.isDefender
     comms.onclick = () => showOverlay(defenderCommsSheet({
       eventId: defuse.id, progress: defuse.progress, target: defuse.target,
-      defenderAgents: defuse.defenderAgents,
+      defenderAgents: defuse.defenderAgents, messageCount: defuse.messageCount,
     }))
     zone.appendChild(comms)
     // "Comms" reads as communications to anyone who plays games and as

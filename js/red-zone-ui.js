@@ -153,6 +153,22 @@ export function redZoneGoalCopy(defuse, band) {
   }
 }
 
+/** How many ARMY Comms lines have arrived since this agent last opened the
+ *  room. Never negative: a thread can shrink when an event resolves and its
+ *  messages are archived, and a negative badge would be nonsense. */
+export function unreadCommsCount(total, seen) {
+  return Math.max(0, (Number(total) || 0) - (Number(seen) || 0))
+}
+
+/** The badge text itself. Empty means "draw nothing" — an unread bubble
+ *  showing 0 is worse than no bubble. Caps at 9+ so one busy thread cannot
+ *  stretch the button it sits on. */
+export function unreadBadgeText(count) {
+  const n = Math.max(0, Number(count) || 0)
+  if (n <= 0) return ''
+  return n > 9 ? '9+' : String(n)
+}
+
 /** "75% DEFUSED" — one verb for the whole mechanic. Defusing is what the
  *  player's streams are doing; "stabilized" made them work that out. */
 export function defusedLine(progress, target) {

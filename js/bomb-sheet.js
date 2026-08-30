@@ -19,6 +19,42 @@ import { chatThread } from './chat-thread.js'
 import { personalSignalCopy, interpolateBombColor,
   redZoneBand, redZoneHeadline, redZoneGoalCopy } from './red-zone-ui.js'
 
+/* ── unread ARMY Comms ───────────────────────────────────────────────────
+   Per-event, per-device, in localStorage: the number of lines the thread
+   held when this agent last had it open. Kept here beside the sheet that
+   does the marking rather than in red-zone-ui.js, which stays DOM- and
+   storage-free so it can be unit tested in plain Node. */
+const COMMS_SEEN_KEY = 'rc_comms_seen'
+
+function commsSeenMap() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(COMMS_SEEN_KEY) || '{}')
+    return raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {}
+  } catch { return {} }
+}
+
+export function getCommsSeen(eventId) {
+  return Number(commsSeenMap()[String(eventId)]) || 0
+}
+
+/** Only ever moves forward. Opening an older archived thread must not make
+ *  a newer, busier one look unread again. */
+export function markCommsSeen(eventId, count) {
+  const id = String(eventId || '')
+  if (!id) return
+  const total = Math.max(0, Number(count) || 0)
+  try {
+    const map = commsSeenMap()
+    if ((Number(map[id]) || 0) >= total) return
+    map[id] = total
+    // One event at a time in practice; keep the last few so a resolved
+    // event's thread doesn't light up again if it's reopened.
+    const ids = Object.keys(map)
+    if (ids.length > 8) for (const stale of ids.slice(0, ids.length - 8)) delete map[stale]
+    localStorage.setItem(COMMS_SEEN_KEY, JSON.stringify(map))
+  } catch { /* private mode — the badge just stays visible */ }
+}
+
 function statLine(label, value) {
   return el('div', 'rz-stat-line', `<span>${esc(label)}</span><b>${value}</b>`)
 }
@@ -122,6 +158,7 @@ export function redZoneSheet(state) {
   commsBtn.disabled = !d.isDefender
   commsBtn.onclick = () => showOverlay(defenderCommsSheet({
     eventId: d.id, progress: d.progress, target: d.target, defenderAgents: d.defenderAgents,
+    messageCount: d.messageCount,
   }))
   sheet.appendChild(commsBtn)
   // Same plain-language line the City screen carries — the unlocked state
@@ -184,7 +221,7 @@ function defenderCommsGlow({ progress, target, blackout }) {
  *  emergency channel inside the compromised network, not another
  *  dashboard card, so the chrome stays minimal and the color does the
  *  talking behind it. */
-export function defenderCommsSheet({ eventId, progress, target, defenderAgents, blackout = false }) {
+export function defenderCommsSheet({ eventId, progress, target, defenderAgents, messageCount = null, blackout = false }) {
   const sheet = el('div', 'sheet dc-sheet')
   const glow = el('div', 'dc-glow')
   glow.style.setProperty('--dc-bomb', defenderCommsGlow({ progress, target, blackout }))
@@ -209,6 +246,10 @@ export function defenderCommsSheet({ eventId, progress, target, defenderAgents, 
       return
     }
     body.innerHTML = ''
+    // Mark seen against the server's own total where we have it: the thread
+    // itself returns at most the newest 50 lines, so counting what came back
+    // would leave a busy room permanently showing unread.
+    markCommsSeen(eventId, messageCount == null ? (res.messages || []).length : messageCount)
     body.appendChild(chatThread(res.messages, {
       variant: 'radio',
       placeholder: 'Message ARMY defenders…',

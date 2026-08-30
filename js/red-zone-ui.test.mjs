@@ -3,7 +3,7 @@ import test from 'node:test'
 import { redZoneBand, interpolateBombColor, redZonePercent, personalSignalCopy, countdownText,
   corruptionOpacity, sparkOpacity, arcPath, pointOnCircle, tendrilPath,
   redZoneHeadline, redZoneTarget, redZoneGoalCopy, defusedLine,
-  redZoneTargetEntries, joinNames } from './red-zone-ui.js'
+  redZoneTargetEntries, joinNames, unreadCommsCount, unreadBadgeText } from './red-zone-ui.js'
 
 test('progress bands match the backend thresholds', () => {
   assert.equal(redZoneBand(0, 1000), 'compromised')
@@ -199,4 +199,23 @@ test('goal copy carries a multi-target instruction end to end', () => {
   assert.equal(goal.instruction, 'Protect the ARMY Bomb by streaming the ARIRANG album and Keep Swimming')
   assert.equal(goal.goal, 'Goal: 5,000 streams')
   assert.equal(goal.progressLine, '1,200 / 5,000 streams')
+})
+
+test('unread ARMY Comms count and badge text', () => {
+  assert.equal(unreadCommsCount(12, 9), 3)
+  assert.equal(unreadCommsCount(9, 9), 0)
+  // A resolved event's thread can shrink; a negative badge would be nonsense.
+  assert.equal(unreadCommsCount(4, 9), 0)
+  // Never-opened threads count everything, and missing values are not NaN.
+  assert.equal(unreadCommsCount(6, 0), 6)
+  assert.equal(unreadCommsCount(undefined, undefined), 0)
+
+  // Empty means "draw nothing" — a bubble showing 0 is worse than no bubble.
+  assert.equal(unreadBadgeText(0), '')
+  assert.equal(unreadBadgeText(-3), '')
+  assert.equal(unreadBadgeText(1), '1')
+  assert.equal(unreadBadgeText(9), '9')
+  // Capped so one busy thread cannot stretch the button it sits on.
+  assert.equal(unreadBadgeText(10), '9+')
+  assert.equal(unreadBadgeText(4000), '9+')
 })
