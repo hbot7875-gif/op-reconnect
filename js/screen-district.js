@@ -17,6 +17,7 @@ import { itemTile, itemSheet, itemsAt, itemsInPack } from './items.js'
 import { trackEngagementOnce } from './engagement.js'
 import { reconnectPlayerNext } from './reconnect-player-ui.js'
 import { openPlaylistVault } from './playlist-vault-sheet.js'
+import { chatThread } from './chat-thread.js'
 
 let teardown = null
 let sceneFor = null
@@ -917,44 +918,19 @@ function paintMissionPanel(box, d, res) {
 /** The mission's shared thread — an invite's optional note and the ongoing
  *  coordination chat once paired up are the same feature (see the
  *  migration's own comment), so this renders for anyone currently invited
- *  OR joined here, not just after both sides have accepted. Kept simple on
- *  purpose: plain text, oldest first, no read receipts or typing
- *  indicators — this is "leave your teammate a note," not a full DM inbox. */
+ *  OR joined here, not just after both sides have accepted. Rendering
+ *  itself now lives in chat-thread.js, shared with ARMY Comms
+ *  (bomb-sheet.js) — this is just the ReConnect-specific wiring on top. */
 function chatPanel(d, m, refresh) {
-  const wrap = el('div', 'reconnect-chat')
+  const wrap = el('div')
   wrap.appendChild(el('div', 'eyebrow', '💬 TEAM CHAT'))
-  const list = el('div', 'reconnect-chat-list')
-  if (!m.messages?.length) {
-    list.appendChild(el('div', 'muted', 'No messages yet — say hi to your team.'))
-  } else {
-    for (const msg of m.messages) {
-      const row = el('div', 'reconnect-chat-msg' + (msg.isMe ? ' is-me' : ''))
-      row.innerHTML = `<b>${esc(msg.isMe ? 'You' : msg.codename)}</b><span>${esc(msg.body)}</span>`
-      list.appendChild(row)
-    }
-  }
-  wrap.appendChild(list)
-
-  const composer = el('div', 'reconnect-invite-row')
-  const input = el('input', 'ob-input')
-  input.placeholder = 'Message your team…'
-  input.maxLength = 240
-  const sendBtn = el('button', 'btn btn-ghost', 'Send')
-  const send = async () => {
-    const body = input.value.trim()
-    if (!body) return
-    input.disabled = true
-    sendBtn.disabled = true
-    const r = await call('sendReconnectMessage', { agentNo: getAgentNo(), districtId: d.id, message: body })
-    input.disabled = false
-    sendBtn.disabled = false
-    if (r.success) { input.value = ''; refresh() }
-    else toast(reconnectError(r.error))
-  }
-  sendBtn.onclick = send
-  input.onkeydown = (e) => { if (e.key === 'Enter') send() }
-  composer.append(input, sendBtn)
-  wrap.appendChild(composer)
+  wrap.appendChild(chatThread(m.messages, {
+    placeholder: 'Message your team…',
+    emptyText: 'No messages yet — say hi to your team.',
+    onSend: (body) => call('sendReconnectMessage', { agentNo: getAgentNo(), districtId: d.id, message: body }),
+    onSent: refresh,
+    errorText: reconnectError,
+  }))
   return wrap
 }
 

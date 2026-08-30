@@ -21,7 +21,7 @@ import {
 import { importFillerPlaylist, addFillerManual, getFillerLibrary, removeFiller } from './lib/spotify-filler.ts'
 import { generatePlaylist, validatePlaylist, validatePlaylistFromTracks, getAlpacaOptions, generateAlpaca, previewAlpaca, adminDeleteAlpacaPlaylist } from './lib/candy-star.ts'
 import { deleteCandyPlaylist, getCandyPlaylistLibrary, setCandyPlaylistSaved, shareCandyPlaylist, reportCandyPlaylist } from './lib/playlist-vault.ts'
-import { adminGetActiveDefuse } from './lib/bomb.ts'
+import { adminGetActiveDefuse, getDefuseMessages, sendDefuseMessage } from './lib/bomb.ts'
 import { adminCreateBroadcast, adminListBroadcasts, adminDeleteBroadcast } from './lib/broadcasts.ts'
 import { adminDeleteAgent, adminGetAgent, adminGetAgentTracks, adminScanAltAccounts, adminResetAgentXp, adminDeleteInactiveAgents, sendInactiveReminders, adminListAgents } from './lib/admin-agent.ts'
 import { adminSyncAllStreams } from './lib/sync-all.ts'
@@ -168,6 +168,11 @@ const ROUTES: Record<string, Route> = {
   submitReconnectPuzzleAnswer: { auth: 'agent', handler: (sb, p) => submitReconnectPuzzleAnswer(sb, null, p) },
   // admin-gated inside the handler via SYNC_ADMIN_KEY
   launchDefuse: { auth: 'public', handler: (sb, p) => adminLaunchDefuse(sb, p) },
+  // ARMY Comms — gated inside the handler itself on real Red Zone
+  // contribution (rc_defuse_contrib.streams >= 1 for the given eventId),
+  // not just agent auth.
+  getDefuseMessages: { auth: 'agent', handler: (sb, p) => getDefuseMessages(sb, p) },
+  sendDefuseMessage: { auth: 'agent', handler: (sb, p) => sendDefuseMessage(sb, p) },
 
   // ── Candy Star Generator — player-facing ───────────────
   getAlpacaOptions: { auth: 'agent', handler: (sb, p) => getAlpacaOptions(sb, p) },

@@ -1,0 +1,96 @@
+/* ═══════════════════════════════════════════════════════════════════
+   Gameplay Preview section — PREVIEW ONLY.
+   Loaded by _preview_landing.html, not by index.html.
+
+   One new section between the hero and #brief. It reuses landing.css's
+   existing .sec rhythm (which already draws the divider via .sec + .sec),
+   so it adds no new page chrome — just a framed portrait video, a caption
+   and nothing else.
+
+   Design constraints held here:
+     - portrait 9:16, so the same file works for Reels/Stories later
+     - click-to-play only. No autoplay, no sound, never gates entry
+     - the CTA above it stays the primary action; this is optional
+     - no new colour: purple only on the play control, gold nowhere
+   ═══════════════════════════════════════════════════════════════════ */
+
+.preview-sec { text-align: center; }
+
+.preview-eyebrow {
+  display: block;
+  font-family: var(--mono, 'Share Tech Mono', monospace);
+  font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
+  color: var(--muted, #9c96b0); margin-bottom: 14px;
+}
+
+/* Portrait frame. max-height keeps a 9:16 clip from eating a whole
+   desktop screen; on a phone it just fills the column. */
+.preview-frame {
+  position: relative; margin: 0 auto; width: 100%;
+  max-width: 300px; aspect-ratio: 9 / 16; max-height: 70vh;
+  border-radius: 18px; overflow: hidden;
+  background: #08070e;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
+}
+
+.preview-frame video {
+  display: block; width: 100%; height: 100%;
+  object-fit: cover; background: #08070e;
+}
+
+/* The play control — the only purple on this section, because it is the
+   one thing here you can act on. */
+.preview-play {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  border: 0; padding: 0; cursor: pointer; background: rgba(6, 5, 13, 0.28);
+  transition: background 0.2s;
+}
+.preview-play:hover { background: rgba(6, 5, 13, 0.14); }
+.preview-play[hidden] { display: none; }
+
+.preview-play span {
+  width: 58px; height: 58px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: rgba(139, 92, 246, 0.92);
+  color: #fff; font-size: 20px; line-height: 1; padding-left: 4px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+}
+.preview-play:focus-visible { outline: 2px solid var(--purple-lt, #a78bfa); outline-offset: 3px; }
+
+.preview-cap {
+  margin-top: 14px; font-size: 13.5px; line-height: 1.6;
+  color: var(--muted, #9c96b0);
+}
+
+/* ── the not-yet-supplied state ──────────────────────────────────────
+   Deliberately NOT a mocked-up gameplay still. If the MP4 is missing the
+   section says so plainly rather than showing invented footage — and on
+   the real landing page this whole section should simply not be rendered
+   until the file exists. */
+.preview-missing {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 10px; padding: 24px;
+  text-align: center;
+  background:
+    repeating-linear-gradient(45deg, rgba(255,255,255,0.018) 0 12px, transparent 12px 24px),
+    #0b0a12;
+}
+.preview-missing b {
+  font-family: var(--mono, 'Share Tech Mono', monospace);
+  font-size: 11px; letter-spacing: 1.6px; text-transform: uppercase;
+  color: var(--muted, #9c96b0); font-weight: 400;
+}
+.preview-missing i {
+  font-style: normal; font-size: 12px; line-height: 1.65;
+  color: var(--dim, #7a7391);
+}
+.preview-missing code {
+  font-family: var(--mono, 'Share Tech Mono', monospace);
+  font-size: 11px; color: var(--purple-lt, #a78bfa);
+  word-break: break-all;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .preview-play, .preview-frame { transition: none; }
+}

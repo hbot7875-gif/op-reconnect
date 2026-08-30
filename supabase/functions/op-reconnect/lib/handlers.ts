@@ -96,7 +96,7 @@ function wardStates(content: GameContent, restored: Set<string>) {
   return unlockedWards
 }
 
-async function buildState(supabase: SupabaseDB, content: GameContent, agent: any, player: any) {
+async function buildState(supabase: SupabaseDB, content: GameContent, agent: any, player: any, manualSync = false) {
   const rules = xpRules(content)
   // Personal counting is uncapped — see config.ts's PERSONAL_COUNT_CAP.
   const cap = PERSONAL_COUNT_CAP
@@ -115,12 +115,9 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     ? Number(player.boost_multiplier) || 1
     : 1
 
-  // Bomb view first — Red Zone (target/contribution/reward) is still
-  // network-wide, and the Bomb's charge still decides brownouts and (via
-  // Personal Charge, agent-charge.ts) a player's own district survival.
-  // Its charge no longer multiplies XP, though — bomb.multiplier is display-
-  // only from here on, not fed into ensureDailyRollups below.
-  const bomb = await getBombView(supabase, content, player.agent_no)
+  // Personal Charge decides this player's own district survival. The shared
+  // Bomb is read after ensureDailyRollups below so a manual Sync persists the
+  // newest timestamped listens before Red Zone evaluates its exact window.
   const agentCharge = await getAgentChargeView(supabase, content, player.agent_no)
   const eraTimeline = await getEraTimeline(supabase, content)
   // Pending reconnect-mission invites — small, agent-scoped, cheap to
@@ -136,6 +133,11 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     ? { goals: activePd.goals, baseline: activePd.baseline || {}, activatedAt: activePd.activated_at }
     : null
   const rollups = await ensureDailyRollups(supabase, agent, player, content, personalBoostMult, goalXpScope)
+  // Red Zone (target/contribution/reward) is network-wide. Reading it after
+  // the current agent's rollup/source refresh prevents the Red Zone card
+  // from lagging one Sync behind the district progress shown beside it.
+  // bomb.multiplier remains display-only and is never fed into XP.
+  const bomb = await getBombView(supabase, content, player.agent_no, manualSync)
   const todayRow = rollups.find((r) => String(r.kst_date) === today) || null
   if ((todayRow?.raw_streams || todayRow?.counted_streams || 0) > 0) {
     logEngagementEvent(supabase, {
@@ -515,7 +517,10 @@ export async function getGameState(supabase: SupabaseDB, params: any) {
       ranks: content.config.ranks || [],
     }
   }
-  return buildState(supabase, content, agent, player)
+  // manualSync: true only from ui-hud.js's explicit "sync now" tap, never
+  // the 90s poll or tab-focus refresh — see getBombView's own doc comment
+  // for why this needs to bypass Red Zone's short progress-refresh cache.
+  return buildState(supabase, content, agent, player, !!params.manualSync)
 }
 
 export async function joinGame(supabase: SupabaseDB, params: any) {

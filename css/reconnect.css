@@ -539,6 +539,36 @@ body {
   .recovery-signal { top: 10px; left: 14px; }
   .command-tools { top: 13px; right: 13px; }
   .mission-beacon { left: 14px; bottom: 74px; width: calc(100% - 28px); }
+
+  /* Red Zone's Bomb hero carries real numbers the personal-charge circle
+     never needed — city count, your signal, a secondary charge line — on
+     top of the same sphere/timer. Measured live (see this file's own
+     convention for these hand-tuned mobile values): the plain circular
+     badge above was sized for "one big number", not four extra lines of
+     text, so it needs its own taller, non-circular card and a
+     correspondingly lower map so the two never overlap. */
+  .command-scene.is-redzone { min-height: 1112px; }
+  .command-scene.is-redzone > .city-plan { inset: 578px 4px 220px; }
+  /* Wider than the personal-charge core: this one carries a headline and a
+     one-sentence instruction, and at 210px "CITY UNDER ATTACK" broke across
+     two lines mid-phrase. Measured against the longest real headline. */
+  .command-scene.is-redzone .command-core { width: 286px; max-width: calc(100% - 24px); }
+  /* No card: the Bomb lives directly in the City, same as it always has —
+     just a soft radial vignette (identical trick the plain circular
+     personal-charge badge already uses) so the extra readout lines stay
+     legible over a busy map, never a bordered rectangle sitting on it. */
+  .command-scene.is-redzone .command-core .core-block { min-height: 448px;
+    border-radius: 0; border: 0; padding: 14px 10px 16px; backdrop-filter: none;
+    background: radial-gradient(ellipse 100% 70% at 50% 32%, rgba(8,6,16,.55) 0%, rgba(8,6,16,.24) 55%, transparent 78%); }
+  .command-scene.is-redzone .command-core .core-eyebrow { display: block; }
+  .command-scene.is-redzone .command-core .core-lbl { display: block; margin-top: 3px; }
+}
+/* The generic mobile hide-rule above is meant for personal charge's own
+   sub-label (redundant next to its big "12H"/"DARK" number) — Red Zone's
+   own sub-label carries the real city count, so it's excluded here rather
+   than adding a second, easy-to-miss show-rule far away in the file. */
+@media (max-width: 759px) {
+  .command-scene .command-core .core-read.is-redzone .core-lbl { display: block; }
 }
 .world-eyebrow {
   font-family: var(--mono); font-size: 11.5px; letter-spacing: 2.5px;
@@ -907,9 +937,17 @@ body.red-zone .wtb.now { fill: var(--crimson); filter: drop-shadow(0 0 3px rgba(
 
 .army-core { position: relative; width: 95px; height: 108px; background: none; border: none;
   cursor: pointer; padding: 0; margin: 4px 0 0;
-  --bomb: var(--purple); --charge: 0; }
-.army-core.is-attack { --bomb: var(--crimson); }
+  --bomb: var(--purple); --charge: 0; --rz-restored: 0; --rz-glow-opacity: .2; }
 .army-core.is-brownout { --bomb: #3d3852; }
+/* Extra urgency as bands escalate — these three just tune animation
+   speed, not color; is-band-restored intentionally matches nothing extra:
+   at 100% the event has already flipped to resolvedDefuse before the next
+   render, so this band is mostly a one-frame transition state, not a
+   resting look. */
+.army-core.is-band-compromised .core-glow { animation-duration: 0.9s; }
+.army-core.is-band-final-push .rc-bomb { animation-duration: 0.6s; }
+.army-core.is-band-final-push .core-glow { animation-duration: 0.7s; }
+.army-core.is-band-final-push .rc-handle::before { animation-duration: 0.6s; }
 
 /* the Voyage back-glow: one big blurred disc behind the sphere.
    Opacity now scales with --charge (set inline from real b.charge in
@@ -923,7 +961,9 @@ body.red-zone .wtb.now { fill: var(--crimson); filter: drop-shadow(0 0 3px rgba(
   border-radius: 50%; background: var(--bomb); filter: blur(26px);
   opacity: calc(0.05 + var(--charge) * 0.5);
   animation: corePulse 4.5s ease-in-out infinite; transition: background 0.8s, opacity 0.9s ease; }
-.army-core.is-attack .core-glow { animation-duration: 1.1s; }
+.army-core.is-attack .core-glow { top: 7px; width: 62px; height: 62px; margin-left: -31px;
+  background: rgba(201,47,69,.26); filter: blur(22px); opacity: var(--rz-glow-opacity, .2);
+  animation: none; }
 .army-core.is-brownout .core-glow { opacity: 0.12; animation: none; }
 
 .core-rings { position: absolute; top: 0; left: 50%; margin-left: -42px; width: 84px; height: 84px; }
@@ -931,15 +971,14 @@ body.red-zone .wtb.now { fill: var(--crimson); filter: drop-shadow(0 0 3px rgba(
    the sphere/charge-arc for attention, not a background detail. */
 .ring-outer { fill: none; stroke: var(--bomb); stroke-width: 2; transform-origin: 110px 110px;
   stroke-dasharray: 5 12; opacity: 0.3; animation: ringSpin 30s linear infinite; transition: stroke 0.8s; }
-.army-core.is-attack .ring-outer { opacity: 0.8; animation-duration: 6s; }
 .army-core.is-brownout .ring-outer { animation-play-state: paused; opacity: 0.2; }
 
 /* a second, tighter ring spinning the other way — one ring alone read as a
    single decoration; two counter-rotating reads as a machine idling. Fainter
-   and shorter-dashed than the outer one so it stays a background detail. */
+   and shorter-dashed than the outer one so it stays a background detail.
+   screen-world.js omits all ring markup during Red Zone. */
 .ring-inner { fill: none; stroke: var(--bomb); stroke-width: 1.2; transform-origin: 110px 110px;
   stroke-dasharray: 2 9; opacity: 0.2; animation: ringSpin 22s linear infinite reverse; transition: stroke 0.8s; }
-.army-core.is-attack .ring-inner { opacity: 0.6; animation-duration: 5s; }
 .army-core.is-brownout .ring-inner { animation-play-state: paused; opacity: 0.12; }
 
 /* the charge arc — live data wearing a halo */
@@ -955,8 +994,6 @@ body.red-zone .wtb.now { fill: var(--crimson); filter: drop-shadow(0 0 3px rgba(
   filter: drop-shadow(-0.5px -0.5px 0 rgba(255,224,168,0.55))
           drop-shadow(0.5px 0.5px 0.5px rgba(0,0,0,0.4))
           drop-shadow(0 0 2.5px rgba(217,173,95,0.35)); }
-.army-core.is-attack .ring-charge { stroke: var(--crimson);
-  filter: drop-shadow(0 0 4px rgba(229,56,79,0.6)); }
 .army-core.is-brownout .ring-charge { stroke: var(--dim); filter: none; }
 
 /* the Voyage bomb (.cs-bomb from Launch the Voyage) — always idle.
@@ -1018,10 +1055,54 @@ body.red-zone .wtb.now { fill: var(--crimson); filter: drop-shadow(0 0 3px rgba(
   background: rgba(255,255,255,0.16); animation: liquidSpin 9s linear infinite reverse; }
 .army-core.is-brownout .rc-fill, .army-core.is-brownout .rc-fill::after { animation-play-state: paused; }
 @keyframes liquidSpin { to { transform: rotate(360deg); } }
-.rc-logo { font-size: 19px; font-weight: 900; color: #fff; z-index: 2;
+
+.rc-logo { font-size: 19px; font-weight: 900; color: #fff; z-index: 4;
   opacity: calc(0.34 + var(--charge) * 0.61);
   text-shadow: 0 0 calc(var(--charge) * 13px) var(--bomb);
   transition: text-shadow 0.5s, opacity 0.9s ease; }
+
+/* Red Zone is one minimal rule: the original crimson liquid is the
+   remaining threat. It drains to neutral dark glass as qualified streams
+   arrive—there is no purple restored layer underneath and no surrounding
+   halo, orbit or particle decoration. */
+.army-core.is-attack .rc-sphere { background: radial-gradient(circle at 35% 28%,
+    rgba(255,255,255,.12), rgba(255,255,255,.025) 38%, rgba(0,0,0,.78));
+  border-color: rgba(255,255,255,.22); box-shadow: inset 0 0 10px rgba(0,0,0,.62); }
+.army-core.is-attack .rc-fill { display: none; }
+.army-core.is-attack .rc-logo { opacity: .88; text-shadow: 0 0 5px rgba(255,255,255,.12); }
+.army-core.is-attack .rc-shine { background: linear-gradient(180deg, rgba(255,255,255,.26), transparent); }
+.army-core.is-attack .rc-shine-2 { background: rgba(255,255,255,.12); }
+/* The dark glass shell, painted back OVER the liquid. .rc-sphere's own
+   inset shadow can't do this: an inset box-shadow paints under the
+   element's children, so the liquid covered it and a 0% Bomb flattened
+   into one uniformly lit red ball. Sitting at z-index 3 — above the liquid
+   (2), below the highlights (4) — keeps a dark rim at every fill level, so
+   the red reads as something inside a glass sphere rather than as the
+   sphere itself. */
+.army-core.is-attack .rc-sphere::after { content: ''; position: absolute; inset: 0; z-index: 3;
+  border-radius: 50%; pointer-events: none;
+  background: radial-gradient(circle at 50% 42%,
+    transparent 0 38%, rgba(10,2,7,.26) 72%, rgba(7,2,5,.62) 90%, rgba(5,1,4,.8) 100%); }
+/* Danger red: #C92F45. Deep enough to sit inside a black/purple/gold
+   system without turning brown, still unmistakably a warning. The ramp
+   only ever darkens downward — the old top stop was a bright cherry
+   (#ee5368) which is what made the surface read as glossy plastic. */
+.rz-liquid { position: absolute; z-index: 2; left: -1px; right: -1px;
+  top: calc(var(--rz-restored) * 100%); bottom: -1px;
+  background: radial-gradient(circle at 35% 18%, rgba(198,110,122,.10) 0 5%, transparent 30%),
+    linear-gradient(180deg, #c92f45 0%, #a82539 55%, #5e1122 100%);
+  /* A muted crimson sheen along the waterline, not a near-white specular
+     patch, and a heavier maroon shadow pooling at the bottom — liquid
+     under glass rather than a colored ball. */
+  box-shadow: inset 0 7px 11px rgba(190,86,101,.10),
+    inset 0 -13px 16px rgba(28,0,6,.72), 0 -2px 4px rgba(110,14,34,.45);
+  transition: top 1s cubic-bezier(.2,.75,.25,1), opacity .5s ease; }
+.rz-liquid::before { content: ''; position: absolute; left: -8%; top: -4px;
+  width: 116%; height: 8px; border-radius: 50%;
+  background: linear-gradient(180deg, #cf3a4f 0%, #b32840 72%, #85182e 100%);
+  box-shadow: inset 0 1px 1px rgba(214,150,160,.08), 0 2px 3px rgba(36,0,8,.45);
+  opacity: 1; animation: none; }
+.army-core.is-band-restored .rz-liquid { opacity: 0; }
 
 /* Glass reflections — ambient light on the shell, not the internal charge.
    Unlike everything else on the sphere these don't scale with --charge: a
@@ -1029,9 +1110,9 @@ body.red-zone .wtb.now { fill: var(--crimson); filter: drop-shadow(0 0 3px rgba(
    actually sells "glass" instead of "lit plastic". */
 .rc-shine { position: absolute; top: 15%; left: 20%; width: 34%; height: 18%;
   background: linear-gradient(180deg, rgba(255,255,255,0.35), transparent);
-  border-radius: 50%; transform: rotate(-30deg); z-index: 2; pointer-events: none; }
+  border-radius: 50%; transform: rotate(-30deg); z-index: 4; pointer-events: none; }
 .rc-shine-2 { position: absolute; top: 24%; right: 16%; width: 12%; height: 7%;
-  background: rgba(255,255,255,0.22); border-radius: 50%; z-index: 2; pointer-events: none; }
+  background: rgba(255,255,255,0.22); border-radius: 50%; z-index: 4; pointer-events: none; }
 
 .rc-handle { width: 12px; height: 43px; margin-top: -4px; position: relative; z-index: 1;
   background: linear-gradient(90deg, #050505, #222, #050505);
@@ -1093,6 +1174,66 @@ body.red-zone .wtb.now { fill: var(--crimson); filter: drop-shadow(0 0 3px rgba(
   animation: rcCountBlink 1s step-end infinite; }
 @keyframes rcCountBlink { 0% { opacity: 1; } 50% { opacity: 0.75; } }
 .core-lbl { font-family: var(--mono); font-size: 9.5px; letter-spacing: 1.6px; color: var(--dim); text-transform: uppercase; margin-top: 2px; }
+
+/* Red Zone additions to the core readout — the exact percentage lives here
+   in plain text (and in the ring's own dasharray), independent of
+   whatever the sphere itself is doing visually, per "don't rely on color
+   alone" and the newer "the sphere is never a progress gauge" direction. */
+.core-block.is-redzone .core-title { margin-top: 7px; }
+/* The instruction, directly under the headline — a readable sentence, not
+   another mono/uppercase status label. This is the line that tells a new
+   player what to actually go and do, so it gets sentence case and normal
+   text color while everything around it stays chrome. */
+.core-goal { max-width: 280px; margin: 6px auto 0; color: var(--muted);
+  font-size: 12.5px; line-height: 1.45; text-align: center; text-wrap: balance; }
+.core-goal b { color: var(--text); font-weight: 700; }
+.core-timer { margin-top: 9px; margin-bottom: 15px; font-family: var(--mono); font-size: 13px;
+  letter-spacing: 2px; line-height: 1; color: var(--dim); }
+.core-timer b { color: #ffb6c1; font-weight: 700; text-shadow: 0 0 8px rgba(229,56,79,.28); }
+/* "02:47:02 left" — the unit spelled out, so the number isn't left to be
+   guessed at as elapsed vs remaining. */
+.core-timer i { margin-left: 7px; font-style: normal; font-size: 9.5px; letter-spacing: 1.4px;
+  text-transform: uppercase; color: var(--dim); }
+.core-block.is-redzone .army-core { margin-top: 5px; }
+.core-read.is-redzone .core-pct { color: var(--text); letter-spacing: 1.6px; }
+.core-support-row { display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 7px;
+  color: var(--dim); white-space: nowrap; }
+.core-signal { margin-top: 0; text-align: center; white-space: nowrap; }
+.core-signal-lbl { display: inline; font-family: var(--mono); font-size: 9px; letter-spacing: 1.6px;
+  color: var(--dim); text-transform: uppercase; }
+/* The percentage's own unit is now a word ("% DEFUSED"), so it needs room
+   to sit next to the number instead of hugging it like a bare "%". */
+.core-read.is-redzone .core-pct i { font-size: 12px; letter-spacing: 1.6px; }
+.core-signal-lbl::after { content: ' · '; }
+.core-signal-val { display: inline; font-family: var(--mono); font-size: 10.5px;
+  font-weight: 700; letter-spacing: .4px; color: var(--crimson); }
+.core-signal.is-qualified .core-signal-val { color: var(--text); }
+.core-charge-pill { display: block; margin: 0; padding: 2px 0 2px 10px; border-radius: 0;
+  background: none; border: 0; border-left: 1px solid rgba(255,255,255,.12); color: var(--dim); font-family: var(--mono);
+  font-size: 9.5px; letter-spacing: .5px; text-transform: uppercase; cursor: pointer; }
+.core-charge-pill:hover { color: var(--purple-lt); }
+/* ARMY Comms, promoted out of the details sheet onto the City screen.
+   Sized as a real touch target and dashed rather than solid: it's a live
+   room to step into, not the event's primary action (streaming is). */
+.core-comms { display: block; margin: 11px auto 0; min-height: 34px; padding: 8px 16px;
+  max-width: 100%; background: rgba(139,92,246,.10); border: 1px dashed rgba(139,92,246,.55);
+  border-radius: var(--r); color: var(--purple-lt); font-family: var(--mono); font-size: 10.5px;
+  font-weight: 700; letter-spacing: .9px; text-transform: uppercase; cursor: pointer;
+  transition: border-color .2s, background .2s; }
+.core-comms:hover { background: rgba(139,92,246,.18); border-color: var(--purple-lt); }
+/* Locked reads as "not yet", not as broken: same shape, no purple pull. */
+.core-comms.is-locked { background: none; border-color: var(--border); color: var(--dim);
+  cursor: default; opacity: .75; }
+/* What ARMY Comms actually is, in words that need no decoding. Sentence
+   case and lower contrast than the button above it: an explanation, not a
+   second thing to tap. */
+.core-comms-sub { margin-top: 5px; color: var(--dim); font-size: 11px; line-height: 1.4;
+  text-align: center; }
+.rz-comms-sub { margin-top: 8px; text-align: center; }
+/* The Bomb is the way into everything else about the event — say so, since
+   a bare sphere carries no affordance of its own. */
+.core-hint { margin-top: 9px; color: var(--dim); font-family: var(--mono); font-size: 9px;
+  letter-spacing: 1.1px; text-transform: uppercase; text-align: center; }
 
 /* The pulse has to carry --charge too. Hardcoding opacity here silently beat
    .core-glow's own charge-scaled opacity — the animation always wins over the
@@ -1197,29 +1338,79 @@ body.red-zone .wtb.now { fill: var(--crimson); filter: drop-shadow(0 0 3px rgba(
 }
 body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 
-/* ── Red Zone — the one place crimson is allowed ── */
-.redzone {
-  background: linear-gradient(165deg, rgba(229,56,79,0.16), rgba(229,56,79,0.04));
-  border: 1px solid rgba(229,56,79,0.42); border-radius: var(--r-lg); padding: 16px 17px 17px;
-}
-.rz-head { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 10.5px;
-  letter-spacing: 2px; text-transform: uppercase; color: var(--crimson); }
-.rz-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--crimson);
-  animation: rzBlink 1.4s ease-in-out infinite; }
-@keyframes rzBlink { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
-.rz-title { font-family: var(--disp); font-weight: 800; font-size: 17px; margin-top: 8px; }
-.rz-msg { color: var(--muted); font-size: 14px; line-height: 1.55; margin-top: 6px; }
-.rz-goal-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-top: 14px;
-  font-family: var(--mono); font-size: 10.5px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
-.rz-num { color: var(--text); font-size: 13px; letter-spacing: 0; }
-.rz-num i { font-style: normal; color: var(--dim); font-size: 11px; }
-.rz-bar { height: 7px; border-radius: 4px; background: rgba(0,0,0,0.4); overflow: hidden; margin-top: 7px; }
-.rz-bar i { display: block; height: 100%; border-radius: 4px; background: var(--crimson); transition: width 0.5s; }
-.rz-timer { display: flex; align-items: baseline; justify-content: space-between; margin-top: 10px;
-  font-family: var(--mono); font-size: 10.5px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
-.rz-timer b { font-size: 17px; font-weight: 700; color: var(--crimson); letter-spacing: 2px; }
-.rz-foot { font-family: var(--mono); font-size: 10.5px; color: var(--dim); margin-top: 9px; line-height: 1.6; }
-.redzone .btn { display: block; width: 100%; margin-top: 14px; }
+/* ── Red Zone ──
+   The old standalone banner card (.redzone/.rz-head/.rz-title/...) is gone:
+   the redesign folds Red Zone into the ARMY Bomb itself (see .army-core.
+   is-attack/.is-band-* above and .core-signal/.core-timer below) instead of
+   a second card competing with it for space. What's left here is the
+   details sheet you get by tapping the Bomb (redZoneSheet, bomb-sheet.js)
+   and its ARMY Comms / result-sheet siblings. */
+.redzone-sheet .rz-stats { margin-top: 14px; }
+.rz-stat-line { display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  padding: 8px 0; border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: 12px; }
+.rz-stat-line:last-child { border-bottom: none; }
+.rz-stat-line span { color: var(--dim); letter-spacing: .8px; text-transform: uppercase; font-size: 10px; }
+.rz-stat-line b { color: var(--text); font-weight: 700; font-size: 12.5px; text-align: right; }
+/* The one stake worth seeing without a tap — see this session's Blackout
+   brief: "the IF WE FAIL line becomes important" once it's everyone's
+   Bomb, not just Defenders'. Deliberately not inside the collapsed
+   How-it-works disclosure below. */
+.rz-blackout-warn { margin-top: 14px; padding: 11px 13px; border: 1px solid rgba(0,0,0,0.55);
+  border-radius: var(--r); background: rgba(0,0,0,0.35); }
+.rz-blackout-warn b { display: block; font-family: var(--mono); font-size: 9.5px; letter-spacing: 1.6px;
+  color: var(--dim); text-transform: uppercase; }
+.rz-blackout-warn span { display: block; margin-top: 4px; font-size: 13px; line-height: 1.45; color: var(--text); }
+.rz-comms-btn { display: block; width: 100%; margin-top: 16px; }
+.rz-comms-btn:disabled { opacity: 0.55; cursor: default; }
+.rz-comms-hint { margin-top: 6px; font-size: 11.5px; line-height: 1.45; }
+.rz-how-body p { margin: 0 0 8px; }
+.rz-how-body p:last-child { margin-bottom: 0; }
+/* An admin's free-text note for this event — secondary to the generated
+   instruction above it, never a replacement for it. */
+.rz-event-note { margin-top: 6px !important; font-style: italic; line-height: 1.5; }
+
+/* ARMY Comms — a live channel inside the compromised network, not
+   another dashboard card. .dc-glow is the whole visual idea: the exact
+   same red→purple color the Bomb itself is showing (interpolateBombColor,
+   reused not reinvented), painted as one soft blurred wash behind the
+   thread instead of a second progress bar. */
+.dc-sheet { position: relative; overflow: hidden; }
+.dc-glow { position: absolute; inset: -15%; z-index: 0; pointer-events: none; opacity: 0.5;
+  background: radial-gradient(circle at 50% 18%, var(--dc-bomb) 0%, transparent 68%);
+  filter: blur(20px); transition: background 1.1s ease; }
+.dc-sheet > * { position: relative; z-index: 1; }
+.dc-head { margin-bottom: 2px; }
+.dc-body p { line-height: 1.5; }
+/* Quiet, secondary — a Close that reads as "step back", not the sheet's
+   main action (there isn't one; reading/sending is). */
+.dc-close { display: block; margin: 16px auto 0; padding: 4px 6px; background: none; border: none;
+  color: var(--dim); font-family: var(--mono); font-size: 10.5px; letter-spacing: .5px; text-transform: uppercase;
+  text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.dc-close:hover { color: var(--muted); }
+/* The result sheet's own entry into the (now archived) thread — dashed and
+   quiet, secondary to the Close button below it. */
+.dc-link { display: block; width: 100%; margin-top: 12px; padding: 9px 10px; background: none;
+  border: 1px dashed var(--border); border-radius: var(--r); color: var(--purple-lt); font-family: var(--mono);
+  font-size: 10.5px; letter-spacing: .4px; text-transform: uppercase; text-align: center; cursor: pointer; }
+.dc-link:hover { border-color: var(--purple-lt); }
+
+/* chatThread's 'radio' skin (ARMY Comms only — ReConnect Team Chat
+   keeps the normal bubble look). Drops the card treatment per-message:
+   no borders, no backgrounds, no bubble alignment — just short lines,
+   closer to a live transcript than a normal group chat. */
+.reconnect-chat.is-radio { border-top: none; padding-top: 0; margin-top: 10px; }
+.reconnect-chat.is-radio .reconnect-chat-list { gap: 2px; }
+.reconnect-chat.is-radio .reconnect-chat-msg { max-width: 100%; padding: 3px 2px; background: none; border: none; border-radius: 0; }
+.reconnect-chat.is-radio .reconnect-chat-msg b { display: inline; margin: 0 6px 0 0; font-size: 10px; }
+.reconnect-chat.is-radio .reconnect-chat-msg span { display: inline; font-size: 13px; }
+.reconnect-chat.is-radio .reconnect-chat-msg.is-me { margin-left: 0; background: none; border: none; }
+.reconnect-chat.is-radio .reconnect-chat-msg.is-me span,
+.reconnect-chat.is-radio .reconnect-chat-msg.is-me b { text-align: left; }
+/* System lines as small atmospheric dividers, not a bordered card — a
+   plain dim caption is enough to read as "the network, not a person". */
+.reconnect-chat.is-radio .reconnect-chat-msg.is-system { margin: 6px 0; padding: 2px 2px; border-top: none; }
+.reconnect-chat.is-radio .reconnect-chat-msg.is-system span { color: var(--dim); opacity: 0.85; }
+.reconnect-chat.is-radio .reconnect-chat-readonly { margin-top: 6px; padding: 8px 2px 0; background: none; border: none; border-top: 1px dashed var(--border); border-radius: 0; }
 
 /* ── current op ── */
 .op-card { background: var(--surface); border: 1px solid var(--border);
@@ -2342,7 +2533,7 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 .reconnect-row-msg:empty { display: none; }
 .reconnect-row-msg.is-error { color: var(--crimson); }
 .reconnect-invite-row { display: flex; gap: 8px; margin-top: 12px; }
-.reconnect-invite-row .ob-input { flex: 1; }
+.reconnect-invite-row .ob-input { flex: 1; min-width: 0; }
 .reconnect-invite-actions { display: flex; gap: 8px; margin-top: 12px; }
 .reconnect-invite-actions .btn { flex: 1; margin-top: 0; }
 
@@ -2364,6 +2555,29 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 .reconnect-chat-msg.is-me { margin-left: auto; background: var(--gold-soft); border-color: rgba(217,173,95,0.35); }
 .reconnect-chat-msg.is-me b { color: var(--gold); text-align: right; }
 .reconnect-chat-msg.is-me span { text-align: right; display: block; }
+/* System messages (defender-count milestones, progress bands, final push,
+   resolution) — centered, no sender label, dimmer than a real agent's
+   bubble so the thread still reads as "people talking" with the odd
+   automated note dropped in, not a log console. Shared by ARMY Comms
+   and (structurally) available to any future chatThread() caller. */
+.reconnect-chat-msg.is-system { max-width: 100%; margin: 2px auto; padding: 6px 10px; text-align: center;
+  background: none; border: none; border-top: 1px dashed var(--border); border-radius: 0; }
+.reconnect-chat-msg.is-system span { display: block; color: var(--dim); font-family: var(--mono);
+  font-size: 10.5px; letter-spacing: .4px; text-transform: uppercase; }
+/* Read-only note replaces the composer once a thread resolves — the
+   messages above stay exactly as they were (archived, not deleted). */
+.reconnect-chat-readonly { margin-top: 4px; padding: 9px 11px; border-radius: var(--r);
+  background: rgba(255,255,255,.03); border: 1px dashed var(--border);
+  color: var(--dim); font-family: var(--mono); font-size: 10.5px; letter-spacing: .3px; text-align: center; }
+/* Composer — the text field is the important half of this row, so it takes
+   the leftover width and Send stays at its own natural size. min-width: 0
+   only lets it shrink to the 160px basis; below that the field keeps the
+   full line and Send drops beneath it, right-aligned. */
+.reconnect-chat-composer { display: flex; flex-wrap: wrap; align-items: center;
+  justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.reconnect-chat-composer .ob-input { flex: 1 1 160px; width: auto; min-width: 0; }
+.reconnect-chat-composer .btn { flex: 0 0 auto; width: auto; margin-top: 0;
+  padding: 11px 18px; font-size: 12px; }
 
 .shelf { margin-top: 22px; }
 .shelf-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
@@ -2531,6 +2745,11 @@ body.overlay-open { overflow: hidden; }
   padding: 22px; max-width: 420px; width: 100%; max-height: 82vh; overflow-y: auto; }
 .sheet h3 { font-family: var(--disp); font-size: 17px; margin: 8px 0 10px; }
 .sheet .btn-ghost { display: block; width: 100%; }
+/* …except beside a text field: a 100%-wide button in a flex row takes the
+   whole line and collapses the input to a sliver (ARMY Comms' composer,
+   the puzzle answer row). In those rows the button keeps its own size. */
+.sheet .reconnect-chat-composer .btn, .sheet .reconnect-invite-row .btn {
+  display: inline-block; width: auto; flex: 0 0 auto; margin-top: 0; }
 
 /* ── ARMY Bomb dashboard ── */
 .bomb-dash .bd-status { font-family: var(--disp); font-weight: 800; font-size: 18px; margin-top: 6px; }

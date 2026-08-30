@@ -13,6 +13,7 @@ import { fetchStreamRows } from './streams.ts'
 import { flagStreamRows, findPossibleAlts, modesByAgentNo, IDENTITY_FIELDS } from './police-check.ts'
 import { sendMail, bombReminderEmail, mailerConfigured } from './mailer.ts'
 import { adminReconnectHealthForAgent } from './reconnect-missions.ts'
+import { buildAgentDiary } from './admin-diary.js'
 
 /** j***@gmail.com — enough to confirm "yes that's their address" without
  *  displaying it in full. This is sensitive, support-only data. */
@@ -109,9 +110,10 @@ export async function adminGetAgent(supabase: SupabaseDB, params: any) {
   let level = 1
   let rank: string | null = null
   let reconnectHealth: any[] = []
+  let content: any = null
 
   if (player) {
-    const content = await loadContent(supabase)
+    content = await loadContent(supabase)
     xp = await totalXp(supabase, agent.agent_no)
     level = levelFor(content, xp).level
     rank = rankFor(content, xp).title
@@ -140,6 +142,23 @@ export async function adminGetAgent(supabase: SupabaseDB, params: any) {
     reconnectHealth = await adminReconnectHealthForAgent(supabase, content, agent.agent_no)
   }
 
+  // The diary is a read-only view over systems that already persist these
+  // moments. A failed optional source must never break the support lookup:
+  // older environments can still show the sources they do have.
+  const [{ data: feedRows }, { data: xpRows }, { data: technicalRows }] = await Promise.all([
+    supabase.from('rc_feed_events')
+      .select('event_type, payload, dedup_key, created_at')
+      .eq('agent_no', agent.agent_no).order('created_at', { ascending: false }).limit(160),
+    supabase.from('rc_xp_ledger')
+      .select('amount, source, created_at')
+      .eq('agent_no', agent.agent_no).order('created_at', { ascending: false }).limit(400),
+    supabase.from('rc_engagement_events')
+      .select('event_type, screen, district_id, created_at')
+      .eq('agent_no', agent.agent_no).order('created_at', { ascending: false }).limit(60),
+  ])
+  const districtNames = Object.fromEntries((content?.districts || []).map((district: any) => [district.id, district.name]))
+  const gameDiary = buildAgentDiary({ feedRows: feedRows || [], xpRows: xpRows || [], districtNames })
+
   return {
     success: true,
     agent: {
@@ -156,7 +175,10 @@ export async function adminGetAgent(supabase: SupabaseDB, params: any) {
       musicatPublicId: agent.musicat_public_id,
       hasPin: !!agent.scrobble_pin,
       uplinkBroken: uplinkBroken(agent),
-      progress, reconnectHealth,
+      progress, reconnectHealth, gameDiary,
+      technicalEvents: (technicalRows || []).map((row: any) => ({
+        eventType: row.event_type, screen: row.screen, districtId: row.district_id, createdAt: row.created_at,
+      })),
     },
   }
 }

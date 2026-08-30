@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bomb containment-field preview (LOCAL ONLY)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/reconnect.css">
+<style>
+  body { background: #060509; margin: 0; padding: 50px 40px 80px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 70px 40px; justify-items: center; width: 900px; }
+  .cell { display: flex; flex-direction: column; align-items: center; width: 170px; gap: 285px; }
+  .cell .army-core { margin: 0; transform: scale(3.4); transform-origin: top center; }
+  .stage { color: #c4b5fd; font-family: 'Share Tech Mono', monospace; font-size: 18px; letter-spacing: 1px; }
+</style>
+</head>
+<body></body>
+<script>
+  const CIRC = 2 * Math.PI * 106
+  const stages = [0, 0.25, 0.5, 0.75, 0.9, 1]
+  for (const frac of stages) {
+    const cell = document.createElement('div')
+    cell.className = 'cell'
+    cell.innerHTML = `
+      <button class="army-core is-attack${frac >= 1 ? ' is-band-restored' : ''}" style="--charge:1;--rz-restored:${frac};--rz-glow:rgb(${Math.round(229 + (139 - 229) * frac)}, ${Math.round(56 + (92 - 56) * frac)}, ${Math.round(79 + (246 - 79) * frac)})">
+        <div class="core-glow"></div>
+        <svg class="core-rings" viewBox="0 0 220 220" aria-hidden="true">
+          <circle class="ring-outer" cx="110" cy="110" r="98"></circle>
+          <circle class="ring-inner" cx="110" cy="110" r="90"></circle>
+          <circle class="ring-charge-bg" cx="110" cy="110" r="106"></circle>
+          <circle class="ring-charge" cx="110" cy="110" r="106" transform="rotate(-90 110 110)"
+            stroke-dasharray="${(CIRC * 0.62).toFixed(1)} ${CIRC.toFixed(1)}"></circle>
+        </svg>
+        <div class="core-particles"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+        <div class="rc-bomb">
+          <div class="rc-sphere">
+            <span class="rc-fill"></span>
+            <span class="rz-liquid" aria-hidden="true"></span>
+            <span class="rc-shine"></span>
+            <span class="rc-shine-2"></span>
+            <span class="rc-logo">⟭⟬</span>
+          </div>
+          <div class="rc-handle"><span class="rc-grip"></span><span class="rc-grip"></span></div>
+        </div>
+      </button>
+      <div class="stage">${Math.round(frac * 100)}% restored</div>
+    `
+    document.body.appendChild(cell)
+  }
+</script>
+</html>

@@ -1,0 +1,116 @@
+/* ═══════════════════════════════════════════════════════════════════
+   SIGNAL SWEEP — revision 2. PREVIEW ONLY.
+
+   Scoped entirely under .ap-after. Nothing here touches production until
+   it is deliberately merged with the prefix stripped.
+
+   Revision 1 was rejected for the right reason: it fixed the colour
+   contract but spent gold on everything that qualified — completed day
+   cells, weekly totals, completion text and the overall state all
+   competed at the same weight, so nothing led.
+
+   THE RULE THIS REVISION FOLLOWS
+     Gold marks the achievement. It does not paint the evidence for it.
+
+   Which resolves to a strict hierarchy — gold appears exactly once per
+   level of the component, always as a mark or a single word, never as a
+   fill:
+     panel   the status word, when the day is actually cleared
+     track   the ✓ glyph, when that track is done
+     day     a 3px dot, when that day was cleared
+   Everything else that is merely evidence — day cells, weekly counts,
+   reward lines, progress bars, the week tag — is neutral or purple.
+
+     purple   active / in progress
+     gold     completed / earned
+     neutral  historical / supporting evidence
+     absence  shape: hollow, dashed, dimmed — never a colour
+
+   No green anywhere. No fourth colour introduced.
+   ═══════════════════════════════════════════════════════════════════ */
+
+
+/* ── PANEL ────────────────────────────────────────────────────────────
+   One gold word, and only when the day is genuinely cleared. While the
+   day is in progress the count is purple, because that is what purple
+   means everywhere else in the game. */
+.ap-after .side-mission-today { color: var(--purple-lt); }
+.ap-after .side-missions.is-cleared .side-mission-today { color: var(--gold); }
+
+/* The week tag is secondary to today — it stays neutral in both states so
+   it cannot compete with the headline. The words already carry it. */
+.ap-after .side-mission-week-tag { color: var(--dim); }
+.ap-after .side-mission-week-tag.is-done { color: var(--muted); }
+
+/* Reward lines are a record of what was earned, not the achievement
+   itself. Supporting information, so: neutral. This is the single
+   biggest reduction in competing gold from revision 1. */
+.ap-after .side-mission-reward { color: var(--dim); }
+.ap-after .side-missions.is-cleared .side-mission-reward { color: var(--muted); }
+.ap-after .side-mission-week-reward { color: var(--dim); }
+.ap-after .side-mission-week-reward.is-done { color: var(--muted); }
+
+
+/* ── TRACK ROW ────────────────────────────────────────────────────────
+   The check is the mark. A thin gold rule and a gold glyph — no filled
+   disc, so a finished row reads as ticked rather than highlighted. */
+.ap-after .side-mission-track.is-done .side-track-check {
+  border-color: rgba(217,173,95,.55); color: var(--gold); background: none;
+}
+
+/* The weekly count is evidence of the achievement, not the achievement.
+   Neutral in both the row and the sheet. */
+.ap-after .side-track-week { color: var(--muted); }
+.ap-after .side-sheet-title span { color: var(--muted); }
+
+/* Progress is purple, full stop — the bar was a purple→gold gradient, so
+   every row was part-gold at all times regardless of state. */
+.ap-after .side-track-bar i { background: var(--purple); }
+
+
+/* ── SHEET STATUS ─────────────────────────────────────────────────────
+   ok = gold (the achievement word), warn = purple (still in progress). */
+.ap-after .side-sheet-stat b.ok { color: var(--gold); }
+.ap-after .side-sheet-stat b.warn { color: var(--purple-lt); }
+
+/* The per-track line already begins with a ✓ glyph, so it does not need
+   to be gold as well — that was two marks for one fact. */
+.ap-after .side-sheet-today.ok { color: var(--muted); }
+
+
+/* ── THE SEVEN-DAY STRIP ──────────────────────────────────────────────
+   The part revision 1 got most wrong: every cleared day was a filled
+   gold tile, so six gold tiles shouted louder than the one gold word
+   that actually reported the week.
+
+   Now: the cell is graphite (it is evidence — what you did, historical),
+   and a single 3px gold dot in the corner is the confirmation. The count
+   inside stays neutral and legible. */
+.ap-after .side-sheet-days > span { position: relative; }
+
+.ap-after .side-sheet-days > span.done {
+  border-color: rgba(255,255,255,.16);
+  background: rgba(255,255,255,.05);
+  color: var(--muted);
+}
+.ap-after .side-sheet-days > span.done b { color: var(--text); }
+/* the whole gold budget for a completed day: one dot */
+.ap-after .side-sheet-days > span.done::after {
+  content: ''; position: absolute; top: 4px; right: 4px;
+  width: 3px; height: 3px; border-radius: 50%; background: var(--gold);
+}
+
+/* A missed day is an absence. Hollow and dashed, dimmed — read by shape,
+   not by colour. Distinct from a future day because it is dashed and
+   carries a real 0, where a future day is solid, fainter and carries a
+   placeholder. */
+.ap-after .side-sheet-days > span.miss {
+  border-style: dashed; border-color: rgba(255,255,255,.13);
+  background: none; color: var(--dim); opacity: .8;
+}
+
+/* Not yet happened — quietest of the three, and solid so it never reads
+   as a miss. */
+.ap-after .side-sheet-days > span.future {
+  border-color: rgba(255,255,255,.07); background: none; opacity: .55;
+}

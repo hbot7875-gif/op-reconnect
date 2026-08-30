@@ -16,6 +16,10 @@
     // #signedout replays the front door (no session at all).
     if (location.hash.includes('signedout')) localStorage.removeItem('rc_agent')
     else localStorage.setItem('rc_agent', JSON.stringify({ agentNo: 'AGENT000', handle: 'hopesizeyouknow', sessionToken: 'mock-token' }))
+    // Skip the one-time School/Exam mode nudge — unrelated to whatever this
+    // preview load is actually for, and it steals first-focus/blocks the
+    // screen behind it every time.
+    localStorage.setItem('rc_seen_exam_mode_announce:AGENT000', '1')
 
     const WARDS = [
       { id: 'mono',      name: 'Mono Ward',      status: 'active',   restoredCount: 7,  totalCount: 25 },
@@ -218,8 +222,144 @@
       }
     }
 
-    if (location.hash.includes('attack')) {
-      STATE.bomb.defuse = { title: 'THE NETWORK IS UNDER ATTACK', message: 'An infiltrator is draining the core. Stream together to defuse it.', progress: 640, target: 1000, yourStreams: 18, rewardXp: 25, activeUntil: new Date(Date.now() + (2 * 3600 + 47 * 60 + 12) * 1000).toISOString() }
+    // Red Zone preview fixtures — the redesign folds the whole event into
+    // the ARMY Bomb itself (coreBlock, screen-world.js) and now Defender
+    // Comms' own background glow (bomb-sheet.js's dc-glow), both reading
+    // the same real progress/target — one 7-stage table drives every
+    // comparison screenshot instead of two drifting sets of fixtures.
+    //   #rz-0    0%   COMPROMISED — deep red, nobody qualified yet
+    //   #rz-25   25%  STABILIZING — purple just starting to show
+    //   #rz-50   50%  HALFWAY — clear transition
+    //   #rz-75   75%  STABILIZING — purple dominant, red still present
+    //   #rz-90   93%  FINAL PUSH — almost fully purple
+    //   #rz-100  100% SIGNAL RESTORED (resolvedDefuse, success)
+    //   #rz-fail 86%  BLACKOUT (resolvedDefuse, failed)
+    // #rz-100 / #rz-fail clear the one-shot "already shown" localStorage
+    // flag so the result sheet reliably replays on every preview load.
+    const RZ_ID = 'preview-defuse-1'
+    const RZ_TARGET = 1000
+    const RZ_STAGES = {
+      'rz-0':    { progress: 0,   yourStreams: 3,  defenderAgents: 5  },
+      'rz-25':   { progress: 250, yourStreams: 4,  defenderAgents: 6  },
+      'rz-50':   { progress: 500, yourStreams: 7,  defenderAgents: 11 },
+      'rz-75':   { progress: 750, yourStreams: 18, defenderAgents: 19 },
+      'rz-90':   { progress: 930, yourStreams: 18, defenderAgents: 22 },
+      'rz-100':  { progress: 1000, yourStreams: 18, defenderAgents: 24, resolved: 'defused' },
+      'rz-fail': { progress: 860, yourStreams: 18, defenderAgents: 21, resolved: 'failed' },
+      // Legacy aliases from before the 7-stage table, kept so any old link
+      // to this preview still shows something sensible.
+      'attack':             { progress: 640, yourStreams: 18, defenderAgents: 14 },
+      'attack-compromised': { progress: 120, yourStreams: 18, defenderAgents: 5 },
+      'attack-final':       { progress: 950, yourStreams: 18, defenderAgents: 23 },
+      'attack-nodefender':  { progress: 640, yourStreams: 0,  defenderAgents: 14 },
+      'defused':            { progress: 1000, yourStreams: 18, defenderAgents: 24, resolved: 'defused' },
+      'blackout':           { progress: 860, yourStreams: 18, defenderAgents: 21, resolved: 'failed' },
+    }
+    // Longest match wins: '#attack-nodefender' contains 'attack' too, and
+    // plain insertion order would quietly hand it the wrong fixture.
+    const rzKey = Object.keys(RZ_STAGES)
+      .filter((k) => location.hash.includes(k))
+      .sort((a, b) => b.length - a.length)[0]
+    if (rzKey) {
+      const s = RZ_STAGES[rzKey]
+      if (s.resolved) {
+        try { localStorage.removeItem('rc_last_defuse_result_shown') } catch (_) {}
+        STATE.bomb.resolvedDefuse = {
+          id: RZ_ID, status: s.resolved, title: 'THE NETWORK IS UNDER ATTACK',
+          target: RZ_TARGET, progress: s.progress, rewardXp: 500, minimumStreams: 7,
+          defenderAgents: s.defenderAgents, yourStreams: s.yourStreams, isQualified: true,
+          yourXpAwarded: s.resolved === 'defused' ? 62 : 0,
+        }
+        // Real Blackout wiring: applyBlackout() sets charged_until to now(),
+        // so the very next agentCharge read already sees isDark:true — the
+        // Bomb goes dark automatically through the existing brownout look,
+        // no special-cased "blackout Bomb" skin needed. Mirrored here so
+        // the preview shows what production will actually render.
+        if (s.resolved === 'failed') { AGENT_CHARGE.isDark = true; AGENT_CHARGE.hoursRemaining = 0 }
+      } else {
+        STATE.bomb.defuse = {
+          id: RZ_ID, title: 'THE NETWORK IS UNDER ATTACK',
+          message: 'An infiltrator is draining the core. Stream together to defuse it.',
+          progress: s.progress, target: RZ_TARGET, yourStreams: s.yourStreams,
+          minimumStreams: 7, qualifiedAgents: Math.max(0, s.defenderAgents - 2),
+          defenderAgents: s.defenderAgents, rewardXp: 500,
+          activeUntil: new Date(Date.now() + (2 * 3600 + 47 * 60 + 12) * 1000).toISOString(),
+          isDefender: s.yourStreams >= 1, isQualified: s.yourStreams >= 7,
+        }
+        // PREVIEW ONLY: #track / #album attaches a per-event streaming
+        // target so the generated instruction can be reviewed in both
+        // shapes (see redZoneTarget() in js/red-zone-ui.js). No such column
+        // exists yet — with neither hash the fixture matches production,
+        // where any eligible BTS play counts and the copy says exactly that.
+        if (location.hash.includes('album')) STATE.bomb.defuse.targetAlbum = 'ARIRANG'
+        else if (location.hash.includes('track')) STATE.bomb.defuse.targetTrack = 'Haegeum'
+      }
+    }
+    // ARMY Comms preview thread — the same realistic sample messages at
+    // every stage, so only the background glow changes between screenshots.
+    // Mutable so posting in the sheet reflects back into the list without a
+    // page reload.
+    const DC_MESSAGES = [
+      { isMe: false, isSystem: true, body: 'ARMY Comms unlocked — the signal is compromised.' },
+      { isMe: false, codename: 'signalbloom', body: 'pushing Arirang on repeat, join in!' },
+      { isMe: false, codename: 'violetorbit', body: 'streaming from two accounts rn' },
+      { isMe: true, codename: 'You', body: 'on it 💜' },
+      { isMe: false, isSystem: true, body: '500 / 1,000 streams — halfway there.' },
+      { isMe: false, codename: 'signalbloom', body: 'almost there army lets goo' },
+    ]
+
+    // ReConnect simplification fixtures. These stay inside the local preview
+    // harness and deliberately exercise the same rendering path as the game.
+    const reconnectPreview = location.hash.match(/reconnect-([a-z0-9]+)/)?.[1] || ''
+    let RECONNECT_RESPONSE = null
+    let RECONNECT_CANDIDATES = []
+    if (reconnectPreview) {
+      STATE.activeDistrict.reconnect = {
+        id: 'connect-swim', label: 'SWIM Signal Link', variant: 'connect', done: false,
+      }
+      const me = { agentNo: 'AGENT000', codename: 'moonchild7', status: 'joined', isMe: true, streams: 6 }
+      const teammate = { agentNo: 'AGENT053', codename: 'purplewhale', status: 'joined', isMe: false, streams: 5 }
+      const third = { agentNo: 'AGENT086', codename: 'starlight7', status: 'joined', isMe: false, streams: 3 }
+      const mission = {
+        id: 'preview-mission', status: 'open', requiredAgents: reconnectPreview === 'healthy3' ? 3 : 2,
+        isCreator: true, expiresAt: new Date(Date.now() + 5 * 86400000).toISOString(),
+        sharedTrack: { label: 'SWIM', progress: 11, target: 25 }, messages: [], participants: [me],
+      }
+      if (reconnectPreview === 'pending') {
+        mission.participants.push({ agentNo: 'AGENT053', codename: 'purplewhale', status: 'invited', isMe: false })
+      } else if (reconnectPreview === 'expired') {
+        mission.participants.push({ agentNo: 'AGENT053', codename: 'purplewhale', status: 'invited', inviteExpired: true, removable: true, isMe: false })
+      } else if (reconnectPreview === 'healthy2' || reconnectPreview === 'extended') {
+        mission.participants.push(teammate)
+      } else if (reconnectPreview === 'healthy3') {
+        mission.participants.push(teammate, third)
+        mission.sharedTrack = { label: 'SWIM', progress: 14, target: 25 }
+      } else if (reconnectPreview === 'complete') {
+        mission.status = 'complete'
+        mission.participants.push(teammate)
+        mission.sharedTrack = { label: 'SWIM', progress: 25, target: 25 }
+      }
+      if (reconnectPreview === 'extended') {
+        STATE.activeDistrict.expiresAt = new Date(Date.now() + 8 * 86400000).toISOString()
+        STATE.activeDistrict.daysLeft = 8
+        STATE.activeDistrict.deadlineExtended = true
+      }
+      if (reconnectPreview === 'puzzle') {
+        STATE.activeDistrict.reconnect = {
+          id: 'cipher-signal', label: 'Lost Frequency', variant: 'cipher', done: false,
+          prompt: 'Decode the final word in the signal.', attemptsLeft: 0,
+        }
+      } else {
+        RECONNECT_RESPONSE = {
+          success: true, available: true, variant: 'connect',
+          config: { requiredAgents: mission.requiredAgents, sharedTrack: { label: 'SWIM', target: 25 } },
+          mission,
+        }
+      }
+      RECONNECT_CANDIDATES = [
+        { agentNo: 'AGENT114', codename: 'signalbloom', online: true, waitingSince: new Date(Date.now() - 25 * 60000).toISOString() },
+        { agentNo: 'AGENT050', codename: 'violetorbit', online: false, waitingSince: new Date(Date.now() - 4 * 3600000).toISOString() },
+      ]
     }
 
     // #onboard replays a brand-new agent's first run (joined: false).
@@ -259,6 +399,24 @@
         }
         if (body.action === 'getAgentCharge') {
           return { json: async () => ({ success: true, charge: JSON.parse(JSON.stringify(AGENT_CHARGE)) }) }
+        }
+        if (body.action === 'getDefuseMessages') {
+          if (STATE.bomb.defuse && !STATE.bomb.defuse.isDefender) {
+            return { json: async () => ({ success: false, error: 'not_a_defender' }) }
+          }
+          const readOnly = !STATE.bomb.defuse // resolved (defused/blackout hashes) — archived
+          return { json: async () => ({ success: true, readOnly, messages: JSON.parse(JSON.stringify(DC_MESSAGES)) }) }
+        }
+        if (body.action === 'sendDefuseMessage') {
+          if (!STATE.bomb.defuse) return { json: async () => ({ success: false, error: 'event_resolved' }) }
+          DC_MESSAGES.push({ isMe: true, codename: 'You', body: String(body.message || '').slice(0, 240) })
+          return { json: async () => ({ success: true }) }
+        }
+        if (body.action === 'getReconnectMission' && RECONNECT_RESPONSE) {
+          return { json: async () => JSON.parse(JSON.stringify(RECONNECT_RESPONSE)) }
+        }
+        if (body.action === 'getInviteCandidates' && reconnectPreview) {
+          return { json: async () => ({ success: true, candidates: JSON.parse(JSON.stringify(RECONNECT_CANDIDATES)), stillOnHomeBase: 0, alertActive: false }) }
         }
         if (body.action === 'feedCharge') {
           if (AGENT_CHARGE.chargeCells < 1) return { json: async () => ({ success: false, error: 'not_enough_charge_cells' }) }
@@ -351,10 +509,35 @@
   <script type="module" src="js/main.js"></script>
   <script type="module">
     // PREVIEW ONLY: jump straight to the district so the moment plays.
-    if (location.hash.includes('restored') || location.hash.includes('wardwhole')) {
+    if (location.hash.includes('restored') || location.hash.includes('wardwhole') || location.hash.includes('reconnect-')) {
       const { goDistrict } = await import('./js/router.js')
       const t = setInterval(() => {
         if (window.__rcState?.joined) { clearInterval(t); goDistrict('mono', 'mono-7') }
+      }, 200)
+    }
+    // PREVIEW ONLY: open the Red Zone details sheet or ARMY Comms
+    // directly from a hash, so every state is reachable by URL alone —
+    // useful for screenshotting without depending on a working click (the
+    // sheet is still reached by tapping the compromised Bomb in normal
+    // play; this is a shortcut, not a new entry point).
+    //   #<stage>-sheet  → redZoneSheet / defuseResultSheet
+    //   #<stage>-comms  → defenderCommsSheet, straight to the thread
+    if (location.hash.includes('-sheet') || location.hash.includes('-comms')) {
+      const [{ showOverlay }, { redZoneSheet, defenderCommsSheet, defuseResultSheet }] =
+        await Promise.all([import('./js/state.js'), import('./js/bomb-sheet.js')])
+      const t = setInterval(() => {
+        const state = window.__rcState
+        if (!state?.joined) return
+        clearInterval(t)
+        const d = state.bomb?.defuse
+        const r = state.bomb?.resolvedDefuse
+        if (location.hash.includes('-comms')) {
+          if (d) showOverlay(defenderCommsSheet({ eventId: d.id, progress: d.progress, target: d.target, defenderAgents: d.defenderAgents }))
+          else if (r) showOverlay(defenderCommsSheet({ eventId: r.id, progress: r.progress, target: r.target, defenderAgents: r.defenderAgents, blackout: r.status === 'failed' }))
+        } else {
+          if (d) showOverlay(redZoneSheet(state))
+          else if (r) showOverlay(defuseResultSheet(r))
+        }
       }, 200)
     }
   </script>

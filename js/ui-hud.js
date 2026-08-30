@@ -19,6 +19,7 @@ import { getScreen, goWorld, goResources, goSettings, goCandyStar, goRanking, go
 import { getAgentNo } from './session.js'
 import { earnedBadgeCount, equippedBadge } from './badges.js'
 import { openMoonStation } from './settings-streams.js'
+import { redZonePercent } from './red-zone-ui.js'
 
 /** { multiplier, minsLeft } while state.player.boost is live, else null. */
 function activeBoost(boost) {
@@ -95,12 +96,30 @@ function reconnectHudStatus(state) {
   return { label: 'Team ready · stream now' }
 }
 
+/** Real "you just did something" Red Zone feedback — see this session's own
+ *  Red Zone brief: "+N streams" and the %→% DEFUSED line must only ever
+ *  appear off a manual Sync's before/after diff, never off the 90s poll or
+ *  a tab-focus refresh (those call refresh() in main.js, not syncNow()).
+ *  Returns null unless THIS sync actually landed new streams of yours on
+ *  the currently-active event — a same-magnitude poll a moment later stays
+ *  silent because there's nothing new to diff against. */
+function redZoneSyncFeedback(before, after) {
+  if (!after) return null
+  const sameEvent = before && before.id === after.id
+  const gained = after.yourStreams - (sameEvent ? before.yourStreams : 0)
+  if (gained <= 0) return null
+  const toPct = redZonePercent(after.progress, after.target)
+  const fromPct = sameEvent ? redZonePercent(before.progress, before.target) : toPct
+  return { gained, fromPct, toPct }
+}
+
 async function syncNow(state) {
   if (syncInFlight || Date.now() - lastSyncAt < SYNC_COOLDOWN_MS) return
   syncInFlight = true
   paintSyncButton()
   const before = countedTotal(state)
-  const res = await call('getGameState', { agentNo: getAgentNo() })
+  const beforeDefuse = state?.bomb?.defuse || null
+  const res = await call('getGameState', { agentNo: getAgentNo(), manualSync: true })
   syncInFlight = false
   lastSyncAt = Date.now()
   if (!res.success) {
@@ -110,7 +129,14 @@ async function syncNow(state) {
   }
   setState(res)
   const gained = countedTotal(res) - before
-  toast(gained > 0 ? `🔄 Synced — ${gained} new play${gained === 1 ? '' : 's'} counted` : "🔄 Synced — you're all caught up")
+  const rz = redZoneSyncFeedback(beforeDefuse, res?.bomb?.defuse || null)
+  const parts = []
+  if (gained > 0) parts.push(`${gained} new play${gained === 1 ? '' : 's'} counted`)
+  if (rz) {
+    const pctPart = rz.fromPct === rz.toPct ? `${rz.toPct}% DEFUSED` : `${rz.fromPct}% → ${rz.toPct}% DEFUSED`
+    parts.push(`+${rz.gained} Red Zone stream${rz.gained === 1 ? '' : 's'} · ${pctPart}`)
+  }
+  toast(parts.length ? `🔄 Synced — ${parts.join(' · ')}` : "🔄 Synced — you're all caught up")
 }
 
 /** Repaint just the sync button in place, without a full renderHud — used

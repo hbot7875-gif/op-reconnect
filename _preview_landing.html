@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PREVIEW — Landing with Gameplay Preview</title>
+  <meta name="description" content="OP: ReConnect is HopeTrackers' streaming game for ARMY — the network went dark, and every stream you play brings a piece of the city back.">
+  <meta name="theme-color" content="#07060d">
+  <link rel="canonical" href="https://hopetrackers.org/">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta property="og:site_name" content="HopeTrackers">
+  <meta property="og:title" content="OP: ReConnect — HopeTrackers">
+  <meta property="og:description" content="The network went dark. Every stream you play brings a piece of the city back.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://hopetrackers.org/">
+  <meta property="og:image" content="https://hopetrackers.org/og-image.jpg">
+  <meta property="og:image:width" content="1080">
+  <meta property="og:image:height" content="785">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="OP: ReConnect — HopeTrackers">
+  <meta name="twitter:description" content="The network went dark. Every stream you play brings a piece of the city back.">
+  <meta name="twitter:image" content="https://hopetrackers.org/og-image.jpg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/landing.css">
+  <!-- PREVIEW ONLY — not loaded by index.html -->
+  <link rel="stylesheet" href="css/landing-preview.css">
+</head>
+<body class="landing">
+
+  <!-- The arena. A real stadium shot as the base layer, heavily dimmed so
+       the headline stays legible; a thin strip of the procedural lightstick
+       field (js/concert-bg.js) sits along the very bottom for motion — small
+       enough now to read as "the pit is alive" rather than compete with the
+       photo above it. -->
+  <div class="crowd-photo" aria-hidden="true"></div>
+  <canvas id="crowd" class="crowd-strip" aria-hidden="true"></canvas>
+  <div class="crowd-scrim" aria-hidden="true"></div>
+
+  <!-- ── Hero: the message and the button ──────────────────────────
+       Text-on-a-photo only. The map moved back down next to the copy
+       that actually explains it (#brief) — up here it was competing
+       with the headline for a look before the reader knows what it
+       is a map OF. -->
+  <header class="hero">
+    <div class="hero-grid">
+      <div class="hero-inner">
+        <div class="badge"><span class="dot" aria-hidden="true"></span> OP: <span class="brand">ReConnect</span></div>
+        <h1 class="title">The city<br>went dark.</h1>
+        <p class="lede">Every stream you play turns a piece of it back on.</p>
+        <a href="game.html" id="ctaPrimary" class="btn btn-primary">Create your agent file</a>
+        <span class="cta-hint">Free · takes about 30 seconds</span>
+        <a href="game.html?mode=signin" id="ctaSecondary" class="quiet-link">I already have an agent file</a>
+      </div>
+    </div>
+    <a href="#brief" class="scroll-cue" aria-label="Read more">
+      <span></span>
+    </a>
+  </header>
+
+  <!-- ── Below the fold: the detail ────────────────────────────── -->
+  <main class="below">
+
+
+    <!-- ── ▶ Gameplay Preview — PREVIEW ONLY ──────────────────────────
+         Sits between the hero and #brief: the hero makes the claim, this
+         shows it, then the map and live ticker give the detail. Uses the
+         existing .sec rhythm so it inherits the divider and spacing and
+         adds no new page chrome.
+
+         Optional by construction — click to play, no autoplay, no sound,
+         and the hero CTA above remains the primary action. Nothing here
+         gates entry to the game. -->
+    <section class="sec preview-sec" id="preview">
+      <span class="preview-eyebrow">▶ Gameplay preview</span>
+
+      <div class="preview-frame">
+        <video id="previewVideo" playsinline preload="none" controls
+               poster="preview/reconnect-preview-poster.jpg">
+          <source src="preview/reconnect-preview.mp4" type="video/mp4">
+        </video>
+
+        <!-- Replaced by the real poster frame once the MP4 lands. Shown
+             only while the file is genuinely absent — this is a missing-
+             asset notice, deliberately not a mocked-up gameplay still. -->
+        <div class="preview-missing" id="previewMissing">
+          <b>No preview file yet</b>
+          <i>Drop the recorded MP4 at<br><code>public/preview/reconnect-preview.mp4</code><br>and its poster frame beside it.</i>
+        </div>
+
+        <button class="preview-play" id="previewPlay" type="button" aria-label="Play gameplay preview" hidden>
+          <span aria-hidden="true">▶</span>
+        </button>
+      </div>
+
+      <p class="preview-cap">About 25 seconds. Real gameplay — no sound needed.</p>
+    </section>
+
+    <section class="sec" id="brief">
+      <p class="sec-lede">
+        Every district on this map went dark the same night — stream to bring it back, one piece at a time.
+      </p>
+      <div class="brief-map">
+        <div class="map" id="mapMount"></div>
+      </div>
+    </section>
+
+    <!-- One line, not a dashboard. A stranger doesn't need three labelled
+         cards to feel "something real is happening here" — a terminal
+         readout does it in less space and reads as HT's own monitor, not
+         marketing copy. -->
+    <section class="sec">
+      <div class="ticker">
+        <span class="ticker-dot" aria-hidden="true"></span>
+        <span id="statAgents" class="is-loading">—</span> <span id="statAgentsWord">agents</span>
+        <span class="ticker-sep">·</span>
+        <span id="statDistricts" class="is-loading">—</span><span id="statDistrictsTotal"></span> districts restored
+        <span class="ticker-sep">·</span>
+        charge <span id="statCharge" class="is-loading">—</span>
+      </div>
+    </section>
+
+    <section class="sec closing">
+      <p class="closing-line">One stream at a <span>time</span>.</p>
+      <a href="game.html" class="btn btn-primary">Create your agent file</a>
+      <span class="cta-hint">Free · takes about 30 seconds</span>
+    </section>
+
+    <footer class="foot">
+      OP: <span class="brand">ReConnect</span> · 2026 · by HopeTrackers
+      <span class="love">Made for ARMY 💜</span>
+    </footer>
+  </main>
+
+  <!-- PREVIEW ONLY. Shows the play control only once the browser confirms
+       the video is really there, so a missing file degrades to an honest
+       notice instead of a dead play button. -->
+  <script>
+    (function () {
+      var v = document.getElementById('previewVideo');
+      var miss = document.getElementById('previewMissing');
+      var play = document.getElementById('previewPlay');
+      if (!v) return;
+      v.addEventListener('loadeddata', function () {
+        miss.hidden = true; play.hidden = false;
+      });
+      v.addEventListener('error', function () { play.hidden = true; }, true);
+      play.addEventListener('click', function () {
+        play.hidden = true; v.play();
+      });
+      // preload="none" means loadeddata never fires until we ask for metadata
+      v.preload = 'metadata';
+      v.load();
+    })();
+  </script>
+  <script type="module" src="js/landing.js"></script>
+</body>
+</html>

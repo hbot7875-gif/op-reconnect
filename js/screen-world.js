@@ -29,13 +29,15 @@ import { renderCityMap } from './city-map.js'
 import { districtIcon } from './landmarks.js'
 import { openFinder } from './search.js'
 import { openShare } from './share.js'
-import { bombSheet } from './bomb-sheet.js'
 import { agentChargeSheet } from './agent-charge.js'
 import { broadcastCards } from './broadcasts.js'
 import { cityFeedCard } from './city-feed.js'
 import { openSuggestions } from './suggestions.js'
 import { openMagicShop } from './magic-shop.js'
 import { vmaEventCard, openVmaMission } from './vma.js'
+import { redZoneSheet, defuseResultSheet, defenderCommsSheet } from './bomb-sheet.js'
+import { tickCountdowns } from './countdown.js'
+import { redZonePercent, personalSignalCopy, redZoneHeadline, redZoneGoalCopy } from './red-zone-ui.js'
 
 export function renderWorld(container, state) {
   container.innerHTML = ''
@@ -44,14 +46,18 @@ export function renderWorld(container, state) {
 
   const bc = broadcastCards(state)
   if (bc.children.length) wrap.appendChild(bc)
-  if (b.defuse) wrap.appendChild(redZoneCard(state))
+  // Red Zone no longer gets its own banner here — it's the existing ARMY
+  // Bomb itself (coreBlock, below) that turns compromised/crimson and shows
+  // progress. See maybeShowDefuseResult for the one-shot success/failure
+  // acknowledgement, which also used to be this card's job.
   if (state.vma) wrap.appendChild(vmaEventCard(state))
+  maybeShowDefuseResult(state.bomb?.resolvedDefuse)
 
   // One playable command scene instead of a dashboard stack. The map is the
   // world; personal charge, recovery and the current mission sit on its edge
   // as HUD prompts. Ward tiles, status cards and the Era strip were duplicate
   // summaries of information already reachable by tapping the map/Bomb.
-  const command = el('section', 'command-scene')
+  const command = el('section', 'command-scene' + (b.defuse ? ' is-redzone' : ''))
   command.appendChild(cityPlan(state))
   command.appendChild(recoverySignal(state))
   const core = el('div', 'command-core')
@@ -409,44 +415,73 @@ function coreBlock(state) {
   const cells = Number(state.player?.chargeCells) || 0
   const hours = Math.max(0, Number(charge.hoursRemaining) || 0)
   const neverFed = !charge.isDark && hours <= 0
-  // Same 48-hour visual ceiling as the full Personal Charge sheet: one Cell
-  // visibly helps without making a 2-hour feed look completely full.
-  const chargeFrac = Math.max(0, Math.min(1, hours / 48))
-  const chargeText = charge.isDark ? 'DARK' : neverFed ? 'EMPTY' : `${Math.round(hours)}H`
+  const defuse = state.bomb?.defuse || null
   const firstReveal = !bombIntroPlayed
   bombIntroPlayed = true
 
-  const zone = el('div', 'core-block')
-  zone.appendChild(el('div', 'core-eyebrow', 'Your lifeline'))
-  zone.appendChild(el('div', 'core-title', 'ARMY Bomb'))
+  const zone = el('div', 'core-block' + (defuse ? ' is-redzone' : ''))
+
+  // Personal charge is a completely different number from Red Zone
+  // progress — while an event is active the Bomb's main dial tells the
+  // city's story, so charge moves to a small secondary line underneath
+  // instead of disappearing. See btn.onclick below for the corresponding
+  // tap-target swap.
+  const chargeFrac = Math.max(0, Math.min(1, hours / 48))
+  // Same 48-hour visual ceiling as the full Personal Charge sheet: one Cell
+  // visibly helps without making a 2-hour feed look completely full.
+  const mainFrac = defuse ? Math.max(0, Math.min(1, defuse.progress / Math.max(1, defuse.target))) : chargeFrac
+
+  // Red Zone leads with what happened and what to do about it, in that
+  // order: headline, then the instruction generated from this event's own
+  // target, then the clock. The lore eyebrow ("SIGNAL BREACH") is gone on
+  // purpose — it said the same thing as the headline in words a new player
+  // has to translate first.
+  const band = defuse ? redZoneBandOf(defuse) : null
+  const head = defuse ? redZoneHeadline(band) : null
+  const goal = defuse ? redZoneGoalCopy(defuse, band) : null
+  if (!defuse) zone.appendChild(el('div', 'core-eyebrow', 'Your lifeline'))
+  zone.appendChild(el('div', 'core-title', defuse ? `${head.icon} ${head.title}` : 'ARMY Bomb'))
+  if (defuse) {
+    zone.appendChild(el('div', 'core-goal', esc(goal.instruction)))
+    const untilIso = defuse.activeUntil || defuse.endsAt
+    zone.appendChild(el('div', 'core-timer', `<b data-deadline="${esc(untilIso)}">--:--:--</b><i>left</i>`))
+  }
 
   const btn = el('button', 'army-core'
-    + (charge.isDark || neverFed ? ' is-brownout' : '')
+    + (defuse ? ` is-attack is-band-${redZoneBandOf(defuse)}` : (charge.isDark || neverFed ? ' is-brownout' : ''))
     + (firstReveal && !reducedMotion() ? ' core-intro' : ''))
-  // This is the player's survival resource, so both the visual and the tap
-  // now describe the same system. Shared network activity still powers the
-  // city atmosphere and Red Zone, but no longer occupies the primary hero.
-  btn.setAttribute('aria-label', charge.isDark
-    ? 'Your ARMY Bomb is dark. Tap to feed it.'
-    : neverFed ? 'Your ARMY Bomb is empty. Tap to charge it.'
-    : `Your ARMY Bomb has ${Math.round(hours)} hours remaining. Tap to feed it.`)
-  // The lightstick is the Launch the Voyage bomb (the .cs-bomb build from
-  // app.js's concert mode): glassy sphere, ⟭⟬ logo, dark handle, gentle sway.
-  // The outer arc is the same personal charge driving the fill and glow.
+  btn.setAttribute('aria-label', defuse
+    ? `The City is under attack. The ARMY Bomb is ${redZonePercent(defuse.progress, defuse.target)} percent defused. ${goal.instruction}. Tap for details.`
+    : charge.isDark
+      ? 'Your ARMY Bomb is dark. Tap to feed it.'
+      : neverFed ? 'Your ARMY Bomb is empty. Tap to charge it.'
+      : `Your ARMY Bomb has ${Math.round(hours)} hours remaining. Tap to feed it.`)
+  // Red Zone uses the Bomb itself as the progress display. It starts with
+  // one red liquid layer and drains to neutral dark glass as qualified
+  // streams arrive. Personal charge remains a separate supporting value;
+  // its purple fill, rings and particles are deliberately not rendered in
+  // the Red Zone state.
   const CIRC = 2 * Math.PI * 106
-  btn.innerHTML = `
-    <div class="core-glow"></div>
-    <svg class="core-rings" viewBox="0 0 220 220" aria-hidden="true">
+  const ringsHtml = `
       <circle class="ring-outer" cx="110" cy="110" r="98"></circle>
       <circle class="ring-inner" cx="110" cy="110" r="90"></circle>
       <circle class="ring-charge-bg" cx="110" cy="110" r="106"></circle>
       <circle class="ring-charge" cx="110" cy="110" r="106" transform="rotate(-90 110 110)"
         stroke-dasharray="${(CIRC * chargeFrac).toFixed(1)} ${CIRC.toFixed(1)}"></circle>
+  `
+  const normalDecorHtml = defuse ? '' : `
+    <svg class="core-rings" viewBox="0 0 220 220" aria-hidden="true">
+      ${ringsHtml}
     </svg>
     <div class="core-particles"><span></span><span></span><span></span><span></span><span></span><span></span></div>
-    <div class="rc-bomb">
+  `
+  btn.innerHTML = `
+    <div class="core-glow"></div>
+    ${normalDecorHtml}
+      <div class="rc-bomb">
       <div class="rc-sphere">
         <span class="rc-fill"></span>
+        ${defuse ? '<span class="rz-liquid" aria-hidden="true"></span>' : ''}
         <span class="rc-shine"></span>
         <span class="rc-shine-2"></span>
         <span class="rc-logo">⟭⟬</span>
@@ -454,11 +489,66 @@ function coreBlock(state) {
       <div class="rc-handle"><span class="rc-grip"></span><span class="rc-grip"></span></div>
     </div>
   `
-  btn.style.setProperty('--charge', chargeFrac.toFixed(3))
-  btn.onclick = () => showOverlay(agentChargeSheet())
+  btn.style.setProperty('--charge', (defuse ? 0 : mainFrac).toFixed(3))
+  if (defuse) {
+    btn.style.setProperty('--rz-restored', mainFrac.toFixed(3))
+    btn.style.setProperty('--rz-glow-opacity', (0.08 + (1 - mainFrac) * 0.18).toFixed(3))
+  }
+  btn.onclick = () => showOverlay(defuse ? redZoneSheet(state) : agentChargeSheet())
   zone.appendChild(btn)
 
+  if (defuse) {
+    const pct = redZonePercent(defuse.progress, defuse.target)
+    const read = el('div', 'core-read is-redzone')
+    read.innerHTML = `
+      <div class="core-pct">${pct}<i>% DEFUSED</i></div>
+      <div class="core-lbl">${esc(goal.progressLine)}</div>
+    `
+    zone.appendChild(read)
+    const signal = personalSignalCopy(defuse.yourStreams, defuse.minimumStreams)
+    const support = el('div', 'core-support-row')
+    support.appendChild(el('div', 'core-signal' + (signal.qualified ? ' is-qualified' : ''),
+      `<span class="core-signal-lbl">Your streams</span><span class="core-signal-val">${esc(signal.value)}</span>`))
+    const chargePill = el('button', 'core-charge-pill', `Personal charge · ${charge.isDark ? 'dark' : neverFed ? 'empty' : `${Math.round(hours)}h`}`)
+    chargePill.onclick = (e) => { e.stopPropagation(); showOverlay(agentChargeSheet()) }
+    support.appendChild(chargePill)
+    zone.appendChild(support)
+
+    // ARMY Comms, on the City screen itself. It used to be two taps in
+    // (Bomb → details sheet → Comms), which is where a live channel goes to
+    // be missed — the whole point of it is that people can see each other
+    // streaming while the event is running. Locked state stays visible
+    // rather than hidden: "there's a room here, one stream gets you in" is
+    // the more useful message than showing nothing at all.
+    const comms = el('button', 'core-comms' + (defuse.isDefender ? '' : ' is-locked'),
+      defuse.isDefender
+        ? `💬 ARMY Comms · ${(defuse.defenderAgents || 0).toLocaleString()}`
+        : '🔒 Stream once to join ARMY Comms')
+    comms.disabled = !defuse.isDefender
+    comms.onclick = () => showOverlay(defenderCommsSheet({
+      eventId: defuse.id, progress: defuse.progress, target: defuse.target,
+      defenderAgents: defuse.defenderAgents,
+    }))
+    zone.appendChild(comms)
+    // "Comms" reads as communications to anyone who plays games and as
+    // nothing at all to anyone who doesn't. The name earns its place in the
+    // agent/city fiction; this line means nobody has to guess what it opens.
+    // Kept as a sibling, not inside the button, so the locked state's own
+    // dimming never takes the explanation down with it.
+    zone.appendChild(el('div', 'core-comms-sub', defuse.isDefender
+      ? 'Chat with other ARMY protecting the Bomb'
+      : 'Contributors unlock the Red Zone chat'))
+
+    // The Bomb is the entry point to everything else about the event, and a
+    // sphere with no chrome doesn't read as tappable on its own.
+    zone.appendChild(el('div', 'core-hint', 'Tap the ARMY Bomb for full details'))
+
+    tickCountdowns()
+    return zone
+  }
+
   const read = el('div', 'core-read' + (charge.isDark ? ' is-attack' : ''))
+  const chargeText = charge.isDark ? 'DARK' : neverFed ? 'EMPTY' : `${Math.round(hours)}H`
   read.innerHTML = `
     <div class="core-pct">${chargeText}</div>
     <div class="core-lbl">${charge.isDark ? 'charge lost &middot; tap to feed'
@@ -492,6 +582,31 @@ function coreBlock(state) {
     })
   }
   return zone
+}
+
+function redZoneBandOf(defuse) {
+  const frac = defuse.target > 0 ? Math.max(0, Math.min(1, defuse.progress / defuse.target)) : 0
+  if (frac >= 1) return 'restored'
+  if (frac >= 0.9) return 'final-push'
+  if (frac >= 0.25) return 'restoring'
+  return 'compromised'
+}
+
+
+/** One-shot success/failure acknowledgement. resolvedDefuse never expires
+ *  on the server (see bomb.ts's own doc comment) so a slow/offline client
+ *  still gets its chance to see the result — this is the client half of
+ *  that contract: remember the last event id already shown, in
+ *  localStorage (survives a reload, unlike an in-memory flag), and never
+ *  show the same one twice. */
+const LAST_DEFUSE_RESULT_KEY = 'rc_last_defuse_result_shown'
+function maybeShowDefuseResult(resolved) {
+  if (!resolved) return
+  let lastShown = null
+  try { lastShown = localStorage.getItem(LAST_DEFUSE_RESULT_KEY) } catch { /* private mode etc. */ }
+  if (lastShown === resolved.id) return
+  try { localStorage.setItem(LAST_DEFUSE_RESULT_KEY, resolved.id) } catch { /* best-effort only */ }
+  showOverlay(defuseResultSheet(resolved))
 }
 
 /* ── The conduit ────────────────────────────────────────────────────────
@@ -575,32 +690,6 @@ function eraTracksSheet(e, personal = false) {
   return sheet
 }
 
-/* ── Red Zone ───────────────────────────────────────────────────────────── */
-
-function redZoneCard(state) {
-  const d = state.bomb.defuse
-  const pct = Math.min(100, Math.round((d.progress / Math.max(1, d.target)) * 100))
-  const minimum = d.minimumStreams || 7
-  const yours = d.yourStreams || 0
-  const qualified = yours >= minimum
-
-  const card = el('section', 'redzone')
-  card.innerHTML = `
-    <div class="rz-head"><span class="rz-dot"></span>Red Zone &middot; active</div>
-    <div class="rz-title">${esc(d.title || 'Signal breach detected')}</div>
-    <p class="rz-msg">${esc(d.message || 'Everyone stream. That\'s how we defuse it.')}</p>
-    <div class="rz-goal-top"><span>Qualified streams</span><span class="rz-num">${d.progress.toLocaleString()}<i>/${d.target.toLocaleString()}</i></span></div>
-    <div class="rz-bar"><i style="width:${pct}%"></i></div>
-    ${(d.activeUntil || d.active_until)
-      ? `<div class="rz-timer">Time left <b data-deadline="${esc(d.activeUntil || d.active_until)}">--:--:--</b></div>`
-      : ''}
-    <div class="rz-foot">Your signal: ${yours}/${minimum} ${qualified ? '&middot; qualified' : `&middot; ${minimum - yours} more to qualify`}<br>${d.rewardXp.toLocaleString()} XP split among ${d.qualifiedAgents || 0} qualified agent${d.qualifiedAgents === 1 ? '' : 's'}</div>
-  `
-  const go = el('button', 'btn btn-alert', 'View Red Zone')
-  go.onclick = () => showOverlay(bombSheet(state))
-  card.appendChild(go)
-  return card
-}
 
 /* ── The one thing the player is here to do ─────────────────────────────── */
 

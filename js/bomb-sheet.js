@@ -1,119 +1,208 @@
-// The ARMY Bomb, opened up.
+// The ARMY Bomb, opened up — Red Zone details, ARMY Comms, and the
+// success/failure result.
 //
-// Tapping the core used to show one bar and a sentence. It's the thing every
-// agent on the network feeds, so it gets a real panel: how charged it is,
-// what that's worth, what the network did today, whether anything is
-// attacking it, and what you personally have restored.
-//
-// Deliberately circular rather than another horizontal bar — the world
-// screen already has four of those, and the core deserves its own shape.
+// The old general "network vitality" dashboard (bombSheet) is gone: it was
+// only ever reachable while a Red Zone was active in the first place (the
+// old redZoneCard's "View Red Zone" button was its one entry point), so
+// this is a faithful, redesigned replacement of that same reachable
+// surface — not a removal of something that was otherwise always visible.
+// Personal charge now has its own always-available entry (the ARMY Bomb
+// itself when no Red Zone is active, or the small "Personal charge" pill
+// screen-world.js keeps showing during one) via agent-charge.js's own
+// sheet, untouched by any of this.
 
-import { el, esc, hideOverlay } from './state.js'
+import { el, esc, showOverlay, hideOverlay } from './state.js'
+import { call } from './api.js'
+import { getAgentNo } from './session.js'
 import { tickCountdowns } from './countdown.js'
-import { districtDisplayName } from './ward-tiles.js'
+import { chatThread } from './chat-thread.js'
+import { personalSignalCopy, interpolateBombColor,
+  redZoneBand, redZoneHeadline, redZoneGoalCopy } from './red-zone-ui.js'
 
-const R = 54
-const CIRC = 2 * Math.PI * R
-
-function gauge(frac, danger) {
-  const pct = Math.round(frac * 100)
-  const g = el('div', 'bg-gauge' + (danger ? ' danger' : ''))
-  g.innerHTML = `
-    <svg viewBox="0 0 130 130" aria-hidden="true">
-      <circle class="bg-track" cx="65" cy="65" r="${R}"></circle>
-      <circle class="bg-fill" cx="65" cy="65" r="${R}" transform="rotate(-90 65 65)"
-        stroke-dasharray="${(CIRC * Math.max(0, Math.min(1, frac))).toFixed(1)} ${CIRC.toFixed(1)}"></circle>
-    </svg>
-    <div class="bg-read">
-      <div class="bg-pct">${pct}<i>%</i></div>
-      <div class="bg-lbl">charged</div>
-    </div>
-  `
-  return g
+function statLine(label, value) {
+  return el('div', 'rz-stat-line', `<span>${esc(label)}</span><b>${value}</b>`)
 }
 
-function statRow(items) {
-  const row = el('div', 'bg-stats')
-  for (const [label, value] of items) {
-    row.appendChild(el('div', 'bg-stat', `<span class="bs-v">${value}</span><span class="bs-l">${esc(label)}</span>`))
-  }
-  return row
-}
-
-export function bombSheet(state) {
-  const b = state.bomb || { charge: 0 }
-  const d = b.defuse
-  const underAttack = !!d
-  const wards = state.map?.wards || []
-
-  const sheet = el('div', 'sheet bomb-dash')
-
-  sheet.appendChild(el('div', 'eyebrow' + (underAttack ? ' alert' : ''), 'ARMY BOMB'))
-  sheet.appendChild(el('div', 'bd-status' + (underAttack ? ' alert' : b.brownout ? ' warn' : ''),
-    underAttack ? 'Under attack'
-    : b.brownout ? 'Brownout — grid recovering'
-    : 'Network stable'))
-
-  // ── power ──
-  const frac = underAttack ? Math.min(1, d.progress / Math.max(1, d.target)) : (b.charge || 0)
-  sheet.appendChild(gauge(frac, underAttack))
-  sheet.appendChild(el('p', 'muted bd-note', underAttack
-    ? 'This is how far the defuse has come. Everyone streaming right now pushes it up.'
-    : b.brownout
-      ? 'The grid took a hit. Power is down while it recovers — you didn\'t lose anything you earned.'
-      : "Everyone streaming right now feeds this — the network's shared vitality signal. It doesn't change your own XP or survival anymore; tap the ARMY Bomb on the City screen for your personal charge."))
-
-  // ── what it's worth ──
-  // No "Boost ×N" line anymore — the shared multiplier was retired from XP
-  // (see derive.ts). This panel is network vitality + Red Zone status only.
-  const stats = []
-  if (Number.isFinite(b.communityStreams)) stats.push(['Streams today', b.communityStreams.toLocaleString()])
-  // Grows by a day per Era Timeline era the network has fully unlocked
-  // (bomb.ts's chargeWindowDays) — the visible payoff for finishing one.
-  if (Number.isFinite(b.chargeWindowDays)) stats.push(['Charge window', `${b.chargeWindowDays}d`])
-  const totalD = wards.reduce((a, w) => a + (w.totalCount || 0), 0)
-  const doneD = wards.reduce((a, w) => a + (w.restoredCount || 0), 0)
-  if (totalD) stats.push(['City recovery', `${Math.round((doneD / totalD) * 100)}%`])
-  if (stats.length) sheet.appendChild(statRow(stats))
-
-  // ── red zone ──
-  if (underAttack) {
-    const rz = el('div', 'bd-block alert')
-    const deadline = d.activeUntil || d.active_until
-    const minimum = d.minimumStreams || 7
-    const yours = d.yourStreams || 0
-    rz.innerHTML = `
-      <div class="bd-block-head">Red Zone</div>
-      <div class="bd-line"><span>Qualified streams</span><b>${d.progress.toLocaleString()} / ${d.target.toLocaleString()}</b></div>
-      ${deadline ? `<div class="bd-line"><span>Time left</span><b class="bd-clock" data-deadline="${esc(deadline)}">--:--:--</b></div>` : ''}
-      <div class="bd-line"><span>Your minimum</span><b>${yours} / ${minimum}</b></div>
-      <div class="bd-line"><span>Qualified agents</span><b>${d.qualifiedAgents || 0}</b></div>
-      <div class="bd-line"><span>Shared reward</span><b>${d.rewardXp.toLocaleString()} XP pool</b></div>
-    `
-    sheet.appendChild(rz)
-  } else {
-    sheet.appendChild(el('div', 'bd-block', `
-      <div class="bd-block-head">Red Zone</div>
-      <div class="dim">No active threats. If the network is attacked, it shows up here and on the home screen.</div>
-    `))
+/** Player-friendly Red Zone details — no diagnostic/admin terminology, no
+ *  event ids, no raw backend state names. Only real data already on
+ *  state.bomb.defuse; nothing here is estimated. */
+export function redZoneSheet(state) {
+  const d = state.bomb?.defuse
+  const sheet = el('div', 'sheet redzone-sheet')
+  if (!d) {
+    // The event resolved between the tap and the sheet opening (a live poll
+    // landed in between) — nothing to show as "active" anymore; closing
+    // and letting the next render pick up resolvedDefuse is correct, not
+    // an error state worth its own copy.
+    sheet.append(el('div', 'eyebrow', 'ARMY BOMB'), el('p', 'muted', 'This Red Zone just resolved — closing.'))
+    const close0 = el('button', 'btn btn-ghost', 'Close')
+    close0.onclick = hideOverlay
+    sheet.appendChild(close0)
+    return sheet
   }
 
-  // ── your network ──
-  const active = (state.map?.districts || []).find((x) => x.status === 'active')
-  const wardsOnline = wards.filter((w) => w.status === 'restored').length
-  const yours = el('div', 'bd-block')
-  yours.innerHTML = `
-    <div class="bd-block-head">Your network</div>
-    <div class="bd-line"><span>Districts restored</span><b>${doneD} / ${totalD}</b></div>
-    <div class="bd-line"><span>Wards online</span><b>${wardsOnline} / ${wards.length}</b></div>
-    <div class="bd-line"><span>Working on</span><b>${active ? esc(districtDisplayName(active)) : '—'}</b></div>
-  `
-  sheet.appendChild(yours)
+  // What happened -> what to stream -> how much -> by when -> what it costs
+  // if we fail, in that order. The percentage moved out of the title (the
+  // Bomb itself is already showing it one tap back) so the title can carry
+  // the instruction instead.
+  const band = redZoneBand(d.progress, d.target)
+  const head = redZoneHeadline(band)
+  const goal = redZoneGoalCopy(d, band)
+  sheet.append(
+    el('div', 'eyebrow alert', `${head.icon} ${head.title}`),
+    el('h3', '', 'Protect the ARMY Bomb'),
+    el('p', 'muted', `Stream <b>${esc(goal.short)}</b> together before the timer reaches 0.`),
+  )
+  // The admin's own words for this event, if they wrote any — kept under
+  // the generated instruction, never in place of it.
+  if (d.message) sheet.appendChild(el('p', 'dim rz-event-note', esc(d.message)))
+
+  const stats = el('div', 'rz-stats')
+  stats.appendChild(statLine('CITY STREAMS', esc(goal.progressLine)))
+  const signal = personalSignalCopy(d.yourStreams, d.minimumStreams)
+  stats.appendChild(statLine('YOUR STREAMS', esc(signal.full)))
+  stats.appendChild(el('div', 'rz-stat-line', `<span>TIME LEFT</span><b class="bd-clock" data-deadline="${esc(d.activeUntil)}">--:--:--</b>`))
+  // Two different numbers that must never be conflated (see red-zone.js's
+  // isDefender vs isQualifiedDefender) — said in words rather than showing
+  // one of them and hoping nobody asks about the other.
+  const defenders = d.defenderAgents || 0
+  const earning = d.qualifiedAgents || 0
+  stats.appendChild(statLine('ARMY DEFENDERS', defenders === earning
+    ? `${defenders.toLocaleString()} streaming`
+    : `${defenders.toLocaleString()} streaming &middot; ${earning.toLocaleString()} earning XP`))
+  stats.appendChild(statLine('REWARD', `${d.rewardXp.toLocaleString()} XP shared`))
+  sheet.appendChild(stats)
+
+  // The one stake worth surfacing without a tap — see the brief's own
+  // "make failure visible before it happens" requirement. Deliberately not
+  // buried in the collapsed explainer below.
+  sheet.appendChild(el('div', 'rz-blackout-warn', `
+    <b>IF WE FAIL</b>
+    <span>⚫ The City goes into Blackout and every ARMY Bomb loses its charge.</span>
+  `))
+
+  const commsBtn = el('button', 'btn btn-ghost rz-comms-btn',
+    d.isDefender
+      ? `💬 ARMY Comms · ${d.defenderAgents || 0} ARMY defender${d.defenderAgents === 1 ? '' : 's'}`
+      : '🔒 ARMY Comms — stream once to unlock')
+  commsBtn.disabled = !d.isDefender
+  commsBtn.onclick = () => showOverlay(defenderCommsSheet({
+    eventId: d.id, progress: d.progress, target: d.target, defenderAgents: d.defenderAgents,
+  }))
+  sheet.appendChild(commsBtn)
+  // Same plain-language line the City screen carries — the unlocked state
+  // had no explanation at all here. The locked state's own hint below
+  // already says both what unlocks it and how that differs from the XP
+  // minimum, so it isn't repeated.
+  if (d.isDefender) {
+    sheet.appendChild(el('p', 'dim rz-comms-sub', 'Chat with other ARMY protecting the Bomb'))
+  }
+  if (!d.isDefender) {
+    sheet.appendChild(el('p', 'dim rz-comms-hint', `Stream once during this Red Zone to join ARMY Comms. Earning a share of the XP takes ${d.minimumStreams} streams — the two are separate.`))
+  }
+
+  const how = el('details', 'reconnect-disclosure')
+  how.appendChild(el('summary', '', 'How this works ▾'))
+  how.appendChild(el('div', 'muted rz-how-body', `
+    <p>Stream ${esc(goal.short)}. Everyone's streams add up to one shared goal of ${d.target.toLocaleString()}. Your first ${d.minimumStreams} show as your own progress — hitting ${d.minimumStreams} releases them into the city total and earns you a share of the XP.</p>
+    <p>Reach the goal before the timer runs out and the ARMY Bomb is saved: everyone who streamed ${d.minimumStreams} or more shares ${d.rewardXp.toLocaleString()} XP. Run out of time and the City goes dark — every ARMY Bomb charge drops to 0. Nothing else is lost.</p>
+  `))
+  sheet.appendChild(how)
 
   const close = el('button', 'btn btn-ghost', 'Close')
   close.onclick = hideOverlay
   sheet.appendChild(close)
 
-  if (underAttack) tickCountdowns()
+  tickCountdowns()
+  return sheet
+}
+
+/** The same red→purple story the Bomb itself tells, reused rather than
+ *  reinvented — see this session's own note: no second progress bar, this
+ *  is the actual Red Zone progress feeding a soft glow behind the thread
+ *  instead of a number. Blackout gets its own dark override rather than
+ *  whatever color progress happened to stall at — failure should read as
+ *  "the signal is gone", not "68% purple". */
+function defenderCommsGlow({ progress, target, blackout }) {
+  return blackout ? 'rgb(18, 16, 24)' : interpolateBombColor(progress, target, '#e5384f', '#8b5cf6')
+}
+
+/** ARMY Comms — a shared thread scoped to one Red Zone event, opened
+ *  from the details sheet above (or from the result sheet, once archived).
+ *  Same chat-thread.js component ReConnect's Team Chat uses, in its
+ *  'radio' skin (see chat-thread.js and this file's own CSS): a live
+ *  emergency channel inside the compromised network, not another
+ *  dashboard card, so the chrome stays minimal and the color does the
+ *  talking behind it. */
+export function defenderCommsSheet({ eventId, progress, target, defenderAgents, blackout = false }) {
+  const sheet = el('div', 'sheet dc-sheet')
+  const glow = el('div', 'dc-glow')
+  glow.style.setProperty('--dc-bomb', defenderCommsGlow({ progress, target, blackout }))
+  sheet.appendChild(glow)
+
+  const count = defenderAgents || 0
+  sheet.appendChild(el('div', 'eyebrow dc-head', `💬 ARMY COMMS &middot; ${count} ARMY DEFENDER${count === 1 ? '' : 'S'}`))
+  const body = el('div', 'dc-body', '<p class="muted">Opening comms…</p>')
+  sheet.appendChild(body)
+
+  const back = el('button', 'dc-close', 'Close')
+  back.onclick = hideOverlay
+  sheet.appendChild(back)
+
+  async function load() {
+    const res = await call('getDefuseMessages', { agentNo: getAgentNo(), eventId })
+    if (!res?.success) {
+      body.innerHTML = ''
+      body.appendChild(el('p', 'muted', esc(res?.error === 'not_a_defender'
+        ? 'Stream at least once during this Red Zone to unlock ARMY Comms.'
+        : "Couldn't open comms — try again.")))
+      return
+    }
+    body.innerHTML = ''
+    body.appendChild(chatThread(res.messages, {
+      variant: 'radio',
+      placeholder: 'Message ARMY defenders…',
+      emptyText: 'No messages yet.',
+      readOnly: res.readOnly,
+      readOnlyNote: blackout ? 'The signal went dark — archived.' : 'Signal restored — archived.',
+      onSend: (message) => call('sendDefuseMessage', { agentNo: getAgentNo(), eventId, message }),
+      onSent: load,
+    }))
+  }
+  load()
+  return sheet
+}
+
+/** One-shot success/failure acknowledgement — see screen-world.js's
+ *  maybeShowDefuseResult for the localStorage dedup that ensures this is
+ *  only ever shown once per event, never replayed on a later poll. */
+export function defuseResultSheet(resolved) {
+  const sheet = el('div', 'sheet redzone-result-sheet')
+  const success = resolved.status === 'defused'
+  sheet.append(
+    el('div', 'eyebrow' + (success ? '' : ' alert'), success ? '✦ CITY SAVED' : '⚫ BLACKOUT'),
+    el('h3', '', success ? 'We protected the ARMY Bomb! 💜' : "We didn't reach the streaming goal in time."),
+  )
+  if (success) {
+    sheet.appendChild(el('p', 'muted', 'The Red Zone has been cleared.'))
+    sheet.appendChild(el('p', 'muted', `Your streams: <b>${resolved.yourStreams.toLocaleString()}</b>`))
+    sheet.appendChild(el('p', 'muted', resolved.yourXpAwarded > 0
+      ? `Your reward: <b>+${resolved.yourXpAwarded.toLocaleString()} XP</b>`
+      : `You needed ${resolved.minimumStreams} streams to earn a share — this time you had ${resolved.yourStreams}.`))
+  } else {
+    sheet.appendChild(el('p', 'muted', 'The City has gone dark and your ARMY Bomb charge is now <b>0</b>.'))
+    sheet.appendChild(el('p', 'dim', 'Feed your Bomb to bring it back online. Nothing else was lost.'))
+  }
+
+  const viewComms = el('button', 'dc-link', '💬 View ARMY Comms')
+  viewComms.onclick = () => showOverlay(defenderCommsSheet({
+    eventId: resolved.id, progress: resolved.progress, target: resolved.target,
+    defenderAgents: resolved.defenderAgents, blackout: !success,
+  }))
+  sheet.appendChild(viewComms)
+
+  const close = el('button', 'btn btn-primary', 'Close')
+  close.onclick = hideOverlay
+  sheet.appendChild(close)
   return sheet
 }

@@ -32,6 +32,13 @@ function resolveNonLbSource(pref: string, hasStatsFm: boolean, hasMusicat: boole
   return 'direct'
 }
 
+export function resolvedAgentStreamSource(agent: AgentSourceRow): 'listenbrainz' | 'direct' | 'statsfm' | 'musicat' {
+  const pref = agent.stream_source_preference || 'lb'
+  const lbUser = NON_LB_PREFS.has(pref) ? '' : (agent.lb_username || '').trim()
+  if (lbUser) return 'listenbrainz'
+  return resolveNonLbSource(pref, !!agent.statsfm_username, !!agent.musicat_public_id)
+}
+
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 // ok:false means a page request itself failed (network error, non-429
@@ -185,7 +192,18 @@ async function fetchMusicat(publicId: string, fromTs: number, toTs: number): Pro
 // polls of the same overlapping window a no-op rather than a double-count.
 async function persistScrobbles(supabase: SupabaseDB, agentNo: string, rows: StreamRow[], source: string) {
   if (rows.length === 0) return
-  const payload = rows
+  let candidates = rows
+  if (source === 'listenbrainz') {
+    // LB can return the whole current day on every 90-second player poll.
+    // Avoid re-sending hundreds of already-stored rows each time; keep the
+    // last second inclusive so two tracks sharing one timestamp are not lost.
+    const { data: latest } = await supabase.from('rc_scrobbles')
+      .select('listened_at').eq('agent_no', agentNo).eq('source', source)
+      .order('listened_at', { ascending: false }).limit(1).maybeSingle()
+    const latestTs = Number(latest?.listened_at) || 0
+    if (latestTs > 0) candidates = rows.filter((row) => row.listened_at >= latestTs)
+  }
+  const payload = candidates
     .filter((r) => r.track_name && r.listened_at && !isAdScrobble(r.track_name, r.artist_name))
     .map((r) => ({
       agent_no: agentNo,
@@ -211,17 +229,21 @@ export async function fetchStreamRows(
   toTs: number,
   lbMaxPages: number,
 ): Promise<{ rows: StreamRow[]; ok: boolean }> {
-  const pref = agent.stream_source_preference || 'lb'
-  const lbUser = NON_LB_PREFS.has(pref) ? null : (agent.lb_username || '').trim() || null
+  const source = resolvedAgentStreamSource(agent)
 
   let rows: StreamRow[]
   let ok = true
-  if (lbUser) {
-    const lb = await fetchListenBrainz(lbUser, fromTs, toTs, lbMaxPages)
+  if (source === 'listenbrainz') {
+    const lb = await fetchListenBrainz((agent.lb_username || '').trim(), fromTs, toTs, lbMaxPages)
     rows = lb.rows
     ok = lb.ok
+    // Keep the same timestamped source-of-truth every other provider uses.
+    // Red Zone needs exact launch/deadline boundaries; a KST-day rollup can
+    // never tell whether a play happened before launch or after expiry.
+    // Persisting the successful LB window makes those exact timestamps
+    // available without changing ordinary daily counting.
+    if (ok) await persistScrobbles(supabase, agent.agent_no, rows, 'listenbrainz')
   } else {
-    const source = resolveNonLbSource(pref, !!agent.statsfm_username, !!agent.musicat_public_id)
     if (source === 'statsfm' && agent.statsfm_username) {
       // Persist the live snapshot, then read the return value back from the
       // accumulated table windowed to what was actually asked for — never

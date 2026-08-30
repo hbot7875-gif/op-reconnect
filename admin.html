@@ -176,38 +176,33 @@
   .adm-roster-drawer-body { padding: 0 18px 30px; }
   .adm-roster-drawer-body .adm-agent-card { margin-top: 18px; }
 
-  /* ── ReConnect Health ── one action queue, not a wall of raw mission rows. */
-  .rh-intro { max-width: 760px; margin: 0 0 14px; }
-  .rh-summary { display: flex; gap: 7px; overflow-x: auto; padding: 2px 0 12px; scrollbar-width: thin; }
-  .rh-chip { flex: 0 0 120px; appearance: none; text-align: left; background: var(--surface-2); color: var(--muted);
-    border: 1px solid var(--border); border-radius: var(--r); padding: 9px 10px; cursor: pointer; }
-  .rh-chip.is-active { color: var(--purple-lt); border-color: var(--purple); background: var(--purple-soft); }
-  .rh-chip b { display: block; color: var(--text); font-family: var(--disp); font-size: 19px; line-height: 1; }
-  .rh-chip span { display: block; font-family: var(--mono); font-size: 9px; text-transform: uppercase; letter-spacing: .55px; margin-top: 5px; }
-  .rh-toolbar { display: grid; grid-template-columns: minmax(180px,1fr) minmax(170px,220px) auto; gap: 8px; margin-bottom: 12px; }
-  .rh-list { display: flex; flex-direction: column; gap: 10px; }
-  .rh-card { border: 1px solid var(--border); border-radius: var(--r-lg); background: rgba(255,255,255,.018); padding: 14px; }
-  .rh-card.is-urgent { border-color: rgba(229,56,79,.42); }
-  .rh-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
-  .rh-head h3 { margin: 0; font-size: 16px; }
-  .rh-head p { margin: 3px 0 0; color: var(--muted); font-size: 13px; }
-  .rh-status { flex-shrink: 0; border: 1px solid var(--border); border-radius: 999px; padding: 4px 8px;
-    color: var(--purple-lt); font-family: var(--mono); font-size: 9px; text-transform: uppercase; letter-spacing: .45px; }
-  .rh-card.is-urgent .rh-status { color: var(--crimson); border-color: rgba(229,56,79,.4); }
-  .rh-meta { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 7px; margin: 11px 0; }
-  .rh-meta span { padding: 8px 9px; background: var(--surface-2); border-radius: var(--r); min-width: 0; }
-  .rh-meta small { display: block; color: var(--dim); font-family: var(--mono); font-size: 8.5px; text-transform: uppercase; letter-spacing: .5px; }
-  .rh-meta b { display: block; margin-top: 2px; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .rh-agents { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
-  .rh-agent { border: 1px solid var(--border); border-radius: 999px; padding: 5px 8px; font-size: 12px; color: var(--muted); }
-  .rh-agent.is-online { color: #75dcae; border-color: rgba(43,190,126,.35); }
-  .rh-action { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 11px;
-    padding-top: 11px; border-top: 1px solid var(--border); }
-  .rh-action-copy { min-width: 0; }
-  .rh-action-copy small { display: block; color: var(--dim); font-family: var(--mono); font-size: 8.5px; text-transform: uppercase; }
-  .rh-action-copy b { display: block; font-size: 13px; margin-top: 2px; }
+  /* ── ReConnect Health ── three human decisions, not diagnostic filters. */
+  .rh-intro { max-width: 680px; margin: 0 0 8px; }
+  .rh-compact-summary { margin: 0 0 18px; color: var(--text); font-family: var(--disp); font-size: 17px; }
+  .rh-compact-summary b { color: var(--purple-lt); }
+  .rh-section { margin-top: 18px; }
+  .rh-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 9px; }
+  .rh-section-head h3 { margin: 0; font-family: var(--mono); font-size: 11px; letter-spacing: 1.4px; }
+  .rh-section-head span { color: var(--dim); font-size: 12px; }
+  .rh-section.is-action .rh-section-head h3 { color: var(--crimson); }
+  .rh-section.is-watch .rh-section-head h3 { color: var(--gold); }
+  .rh-list { display: flex; flex-direction: column; gap: 9px; }
+  .rh-card { border: 1px solid var(--border); border-radius: var(--r-lg); background: rgba(255,255,255,.018); padding: 15px; }
+  .rh-card.is-action { border-color: rgba(229,56,79,.35); }
+  .rh-context { display: block; color: var(--dim); font-family: var(--mono); font-size: 9.5px; letter-spacing: .7px; text-transform: uppercase; }
+  .rh-team { display: block; margin-top: 5px; color: var(--text); font-size: 17px; font-weight: 700; }
+  .rh-reason { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+  .rh-action { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; }
+  .rh-watch-action { color: var(--gold); font-family: var(--mono); font-size: 10.5px; letter-spacing: .35px; }
+  .rh-find { margin-top: 14px; }
+  .rh-find > summary { cursor: pointer; color: var(--dim); font-size: 12px; }
+  .rh-toolbar { display: grid; grid-template-columns: minmax(180px,1fr) minmax(170px,220px); gap: 8px; margin-top: 9px; }
+  .rh-fine { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid var(--border);
+    border-radius: var(--r-lg); padding: 13px 15px; background: rgba(43,190,126,.045); }
+  .rh-fine b { font-family: var(--disp); font-size: 17px; }
+  .rh-fine span { color: #75dcae; font-family: var(--mono); font-size: 11px; }
   .rh-roster { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 10px; }
-  .rh-roster summary { color: var(--purple-lt); cursor: pointer; font-size: 12.5px; }
+  .rh-roster summary { color: var(--dim); cursor: pointer; font-size: 12px; }
   .rh-roster-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 6px; margin-top: 8px; }
   .rh-pick { display: flex; gap: 7px; align-items: center; min-width: 0; padding: 7px 8px; border: 1px solid var(--border);
     border-radius: var(--r); font-size: 12px; }
@@ -215,6 +210,35 @@
   .rh-drawer-card { border: 1px solid var(--border); border-radius: var(--r); padding: 10px 11px; margin-top: 8px; }
   .rh-drawer-card b { display: block; }
   .rh-drawer-card span { display: block; color: var(--muted); font-size: 12px; margin-top: 3px; }
+  .rh-match-dialog { width: min(460px, calc(100vw - 28px)); margin: auto; color: var(--text); background: #13101f;
+    border: 1px solid var(--border-str); border-radius: var(--r-lg); padding: 0; box-shadow: 0 22px 70px rgba(0,0,0,.62); }
+  .rh-match-dialog::backdrop { background: rgba(3,3,8,.76); backdrop-filter: blur(5px); }
+  .rh-match-body { padding: 20px; }
+  .rh-match-body h3 { margin: 4px 0 5px; }
+  .rh-match-line { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--border); }
+  .rh-match-line span { color: var(--dim); }
+  .rh-match-actions { display: flex; gap: 8px; margin-top: 16px; }
+  .rh-match-actions .btn { flex: 1; }
+
+  /* Agent Log: the default surface is a game diary. Account and raw signals
+     remain available, but never compete with the player's story. */
+  .agent-file-tabs { display: grid; grid-template-columns: repeat(3,1fr); gap: 5px; margin: 15px 0; }
+  .agent-file-tab { appearance: none; border: 1px solid var(--border); border-radius: var(--r); background: var(--surface-2);
+    color: var(--dim); padding: 9px 5px; font-family: var(--mono); font-size: 9px; letter-spacing: .55px; cursor: pointer; }
+  .agent-file-tab.is-active { color: var(--purple-lt); border-color: var(--purple); background: var(--purple-soft); }
+  .agent-file-panel[hidden] { display: none; }
+  .agent-diary-day { margin-top: 17px; }
+  .agent-diary-day:first-child { margin-top: 0; }
+  .agent-diary-date { color: var(--dim); font-family: var(--mono); font-size: 9.5px; letter-spacing: .8px; text-transform: uppercase; margin-bottom: 7px; }
+  .agent-diary-entry { display: grid; grid-template-columns: 28px 1fr auto; gap: 8px; align-items: center; padding: 9px 0;
+    border-bottom: 1px solid var(--border); }
+  .agent-diary-icon { font-size: 17px; text-align: center; }
+  .agent-diary-copy b { display: block; font-size: 14px; }
+  .agent-diary-copy span { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .agent-diary-time { color: var(--dim); font-family: var(--mono); font-size: 9px; white-space: nowrap; }
+  .agent-tech-row { padding: 9px 0; border-bottom: 1px solid var(--border); }
+  .agent-tech-row b { display: block; font-family: var(--mono); font-size: 10.5px; }
+  .agent-tech-row span { display: block; color: var(--dim); font-size: 11px; margin-top: 2px; }
 
   .adm-field { display: block; margin-bottom: 12px; }
   .adm-field > span { display: block; font-family: var(--mono); font-size: 11px; letter-spacing: 0.8px;
@@ -473,13 +497,20 @@
   <section class="adm-card">
     <h2>Launch a Red Zone event</h2>
     <p class="muted">Every agent sees a breach warning and streams together to defuse it before the timer
-      runs out. Launching while one is already active <b>overwrites it</b> — you'll be asked to confirm first.</p>
+      runs out. Only one Red Zone can run at a time; finish or expire the current event before launching another.</p>
     <div class="adm-grid2">
       <label class="adm-field"><span>Target streams</span>
         <input id="rzTarget" class="ob-input" type="number" min="1" value="2000"></label>
       <label class="adm-field"><span>Duration (hours, 1–72)</span>
         <input id="rzHours" class="ob-input" type="number" min="1" max="72" value="24"></label>
     </div>
+    <label class="adm-field"><span>What counts</span>
+      <select id="rzTargetGoal" class="ob-input">
+        <option value="">Any BTS song</option>
+      </select></label>
+    <p class="muted">Players are told exactly this — "stream Haegeum", "stream the ARIRANG album", or
+      "stream any BTS song". Picking a track counts only that track; picking an album counts any track on
+      it. The choice is frozen when you launch, so editing the goal afterwards can't change a running event.</p>
     <label class="adm-field"><span>Title</span>
       <input id="rzTitle" class="ob-input" type="text" placeholder="INCOMING: RED ZONE"></label>
     <label class="adm-field"><span>Message</span>
@@ -726,18 +757,38 @@
       <h2>ReConnect Health</h2>
       <button class="btn btn-ghost" id="btnLoadReconnect" type="button">↻ Refresh</button>
     </div>
-    <p class="muted rh-intro">See who needs people, whose invite is getting old, inactive teams, deadlines,
-      and blocked puzzles in one place. Suggested fixes never run until you confirm them.</p>
-    <div class="rh-summary" id="reconnectSummary" aria-label="ReConnect health filters"></div>
-    <div class="rh-toolbar">
-      <input class="ob-input" id="reconnectFilter" type="search" placeholder="Search agent or district…" autocomplete="off">
-      <select class="ob-input" id="reconnectDistrictFilter" aria-label="Filter by district">
-        <option value="">All districts</option>
-      </select>
-      <span class="muted" id="reconnectCount">—</span>
-    </div>
-    <div id="reconnectList"></div>
+    <p class="muted rh-intro">Start with the people who need you. Everything healthy stays out of the way.</p>
+    <p class="rh-compact-summary" id="reconnectSummary">—</p>
+
+    <section class="rh-section is-action" aria-labelledby="rhNeedsTitle">
+      <div class="rh-section-head"><h3 id="rhNeedsTitle">NEEDS ACTION</h3><span id="reconnectNeedsCount">—</span></div>
+      <div class="rh-list" id="reconnectNeedsList"></div>
+    </section>
+
+    <section class="rh-section is-watch" aria-labelledby="rhWatchTitle">
+      <div class="rh-section-head"><h3 id="rhWatchTitle">WATCH</h3><span id="reconnectWatchCount">—</span></div>
+      <div class="rh-list" id="reconnectWatchList"></div>
+    </section>
+
+    <section class="rh-section" aria-labelledby="rhFineTitle">
+      <div class="rh-section-head"><h3 id="rhFineTitle">FINE</h3><span>count only</span></div>
+      <div class="rh-fine"><b id="reconnectFineCount">—</b><span>progressing normally</span></div>
+    </section>
+
+    <details class="rh-find">
+      <summary>Find a specific ReConnect case</summary>
+      <div class="rh-toolbar">
+        <input class="ob-input" id="reconnectFilter" type="search" placeholder="Search agent or district…" autocomplete="off">
+        <select class="ob-input" id="reconnectDistrictFilter" aria-label="Filter by district">
+          <option value="">All districts</option>
+        </select>
+      </div>
+    </details>
   </section>
+
+  <dialog class="rh-match-dialog" id="reconnectMatchDialog">
+    <div class="rh-match-body" id="reconnectMatchBody"></div>
+  </dialog>
 </div>
 
 </div><!-- /admApp -->
@@ -746,6 +797,11 @@
 import { call as rawCall, API_URL } from './js/api.js'
 import { scanVoteProofImage } from './js/vma.js'
 import { evaluateVoteProof } from './supabase/functions/op-reconnect/lib/vma-ocr.js'
+import {
+  reconnectAdminAction, reconnectAdminBucket, reconnectBucketCounts,
+  reconnectPlainReason, reconnectTeamLabel,
+  redZoneTargetOptions,
+} from './js/reconnect-admin-ui.js'
 
 const $ = (id) => document.getElementById(id)
 const KEY_STORAGE = 'rc_admin_key' // shared with candy-star-admin.html on purpose
@@ -833,6 +889,9 @@ function revealApp(res) {
   $('admGate').hidden = true
   $('admApp').hidden = false
   paintRZStatus(res)
+  // The launch form's target picker needs the goal list too — without this
+  // it would sit on "Any BTS song" alone until someone hit Refresh.
+  loadRZTargets()
   loadBroadcastsSnapOnly()
 }
 
@@ -907,6 +966,11 @@ function paintRZStatus(res) {
     return
   }
   rzActive = !!res.active
+  const launch = $('btnLaunchRZ')
+  if (launch) {
+    launch.disabled = sessionUnauthorized || rzActive
+    launch.textContent = rzActive ? '🛡️ Red Zone already active' : '🛡️ Launch Red Zone'
+  }
   paintSnapRZ(res)
   if (!res.active) {
     box.innerHTML = `<span class="adm-rz-dot"></span><span>No active Red Zone — the network is clear.</span>`
@@ -924,6 +988,7 @@ function paintRZStatus(res) {
       <div class="rz-goal-top"><span>Qualified streams</span><span class="rz-num">${d.progress.toLocaleString()}<i>/${d.target.toLocaleString()}</i></span></div>
       <div class="rz-bar"><i style="width:${pct}%"></i></div>
       <div class="rz-timer"><span>Ends</span><b style="font-size:13px;letter-spacing:0;">${esc(ends)}</b></div>
+      <div class="rz-foot">Counting: ${esc(d.targetAlbum ? `the ${d.targetAlbum} album` : d.targetTrack || 'any BTS song')}</div>
       <div class="rz-foot">${d.rewardXp.toLocaleString()} XP pool &middot; ${d.qualifiedAgents} qualified agent${d.qualifiedAgents === 1 ? '' : 's'} &middot; minimum ${d.minimumStreams} streams each</div>
     </div>
   `
@@ -941,15 +1006,46 @@ function paintSnapRZ(res) {
     sub.textContent = 'No event running'
   }
 }
+/** Fills the "What counts" picker from the same goal list the Goals tab
+ *  edits — no separate catalog of song names to keep in sync, and no free
+ *  text for a title to be typo'd into something that matches nothing.
+ *  Reconnect goals are excluded: they're puzzles, not streamable targets.
+ *  Loaded once per session; a goal added while the panel is open shows up
+ *  on the next refresh, same as every other list here. */
+let rzGoalsLoaded = false
+async function loadRZTargets() {
+  if (rzGoalsLoaded) return
+  const sel = $('rzTargetGoal')
+  const res = await call('adminListGoals')
+  if (!res?.success) return
+  rzGoalsLoaded = true
+  let html = ''
+  let openGroup = null
+  for (const opt of redZoneTargetOptions(res.goals)) {
+    if (opt.group !== openGroup) {
+      if (openGroup) html += '</optgroup>'
+      openGroup = opt.group
+      if (openGroup) html += `<optgroup label="${esc(openGroup)}">`
+    }
+    html += `<option value="${esc(opt.value)}">${esc(opt.label)}</option>`
+  }
+  if (openGroup) html += '</optgroup>'
+  sel.innerHTML = html
+}
+
 async function refreshRZ() {
   $('rzStatus').innerHTML = `<span class="adm-spin"></span> Checking…`
+  loadRZTargets()
   const res = await call('adminGetActiveDefuse')
   paintRZStatus(res)
 }
 $('btnRefreshRZ').onclick = refreshRZ
 
 $('btnLaunchRZ').onclick = async () => {
-  if (rzActive && !confirm('A Red Zone event is already active. Launching a new one overwrites it — the old one stops counting. Continue?')) return
+  if (rzActive) {
+    showOut('rzOut', { success: false, error: 'Finish or expire the current Red Zone before launching another.' }, 'error')
+    return
+  }
   const btn = $('btnLaunchRZ')
   btn.disabled = true
   btn.textContent = 'LAUNCHING…'
@@ -959,6 +1055,7 @@ $('btnLaunchRZ').onclick = async () => {
     title: $('rzTitle').value.trim() || undefined,
     message: $('rzMessage').value.trim() || undefined,
     rewardXp: parseInt($('rzReward').value) || 500,
+    targetGoalId: $('rzTargetGoal').value || undefined,
   })
   btn.disabled = sessionUnauthorized
   btn.textContent = '🛡️ Launch Red Zone'
@@ -1418,39 +1515,50 @@ $('btnAddReconnectGoal').onclick = async () => {
 function progressBar(pct) {
   return `<div class="pbar"><div class="pfill${pct >= 100 ? ' done' : ''}" style="width:${Math.min(100, pct)}%"></div></div>`
 }
-const RECONNECT_STATUS_COPY = {
-  expired: 'Deadline passed', mission_expired: 'Mission expired', deadline_soon: 'Deadline soon',
-  puzzle_blocked: 'Puzzle blocked', cipher_blocked: 'Cipher blocked', invite_overdue: 'Invite unanswered',
-  idle_teammate: 'Inactive teammate', needs_people: 'Needs people', active: 'Team active',
+function kstToday(offsetDays = 0) {
+  return new Date(Date.now() + (9 * 60 * 60 * 1000) + offsetDays * 86400000).toISOString().slice(0, 10)
 }
-const RECONNECT_ACTION_COPY = {
-  extend_or_reset: 'Review deadline or restart', open_agent_file: 'Help with this puzzle',
-  reset_cipher: 'Reset cipher attempts', replace_invite: 'Replace old invite',
-  check_teammate: 'Check inactive teammate', fill_team: 'Complete the team', monitor: 'No action needed',
+
+function diaryDayLabel(dayKey) {
+  if (dayKey === kstToday()) return 'Today'
+  if (dayKey === kstToday(-1)) return 'Yesterday'
+  return new Date(`${dayKey}T00:00:00Z`).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 }
-function reconnectStatusCopy(value) { return RECONNECT_STATUS_COPY[value] || String(value || 'Needs attention').replaceAll('_', ' ') }
-function reconnectActionCopy(value) { return RECONNECT_ACTION_COPY[value] || String(value || 'Review').replaceAll('_', ' ') }
-function renderAgentReconnectHealth(items = [], agentNo = '') {
-  if (!items.length) return `
-    <div class="adm-agent-section">
-      <h3>ReConnect</h3>
-      <div class="rh-drawer-card"><b>✓ No active issue</b><span>This agent is not waiting, blocked, or near a ReConnect deadline.</span></div>
-    </div>`
-  return `
-    <div class="adm-agent-section">
-      <h3>ReConnect</h3>
-      ${items.map((item) => `
-        <div class="rh-drawer-card">
-          <b>${esc(item.districtName)} · ${esc(reconnectStatusCopy(item.primaryStatus))}</b>
-          <span>${esc(item.goalLabel)} · ${esc(reconnectActionCopy(item.recommendedAction))}</span>
+
+function renderAgentDiary(entries = []) {
+  if (!entries.length) return `<div class="adm-empty">No stored game milestones yet.</div>`
+  const groups = new Map()
+  for (const entry of entries) {
+    const list = groups.get(entry.dayKey) || []
+    list.push(entry)
+    groups.set(entry.dayKey, list)
+  }
+  return [...groups.entries()].map(([dayKey, rows]) => `
+    <section class="agent-diary-day">
+      <div class="agent-diary-date">${esc(diaryDayLabel(dayKey))}</div>
+      ${rows.map((entry) => `
+        <div class="agent-diary-entry">
+          <span class="agent-diary-icon">${esc(entry.icon || '•')}</span>
+          <span class="agent-diary-copy"><b>${esc(entry.title)}</b>${entry.detail ? `<span>${esc(entry.detail)}</span>` : ''}</span>
+          <time class="agent-diary-time">${new Date(entry.occurredAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</time>
         </div>`).join('')}
-      <button class="btn btn-ghost" type="button" data-act="open-reconnect-health" data-agent="${esc(agentNo)}" style="margin-top:9px;">Open in ReConnect Health</button>
-    </div>`
+    </section>`).join('')
 }
+
+function renderTechnicalEvents(events = []) {
+  if (!events.length) return `<div class="adm-empty">No recent telemetry stored.</div>`
+  return events.map((event) => `
+    <div class="agent-tech-row">
+      <b>${esc(event.eventType)}</b>
+      <span>${esc([event.screen, event.districtId, fmtDate(event.createdAt)].filter(Boolean).join(' · '))}</span>
+    </div>`).join('')
+}
+
 function renderAgent(a) {
   const uplinkOk = !a.uplinkBroken
   const sourceLabel = { lb: 'ListenBrainz', direct: 'Scrobbler app (direct)', statsfm: 'stats.fm', musicat: 'musicat.fm' }[a.streamSource] || a.streamSource
   const p = a.progress
+  const issue = (a.reconnectHealth || [])[0]
   return `
     <div class="adm-agent-card">
       <div class="adm-agent-head">
@@ -1458,62 +1566,63 @@ function renderAgent(a) {
           <div class="adm-agent-handle">${esc(a.handle)}</div>
           <div class="adm-agent-no">${esc(a.agentNo)}</div>
         </div>
-        <span class="adm-badge ${uplinkOk ? 'ok' : 'bad'}">${uplinkOk ? '✓ Uplink OK' : '⚠ Uplink broken'}</span>
+        <span class="adm-badge ${uplinkOk ? 'ok' : 'bad'}">${uplinkOk ? '✓ Setup OK' : '⚠ Setup issue'}</span>
       </div>
 
-      <div class="adm-agent-grid">
-        <div class="adm-agent-stat"><div class="k">Email</div><div class="v">${esc(a.email || '—')}</div></div>
-        <div class="adm-agent-stat"><div class="k">Joined game</div><div class="v">${a.joined ? 'Yes' : 'No — account only'}</div></div>
-        <div class="adm-agent-stat"><div class="k">Account created</div><div class="v">${esc(fmtDate(a.createdAt))}</div></div>
-        <div class="adm-agent-stat"><div class="k">Last login</div><div class="v">${esc(fmtDate(a.lastLoginAt))}</div></div>
+      ${issue ? `<div class="rh-drawer-card"><b>ReConnect needs attention</b><span>${esc(reconnectPlainReason(issue))}</span>
+        <button class="btn btn-ghost" type="button" data-act="open-reconnect-health" data-agent="${esc(a.agentNo)}" style="margin-top:9px;">Open ReConnect</button></div>` : ''}
+
+      <div class="agent-file-tabs" role="tablist">
+        <button class="agent-file-tab is-active" type="button" data-agent-tab="diary">GAME DIARY</button>
+        <button class="agent-file-tab" type="button" data-agent-tab="account">ACCOUNT</button>
+        <button class="agent-file-tab" type="button" data-agent-tab="technical">TECHNICAL</button>
       </div>
 
-      ${a.joined ? `
-      <div class="adm-agent-section">
-        <h3>Progress</h3>
-        <div class="adm-agent-grid">
-          <div class="adm-agent-stat"><div class="k">Level</div><div class="v">${a.level} &middot; ${esc(a.rank || '')}</div></div>
-          <div class="adm-agent-stat"><div class="k">Lifetime XP</div><div class="v">${a.xp.toLocaleString()}</div></div>
-          <div class="adm-agent-stat"><div class="k">Codename</div><div class="v">${esc(p.codename)} (${esc(p.mode)} mode)</div></div>
-          <div class="adm-agent-stat"><div class="k">Active district</div><div class="v">${esc(p.activeDistrict || 'None')}</div></div>
-        </div>
-        <div style="margin-top:12px;">
-          <div class="k" style="font-family:var(--mono);font-size:9.5px;letter-spacing:1px;text-transform:uppercase;color:var(--dim);margin-bottom:6px;">
-            Districts restored — ${p.districtsRestored} / ${p.districtsTotal}
-          </div>
-          ${progressBar(p.districtsTotal ? (p.districtsRestored / p.districtsTotal) * 100 : 0)}
-        </div>
-        <div style="margin-top:10px;">
-          <div class="k" style="font-family:var(--mono);font-size:9.5px;letter-spacing:1px;text-transform:uppercase;color:var(--dim);margin-bottom:6px;">
-            Wards restored — ${p.wardsRestored} / ${p.wardsTotal}
-          </div>
-          ${progressBar(p.wardsTotal ? (p.wardsRestored / p.wardsTotal) * 100 : 0)}
-        </div>
-      </div>` : ''}
+      <section class="agent-file-panel" data-agent-panel="diary">
+        ${renderAgentDiary(a.gameDiary || [])}
+      </section>
 
-      ${a.joined ? renderAgentReconnectHealth(a.reconnectHealth || [], a.agentNo) : ''}
-
-      <div class="adm-agent-section">
-        <h3>Uplink source</h3>
+      <section class="agent-file-panel" data-agent-panel="account" hidden>
         <div class="adm-agent-grid">
+          <div class="adm-agent-stat"><div class="k">Email</div><div class="v">${esc(a.email || '—')}</div></div>
+          <div class="adm-agent-stat"><div class="k">Joined game</div><div class="v">${a.joined ? 'Yes' : 'No — account only'}</div></div>
+          <div class="adm-agent-stat"><div class="k">Account created</div><div class="v">${esc(fmtDate(a.createdAt))}</div></div>
+          <div class="adm-agent-stat"><div class="k">Last login</div><div class="v">${esc(fmtDate(a.lastLoginAt))}</div></div>
+        </div>
+        ${a.joined ? `
+          <div class="adm-agent-section"><h3>Progress</h3><div class="adm-agent-grid">
+            <div class="adm-agent-stat"><div class="k">Level</div><div class="v">${a.level} &middot; ${esc(a.rank || '')}</div></div>
+            <div class="adm-agent-stat"><div class="k">Lifetime XP</div><div class="v">${a.xp.toLocaleString()}</div></div>
+            <div class="adm-agent-stat"><div class="k">Codename</div><div class="v">${esc(p.codename)} (${esc(p.mode)} mode)</div></div>
+            <div class="adm-agent-stat"><div class="k">Active district</div><div class="v">${esc(p.activeDistrict || 'None')}</div></div>
+          </div></div>` : ''}
+        <div class="adm-agent-section"><h3>Streaming setup</h3><div class="adm-agent-grid">
           <div class="adm-agent-stat"><div class="k">Configured source</div><div class="v">${esc(sourceLabel)}</div></div>
           <div class="adm-agent-stat"><div class="k">ListenBrainz user</div><div class="v">${esc(a.lbUsername || '—')}</div></div>
           <div class="adm-agent-stat"><div class="k">stats.fm user</div><div class="v">${esc(a.statsfmUsername || '—')}</div></div>
           <div class="adm-agent-stat"><div class="k">musicat.fm ID</div><div class="v">${esc(a.musicatPublicId || '—')}</div></div>
-        </div>
-        <div class="adm-agent-stat" style="margin-top:10px;"><div class="k">Direct scrobble PIN</div><div class="v">${a.hasPin ? 'Generated' : 'Not generated'}</div></div>
-        ${!uplinkOk ? `<p class="muted" style="margin-top:10px;color:var(--crimson);">This agent's counted-source is unset or missing its username/ID — they will earn zero XP from streaming until it's fixed in Settings.</p>` : ''}
-      </div>
+        </div><div class="adm-agent-stat" style="margin-top:10px;"><div class="k">Direct scrobble PIN</div><div class="v">${a.hasPin ? 'Generated' : 'Not generated'}</div></div>
+        ${!uplinkOk ? `<p class="muted" style="margin-top:10px;color:var(--crimson);">This streaming source is incomplete, so plays cannot be counted until it is fixed in Settings.</p>` : ''}</div>
+        <div class="adm-agent-section"><h3>Danger zone</h3>
+          <p class="muted" style="font-size:13px;margin-bottom:10px;">Permanently deletes this account and all game data. Cannot be undone.</p>
+          <button class="adm-agent-danger-btn adm-mutate-btn" type="button" data-act="delete-agent">Delete agent…</button>
+          <div class="adm-out" id="lkAgentOut"></div></div>
+      </section>
 
-      <div class="adm-agent-section">
-        <h3>Danger zone</h3>
-        <p class="muted" style="font-size:13px;margin-bottom:10px;">Permanently deletes this account and every
-          row tied to it — progress, badges, XP, stream history, everything. Cannot be undone.</p>
-        <button class="adm-agent-danger-btn adm-mutate-btn" type="button" data-act="delete-agent">Delete agent…</button>
-        <div class="adm-out" id="lkAgentOut"></div>
-      </div>
+      <section class="agent-file-panel" data-agent-panel="technical" hidden>
+        <div class="adm-agent-section"><h3>Recent telemetry</h3>${renderTechnicalEvents(a.technicalEvents || [])}</div>
+      </section>
     </div>
   `
+}
+
+function wireAgentTabs(container) {
+  const tabs = [...container.querySelectorAll('[data-agent-tab]')]
+  const panels = [...container.querySelectorAll('[data-agent-panel]')]
+  for (const tab of tabs) tab.onclick = () => {
+    for (const button of tabs) button.classList.toggle('is-active', button === tab)
+    for (const panel of panels) panel.hidden = panel.dataset.agentPanel !== tab.dataset.agentTab
+  }
 }
 function wireAgentDangerButton(container, agent) {
   const btn = container.querySelector('[data-act="delete-agent"]')
@@ -1555,6 +1664,7 @@ $('btnLookup').onclick = async () => {
     return
   }
   out.innerHTML = renderAgent(res.agent)
+  wireAgentTabs(out)
   wireAgentDangerButton(out, res.agent)
   wireAgentReconnectButton(out, res.agent)
   if (sessionUnauthorized) setMutationButtonsDisabled(true)
@@ -1735,6 +1845,7 @@ async function openRosterAgent(agent) {
     return
   }
   $('rosterDrawerBody').innerHTML = renderAgent(res.agent)
+  wireAgentTabs($('rosterDrawerBody'))
   wireAgentDangerButton($('rosterDrawerBody'), res.agent)
   wireAgentReconnectButton($('rosterDrawerBody'), res.agent)
   if (sessionUnauthorized) setMutationButtonsDisabled(true)
@@ -1954,7 +2065,6 @@ document.querySelector('[data-tab="vma"]').addEventListener('click', () => loadV
 
 /* ── Reconnect ── */
 let reconnectCases = []
-let reconnectScope = 'attention'
 
 function fmtWait(iso) {
   if (!iso) return '—'
@@ -1970,30 +2080,7 @@ function fmtDeadline(iso) {
   return `${hours < 24 ? `${hours}h left` : `${Math.ceil(hours / 24)}d left`} · ${fmtDate(iso)}`
 }
 
-function fmtLastSeen(agent) {
-  const seenPart = agent.lastSeenAt
-    ? `seen ${fmtWait(agent.lastSeenAt) === 'today' ? 'today' : fmtWait(agent.lastSeenAt) + ' ago'}`
-    : 'last-seen not recorded'
-  const activePart = agent.quietDays === 0 ? 'streamed today'
-    : agent.quietDays === 1 ? 'streamed yesterday'
-    : `quiet ${agent.quietDays}d`
-  return `${seenPart} · ${activePart}`
-}
-
-const RECONNECT_FILTERS = [
-  ['attention', 'Needs attention'], ['needs_people', 'Needs people'],
-  ['invite_overdue', 'Old invites'], ['idle_teammate', 'Inactive team'],
-  ['deadline_soon', 'Deadline soon'], ['puzzle_blocked', 'Blocked'], ['all', 'All cases'],
-]
-
-function reconnectMatchesScope(item) {
-  if (reconnectScope === 'all') return true
-  if (reconnectScope === 'attention') return !['active', 'invite_pending'].includes(item.primaryStatus)
-  return (item.flags || []).includes(reconnectScope)
-}
-
 function reconnectCaseMatches(item) {
-  if (!reconnectMatchesScope(item)) return false
   const district = $('reconnectDistrictFilter').value
   if (district && item.districtId !== district) return false
   const q = $('reconnectFilter').value.trim().toLowerCase()
@@ -2002,18 +2089,6 @@ function reconnectCaseMatches(item) {
     ...(item.agents || []).flatMap((a) => [a.agentNo, a.codename]),
     ...(item.invites || []).flatMap((a) => [a.agentNo, a.codename])]
   return searchable.some((value) => String(value || '').toLowerCase().includes(q))
-}
-
-function paintReconnectSummary(summary = {}) {
-  const attention = reconnectCases.filter((item) => !['active', 'invite_pending'].includes(item.primaryStatus)).length
-  $('reconnectSummary').innerHTML = RECONNECT_FILTERS.map(([key, label]) => {
-    const count = key === 'attention' ? attention : key === 'all' ? reconnectCases.length : (summary[key] || 0)
-    return `<button class="rh-chip${reconnectScope === key ? ' is-active' : ''}" type="button" data-rh-scope="${key}">
-      <b>${count}</b><span>${esc(label)}</span></button>`
-  }).join('')
-  $('reconnectSummary').querySelectorAll('[data-rh-scope]').forEach((button) => {
-    button.onclick = () => { reconnectScope = button.dataset.rhScope; paintReconnectSummary(summary); paintReconnectList() }
-  })
 }
 
 function populateReconnectDistricts() {
@@ -2027,11 +2102,6 @@ function populateReconnectDistricts() {
 
 async function connectReconnectRoster(btn, item, agentNos) {
   if (agentNos.length !== item.requiredAgents) return
-  const names = agentNos.map((agentNo) => {
-    const agent = [...(item.agents || []), ...(item.availableAgents || [])].find((a) => a.agentNo === agentNo)
-    return agent?.codename || agentNo
-  })
-  if (!confirm(`Connect this ${item.requiredAgents}-agent team in ${item.districtName}?\n\n${names.join(', ')}\n\nExisting team members will be kept.`)) return
   btn.disabled = true
   const original = btn.textContent
   btn.textContent = 'Connecting…'
@@ -2048,109 +2118,149 @@ async function connectReconnectRoster(btn, item, agentNos) {
   }
 }
 
-function agentPill(agent, extra = '') {
-  return `<span class="rh-agent${agent.online ? ' is-online' : ''}">${agent.online ? '●' : '○'} ${esc(agent.codename)}${extra ? ` · ${esc(extra)}` : ''}</span>`
+function previewReconnectRoster(btn, item, agentNos) {
+  const dialog = $('reconnectMatchDialog')
+  const body = $('reconnectMatchBody')
+  const allAgents = [...(item.agents || []), ...(item.availableAgents || []), ...(item.suggestedAgents || [])]
+  const nameOf = (agentNo) => allAgents.find((agent) => agent.agentNo === agentNo)?.codename || agentNo
+  const currentNos = new Set((item.agents || []).map((agent) => agent.agentNo))
+  const current = (item.agents || []).map((agent) => agent.codename)
+  const additions = agentNos.filter((agentNo) => !currentNos.has(agentNo)).map(nameOf)
+  body.innerHTML = `
+    <span class="rh-context">${esc(item.districtName)} · ${esc(item.goalLabel)}</span>
+    <h3>Confirm this team?</h3>
+    <p class="muted">The suggested match is available and restoring the same district.</p>
+    <div class="rh-match-line"><span>Current team</span><b>${esc(current.join(' + ') || 'No one yet')}</b></div>
+    <div class="rh-match-line"><span>Add</span><b>${esc(additions.join(' + ') || 'No change')}</b></div>
+    <div class="rh-match-actions">
+      <button class="btn btn-ghost" type="button" data-match-cancel>Cancel</button>
+      <button class="btn btn-primary adm-mutate-btn" type="button" data-match-confirm>Confirm team</button>
+    </div>`
+  body.querySelector('[data-match-cancel]').onclick = () => dialog.close()
+  body.querySelector('[data-match-confirm]').onclick = async (event) => {
+    dialog.close()
+    await connectReconnectRoster(btn, item, agentNos)
+  }
+  dialog.showModal()
 }
 
-function makeReconnectCard(item) {
-  const card = document.createElement('article')
-  const urgent = (item.flags || []).some((flag) => ['expired', 'deadline_soon', 'puzzle_blocked'].includes(flag))
-  card.className = `rh-card${urgent ? ' is-urgent' : ''}`
-  const joinedLabel = item.kind === 'puzzle' ? 'Solo puzzle' : `${item.joinedCount}/${item.requiredAgents} joined`
-  card.innerHTML = `
-    <div class="rh-head">
-      <div><h3>${esc(item.districtName)}</h3><p>${esc(item.goalLabel)}</p></div>
-      <span class="rh-status">${esc(reconnectStatusCopy(item.primaryStatus))}</span>
-    </div>
-    <div class="rh-meta">
-      <span><small>Team</small><b>${esc(joinedLabel)}</b></span>
-      <span><small>Waiting</small><b>${esc(fmtWait(item.waitingSince))}</b></span>
-      <span><small>District deadline</small><b>${esc(fmtDeadline(item.districtExpiresAt))}</b></span>
-    </div>
-    <div class="rh-agents">
-      ${(item.agents || []).map((a) => agentPill(a, a.quietDays > 0 ? `${a.quietDays}d quiet` : 'active')).join('')}
-      ${(item.invites || []).map((a) => agentPill(a, 'invited')).join('')}
-    </div>`
-
-  const action = document.createElement('div')
-  action.className = 'rh-action'
-  action.innerHTML = `<div class="rh-action-copy"><small>Recommended next step</small><b>${esc(item.recommendedAction)}</b></div>`
-  if (item.kind === 'puzzle') {
-    const btn = document.createElement('button')
-    btn.className = 'btn btn-ghost'; btn.type = 'button'; btn.textContent = 'Open agent file'
-    btn.onclick = () => {
-      selectTab('lookup'); $('lkQuery').value = item.agents?.[0]?.agentNo || ''; $('btnLookup').click()
-    }
-    action.appendChild(btn)
-  } else if (item.suggestedAgentNos?.length === item.requiredAgents && !(item.flags || []).includes('expired')) {
-    const btn = document.createElement('button')
-    btn.className = 'btn btn-primary adm-mutate-btn'; btn.type = 'button'
-    btn.textContent = `Complete ${item.requiredAgents}-agent team`
-    btn.onclick = () => connectReconnectRoster(btn, item, item.suggestedAgentNos)
-    action.appendChild(btn)
-  }
-  card.appendChild(action)
+function appendReconnectMoreOptions(card, item) {
+  const details = document.createElement('details')
+  details.className = 'rh-roster'
+  details.innerHTML = `<summary>More options</summary>
+    <div class="rh-match-line"><span>Quest</span><b>${esc(item.goalLabel)}</b></div>
+    <div class="rh-match-line"><span>Waiting</span><b>${esc(fmtWait(item.waitingSince))}</b></div>
+    <div class="rh-match-line"><span>District deadline</span><b>${esc(fmtDeadline(item.districtExpiresAt))}</b></div>`
 
   if (item.kind === 'mission' && !(item.flags || []).includes('expired')) {
-    const details = document.createElement('details')
-    details.className = 'rh-roster'
-    details.innerHTML = `<summary>Choose a different roster</summary><div class="rh-roster-list"></div>`
-    const roster = details.querySelector('.rh-roster-list')
+    const roster = document.createElement('div')
+    roster.className = 'rh-roster-list'
     for (const agent of item.agents || []) {
       const label = document.createElement('label')
-      label.className = 'rh-pick'; label.innerHTML = `<input type="checkbox" checked disabled value="${esc(agent.agentNo)}"><span>${esc(agent.codename)} · already joined</span>`
+      label.className = 'rh-pick'
+      label.innerHTML = `<input type="checkbox" checked disabled value="${esc(agent.agentNo)}"><span>${esc(agent.codename)} · already joined</span>`
       roster.appendChild(label)
     }
     for (const agent of item.availableAgents || []) {
       const label = document.createElement('label')
-      label.className = 'rh-pick'; label.innerHTML = `<input type="checkbox" value="${esc(agent.agentNo)}"><span>${agent.online ? '● ' : ''}${esc(agent.codename)} · ${agent.quietDays ? `${agent.quietDays}d quiet` : 'active'}</span>`
+      label.className = 'rh-pick'
+      label.innerHTML = `<input type="checkbox" value="${esc(agent.agentNo)}"><span>${esc(agent.codename)}</span>`
       roster.appendChild(label)
     }
+    details.appendChild(roster)
     const manualBtn = document.createElement('button')
-    manualBtn.className = 'btn btn-ghost adm-mutate-btn'; manualBtn.type = 'button'; manualBtn.style.marginTop = '8px'
+    manualBtn.className = 'btn btn-ghost adm-mutate-btn'
+    manualBtn.type = 'button'
+    manualBtn.style.marginTop = '8px'
     const updateManual = () => {
       const selected = [...details.querySelectorAll('input:checked')].map((input) => input.value)
       manualBtn.disabled = selected.length !== item.requiredAgents || sessionUnauthorized
       manualBtn.textContent = selected.length === item.requiredAgents
-        ? `Connect selected ${item.requiredAgents}` : `Choose ${item.requiredAgents - selected.length} more`
+        ? 'Preview selected team' : `Choose ${Math.max(0, item.requiredAgents - selected.length)} more`
     }
     roster.querySelectorAll('input:not(:disabled)').forEach((input) => input.onchange = () => {
       const checked = [...roster.querySelectorAll('input:checked')]
       if (checked.length > item.requiredAgents) input.checked = false
       updateManual()
     })
-    manualBtn.onclick = () => connectReconnectRoster(manualBtn, item,
+    manualBtn.onclick = () => previewReconnectRoster(manualBtn, item,
       [...details.querySelectorAll('input:checked')].map((input) => input.value))
     details.appendChild(manualBtn)
     updateManual()
-    card.appendChild(details)
   }
+  card.appendChild(details)
+  return details
+}
+
+function openReconnectAgent(item) {
+  const agentNo = item.agents?.[0]?.agentNo || item.invites?.[0]?.agentNo
+  if (!agentNo) return
+  selectTab('lookup')
+  $('lkQuery').value = agentNo
+  $('btnLookup').click()
+}
+
+function makeReconnectCard(item, bucket) {
+  const card = document.createElement('article')
+  card.className = `rh-card is-${bucket}`
+  const actionSpec = reconnectAdminAction(item)
+  card.innerHTML = `
+    <span class="rh-context">${esc(item.districtName)}</span>
+    <strong class="rh-team">${esc(reconnectTeamLabel(item))}</strong>
+    <p class="rh-reason">${esc(reconnectPlainReason(item))}</p>`
+
+  const action = document.createElement('div')
+  action.className = 'rh-action'
+  if (actionSpec.kind === 'autofill') {
+    const btn = document.createElement('button')
+    btn.className = 'btn btn-primary adm-mutate-btn'; btn.type = 'button'; btn.textContent = actionSpec.label
+    btn.onclick = () => previewReconnectRoster(btn, item, item.suggestedAgentNos)
+    action.appendChild(btn)
+  } else if (actionSpec.kind === 'open_agent') {
+    const btn = document.createElement('button')
+    btn.className = 'btn btn-ghost'; btn.type = 'button'; btn.textContent = actionSpec.label
+    btn.onclick = () => openReconnectAgent(item)
+    action.appendChild(btn)
+  } else if (actionSpec.kind === 'review') {
+    const btn = document.createElement('button')
+    btn.className = 'btn btn-ghost'; btn.type = 'button'; btn.textContent = actionSpec.label
+    btn.onclick = () => { const more = card.querySelector('.rh-roster'); more.open = true; more.scrollIntoView({ block: 'nearest' }) }
+    action.appendChild(btn)
+  } else {
+    action.innerHTML = `<span class="rh-watch-action">Recommended: ${esc(actionSpec.label)}</span>`
+  }
+  card.appendChild(action)
+  appendReconnectMoreOptions(card, item)
   return card
 }
 
 function paintReconnectList() {
-  const list = $('reconnectList')
-  list.innerHTML = ''
-  const cases = reconnectCases.filter(reconnectCaseMatches)
-  $('reconnectCount').textContent = `Showing ${cases.length} of ${reconnectCases.length}`
-  if (!cases.length) {
-    list.innerHTML = '<div class="adm-empty">No ReConnect cases match this view.</div>'
-    return
+  const counts = reconnectBucketCounts(reconnectCases)
+  $('reconnectSummary').innerHTML = `<b>${counts.action}</b> need action &middot; <b>${counts.watch}</b> to watch &middot; <b>${counts.fine}</b> fine`
+  $('reconnectFineCount').textContent = `${counts.fine} ${counts.fine === 1 ? 'mission' : 'missions'}`
+  const visible = reconnectCases.filter(reconnectCaseMatches)
+  const actionCases = visible.filter((item) => reconnectAdminBucket(item) === 'action')
+  const watchCases = visible.filter((item) => reconnectAdminBucket(item) === 'watch')
+  $('reconnectNeedsCount').textContent = `${actionCases.length}`
+  $('reconnectWatchCount').textContent = `${watchCases.length}`
+  const paint = (id, cases, bucket, empty) => {
+    const list = $(id)
+    list.innerHTML = ''
+    if (!cases.length) { list.innerHTML = `<div class="adm-empty">${empty}</div>`; return }
+    for (const item of cases) list.appendChild(makeReconnectCard(item, bucket))
   }
-  const wrap = document.createElement('div'); wrap.className = 'rh-list'
-  for (const item of cases) wrap.appendChild(makeReconnectCard(item))
-  list.appendChild(wrap)
+  paint('reconnectNeedsList', actionCases, 'action', 'Nobody needs you right now.')
+  paint('reconnectWatchList', watchCases, 'watch', 'Nothing needs watching right now.')
   if (sessionUnauthorized) setMutationButtonsDisabled(true)
 }
 
 async function loadReconnectList() {
-  const list = $('reconnectList')
-  list.innerHTML = `<div class="adm-empty"><span class="adm-spin"></span> Loading…</div>`
+  $('reconnectNeedsList').innerHTML = `<div class="adm-empty"><span class="adm-spin"></span> Loading…</div>`
+  $('reconnectWatchList').innerHTML = ''
   const res = await call('adminListStuckReconnects')
-  if (!res?.success) { list.innerHTML = `<div class="adm-empty">${esc(res?.error || 'Failed to load')}</div>`; return }
+  if (!res?.success) { $('reconnectNeedsList').innerHTML = `<div class="adm-empty">${esc(res?.error || 'Failed to load')}</div>`; return }
   reconnectCases = res.cases || []
   populateReconnectDistricts()
-  paintReconnectSummary(res.summary || {})
   paintReconnectList()
 }
 $('btnLoadReconnect').onclick = () => loadReconnectList()
