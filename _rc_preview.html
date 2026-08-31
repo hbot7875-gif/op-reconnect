@@ -491,6 +491,12 @@
           if (it) it.usedAt = new Date().toISOString()
           return { json: async () => ({ success: true }) }
         }
+        // The district Vault row shows a real count in production; without a
+        // stub here it always read "0 playlists", which makes the row look
+        // broken rather than secondary when reviewing the layout.
+        if (body.action === 'getCandyPlaylistLibrary') {
+          return { json: async () => ({ success: true, total: 374, items: [], savedIds: [] }) }
+        }
         // ── auth stubs (the real ones live in the op-reconnect function) ──
         if (body.action === 'registerAgent') {
           if (String(body.handle).toLowerCase() === 'taken') {
@@ -539,7 +545,19 @@
     if (location.hash.includes('restored') || location.hash.includes('wardwhole') || location.hash.includes('reconnect-')) {
       const { goDistrict } = await import('./js/router.js')
       const t = setInterval(() => {
-        if (window.__rcState?.joined) { clearInterval(t); goDistrict('mono', 'mono-7') }
+        if (window.__rcState?.joined) {
+          clearInterval(t)
+          goDistrict('mono', 'mono-7')
+          // PREVIEW ONLY: '#...-toqueue' parks the board at Build today's
+          // queue, so a screenshot of the Queue / Vault / Track Mission
+          // hierarchy is reproducible instead of hand-scrolled.
+          if (location.hash.includes('toqueue')) {
+            setTimeout(() => {
+              const q = document.querySelector('.queue-btn')
+              if (q) { q.scrollIntoView({ block: 'start' }); window.scrollBy(0, -70) }
+            }, 900)
+          }
+        }
       }, 200)
     }
     // PREVIEW ONLY: open the Red Zone details sheet or ARMY Comms

@@ -304,7 +304,12 @@ function toolMarker(angle, icon, label, onClick, extraClass) {
   g.appendChild(n('circle', { cx: mx.toFixed(2), cy: my.toFixed(2), r: 5.6, class: 'cm-tool-halo' }))
   g.appendChild(n('circle', { cx: mx.toFixed(2), cy: my.toFixed(2), r: 3.8, class: 'cm-tool-body' }))
   g.appendChild(n('text', { x: mx.toFixed(2), y: (my + 1.3).toFixed(2), class: 'cm-tool-icon' }, icon))
-  g.appendChild(n('text', { x: mx.toFixed(2), y: (my + 8.6).toFixed(2), class: 'cm-tool-label' }, label))
+  // 6.4, not 8.6: at 8.6 the label landed at radius ~40.4 and the ward
+  // names sit at ~38.7, so Magic Shop's label printed on top of Mono's on a
+  // real phone (measured at 375px: 1px apart vertically, fully overlapping
+  // horizontally). Candy Star only looked fine because no ward label sits
+  // under it. Pulling the label back toward its own icon clears that ring.
+  g.appendChild(n('text', { x: mx.toFixed(2), y: (my + 6.4).toFixed(2), class: 'cm-tool-label' }, label))
   if (onClick) {
     g.style.cursor = 'pointer'
     g.onclick = (e) => onClick({ x: e.clientX, y: e.clientY })
@@ -522,8 +527,13 @@ export function renderCityMap(wards, districts, onSelect, homeFraction, onCandyS
   // touch at this radius). Suggestions used to sit in this cluster too; it
   // moved to the City ••• menu (screen-world.js's commandTools) since it was
   // never a place, just a feedback form — see suggestions.js.
-  if (onCandyStar) svg.appendChild(toolMarker(-Math.PI / 2 - 0.32, '🍬', 'Candy Star', onCandyStar))
-  if (onMagicShop) svg.appendChild(toolMarker(-Math.PI / 2 + 0.32, '🏪', 'Magic Shop', onMagicShop))
+  // ±0.20 rather than ±0.32: a ward's own label sits ~0.45rad off this seam,
+  // so the WIDER the tools spread the closer they crowd Mono and Old Grid.
+  // Tucking them toward the seam moves both away from the ward names while
+  // still leaving ~19 viewBox units between the two markers — plainly two
+  // separate places, neither sitting on a label.
+  if (onCandyStar) svg.appendChild(toolMarker(-Math.PI / 2 - 0.20, '🍬', 'Candy Star', onCandyStar))
+  if (onMagicShop) svg.appendChild(toolMarker(-Math.PI / 2 + 0.20, '🏪', 'Magic Shop', onMagicShop))
 
   // The opposite seam from Candy Star/Suggestions, deliberately — a
   // temporary event marker sitting beside two permanent utilities would

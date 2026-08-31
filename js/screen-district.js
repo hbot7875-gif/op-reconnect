@@ -259,11 +259,14 @@ function districtVaultCard(districtId, districtName) {
   const card = el('button', 'district-vault-card')
   card.type = 'button'
   const cached = vaultCountCache.get(districtId)
-  const countLabel = (n) => `${n} community playlist${n === 1 ? '' : 's'}`
+  const countLabel = (n) => `${n} playlist${n === 1 ? '' : 's'} available`
+  // A secondary shortcut, not a second feature card: title, one real number,
+  // and the way in. The count is already scoped to this district (the
+  // 'relevant' view below), and the sheet it opens names the district, so
+  // saying so again here was noise.
   card.innerHTML = `
-    <div class="dv-head"><span class="dv-icon">🎧</span><span class="dv-title">PLAYLIST VAULT</span></div>
-    <div class="dv-sub">Playlists for ${esc(districtName)}</div>
-    <div class="dv-foot"><span class="dv-count">${typeof cached === 'number' ? esc(countLabel(cached)) : 'Loading…'}</span><span class="dv-open">OPEN VAULT →</span></div>
+    <div class="dv-head"><span class="dv-icon">🎧</span><span class="dv-title">Playlist Vault</span></div>
+    <div class="dv-foot"><span class="dv-count">${typeof cached === 'number' ? esc(countLabel(cached)) : 'Loading…'}</span><span class="dv-open">OPEN →</span></div>
   `
   card.onclick = () => openPlaylistVault({ districtId, districtName })
   if (typeof cached !== 'number') {
