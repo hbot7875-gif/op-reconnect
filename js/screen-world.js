@@ -569,6 +569,15 @@ function coreBlock(state) {
   `
   zone.appendChild(read)
 
+  // The same affordance the Red Zone state carries. It matters more here:
+  // .core-lbl ("tap to feed") is hidden inside the City scene on every
+  // width, so outside a Red Zone the Bomb had NO visible instruction at all
+  // — a sphere with no chrome that happens to be the entry point to the
+  // whole charge economy.
+  zone.appendChild(el('div', 'core-hint', charge.isDark
+    ? 'Tap the ARMY Bomb to power it back up'
+    : 'Tap the ARMY Bomb to charge it'))
+
   if ((charge.isDark || hours <= 2) && cells > 0) {
     const low = el('button', 'core-low-cta', 'LOW POWER · FEED 1 CELL → +2 HOURS')
     low.onclick = () => showOverlay(agentChargeSheet())

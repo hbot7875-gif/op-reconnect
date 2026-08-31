@@ -511,8 +511,8 @@ body {
   .world-screen { display: flex; }
 }
 @media (max-width: 759px) {
-  .command-scene { min-height: 845px; border-radius: 20px; }
-  .command-scene > .city-plan { inset: 306px 4px 220px; }
+  .command-scene { min-height: 872px; border-radius: 20px; }
+  .command-scene > .city-plan { inset: 333px 4px 220px; }
   .command-scene > .city-plan > * { width: auto; height: 100%; max-width: 100%; }
   /* On phones the Bomb gets its own hero band above the city map. It remains
      the primary survival object without covering Home Base or any ward.
@@ -522,7 +522,7 @@ body {
      than guessed. city-plan's inset-top moved the same +48px to keep the
      gap below the Bomb circle unchanged. */
   .command-core { left: 50%; right: auto; top: 100px; width: 150px; transform: translateX(-50%); }
-  .command-scene .command-core .core-block { min-height: 182px; padding: 0; justify-content: center;
+  .command-scene .command-core .core-block { min-height: 209px; padding: 0; justify-content: center;
     border: 0; border-radius: 50%; background: radial-gradient(circle, rgba(8,6,16,.88) 0 34%, rgba(8,6,16,.58) 52%, transparent 72%);
     backdrop-filter: none; }
   .command-scene .command-core .core-eyebrow { display: none; }
@@ -534,6 +534,11 @@ body {
   .command-scene .command-core .core-read { margin: 0; text-align: center; }
   .command-scene .command-core .core-pct { min-width: 38px; font-size: 19px; letter-spacing: 1px; }
   .command-scene .command-core .core-lbl { display: none; }
+  /* The tap hint is the only instruction the Bomb has inside the City scene
+     (core-lbl above is hidden here), so it must not wrap. The core column is
+     150px for the sphere's sake; the hint is allowed to be wider than that
+     and stays centred by .core-block's own flex centring. */
+  .command-scene .command-core .core-hint { width: max-content; max-width: 82vw; margin-top: 7px; }
   .command-scene .command-core .core-low-cta { display: none; }
   .command-scene .command-core .core-ports { display: none; }
   .recovery-signal { top: 10px; left: 14px; }
