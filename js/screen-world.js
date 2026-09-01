@@ -432,21 +432,25 @@ function goldenCornerContent(state) {
     : '<h3>Light up Golden Corner together 🐰</h3><p>Complete your GOLDEN Birthday Era Card. Every track adds a little more light.</p>'
   sheet.appendChild(copy)
 
-  // Three community numbers, in the order they answer "is this working?":
-  // how lit the room is, how many of us lit it, and what you personally
-  // still have left. `agents` counts everyone who has lit at least one
-  // track here today — the room is not a district, so there is no live
-  // presence feed to say who is standing in it this second.
+  // Four numbers, in the order they answer "is this working?": how lit the
+  // room is, YOUR OWN share of that (each track can add up to 2 lights now
+  // that a second play counts too — see ENCORE_THRESHOLD), how many of us
+  // lit it, and what you personally still have left. `agents` counts
+  // everyone who has lit at least one track here today — the room is not a
+  // district, so there is no live presence feed to say who is standing in
+  // it this second. A 2x2 grid rather than 3-across so the new personal
+  // number pairs naturally with the community total above it.
   const agents = Math.max(0, Number(corner?.agents) || 0)
-  const progressRow = el('div', 'gc-progress')
+  const yourLightUnits = Math.max(0, Number(corner?.yourLightUnits) || 0)
+  const progressRow = el('div', 'gc-progress gc-progress-4')
   progressRow.innerHTML = `
     <span><i>OUR LIGHTS</i><b>${community} / ${target}</b></span>
+    <span><i>YOUR LIGHTS</i><b>${yourLightUnits}</b></span>
     <span><i>ARMY HERE</i><b>${agents}</b></span>
     <span><i>YOUR CARD</i><b>${personalDone} / ${personalTotal}</b></span>`
   sheet.appendChild(progressRow)
   // "Finished" is the harder number and the one people will ask about, so
-  // it rides in the sentence rather than taking a fourth stat box that
-  // would crowd the row at 320px.
+  // it rides in the sentence rather than taking its own stat box.
   const completed = Math.max(0, Number(corner?.completed) || 0)
   const lightLine = agents === 0
     ? 'Be the first to light it today.'
@@ -458,6 +462,14 @@ function goldenCornerContent(state) {
     : completed === 1 ? ' · 1 completed their card.'
     : ` · ${completed} completed their card.`
   sheet.appendChild(el('p', 'gc-agents-note', `${lightLine}${finishedLine}`))
+  // Encore progress — the same number the reward box below points players
+  // toward once they've finished, surfaced here too so it's visible even
+  // before their card is done.
+  const encoreProgress = card?.encoreProgress
+  if (encoreProgress && encoreProgress.done < encoreProgress.total) {
+    sheet.appendChild(el('p', 'gc-agents-note gc-encore-note',
+      `Encore: ${encoreProgress.done} / ${encoreProgress.total} tracks streamed twice`))
+  }
 
   const communityComplete = progress >= 1
   if (personalComplete) {

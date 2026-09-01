@@ -92,6 +92,11 @@ export interface EraCardView {
   tracks: { title: string; done: boolean }[]
   isSpecial?: boolean
   reward?: string
+  // Personal progress toward event.encoreBadgeTemplateId (every track
+  // counted ENCORE_THRESHOLD times) — null when this event has no encore
+  // badge configured. Distinct from `done`/`total`, which track the base
+  // 13/13 card.
+  encoreProgress?: { done: number; total: number } | null
 }
 
 export interface GoldenCornerView {
@@ -110,6 +115,12 @@ export interface GoldenCornerView {
   // actually finished it, as opposed to the wider `agents` who have lit at
   // least one. Same single scan, so the two can never disagree.
   completed: number
+  // The requesting agent's own contribution to communityLights — each
+  // track is worth up to ENCORE_THRESHOLD lights (1 for the first counted
+  // play, another for the second), same cap every other agent's
+  // contribution uses. So this agent can see their own number next to the
+  // shared total, not just the total itself.
+  yourLightUnits: number
 }
 
 /** Personal weekly progress, separate from era-timeline.ts's community,
@@ -239,12 +250,14 @@ async function computeWeeklyEraCards(
     // within the same event window. rc_award_badge is idempotent, so this
     // just re-checks on every poll rather than needing its own claim/dedup
     // row the way the primary card does.
+    let encoreProgress: { done: number; total: number } | null = null
     if (event.encoreBadgeTemplateId) {
       const encoreMatches = allocateTrackHits(birthdayEntries, eventTotals, ENCORE_THRESHOLD)
-      const encoreDone = birthdayEntries.every(
+      const encoreDoneCount = birthdayEntries.filter(
         (entry) => (encoreMatches.get(entry.id) || 0) >= ENCORE_THRESHOLD,
-      )
-      if (encoreDone) {
+      ).length
+      encoreProgress = { done: encoreDoneCount, total: birthdayEntries.length }
+      if (encoreDoneCount === birthdayEntries.length) {
         await supabase.rpc('rc_award_badge', {
           p_agent_no: agentNo, p_template_id: event.encoreBadgeTemplateId, p_scope_id: null,
         })
@@ -263,6 +276,7 @@ async function computeWeeklyEraCards(
       tracks: claimed ? birthdayTracks.map((track) => ({ ...track, done: true })) : birthdayTracks,
       isSpecial: true,
       reward: `${event.member} Birthday Badge · +${event.rewardHours}h ARMY Bomb charge`,
+      encoreProgress,
     })
   }
   return { eraCards, newlyLitEraIds }
@@ -279,7 +293,11 @@ async function computeWeeklyEraCards(
 // (upsert on agent_no+badge_id), so calling it again on every later poll
 // once the condition holds is safe — no separate dedup needed here.
 const GOLDEN_DEFENDER_BADGE_ID = 'event_jk_golden_defender_2026'
-const GOLDEN_CORNER_TARGET = 910
+// Raised 2026-09-01 to 1000 (from 260, then 910) when the community total
+// started also counting Encore-level replays (a track can now be worth up
+// to ENCORE_THRESHOLD lights instead of a flat 1) — a deliberate round
+// number the site owner picked, not derived from the new counting math.
+const GOLDEN_CORNER_TARGET = 1000
 // How many counted plays per track "streaming it again" needs for the
 // Encore badge (see event.encoreBadgeTemplateId above).
 const ENCORE_THRESHOLD = 2
@@ -319,13 +337,21 @@ async function computeGoldenCorner(
   let agents = 0
   let completed = 0
   let yourLit = 0
+  let yourLightUnits = 0
   for (const [countedAgentNo, totals] of perAgentCounted) {
     const matched = allocateTrackHits(entries, totals, 1)
     const lit = entries.filter((entry) => (matched.get(entry.id) || 0) >= 1).length
-    communityLights += lit
+    // Extending the community total to count a second play too (not just
+    // whether a track was ever lit): allocateTrackHits(..., ENCORE_THRESHOLD)
+    // caps each entry's assigned count at ENCORE_THRESHOLD, so summing it
+    // across all 13 tracks gives "how many lights this agent contributed"
+    // (0-2 per track) without a separate cap of our own to get wrong.
+    const encoreMatched = allocateTrackHits(entries, totals, ENCORE_THRESHOLD)
+    const lightUnits = entries.reduce((sum, entry) => sum + (encoreMatched.get(entry.id) || 0), 0)
+    communityLights += lightUnits
     if (lit > 0) agents++
     if (lit >= entries.length) completed++
-    if (countedAgentNo === agentNo) yourLit = lit
+    if (countedAgentNo === agentNo) { yourLit = lit; yourLightUnits = lightUnits }
   }
 
   // The city-wide surprise: any Defender still gets a badge for having
@@ -352,6 +378,7 @@ async function computeGoldenCorner(
     target: GOLDEN_CORNER_TARGET,
     agents,
     completed,
+    yourLightUnits,
   }
 }
 

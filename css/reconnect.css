@@ -4269,6 +4269,8 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .gc-progress{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin:14px 0}.gc-agents-note{margin:-4px 0 14px;color:var(--dim);font-size:12px;line-height:1.5}
 .gc-progress span{padding:10px 11px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.025)}
 .gc-progress i,.gc-progress b{display:block}.gc-progress i{font:8px var(--mono);letter-spacing:1.2px;color:var(--muted)}.gc-progress b{margin-top:5px;color:var(--gold);font-size:14px}
+.gc-progress-4{grid-template-columns:repeat(2,1fr)}
+.gc-encore-note{margin-top:-10px;color:#c9a15a}
 .gc-record-note{margin:2px 0 10px;text-align:center;color:var(--muted);font-size:11px}.gc-reward{margin:3px 0 12px;padding:5px 2px 8px;text-align:center}
 .gc-reward b,.gc-reward span{display:block}.gc-reward b{color:#f2d393;font-size:12px}.gc-reward span{margin-top:4px;color:var(--muted);font-size:10px}
 .gc-reward small{display:block;margin-top:6px;color:#c9a15a;font-size:9px;letter-spacing:.2px;opacity:.85}
