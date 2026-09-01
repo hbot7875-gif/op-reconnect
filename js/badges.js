@@ -7,6 +7,11 @@ const COLLECTION_TEMPLATES = new Set([
   'district_restored', 'ward', 'mission_bond',
   'event_vma_voter', 'event_vma_power_hour', 'event_vma_double_day',
   'event_vma_supply_chest',
+  // Awarded by the same rc_award_badge() every other collection badge
+  // goes through (rc_claim_birthday_era), just missing from this
+  // allow-list — meaning completing the GOLDEN card never triggered the
+  // usual unlock reveal or counted toward the Drawer/Pack badge count.
+  'event_jk_birthday_2026',
 ])
 
 export const BADGE_CATALOG = []
