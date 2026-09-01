@@ -16,6 +16,12 @@ export interface BirthdayEraEvent {
   tracks: string[]
   badgeTemplateId: string
   rewardHours: number
+  // Optional second, rarer badge for anyone who streams every track on the
+  // card at least twice within the same event window — a bonus for players
+  // who keep going after their own 13/13, on top of (not instead of) the
+  // primary badgeTemplateId. Awarded directly via rc_award_badge, no
+  // separate claim RPC (see agent-charge.ts's ENCORE_THRESHOLD).
+  encoreBadgeTemplateId?: string
   weeklyEra: EraDef & { startsOn: string }
 }
 
@@ -50,6 +56,7 @@ export const BIRTHDAY_ERA_EVENTS: BirthdayEraEvent[] = [
     ],
     badgeTemplateId: 'event_jk_birthday_2026',
     rewardHours: 10,
+    encoreBadgeTemplateId: 'event_jk_golden_encore_2026',
     weeklyEra: {
       id: 'golden',
       name: 'GOLDEN',

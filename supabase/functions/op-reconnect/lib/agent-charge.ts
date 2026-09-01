@@ -234,6 +234,22 @@ async function computeWeeklyEraCards(
       claimed = !error && data === true
       if (claimed) newlyLitEraIds.push(event.id)
     }
+    // Encore — a second, rarer badge for anyone who keeps streaming past
+    // their own 13/13: every track counted at least ENCORE_THRESHOLD times
+    // within the same event window. rc_award_badge is idempotent, so this
+    // just re-checks on every poll rather than needing its own claim/dedup
+    // row the way the primary card does.
+    if (event.encoreBadgeTemplateId) {
+      const encoreMatches = allocateTrackHits(birthdayEntries, eventTotals, ENCORE_THRESHOLD)
+      const encoreDone = birthdayEntries.every(
+        (entry) => (encoreMatches.get(entry.id) || 0) >= ENCORE_THRESHOLD,
+      )
+      if (encoreDone) {
+        await supabase.rpc('rc_award_badge', {
+          p_agent_no: agentNo, p_template_id: event.encoreBadgeTemplateId, p_scope_id: null,
+        })
+      }
+    }
     eraCards.unshift({
       id: event.id,
       name: event.cardName,
@@ -264,6 +280,9 @@ async function computeWeeklyEraCards(
 // once the condition holds is safe — no separate dedup needed here.
 const GOLDEN_DEFENDER_BADGE_ID = 'event_jk_golden_defender_2026'
 const GOLDEN_CORNER_TARGET = 910
+// How many counted plays per track "streaming it again" needs for the
+// Encore badge (see event.encoreBadgeTemplateId above).
+const ENCORE_THRESHOLD = 2
 
 async function computeGoldenCorner(
   supabase: SupabaseDB, content: GameContent, agentNo: string,

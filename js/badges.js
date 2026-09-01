@@ -15,6 +15,10 @@ const COLLECTION_TEMPLATES = new Set([
   // The rarer badge's city-wide companion — any Defender (1+ GOLDEN play),
   // awarded once the whole City finishes the room, not personal completion.
   'event_jk_golden_defender_2026',
+  // Encore — for anyone who keeps streaming past their own 13/13 until
+  // every GOLDEN track is counted twice. Same rc_award_badge path as
+  // Defender, just personal instead of city-wide.
+  'event_jk_golden_encore_2026',
 ])
 
 export const BADGE_CATALOG = []

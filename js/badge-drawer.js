@@ -135,6 +135,7 @@ export function badgeStory(e, state) {
   if (e.templateId === 'event_vma_supply_chest') return 'Found this rare badge inside a Supply Chest.'
   if (e.templateId === 'event_jk_birthday_2026') return "Lit every track on Jung Kook's GOLDEN Birthday Era Card."
   if (e.templateId === 'event_jk_golden_defender_2026') return 'Helped light Golden Corner before the whole City reached 100%.'
+  if (e.templateId === 'event_jk_golden_encore_2026') return 'Streamed every track on the GOLDEN Birthday Era Card twice over.'
   return e.unlockHint || 'Badge unlocked.'
 }
 
