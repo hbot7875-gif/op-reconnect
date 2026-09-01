@@ -379,6 +379,17 @@ export function goldenRoom(progress, personalComplete) {
   const band = pct >= 100 ? 100 : pct >= 90 ? 90 : pct >= 75 ? 75 : pct >= 50 ? 50 : pct >= 25 ? 25 : 0
   const room = el('div', `stage gc-room gc-p${band}${personalComplete ? ' is-personal-complete' : ''}`)
   room.style.setProperty('--gc-light', String(progress))
+  // --gc-light stays real/linear (it's what band thresholds and the exact
+  // per-object brightness ramps below key off of). --gc-glow is an
+  // eased-out version of the SAME number, used only for the whole-room
+  // ambient wash/shadow: a real agent spends most of the day sitting
+  // between two 25-point checkpoints, not on one, and a linear wash barely
+  // moves in the first half of each band — the room read as "stuck" at a
+  // live 31% because visually it was still doing its 25% impression.
+  // Easing out means the room keeps visibly gaining warmth continuously
+  // between checkpoints instead of only jumping at them.
+  const glow = 1 - Math.pow(1 - progress, 2)
+  room.style.setProperty('--gc-glow', String(glow))
   room.setAttribute('role', 'img')
   room.setAttribute('aria-label', `Golden Corner is ${pct}% lit`)
   room.innerHTML = `
