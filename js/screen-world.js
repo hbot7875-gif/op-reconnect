@@ -390,11 +390,32 @@ function goldenCornerContent(state) {
     : '<h3>Light up Golden Corner together 🐰</h3><p>Complete your GOLDEN Birthday Era Card. Every track adds a little more light.</p>'
   sheet.appendChild(copy)
 
+  // Three community numbers, in the order they answer "is this working?":
+  // how lit the room is, how many of us lit it, and what you personally
+  // still have left. `agents` counts everyone who has lit at least one
+  // track here today — the room is not a district, so there is no live
+  // presence feed to say who is standing in it this second.
+  const agents = Math.max(0, Number(corner?.agents) || 0)
   const progressRow = el('div', 'gc-progress')
   progressRow.innerHTML = `
     <span><i>OUR LIGHTS</i><b>${community} / ${target}</b></span>
+    <span><i>ARMY HERE</i><b>${agents}</b></span>
     <span><i>YOUR CARD</i><b>${personalDone} / ${personalTotal}</b></span>`
   sheet.appendChild(progressRow)
+  // "Finished" is the harder number and the one people will ask about, so
+  // it rides in the sentence rather than taking a fourth stat box that
+  // would crowd the row at 320px.
+  const completed = Math.max(0, Number(corner?.completed) || 0)
+  const lightLine = agents === 0
+    ? 'Be the first to light it today.'
+    : agents === 1
+      ? '1 ARMY has lit a candle here today'
+      : `${agents} ARMY have lit candles here today`
+  const finishedLine = agents === 0 ? ''
+    : completed === 0 ? ' — nobody has finished the card yet.'
+    : completed === 1 ? ' · 1 has finished the whole card.'
+    : ` · ${completed} have finished the whole card.`
+  sheet.appendChild(el('p', 'gc-agents-note', `${lightLine}${finishedLine}`))
 
   if (personalComplete) {
     const reward = el('div', 'gc-reward')

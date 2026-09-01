@@ -100,6 +100,16 @@ export interface GoldenCornerView {
   date: string
   communityLights: number
   target: number
+  // Agents who have lit at least one track here today. Counted from the
+  // same scan as communityLights, so it costs nothing extra and can never
+  // disagree with it. This is "who helped light the room", not live
+  // presence — the room is not a district, so there is no onlineNow feed
+  // to say who is standing in it right now.
+  agents: number
+  // Agents who have lit EVERY track on the card today — the ones who
+  // actually finished it, as opposed to the wider `agents` who have lit at
+  // least one. Same single scan, so the two can never disagree.
+  completed: number
 }
 
 /** Personal weekly progress, separate from era-timeline.ts's community,
@@ -250,6 +260,8 @@ async function computeGoldenCorner(
   const allow: string[] = content.config.bts_artists || []
   const overrides = trackArtistOverrides(content)
   let communityLights = 0
+  let agents = 0
+  let completed = 0
 
   for (const row of rows || []) {
     const totals = new Map<string, number>()
@@ -263,7 +275,10 @@ async function computeGoldenCorner(
       keys: [normKeyFull(title)],
     }))
     const matched = allocateTrackHits(entries, totals, 1)
-    communityLights += entries.filter((entry) => (matched.get(entry.id) || 0) >= 1).length
+    const lit = entries.filter((entry) => (matched.get(entry.id) || 0) >= 1).length
+    communityLights += lit
+    if (lit > 0) agents++
+    if (lit >= entries.length) completed++
   }
 
   return {
@@ -272,6 +287,8 @@ async function computeGoldenCorner(
     date: event.date,
     communityLights,
     target: 260,
+    agents,
+    completed,
   }
 }
 

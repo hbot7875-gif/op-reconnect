@@ -234,7 +234,7 @@
         tracks:titles.map((title,index)=>({title,done:index<done})),
       }
       AGENT_CHARGE.eraCards.unshift(birthdayCard)
-      AGENT_CHARGE.goldenCorner = { eventId:birthdayCard.id,name:'Golden Corner',date:'2026-09-01',communityLights,target:260 }
+      AGENT_CHARGE.goldenCorner = { eventId:birthdayCard.id,name:'Golden Corner',date:'2026-09-01',communityLights,target:260,agents:Math.max(1,Math.round(communityLights/5)),completed:Math.max(0,Math.round(communityLights/22)) }
       AGENT_CHARGE.newlyLitEraIds = []
     }
 
