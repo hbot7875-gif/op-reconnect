@@ -94,6 +94,14 @@ export interface EraCardView {
   reward?: string
 }
 
+export interface GoldenCornerView {
+  eventId: string
+  name: string
+  date: string
+  communityLights: number
+  target: number
+}
+
 /** Personal weekly progress, separate from era-timeline.ts's community,
  * all-time display. Completing every track inserts a ready inventory card;
  * charge is added only when the agent deliberately uses that card. A used
@@ -227,6 +235,46 @@ async function computeWeeklyEraCards(
   return { eraCards, newlyLitEraIds }
 }
 
+/** Golden Corner is a read-only community view over the Birthday Era Card's
+ * existing source of truth. Each agent can contribute at most one light per
+ * configured track on the event date, so reopening the UI, repeated syncs,
+ * and repeat streams cannot add anything extra. */
+async function computeGoldenCorner(
+  supabase: SupabaseDB, content: GameContent,
+): Promise<GoldenCornerView | null> {
+  const event = BIRTHDAY_ERA_EVENTS.find((entry) => entry.date === todayKst())
+  if (!event) return null
+
+  const { data: rows } = await supabase.from('rc_daily_activity')
+    .select('agent_no, track_counts').eq('kst_date', event.date)
+  const allow: string[] = content.config.bts_artists || []
+  const overrides = trackArtistOverrides(content)
+  let communityLights = 0
+
+  for (const row of rows || []) {
+    const totals = new Map<string, number>()
+    for (const [key, value] of Object.entries(row.track_counts || {})) {
+      const counted = countedArtistPlays((value as any)?.a, allow, key, overrides)
+      if (counted) totals.set(key, counted)
+    }
+    const entries = event.tracks.map((title, index) => ({
+      id: `${event.id}:${index}`,
+      canonicalKey: normKeyFull(title),
+      keys: [normKeyFull(title)],
+    }))
+    const matched = allocateTrackHits(entries, totals, 1)
+    communityLights += entries.filter((entry) => (matched.get(entry.id) || 0) >= 1).length
+  }
+
+  return {
+    eventId: event.id,
+    name: 'Golden Corner',
+    date: event.date,
+    communityLights,
+    target: 260,
+  }
+}
+
 export interface AgentChargeView {
   hoursRemaining: number
   isDark: boolean
@@ -264,6 +312,7 @@ export interface AgentChargeView {
   // either already deleted the account or is about to, and there's nothing
   // left for a warning to accomplish.
   deletionWarning: { daysInactive: number; daysLeft: number } | null
+  goldenCorner: GoldenCornerView | null
 }
 
 /** Same authoritative rc_agent_charge.last_fed_at rule used by
@@ -399,6 +448,7 @@ export async function getAgentChargeView(supabase: SupabaseDB, content: GameCont
 
   const earned = await lifetimeChargeCellsEarned(supabase, agentNo)
   const deletionWarning = await bombDeletionWarning(supabase, agentNo)
+  const goldenCorner = await computeGoldenCorner(supabase, content)
 
   return {
     hoursRemaining: chargedUntilMs ? Math.max(0, (chargedUntilMs - now) / HOUR_MS) : 0,
@@ -412,6 +462,7 @@ export async function getAgentChargeView(supabase: SupabaseDB, content: GameCont
     newlyLitEraIds: weekly.newlyLitEraIds,
     freezeChargesRemaining: freezes,
     deletionWarning,
+    goldenCorner,
   }
 }
 

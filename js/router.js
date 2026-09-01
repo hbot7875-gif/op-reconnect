@@ -51,6 +51,10 @@ export function goCandyStar(origin = null) {
   set({ name: 'candystar', wardId: null, districtId: null, origin })
 }
 
+export function goGoldenCorner(origin = null) {
+  set({ name: 'golden-corner', wardId: null, districtId: null, origin })
+}
+
 export function goRanking(origin = null) {
   set({ name: 'ranking', wardId: null, districtId: null, origin })
 }

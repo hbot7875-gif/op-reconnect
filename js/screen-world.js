@@ -21,7 +21,7 @@
 // the map's own centre landmark; a third copy was pure repetition.
 
 import { el, esc, showOverlay, hideOverlay, unlockAfter } from './state.js'
-import { goWard, goDistrict, goCandyStar } from './router.js'
+import { goWorld, goWard, goDistrict, goCandyStar, goGoldenCorner } from './router.js'
 import { districtFraction } from './ui-district.js'
 import { districtGoalsLeft, districtPercent } from './district-progress.js'
 import { renderWardTiles, glanceStrip, wardDisplayName, districtDisplayName, HOME_BASE_WARD } from './ward-tiles.js'
@@ -332,13 +332,99 @@ function cityPlan(state) {
   const homeFraction = activeD?.wardId === HOME_BASE_WARD
     ? districtFraction(activeD)
     : wards.find((w) => w.id === HOME_BASE_WARD)?.status === 'restored' ? 1 : 0
+  const golden = state.agentCharge?.goldenCorner
+  const goldenProgress = golden ? Math.min(1, golden.communityLights / Math.max(1, golden.target)) : 0
   box.appendChild(renderCityMap(wards, state.map?.districts || [],
     (w, origin) => goWard(w.id, origin), homeFraction,
     (origin) => goCandyStar(origin),
     () => openMagicShop(),
     state.vma ? () => openVmaMission() : null,
-    !!(state.vma?.isPowerHour || state.vma?.isDoubleDay)))
+    !!(state.vma?.isPowerHour || state.vma?.isDoubleDay),
+    golden ? (origin) => goGoldenCorner(origin) : null,
+    goldenProgress))
   return box
+}
+
+function goldenRoom(progress, personalComplete) {
+  const pct = Math.max(0, Math.min(100, Math.round(progress * 100)))
+  const band = pct >= 100 ? 100 : pct >= 90 ? 90 : pct >= 75 ? 75 : pct >= 50 ? 50 : pct >= 25 ? 25 : 0
+  const room = el('div', `stage gc-room gc-p${band}${personalComplete ? ' is-personal-complete' : ''}`)
+  room.style.setProperty('--gc-light', String(progress))
+  room.setAttribute('role', 'img')
+  room.setAttribute('aria-label', `Golden Corner is ${pct}% lit`)
+  room.innerHTML = `
+    <div class="gc-props">
+      <div class="gc-wall"></div><div class="gc-floor"></div>
+      <div class="gc-fairy" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="gc-bunting" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div class="gc-lamp" aria-hidden="true"></div>
+      <div class="gc-shelf" aria-hidden="true"><span class="gc-frame"></span><span class="gc-bunny">🐰</span><span class="gc-date">09·01</span></div>
+      <div class="gc-table" aria-hidden="true"></div>
+      <div class="gc-cake" aria-hidden="true"><i></i><span></span></div>
+      <div class="gc-mic" aria-hidden="true"></div>
+      <div class="gc-turntable" aria-hidden="true"><i></i><span></span></div>
+      <div class="gc-shadow"></div>
+    </div>
+    <div class="stage-overlay gc-stage-overlay">
+      <div class="stage-top"><div class="stage-eyebrow">${pct >= 100 ? 'ONLINE' : 'LIGHTING UP'}</div><div class="stage-name">Golden Corner</div></div>
+      <div class="stage-bottom"><div class="stage-power"><span class="pw-val">${pct >= 100 ? 'FULLY' : `${pct}%`}</span><span class="pw-lbl">${pct >= 100 ? 'LIT ✦' : 'LIT'}</span></div><div class="stage-meter"><div class="stage-meter-fill" style="width:${pct}%"></div></div></div>
+    </div>`
+  return room
+}
+
+function goldenCornerContent(state) {
+  const corner = state.agentCharge?.goldenCorner
+  const card = (state.agentCharge?.eraCards || []).find((entry) => entry.id === corner?.eventId)
+  const community = Number(corner?.communityLights) || 0
+  const target = Math.max(1, Number(corner?.target) || 260)
+  const progress = Math.min(1, community / target)
+  const personalDone = Math.min(Number(card?.done) || 0, Number(card?.total) || 13)
+  const personalTotal = Number(card?.total) || 13
+  const personalComplete = personalDone >= personalTotal || card?.status === 'keepsake'
+
+  const sheet = el('div', 'golden-corner-content')
+  sheet.append(goldenRoom(progress, personalComplete))
+  const copy = el('div', 'gc-copy')
+  copy.innerHTML = progress >= 1
+    ? `<h3>Happy Jung Kook Day 💜</h3><p>A little room in the City lit up today. ${personalDone ? 'You helped light it.' : ''}</p>`
+    : '<h3>Light up Golden Corner together 🐰</h3><p>Complete your GOLDEN Birthday Era Card. Every track adds a little more light.</p>'
+  sheet.appendChild(copy)
+
+  const progressRow = el('div', 'gc-progress')
+  progressRow.innerHTML = `
+    <span><i>OUR LIGHTS</i><b>${community} / ${target}</b></span>
+    <span><i>YOUR CARD</i><b>${personalDone} / ${personalTotal}</b></span>`
+  sheet.appendChild(progressRow)
+
+  if (personalComplete) {
+    const reward = el('div', 'gc-reward')
+    reward.innerHTML = '<b>YOUR LIGHT IS IN ✨</b><span>Jung Kook Birthday Badge · +10H charge</span>'
+    sheet.appendChild(reward)
+    const music = el('section', 'gc-music')
+    music.innerHTML = `
+      <div><p><b>NOW PLAYING IN GOLDEN CORNER 🎵</b><span>Euphoria</span></p></div>
+      <iframe title="Euphoria by Jung Kook on Spotify" src="https://open.spotify.com/embed/track/5YMXGBD6vcYP7IolemyLtK?utm_source=generator&theme=0" width="100%" height="152" frameborder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe>`
+    sheet.appendChild(music)
+  } else if (card) {
+    sheet.appendChild(el('p', 'gc-record-note', 'Complete your GOLDEN card to unlock the birthday listening moment.'))
+    const continueButton = el('button', 'btn btn-primary', 'Continue GOLDEN')
+    continueButton.onclick = () => showOverlay(eraTracksSheet(card, true))
+    sheet.appendChild(continueButton)
+  }
+
+  return sheet
+}
+
+export function renderGoldenCorner(container, state) {
+  if (!state.agentCharge?.goldenCorner) { goWorld(); return }
+  container.innerHTML = ''
+  const screen = el('div', 'golden-corner-screen')
+  const head = el('div', 'screen-head')
+  const back = el('button', 'back-btn', 'City')
+  back.onclick = (event) => goWorld({ x: event.clientX, y: event.clientY })
+  head.appendChild(back)
+  screen.append(head, goldenCornerContent(state))
+  container.appendChild(screen)
 }
 
 function mapField(state) {
@@ -694,7 +780,11 @@ function eraTracksSheet(e, personal = false) {
     <div class="pbar" style="flex:1" role="progressbar" aria-label="${esc(e.name)} tracks streamed" aria-valuemin="0" aria-valuemax="${e.total}" aria-valuenow="${Math.min(e.done, e.total)}"><div class="pfill${e.done >= e.total && e.total > 0 ? ' done' : ''}" style="width:${e.total ? Math.round((e.done / e.total) * 100) : 0}%"></div></div>
     <span class="count">${e.done} / ${e.total} streamed</span>`))
   sheet.appendChild(el('div', 'dim', personal
-    ? (e.status === 'used'
+    ? (e.isSpecial
+      ? (e.status === 'keepsake'
+        ? 'Birthday card complete — your badge and +10H charge are secured.'
+        : 'Stream every track once today to complete your birthday card, earn the badge, and add +10H charge.')
+      : e.status === 'used'
       ? 'This card has powered your ARMY Bomb and resets Monday.'
       : 'Stream every track once this week to activate this +10h emergency card.')
     : 'Stream a song enough for the whole network to cross its threshold, and it lights up here for everyone.'))

@@ -9,7 +9,7 @@ import { setState, getState, subscribe, toast } from './state.js'
 import { getScreen, onScreenChange } from './router.js'
 import { renderOnboarding } from './ui-onboarding.js'
 import { renderHud, renderTabbar } from './ui-hud.js'
-import { renderWorld } from './screen-world.js'
+import { renderWorld, renderGoldenCorner } from './screen-world.js'
 import { renderWard, teardownWard } from './screen-ward.js'
 import { renderDistrictScreen, teardownDistrictScreen } from './screen-district.js'
 import { renderResources } from './screen-resources.js'
@@ -75,6 +75,7 @@ function renderScreen(state) {
     else if (scr.name === 'settings') renderSettings(scene, state)
     else if (scr.name === 'candystar') renderCandyStar(scene, state)
     else if (scr.name === 'ranking') renderRanking(scene, state)
+    else if (scr.name === 'golden-corner') renderGoldenCorner(scene, state)
     else renderWorld(scene, state)
     if (isNav) {
       scene.classList.remove('scene-out')

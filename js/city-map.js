@@ -346,8 +346,10 @@ function toolMarker(angle, icon, label, onClick, extraClass) {
  *                     its own placement comment below.
  * @param vmaPulse     whether to pulse the VMA marker gold (Power Hour /
  *                     Double Day) rather than its plain resting purple.
+ * @param onGoldenCorner ({x,y}) => void — optional birthday-room location.
+ * @param goldenProgress 0..1 — gently lights its map marker with the room.
  */
-export function renderCityMap(wards, districts, onSelect, homeFraction, onCandyStar, onMagicShop, onVma, vmaPulse) {
+export function renderCityMap(wards, districts, onSelect, homeFraction, onCandyStar, onMagicShop, onVma, vmaPulse, onGoldenCorner, goldenProgress = 0) {
   const PAD = 5
   const svg = n('svg', {
     class: 'city-map', 'aria-hidden': 'true',
@@ -539,7 +541,13 @@ export function renderCityMap(wards, districts, onSelect, homeFraction, onCandyS
   // temporary event marker sitting beside two permanent utilities would
   // read as equally routine. Placed on its own side of the ring instead,
   // like a location that appeared on the map for the event's duration.
-  if (onVma) svg.appendChild(toolMarker(Math.PI / 2, '⚡', 'VMA', onVma, vmaPulse ? 'is-vma-pulse' : ''))
+  if (onVma) svg.appendChild(toolMarker(Math.PI / 2 - (onGoldenCorner ? 0.20 : 0), '⚡', 'VMA', onVma, vmaPulse ? 'is-vma-pulse' : ''))
+  if (onGoldenCorner) {
+    const marker = toolMarker(Math.PI / 2 + (onVma ? 0.20 : 0), '🐰', 'Golden Corner', onGoldenCorner,
+      goldenProgress >= 1 ? 'is-golden-complete' : goldenProgress > 0 ? 'is-golden-live' : 'is-golden-dark')
+    marker.style.setProperty('--golden-progress', String(Math.max(0, Math.min(1, goldenProgress))))
+    svg.appendChild(marker)
+  }
 
   return svg
 }
