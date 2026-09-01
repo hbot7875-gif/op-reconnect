@@ -3,6 +3,11 @@ import type { EraDef } from './era-timeline.ts'
 export interface BirthdayEraEvent {
   id: string
   date: string
+  // Inclusive last KST calendar day the one-time keepsake can still be
+  // lit/claimed on. Defaults to `date` itself (a single-day event) when
+  // omitted — see isBirthdayEventDate, the one place that should ever
+  // compare a KST date against this window.
+  dateEnd?: string
   member: string
   cardName: string
   icon: string
@@ -27,6 +32,10 @@ export const BIRTHDAY_ERA_EVENTS: BirthdayEraEvent[] = [
   {
     id: 'jk-golden-birthday-2026',
     date: '2026-09-01',
+    // Extended one extra KST day (site owner's call, 2026-09-01 evening) —
+    // Golden Corner and the card were about to hard-cut off at midnight
+    // with real, live participation still climbing.
+    dateEnd: '2026-09-02',
     member: 'Jung Kook',
     cardName: 'GOLDEN Birthday',
     icon: '🐰',
@@ -58,6 +67,15 @@ export const BIRTHDAY_ERA_EVENTS: BirthdayEraEvent[] = [
     },
   },
 ]
+
+/** Is this KST calendar date within the event's active window? Plain
+ *  string comparison — every kst_date/todayKst() value in this codebase is
+ *  already 'YYYY-MM-DD', which sorts identically to a real date compare.
+ *  The one place a birthday event's date should ever be checked, so a
+ *  future multi-day extension never needs touching more than one line. */
+export function isBirthdayEventDate(event: BirthdayEraEvent, kstDate: string): boolean {
+  return kstDate >= event.date && kstDate <= (event.dateEnd || event.date)
+}
 
 export function activeWeeklyBirthdayEras(kstDate: string): EraDef[] {
   return BIRTHDAY_ERA_EVENTS

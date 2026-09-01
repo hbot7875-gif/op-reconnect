@@ -18,7 +18,7 @@ import { normKeyFull } from './text.ts'
 import { ERA_CATALOG, allocateEraMatches, eraCatalogTrackDone, eraTrackTitle } from './era-timeline.ts'
 import { allocateTrackHits } from './era-match.js'
 import { logFeedEvent } from './feed.ts'
-import { BIRTHDAY_ERA_EVENTS, activeWeeklyBirthdayEras, isWeeklyBirthdayEraId } from './birthday-eras.ts'
+import { BIRTHDAY_ERA_EVENTS, activeWeeklyBirthdayEras, isWeeklyBirthdayEraId, isBirthdayEventDate } from './birthday-eras.ts'
 
 export const HOURS_PER_CHARGE_CELL = 2
 export const HOURS_PER_LIT_ERA = 10
@@ -147,7 +147,7 @@ async function computeWeeklyEraCards(
       const counted = countedArtistPlays(bucket[key]?.a, allow, key, overrides)
       if (counted) {
         totals.set(key, (totals.get(key) || 0) + counted)
-        if (BIRTHDAY_ERA_EVENTS.some((event) => event.date === row.kst_date)) {
+        if (BIRTHDAY_ERA_EVENTS.some((event) => isBirthdayEventDate(event, row.kst_date))) {
           if (!birthdayTotalsByDate.has(row.kst_date)) birthdayTotalsByDate.set(row.kst_date, new Map())
           const eventTotals = birthdayTotalsByDate.get(row.kst_date)!
           eventTotals.set(key, (eventTotals.get(key) || 0) + counted)
@@ -195,7 +195,7 @@ async function computeWeeklyEraCards(
   // Future member birthdays are added to birthday-eras.ts rather than
   // copying this claim/progress/charge flow again.
   for (const event of BIRTHDAY_ERA_EVENTS) {
-    const birthdayActive = currentKstDate === event.date
+    const birthdayActive = isBirthdayEventDate(event, currentKstDate)
     const birthdayRow = birthdayRows.get(event.id)
     if (!birthdayActive && !birthdayRow) continue
 
@@ -204,9 +204,15 @@ async function computeWeeklyEraCards(
       canonicalKey: normKeyFull(title),
       keys: [normKeyFull(title)],
     }))
-    const birthdayMatches = allocateTrackHits(
-      birthdayEntries, birthdayTotalsByDate.get(event.date) || new Map(), 1,
-    )
+    // A multi-day window pools every active day's plays together — someone
+    // who streamed half the album on day one and the rest on day two still
+    // gets full credit, not two partial days that never add up.
+    const eventTotals = new Map<string, number>()
+    for (const [date, dayTotals] of birthdayTotalsByDate) {
+      if (!isBirthdayEventDate(event, date)) continue
+      for (const [key, count] of dayTotals) eventTotals.set(key, (eventTotals.get(key) || 0) + count)
+    }
+    const birthdayMatches = allocateTrackHits(birthdayEntries, eventTotals, 1)
     let claimed = !!birthdayRow
     const birthdayTracks = event.tracks.map((title, index) => ({
       title,
@@ -223,6 +229,7 @@ async function computeWeeklyEraCards(
         p_era_name: event.cardName,
         p_badge_template_id: event.badgeTemplateId,
         p_reward_hours: event.rewardHours,
+        p_event_date_end: event.dateEnd || event.date,
       })
       claimed = !error && data === true
       if (claimed) newlyLitEraIds.push(event.id)
@@ -252,28 +259,38 @@ async function computeWeeklyEraCards(
 async function computeGoldenCorner(
   supabase: SupabaseDB, content: GameContent,
 ): Promise<GoldenCornerView | null> {
-  const event = BIRTHDAY_ERA_EVENTS.find((entry) => entry.date === todayKst())
+  const today = todayKst()
+  const event = BIRTHDAY_ERA_EVENTS.find((entry) => isBirthdayEventDate(entry, today))
   if (!event) return null
 
   const { data: rows } = await supabase.from('rc_daily_activity')
-    .select('agent_no, track_counts').eq('kst_date', event.date)
+    .select('agent_no, track_counts')
+    .gte('kst_date', event.date).lte('kst_date', event.dateEnd || event.date)
   const allow: string[] = content.config.bts_artists || []
   const overrides = trackArtistOverrides(content)
+
+  // A multi-day window returns up to one row per agent per active day —
+  // merge them before scoring, or someone active on both days would get
+  // double-counted as two separate partial agents instead of one.
+  const perAgentCounted = new Map<string, Map<string, number>>()
+  for (const row of rows || []) {
+    let bucket = perAgentCounted.get(row.agent_no)
+    if (!bucket) { bucket = new Map(); perAgentCounted.set(row.agent_no, bucket) }
+    for (const [key, value] of Object.entries(row.track_counts || {})) {
+      const counted = countedArtistPlays((value as any)?.a, allow, key, overrides)
+      if (counted) bucket.set(key, (bucket.get(key) || 0) + counted)
+    }
+  }
+
+  const entries = event.tracks.map((title, index) => ({
+    id: `${event.id}:${index}`,
+    canonicalKey: normKeyFull(title),
+    keys: [normKeyFull(title)],
+  }))
   let communityLights = 0
   let agents = 0
   let completed = 0
-
-  for (const row of rows || []) {
-    const totals = new Map<string, number>()
-    for (const [key, value] of Object.entries(row.track_counts || {})) {
-      const counted = countedArtistPlays((value as any)?.a, allow, key, overrides)
-      if (counted) totals.set(key, counted)
-    }
-    const entries = event.tracks.map((title, index) => ({
-      id: `${event.id}:${index}`,
-      canonicalKey: normKeyFull(title),
-      keys: [normKeyFull(title)],
-    }))
+  for (const totals of perAgentCounted.values()) {
     const matched = allocateTrackHits(entries, totals, 1)
     const lit = entries.filter((entry) => (matched.get(entry.id) || 0) >= 1).length
     communityLights += lit
