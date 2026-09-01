@@ -15,9 +15,11 @@ assert.equal(new Set(eventIds).size, eventIds.length, 'birthday event ids must b
 assert.equal(new Set(weeklyIds).size, weeklyIds.length, 'weekly birthday Era ids must be unique')
 
 const golden = BIRTHDAY_ERA_EVENTS[0]
-assert.equal(golden.tracks.length, 11)
-assert.equal(golden.weeklyEra.tracks.length, 11)
+assert.equal(golden.tracks.length, 13)
+assert.equal(golden.weeklyEra.tracks.length, 13)
+assert.ok(golden.tracks.includes('Euphoria'))
+assert.ok(golden.tracks.includes('SWIM'))
 assert.equal(golden.tracks.filter((title) => title.startsWith('Seven')).length, 2,
   'both GOLDEN Seven versions remain separate album slots')
 
-console.log('birthday-eras: 9 tests passed')
+console.log('birthday-eras: 11 tests passed')
