@@ -4133,9 +4133,15 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .gc-props::after{content:"";position:absolute;inset:0;z-index:6;pointer-events:none;mix-blend-mode:screen;
   background:radial-gradient(ellipse at 52% 64%,rgba(243,197,107,.4),transparent 72%);
   opacity:calc(var(--gc-glow) * .85);transition:opacity 1.1s ease}
-.gc-p75 .gc-wall::after,.gc-p90 .gc-wall::after,.gc-p100 .gc-wall::after{content:"";position:absolute;left:78px;right:80px;bottom:0;height:105px;background:radial-gradient(ellipse at 50% 100%,rgba(247,194,101,.13),transparent 66%);pointer-events:none;transition:background 1.1s ease}
+.gc-p75 .gc-wall::after,.gc-p90 .gc-wall::after,.gc-p100 .gc-wall::after{content:"";position:absolute;left:78px;right:80px;bottom:0;height:105px;background:radial-gradient(ellipse at 50% 100%,rgba(247,194,101,.13),transparent 66%);pointer-events:none;transition:background 1.1s ease;
+  animation:gcGlowBreathe 7s ease-in-out infinite}
 .gc-p90 .gc-wall::after{background:radial-gradient(ellipse at 50% 100%,rgba(247,194,101,.2),transparent 66%)}
 .gc-p100 .gc-wall::after{background:radial-gradient(ellipse at 50% 100%,rgba(247,194,101,.3),transparent 66%)}
+/* A static gradient patch reads as a sticker; a slow, small opacity
+   breathe reads as light. Same restrained, always-on-once-lit treatment
+   the fairy lights already use (gcTwinkle), just slower — this is
+   ambient glow, not something the eye should track. */
+@keyframes gcGlowBreathe{0%,100%{opacity:.78}50%{opacity:1}}
 .gc-floor{position:absolute;inset:auto 0 0;height:70px;clip-path:polygon(0 18%,18% 10%,34% 16%,52% 5%,74% 14%,100% 8%,100% 100%,0 100%);background:repeating-linear-gradient(96deg,#090710 0 44px,#171020 45px 46px);box-shadow:inset 0 1px rgba(139,92,246,.17)}
 .gc-stage-overlay{z-index:15}.gc-stage-overlay .stage-name{text-shadow:0 2px 8px rgba(0,0,0,.9)}.gc-stage-overlay .stage-meter-fill{background:linear-gradient(90deg,var(--purple),var(--gold))}
 .gc-shadow { position:absolute; inset:0; z-index:10; pointer-events:none;
@@ -4161,10 +4167,14 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .gc-bunting i:nth-child(2){border-top-color:#9a7339}
 /* Continuous from its own p50 switch-on point, same reasoning as the
    ambient wash above — a flat step per band read as frozen for most of
-   the day a real agent actually watches it. */
+   the day a real agent actually watches it. A small sway once it's lit —
+   static bunting reads as a sticker; a strung line gently moving reads
+   as fabric in a real room. */
 .gc-p50 .gc-bunting,.gc-p75 .gc-bunting,.gc-p90 .gc-bunting,.gc-p100 .gc-bunting {
   opacity:calc(.6 + var(--gc-light) * .38);
-  filter:saturate(calc(1 + var(--gc-light) * .35)) brightness(calc(.95 + var(--gc-light) * .28)); }
+  filter:saturate(calc(1 + var(--gc-light) * .35)) brightness(calc(.95 + var(--gc-light) * .28));
+  animation:gcBuntingSway 5s ease-in-out infinite; }
+@keyframes gcBuntingSway{0%,100%{transform:rotate(-2deg)}50%{transform:rotate(-.5deg)}}
 .gc-p90 .gc-bunting,.gc-p100 .gc-bunting{filter:saturate(calc(1 + var(--gc-light) * .35)) brightness(calc(.95 + var(--gc-light) * .28)) drop-shadow(0 0 3px rgba(237,200,121,.3))}
 .gc-lamp { position:absolute; left:37px; bottom:51px; width:3px; height:86px; background:#473b35; }
 .gc-lamp::before { content:""; position:absolute; left:-16px; top:-15px; width:35px; height:22px;
