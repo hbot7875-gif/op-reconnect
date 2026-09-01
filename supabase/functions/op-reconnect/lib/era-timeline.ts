@@ -56,8 +56,8 @@ function eraMatchId(eraId: string, trackIndex: number): string {
   return `${eraId}:${trackIndex}`
 }
 
-export function allocateEraCatalogMatches(totals: Map<string, number>, threshold = 1): Map<string, number> {
-  const entries = ERA_CATALOG.flatMap((era) => era.tracks.map((track, index) => {
+export function allocateEraMatches(eras: EraDef[], totals: Map<string, number>, threshold = 1): Map<string, number> {
+  const entries = eras.flatMap((era) => era.tracks.map((track, index) => {
     const keys = eraTrackKeys(track)
     return {
       id: eraMatchId(era.id, index),
@@ -66,6 +66,10 @@ export function allocateEraCatalogMatches(totals: Map<string, number>, threshold
     }
   }))
   return allocateTrackHits(entries, totals, threshold)
+}
+
+export function allocateEraCatalogMatches(totals: Map<string, number>, threshold = 1): Map<string, number> {
+  return allocateEraMatches(ERA_CATALOG, totals, threshold)
 }
 
 export function eraCatalogTrackDone(matches: Map<string, number>, eraId: string, trackIndex: number, threshold = 1): boolean {
