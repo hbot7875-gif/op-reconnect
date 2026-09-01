@@ -55,6 +55,7 @@ export function renderWorld(container, state) {
   const goldenBanner = goldenCornerBanner(state)
   if (goldenBanner) wrap.appendChild(goldenBanner)
   maybeShowDefuseResult(state.bomb?.resolvedDefuse)
+  maybeShowGoldenCornerComplete(state.agentCharge?.goldenCorner)
 
   // One playable command scene instead of a dashboard stack. The map is the
   // world; personal charge, recovery and the current mission sit on its edge
@@ -397,10 +398,11 @@ export function goldenRoom(progress, personalComplete) {
       <div class="gc-wall"></div><div class="gc-floor"></div>
       <div class="gc-fairy" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
       <div class="gc-bunting" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div class="gc-hbd-sign" aria-hidden="true"><span>Happy Birthday JK</span></div>
       <div class="gc-lamp" aria-hidden="true"></div>
       <div class="gc-shelf" aria-hidden="true"><span class="gc-frame"></span><span class="gc-bunny">🐰</span><span class="gc-date">09·01</span></div>
       <div class="gc-table" aria-hidden="true"></div>
-      <div class="gc-cake" aria-hidden="true"><i></i><span></span></div>
+      <div class="gc-cake" aria-hidden="true"><i></i><i></i><i></i><span></span><span></span><span></span></div>
       <div class="gc-mic" aria-hidden="true"></div>
       <div class="gc-turntable" aria-hidden="true"><i></i><span></span></div>
       <div class="gc-shadow"></div>
@@ -457,13 +459,20 @@ function goldenCornerContent(state) {
     : ` · ${completed} completed their card.`
   sheet.appendChild(el('p', 'gc-agents-note', `${lightLine}${finishedLine}`))
 
+  const communityComplete = progress >= 1
   if (personalComplete) {
     const reward = el('div', 'gc-reward')
     reward.innerHTML = '<b>YOUR LIGHT IS IN ✨</b><span>Jung Kook Birthday Badge · +10H charge</span>'
     sheet.appendChild(reward)
+  }
+  // The listening moment used to be a personal-completion reward only.
+  // Once the whole City finishes the room together, it plays for everyone
+  // standing in it — the city's own surprise, not something you had to
+  // have personally earned.
+  if (personalComplete || communityComplete) {
     const music = el('section', 'gc-music')
     music.innerHTML = `
-      <div><p><b>NOW PLAYING IN GOLDEN CORNER 🎵</b><span>Euphoria</span></p></div>
+      <div><p><b>${personalComplete ? 'NOW PLAYING IN GOLDEN CORNER 🎵' : 'THE CITY LIT IT TOGETHER 🎵'}</b><span>Euphoria</span></p></div>
       <iframe title="Euphoria by Jung Kook on Spotify" src="https://open.spotify.com/embed/track/5YMXGBD6vcYP7IolemyLtK?utm_source=generator&theme=0" width="100%" height="152" frameborder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe>`
     sheet.appendChild(music)
   } else if (card) {
@@ -777,6 +786,37 @@ function maybeShowDefuseResult(resolved) {
   if (lastShown === resolved.id) return
   try { localStorage.setItem(LAST_DEFUSE_RESULT_KEY, resolved.id) } catch { /* best-effort only */ }
   showOverlay(defuseResultSheet(resolved))
+}
+
+/** One-shot "the City finished it together" acknowledgement — everyone
+ *  gets this, not just agents who personally completed their own card
+ *  (that's the separate badge-unlock reveal). Same shape as
+ *  maybeShowDefuseResult: keyed by event id in localStorage so it survives
+ *  a reload and never repeats, checked every time the World screen renders
+ *  so it reaches whoever is around when the community total ticks over,
+ *  not just whoever happened to be staring at the Golden Corner screen at
+ *  that exact moment. */
+const SEEN_GOLDEN_COMPLETE_KEY = 'rc_seen_golden_complete:'
+function maybeShowGoldenCornerComplete(corner) {
+  if (!corner) return
+  const target = Math.max(1, Number(corner.target) || 1)
+  if ((Number(corner.communityLights) || 0) < target) return
+  const key = SEEN_GOLDEN_COMPLETE_KEY + corner.eventId
+  let already = null
+  try { already = localStorage.getItem(key) } catch { /* private mode etc. */ }
+  if (already) return
+  try { localStorage.setItem(key, '1') } catch { /* best-effort only */ }
+  const agents = Math.max(0, Number(corner.agents) || 0)
+  const sheet = el('div', 'sheet gc-complete-sheet')
+  sheet.innerHTML = `
+    <div class="eyebrow">✦ GOLDEN CORNER FULLY LIT</div>
+    <h3>The City lit it together tonight.</h3>
+    <p class="muted">${agents.toLocaleString()} ARMY helped light the Corner. 💜</p>
+  `
+  const close = el('button', 'btn btn-primary', 'Close')
+  close.onclick = hideOverlay
+  sheet.appendChild(close)
+  showOverlay(sheet)
 }
 
 /* ── The conduit ────────────────────────────────────────────────────────

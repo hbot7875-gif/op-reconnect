@@ -256,8 +256,17 @@ async function computeWeeklyEraCards(
  * existing source of truth. Each agent can contribute at most one light per
  * configured track on the event date, so reopening the UI, repeated syncs,
  * and repeat streams cannot add anything extra. */
+// Every Defender (1+ counted play during the event window) gets this once
+// the CITY finishes the room, regardless of whether they personally
+// completed their own 13/13 card — that's the separate, rarer
+// event_jk_birthday_2026 badge. rc_award_badge is itself idempotent
+// (upsert on agent_no+badge_id), so calling it again on every later poll
+// once the condition holds is safe — no separate dedup needed here.
+const GOLDEN_DEFENDER_BADGE_ID = 'event_jk_golden_defender_2026'
+const GOLDEN_CORNER_TARGET = 910
+
 async function computeGoldenCorner(
-  supabase: SupabaseDB, content: GameContent,
+  supabase: SupabaseDB, content: GameContent, agentNo: string,
 ): Promise<GoldenCornerView | null> {
   const today = todayKst()
   const event = BIRTHDAY_ERA_EVENTS.find((entry) => isBirthdayEventDate(entry, today))
@@ -290,12 +299,22 @@ async function computeGoldenCorner(
   let communityLights = 0
   let agents = 0
   let completed = 0
-  for (const totals of perAgentCounted.values()) {
+  let yourLit = 0
+  for (const [countedAgentNo, totals] of perAgentCounted) {
     const matched = allocateTrackHits(entries, totals, 1)
     const lit = entries.filter((entry) => (matched.get(entry.id) || 0) >= 1).length
     communityLights += lit
     if (lit > 0) agents++
     if (lit >= entries.length) completed++
+    if (countedAgentNo === agentNo) yourLit = lit
+  }
+
+  // The city-wide surprise: any Defender still gets a badge for having
+  // helped, once the room the whole City was working on actually finishes.
+  if (communityLights >= GOLDEN_CORNER_TARGET && yourLit > 0) {
+    await supabase.rpc('rc_award_badge', {
+      p_agent_no: agentNo, p_template_id: GOLDEN_DEFENDER_BADGE_ID, p_scope_id: null,
+    })
   }
 
   return {
@@ -311,7 +330,7 @@ async function computeGoldenCorner(
     // live-computed from today's agent count: scaling the goal with each
     // newcomer would make the percentage every ARMY is watching go DOWN as
     // more people arrive, which is the wrong feeling for a birthday target.
-    target: 910,
+    target: GOLDEN_CORNER_TARGET,
     agents,
     completed,
   }
@@ -490,7 +509,7 @@ export async function getAgentChargeView(supabase: SupabaseDB, content: GameCont
 
   const earned = await lifetimeChargeCellsEarned(supabase, agentNo)
   const deletionWarning = await bombDeletionWarning(supabase, agentNo)
-  const goldenCorner = await computeGoldenCorner(supabase, content)
+  const goldenCorner = await computeGoldenCorner(supabase, content, agentNo)
 
   return {
     hoursRemaining: chargedUntilMs ? Math.max(0, (chargedUntilMs - now) / HOUR_MS) : 0,

@@ -134,6 +134,7 @@ export function badgeStory(e, state) {
   if (e.templateId === 'event_vma_double_day') return 'Voted for BTS on a VMA Double Day.'
   if (e.templateId === 'event_vma_supply_chest') return 'Found this rare badge inside a Supply Chest.'
   if (e.templateId === 'event_jk_birthday_2026') return "Lit every track on Jung Kook's GOLDEN Birthday Era Card."
+  if (e.templateId === 'event_jk_golden_defender_2026') return 'Helped light Golden Corner before the whole City reached 100%.'
   return e.unlockHint || 'Badge unlocked.'
 }
 
