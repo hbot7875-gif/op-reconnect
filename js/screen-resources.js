@@ -400,6 +400,33 @@ function eraDeck(cards, ready, newlyLit, onOpen) {
   return deck
 }
 
+/** Opening the deck is the one moment this section is deliberately brought
+ *  into view, and it expands into a rack tall enough to finish under the
+ *  fixed tab bar — the card then reads as cropped rather than as content
+ *  the bar happens to be over. Scrolls the lit card (the one you opened the
+ *  deck for) just far enough to clear the bar, using block:'nearest' so it
+ *  does nothing at all when the rack is already comfortably visible. The
+ *  clearance itself is scroll-margin-bottom in reconnect.css; nothing here
+ *  changes layout or affects any other screen. */
+function revealEraDeck(container) {
+  const target = container.querySelector('.era-pack-card.just-lit')
+    || container.querySelector('.era-pack-card.era-lit')
+    || container.querySelector('.era-pack-rack')
+  if (!target) return
+  const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  const reveal = () => target.scrollIntoView({ block: 'nearest', behavior: still ? 'auto' : 'smooth' })
+  // A just-lit card enters on eraCardActivate, which starts it at
+  // translateY(8px) scale(.9). scrollIntoView measures the VISUAL box, so
+  // running it mid-animation compares a shrunken, shifted card and decides
+  // no scroll is needed — the card then settles under the bar and stays
+  // there. Wait for the entrance to finish so the box being measured is
+  // the one the player ends up looking at. Everything else scrolls on the
+  // next frame, as before.
+  const entrance = target.getAnimations ? target.getAnimations().find((a) => a.playState === 'running') : null
+  if (entrance) entrance.finished.then(reveal, reveal)
+  else requestAnimationFrame(reveal)
+}
+
 export function renderResources(container, state) {
   container.innerHTML = ''
   const wrap = el('div', 'res-screen')
@@ -434,7 +461,11 @@ export function renderResources(container, state) {
       wrap.appendChild(close)
       wrap.appendChild(el('p', 'era-pack-note', 'Complete every track in an era this week to activate its card. Use only when your ARMY Bomb needs emergency power.'))
     } else {
-      wrap.appendChild(eraDeck(eraCards, ready, newlyLit, () => { deckOpen = true; renderResources(container, state) }))
+      wrap.appendChild(eraDeck(eraCards, ready, newlyLit, () => {
+        deckOpen = true
+        renderResources(container, state)
+        revealEraDeck(container)
+      }))
     }
   }
 
