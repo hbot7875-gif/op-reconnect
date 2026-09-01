@@ -52,6 +52,8 @@ export function renderWorld(container, state) {
   // progress. See maybeShowDefuseResult for the one-shot success/failure
   // acknowledgement, which also used to be this card's job.
   if (state.vma) wrap.appendChild(vmaEventCard(state))
+  const goldenBanner = goldenCornerBanner(state)
+  if (goldenBanner) wrap.appendChild(goldenBanner)
   maybeShowDefuseResult(state.bomb?.resolvedDefuse)
 
   // One playable command scene instead of a dashboard stack. The map is the
@@ -345,7 +347,34 @@ function cityPlan(state) {
   return box
 }
 
-function goldenRoom(progress, personalComplete) {
+/** A tiny, temporary entry point for the one-day GOLDEN birthday event —
+ *  the .vma-banner card was too big next to the real VMA banner this
+ *  screen can already be showing; this is the same compact single-row
+ *  pill hud-reconnect-status already uses for "something needs a tap"
+ *  status lines. Real light count, not a static "party open" line — hides
+ *  once the room is fully lit, same as the room itself has nothing left
+ *  to invite anyone into. */
+function goldenCornerBanner(state) {
+  const corner = state.agentCharge?.goldenCorner
+  if (!corner) return null
+  const community = Number(corner.communityLights) || 0
+  const target = Math.max(1, Number(corner.target) || 1)
+  if (community >= target) return null
+
+  const pill = el('button', 'gc-status-pill', `
+    <span>🐰 JUNG KOOK DAY</span>
+    <b>${community.toLocaleString()} / ${target.toLocaleString()} lights &middot; join the party</b>
+    <i>›</i>
+  `)
+  pill.type = 'button'
+  pill.onclick = (e) => goGoldenCorner({ x: e.clientX, y: e.clientY })
+  return pill
+}
+
+// Exported only so the local design-review preview (_golden_corner_preview.html)
+// can render several bands side by side without duplicating this markup —
+// not a second entry point into the room, nothing else imports it.
+export function goldenRoom(progress, personalComplete) {
   const pct = Math.max(0, Math.min(100, Math.round(progress * 100)))
   const band = pct >= 100 ? 100 : pct >= 90 ? 90 : pct >= 75 ? 75 : pct >= 50 ? 50 : pct >= 25 ? 25 : 0
   const room = el('div', `stage gc-room gc-p${band}${personalComplete ? ' is-personal-complete' : ''}`)
@@ -409,12 +438,12 @@ function goldenCornerContent(state) {
   const lightLine = agents === 0
     ? 'Be the first to light it today.'
     : agents === 1
-      ? '1 ARMY has lit a candle here today'
-      : `${agents} ARMY have lit candles here today`
+      ? '1 ARMY has helped light the Corner today'
+      : `${agents} ARMY have helped light the Corner today`
   const finishedLine = agents === 0 ? ''
-    : completed === 0 ? ' — nobody has finished the card yet.'
-    : completed === 1 ? ' · 1 has finished the whole card.'
-    : ` · ${completed} have finished the whole card.`
+    : completed === 0 ? ' — nobody has completed their card yet.'
+    : completed === 1 ? ' · 1 completed their card.'
+    : ` · ${completed} completed their card.`
   sheet.appendChild(el('p', 'gc-agents-note', `${lightLine}${finishedLine}`))
 
   if (personalComplete) {

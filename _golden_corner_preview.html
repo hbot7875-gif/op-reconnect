@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Golden Corner lighting preview (LOCAL ONLY)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/reconnect.css">
+<style>
+  body { background: #050409; margin: 0; padding: 20px; display: flex; flex-direction: column; gap: 22px; align-items: center; }
+  .cell { width: 375px; max-width: 100%; }
+  .cell label { display: block; margin: 0 0 6px; font-family: var(--mono); color: var(--dim); font-size: 11px;
+    letter-spacing: 1.5px; text-transform: uppercase; }
+  .cell label b { color: #fff; }
+  .cell .stage { position: relative; }
+</style>
+</head>
+<body></body>
+<script type="module">
+  import { goldenRoom } from './js/screen-world.js'
+  const stages = [0, 0.25, 0.5, 0.75, 0.95, 1]
+  for (const p of stages) {
+    const cell = document.createElement('div')
+    cell.className = 'cell'
+    const pct = Math.round(p * 100)
+    cell.innerHTML = `<label>${pct}% <b>${pct === 100 ? '— WE LIT IT' : pct >= 90 ? '— ONE LAST PUSH' : pct >= 75 ? '— ALMOST A CELEBRATION' : pct >= 50 ? '— WARMING UP' : pct >= 25 ? '— FIRST LIGHTS' : '— DARK / WAITING'}</b></label>`
+    cell.appendChild(goldenRoom(p, p >= 1))
+    document.body.appendChild(cell)
+  }
+</script>
+</html>

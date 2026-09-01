@@ -223,7 +223,7 @@
     const goldenMatch = location.hash.match(/golden-(0|25|50|75|90|100|complete)/)
     if (goldenMatch) {
       const stage = goldenMatch[1]
-      const communityLights = stage === 'complete' ? 260 : Math.round(260 * Number(stage) / 100)
+      const communityLights = stage === 'complete' ? 910 : Math.round(910 * Number(stage) / 100)
       const done = stage === 'complete' ? 13 : 8
       const titles = ['3D (feat. Jack Harlow)','Closer to You (feat. Major Lazer)','Seven (Explicit Ver.)','Standing Next to You','Yes or No',"Please Don't Change (feat. DJ Snake)",'Hate You','Somebody','Too Sad to Dance','Shot Glass of Tears','Seven (Clean Ver.)','Euphoria','SWIM with Jung Kook (Acoustic Lofi Remix)']
       const birthdayCard = {
@@ -234,7 +234,7 @@
         tracks:titles.map((title,index)=>({title,done:index<done})),
       }
       AGENT_CHARGE.eraCards.unshift(birthdayCard)
-      AGENT_CHARGE.goldenCorner = { eventId:birthdayCard.id,name:'Golden Corner',date:'2026-09-01',communityLights,target:260,agents:Math.max(1,Math.round(communityLights/5)),completed:Math.max(0,Math.round(communityLights/22)) }
+      AGENT_CHARGE.goldenCorner = { eventId:birthdayCard.id,name:'Golden Corner',date:'2026-09-01',communityLights,target:910,agents:Math.max(1,Math.round(communityLights/5)),completed:Math.max(0,Math.round(communityLights/22)) }
       AGENT_CHARGE.newlyLitEraIds = []
     }
 
