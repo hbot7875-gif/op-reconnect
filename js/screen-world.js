@@ -461,8 +461,14 @@ function goldenCornerContent(state) {
 
   const communityComplete = progress >= 1
   if (personalComplete) {
+    // Encore is a second, quieter badge (stream every track twice over) —
+    // most players will never look it up in the Drawer's locked tiles on
+    // their own, so the one moment they're told "your card is done" is
+    // also the moment to mention there's a reason to keep streaming.
+    const encoreEarned = (state.player?.badges || []).some((b) => String(b).split(':', 1)[0] === 'event_jk_golden_encore_2026')
     const reward = el('div', 'gc-reward')
     reward.innerHTML = '<b>YOUR LIGHT IS IN ✨</b><span>Jung Kook Birthday Badge · +10H charge</span>'
+      + (encoreEarned ? '' : '<small>Keep streaming — play every GOLDEN track twice for a bonus Encore badge</small>')
     sheet.appendChild(reward)
   }
   // The listening moment used to be a personal-completion reward only.
