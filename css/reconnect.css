@@ -4106,7 +4106,13 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 /* ── Golden Corner — one-day birthday room ────────────────────────────
    The Birthday Era Card remains the tracker. This sheet is only the warm
    City place that reflects shared progress and links back to that card. */
-.golden-corner-screen{max-width:430px;margin:0 auto;padding-bottom:18px}.golden-corner-content>.btn-primary{display:block;width:100%;margin-top:12px}
+/* padding-bottom bumped from 18px: #game's shared 110px dock reserve
+   already clears the Spotify embed with real room in emulated testing at
+   both 390 and 320px widths, but real mobile browsers collapse/expand
+   their own toolbar during scroll in ways a desktop emulator can't fully
+   reproduce -- this is a small extra safety margin under the embed
+   specifically, not a sign a real overlap was reproduced. */
+.golden-corner-screen{max-width:430px;margin:0 auto;padding-bottom:48px}.golden-corner-content>.btn-primary{display:block;width:100%;margin-top:12px}
 /* Same .stage shell and 0.52 scene proportion as every rendered district.
    The inner set is authored at 240px, then scaled into that shared frame. */
 .gc-room{--gc-light:0;height:auto;aspect-ratio:1/.52;margin:14px 0 16px;background:#06050d}
