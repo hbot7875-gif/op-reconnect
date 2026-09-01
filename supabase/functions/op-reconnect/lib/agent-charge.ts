@@ -286,7 +286,15 @@ async function computeGoldenCorner(
     name: 'Golden Corner',
     date: event.date,
     communityLights,
-    target: 260,
+    // Raised 2026-09-01 ~mid-event: the original 260 (20 ARMY × 13 tracks)
+    // was sized for a much smaller turnout and was about to cap at 248/260
+    // with 63 ARMY already in the room and hours of the day left. 910 is
+    // 13 × 70 — a little above today's live headcount, leaving room to keep
+    // climbing instead of finishing early. A fixed number, deliberately not
+    // live-computed from today's agent count: scaling the goal with each
+    // newcomer would make the percentage every ARMY is watching go DOWN as
+    // more people arrive, which is the wrong feeling for a birthday target.
+    target: 910,
     agents,
     completed,
   }
