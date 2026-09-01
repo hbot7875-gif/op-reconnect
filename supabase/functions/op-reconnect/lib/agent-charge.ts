@@ -14,11 +14,22 @@ import type { SupabaseDB, GameContent } from './config.ts'
 import { trackArtistOverrides } from './config.ts'
 import { todayKst, kstWeekKey } from './kst.ts'
 import { countedArtistPlays } from './text.ts'
+import { normKeyFull } from './text.ts'
 import { ERA_CATALOG, allocateEraCatalogMatches, eraCatalogTrackDone, eraTrackTitle } from './era-timeline.ts'
+import { allocateTrackHits } from './era-match.js'
 import { logFeedEvent } from './feed.ts'
 
 export const HOURS_PER_CHARGE_CELL = 2
 export const HOURS_PER_LIT_ERA = 10
+const JK_BIRTHDAY_ERA_ID = 'jk-golden-birthday-2026'
+const JK_BIRTHDAY_WEEK_KEY = 'event:2026-09-01'
+const JK_BIRTHDAY_DATE = '2026-09-01'
+const JK_GOLDEN_TRACKS = [
+  '3D (feat. Jack Harlow)', 'Closer to You (feat. Major Lazer)',
+  'Seven (Explicit Ver.)', 'Standing Next to You', 'Yes or No',
+  "Please Don't Change (feat. DJ Snake)", 'Hate You', 'Somebody',
+  'Too Sad to Dance', 'Shot Glass of Tears', 'Seven (Clean Ver.)',
+]
 const SOFT_RESET_DAYS = 7   // dark this long → abandon the active district, back to Home Base
 const FULL_RESET_DAYS = 14  // dark this long → every restored district reverts (XP stays banked)
 
@@ -85,8 +96,10 @@ export interface EraCardView {
   done: number
   total: number
   remaining: number
-  status: 'dark' | 'lit' | 'used'
+  status: 'dark' | 'lit' | 'used' | 'keepsake'
   tracks: { title: string; done: boolean }[]
+  isSpecial?: boolean
+  reward?: string
 }
 
 /** Personal weekly progress, separate from era-timeline.ts's community,
@@ -101,18 +114,27 @@ async function computeWeeklyEraCards(
   const { data: rowsForWeek } = await supabase.from('rc_agent_lit_eras')
     .select('era_id, lit_at, used_at').eq('agent_no', agentNo).eq('week_key', weekKey)
   const stored = new Map((rowsForWeek || []).map((r: any) => [r.era_id, r]))
+  const { data: birthdayRow } = await supabase.from('rc_agent_lit_eras')
+    .select('era_id, lit_at, used_at').eq('agent_no', agentNo)
+    .eq('era_id', JK_BIRTHDAY_ERA_ID).eq('week_key', JK_BIRTHDAY_WEEK_KEY).maybeSingle()
 
   // Monday of this KST week through today — the week's own activity only.
   const { data: rows } = await supabase.from('rc_daily_activity')
-    .select('track_counts').eq('agent_no', agentNo).gte('kst_date', weekKey)
+    .select('kst_date, track_counts').eq('agent_no', agentNo).gte('kst_date', weekKey)
   const allow: string[] = content.config.bts_artists || []
   const overrides = trackArtistOverrides(content)
   const totals = new Map<string, number>()
+  const birthdayTotals = new Map<string, number>()
   for (const row of rows || []) {
     const bucket = row.track_counts || {}
     for (const key of Object.keys(bucket)) {
       const counted = countedArtistPlays(bucket[key]?.a, allow, key, overrides)
-      if (counted) totals.set(key, (totals.get(key) || 0) + counted)
+      if (counted) {
+        totals.set(key, (totals.get(key) || 0) + counted)
+        if (row.kst_date === JK_BIRTHDAY_DATE) {
+          birthdayTotals.set(key, (birthdayTotals.get(key) || 0) + counted)
+        }
+      }
     }
   }
 
@@ -147,6 +169,44 @@ async function computeWeeklyEraCards(
       status: row ? (row.used_at ? 'used' : 'lit') : 'dark', tracks,
     }
   })
+
+  // One-day birthday collectible. The two Seven versions deliberately
+  // share one normalized title bucket; allocateTrackHits requires two real
+  // plays before both album slots are complete, so a single Seven scrobble
+  // can never finish two tracks at once.
+  const birthdayActive = todayKst() === JK_BIRTHDAY_DATE
+  if (birthdayActive || birthdayRow) {
+    const birthdayEntries = JK_GOLDEN_TRACKS.map((title, index) => ({
+      id: `${JK_BIRTHDAY_ERA_ID}:${index}`,
+      canonicalKey: normKeyFull(title),
+      keys: [normKeyFull(title)],
+    }))
+    const birthdayMatches = allocateTrackHits(birthdayEntries, birthdayTotals, 1)
+    const birthdayTracks = JK_GOLDEN_TRACKS.map((title, index) => ({
+      title, done: (birthdayMatches.get(`${JK_BIRTHDAY_ERA_ID}:${index}`) || 0) >= 1,
+    }))
+    const birthdayDone = birthdayTracks.filter((track) => track.done).length
+    let claimed = !!birthdayRow
+    if (birthdayActive && !claimed && birthdayDone === birthdayTracks.length) {
+      const { data, error } = await supabase.rpc('rc_claim_jk_birthday_2026', { p_agent_no: agentNo })
+      claimed = !error && data === true
+      if (claimed) newlyLitEraIds.push(JK_BIRTHDAY_ERA_ID)
+    }
+    eraCards.unshift({
+      id: JK_BIRTHDAY_ERA_ID,
+      name: 'GOLDEN Birthday',
+      icon: '🐰',
+      description: 'Jung Kook · September 1, 2026 birthday keepsake.',
+      albums: ['GOLDEN'],
+      done: birthdayDone,
+      total: birthdayTracks.length,
+      remaining: birthdayTracks.length - birthdayDone,
+      status: claimed ? 'keepsake' : 'dark',
+      tracks: birthdayTracks,
+      isSpecial: true,
+      reward: 'Jung Kook Birthday Badge · +10h ARMY Bomb charge',
+    })
+  }
   return { eraCards, newlyLitEraIds }
 }
 

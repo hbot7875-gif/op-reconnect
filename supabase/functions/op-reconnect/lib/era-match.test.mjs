@@ -45,4 +45,17 @@ const entries = [
   assert.equal(complete.get('japanese'), 20)
 }
 
-console.log('era-match: 5 tests passed')
+{
+  const goldenSeven = [
+    { id: 'seven-explicit', canonicalKey: 'seven', keys: ['seven'] },
+    { id: 'seven-clean', canonicalKey: 'seven', keys: ['seven'] },
+  ]
+  const onePlay = allocateTrackHits(goldenSeven, new Map([['seven', 1]]))
+  assert.equal((onePlay.get('seven-explicit') || 0) + (onePlay.get('seven-clean') || 0), 1,
+    'one Seven play must fill only one GOLDEN album slot')
+  const twoPlays = allocateTrackHits(goldenSeven, new Map([['seven', 2]]))
+  assert.equal(twoPlays.get('seven-explicit'), 1)
+  assert.equal(twoPlays.get('seven-clean'), 1)
+}
+
+console.log('era-match: 6 tests passed')

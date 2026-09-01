@@ -332,6 +332,8 @@ let deckOpen = false
  *  that, whichever in-progress card is closest to activating is more
  *  useful to see at a glance than an arbitrary fixed first card. */
 function frontCardFor(cards) {
+  const special = cards.find((c) => c.isSpecial && c.status !== 'keepsake')
+  if (special) return special
   const lit = cards.find((c) => c.status === 'lit')
   if (lit) return lit
   const inProgress = cards.filter((c) => c.status !== 'used')
@@ -344,6 +346,7 @@ function eraCardButton(card, newlyLit) {
   button.type = 'button'
   const status = card.status === 'lit' ? '+10H READY'
     : card.status === 'used' ? 'USED'
+    : card.status === 'keepsake' ? 'COLLECTED · 09.01'
     : `${card.done}/${card.total}`
   button.setAttribute('aria-label', `${card.name}. ${status}.`)
   button.innerHTML = `
@@ -386,7 +389,10 @@ function eraDeck(cards, ready, newlyLit, onOpen) {
 
   const faceCls = `era-deck-face era-${front.status}${newlyLit.has(front.id) ? ' just-lit' : ''}`
   const face = el('div', faceCls)
-  const statusText = front.status === 'lit' ? '+10H READY' : front.status === 'used' ? 'USED' : `${front.done}/${front.total}`
+  const statusText = front.status === 'lit' ? '+10H READY'
+    : front.status === 'used' ? 'USED'
+    : front.status === 'keepsake' ? 'COLLECTED · 09.01'
+    : `${front.done}/${front.total}`
   face.innerHTML = `
     <span class="epc-icon">${front.icon}</span>
     <span class="epc-name">${esc(front.name)}</span>
@@ -448,8 +454,8 @@ export function renderResources(container, state) {
     const ready = eraCards.filter((e) => e.status === 'lit').length
     const newlyLit = new Set(state?.agentCharge?.newlyLitEraIds || [])
     wrap.appendChild(el('div', 'pack-section era-pack-head pack-after-bag', `
-      <span class="ps-title">Lit Era Cards</span>
-      <span class="ps-count">${ready} ready · reset Monday</span>
+      <span class="ps-title">Era Cards</span>
+      <span class="ps-count">${ready ? `${ready} ready` : 'Your collection'}</span>
     `))
     if (deckOpen) {
       const rack = el('div', 'era-pack-rack')
@@ -459,7 +465,9 @@ export function renderResources(container, state) {
       close.type = 'button'
       close.onclick = () => { deckOpen = false; renderResources(container, state) }
       wrap.appendChild(close)
-      wrap.appendChild(el('p', 'era-pack-note', 'Complete every track in an era this week to activate its card. Use only when your ARMY Bomb needs emergency power.'))
+      wrap.appendChild(el('p', 'era-pack-note', eraCards.some((card) => card.isSpecial)
+        ? 'Weekly cards reset Monday. Birthday keepsakes stay in your collection.'
+        : 'Complete every track in an era this week to activate its card. Use only when your ARMY Bomb needs emergency power.'))
     } else {
       wrap.appendChild(eraDeck(eraCards, ready, newlyLit, () => {
         deckOpen = true

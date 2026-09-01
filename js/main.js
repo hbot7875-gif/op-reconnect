@@ -131,7 +131,9 @@ subscribe((state) => {
     if (celebratedEraCards.has(eraId)) continue
     celebratedEraCards.add(eraId)
     const era = (state.agentCharge?.eraCards || []).find((e) => e.id === eraId)
-    toast(`${era?.icon || '✨'} ${era?.name || 'Era'} Card activated — stored in Pack`, 4800)
+    toast(era?.isSpecial
+      ? `${era.icon || '🐰'} ${era.name} recovered — birthday badge +10h charge`
+      : `${era?.icon || '✨'} ${era?.name || 'Era'} Card activated — stored in Pack`, 4800)
   }
   // Inherently one-shot, unlike levelUp — the backend deletes the lapsed
   // rc_player_districts row in the same request that reports it, so it

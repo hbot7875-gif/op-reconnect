@@ -179,7 +179,7 @@ function paint(body, ac, focusEraId = null) {
   const ready = eraCards.filter((e) => e.status === 'lit').length
   const litCard = el('div', 'ms-card ac-era-inventory')
   litCard.innerHTML = `
-    <div class="ms-card-head"><span class="ms-card-icon">🕯️</span><span class="ms-card-title">Weekly Era Cards</span></div>
+    <div class="ms-card-head"><span class="ms-card-icon">🕯️</span><span class="ms-card-title">Era Cards</span></div>
     <p class="ms-card-body">${ready
       ? `${ready} emergency card${ready === 1 ? '' : 's'} ready. Each adds 10 hours.`
       : "Stream every track in an era this week to activate a +10h card. Cards reset Monday."}</p>
@@ -191,6 +191,7 @@ function paint(body, ac, focusEraId = null) {
       <span class="aec-icon">${card.icon}</span>
       <span class="aec-copy"><b>${esc(card.name)}</b><small>${card.status === 'lit' ? 'LIT · READY'
         : card.status === 'used' ? 'USED · RESETS MONDAY'
+        : card.status === 'keepsake' ? 'COLLECTED · PERMANENT'
         : `${card.done}/${card.total} TRACKS · ${card.remaining} LEFT`}</small></span>
     `
     if (card.status === 'lit') {

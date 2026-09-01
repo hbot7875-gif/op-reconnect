@@ -197,7 +197,7 @@ function weeklyEraCards(state) {
   const wrap = el('section', 'era-strip command-era-strip')
   wrap.innerHTML = `
     <div class="era-strip-head">
-      <span class="era-strip-label">Lit Era Cards · this week</span>
+      <span class="era-strip-label">Era Cards</span>
       <span class="era-ready-count">${ready} ready · +10h each</span>
     </div>`
   const row = el('div', 'era-row')
@@ -206,6 +206,7 @@ function weeklyEraCards(state) {
     chip.type = 'button'
     const status = e.status === 'lit' ? 'READY · +10H'
       : e.status === 'used' ? 'USED THIS WEEK'
+      : e.status === 'keepsake' ? 'COLLECTED · 09.01'
       : `${e.done}/${e.total} · ${e.remaining} LEFT`
     chip.setAttribute('aria-label', `${e.name}. ${status}.`)
     chip.innerHTML = `
