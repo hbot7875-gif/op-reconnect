@@ -192,51 +192,19 @@ export const ERA_CATALOG: EraDef[] = [
   {
     id: 'wings', name: 'Wings / YNWA', icon: '🦋',
     description: 'Temptation, artistic high-concepts, and learning to fly.',
-    // Every track on all three releases (verified against the real
-    // Spotify tracklists), same "don't skip any track" treatment as HYYH
-    // above — Intro/Interlude/Outro fragments included, and Youth's
-    // Japanese re-recordings listed even though their base song belongs
-    // to a different era (they're still real, distinct content on THIS
-    // album). You Never Walk Alone is Wings' own repackage, so its first
-    // 14 tracks are exact duplicates of Wings' own — not re-listed twice.
-    albums: ['Youth', 'Wings', 'You Never Walk Alone'],
-    // Dope and Pepse below both had zero real plays ever recorded under
-    // their configured keys (network-wide audit, 2026-08-25) despite every
-    // other Japanese re-recording here having real history — checked
-    // Spotify's actual Youth tracklist directly and both titles were
-    // simply wrong. Dope's real title bakes in a Japanese subtitle
-    // ("DOPE‐超ヤベー!‐(Japanese Ver.)") that changes its normalized key
-    // entirely, not just a formatting difference. Pepse is the Japanese
-    // reading of "Baepsae," written "ペップセ‐Japanese Ver.‐" in katakana
-    // on Spotify — no scrobble evidence exists yet for either (unlike the
-    // Iine! fix, there's no real agent history to confirm the exact string
-    // a scrobble source reports), so both list several plausible forms
-    // rather than gambling on one guess a second time.
+    // Only Wings' own two real releases — the "Youth" Japanese compilation
+    // used to be bundled in here too, but every one of its 13 tracks is
+    // either a Japanese re-recording of a song whose original already
+    // belongs to a different era (HYYH, mostly — Run/Fire/Dope/Save
+    // Me/Boyz with Fun/Baepsae/Butterfly/I Need U/Epilogue: Young Forever
+    // all live in the 'hyyh' era above) or a standalone Japan-only bonus
+    // track with no real tie to the Wings/YNWA era itself. Site owner's
+    // call 2026-09-01: this card should only count tracks that actually
+    // belong to the era it's named for. You Never Walk Alone is Wings'
+    // own repackage, so its first 14 tracks are exact duplicates of
+    // Wings' own — not re-listed twice.
+    albums: ['Wings', 'You Never Walk Alone'],
     tracks: [
-      'Introduction : Youth', 'Run -Japanese Ver.-', 'Fire -Japanese Ver.-',
-      // NOT 'Dope (Japanese Ver.)' as an alias — it strips down to bare
-      // "dope", which collides with HYYH's own (Korean) "Dope" above and
-      // would let that already-required stream silently satisfy this
-      // supposedly-distinct Japanese re-recording too.
-      { title: 'Dope -Japanese Ver.-', aliases: [
-        'DOPE‐超ヤベー!‐(Japanese Ver.)', 'DOPE-超ヤベー!-(Japanese Ver.)', '超ヤベー',
-        // Apple Music via Musicat romanizes 超ヤベー instead of retaining
-        // the Japanese characters (confirmed from a real stored play).
-        'DOPE -Chou Yabee! (Japanese Ver.)', 'DOPE Chou Yabee Japanese Ver.',
-      ] },
-      'Good Day', 'Save Me -Japanese Ver.-',
-      'Boyz with Fun (Japanese Ver.)',
-      { title: 'Pepse (Japanese Ver.)', aliases: [
-        'ペップセ‐Japanese Ver.‐', 'ペップセ-Japanese Ver.-', 'ペップセ',
-        'Pepse -Japanese Ver.-', 'Baepsae (Japanese Ver.)', 'Baepsae -Japanese Ver.-',
-        // Apple Music localizes this Japanese recording to the same English
-        // title as the Korean original. The allocator above requires a
-        // separate play before this alias can fill the Japanese slot.
-        'Silver Spoon',
-      ] },
-      'Wishing On A Star',
-      'Butterfly -Japanese Ver.-', 'For You', 'I Need U (Japanese Ver.)',
-      'Epilogue : Young Forever -Japanese Ver.-',
       'Intro: Boy Meets Evil',
       'Blood Sweat & Tears', 'Begin', 'Lie', 'Stigma', 'First Love', 'Reflection', 'MAMA',
       'Awake', 'Lost', 'BTS Cypher 4', 'Am I Wrong', '21st Century Girl', '2! 3!',
