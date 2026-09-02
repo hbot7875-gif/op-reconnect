@@ -215,20 +215,25 @@ export const ERA_CATALOG: EraDef[] = [
   {
     id: 'ly', name: 'Love Yourself Series', icon: '💜',
     description: 'The global message of self-love and acceptance.',
-    // Every track on all four releases, same "don't skip any track"
-    // treatment as the eras above — fragments and Japanese re-recordings
-    // included (verified against the real Spotify tracklists), even where
-    // the re-recording's base song formally belongs to a different era.
+    // Every track on all four releases, fragments and Japanese
+    // re-recordings included — but ONLY the re-recordings whose original
+    // song actually belongs to this era (Best Of Me/DNA/MIC Drop/Go Go, all
+    // Love Yourself: Her). Face Yourself (verified against the real Spotify
+    // tracklist) also carries Japanese re-recordings of "Blood Sweat &
+    // Tears" (血、汗、涙), "Not Today" and "Spring Day" — those three
+    // originals belong to Wings/YNWA, not here, and were dropped 2026-09-01
+    // for the same reason Wings/YNWA dropped Youth: a play of them is
+    // already counted once, under its real era, not a second time here.
     albums: ['Love Yourself: Her', 'Face Yourself', 'Love Yourself: Tear', 'Love Yourself: Answer'],
     tracks: [
       'Intro: Serendipity',
       'DNA', 'Pied Piper', 'Best Of Me', 'Dimple', 'Skit: Billboard Music Awards Speech', 'Go Go', 'MIC Drop',
       'Outro: Her',
       'INTRO : Ringwanderung',
-      'Best Of Me - Japanese ver.', '血、汗、涙 - Japanese ver.', 'DNA - Japanese ver.', 'Not Today - Japanese ver.',
+      'Best Of Me - Japanese ver.', 'DNA - Japanese ver.',
       'MIC Drop - Japanese ver.',
       "Don't Leave Me",
-      'Go Go - Japanese ver.', 'Crystal Snow', 'Spring Day - Japanese ver.', 'Let Go', 'OUTRO : Crack',
+      'Go Go - Japanese ver.', 'Crystal Snow', 'Let Go', 'OUTRO : Crack',
       'Intro: Singularity',
       'Fake Love', 'The Truth Untold', '134340', 'Paradise', 'Love Maze', 'Magic Shop',
       { title: 'Airplane Pt.2', aliases: ['Airplane, Pt. 2'] },
@@ -258,9 +263,19 @@ export const ERA_CATALOG: EraDef[] = [
   {
     id: 'mots', name: 'Map of the Soul', icon: '🗺️',
     description: 'The psychological journey into the Shadow and the Ego.',
-    // Every track on all three releases (verified against the real
-    // Spotify tracklists) — fragments, the "ON (Feat. Sia)" alternate
-    // cut, and 7 ~The Journey~'s Japanese re-recordings all included.
+    // Every track on all three releases — fragments and the "ON (Feat.
+    // Sia)" alternate cut included. 7 ~The Journey~'s Japanese
+    // re-recordings are only included where the original actually belongs
+    // to Map of the Soul (Boy With Luv/Make It Right/Dionysus/Black
+    // Swan/ON, all Persona or 7). Its IDOL/Airplane pt.2/FAKE LOVE
+    // re-recordings were dropped 2026-09-01 — those three originals belong
+    // to the Love Yourself series, and worse than just being in the wrong
+    // place, their bare-title aliases (Apple Music/Musicat drops the
+    // "Japanese ver." suffix) shared the exact same normalized key as Love
+    // Yourself's own "Idol"/"Airplane Pt.2"/"Fake Love" entries — a single
+    // real Korean-original play could get consumed by whichever era's
+    // entry claimed it first, sometimes leaving the RIGHT card one play
+    // short of a bare-titled scrobble that should have completed it.
     albums: ['Map of the Soul: Persona', 'Map of the Soul: 7', 'Map of the Soul: 7 ~The Journey~'],
     tracks: [
       'Intro : Persona',
@@ -272,15 +287,12 @@ export const ERA_CATALOG: EraDef[] = [
       'Intro : Calling',
       'Stay Gold',
       // Apple Music/Musicat drops the Japanese-version suffix from these
-      // eight titles. Bare aliases are safe because catalog matching now
+      // titles. Bare aliases are safe because catalog matching now
       // consumes plays one-to-one globally: a single ambiguous play cannot
       // unlock both the original and Japanese recording.
       { title: 'Boy With Luv - Japanese ver.', aliases: ['Boy With Luv'] },
       { title: 'Make It Right - Japanese ver.', aliases: ['Make It Right'] },
       { title: 'Dionysus - Japanese ver.', aliases: ['Dionysus'] },
-      { title: 'IDOL - Japanese ver.', aliases: ['IDOL'] },
-      { title: 'Airplane pt.2 - Japanese ver.', aliases: ['Airplane pt.2'] },
-      { title: 'FAKE LOVE - Japanese ver.', aliases: ['FAKE LOVE'] },
       { title: 'Black Swan - Japanese ver.', aliases: ['Black Swan'] },
       { title: 'ON - Japanese ver.', aliases: ['ON'] },
       'Lights', 'Your Eyes Tell', 'Outro : The Journey',
