@@ -14,11 +14,10 @@ import type { SupabaseDB, GameContent } from './config.ts'
 import { trackArtistOverrides } from './config.ts'
 import { todayKst, kstWeekKey } from './kst.ts'
 import { countedArtistPlays } from './text.ts'
-import { normKeyFull } from './text.ts'
 import { ERA_CATALOG, allocateEraMatches, eraCatalogTrackDone, eraTrackTitle } from './era-timeline.ts'
 import { allocateTrackHits } from './era-match.js'
 import { logFeedEvent } from './feed.ts'
-import { BIRTHDAY_ERA_EVENTS, activeWeeklyBirthdayEras, isWeeklyBirthdayEraId, isBirthdayEventDate } from './birthday-eras.ts'
+import { BIRTHDAY_ERA_EVENTS, BIRTHDAY_LIGHTS_PER_TRACK, activeWeeklyBirthdayEras, birthdayTrackEntries, isWeeklyBirthdayEraId, isBirthdayEventDate } from './birthday-eras.ts'
 
 export const HOURS_PER_CHARGE_CELL = 2
 export const HOURS_PER_LIT_ERA = 10
@@ -210,11 +209,7 @@ async function computeWeeklyEraCards(
     const birthdayRow = birthdayRows.get(event.id)
     if (!birthdayActive && !birthdayRow) continue
 
-    const birthdayEntries = event.tracks.map((title, index) => ({
-      id: `${event.id}:${index}`,
-      canonicalKey: normKeyFull(title),
-      keys: [normKeyFull(title)],
-    }))
+    const birthdayEntries = birthdayTrackEntries(event)
     // A multi-day window pools every active day's plays together — someone
     // who streamed half the album on day one and the rest on day two still
     // gets full credit, not two partial days that never add up.
@@ -252,9 +247,9 @@ async function computeWeeklyEraCards(
     // row the way the primary card does.
     let encoreProgress: { done: number; total: number } | null = null
     if (event.encoreBadgeTemplateId) {
-      const encoreMatches = allocateTrackHits(birthdayEntries, eventTotals, ENCORE_THRESHOLD)
+      const encoreMatches = allocateTrackHits(birthdayEntries, eventTotals, BIRTHDAY_LIGHTS_PER_TRACK)
       const encoreDoneCount = birthdayEntries.filter(
-        (entry) => (encoreMatches.get(entry.id) || 0) >= ENCORE_THRESHOLD,
+        (entry) => (encoreMatches.get(entry.id) || 0) >= BIRTHDAY_LIGHTS_PER_TRACK,
       ).length
       encoreProgress = { done: encoreDoneCount, total: birthdayEntries.length }
       if (encoreDoneCount === birthdayEntries.length) {
@@ -300,7 +295,6 @@ const GOLDEN_DEFENDER_BADGE_ID = 'event_jk_golden_defender_2026'
 const GOLDEN_CORNER_TARGET = 1000
 // How many counted plays per track "streaming it again" needs for the
 // Encore badge (see event.encoreBadgeTemplateId above).
-const ENCORE_THRESHOLD = 2
 
 async function computeGoldenCorner(
   supabase: SupabaseDB, content: GameContent, agentNo: string,
@@ -328,11 +322,7 @@ async function computeGoldenCorner(
     }
   }
 
-  const entries = event.tracks.map((title, index) => ({
-    id: `${event.id}:${index}`,
-    canonicalKey: normKeyFull(title),
-    keys: [normKeyFull(title)],
-  }))
+  const entries = birthdayTrackEntries(event)
   let communityLights = 0
   let agents = 0
   let completed = 0
@@ -346,7 +336,7 @@ async function computeGoldenCorner(
     // caps each entry's assigned count at ENCORE_THRESHOLD, so summing it
     // across all 13 tracks gives "how many lights this agent contributed"
     // (0-2 per track) without a separate cap of our own to get wrong.
-    const encoreMatched = allocateTrackHits(entries, totals, ENCORE_THRESHOLD)
+    const encoreMatched = allocateTrackHits(entries, totals, BIRTHDAY_LIGHTS_PER_TRACK)
     const lightUnits = entries.reduce((sum, entry) => sum + (encoreMatched.get(entry.id) || 0), 0)
     communityLights += lightUnits
     if (lit > 0) agents++

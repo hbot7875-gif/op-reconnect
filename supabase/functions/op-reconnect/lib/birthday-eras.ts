@@ -1,4 +1,5 @@
 import type { EraDef } from './era-timeline.ts'
+import { normKeyFull } from './text.ts'
 
 export interface BirthdayEraEvent {
   id: string
@@ -24,6 +25,18 @@ export interface BirthdayEraEvent {
   encoreBadgeTemplateId?: string
   weeklyEra: EraDef & { startsOn: string }
 }
+
+/** Shared with Agent Charge and BOTZ so a birthday track can never be
+ * matched through two subtly different title/slot definitions. */
+export function birthdayTrackEntries(event: BirthdayEraEvent) {
+  return event.tracks.map((title, index) => ({
+    id: `${event.id}:${index}`,
+    canonicalKey: normKeyFull(title),
+    keys: [normKeyFull(title)],
+  }))
+}
+
+export const BIRTHDAY_LIGHTS_PER_TRACK = 2
 
 /**
  * Birthday Era Cards are intentionally data-driven. A future member birthday

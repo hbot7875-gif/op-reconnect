@@ -50,7 +50,7 @@
       padding: 0 16px calc(14px + env(safe-area-inset-bottom));
     }
     .botz-tabs {
-      pointer-events: auto; width: 100%; max-width: 620px;
+      box-sizing:border-box; pointer-events: auto; width: 100%; max-width: 620px;
       display: flex; gap: 1px; padding: 7px;
       background: rgba(14, 14, 20, 0.94); backdrop-filter: blur(14px);
       -webkit-backdrop-filter: blur(14px);
@@ -887,6 +887,144 @@
       color: var(--text-secondary); line-height: 1.7;
     }
     .botz-moon-scan-group b { color: var(--fail); }
+
+    /* Phase 1 streaming console — a scrobbler profile and chronological feed,
+       with ReConnect mission credit kept as quiet supporting information. */
+    .botz-page { overflow-x:hidden; }
+    .botz-console { box-sizing:border-box; width:100%; max-width:620px; margin:0 auto; padding:10px 16px 30px; }
+    .botz-console-meta { display:flex; justify-content:space-between; gap:10px; margin:2px 0 7px; font:0.49rem var(--font-mono); letter-spacing:1px; color:var(--text-ghost); text-transform:uppercase; }
+    .botz-console-section { padding:17px 2px; border-bottom:1px solid var(--border-subtle); }
+    .botz-console-section:last-child { border-bottom:0; }
+    .botz-console .botz-section-label { margin:0 0 11px; color:var(--text-muted); letter-spacing:2px; }
+    .botz-tracking { padding:10px 2px 13px; margin-top:4px; border-bottom:1px solid var(--border-subtle); }
+    .botz-tracking .botz-section-label { display:none; }
+    .botz-status-line { display:flex; align-items:center; gap:8px; color:var(--text-primary); font-size:0.78rem; }
+    .botz-status-line strong { font-weight:700; }
+    .botz-status-dot { width:8px; height:8px; border-radius:50%; background:#4ade80; box-shadow:0 0 10px rgba(74,222,128,.35); flex:none; }
+    .botz-status-meta, .botz-last-meta, .botz-muted { margin-top:4px; color:var(--text-muted); font-size:0.64rem; line-height:1.45; padding-left:16px; }
+    .botz-fix-link { display:inline-flex; width:auto; margin-top:12px; text-decoration:none; }
+    .botz-fix-link[hidden] { display:none; }
+    .botz-profile-summary { padding-top:15px; }
+    .botz-today-grid { display:grid; grid-template-columns:1fr 1fr; gap:0; border-top:1px solid var(--border-subtle); border-bottom:1px solid var(--border-subtle); }
+    .botz-today-grid > div { display:flex; flex-direction:column; align-items:flex-start; gap:2px; min-width:0; padding:12px 0; }
+    .botz-today-grid > div + div { padding-left:18px; border-left:1px solid var(--border-subtle); }
+    .botz-today-grid strong { font:800 1.7rem var(--font-display); color:var(--text-primary); }
+    .botz-today-grid span { color:var(--text-muted); font:0.55rem var(--font-mono); letter-spacing:1px; line-height:1.2; }
+    .botz-mission-context { margin-top:12px; display:flex; flex-wrap:wrap; gap:7px; }
+    .botz-mission-line { color:var(--text-secondary); font-size:0.65rem; }
+    .botz-mission-line span { display:block; min-width:0; white-space:normal; }
+    .botz-mission-line b { color:var(--red-soft); white-space:nowrap; font-family:var(--font-mono); font-size:0.64rem; }
+    .botz-last-card { position:relative; display:flex; align-items:center; gap:13px; min-height:82px; padding:12px; border-radius:12px; background:linear-gradient(110deg,var(--red-whisper),rgba(255,255,255,.025)); border:1px solid var(--red-border); overflow:hidden; }
+    .botz-last-copy { min-width:0; flex:1; }
+    .botz-last-track { max-width:100%; font-size:0.96rem; font-weight:750; color:var(--text-primary); line-height:1.28; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .botz-last-artist { margin-top:4px; color:var(--text-secondary); font-size:.72rem; }
+    .botz-last-meta { padding:0; font-size:.59rem; }
+    .botz-last-bars { height:22px; display:flex; align-items:flex-end; gap:2px; opacity:.8; }
+    .botz-last-bars i { width:2px; background:var(--red-core); border-radius:2px; animation:botzBars .9s ease-in-out infinite alternate; }
+    .botz-last-bars i:nth-child(1){height:40%}.botz-last-bars i:nth-child(2){height:100%;animation-delay:.2s}.botz-last-bars i:nth-child(3){height:65%;animation-delay:.4s}
+    @keyframes botzBars { to { height:25%; } }
+    @media (prefers-reduced-motion:reduce){.botz-last-bars i{animation:none}}
+    .botz-cover { position:relative; width:48px; height:48px; flex:0 0 48px; overflow:hidden; border-radius:2px; background:#161620; }
+    .botz-cover img { width:100%; height:100%; object-fit:cover; }
+    .botz-cover-fallback { display:grid; place-items:center; background:linear-gradient(145deg,hsl(var(--cover-hue) 34% 24%),#111118); border:1px solid rgba(255,255,255,.05); }
+    .botz-cover-fallback em { color:rgba(255,255,255,.7); font-style:normal; font-size:1rem; }
+    .botz-row-list { display:grid; gap:0; }
+    details.botz-jam-row { border-bottom:1px solid var(--border-subtle); }
+    details.botz-jam-row:last-child { border-bottom:0; }
+    .botz-jam-row summary { list-style:none; display:grid; grid-template-columns:48px minmax(0,1fr) auto; align-items:center; gap:10px; padding:9px 0; cursor:pointer; }
+    .botz-jam-row summary::-webkit-details-marker { display:none; }
+    .botz-jam-main { min-width:0; display:flex; flex-direction:column; gap:3px; }
+    .botz-jam-main b { color:var(--text-primary); font-size:0.76rem; font-weight:650; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .botz-jam-main small { color:var(--text-muted); font-size:0.65rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .botz-jam-age { color:var(--text-ghost); font:0.56rem var(--font-mono); white-space:nowrap; }
+    .botz-jam-result { font-size:0.59rem; line-height:1.3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .botz-jam-result.helped { color:#86efac; }
+    .botz-jam-result.tracked { color:var(--text-muted); }
+    .botz-jam-result.not-counted { color:#f5a3ad; }
+    .botz-latest-tag { color:var(--red-core); font:0.48rem var(--font-mono); letter-spacing:1px; }
+    .botz-jam-details { padding:0 0 10px 58px; color:var(--text-ghost); font:0.56rem/1.45 var(--font-mono); }
+    .botz-recent-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:5px; }
+    .botz-recent-heading .botz-section-label { margin-bottom:3px; }
+    .botz-recent-heading span { color:var(--text-ghost); font:0.54rem var(--font-mono); }
+    .botz-refresh { width:30px; height:30px; border:1px solid var(--border-light); border-radius:50%; background:transparent; color:var(--text-secondary); font-size:1rem; cursor:pointer; }
+    .botz-empty-compact { padding:8px 0; color:var(--text-muted); font-size:0.72rem; }
+    @media (max-width:340px) {
+      .botz-console { padding-left:13px; padding-right:13px; }
+      .botz-console-meta { letter-spacing:.55px; }
+      .botz-today-grid strong { font-size:1.45rem; }
+      .botz-today-grid span { font-size:.62rem; }
+      .botz-topbar { gap:7px; padding-left:12px; padding-right:12px; }
+      .botz-brand-sub { display:none; }
+    }
+    @media (max-width:480px) {
+      .botz-agent-chip { display:none; }
+      .botz-brand { min-width:0; }
+    }
+
+    /* Scrobbler profile shell. This borrows the hierarchy of a listening
+       profile without copying another service's branding or unused tabs. */
+    .botz-console { max-width:760px; padding:0 0 30px; }
+    .botz-profile {
+      position:relative; overflow:hidden; padding:21px 16px 17px;
+      background:
+        linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.008)),
+        radial-gradient(circle at 82% 5%,var(--red-whisper),transparent 42%);
+      border-bottom:1px solid var(--border-subtle);
+    }
+    .botz-profile::after {
+      content:""; position:absolute; inset:auto 0 0; height:2px;
+      background:linear-gradient(90deg,var(--red-core) 0 27%,transparent 27%);
+      opacity:.85;
+    }
+    .botz-profile-head { display:flex; align-items:center; gap:13px; min-width:0; }
+    .botz-profile-avatar {
+      width:62px; height:62px; flex:0 0 62px; display:grid; place-items:center;
+      border-radius:50%; color:var(--text-primary); font-size:1.45rem;
+      background:linear-gradient(145deg,var(--red-whisper),rgba(255,255,255,.035));
+      border:1px solid var(--border-light);
+    }
+    .botz-profile-copy { min-width:0; flex:1; }
+    .botz-profile-kicker { color:var(--text-ghost); font:.5rem var(--font-mono); letter-spacing:1.6px; text-transform:uppercase; }
+    .botz-profile-name { margin:3px 0 4px; color:var(--text-primary); font:800 1.2rem/1.15 var(--font-display); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .botz-profile-source { color:var(--text-muted); font-size:.66rem; line-height:1.35; }
+    .botz-profile .botz-tracking { padding:12px 0 0 75px; margin:0; border:0; }
+    .botz-profile .botz-status-line { font-size:.69rem; }
+    .botz-profile .botz-status-meta { padding-left:16px; font-size:.59rem; }
+    .botz-profile-stats { display:grid; grid-template-columns:1fr 1fr; margin-top:17px; border-top:1px solid var(--border-subtle); }
+    .botz-profile-stats > div { padding:13px 0 0; }
+    .botz-profile-stats > div + div { padding-left:18px; border-left:1px solid var(--border-subtle); }
+    .botz-profile-stats strong { display:block; color:var(--text-primary); font:800 1.55rem var(--font-display); }
+    .botz-profile-stats span { display:block; margin-top:2px; color:var(--text-muted); font:.53rem var(--font-mono); letter-spacing:1px; text-transform:uppercase; }
+    .botz-profile .botz-mission-context { margin:13px 0 0; padding-top:11px; border-top:1px solid var(--border-subtle); }
+    .botz-profile .botz-mission-line { flex:1 1 220px; }
+    .botz-library-tabs { display:flex; gap:22px; padding:0 16px; border-bottom:1px solid var(--border-subtle); }
+    .botz-library-tab { position:relative; padding:13px 0 11px; border:0; background:transparent; color:var(--text-muted); font:600 .68rem var(--font-mono); letter-spacing:.7px; cursor:pointer; }
+    .botz-library-tab.active { color:var(--text-primary); }
+    .botz-library-tab.active::after { content:""; position:absolute; left:0; right:0; bottom:-1px; height:2px; background:var(--red-core); }
+    .botz-recent-section { padding:18px 16px 10px; border:0; }
+    .botz-recent-heading { padding-bottom:8px; margin-bottom:0; border-bottom:1px solid var(--border-subtle); }
+    .botz-recent-heading .botz-section-label { color:var(--text-primary); font:700 .92rem var(--font-display); letter-spacing:.2px; text-transform:none; }
+    .botz-recent-heading span { font-size:.52rem; }
+    .botz-jam-row summary { grid-template-columns:48px minmax(0,1fr) auto; padding:10px 0; }
+    .botz-jam-main b { font-size:.79rem; }
+    .botz-jam-main small { font-size:.66rem; }
+    .botz-latest-tag { width:max-content; padding:2px 4px; background:var(--red-core); color:#fff; border-radius:2px; font-size:.43rem; }
+    .botz-rank { width:22px; color:var(--text-ghost); font:700 .58rem var(--font-mono); text-align:center; }
+    .botz-summary-row { display:grid; grid-template-columns:22px 48px minmax(0,1fr) auto; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--border-subtle); }
+    .botz-summary-row:last-child { border-bottom:0; }
+    .botz-summary-main { min-width:0; display:flex; flex-direction:column; gap:3px; }
+    .botz-summary-main b { color:var(--text-primary); font-size:.79rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .botz-summary-main small { color:var(--text-muted); font-size:.65rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .botz-play-count { color:var(--text-secondary); font:700 .58rem var(--font-mono); white-space:nowrap; }
+    .botz-view-note { padding:11px 0; color:var(--text-ghost); font-size:.61rem; line-height:1.45; border-bottom:1px solid var(--border-subtle); }
+    @media (max-width:340px) {
+      .botz-profile { padding-left:13px; padding-right:13px; }
+      .botz-profile-avatar { width:56px; height:56px; flex-basis:56px; }
+      .botz-profile .botz-tracking { padding-left:69px; }
+      .botz-recent-section { padding-left:13px; padding-right:13px; }
+      .botz-profile-name { font-size:1.06rem; }
+      .botz-profile-stats strong { font-size:1.38rem; }
+    }
   </style>
   <script>
     // Apply the saved theme before first paint — avoids a flash of the wrong
@@ -918,151 +1056,42 @@
 </header>
 
 <!-- ── MAIN CONTENT (hidden until loaded) ── -->
-<div id="mainContent" style="display:none; flex:1; flex-direction:column;">
-
-  <!-- NOW PLAYING -->
-  <div class="botz-np" id="nowPlayingBar">
-    <div class="botz-np-dot"></div>
-    <div class="botz-np-info">
-      <div class="botz-np-label">Now Playing</div>
-      <div class="botz-np-track" id="npTrack"></div>
-      <div class="botz-np-artist" id="npArtist"></div>
-    </div>
-    <div class="botz-eq" aria-hidden="true">
-      <span></span><span></span><span></span><span></span>
-    </div>
-    <div class="botz-np-live">Live</div>
-  </div>
-
-  <!-- PULL-TO-REFRESH -->
-  <div class="botz-ptr" id="ptrBar">
-    <span class="botz-ptr-arrow">↓</span>
-    <span id="ptrText">Pull to refresh</span>
-  </div>
-
-  <!-- ═══ HISTORY VIEW (all-time listening) ═══ -->
-  <div id="historyView">
-
-  <!-- HERO -->
-  <div class="botz-hero">
-    <div class="botz-hero-label" id="heroLabel">Jams (Last 24h)</div>
-    <div class="botz-hero-count" id="heroTotal">—</div>
-    <div class="botz-hero-unit">rolling 24h window</div>
-    <div class="botz-source-chips" id="heroSourceChips" style="display:none;"></div>
-  </div>
-
-  <!-- DATE PRESETS -->
-  <div class="botz-presets">
-    <button class="botz-preset-btn active" data-preset="all" onclick="applyPreset('all')">All</button>
-    <button class="botz-preset-btn" data-preset="today" onclick="applyPreset('today')">Today</button>
-    <button class="botz-preset-btn" data-preset="7d" onclick="applyPreset('7d')">7D</button>
-    <button class="botz-preset-btn" data-preset="30d" onclick="applyPreset('30d')">30D</button>
-    <button class="botz-preset-btn" data-preset="custom" onclick="toggleCustomFilter()">Custom</button>
-  </div>
-
-  <!-- DATE FILTER (custom, hidden by default) -->
-  <div class="botz-filter-bar" id="customFilterBar" style="display:none;">
-    <span class="botz-filter-label">From</span>
-    <input type="date" class="botz-date-input" id="filterFrom">
-    <span class="botz-filter-label">To</span>
-    <input type="date" class="botz-date-input" id="filterTo">
-    <div class="botz-filter-actions">
-      <button class="btn-outline" onclick="applyFilter()" style="padding:7px 14px; font-size:0.575rem;">FILTER</button>
-      <button class="btn-ghost" onclick="clearFilter()" style="font-size:0.575rem;">CLEAR</button>
-    </div>
-  </div>
-
-  <!-- LAST UPDATED -->
-  <div style="display:flex; justify-content:space-between; align-items:center; padding:0 16px;">
-    <div class="botz-updated" id="lastUpdated"></div>
-    <div style="font-family:var(--font-mono); font-size:0.5rem; letter-spacing:1px; color:rgba(255,255,255,0.6); text-transform:uppercase;">🕐 KST</div>
-  </div>
-
-  <!-- SYNC STATUS -->
-  <div id="syncStatus" style="display:none; margin:8px 16px 0; padding:10px 12px; border:1px solid rgba(255,255,255,0.08); border-radius:10px; background:rgba(255,255,255,0.02);">
-    <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px;">
-      <span id="syncDot" style="width:7px; height:7px; border-radius:50%; background:#22c55e;"></span>
-      <span style="font-family:var(--font-mono); font-size:0.5rem; letter-spacing:1.5px; text-transform:uppercase; color:rgba(255,255,255,0.75);">Sync Status</span>
-      <span id="syncSource" style="margin-left:auto; font-family:var(--font-mono); font-size:0.5rem; letter-spacing:1px; color:rgba(255,255,255,0.55); text-transform:uppercase;"></span>
-    </div>
-    <div style="display:flex; justify-content:space-between; gap:8px; font-size:0.6rem; color:rgba(255,255,255,0.7);">
-      <div>Last counted<br><span id="syncLast" style="color:#fff; font-weight:600;">—</span></div>
-      <div style="text-align:center;">Next sync<br><span id="syncNext" style="color:#fff; font-weight:600;">—</span></div>
-      <div style="text-align:right;">Pending<br><span id="syncPending" style="color:#fff; font-weight:600;">—</span></div>
-    </div>
-  </div>
-
-  <!-- STREAK + HEATMAP -->
-  <div class="botz-streak-card" id="streakCard" style="display:none;">
-    <div class="botz-streak-top">
-      <div>
-        <div class="botz-streak-label">🔥 Current Streak</div>
-        <div class="botz-streak-num" id="streakCurrent">0 days</div>
-      </div>
-      <div class="botz-streak-best" id="streakBest">Best: —</div>
-    </div>
-    <div class="botz-heatmap" id="streakHeatmap"></div>
-  </div>
-
-  <!-- FULL STATS NOTICE — tracks/albums/members rankings need a backend
-       rollup that doesn't exist yet; say so plainly instead of showing
-       tabs that can only ever read "No jams yet". -->
-  <div style="margin:16px 16px 0; padding:10px 12px; border:1px solid var(--border-subtle); border-radius:var(--radius-md); background:rgba(255,255,255,0.02); font-family:var(--font-mono); font-size:0.55rem; letter-spacing:0.5px; color:var(--text-ghost); text-align:center;">
-    Top tracks, albums &amp; members are coming soon — for now, here's what's live.
-  </div>
-
-  <!-- RECENT STREAMS -->
-  <div class="botz-panel active" id="panel-recent">
-    <div class="botz-section-label">Recent Jams (Last 24h)</div>
-    <div class="botz-row-list" id="recentList">
-      <div class="botz-loading"><div class="botz-spinner"></div>Loading...</div>
-    </div>
-  </div>
-
-  <!-- MOON STATION — admin police-check terminal. Gated behind the same
-       admin key admin.html/candy-star-admin.html already use (rc_admin_key
-       in localStorage), so unlocking one unlocks this too. Reads an
-       agent's real recent tracks straight off this project's own backend —
-       BOTZ's answer to the old site's Police Terminal, which only ever
-       linked out to a public Last.fm page for someone to read by hand. -->
-  <div style="margin:16px 16px 0;">
-    <button type="button" class="botz-moon-toggle" id="moonToggle" onclick="moonToggleOpen()">🌙 Moon Station (under test) — Police Check</button>
-    <div class="botz-moon-section" id="moonStation" style="display:none;">
-      <div id="moonLocked">
-        <div style="display:flex; gap:6px; margin-top:8px;">
-          <input id="moonAdminKey" class="botz-date-input" type="password" placeholder="Admin key (SYNC_ADMIN_KEY)" autocomplete="off" onkeydown="if(event.key==='Enter') moonUnlock()">
-          <button type="button" class="btn-outline" id="moonUnlockBtn" onclick="moonUnlock()">Unlock</button>
-        </div>
-        <div class="botz-moon-error" id="moonKeyError" style="display:none;"></div>
-      </div>
-      <div id="moonUnlocked" style="display:none;">
-        <div style="display:flex; gap:6px; margin:10px 0;">
-          <input id="moonQuery" class="botz-date-input" placeholder="Agent number or handle" onkeydown="if(event.key==='Enter') moonCheck()">
-          <select id="moonDays" class="botz-date-input" style="flex:none; width:70px;">
-            <option value="1">1d</option>
-            <option value="3">3d</option>
-            <option value="7" selected>7d</option>
-            <option value="14">14d</option>
-            <option value="30">30d</option>
-          </select>
-          <button type="button" class="btn-outline" onclick="moonCheck()">Check</button>
-        </div>
-        <div id="moonResult"></div>
-
-        <!-- Alt-account scan — every group of 2+ agents sharing one
-             ListenBrainz/stats.fm/Musicat identity, roster-wide. The
-             per-agent check above already flags this for whoever you look
-             up; this finds it proactively, before you'd know to suspect
-             anyone. -->
-        <button type="button" class="btn-ghost" style="width:100%; margin-top:14px;" onclick="moonScanAlts()">🔗 Scan for shared accounts</button>
-        <div id="moonScanResult"></div>
+<main id="mainContent" class="botz-console" style="display:none;">
+  <section class="botz-profile" aria-label="Jam profile">
+    <div class="botz-profile-head">
+      <div class="botz-profile-avatar" aria-hidden="true">♫</div>
+      <div class="botz-profile-copy">
+        <div class="botz-profile-kicker">Your jam history</div>
+        <h1 class="botz-profile-name" id="profileAgentNo">Agent</h1>
+        <div class="botz-profile-source" id="profileSource">Checking your jam source…</div>
       </div>
     </div>
-  </div>
 
-  </div><!-- /historyView -->
+    <div class="botz-tracking" aria-labelledby="trackingLabel">
+      <div class="botz-section-label" id="trackingLabel">Tracking Status</div>
+      <div class="botz-status-line"><span class="botz-status-dot" aria-hidden="true"></span><strong id="trackingTitle">Checking your source…</strong></div>
+      <div class="botz-status-meta" id="trackingMeta"></div>
+      <a class="btn-outline botz-fix-link" id="trackingAction" href="game.html?screen=settings" hidden>FIX CONNECTION</a>
+    </div>
 
-</div>
+    <div class="botz-profile-stats" aria-label="Listening today">
+      <div><strong id="todayBts">—</strong><span>Jams today</span></div>
+      <div><strong id="todayHelped">—</strong><span>Mission credits</span></div>
+    </div>
+    <div class="botz-mission-context" id="missionContext"></div>
+  </section>
+
+  <nav class="botz-library-tabs" aria-label="BOTZ listening views">
+    <button type="button" class="botz-library-tab active" data-botz-view="jams" onclick="setBotzView('jams')">JAMS</button>
+    <button type="button" class="botz-library-tab" data-botz-view="tracks" onclick="setBotzView('tracks')">TRACKS</button>
+    <button type="button" class="botz-library-tab" data-botz-view="albums" onclick="setBotzView('albums')">ALBUMS</button>
+  </nav>
+
+  <section class="botz-console-section botz-recent-section" aria-labelledby="recentLabel">
+    <div class="botz-recent-heading"><div><div class="botz-section-label" id="recentLabel">Recent jams</div><span><span id="latestSummary">Checking recent jams…</span> · <span id="lastUpdated">KST</span></span></div><button type="button" class="botz-refresh" onclick="location.reload()" aria-label="Refresh recent jams">↻</button></div>
+    <div class="botz-row-list" id="recentList"><div class="botz-loading"><div class="botz-spinner"></div>Loading…</div></div>
+  </section>
+</main>
 
 <!-- ── NOT LOGGED IN ── -->
 <div id="notLoggedIn" style="display:none;" class="botz-not-logged">
@@ -1086,6 +1115,6 @@
 
 <!-- botz-api.js defines window.RCBotz and MUST load before botz.js -->
 <script src="js/botz-api.js"></script>
-<script src="js/botz.js"></script>
+<script src="js/botz-phase1.js"></script>
 </body>
 </html>

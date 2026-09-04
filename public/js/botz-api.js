@@ -77,15 +77,12 @@
       return (s && s.agentNo) || null
     },
 
-    /** { success, playing, track, artist } — the shape the now-playing bar
-     *  already expects, mapped from getSignalLog's nowPlaying. */
-    async nowPlaying() {
+    /** The backend only knows the latest received jam. It never claims that
+     *  a provider is actively playing it right now. */
+    async lastPlayed() {
       const res = await signalLog(15000)
-      if (!res || !res.success) return { success: false, playing: false }
-      const np = res.nowPlaying
-      return np
-        ? { success: true, playing: true, track: np.track, artist: np.artist || '' }
-        : { success: true, playing: false }
+      if (!res || !res.success) return { success: false, lastPlayed: null }
+      return { success: true, lastPlayed: res.lastPlayed || null }
     },
 
     /** The main dashboard payload. Only `recent` and the 24h counts are real;
@@ -94,23 +91,13 @@
     async jams() {
       const res = await signalLog()
       if (!res || !res.success) return { success: false, error: (res && res.error) || 'Could not reach the uplink' }
-      const streams = res.streams || []
-      const totals = res.totals || {}
       return {
         success: true,
-        partial: true,
-        unavailableReason: NOT_WIRED,
-        // Real, from this backend:
-        recent: streams.map((s) => ({
-          track: s.track, artist: s.artist, at: s.at,
-          counted: s.counted, source: 'reconnect',
-        })),
-        counted24h: totals.counted24h || 0,
-        streams24h: totals.streams24h || 0,
-        // Not yet derivable here — deliberately empty, not zero-as-fact:
-        chartTotal: null, total: null,
-        sources: {}, tracks: [], albums: [], artists: [],
-        streak: null, dailyCounts: null, syncStatus: null,
+        tracking: res.tracking || null,
+        today: res.today || { btsJams: 0, helpedMissions: 0, trackedOnly: 0 },
+        missions: res.missions || [],
+        lastPlayed: res.lastPlayed || null,
+        recent: res.streams || [],
       }
     },
 

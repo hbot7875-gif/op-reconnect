@@ -8,6 +8,7 @@ import type { SupabaseDB } from './config.ts'
 export interface StreamRow {
   track_name: string
   artist_name: string
+  album_name?: string
   listened_at: number // unix seconds
 }
 
@@ -73,7 +74,7 @@ async function fetchListenBrainz(lbUser: string, fromTs: number, toTs: number, m
       if (!ts || !md.track_name) continue
       if (ts < oldest) oldest = ts
       if (ts < fromTs || ts > toTs) continue
-      rows.push({ track_name: md.track_name, artist_name: md.artist_name || '', listened_at: ts })
+      rows.push({ track_name: md.track_name, artist_name: md.artist_name || '', album_name: md.release_name || '', listened_at: ts })
     }
     if (listens.length < 100) break
     cursor = oldest - 1
@@ -93,7 +94,7 @@ async function fetchDirectScrobbles(supabase: SupabaseDB, agentNo: string, fromT
   while (offset < MAX_ROWS) {
     const { data, error } = await supabase
       .from('rc_scrobbles')
-      .select('track_name, artist_name, listened_at')
+      .select('track_name, artist_name, album_name, listened_at')
       .eq('agent_no', agentNo)
       .gte('listened_at', fromTs)
       .lte('listened_at', toTs)
@@ -101,7 +102,7 @@ async function fetchDirectScrobbles(supabase: SupabaseDB, agentNo: string, fromT
       .range(offset, offset + PAGE - 1)
     if (error || !data || data.length === 0) break
     for (const r of data) {
-      rows.push({ track_name: r.track_name || '', artist_name: r.artist_name || '', listened_at: r.listened_at })
+      rows.push({ track_name: r.track_name || '', artist_name: r.artist_name || '', album_name: r.album_name || '', listened_at: r.listened_at })
     }
     if (data.length < PAGE) break
     offset += PAGE
@@ -132,7 +133,12 @@ async function fetchStatsFm(username: string): Promise<StreamRow[]> {
     if (!trackName || !it.endTime) continue
     const ts = Math.floor(new Date(it.endTime).getTime() / 1000)
     if (!Number.isFinite(ts)) continue
-    rows.push({ track_name: trackName, artist_name: t.artists?.[0]?.name || '', listened_at: ts })
+    rows.push({
+      track_name: trackName,
+      artist_name: t.artists?.[0]?.name || '',
+      album_name: t.albums?.[0]?.name || t.album?.name || '',
+      listened_at: ts,
+    })
   }
   return rows
 }
@@ -175,7 +181,12 @@ async function fetchMusicat(publicId: string, fromTs: number, toTs: number): Pro
       if (!Number.isFinite(ts)) continue
       if (ts < fromTs) { reachedOlder = true; continue }
       if (ts > toTs) continue
-      rows.push({ track_name: trackName, artist_name: it.artists || '', listened_at: ts })
+      rows.push({
+        track_name: trackName,
+        artist_name: it.artists || '',
+        album_name: it.album?.name || it.albumName || it.releaseName || '',
+        listened_at: ts,
+      })
     }
     if (reachedOlder || items.length < MUSICAT_PAGE_SIZE) break
   }
@@ -209,7 +220,7 @@ async function persistScrobbles(supabase: SupabaseDB, agentNo: string, rows: Str
       agent_no: agentNo,
       track_name: r.track_name,
       artist_name: r.artist_name || null,
-      album_name: null,
+      album_name: r.album_name || null,
       listened_at: r.listened_at,
       source,
     }))
