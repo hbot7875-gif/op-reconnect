@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ReConnect Checklist Preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/reconnect.css">
+<style>
+  body{max-width:420px;margin:0 auto;padding:20px;background:#0b0c10}
+  h2{color:#8a8fa3;font:12px var(--mono, monospace);letter-spacing:1px;margin:0 0 10px}
+</style>
+</head>
+<body>
+  <h2>-- SEEN FROM AGENT046's SCREEN (not the mission creator) --</h2>
+  <div class="card reconnect-card" id="panel"></div>
+
+<script type="module">
+function el(tag, cls, html) {
+  const e = document.createElement(tag)
+  if (cls) e.className = cls
+  if (html != null) e.innerHTML = html
+  return e
+}
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) }
+
+function reconnectMissionBlock(title, body) {
+  return el('section', 'reconnect-core reconnect-mission-core', `
+    <span>MISSION</span><b>${esc(title || 'ReConnect Quest')}</b>
+    ${body ? `<p>${body}</p>` : ''}`)
+}
+function reconnectTeamBlock(body) {
+  return el('section', 'reconnect-core reconnect-team-core', `<span>TEAM</span><b>${body}</b>`)
+}
+function reconnectNextBlock(title, body = '') {
+  return el('div', 'reconnect-next', `<span>NEXT STEP</span><b>${title}</b>${body ? `<p>${body}</p>` : ''}`)
+}
+function labeledBar(label, countText, pct, done) {
+  const wrap = el('div', 'lbar')
+  wrap.innerHTML = `
+    <div class="lbar-head"><span>${esc(label)}</span><b>${esc(countText)}</b></div>
+    <div class="pbar" role="progressbar" aria-label="${esc(label)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.max(0, Math.min(100, pct))}"><div class="pfill${done ? ' done' : ''}" style="width:${Math.max(0, Math.min(100, pct))}%"></div></div>
+  `
+  return wrap
+}
+
+// --- Fabricated mission state: This Is RM checklist, 48 tracks, 8 required ---
+const TOTAL = 48
+const REQUIRED = 8
+const TRACK_LABELS = [
+  'SWIM with RM (Chill Hip Hop Remix)', 'Stop The Rain (TABLO X RM)', 'Neva Play (feat. RM of BTS)', 'LOST!',
+  'Right People, Wrong Place', 'Nuts', 'out of love', 'Domodachi (feat. Little Simz)', 'Groin', 'Heaven',
+  'Around the world in a day (feat. Moses Sumney)', 'ㅠㅠ (Credit Roll)', 'Come back to me',
+  "Don't ever say love me (Feat. RM of BTS)", 'Smoke Sprite (feat. RM of BTS)', 'Wild Flower (with youjeen)',
+  'Yun (with Erykah Badu)', 'Still Life (with Anderson .Paak)', 'All Day (with Tablo)', 'Forg_tful (with Kim Sawol)',
+  'Closer (with Paul Blanco, Mahalia)', 'Change pt.2', 'Lonely', 'Hectic (with Colde)', 'No.2 (with parkjiyoon)',
+  'SEXY NUKIM (feat. RM of BTS)', 'Bicycle', 'tokyo', 'seoul (prod. HONNE)', 'moonchild', 'badbye', 'uhgood',
+  'everythingoes', 'forever rain', 'Old Town Road (feat. RM of BTS) - Seoul Town Road Remix', 'Change',
+  'Intro : Persona', 'Crying Over You ◐ (feat. RM & BEKA)', 'Strange (feat. RM)', 'Champion - Remix',
+  'WINTER FLOWER(Feat.RM)', "Don't (feat. RM)", 'U (Feat. Kwon Jin Ah & Rap Monster)', 'Timeless', 'Gajah (Feat. RM)',
+  'ProMeTheUs', 'Buckubucku (Feat. EE, RM Of BTS, Dino-J)', 'A Song Make to You Smile',
+]
+// Deterministic per-agent tick pattern so the preview is reproducible.
+function ticksFor(doneCount, seed) {
+  const idx = TRACK_LABELS.map((_, i) => i)
+  for (let i = idx.length - 1; i > 0; i--) { seed = (seed * 9301 + 49297) % 233280; const j = Math.floor((seed / 233280) * (i + 1));[idx[i], idx[j]] = [idx[j], idx[i]] }
+  const done = new Set(idx.slice(0, doneCount))
+  return TRACK_LABELS.map((_, i) => done.has(i))
+}
+// The VIEWER is AGENT046 — mid-progress, not the creator.
+const myStreams = 21
+const participants = [
+  { codename: 'AGENT046', isMe: true,  status: 'joined',  streams: myStreams, idle: false, checklistTracks: ticksFor(myStreams, 1) },
+  { codename: 'moonchild7', isMe: false, status: 'joined', streams: 48, idle: false, checklistTracks: ticksFor(48, 2) }, // finished
+  { codename: 'echoRM', isMe: false, status: 'joined', streams: 34, idle: false, checklistTracks: ticksFor(34, 3) },
+  { codename: 'seoulnight', isMe: false, status: 'joined', streams: 9, idle: true, quietDays: 3, checklistTracks: ticksFor(9, 4) },
+  { codename: 'bicycleboy', isMe: false, status: 'joined', streams: 0, idle: false, checklistTracks: ticksFor(0, 5) },
+  { codename: 'kimdotaro', isMe: false, status: 'invited', streams: null, checklistTracks: null },
+  { codename: 'GunJ', isMe: false, status: 'joined', streams: 41, idle: false, checklistTracks: ticksFor(41, 6) },
+]
+const joined = participants.filter((p) => p.status === 'joined')
+const need = Math.max(0, REQUIRED - joined.length)
+const clearedCount = joined.filter((p) => Math.min(TOTAL, p.streams || 0) >= TOTAL).length
+
+const box = document.getElementById('panel')
+box.appendChild(el('div', 'eyebrow', 'CONNECT'))
+box.appendChild(reconnectMissionBlock('This Is RM: Full Playlist',
+  `Team up and each stream every one of ${TOTAL} tracks at least once.`))
+box.appendChild(reconnectTeamBlock(
+  `${participants.filter(p=>p.status==='joined').map(p=>p.isMe?'You':esc(p.codename)).join(' + ')}${need ? ` · ${need} open seat${need===1?'':'s'}` : ''}`,
+))
+
+box.appendChild(el('div', 'team-status', `
+  <b>Team: ${joined.length} of ${REQUIRED} ready</b>
+  ${need > 0 ? `<span> &middot; Need ${need} more agent${need === 1 ? '' : 's'}</span>` : ''}
+`))
+box.appendChild(labeledBar('Team members', `${joined.length}/${REQUIRED}`,
+  Math.round((joined.length / REQUIRED) * 100), need === 0))
+
+box.appendChild(reconnectNextBlock(
+  `Stream ${TOTAL - myStreams} more tracks from the list`,
+  `${myStreams}/${TOTAL} cleared — every teammate needs the whole list on their own.`,
+))
+
+const myDone = Math.min(TOTAL, myStreams)
+box.appendChild(labeledBar('Your tracks cleared', `${myDone}/${TOTAL}`,
+  Math.round((myDone / TOTAL) * 100), myDone >= TOTAL))
+box.appendChild(el('p', 'muted', `${clearedCount}/${joined.length} teammates have cleared the whole list — nothing pools, everyone streams their own full pass.`))
+
+const list = el('div', 'reconnect-roster')
+for (const p of participants) {
+  const statusText = p.status === 'invited' ? 'Invite pending'
+    : p.idle ? `Quiet ${p.quietDays >= 3 ? '3+' : p.quietDays} day${p.quietDays === 1 ? '' : 's'}${p.streams ? ` &middot; ${p.streams}/${TOTAL} tracks` : ''}`
+    : `Ready &middot; ${p.streams ?? 0}/${TOTAL} tracks`
+  const checklistTracks = Array.isArray(p.checklistTracks) ? p.checklistTracks : null
+  const row = el('div', 'reconnect-agent'
+    + (checklistTracks ? ' has-checklist' : '')
+    + (p.status === 'invited' ? ' is-pending' : '')
+    + (p.idle ? ' is-idle' : ''))
+  const head = el('div', 'reconnect-agent-head' + (checklistTracks ? ' is-expandable' : ''), `
+    <span>${esc(p.codename)}${p.isMe ? ' (you)' : ''}</span>
+    <span>${statusText}</span>
+  `)
+  row.appendChild(head)
+  if (checklistTracks) {
+    const detail = el('div', 'reconnect-checklist-detail')
+    detail.hidden = true
+    detail.innerHTML = `<ul class="reconnect-checklist-list">${
+      TRACK_LABELS.map((label, i) => `<li class="${checklistTracks[i] ? 'is-done' : ''}"><i>${checklistTracks[i] ? '✓' : '○'}</i>${esc(label)}</li>`).join('')
+    }</ul>`
+    head.onclick = () => { detail.hidden = !detail.hidden }
+    row.appendChild(detail)
+  }
+  list.appendChild(row)
+}
+box.appendChild(list)
+</script>
+</body>
+</html>

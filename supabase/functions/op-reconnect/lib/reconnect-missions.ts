@@ -272,18 +272,21 @@ export async function contributionSince(supabase: SupabaseDB, agentNo: string, s
 }
 
 /** Per-track completion for a fixed checklist (config.checklist, when a
- *  'connect' goal carries one instead of a sharedTrack) — how many of the
+ *  'connect' goal carries one instead of a sharedTrack) — which of the
  *  list's tracks THIS agent has personally played at least once since they
- *  joined. One query for the whole list rather than one per track (a
+ *  joined, one boolean per track in the same order as `tracks`, plus the
+ *  done count. One query for the whole list rather than one per track (a
  *  49-track checklist would otherwise be 49 round trips per participant on
  *  every poll); same day-granularity/uncapped-count reasoning as
  *  contributionSince, just checked per-track instead of summed across all
  *  of them (a person who streams one track 50 times must not look like
- *  they've cleared 50 different tracks). */
+ *  they've cleared 50 different tracks). The per-track array is what lets
+ *  a teammate's roster row expand into an actual tick-list, not just a
+ *  bare "21/48" nobody can act on. */
 export async function checklistProgressSince(
   supabase: SupabaseDB, agentNo: string, sinceIso: string, tracks: { label: string; keys: string[] }[],
-): Promise<number> {
-  if (!tracks.length) return 0
+): Promise<{ done: number; perTrack: boolean[] }> {
+  if (!tracks.length) return { done: 0, perTrack: [] }
   const sinceDate = kstDateOfIso(sinceIso)
   const { data } = await supabase.from('rc_daily_activity')
     .select('track_counts').eq('agent_no', agentNo).gte('kst_date', sinceDate)
@@ -292,11 +295,8 @@ export async function checklistProgressSince(
     const bucket = row.track_counts || {}
     for (const key of Object.keys(bucket)) totals.set(key, (totals.get(key) || 0) + (bucket[key]?.n || 0))
   }
-  let done = 0
-  for (const t of tracks) {
-    if ((t.keys || []).some((k) => (totals.get(k) || 0) > 0)) done++
-  }
-  return done
+  const perTrack = tracks.map((t) => (t.keys || []).some((k) => (totals.get(k) || 0) > 0))
+  return { done: perTrack.filter(Boolean).length, perTrack }
 }
 
 /** codename lookup for a set of agent numbers — same "agent numbers never
@@ -417,6 +417,13 @@ async function shape(
       // requirement at all) so the client can tell "zero streams" apart
       // from "not applicable" instead of guessing from variant alone.
       streams: typeof p.contribution === 'number' ? p.contribution : null,
+      // Per-track tick-list for checklist goals only — one boolean per
+      // entry in config.checklist.tracks, same order, so a tapped roster
+      // row can expand into an actual list instead of just a fraction.
+      // Any teammate can see any other teammate's — the aggregate count
+      // (streams, above) is already fully visible to the whole team today,
+      // this is just the same information broken out per track.
+      checklistTracks: Array.isArray(p._checklistTracks) ? p._checklistTracks : null,
       // Only meaningful alongside mission.isCreator — a participant who
       // hasn't contributed anything yet (still invited, or joined but never
       // streamed) can be removed to free their slot; one who's already
@@ -537,8 +544,9 @@ async function refreshMission(
   if (variant === 'connect' && checklist?.tracks?.length) {
     checklistAllDone = true
     for (const p of joined) {
-      const done = await checklistProgressSince(supabase, p.agent_no, p.joined_at, checklist.tracks)
+      const { done, perTrack } = await checklistProgressSince(supabase, p.agent_no, p.joined_at, checklist.tracks)
       p.contribution = done
+      p._checklistTracks = perTrack
       if (done < checklist.tracks.length) checklistAllDone = false
       if (done > 0 && !p.streamed_at) {
         await supabase.from('rc_reconnect_participants')

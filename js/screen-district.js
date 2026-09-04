@@ -722,13 +722,34 @@ function paintMissionPanel(box, d, res) {
       : res.variant === 'invite' ? '✓ Ready'
       : m.checklist ? `Ready &middot; ${p.streams ?? 0}/${m.checklist.total} tracks`
       : `Ready &middot; ${p.streams ?? 0} stream${(p.streams ?? 0) === 1 ? '' : 's'}`
+    // A checklist goal's roster can expand each row into that agent's own
+    // tick-list — any teammate's, not just your own, since the aggregate
+    // count next to their name already tells the whole team the same
+    // information; this just breaks it out by track. Only offered once
+    // refreshMission has actually computed a per-track array for them
+    // (joined + counted this pass), same guard collectionBadgeIds-style
+    // features use for "don't render a toggle with nothing to show."
+    const checklistTracks = m.checklist && Array.isArray(p.checklistTracks) ? p.checklistTracks : null
+    const trackList = res.config.checklist?.tracks || []
     const row = el('div', 'reconnect-agent'
+      + (checklistTracks ? ' has-checklist' : '')
       + (p.status === 'invited' ? ' is-pending' : '')
       + (p.idle ? ' is-idle' : '')
-      + (p.inviteExpired || p.leftDistrict ? ' is-expired' : ''), `
+      + (p.inviteExpired || p.leftDistrict ? ' is-expired' : ''))
+    const head = el('div', 'reconnect-agent-head' + (checklistTracks ? ' is-expandable' : ''), `
       <span>${esc(p.codename)}${p.isMe ? ' (you)' : ''}</span>
       <span>${statusText}</span>
     `)
+    row.appendChild(head)
+    if (checklistTracks) {
+      const detail = el('div', 'reconnect-checklist-detail')
+      detail.hidden = true
+      detail.innerHTML = `<ul class="reconnect-checklist-list">${
+        trackList.map((t, i) => `<li class="${checklistTracks[i] ? 'is-done' : ''}"><i>${checklistTracks[i] ? '✓' : '○'}</i>${esc(t.label)}</li>`).join('')
+      }</ul>`
+      head.onclick = () => { detail.hidden = !detail.hidden }
+      row.appendChild(detail)
+    }
     const msg = el('div', 'reconnect-row-msg')
     // Only the mission creator sees this, and only next to someone who
     // hasn't contributed anything yet — server already enforces both, this
@@ -741,7 +762,8 @@ function paintMissionPanel(box, d, res) {
           : p.status === 'invited' ? 'Cancel invite'
           : p.leftDistrict ? 'Clear'
           : p.idle ? 'Drop' : 'Remove')
-      removeBtn.onclick = async () => {
+      removeBtn.onclick = async (e) => {
+        e.stopPropagation() // sits inside the same clickable head as the checklist toggle
         const action = p.status === 'invited' ? 'Cancel this invitation?' : `Remove ${p.codename} from this mission?`
         if (!window.confirm(`${action}\n\nThey will no longer count toward this ReConnect team.`)) return
         removeBtn.disabled = true
@@ -758,14 +780,15 @@ function paintMissionPanel(box, d, res) {
           removeBtn.disabled = false
         }
       }
-      row.appendChild(removeBtn)
+      head.appendChild(removeBtn)
     }
     // Your own way out, whoever opened the mission. The creator already had
     // levers; an agent who accepted an invite had none at all and could only
     // wait out the 7-day expiry.
     if (p.isMe && p.canLeave && p.status === 'joined') {
       const leaveBtn = el('button', 'reconnect-remove', 'Leave')
-      leaveBtn.onclick = async () => {
+      leaveBtn.onclick = async (e) => {
+        e.stopPropagation() // sits inside the same clickable head as the checklist toggle
         if (!window.confirm('Leave this ReConnect mission?\n\nYour team membership will be removed and you will need to team up again.')) return
         leaveBtn.disabled = true
         msg.textContent = ''
@@ -778,7 +801,7 @@ function paintMissionPanel(box, d, res) {
           leaveBtn.disabled = false
         }
       }
-      row.appendChild(leaveBtn)
+      head.appendChild(leaveBtn)
     }
     list.append(row, msg)
   }
