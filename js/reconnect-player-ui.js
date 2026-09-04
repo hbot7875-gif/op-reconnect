@@ -50,10 +50,10 @@ export function reconnectPlayerNext(input = {}) {
     const left = checklist.total - myChecklistDone
     return {
       title: `Stream ${left} more track${left === 1 ? '' : 's'} from the list`,
-      body: `${myChecklistDone}/${checklist.total} cleared — every teammate needs the whole list on their own.`,
+      body: `${myChecklistDone}/${checklist.total} cleared — each teammate completes their own list.`,
     }
   }
-  if (input.variant === 'connect' && checklist) return { title: 'Waiting on the rest of the team', body: 'You’ve cleared the whole list — everyone else needs their own full pass too.' }
+  if (input.variant === 'connect' && checklist) return { title: 'Waiting on the rest of the team', body: 'Your list is complete — each teammate still needs to finish their own.' }
   if (input.variant === 'connect') return { title: 'Stream an active district goal', body: 'Each ready agent needs one qualifying play after joining.' }
   return { title: 'Review the ReConnect Quest', body: 'Check the remaining step in Details.' }
 }

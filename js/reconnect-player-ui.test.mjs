@@ -26,5 +26,8 @@ assert.equal(reconnectPlayerNext({
 assert.equal(reconnectPlayerNext({
   variant: 'connect', need: 0, checklist: { total: 49 }, myChecklistDone: 49,
 }).title, 'Waiting on the rest of the team')
+assert.equal(reconnectPlayerNext({
+  variant: 'connect', need: 0, checklist: { total: 49 }, myChecklistDone: 12,
+}).body, '12/49 cleared — each teammate completes their own list.')
 
 console.log('reconnect-player-ui: all tests passed')

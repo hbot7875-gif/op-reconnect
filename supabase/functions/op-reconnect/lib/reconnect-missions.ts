@@ -497,7 +497,7 @@ async function refreshMission(
   config?: {
     requiredAgents?: number
     sharedTrack?: { label: string; keys: string[]; target: number } | null
-    checklist?: { tracks: { label: string; keys: string[] }[] } | null
+    checklist?: { tracks: { label: string; keys: string[] }[]; playlistUrl?: string } | null
     ciphers?: { prompt: string; answerKeys: string[] }[] | null
   },
 ) {

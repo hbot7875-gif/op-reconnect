@@ -456,7 +456,7 @@ function paintMissionPanel(box, d, res) {
     const missionBody = m.sharedTrack
       ? `Team up and take ${esc(m.sharedTrack.label)} to ${m.sharedTrack.target} combined plays.`
       : m.checklist
-        ? `Team up and each stream every track on the list at least once.`
+        ? `Build a team of ${m.requiredAgents} agents. Each agent streams all ${m.checklist.total} tracks once.`
         : 'Complete this district ReConnect Quest together.'
     box.appendChild(reconnectMissionBlock(d.reconnect?.label || 'ReConnect Quest', missionBody))
     box.appendChild(reconnectTeamBlock(`${esc(m.participants.filter((p) => p.status === 'joined').map((p) => p.isMe ? 'You' : p.codename).join(' + ') || 'Team complete')}`))
@@ -477,7 +477,7 @@ function paintMissionPanel(box, d, res) {
       : st
         ? `Build a ${res.config.requiredAgents}-agent team, then stream ${esc(st.label)} to ${st.target} combined plays.`
         : cl
-          ? `Build a ${res.config.requiredAgents}-agent team — each of you streams every one of ${cl.tracks.length} tracks at least once.`
+          ? `Build a team of ${res.config.requiredAgents} agents. Each agent streams all ${cl.tracks.length} tracks once.`
           : `Build a ${res.config.requiredAgents}-agent team and stream your active district goals.`
     box.appendChild(reconnectMissionBlock(d.reconnect?.label || 'ReConnect Quest', missionBody))
     box.appendChild(reconnectTeamBlock(`You · ${Math.max(0, res.config.requiredAgents - 1)} open seat${res.config.requiredAgents - 1 === 1 ? '' : 's'}`))
@@ -556,7 +556,7 @@ function paintMissionPanel(box, d, res) {
     : m.sharedTrack
       ? `Team up and take ${esc(m.sharedTrack.label)} to ${m.sharedTrack.target} combined plays.`
       : m.checklist
-        ? `Team up and each stream every one of ${m.checklist.total} tracks at least once.`
+        ? `Build a team of ${m.requiredAgents} agents. Each agent streams all ${m.checklist.total} tracks once.`
         : `Team up and stream active goals in ${esc(districtDisplayName(d))}.`
   box.appendChild(reconnectMissionBlock(d.reconnect?.label || 'ReConnect Quest', missionBody))
   box.appendChild(reconnectTeamBlock(teamCopy))
@@ -615,10 +615,18 @@ function paintMissionPanel(box, d, res) {
   } else if (res.variant === 'connect' && m.checklist) {
     const total = m.checklist.total
     const myDone = Math.min(total, Number(myRow?.streams) || 0)
-    box.appendChild(labeledBar('Your tracks cleared', `${myDone}/${total}`,
+    box.appendChild(labeledBar('Your playlist progress', `${myDone}/${total} tracks`,
       Math.round((myDone / Math.max(1, total)) * 100), myDone >= total))
     const clearedCount = joined.filter((p) => Math.min(total, Number(p.streams) || 0) >= total).length
-    box.appendChild(el('p', 'muted', `${clearedCount}/${joined.length} teammates have cleared the whole list — nothing pools, everyone streams their own full pass.`))
+    box.appendChild(el('p', 'muted', `${clearedCount} of ${joined.length} joined agent${joined.length === 1 ? '' : 's'} ${clearedCount === 1 ? 'has' : 'have'} completed their own list.`))
+    const playlistUrl = String(res.config.checklist?.playlistUrl || '')
+    if (/^https:\/\/open\.spotify\.com\/playlist\//i.test(playlistUrl)) {
+      const playlist = el('a', 'reconnect-playlist-link', '<span aria-hidden="true">♫</span><span><b>THIS IS RM</b><small>Open the mission playlist on Spotify</small></span><i aria-hidden="true">↗</i>')
+      playlist.href = playlistUrl
+      playlist.target = '_blank'
+      playlist.rel = 'noopener noreferrer'
+      box.appendChild(playlist)
+    }
   } else if (res.variant === 'connect') {
     const streamedCount = joined.filter((p) => p.streamed).length
     box.appendChild(el('p', 'muted', `${streamedCount}/${joined.length} have streamed toward their own goals here since joining.`))
@@ -736,18 +744,42 @@ function paintMissionPanel(box, d, res) {
       + (p.status === 'invited' ? ' is-pending' : '')
       + (p.idle ? ' is-idle' : '')
       + (p.inviteExpired || p.leftDistrict ? ' is-expired' : ''))
-    const head = el('div', 'reconnect-agent-head' + (checklistTracks ? ' is-expandable' : ''), `
-      <span>${esc(p.codename)}${p.isMe ? ' (you)' : ''}</span>
-      <span>${statusText}</span>
-    `)
+    const head = el('div', 'reconnect-agent-head')
+    let toggle = null
+    if (checklistTracks) {
+      const done = Math.min(m.checklist.total, Number(p.streams) || 0)
+      toggle = el('button', 'reconnect-agent-toggle', `
+        <span class="reconnect-agent-identity"><b>${esc(p.codename)}${p.isMe ? ' <small>(you)</small>' : ''}</b><small>${p.idle ? `Quiet ${p.quietDays >= 3 ? '3+' : p.quietDays} day${p.quietDays === 1 ? '' : 's'}` : 'Tap to view checklist'}</small></span>
+        <span class="reconnect-agent-progress"><b>${done}<i>/</i>${m.checklist.total}</b><small>tracks</small></span>
+        <span class="reconnect-agent-chevron" aria-hidden="true">⌄</span>
+      `)
+      toggle.type = 'button'
+      toggle.setAttribute('aria-expanded', 'false')
+      toggle.setAttribute('aria-label', `${p.codename}: ${done} of ${m.checklist.total} tracks. Show checklist`)
+      head.appendChild(toggle)
+    } else {
+      head.innerHTML = `<span>${esc(p.codename)}${p.isMe ? ' (you)' : ''}</span><span>${statusText}</span>`
+    }
     row.appendChild(head)
     if (checklistTracks) {
       const detail = el('div', 'reconnect-checklist-detail')
       detail.hidden = true
-      detail.innerHTML = `<ul class="reconnect-checklist-list">${
-        trackList.map((t, i) => `<li class="${checklistTracks[i] ? 'is-done' : ''}"><i>${checklistTracks[i] ? '✓' : '○'}</i>${esc(t.label)}</li>`).join('')
-      }</ul>`
-      head.onclick = () => { detail.hidden = !detail.hidden }
+      const done = Math.min(m.checklist.total, Number(p.streams) || 0)
+      detail.innerHTML = `<div class="reconnect-checklist-summary"><span>${esc(p.codename)}'s checklist</span><b>${done} of ${m.checklist.total} complete</b></div>
+        <div class="reconnect-checklist-mini"><i style="width:${Math.round((done / Math.max(1, m.checklist.total)) * 100)}%"></i></div>
+        <ul class="reconnect-checklist-list">${
+          trackList.map((t, i) => `<li class="${checklistTracks[i] ? 'is-done' : ''}"><span>${String(i + 1).padStart(2, '0')}</span><i aria-hidden="true">${checklistTracks[i] ? '✓' : '○'}</i><b>${esc(t.label)}</b></li>`).join('')
+        }</ul>`
+      toggle.onclick = () => {
+        const opening = detail.hidden
+        if (opening) {
+          list.querySelectorAll('.reconnect-checklist-detail').forEach((other) => { other.hidden = true })
+          list.querySelectorAll('.reconnect-agent-toggle').forEach((other) => { other.setAttribute('aria-expanded', 'false') })
+        }
+        detail.hidden = !opening
+        toggle.setAttribute('aria-expanded', String(!detail.hidden))
+        toggle.setAttribute('aria-label', `${p.codename}: ${done} of ${m.checklist.total} tracks. ${detail.hidden ? 'Show' : 'Hide'} checklist`)
+      }
       row.appendChild(detail)
     }
     const msg = el('div', 'reconnect-row-msg')
@@ -812,7 +844,9 @@ function paintMissionPanel(box, d, res) {
       ? "You've been invited to team up here — accepting alone completes your part, no streaming needed."
       : m.sharedTrack
         ? `You've been invited to team up here. Accept to join — once you do, stream ${esc(m.sharedTrack.label)} along with everyone else here until you've hit ${m.sharedTrack.target} between you.`
-        : "You've been invited to team up here. Accept to join — once you do, stream toward your own goals here at least once.")
+        : m.checklist
+          ? `You've been invited to team up here. Accept to join — then stream every one of the ${m.checklist.total} playlist tracks once on your own.`
+          : "You've been invited to team up here. Accept to join — once you do, stream toward your own goals here at least once.")
     box.appendChild(inviteNote)
     const row = el('div', 'reconnect-invite-actions')
     const accept = el('button', 'btn btn-primary', 'Accept')
