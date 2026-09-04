@@ -18,6 +18,8 @@ import { trackEngagementOnce } from './engagement.js'
 import { reconnectPlayerNext } from './reconnect-player-ui.js'
 import { openPlaylistVault } from './playlist-vault-sheet.js'
 import { chatThread } from './chat-thread.js'
+import { getReconnectChatSeen, markReconnectChatSeen,
+  reconnectChatUnreadCount, reconnectChatBadgeText } from './reconnect-chat-unread.js'
 
 let teardown = null
 let sceneFor = null
@@ -991,7 +993,21 @@ function paintMissionPanel(box, d, res) {
   if (detailsBody.childElementCount) box.appendChild(reconnectDisclosure('Details', detailsBody))
 
   const chat = chatPanel(d, m, refresh)
-  box.appendChild(reconnectDisclosure('Team Chat', chat, !!m.cipher))
+  const unread = reconnectChatUnreadCount(m.messageCount, getReconnectChatSeen(m.id))
+  const badge = reconnectChatBadgeText(unread)
+  const chatDisclosure = reconnectDisclosure(
+    `Team Chat${badge ? ` <span class="reconnect-chat-badge">${esc(badge)} new</span>` : ''}`,
+    chat,
+    !!m.cipher,
+  )
+  const markChatRead = () => {
+    if (!chatDisclosure.open) return
+    markReconnectChatSeen(m.id, m.messageCount)
+    chatDisclosure.querySelector('.reconnect-chat-badge')?.remove()
+  }
+  chatDisclosure.addEventListener('toggle', markChatRead)
+  box.appendChild(chatDisclosure)
+  if (chatDisclosure.open) markChatRead()
 }
 
 /** The mission's shared thread — an invite's optional note and the ongoing

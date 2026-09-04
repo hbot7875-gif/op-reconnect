@@ -322,8 +322,8 @@ const MAX_MESSAGE_LEN = 240
 async function missionMessages(supabase: SupabaseDB, missionId: string, meAgentNo: string) {
   const { data } = await supabase.from('rc_reconnect_messages')
     .select('agent_no, body, created_at').eq('mission_id', missionId)
-    .order('created_at', { ascending: true }).limit(50)
-  const rows = data || []
+    .order('created_at', { ascending: false }).limit(50)
+  const rows = (data || []).reverse()
   const names = await codenameMap(supabase, [...new Set(rows.map((r: any) => r.agent_no))])
   return rows.map((r: any) => ({
     codename: names.get(r.agent_no) || r.agent_no,
@@ -331,6 +331,16 @@ async function missionMessages(supabase: SupabaseDB, missionId: string, meAgentN
     body: r.body,
     at: r.created_at,
   }))
+}
+
+/** Lightweight unread input for the normal game-state poll. Counts only
+ * messages written by OTHER teammates, so sending your own reply never
+ * creates a false unread badge. */
+async function missionMessageCount(supabase: SupabaseDB, missionId: string, meAgentNo: string) {
+  const { count } = await supabase.from('rc_reconnect_messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('mission_id', missionId).neq('agent_no', meAgentNo)
+  return count || 0
 }
 
 /** Prefers the rows refreshMission already fetched and annotated with
@@ -356,7 +366,10 @@ async function shape(
   supabase: SupabaseDB, m: any, participants: any[], meAgentNo: string, idleThreshold = IDLE_DAYS,
   ciphers?: { prompt: string; answerKeys: string[] }[] | null,
 ) {
-  const names = await codenameMap(supabase, participants.map((p) => p.agent_no))
+  const [names, messageCount] = await Promise.all([
+    codenameMap(supabase, participants.map((p) => p.agent_no)),
+    missionMessageCount(supabase, m.id, meAgentNo),
+  ])
   return {
     id: m.id,
     districtId: m.district_id,
@@ -367,6 +380,10 @@ async function shape(
     completedAt: m.completed_at,
     expiresAt: m.expires_at,
     isCreator: m.created_by === meAgentNo,
+    // Count of messages from other teammates, included in the lightweight
+    // game-state poll so the HUD can signal unread chat without loading the
+    // full thread. Own messages are deliberately excluded.
+    messageCount,
     // Only present when the frozen goal carries a sharedTrack — see
     // refreshMission. Pooled progress toward one specific track, everyone's
     // own plays (since they personally joined) counted together.

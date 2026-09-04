@@ -86,8 +86,8 @@ function paint(body, ac, focusEraId = null) {
   // paragraph so it doesn't read as a restatement of the note above.
   if (ac.deletionWarning) {
     body.appendChild(el('p', 'muted ac-warn ac-warn-critical',
-      `⚠️ You haven't personally fed the Bomb in ${ac.deletionWarning.daysInactive} days. `
-      + `Feed it yourself within ${ac.deletionWarning.daysLeft} more day${ac.deletionWarning.daysLeft === 1 ? '' : 's'} or your agent file is permanently deleted — Auto Feed alone doesn't count.`))
+      `⚠️ Your Bomb hasn't been fed in ${ac.deletionWarning.daysInactive} days. `
+      + `Feed it within ${ac.deletionWarning.daysLeft} more day${ac.deletionWarning.daysLeft === 1 ? '' : 's'} to keep your agent file active.`))
   }
 
   const feedCard = el('div', 'ms-card')

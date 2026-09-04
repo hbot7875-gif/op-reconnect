@@ -104,7 +104,7 @@ function paintList(body, agents, state) {
 
   if (activeTab === 'all') {
     body.appendChild(el('div', 'dim rank-hint',
-      'Modes trade account count for bigger targets, not more XP — the All board is for bragging rights. Switch to Easy, Medium or Hard for an apples-to-apples ranking.'))
+      'All compares every mode. For a fair board, choose the mode you play.'))
   }
 }
 

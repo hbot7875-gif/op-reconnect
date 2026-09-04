@@ -30,6 +30,7 @@ import {
 } from './red-zone.js'
 import { resolvedAgentStreamSource } from './streams.ts'
 import { goalKeys } from './transmission.ts'
+import { activeRankingRows } from './ranking-rules.js'
 
 const RED_ZONE_DEFAULT_XP_POOL = 500
 const RED_ZONE_MIN_STREAMS = 7
@@ -211,10 +212,16 @@ async function buildDefenderRanking(supabase: SupabaseDB, eventId: string, agent
   if (error || !data?.length) return { leaders: [], yourRank: null, total: 0 }
 
   const agentNos = data.map((row: any) => String(row.agent_no))
-  const { data: players } = await supabase.from('rc_players')
-    .select('agent_no, codename').in('agent_no', agentNos)
+  const [{ data: players }, { data: activeAgents }] = await Promise.all([
+    supabase.from('rc_players').select('agent_no, codename').in('agent_no', agentNos),
+    supabase.from('rc_agents').select('agent_no').in('agent_no', agentNos).is('retired_at', null),
+  ])
+  const active = new Set((activeAgents || []).map((a: any) => String(a.agent_no)))
   const names = new Map((players || []).map((p: any) => [String(p.agent_no), String(p.codename || p.agent_no)]))
-  const ranked = data.map((row: any, index: number) => ({
+  // Retired agents' historical contributions stay in the event totals, but
+  // they are no longer active competitors and should not occupy a place on
+  // the public Defender Ranking.
+  const ranked = activeRankingRows(data, active).map((row: any, index: number) => ({
     rank: index + 1,
     codename: names.get(String(row.agent_no)) || String(row.agent_no),
     streams: Number(row.streams) || 0,

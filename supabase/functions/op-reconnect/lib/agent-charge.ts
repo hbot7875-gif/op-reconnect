@@ -399,16 +399,21 @@ export interface AgentChargeView {
   // silently erase the other, handing back a charge that was legitimately
   // spent moments earlier in the very same call.
   freezeChargesRemaining: number
-  // Present once this agent is 7+ days since their last explicit Feed the
-  // Bomb tap (or since joining, if they've never fed it once) — a
+  // Present once this agent is 7+ days since the Bomb was last fed
+  // (or since joining, if it has never been fed once) — a
   // deliberately SEPARATE clock from isDark/blackout above. isDark tracks
   // charged_until running out, which Auto Feed alone can keep from ever
-  // happening; this tracks the real action of feeding, per the site
-  // owner's choice (see migrations/053_rc_inactive_agent_cleanup.sql).
+  // happening; this tracks the authoritative last_fed_at activity used by
+  // the cleanup rule (see migrations/20260826140000_rc_atomic_last_fed_at.sql).
   // null once the 14-day mark passes — by then the nightly cleanup job has
   // either already deleted the account or is about to, and there's nothing
   // left for a warning to accomplish.
   deletionWarning: { daysInactive: number; daysLeft: number } | null
+  // Always present while the agent file exists. This is the same
+  // last_fed_at clock the cleanup job uses, exposed before the warning stage
+  // so the City Bomb can act like a small health meter instead of surprising
+  // an agent on day seven.
+  feedHealth: { daysSinceFeed: number; daysLeft: number; lastFedAt: string } | null
   goldenCorner: GoldenCornerView | null
 }
 
@@ -419,7 +424,7 @@ export interface AgentChargeView {
  *  feed insert failed (the bug that could falsely delete an active agent).
  *  The old bomb_fed event is retained only as a legacy fallback for rows that
  *  predate the atomic timestamp migration. */
-async function bombDeletionWarning(supabase: SupabaseDB, agentNo: string): Promise<{ daysInactive: number; daysLeft: number } | null> {
+async function bombFeedHealth(supabase: SupabaseDB, agentNo: string): Promise<{ daysSinceFeed: number; daysLeft: number; lastFedAt: string } | null> {
   const { data: charge } = await supabase.from('rc_agent_charge')
     .select('last_fed_at').eq('agent_no', agentNo).maybeSingle()
   const { data: legacyLastFed } = await supabase.from('rc_feed_events')
@@ -428,9 +433,12 @@ async function bombDeletionWarning(supabase: SupabaseDB, agentNo: string): Promi
   const { data: agent } = await supabase.from('rc_agents').select('created_at').eq('agent_no', agentNo).maybeSingle()
   const sinceIso = charge?.last_fed_at || legacyLastFed?.created_at || agent?.created_at
   if (!sinceIso) return null
-  const daysInactive = (Date.now() - new Date(sinceIso).getTime()) / 86400000
-  if (daysInactive < 7 || daysInactive >= 14) return null
-  return { daysInactive: Math.floor(daysInactive), daysLeft: Math.max(0, Math.ceil(14 - daysInactive)) }
+  const daysInactive = Math.max(0, (Date.now() - new Date(sinceIso).getTime()) / DAY_MS)
+  return {
+    daysSinceFeed: Math.floor(daysInactive),
+    daysLeft: Math.max(0, Math.ceil(14 - daysInactive)),
+    lastFedAt: sinceIso,
+  }
 }
 
 /** Lifetime Charge Cells earned, straight off rc_players — a counter that
@@ -544,7 +552,10 @@ export async function getAgentChargeView(supabase: SupabaseDB, content: GameCont
   }
 
   const earned = await lifetimeChargeCellsEarned(supabase, agentNo)
-  const deletionWarning = await bombDeletionWarning(supabase, agentNo)
+  const feedHealth = await bombFeedHealth(supabase, agentNo)
+  const deletionWarning = feedHealth && feedHealth.daysSinceFeed >= 7 && feedHealth.daysLeft > 0
+    ? { daysInactive: feedHealth.daysSinceFeed, daysLeft: feedHealth.daysLeft }
+    : null
   const goldenCorner = await computeGoldenCorner(supabase, content, agentNo)
 
   return {
@@ -559,6 +570,7 @@ export async function getAgentChargeView(supabase: SupabaseDB, content: GameCont
     newlyLitEraIds: weekly.newlyLitEraIds,
     freezeChargesRemaining: freezes,
     deletionWarning,
+    feedHealth,
     goldenCorner,
   }
 }

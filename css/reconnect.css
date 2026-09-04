@@ -228,11 +228,13 @@ body {
 .hud-xp-note { color: var(--muted); font-family: var(--mono); font-size: 11px; letter-spacing: .5px; text-transform: uppercase; white-space: nowrap; }
 .hud-boost { color: var(--gold); font-weight: 700; flex-shrink: 0; }
 .hud-reconnect-status { width: min(620px, calc(100% - (var(--gut) * 2))); margin: -2px auto 8px; padding: 7px 10px;
-  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; border: 1px solid rgba(139,92,246,.38);
+  display: grid; grid-template-columns: auto minmax(0,1fr) auto auto; align-items: center; gap: 8px; border: 1px solid rgba(139,92,246,.38);
   border-radius: 10px; background: rgba(139,92,246,.08); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
 .hud-reconnect-status span { color: var(--purple-lt); font-family: var(--mono); font-size: 9px; letter-spacing: .65px; text-transform: uppercase; }
 .hud-reconnect-status b { overflow: hidden; font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
 .hud-reconnect-status i { color: var(--dim); font-style: normal; }
+.hud-reconnect-chat-badge { min-width: 31px; padding: 2px 6px; border-radius: 999px; background: var(--purple);
+  color: #fff; font: 700 9px var(--mono); font-style: normal; text-align: center; white-space: nowrap; }
 .hud-reconnect-status.is-urgent { border-color: rgba(229,56,79,.45); background: rgba(229,56,79,.07); }
 .hud-reconnect-status.is-urgent span { color: var(--crimson); }
 
@@ -536,7 +538,8 @@ body {
     border: 0; border-radius: 50%; background: radial-gradient(circle, rgba(8,6,16,.88) 0 34%, rgba(8,6,16,.58) 52%, transparent 72%);
     backdrop-filter: none; }
   .command-scene .command-core .core-eyebrow { display: none; }
-  .command-scene .command-core .core-title { display: block; margin: 0; font-size: 13px; letter-spacing: 1.2px; }
+  .command-scene .command-core .core-title { display: block; margin: 0 0 8px; font-size: 13px; letter-spacing: 1.2px; }
+  .command-scene .command-core .core-stage { margin-top: 4px; }
   .command-scene .command-core .army-core { width: 95px; height: 108px; margin: 10px 0 28px; overflow: visible;
     transform: scale(1.35); transform-origin: center; }
   .command-scene .command-core .army-core > * { display: block; }
@@ -954,6 +957,33 @@ body.red-zone .wtb.now { fill: var(--crimson); filter: drop-shadow(0 0 3px rgba(
    drops a couple px and picks up letter-spacing to match — same visual
    weight in less horizontal room, which matters at this button's 95px width. */
 .core-title { font-family: var(--disp); font-weight: 700; font-size: 16px; letter-spacing: 1.5px; margin-top: 2px; }
+
+/* The 14-day last-fed clock as a tiny bit of game language beside the
+   object it belongs to. It never becomes another card: two short lines,
+   one soft edge and no persistent animation. The Bomb remains centred;
+   this sits outside its layout box so adding the reminder cannot push the
+   City or mission downward. */
+.core-stage { position: relative; width: 95px; }
+.core-health { position: absolute; z-index: 6; left: calc(100% + 14px); top: 33px; width: 90px;
+  padding: 6px 7px; display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+  border: 1px solid rgba(139,92,246,.22); border-radius: 9px;
+  background: rgba(8,6,16,.78); color: var(--muted); text-align: left; cursor: pointer;
+  backdrop-filter: blur(8px); }
+.core-health:hover { border-color: rgba(167,139,250,.48); background: rgba(17,12,31,.88); }
+.core-health-kicker { color: var(--dim); font-family: var(--mono); font-size: 6.5px;
+  line-height: 1; letter-spacing: .8px; text-transform: uppercase; white-space: nowrap; }
+.core-health strong { display: flex; align-items: center; gap: 4px; color: var(--purple-lt);
+  font-family: var(--mono); font-size: 8px; line-height: 1.25; letter-spacing: .25px; white-space: nowrap; }
+.core-health strong b { color: var(--purple); font-size: 9px; }
+.core-health i { color: var(--dim); font-family: var(--mono); font-size: 7px;
+  font-style: normal; letter-spacing: .5px; }
+.core-health-fed { opacity: .78; }
+.core-health.is-steady { border-color: rgba(217,173,95,.20); }
+.core-health.is-steady strong, .core-health.is-steady strong b { color: var(--gold); }
+.core-health.is-hungry { border-color: rgba(217,173,95,.38); }
+.core-health.is-hungry strong, .core-health.is-hungry strong b { color: #e8bd72; }
+.core-health.is-urgent { border-color: rgba(229,56,79,.5); background: rgba(35,8,16,.82); }
+.core-health.is-urgent strong, .core-health.is-urgent strong b { color: #ff9aaa; }
 
 .army-core { position: relative; width: 95px; height: 108px; background: none; border: none;
   cursor: pointer; padding: 0; margin: 4px 0 0;
@@ -2666,6 +2696,8 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
    after both sides have accepted. */
 .reconnect-chat { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
 .reconnect-disclosure .reconnect-chat { margin-top: 0; padding: 3px 12px 13px; border-top: 0; }
+.reconnect-chat-badge { display: inline-block; margin-left: 7px; padding: 2px 6px; border-radius: 999px;
+  background: var(--purple); color: #fff; font: 700 9px var(--mono); vertical-align: 1px; }
 .reconnect-chat-list { display: flex; flex-direction: column; gap: 7px; margin: 10px 0 12px;
   max-height: 220px; overflow-y: auto; }
 .reconnect-chat-msg { max-width: 86%; padding: 8px 11px; border-radius: var(--r);
@@ -3902,32 +3934,37 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
    Reached from the persistent navigation. Gold marks the
    player's own row and the top-3 medal slots — the same "good news" gold
    used everywhere else, not a new colour. */
-.rank-tabs { display: flex; gap: 8px; margin-bottom: 14px; overflow-x: auto; }
+.rank-screen .pack-head { margin-bottom: 13px; }
+.rank-screen .pack-name { max-width: none; margin-top: 3px; font-size: 21px; line-height: 1.18; }
+.rank-tabs { display: grid; grid-template-columns: .72fr 1.55fr repeat(3, 1fr); gap: 0;
+  margin-bottom: 8px; overflow: hidden; border-bottom: 1px solid var(--border); }
 .rank-tab {
-  flex: none; padding: 8px 16px; border-radius: 999px; border: 1px solid var(--border);
-  background: var(--surface-2); color: var(--muted); font-family: var(--mono); font-size: 12.5px;
-  font-weight: 800; letter-spacing: 0.5px; cursor: pointer; transition: border-color 0.15s, background 0.15s, color 0.15s;
+  min-width: 0; padding: 9px 4px 8px; border: 0; border-bottom: 2px solid transparent;
+  background: transparent; color: var(--muted); font-family: var(--mono); font-size: 10px;
+  font-weight: 700; letter-spacing: .25px; white-space: nowrap; cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
 }
-.rank-tab:hover { border-color: var(--border-str); color: var(--text); }
-.rank-tab.sel { border-color: var(--purple); background: var(--purple-soft); color: var(--purple-lt); }
+.rank-tab:hover { color: var(--text); }
+.rank-tab.sel { border-bottom-color: var(--purple-lt); color: var(--text); }
 
-.rank-list { display: flex; flex-direction: column; gap: 8px; }
+.rank-list { display: flex; flex-direction: column; border-top: 1px solid rgba(255,255,255,.04); }
 .rank-row {
-  display: flex; align-items: center; gap: 12px; padding: 12px 14px;
-  border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface);
+  display: grid; grid-template-columns: 27px 34px minmax(0, 1fr) auto; align-items: center; gap: 9px;
+  min-height: 59px; padding: 9px 5px; border: 0; border-bottom: 1px solid var(--border); background: transparent;
 }
-.rank-row.is-top { border-color: rgba(217,173,95,0.35); background: linear-gradient(90deg, rgba(217,173,95,0.08), transparent); }
-.rank-row.is-me { border-color: var(--purple); box-shadow: 0 0 0 1px var(--purple) inset; }
+.rank-row.is-top { background: linear-gradient(90deg, rgba(217,173,95,.055), transparent 72%); }
+.rank-row.is-me { margin-inline: -5px; padding-inline: 10px 5px; border-left: 2px solid var(--purple-lt);
+  background: linear-gradient(90deg, rgba(139,92,246,.11), transparent 78%); }
 .rank-place {
-  flex: none; width: 28px; text-align: center; font-family: var(--mono); font-weight: 800;
-  font-size: 14px; color: var(--dim);
+  width: 27px; text-align: center; font-family: var(--mono); font-weight: 700;
+  font-size: 11px; color: var(--dim);
 }
-.rank-row.is-top .rank-place { font-size: 18px; }
+.rank-row.is-top .rank-place { font-size: 16px; }
 /* Authored pass: every row's avatar carried a gold ring and an inset purple
    glow, so neither marked anything. Neutral by default — .is-top already
    carries top-three emphasis on the row itself. */
-.rank-agent-icon { flex: none; width: 38px; height: 38px; display: grid; place-items: center; border-radius: 50%;
-  border: 1px solid rgba(255,255,255,.16); background: var(--panel); font-size: 19px;
+.rank-agent-icon { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.14); background: var(--panel); font-size: 16px;
   overflow: hidden; }
 .rank-row.is-top .rank-agent-icon { border-color: rgba(217,173,95,.48); }
 .rank-agent-photo { width: 100%; height: 100%; object-fit: cover; object-position: 50% 20%; border-radius: 50%; }
@@ -3939,12 +3976,14 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
    either). Nothing else on this screen singles codenames out as a special
    "identity" moment the way the HUD's own .hud-code does, so the mismatch
    read as inconsistent rather than intentional. */
-.rank-name { font-weight: 700; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rank-row.is-me .rank-name::after { content: ' (you)'; color: var(--purple-lt); font-family: var(--mono); font-size: 10.5px; font-weight: 800; }
-.rank-sub { font-size: 12.5px; color: var(--muted); }
-.rank-xp { flex: none; font-family: var(--mono); font-weight: 800; font-size: 14px; color: var(--gold); }
-.rank-xp-unit { font-size: 10.5px; font-weight: 700; color: var(--muted); }
-.rank-hint { margin-top: 14px; font-size: 13px; line-height: 1.55; }
+.rank-name { font-weight: 700; font-size: 14.5px; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rank-row.is-me .rank-name::after { content: ' · YOU'; color: var(--purple-lt); font-family: var(--mono); font-size: 8px; font-weight: 800; }
+.rank-sub { overflow: hidden; color: var(--muted); font-size: 11px; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+.rank-xp { min-width: 57px; display: flex; flex-direction: column; align-items: flex-end;
+  font-family: var(--mono); font-weight: 800; font-size: 13px; line-height: 1; color: var(--gold); white-space: nowrap; }
+.rank-xp-unit { display: block; margin-top: 4px; color: var(--dim); font-size: 7px; font-weight: 600;
+  letter-spacing: .55px; text-transform: uppercase; }
+.rank-hint { margin-top: 11px; padding-inline: 3px; font-size: 11.5px; line-height: 1.5; }
 
 /* ── VMA Voting Mission ──────────────────────────────────────────────────
    Same shape as .redzone (js/screen-world.js's redZoneCard) but purple —

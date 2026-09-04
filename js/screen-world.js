@@ -39,6 +39,7 @@ import { redZoneSheet, defuseResultSheet, defenderCommsSheet, getCommsSeen } fro
 import { tickCountdowns } from './countdown.js'
 import { redZonePercent, personalSignalCopy, redZoneHeadline, redZoneGoalCopy,
   unreadCommsCount, unreadBadgeText } from './red-zone-ui.js'
+import { bombHealthStatus, lastFedLabel } from './agent-charge-health.js'
 
 export function renderWorld(container, state) {
   container.innerHTML = ''
@@ -671,7 +672,26 @@ function coreBlock(state) {
     btn.style.setProperty('--rz-glow-opacity', (0.08 + (1 - mainFrac) * 0.18).toFixed(3))
   }
   btn.onclick = () => showOverlay(defuse ? redZoneSheet(state) : agentChargeSheet())
-  zone.appendChild(btn)
+  if (charge.feedHealth) {
+    const stage = el('div', 'core-stage')
+    stage.appendChild(btn)
+    const health = bombHealthStatus(charge.feedHealth)
+    const lastFed = lastFedLabel(charge.feedHealth)
+    if (health) {
+      const healthBtn = el('button', `core-health is-${health.tone}`, `
+        <span class="core-health-kicker">Bora meter</span>
+        <strong><b aria-hidden="true">${health.icon}</b>${health.label}</strong>
+        <i>${health.detail}</i>
+        ${lastFed ? `<i class="core-health-fed">${lastFed}</i>` : ''}
+      `)
+      healthBtn.setAttribute('aria-label', `Bora meter ${health.label}. ${charge.feedHealth.daysLeft} days left before the 14-day feed limit.${lastFed ? ` ${lastFed.toLowerCase()}.` : ''} Tap to feed it.`)
+      healthBtn.onclick = () => showOverlay(agentChargeSheet())
+      stage.appendChild(healthBtn)
+    }
+    zone.appendChild(stage)
+  } else {
+    zone.appendChild(btn)
+  }
 
   if (defuse) {
     const pct = redZonePercent(defuse.progress, defuse.target)

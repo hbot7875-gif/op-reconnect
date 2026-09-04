@@ -20,6 +20,8 @@ import { getAgentNo } from './session.js'
 import { earnedBadgeCount, equippedBadge } from './badges.js'
 import { openMoonStation } from './settings-streams.js'
 import { redZonePercent } from './red-zone-ui.js'
+import { getReconnectChatSeen, reconnectChatUnreadCount,
+  reconnectChatBadgeText } from './reconnect-chat-unread.js'
 
 /** { multiplier, minsLeft } while state.player.boost is live, else null. */
 function activeBoost(boost) {
@@ -209,6 +211,11 @@ export function renderHud(container, state) {
   const reconnectAlerts = state.reconnectAlerts || []
   const signalCount = invites.length + reconnectAlerts.length
   const reconnectStatus = reconnectHudStatus(state)
+  const reconnectMission = state.activeDistrict?.reconnect?.mission
+  const reconnectUnread = reconnectMission
+    ? reconnectChatUnreadCount(reconnectMission.messageCount, getReconnectChatSeen(reconnectMission.id))
+    : 0
+  const reconnectBadge = reconnectChatBadgeText(reconnectUnread)
   const codenameHidden = isCodenameHidden()
   const displayCode = codenameHidden ? 'Agent' : esc(p.codename)
 
@@ -240,7 +247,7 @@ export function renderHud(container, state) {
       <div class="xp-bar" role="progressbar" aria-label="Level ${lvl.level} XP progress" aria-valuemin="0" aria-valuemax="${lvl.xpForNextLevel}" aria-valuenow="${lvl.xpIntoLevel}"><div class="xp-fill" style="width:${pct}%"></div></div>
       ${boost ? `<span class="hud-boost">${boost.multiplier}&times; BOOST &middot; ${boost.minsLeft}m</span>` : ''}
     </div>
-    ${reconnectStatus ? `<button class="hud-reconnect-status${reconnectStatus.urgent ? ' is-urgent' : ''}" id="hudReconnectStatus" type="button"><span>🤝 ReConnect</span><b>${esc(reconnectStatus.label)}</b><i>›</i></button>` : ''}
+    ${reconnectStatus ? `<button class="hud-reconnect-status${reconnectStatus.urgent ? ' is-urgent' : ''}" id="hudReconnectStatus" type="button"><span>🤝 ReConnect</span><b>${esc(reconnectStatus.label)}</b>${reconnectBadge ? `<em class="hud-reconnect-chat-badge">💬 ${esc(reconnectBadge)}</em>` : ''}<i>›</i></button>` : ''}
   `
   const levelPill = container.querySelector('#levelPill')
   levelPill.onclick = () => showOverlay(progressSheet(state))
@@ -258,6 +265,8 @@ export function renderHud(container, state) {
     const d = state.activeDistrict
     goDistrict(d.wardId, d.id)
   }
+  if (reconnectButton && reconnectUnread) reconnectButton.setAttribute('aria-label',
+    `ReConnect. ${reconnectUnread} new team message${reconnectUnread === 1 ? '' : 's'}. ${reconnectStatus.label}`)
   container.querySelector('#syncBtn').onclick = () => syncNow(state)
   paintSyncButton()
   wireHudScrollCollapse()
