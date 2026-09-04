@@ -88,22 +88,27 @@
       backdrop-filter: blur(16px);
       -webkit-backdrop-filter: blur(16px);
       border-bottom: 1px solid var(--border-subtle);
-      padding: 12px 16px;
-      padding-top: calc(12px + env(safe-area-inset-top));
+      padding: env(safe-area-inset-top) 16px 0;
+    }
+    .botz-topbar-inner {
+      box-sizing: border-box;
+      width: 100%;
+      max-width: 760px;
+      min-height: 58px;
+      margin: 0 auto;
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 11px;
     }
 
     .botz-back-btn {
       background: none;
-      border: 1px solid var(--border-light);
+      border: 0;
       color: var(--text-muted);
-      border-radius: var(--radius-sm);
-      padding: 5px 11px;
+      padding: 7px 4px 7px 0;
       font-family: var(--font-mono);
-      font-size: 0.625rem;
-      letter-spacing: 1px;
+      font-size: 0.66rem;
+      letter-spacing: .8px;
       cursor: pointer;
       text-decoration: none;
       display: inline-flex;
@@ -112,16 +117,16 @@
       transition: color 0.2s, border-color 0.2s;
       flex-shrink: 0;
     }
-    .botz-back-btn:hover { color: var(--text-primary); border-color: var(--border-mid); }
+    .botz-back-btn:hover { color: var(--text-primary); }
 
     .botz-theme-toggle {
       background: none;
       border: 1px solid var(--border-light);
       color: var(--text-muted);
       border-radius: var(--radius-full, 999px);
-      width: 30px;
-      height: 30px;
-      font-size: 0.85rem;
+      width: 34px;
+      height: 34px;
+      font: 0.95rem var(--font-mono);
       cursor: pointer;
       display: inline-flex;
       align-items: center;
@@ -141,17 +146,17 @@
     .botz-brand-name {
       font-family: var(--font-display);
       font-weight: 900;
-      font-size: 1.1rem;
-      letter-spacing: 6px;
+      font-size: 1.06rem;
+      letter-spacing: 4px;
       color: var(--red-core);
       line-height: 1;
       text-shadow: 0 0 20px var(--red-glow);
     }
     .botz-brand-sub {
       font-family: var(--font-mono);
-      font-size: 0.55rem;
-      letter-spacing: 2px;
-      color: rgba(255,255,255,0.82);
+      font-size: 0.48rem;
+      letter-spacing: 1.35px;
+      color: var(--text-muted);
       text-transform: uppercase;
     }
 
@@ -746,9 +751,9 @@
       border: 1px solid var(--border-light);
       color: var(--text-muted);
       border-radius: var(--radius-full, 999px);
-      width: 30px;
-      height: 30px;
-      font-size: 0.85rem;
+      width: 34px;
+      height: 34px;
+      font: 0.95rem var(--font-mono);
       cursor: pointer;
       display: inline-flex;
       align-items: center;
@@ -758,6 +763,7 @@
     }
     .botz-share-btn:hover { border-color: var(--border-mid); transform: scale(1.06); }
     .botz-share-btn:active { transform: scale(0.94); }
+    .botz-topbar-actions { display:flex; align-items:center; gap:7px; }
 
     /* ── MILESTONE TOAST ── */
     @keyframes botzMilestoneIn {
@@ -981,8 +987,9 @@
       width:62px; height:62px; flex:0 0 62px; display:grid; place-items:center;
       border-radius:50%; color:var(--text-primary); font-size:1.45rem;
       background:linear-gradient(145deg,var(--red-whisper),rgba(255,255,255,.035));
-      border:1px solid var(--border-light);
+      border:1px solid var(--border-light); overflow:hidden;
     }
+    .botz-profile-avatar img { width:100%; height:100%; object-fit:cover; }
     .botz-profile-copy { min-width:0; flex:1; }
     .botz-profile-kicker { color:var(--text-ghost); font:.5rem var(--font-mono); letter-spacing:1.6px; text-transform:uppercase; }
     .botz-profile-name { margin:3px 0 4px; color:var(--text-primary); font:800 1.2rem/1.15 var(--font-display); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -1010,12 +1017,22 @@
     .botz-jam-main small { font-size:.66rem; }
     .botz-latest-tag { width:max-content; padding:2px 4px; background:var(--red-core); color:#fff; border-radius:2px; font-size:.43rem; }
     .botz-rank { width:22px; color:var(--text-ghost); font:700 .58rem var(--font-mono); text-align:center; }
-    .botz-summary-row { display:grid; grid-template-columns:22px 48px minmax(0,1fr) auto; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--border-subtle); }
+    .botz-summary-row { display:grid; grid-template-columns:22px 48px minmax(0,1fr) auto; align-items:center; gap:10px; width:100%; padding:10px 0; border:0; border-bottom:1px solid var(--border-subtle); background:transparent; color:inherit; font:inherit; text-align:left; }
     .botz-summary-row:last-child { border-bottom:0; }
+    button.botz-summary-row { cursor:pointer; }
+    button.botz-summary-row:hover .botz-summary-main b { color:var(--red-core); }
+    button.botz-summary-row:focus-visible { outline:2px solid var(--red-core); outline-offset:2px; }
     .botz-summary-main { min-width:0; display:flex; flex-direction:column; gap:3px; }
     .botz-summary-main b { color:var(--text-primary); font-size:.79rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .botz-summary-main small { color:var(--text-muted); font-size:.65rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .botz-play-count { color:var(--text-secondary); font:700 .58rem var(--font-mono); white-space:nowrap; }
+    .botz-album-count { display:flex; align-items:center; gap:8px; }
+    .botz-row-chevron { color:var(--text-ghost); font-size:1rem; }
+    .botz-album-back { display:inline-flex; align-items:center; margin:0 0 10px; padding:0; border:0; background:transparent; color:var(--text-muted); font:600 .58rem var(--font-mono); letter-spacing:.7px; cursor:pointer; }
+    .botz-album-back:hover { color:var(--text-primary); }
+    .botz-album-heading { padding:1px 0 11px; border-bottom:1px solid var(--border-subtle); }
+    .botz-album-heading b { display:block; color:var(--text-primary); font:700 .92rem var(--font-display); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .botz-album-heading span { display:block; margin-top:4px; color:var(--text-muted); font-size:.64rem; }
     .botz-view-note { padding:11px 0; color:var(--text-ghost); font-size:.61rem; line-height:1.45; border-bottom:1px solid var(--border-subtle); }
     @media (max-width:340px) {
       .botz-profile { padding-left:13px; padding-right:13px; }
@@ -1042,24 +1059,24 @@
 
 <!-- ── TOP BAR ── -->
 <header class="botz-topbar">
-  <a href="game.html" class="botz-back-btn">← BACK</a>
-  <div class="botz-brand">
-    <div class="botz-brand-name">BOTZ</div>
-    <div class="botz-brand-sub">if you know you know</div>
+  <div class="botz-topbar-inner">
+    <a href="game.html" class="botz-back-btn">← CITY</a>
+    <div class="botz-brand">
+      <div class="botz-brand-name">BOTZ</div>
+      <div class="botz-brand-sub">if you know you know</div>
+    </div>
+    <div class="botz-topbar-actions">
+      <button type="button" class="botz-share-btn" id="botzShareBtn" onclick="shareBotzSnapshot()" title="Share jam summary" aria-label="Share jam summary">↥</button>
+      <button type="button" class="botz-theme-toggle" id="botzThemeToggle" onclick="toggleBotzTheme()" title="Switch theme" aria-label="Switch BOTZ theme">◐</button>
+    </div>
   </div>
-  <div class="botz-agent-chip">
-    <span class="botz-agent-chip-label">AGENT</span>
-    <span class="botz-agent-chip-no" id="displayAgentNo">—</span>
-  </div>
-  <button type="button" class="botz-share-btn" id="botzShareBtn" onclick="shareBotzSnapshot()" title="Share snapshot">📤</button>
-  <button type="button" class="botz-theme-toggle" id="botzThemeToggle" onclick="toggleBotzTheme()" title="Switch theme">🕵️</button>
 </header>
 
 <!-- ── MAIN CONTENT (hidden until loaded) ── -->
 <main id="mainContent" class="botz-console" style="display:none;">
   <section class="botz-profile" aria-label="Jam profile">
     <div class="botz-profile-head">
-      <div class="botz-profile-avatar" aria-hidden="true">♫</div>
+      <div class="botz-profile-avatar" id="profileAvatar" aria-label="Equipped game avatar"><span aria-hidden="true">♫</span></div>
       <div class="botz-profile-copy">
         <div class="botz-profile-kicker">Your jam history</div>
         <h1 class="botz-profile-name" id="profileAgentNo">Agent</h1>

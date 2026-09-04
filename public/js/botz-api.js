@@ -93,6 +93,7 @@
       if (!res || !res.success) return { success: false, error: (res && res.error) || 'Could not reach the uplink' }
       return {
         success: true,
+        profile: res.profile || null,
         tracking: res.tracking || null,
         today: res.today || { btsJams: 0, helpedMissions: 0, trackedOnly: 0 },
         missions: res.missions || [],

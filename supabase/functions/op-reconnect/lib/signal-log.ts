@@ -13,14 +13,29 @@ import { BIRTHDAY_ERA_EVENTS, BIRTHDAY_LIGHTS_PER_TRACK, birthdayTrackEntries, i
 import { allocateTrackHits } from './era-match.js'
 import { annotateBotzStreams, botzSourceSetup, botzTrackingState } from './botz-rules.js'
 import { flagStreamRows, findPossibleAlts } from './police-check.ts'
+import { resolveEquippedBadges } from './badge-profile.ts'
 
 export async function getSignalLog(supabase: SupabaseDB, params: Record<string, unknown>) {
   const agentNo = String(params.agentNo || '').trim().toUpperCase()
-  const { data: agentRow } = await supabase
-    .from('rc_agents')
-    .select('agent_no, lb_username, stream_source_preference, statsfm_username, musicat_public_id, scrobble_pin')
-    .eq('agent_no', agentNo).maybeSingle()
+  const [{ data: agentRow }, { data: playerRow }] = await Promise.all([
+    supabase.from('rc_agents')
+      .select('agent_no, lb_username, stream_source_preference, statsfm_username, musicat_public_id, scrobble_pin')
+      .eq('agent_no', agentNo).maybeSingle(),
+    supabase.from('rc_players')
+      .select('equipped_badge_id, avatar_crop')
+      .eq('agent_no', agentNo).maybeSingle(),
+  ])
   if (!agentRow) return { success: false, error: 'Agent not found' }
+
+  // BOTZ uses the same equipped Badge Collection artwork and framing as the
+  // City HUD/Agent ID. Legacy icon-only badges intentionally resolve to null
+  // and use BOTZ's normal fallback instead of pretending they have a photo.
+  const equippedBadgeArtwork = playerRow?.equipped_badge_id
+    ? (await resolveEquippedBadges(supabase, [{
+        agentNo,
+        badgeId: playerRow.equipped_badge_id,
+      }])).get(agentNo) || null
+    : null
 
   const content = await loadContent(supabase)
   const allowlist: string[] = content.config.bts_artists || []
@@ -145,6 +160,10 @@ export async function getSignalLog(supabase: SupabaseDB, params: Record<string, 
 
   return {
     success: true,
+    profile: {
+      equippedBadgeArtwork,
+      avatarCrop: playerRow?.avatar_crop || null,
+    },
     tracking: { state: trackingState, source: setup.source, sourceLabel: sourceLabels[setup.source], lastReceivedAt: visibleStreams[0]?.at || null },
     lastPlayed: visibleStreams[0] ? { track: visibleStreams[0].track, artist: visibleStreams[0].artist, at: visibleStreams[0].at, source: setup.source } : null,
     nowPlaying: visibleStreams[0] ? { track: visibleStreams[0].track, artist: visibleStreams[0].artist, at: visibleStreams[0].at } : null,

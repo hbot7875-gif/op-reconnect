@@ -9,6 +9,7 @@ test('district credit stops when the real remaining target is filled', () => {
   annotateBotzStreams(rows, { district: { id: 'map7', label: 'Map of Seven Crossing', activeFrom: 0, trackSlots: [{ keys: ['swim'], remaining: 1 }], albums: [] } })
   assert.equal(rows[0].attributions[0].kind, 'district')
   assert.deepEqual(rows[1].attributions, [])
+  assert.equal(rows[1].nonCreditReason, 'goal_complete')
 })
 
 test('birthday credit uses the configured per-track light limit', () => {
@@ -17,6 +18,7 @@ test('birthday credit uses the configured per-track light limit', () => {
   assert.equal(rows[0].attributions[0].kind, 'birthday')
   assert.equal(rows[1].attributions[0].kind, 'birthday')
   assert.deepEqual(rows[2].attributions, [])
+  assert.equal(rows[2].nonCreditReason, 'goal_complete')
 })
 
 test('one jam may truthfully help both active systems', () => {
@@ -33,7 +35,16 @@ test('eligible no-mission and ineligible jams are never mislabeled as helped', (
   const ineligible = { ...jam('Other artist'), eligible: false }
   annotateBotzStreams([eligible, ineligible], {})
   assert.deepEqual(eligible.attributions, [])
+  assert.equal(eligible.nonCreditReason, 'not_active_goal')
   assert.deepEqual(ineligible.attributions, [])
+  assert.equal(ineligible.nonCreditReason, null)
+})
+
+test('a matching jam before district activation explains why it was not credited', () => {
+  const row = jam('Haegeum', 5)
+  annotateBotzStreams([row], { district: { id: 'map7', label: 'Map of Seven Crossing', activeFrom: 10, trackSlots: [{ keys: ['haegeum'], remaining: 3 }], albums: [] } })
+  assert.deepEqual(row.attributions, [])
+  assert.equal(row.nonCreditReason, 'before_mission_started')
 })
 
 test('all four providers and incomplete setup resolve truthfully', () => {

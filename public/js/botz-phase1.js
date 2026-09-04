@@ -3,6 +3,7 @@
 let currentAgentNo = null
 let lastBotzData = null
 let activeView = 'jams'
+let selectedAlbum = null
 
 const SOURCE_NAMES = {
   listenbrainz: 'ListenBrainz', direct: 'Pano / Web Scrobbler',
@@ -28,7 +29,7 @@ function syncThemeToggleIcon() {
   const button = document.getElementById('botzThemeToggle')
   if (!button) return
   const purple = document.documentElement.getAttribute('data-theme') === 'purple'
-  button.textContent = purple ? '💜' : '🕵️'
+  button.textContent = purple ? '◑' : '◐'
   button.title = purple ? 'Switch to Arirang theme' : 'Switch to Purple theme'
 }
 
@@ -71,6 +72,21 @@ function renderToday(today, missions) {
   }).join('') || '<div class="botz-muted">No active mission context</div>'
 }
 
+function renderProfile(profile) {
+  const avatar = document.getElementById('profileAvatar')
+  if (!avatar) return
+  const artworkUrl = profile?.equippedBadgeArtwork?.artworkUrl
+  if (!artworkUrl) {
+    avatar.innerHTML = '<span aria-hidden="true">♫</span>'
+    return
+  }
+  const crop = profile?.avatarCrop || { x: 50, y: 50, zoom: 1 }
+  const x = Math.max(0, Math.min(100, Number(crop.x) || 50))
+  const y = Math.max(0, Math.min(100, Number(crop.y) || 50))
+  const zoom = Math.max(1, Math.min(2, Number(crop.zoom) || 1))
+  avatar.innerHTML = `<img src="${escapeHtml(artworkUrl)}" alt="" style="object-position:${x}% ${y}%;transform:scale(${zoom})">`
+}
+
 function renderLastPlayed(last) {
   const summary = document.getElementById('latestSummary')
   if (summary) summary.textContent = last ? `Latest received ${ago(last.at)}` : 'No recent jams'
@@ -78,7 +94,14 @@ function renderLastPlayed(last) {
 
 function resultFor(jam) {
   if (jam.attributions?.length) return { cls: 'helped', text: `✓ Helped ${jam.attributions.map((item) => item.label).join(' + ')}` }
-  if (jam.eligible) return { cls: 'tracked', text: '○ Tracked · not part of your active mission' }
+  if (jam.eligible) {
+    const reason = {
+      goal_complete: '○ Tracked · goal already complete',
+      before_mission_started: '○ Tracked · played before this mission started',
+      not_active_goal: '○ Tracked · not part of your active mission',
+    }[jam.nonCreditReason]
+    return { cls: 'tracked', text: reason || '○ Tracked · not part of your active mission' }
+  }
   return { cls: 'not-counted', text: 'Not counted · artist not eligible for ReConnect' }
 }
 
@@ -136,6 +159,66 @@ function renderSummary(items, emptyCopy) {
   </div>`).join('')
 }
 
+function albumGroups(jams) {
+  return aggregate(
+    (jams || []).filter((jam) => String(jam.album || '').trim()),
+    (jam) => `${String(jam.album).toLowerCase()}|${String(jam.artist || '').toLowerCase()}`,
+    (jam) => ({
+      key: `${String(jam.album).toLowerCase()}|${String(jam.artist || '').toLowerCase()}`,
+      title: jam.album,
+      subtitle: jam.artist || 'Artist unavailable',
+      artworkUrl: jam.artworkUrl,
+    }),
+  )
+}
+
+function renderAlbums(jams) {
+  const list = document.getElementById('recentList')
+  const albums = albumGroups(jams)
+  if (!albums.length) {
+    list.innerHTML = '<div class="botz-empty-compact">No album information was supplied with your recent jams.</div>'
+    return
+  }
+  list.innerHTML = albums.map((album, index) => `<button type="button" class="botz-summary-row" data-album-index="${index}">
+    <span class="botz-rank">${index + 1}</span>
+    ${coverMarkup({ track: album.title, artworkUrl: album.artworkUrl })}
+    <span class="botz-summary-main"><b>${escapeHtml(album.title)}</b><small>${escapeHtml(album.subtitle)}</small></span>
+    <span class="botz-album-count"><span class="botz-play-count">${album.count} ${album.count === 1 ? 'jam' : 'jams'}</span><span class="botz-row-chevron" aria-hidden="true">›</span></span>
+  </button>`).join('')
+  list.querySelectorAll('[data-album-index]').forEach((button) => {
+    button.addEventListener('click', () => {
+      selectedAlbum = albums[Number(button.dataset.albumIndex)] || null
+      renderView()
+    })
+  })
+}
+
+function renderAlbumTracks(jams, album) {
+  const list = document.getElementById('recentList')
+  const matching = (jams || []).filter((jam) => (
+    `${String(jam.album || '').toLowerCase()}|${String(jam.artist || '').toLowerCase()}` === album.key
+  ))
+  const tracks = aggregate(
+    matching,
+    (jam) => `${String(jam.track || '').toLowerCase()}|${String(jam.artist || '').toLowerCase()}`,
+    (jam) => ({ title: jam.track || 'Unknown track', subtitle: jam.artist || 'Artist unavailable', artworkUrl: jam.artworkUrl }),
+  )
+  list.innerHTML = `<button type="button" class="botz-album-back" id="botzAlbumBack">← ALL ALBUMS</button>
+    <div class="botz-album-heading"><b>${escapeHtml(album.title)}</b><span>${escapeHtml(album.subtitle)} · ${matching.length} ${matching.length === 1 ? 'jam' : 'jams'} in the last 24h</span></div>
+    <div id="botzAlbumTracks"></div>`
+  document.getElementById('botzAlbumBack').addEventListener('click', () => {
+    selectedAlbum = null
+    renderView()
+  })
+  const target = document.getElementById('botzAlbumTracks')
+  target.innerHTML = tracks.map((track, index) => `<div class="botz-summary-row">
+    <span class="botz-rank">${index + 1}</span>
+    ${coverMarkup({ track: track.title, artworkUrl: track.artworkUrl })}
+    <span class="botz-summary-main"><b>${escapeHtml(track.title)}</b><small>${escapeHtml(track.subtitle)}</small></span>
+    <span class="botz-play-count">${track.count} ${track.count === 1 ? 'jam' : 'jams'}</span>
+  </div>`).join('')
+}
+
 function renderView() {
   const jams = lastBotzData?.recent || []
   document.querySelectorAll('[data-botz-view]').forEach((button) => {
@@ -154,15 +237,15 @@ function renderView() {
     return
   }
   if (activeView === 'albums') {
-    label.textContent = 'Top albums'
+    label.textContent = selectedAlbum ? 'Album tracks' : 'Top albums'
     const known = jams.filter((jam) => String(jam.album || '').trim())
     const missing = jams.length - known.length
     summary.textContent = 'From your recent 24h jams'
-    renderSummary(aggregate(
-      known,
-      (jam) => `${String(jam.album).toLowerCase()}|${String(jam.artist || '').toLowerCase()}`,
-      (jam) => ({ title: jam.album, subtitle: jam.artist || 'Artist unavailable', artworkUrl: jam.artworkUrl }),
-    ), 'No album information was supplied with your recent jams.')
+    if (selectedAlbum) {
+      renderAlbumTracks(jams, selectedAlbum)
+      return
+    }
+    renderAlbums(jams)
     if (missing > 0 && known.length > 0) {
       document.getElementById('recentList').insertAdjacentHTML('afterbegin', `<div class="botz-view-note">${missing} recent ${missing === 1 ? 'jam has' : 'jams have'} no album information from the source.</div>`)
     }
@@ -175,6 +258,7 @@ function renderView() {
 
 function setBotzView(view) {
   if (!['jams', 'tracks', 'albums'].includes(view)) return
+  if (view !== 'albums') selectedAlbum = null
   activeView = view
   renderView()
 }
@@ -182,6 +266,7 @@ window.setBotzView = setBotzView
 
 function render(data) {
   lastBotzData = data
+  renderProfile(data.profile)
   renderTracking(data.tracking)
   renderToday(data.today, data.missions)
   renderView()
@@ -225,7 +310,8 @@ async function init() {
     document.getElementById('notLoggedIn').style.display = 'flex'
     return
   }
-  document.getElementById('displayAgentNo').textContent = currentAgentNo
+  const headerAgentNo = document.getElementById('displayAgentNo')
+  if (headerAgentNo) headerAgentNo.textContent = currentAgentNo
   const profileAgentNo = document.getElementById('profileAgentNo')
   if (profileAgentNo) profileAgentNo.textContent = currentAgentNo
   document.getElementById('mainContent').style.display = 'block'

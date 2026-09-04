@@ -12,36 +12,55 @@ export function annotateBotzStreams(rows, context = {}) {
 
   for (const row of ordered) {
     row.attributions = []
+    row.nonCreditReason = null
     if (!row.eligible) continue
 
+    let matchedFilledGoal = false
+    let matchedBeforeStart = false
+
     if (birthday && row.at >= birthday.activeFrom && row.at <= birthday.activeTo) {
-      const slot = birthday.slots.find((candidate) =>
-        candidate.credited < candidate.limit && candidate.keys.includes(row.key))
+      const matchingSlots = birthday.slots.filter((candidate) => candidate.keys.includes(row.key))
+      const slot = matchingSlots.find((candidate) => candidate.credited < candidate.limit)
       if (slot) {
         slot.credited++
         row.attributions.push({ kind: 'birthday', id: birthday.id, label: birthday.label })
-      }
+      } else if (matchingSlots.length) matchedFilledGoal = true
     }
 
     if (district && row.at >= district.activeFrom) {
       let helped = false
+      let matchedDistrictGoal = false
       for (const slot of district.trackSlots || []) {
-        if (slot.remaining > 0 && slot.keys.includes(row.key)) {
+        if (!slot.keys.includes(row.key)) continue
+        matchedDistrictGoal = true
+        if (slot.remaining > 0) {
           slot.remaining--
           helped = true
         }
       }
       for (const album of district.albums || []) {
+        const matchingSlots = album.slots.filter((candidate) => candidate.keys.includes(row.key))
+        if (!matchingSlots.length) continue
+        matchedDistrictGoal = true
         const ownPasses = Math.min(...album.slots.map((slot) => slot.have), album.cap)
         if (ownPasses + album.bonus >= album.target) continue
-        const slot = album.slots.find((candidate) =>
-          candidate.have < album.cap && candidate.keys.includes(row.key))
+        const slot = matchingSlots.find((candidate) => candidate.have < album.cap)
         if (slot) {
           slot.have++
           helped = true
         }
       }
       if (helped) row.attributions.push({ kind: 'district', id: district.id, label: district.label })
+      else if (matchedDistrictGoal) matchedFilledGoal = true
+    } else if (district) {
+      matchedBeforeStart = [...(district.trackSlots || []), ...(district.albums || []).flatMap((album) => album.slots || [])]
+        .some((slot) => slot.keys.includes(row.key))
+    }
+
+    if (!row.attributions.length) {
+      if (matchedFilledGoal) row.nonCreditReason = 'goal_complete'
+      else if (matchedBeforeStart) row.nonCreditReason = 'before_mission_started'
+      else row.nonCreditReason = 'not_active_goal'
     }
   }
 
