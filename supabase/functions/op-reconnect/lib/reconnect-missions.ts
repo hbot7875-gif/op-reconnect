@@ -271,6 +271,34 @@ export async function contributionSince(supabase: SupabaseDB, agentNo: string, s
   return total
 }
 
+/** Per-track completion for a fixed checklist (config.checklist, when a
+ *  'connect' goal carries one instead of a sharedTrack) — how many of the
+ *  list's tracks THIS agent has personally played at least once since they
+ *  joined. One query for the whole list rather than one per track (a
+ *  49-track checklist would otherwise be 49 round trips per participant on
+ *  every poll); same day-granularity/uncapped-count reasoning as
+ *  contributionSince, just checked per-track instead of summed across all
+ *  of them (a person who streams one track 50 times must not look like
+ *  they've cleared 50 different tracks). */
+export async function checklistProgressSince(
+  supabase: SupabaseDB, agentNo: string, sinceIso: string, tracks: { label: string; keys: string[] }[],
+): Promise<number> {
+  if (!tracks.length) return 0
+  const sinceDate = kstDateOfIso(sinceIso)
+  const { data } = await supabase.from('rc_daily_activity')
+    .select('track_counts').eq('agent_no', agentNo).gte('kst_date', sinceDate)
+  const totals = new Map<string, number>()
+  for (const row of data || []) {
+    const bucket = row.track_counts || {}
+    for (const key of Object.keys(bucket)) totals.set(key, (totals.get(key) || 0) + (bucket[key]?.n || 0))
+  }
+  let done = 0
+  for (const t of tracks) {
+    if ((t.keys || []).some((k) => (totals.get(k) || 0) > 0)) done++
+  }
+  return done
+}
+
 /** codename lookup for a set of agent numbers — same "agent numbers never
  *  leave the caller's own request" rule getMyInvites already follows below,
  *  now applied to the mission roster too: another participant's raw
@@ -343,6 +371,12 @@ async function shape(
     // refreshMission. Pooled progress toward one specific track, everyone's
     // own plays (since they personally joined) counted together.
     sharedTrack: m.sharedTrackProgress || null,
+    // Only present when the frozen goal carries a checklist instead — see
+    // refreshMission. Per-participant progress (how many of `total` tracks
+    // THEY'VE individually cleared) rides on each participant's own
+    // `streams` field below, same repurposed count refreshMission already
+    // stamps as p.contribution for every other 'connect' shape.
+    checklist: m.checklistProgress || null,
     // Only present once the streaming target is hit and the goal actually
     // carries a cipher sequence — see refreshMission's phase transition.
     // Deliberately exposes only the CURRENT cipher's prompt, never the
@@ -456,6 +490,7 @@ async function refreshMission(
   config?: {
     requiredAgents?: number
     sharedTrack?: { label: string; keys: string[]; target: number } | null
+    checklist?: { tracks: { label: string; keys: string[] }[] } | null
     ciphers?: { prompt: string; answerKeys: string[] }[] | null
   },
 ) {
@@ -497,9 +532,35 @@ async function refreshMission(
   const quiet = await quietDaysByAgent(supabase, joined.map((p: any) => p.agent_no))
   for (const p of joined) p._quietDays = quiet.get(p.agent_no) ?? 0
 
+  const checklist = config?.checklist
+  let checklistAllDone = false
+  if (variant === 'connect' && checklist?.tracks?.length) {
+    checklistAllDone = true
+    for (const p of joined) {
+      const done = await checklistProgressSince(supabase, p.agent_no, p.joined_at, checklist.tracks)
+      p.contribution = done
+      if (done < checklist.tracks.length) checklistAllDone = false
+      if (done > 0 && !p.streamed_at) {
+        await supabase.from('rc_reconnect_participants')
+          .update({ streamed_at: new Date().toISOString() })
+          .eq('mission_id', mission.id).eq('agent_no', p.agent_no)
+        p.streamed_at = new Date().toISOString()
+      }
+    }
+    // Every joined agent must have cleared the whole list — vacuously
+    // "true" with zero joined participants would otherwise let an empty
+    // roster read as done; the required-headcount check in the qualify
+    // block below is what actually guards that, but this keeps the
+    // exposed progress object honest on its own too.
+    if (!joined.length) checklistAllDone = false
+    mission.checklistProgress = { total: checklist.tracks.length }
+  }
+
   const sharedTrack = config?.sharedTrack
   let sharedTotal = 0
-  if (variant === 'connect' && sharedTrack?.keys?.length && sharedTrack.target > 0) {
+  if (checklist?.tracks?.length) {
+    // Mutually exclusive with sharedTrack — already handled above.
+  } else if (variant === 'connect' && sharedTrack?.keys?.length && sharedTrack.target > 0) {
     for (const p of joined) {
       const contributed = await contributionSince(supabase, p.agent_no, p.joined_at, sharedTrack.keys)
       p.contribution = contributed
@@ -540,9 +601,11 @@ async function refreshMission(
   if (mission.status === 'open' && mission.phase === 'streaming') {
     const qualified = variant === 'invite'
       ? joined.length >= mission.required_agents
-      : sharedTrack?.keys?.length
-        ? joined.length >= mission.required_agents && sharedTotal >= sharedTrack.target
-        : joined.length >= mission.required_agents && joined.every((p: any) => p.streamed_at)
+      : checklist?.tracks?.length
+        ? joined.length >= mission.required_agents && checklistAllDone
+        : sharedTrack?.keys?.length
+          ? joined.length >= mission.required_agents && sharedTotal >= sharedTrack.target
+          : joined.length >= mission.required_agents && joined.every((p: any) => p.streamed_at)
 
     if (qualified && variant === 'connect' && ciphers?.length) {
       const { error } = await supabase.from('rc_reconnect_missions')
@@ -571,6 +634,20 @@ export async function getMissionStatus(supabase: SupabaseDB, agentNo: string, di
   const done = mission?.status === 'complete'
   const sharedTarget = Number(frozenReconnect.config.sharedTrack?.target) || 0
   const sharedProgress = Number(mission?.sharedTrackProgress?.progress) || 0
+  // Checklist has no single pooled number — "combined plays toward a
+  // target" doesn't apply when everyone must clear the SAME fixed list
+  // individually. Approximated instead as (tracks cleared, summed and
+  // capped per agent) out of (list length × required headcount), so the
+  // shared restoration meter still climbs smoothly rather than sitting at
+  // 0% until every last agent finishes their very last track.
+  const checklistTracks = frozenReconnect.config.checklist?.tracks?.length || 0
+  const checklistRequired = Number(frozenReconnect.config.requiredAgents) || 0
+  const checklistTarget = checklistTracks * checklistRequired
+  const checklistSum = checklistTracks > 0
+    ? participants
+      .filter((p: any) => p.status === 'joined')
+      .reduce((s: number, p: any) => s + Math.min(Number(p.contribution) || 0, checklistTracks), 0)
+    : 0
   return {
     variant, done,
     // The district's main restoration meter used to omit ReConnect entirely,
@@ -580,7 +657,9 @@ export async function getMissionStatus(supabase: SupabaseDB, agentNo: string, di
     // work is a single 0/1 completion unit.
     restorationProgress: sharedTarget > 0
       ? { progress: done ? sharedTarget : Math.min(sharedProgress, sharedTarget), target: sharedTarget }
-      : { progress: done ? 1 : 0, target: 1 },
+      : checklistTarget > 0
+        ? { progress: done ? checklistTarget : Math.min(checklistSum, checklistTarget), target: checklistTarget }
+        : { progress: done ? 1 : 0, target: 1 },
     mission: mission ? await shape(supabase, mission, participants, agentNo, IDLE_DAYS, frozenReconnect.config.ciphers) : null,
   }
 }
@@ -614,7 +693,14 @@ export async function getReconnectMission(supabase: SupabaseDB, content: any, pa
 
   return {
     success: true, available: true, variant: reconnect.variant,
-    config: { requiredAgents: reconnect.config.requiredAgents, sharedTrack: reconnect.config.sharedTrack || null },
+    config: {
+      requiredAgents: reconnect.config.requiredAgents,
+      sharedTrack: reconnect.config.sharedTrack || null,
+      // Track labels ride along (not just a count) so the panel can list
+      // what's left even before a mission exists to compute per-agent
+      // progress against.
+      checklist: reconnect.config.checklist || null,
+    },
     idleThreshold,
     mission: mission ? await shapeWithMessages(supabase, mission, participants || [], agentNo, idleThreshold, reconnect.config.ciphers) : null,
   }

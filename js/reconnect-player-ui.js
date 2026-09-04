@@ -9,6 +9,8 @@ export function reconnectPlayerNext(input = {}) {
   const idleCount = Math.max(0, Number(input.idleCount) || 0)
   const cipher = input.cipher || null
   const sharedTrack = input.sharedTrack || null
+  const checklist = input.checklist || null
+  const myChecklistDone = Math.max(0, Number(input.myChecklistDone) || 0)
 
   if (input.status === 'complete') return { title: 'Quest complete — finish the district', body: '' }
   if (input.myStatus === 'invited') {
@@ -44,6 +46,14 @@ export function reconnectPlayerNext(input = {}) {
       body: 'Everyone’s qualifying plays count after they join.',
     }
   }
+  if (input.variant === 'connect' && checklist && myChecklistDone < checklist.total) {
+    const left = checklist.total - myChecklistDone
+    return {
+      title: `Stream ${left} more track${left === 1 ? '' : 's'} from the list`,
+      body: `${myChecklistDone}/${checklist.total} cleared — every teammate needs the whole list on their own.`,
+    }
+  }
+  if (input.variant === 'connect' && checklist) return { title: 'Waiting on the rest of the team', body: 'You’ve cleared the whole list — everyone else needs their own full pass too.' }
   if (input.variant === 'connect') return { title: 'Stream an active district goal', body: 'Each ready agent needs one qualifying play after joining.' }
   return { title: 'Review the ReConnect Quest', body: 'Check the remaining step in Details.' }
 }

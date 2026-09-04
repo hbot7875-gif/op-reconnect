@@ -93,6 +93,11 @@ function reconnectHudStatus(state) {
     const left = Math.max(0, mission.sharedTrack.target - mission.sharedTrack.progress)
     return { label: `${left} shared stream${left === 1 ? '' : 's'} left` }
   }
+  if (mission.checklist) {
+    const me = joined.find((p) => p.isMe)
+    const left = Math.max(0, mission.checklist.total - (Number(me?.streams) || 0))
+    return left > 0 ? { label: `${left} track${left === 1 ? '' : 's'} left on your list` } : { label: 'Waiting on your team' }
+  }
   return { label: 'Team ready · stream now' }
 }
 

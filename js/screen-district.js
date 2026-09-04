@@ -455,11 +455,15 @@ function paintMissionPanel(box, d, res) {
     const withWho = others.length ? ` with ${others.map((p) => esc(p.codename)).join(' and ')}` : ''
     const missionBody = m.sharedTrack
       ? `Team up and take ${esc(m.sharedTrack.label)} to ${m.sharedTrack.target} combined plays.`
-      : 'Complete this district ReConnect Quest together.'
+      : m.checklist
+        ? `Team up and each stream every track on the list at least once.`
+        : 'Complete this district ReConnect Quest together.'
     box.appendChild(reconnectMissionBlock(d.reconnect?.label || 'ReConnect Quest', missionBody))
     box.appendChild(reconnectTeamBlock(`${esc(m.participants.filter((p) => p.status === 'joined').map((p) => p.isMe ? 'You' : p.codename).join(' + ') || 'Team complete')}`))
     box.appendChild(reconnectNextBlock('Quest complete — finish the district',
-      m.sharedTrack ? `${esc(m.sharedTrack.label)} reached ${m.sharedTrack.target} combined plays${withWho}.` : `You teamed up${withWho}.`))
+      m.sharedTrack ? `${esc(m.sharedTrack.label)} reached ${m.sharedTrack.target} combined plays${withWho}.`
+        : m.checklist ? `Everyone cleared all ${m.checklist.total} tracks${withWho}.`
+        : `You teamed up${withWho}.`))
     return
   }
 
@@ -467,11 +471,14 @@ function paintMissionPanel(box, d, res) {
 
   if (!m || m.status !== 'open') {
     const st = res.config.sharedTrack
+    const cl = res.config.checklist
     const missionBody = res.variant === 'invite'
       ? `Build a ${res.config.requiredAgents}-agent team in ${esc(districtDisplayName(d))}.`
       : st
         ? `Build a ${res.config.requiredAgents}-agent team, then stream ${esc(st.label)} to ${st.target} combined plays.`
-        : `Build a ${res.config.requiredAgents}-agent team and stream your active district goals.`
+        : cl
+          ? `Build a ${res.config.requiredAgents}-agent team — each of you streams every one of ${cl.tracks.length} tracks at least once.`
+          : `Build a ${res.config.requiredAgents}-agent team and stream your active district goals.`
     box.appendChild(reconnectMissionBlock(d.reconnect?.label || 'ReConnect Quest', missionBody))
     box.appendChild(reconnectTeamBlock(`You · ${Math.max(0, res.config.requiredAgents - 1)} open seat${res.config.requiredAgents - 1 === 1 ? '' : 's'}`))
     box.appendChild(reconnectNextBlock('Open this quest to find teammates'))
@@ -481,7 +488,9 @@ function paintMissionPanel(box, d, res) {
       ? 'Invite active agents here. Their acceptance completes the team step—no extra streaming is needed.'
       : st
         ? `After everyone accepts, stream ${esc(st.label)}. Every team member's plays add up until the shared total reaches ${st.target}.`
-        : 'After everyone accepts, each team member streams at least one of their own active district goals.'}</p>`
+        : cl
+          ? `After everyone accepts, each team member streams every track on the list at least once — on their own, nothing pools between teammates.`
+          : 'After everyone accepts, each team member streams at least one of their own active district goals.'}</p>`
     moreBody.appendChild(how)
     // Who's already standing here, BEFORE committing to open anything. The
     // pickable list used to appear only after opening a mission, so this
@@ -546,7 +555,9 @@ function paintMissionPanel(box, d, res) {
     ? `Build a ${m.requiredAgents}-agent team in ${esc(districtDisplayName(d))}.`
     : m.sharedTrack
       ? `Team up and take ${esc(m.sharedTrack.label)} to ${m.sharedTrack.target} combined plays.`
-      : `Team up and stream active goals in ${esc(districtDisplayName(d))}.`
+      : m.checklist
+        ? `Team up and each stream every one of ${m.checklist.total} tracks at least once.`
+        : `Team up and stream active goals in ${esc(districtDisplayName(d))}.`
   box.appendChild(reconnectMissionBlock(d.reconnect?.label || 'ReConnect Quest', missionBody))
   box.appendChild(reconnectTeamBlock(teamCopy))
   const problemHost = el('div', 'reconnect-problems')
@@ -579,7 +590,7 @@ function paintMissionPanel(box, d, res) {
     variant: res.variant, myStatus: myRow?.status, need,
     pendingNames: pending.map((p) => p.codename), expiredCount: expired.length,
     idleCount: idlers.length, isCreator: m.isCreator, cipher: m.cipher,
-    sharedTrack: m.sharedTrack,
+    sharedTrack: m.sharedTrack, checklist: m.checklist, myChecklistDone: myRow?.streams,
   })
   const nextTitle = esc(next.title)
   const nextBody = esc(next.body)
@@ -601,6 +612,13 @@ function paintMissionPanel(box, d, res) {
     box.appendChild(labeledBar(`Combined ${esc(st.label)} streams`, `${st.progress}/${st.target}`,
       pct, st.progress >= st.target))
     box.appendChild(el('p', 'muted', `Everyone's own plays of ${esc(st.label)} since they personally joined, added together.`))
+  } else if (res.variant === 'connect' && m.checklist) {
+    const total = m.checklist.total
+    const myDone = Math.min(total, Number(myRow?.streams) || 0)
+    box.appendChild(labeledBar('Your tracks cleared', `${myDone}/${total}`,
+      Math.round((myDone / Math.max(1, total)) * 100), myDone >= total))
+    const clearedCount = joined.filter((p) => Math.min(total, Number(p.streams) || 0) >= total).length
+    box.appendChild(el('p', 'muted', `${clearedCount}/${joined.length} teammates have cleared the whole list — nothing pools, everyone streams their own full pass.`))
   } else if (res.variant === 'connect') {
     const streamedCount = joined.filter((p) => p.streamed).length
     box.appendChild(el('p', 'muted', `${streamedCount}/${joined.length} have streamed toward their own goals here since joining.`))
@@ -700,8 +718,9 @@ function paintMissionPanel(box, d, res) {
     const statusText = p.inviteExpired ? 'No reply &middot; expired'
       : p.leftDistrict ? 'Ran out of time here'
       : p.status === 'invited' ? 'Invite pending'
-      : p.idle ? `Quiet ${p.quietDays >= 3 ? '3+' : p.quietDays} day${p.quietDays === 1 ? '' : 's'}${p.streams ? ` &middot; ${p.streams} stream${p.streams === 1 ? '' : 's'}` : ''}`
+      : p.idle ? `Quiet ${p.quietDays >= 3 ? '3+' : p.quietDays} day${p.quietDays === 1 ? '' : 's'}${p.streams ? ` &middot; ${p.streams}${m.checklist ? `/${m.checklist.total} tracks` : ` stream${p.streams === 1 ? '' : 's'}`}` : ''}`
       : res.variant === 'invite' ? '✓ Ready'
+      : m.checklist ? `Ready &middot; ${p.streams ?? 0}/${m.checklist.total} tracks`
       : `Ready &middot; ${p.streams ?? 0} stream${(p.streams ?? 0) === 1 ? '' : 's'}`
     const row = el('div', 'reconnect-agent'
       + (p.status === 'invited' ? ' is-pending' : '')

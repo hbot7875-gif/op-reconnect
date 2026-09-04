@@ -16,4 +16,15 @@ assert.equal(reconnectPlayerNext({ need: 0, cipher: { index: 0, total: 3, attemp
 assert.equal(reconnectPlayerNext({ status: 'complete' }).title, 'Quest complete — finish the district')
 assert.equal(reconnectPlayerNext({ need: 0, idleCount: 1, isCreator: true }).title, 'A teammate has gone quiet')
 
+// Checklist mode — each teammate must clear a fixed track list on their own.
+assert.equal(reconnectPlayerNext({
+  variant: 'connect', need: 0, checklist: { total: 49 }, myChecklistDone: 12,
+}).title, 'Stream 37 more tracks from the list')
+assert.equal(reconnectPlayerNext({
+  variant: 'connect', need: 0, checklist: { total: 49 }, myChecklistDone: 48,
+}).title, 'Stream 1 more track from the list')
+assert.equal(reconnectPlayerNext({
+  variant: 'connect', need: 0, checklist: { total: 49 }, myChecklistDone: 49,
+}).title, 'Waiting on the rest of the team')
+
 console.log('reconnect-player-ui: all tests passed')

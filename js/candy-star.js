@@ -117,6 +117,9 @@ function candyReconnectGuideText(goal) {
     const target = goal.sharedTrack.target ? ` · ${goal.sharedTrack.target} streams together` : '';
     return `${agents} · ${goal.sharedTrack.label}${target}`;
   }
+  if (goal.checklist) {
+    return `${agents} · each person streams all ${goal.checklist.tracks?.length || 0} tracks solo`;
+  }
   if (goal.variant === 'connect' || goal.variant === 'invite') {
     return `${agents} · each person streams their own district goal`;
   }
