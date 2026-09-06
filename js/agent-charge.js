@@ -8,6 +8,7 @@
 import { call } from './api.js'
 import { el, esc, toast, hideOverlay, showOverlay, getState, setState } from './state.js'
 import { getAgentNo } from './session.js'
+import { bombHealthStatus, lastFedLabel } from './agent-charge-health.js'
 
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -263,6 +264,52 @@ export function agentChargeSheet(focusEraId = null) {
   const body = el('div', 'ac-body')
   sheet.appendChild(body)
   loadAndPaint(body, focusEraId)
+
+  const close = el('button', 'btn btn-ghost', 'Close')
+  close.onclick = hideOverlay
+  sheet.appendChild(close)
+  return sheet
+}
+
+export function boraMeterSheet(feedHealth) {
+  const health = bombHealthStatus(feedHealth)
+  const lastFed = lastFedLabel(feedHealth)
+  const daysLeft = Math.max(0, Math.min(14, Math.ceil(Number(feedHealth?.daysLeft) || 0)))
+  const sheet = el('div', 'sheet bora-meter-sheet')
+
+  sheet.appendChild(el('div', 'eyebrow', '💜 BORA METER'))
+  sheet.appendChild(el('h2', '', "Your ARMY Bomb's care clock"))
+  sheet.appendChild(el('p', 'muted bm-intro',
+    'Feed it at least once every 14 days to keep your agent file safe.'))
+
+  const status = el('div', `bm-status is-${health?.tone || 'happy'}`)
+  status.innerHTML = `
+    <span class="bm-status-icon" aria-hidden="true">${esc(health?.icon || '♥')}</span>
+    <div><small>RIGHT NOW</small><strong>${esc(health?.label || 'FULL OF BORA')}</strong></div>
+    <b>${daysLeft > 0 ? `${daysLeft}D LEFT` : 'FEED NOW'}</b>
+  `
+  sheet.appendChild(status)
+
+  const facts = el('div', 'bm-facts')
+  facts.innerHTML = `
+    <div><span>LAST FED</span><strong>${esc(lastFed ? lastFed.replace(/^FED\s+/, '') : 'NOT YET')}</strong></div>
+    <div><span>SAFE WINDOW</span><strong>14 DAYS</strong></div>
+  `
+  sheet.appendChild(facts)
+
+  const explain = el('div', 'bm-explain')
+  explain.innerHTML = `
+    <div><b>💜 Bora Meter</b><p>Protects your agent file. Feeding the Bomb resets this clock to 14 days.</p></div>
+    <div><b>⚡ Charge hours</b><p>Keep restored districts powered. This is a separate clock.</p></div>
+  `
+  sheet.appendChild(explain)
+
+  sheet.appendChild(el('p', 'dim bm-note',
+    'A Charge Cell, Auto Feed that spends a Cell, or a charge reward counts as a feed. If the Bora Meter reaches zero, your agent file may be removed.'))
+
+  const feed = el('button', 'btn btn-primary bm-feed', 'FEED THE BOMB')
+  feed.onclick = () => showOverlay(agentChargeSheet())
+  sheet.appendChild(feed)
 
   const close = el('button', 'btn btn-ghost', 'Close')
   close.onclick = hideOverlay

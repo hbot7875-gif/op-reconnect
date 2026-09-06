@@ -29,7 +29,7 @@ import { renderCityMap } from './city-map.js'
 import { districtIcon } from './landmarks.js'
 import { openFinder } from './search.js'
 import { openShare } from './share.js'
-import { agentChargeSheet } from './agent-charge.js'
+import { agentChargeSheet, boraMeterSheet } from './agent-charge.js'
 import { broadcastCards } from './broadcasts.js'
 import { cityFeedCard } from './city-feed.js'
 import { openSuggestions } from './suggestions.js'
@@ -685,7 +685,7 @@ function coreBlock(state) {
         ${lastFed ? `<i class="core-health-fed">${lastFed}</i>` : ''}
       `)
       healthBtn.setAttribute('aria-label', `Bora meter ${health.label}. ${charge.feedHealth.daysLeft} days left before the 14-day feed limit.${lastFed ? ` ${lastFed.toLowerCase()}.` : ''} Tap to feed it.`)
-      healthBtn.onclick = () => showOverlay(agentChargeSheet())
+      healthBtn.onclick = () => showOverlay(boraMeterSheet(charge.feedHealth))
       stage.appendChild(healthBtn)
     }
     zone.appendChild(stage)

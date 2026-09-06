@@ -985,6 +985,41 @@ body.red-zone .wtb.now { fill: var(--crimson); filter: drop-shadow(0 0 3px rgba(
 .core-health.is-urgent { border-color: rgba(229,56,79,.5); background: rgba(35,8,16,.82); }
 .core-health.is-urgent strong, .core-health.is-urgent strong b { color: #ff9aaa; }
 
+/* Bora Meter explainer — a compact player-facing distinction between the
+   14-day care clock and the separate district-power charge clock. */
+.bora-meter-sheet { max-width: 370px; }
+.bora-meter-sheet h2 { margin: 7px 0 5px; font-family: var(--disp); font-size: 21px; line-height: 1.08; }
+.bm-intro { margin: 0 0 14px; font-size: 13px; line-height: 1.5; }
+.bm-status { display: grid; grid-template-columns: 28px 1fr auto; align-items: center; gap: 9px;
+  padding: 11px 12px; border: 1px solid rgba(139,92,246,.30); border-radius: var(--r-md);
+  background: rgba(139,92,246,.07); }
+.bm-status-icon { display: grid; place-items: center; width: 27px; height: 27px; border-radius: 50%;
+  background: rgba(139,92,246,.14); color: var(--purple-lt); font-size: 14px; }
+.bm-status div { min-width: 0; }
+.bm-status small, .bm-facts span { display: block; color: var(--dim); font-family: var(--mono);
+  font-size: 7px; line-height: 1.2; letter-spacing: 1.1px; }
+.bm-status strong { display: block; margin-top: 2px; color: var(--purple-lt); font-family: var(--mono);
+  font-size: 10px; letter-spacing: .45px; }
+.bm-status > b { color: var(--purple-lt); font-family: var(--mono); font-size: 9px; white-space: nowrap; }
+.bm-status.is-steady { border-color: rgba(217,173,95,.24); background: rgba(217,173,95,.055); }
+.bm-status.is-steady .bm-status-icon, .bm-status.is-steady strong, .bm-status.is-steady > b { color: var(--gold); }
+.bm-status.is-hungry { border-color: rgba(217,173,95,.38); background: rgba(217,173,95,.07); }
+.bm-status.is-hungry .bm-status-icon, .bm-status.is-hungry strong, .bm-status.is-hungry > b { color: #e8bd72; }
+.bm-status.is-urgent { border-color: rgba(229,56,79,.45); background: rgba(229,56,79,.07); }
+.bm-status.is-urgent .bm-status-icon, .bm-status.is-urgent strong, .bm-status.is-urgent > b { color: #ff9aaa; }
+.bm-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin: 12px 0 4px;
+  border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.bm-facts > div { padding: 10px 11px; }
+.bm-facts > div + div { border-left: 1px solid var(--line); }
+.bm-facts strong { display: block; margin-top: 4px; font-family: var(--disp); font-size: 14px; }
+.bm-explain { margin: 6px 0 8px; }
+.bm-explain > div { padding: 8px 2px; }
+.bm-explain > div + div { border-top: 1px solid rgba(255,255,255,.06); }
+.bm-explain b { color: var(--text); font-size: 12px; }
+.bm-explain p { margin: 3px 0 0; color: var(--muted); font-size: 11.5px; line-height: 1.45; }
+.bm-note { margin: 5px 0 12px; font-size: 10.5px; line-height: 1.45; }
+.bm-feed { width: 100%; }
+
 .army-core { position: relative; width: 95px; height: 108px; background: none; border: none;
   cursor: pointer; padding: 0; margin: 4px 0 0;
   --bomb: var(--purple); --charge: 0; --rz-restored: 0; --rz-glow-opacity: .2; }
