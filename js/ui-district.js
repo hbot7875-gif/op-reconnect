@@ -81,6 +81,10 @@ function renderMissionGroup(card, icon, label, items, rowFn) {
  *  whole page. It starts empty and paints itself in once its own
  *  getReconnectMission call resolves, so it's safe to insert synchronously. */
 export function renderBoard(board, d, opts = {}) {
+  // ReConnect owns a live chat composer. Move the existing node out before
+  // rebuilding the mission checklist so a routine data refresh cannot
+  // destroy its focused input or draft.
+  if (opts.reconnectBox?.isConnected) opts.reconnectBox.remove()
   board.innerHTML = ''
 
   const goals = [...(d.trackGoals || [])]

@@ -7,6 +7,54 @@
 
 import { el, esc, toast } from './state.js'
 
+const mountedMessages = new WeakMap()
+
+function sameMessage(a, b) {
+  return !!a && !!b && a.isMe === b.isMe && a.isSystem === b.isSystem
+    && a.codename === b.codename && a.body === b.body
+}
+
+function appendMessage(list, msg) {
+  const row = el('div', 'reconnect-chat-msg'
+    + (msg.isMe ? ' is-me' : '') + (msg.isSystem ? ' is-system' : ''))
+  row.innerHTML = msg.isSystem
+    ? `<span>${esc(msg.body)}</span>`
+    : `<b>${esc(msg.isMe ? 'You' : msg.codename)}</b><span>${esc(msg.body)}</span>`
+  list.appendChild(row)
+}
+
+function paintMessages(list, messages, opts = {}) {
+  list.innerHTML = ''
+  if (!messages?.length) {
+    list.appendChild(el('div', 'muted', opts.emptyText || 'No messages yet — say hi.'))
+    return
+  }
+  for (const msg of messages) appendMessage(list, msg)
+}
+
+/** Refresh only the transcript. The composer is intentionally left mounted
+ *  so live mission updates cannot erase a draft, cursor or keyboard focus. */
+export function updateChatThread(wrap, messages, opts = {}) {
+  const list = wrap?.querySelector('.reconnect-chat-list')
+  if (!list) return wrap
+  const next = messages || []
+  const previous = mountedMessages.get(wrap) || []
+  if (previous.length === next.length && previous.every((msg, i) => sameMessage(msg, next[i]))) return wrap
+
+  // The backend returns oldest-first. When the existing transcript is an
+  // exact prefix, append only the new rows; no old message blinks or moves.
+  const appendOnly = next.length >= previous.length
+    && previous.every((msg, i) => sameMessage(msg, next[i]))
+  if (appendOnly) {
+    if (!previous.length) list.innerHTML = ''
+    for (const msg of next.slice(previous.length)) appendMessage(list, msg)
+  } else {
+    paintMessages(list, next, opts)
+  }
+  mountedMessages.set(wrap, next.map((msg) => ({ ...msg })))
+  return wrap
+}
+
 /**
  * @param {{isMe:boolean, isSystem?:boolean, codename?:string, body:string}[]} messages
  * @param {{
@@ -26,19 +74,9 @@ export function chatThread(messages, opts) {
   // implementation still means one implementation.
   const wrap = el('div', 'reconnect-chat' + (opts.variant ? ` is-${opts.variant}` : ''))
   const list = el('div', 'reconnect-chat-list')
-  if (!messages?.length) {
-    list.appendChild(el('div', 'muted', opts.emptyText || 'No messages yet — say hi.'))
-  } else {
-    for (const msg of messages) {
-      const row = el('div', 'reconnect-chat-msg'
-        + (msg.isMe ? ' is-me' : '') + (msg.isSystem ? ' is-system' : ''))
-      row.innerHTML = msg.isSystem
-        ? `<span>${esc(msg.body)}</span>`
-        : `<b>${esc(msg.isMe ? 'You' : msg.codename)}</b><span>${esc(msg.body)}</span>`
-      list.appendChild(row)
-    }
-  }
+  paintMessages(list, messages, opts)
   wrap.appendChild(list)
+  mountedMessages.set(wrap, (messages || []).map((msg) => ({ ...msg })))
 
   if (opts.readOnly) {
     wrap.appendChild(el('div', 'reconnect-chat-readonly', opts.readOnlyNote || 'This thread is now read-only.'))

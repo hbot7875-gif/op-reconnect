@@ -17,7 +17,7 @@ import { itemTile, itemSheet, itemsAt, itemsInPack } from './items.js'
 import { trackEngagementOnce } from './engagement.js'
 import { reconnectPlayerNext } from './reconnect-player-ui.js'
 import { openPlaylistVault } from './playlist-vault-sheet.js'
-import { chatThread } from './chat-thread.js'
+import { chatThread, updateChatThread } from './chat-thread.js'
 import { getReconnectChatSeen, markReconnectChatSeen,
   reconnectChatUnreadCount, reconnectChatBadgeText } from './reconnect-chat-unread.js'
 
@@ -107,9 +107,27 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
     // renderBoard's own comment. Only when there's an unfinished reconnect
     // goal to actually show; a finished one gets a quiet compact row from
     // renderBoard itself with nothing left to interact with.
-    const reconnectBox = d.reconnect && !d.reconnect.done ? reconnectPanel(d) : null
+    const mountedReconnectBox = board.querySelector('.reconnect-card')
+    const pageScrollBeforeBoardRefresh = document.scrollingElement?.scrollTop ?? 0
+    const focusedComposer = mountedReconnectBox?.querySelector('.reconnect-chat-composer input:focus')
+    const composerSelection = focusedComposer
+      ? { start: focusedComposer.selectionStart, end: focusedComposer.selectionEnd }
+      : null
+    const reconnectBox = d.reconnect && !d.reconnect.done
+      ? (mountedReconnectBox || reconnectPanel(d))
+      : null
     const vaultBox = districtVaultCard(districtId, districtDisplayName(mapD))
     renderBoard(board, d, { reconnectBox, vaultBox })
+    if (focusedComposer?.isConnected) {
+      focusedComposer.focus({ preventScroll: true })
+      if (composerSelection?.start != null) {
+        focusedComposer.setSelectionRange(composerSelection.start, composerSelection.end)
+      }
+    }
+    // The existing panel was moved—not recreated—so its composer, draft,
+    // focus and disclosure state survive. Refresh its changing mission data
+    // after it is safely back in the board.
+    if (mountedReconnectBox && reconnectBox) reconnectBox.refreshMission?.()
     const cellAward = d.chargeCellProgress?.earnedNow || 0
     const cellAwardKey = `${d.id}:${d.chargeCellProgress?.earnedThisDistrict || 0}`
     if (cellAward > 0 && celebratedCellAward !== cellAwardKey) {
@@ -132,6 +150,10 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
       }
     }
     board.appendChild(shelf(state, mapD))
+    // The shelf changes the board's final height. Restore only after every
+    // section is back, otherwise the browser clamps to the shorter interim
+    // page and the player visibly jumps upward on each poll.
+    if (document.scrollingElement) document.scrollingElement.scrollTop = pageScrollBeforeBoardRefresh
     // Fires once, on the refresh that reports the district finished.
     if (d.restoredNow && celebratedFor !== d.id) {
       celebratedFor = d.id
@@ -348,6 +370,7 @@ function reconnectPanel(d) {
       retry.onclick = () => { box.innerHTML = ''; box.appendChild(el('p', 'muted', 'Loading your mission…')); load() }
       box.appendChild(retry)
     })
+    box.refreshMission = load
     load()
   } else {
     paintPuzzlePanel(box, d, r)
@@ -366,7 +389,7 @@ function reconnectTeamBlock(body) {
 }
 
 function reconnectNextBlock(title, body = '') {
-  return el('div', 'reconnect-next', `<span>NEXT STEP</span><b>${title}</b>${body ? `<p>${body}</p>` : ''}`)
+  return el('section', 'reconnect-next', `<span>NEXT STEP</span><b>${title}</b>${body ? `<p>${body}</p>` : ''}`)
 }
 
 function reconnectDisclosure(label, content, open = false) {
@@ -436,7 +459,107 @@ function waitedLabel(waitingSince) {
   return 'waiting 1 day+'
 }
 
+function reconnectQuestSignature(res) {
+  const mission = res.mission ? { ...res.mission } : null
+  if (mission) {
+    delete mission.messages
+    delete mission.messageCount
+  }
+  return JSON.stringify({
+    available: res.available,
+    variant: res.variant,
+    config: res.config,
+    idleThreshold: res.idleThreshold,
+    mission,
+  })
+}
+
+function refreshMountedMissionChat(box, mission) {
+  const disclosure = box.querySelector(':scope > .reconnect-chat-disclosure')
+  if (!disclosure || disclosure.dataset.missionId !== mission?.id) return
+  const chat = disclosure.querySelector('.reconnect-chat')
+  updateChatThread(chat, mission.messages, { emptyText: 'No messages yet — say hi to your team.' })
+  const unread = reconnectChatUnreadCount(mission.messageCount, getReconnectChatSeen(mission.id))
+  const badge = reconnectChatBadgeText(unread)
+  const summary = disclosure.querySelector(':scope > summary')
+  if (summary) summary.innerHTML = `Team Chat${badge ? ` <span class="reconnect-chat-badge">${esc(badge)} new</span>` : ''}`
+  if (disclosure.open) {
+    markReconnectChatSeen(mission.id, mission.messageCount)
+    disclosure.querySelector('.reconnect-chat-badge')?.remove()
+  }
+}
+
+function refreshMountedMissionDeadline(box, mission) {
+  const host = box.querySelector('.reconnect-problems')
+  if (!host) return
+  let deadline = host.querySelector('.reconnect-mission-deadline')
+  const msLeft = mission?.expiresAt ? new Date(mission.expiresAt).getTime() - Date.now() : Infinity
+  const daysLeft = Math.ceil(msLeft / 86400000)
+  if (!Number.isFinite(daysLeft) || daysLeft > 3) {
+    deadline?.remove()
+    return
+  }
+  const urgent = daysLeft <= 2
+  const text = daysLeft <= 0 ? 'Last day for this mission'
+    : daysLeft === 1 ? '<b>1 day</b> left for this mission'
+    : `<b>${daysLeft} days</b> left for this mission`
+  const html = `<span class="deadline-kind">Team mission expires</span><span>⏳ ${text} — after that it expires and any invites are lost.</span>`
+  if (!deadline) {
+    deadline = el('div', 'board-deadline reconnect-mission-deadline')
+    host.prepend(deadline)
+  }
+  deadline.className = 'board-deadline reconnect-mission-deadline' + (urgent ? ' is-urgent' : '')
+  if (deadline.innerHTML !== html) deadline.innerHTML = html
+}
+
 function paintMissionPanel(box, d, res) {
+  const nextSignature = reconnectQuestSignature(res)
+  if (box.dataset.questSignature === nextSignature) {
+    refreshMountedMissionChat(box, res.mission)
+    refreshMountedMissionDeadline(box, res.mission)
+    return
+  }
+  box.dataset.questSignature = nextSignature
+
+  const disclosureKey = (node) => {
+    const text = node.querySelector(':scope > summary')?.textContent?.trim() || ''
+    return text.startsWith('Team Chat') ? 'Team Chat' : text
+  }
+  const openDisclosures = new Set(
+    [...box.querySelectorAll('details[open]')].map(disclosureKey).filter(Boolean),
+  )
+  const expandedChecklists = new Set(
+    [...box.querySelectorAll('.reconnect-agent-toggle[aria-expanded="true"]')]
+      .map((toggle) => toggle.closest('.reconnect-agent')?.dataset.agentCodename)
+      .filter(Boolean),
+  )
+  const pageScroll = document.scrollingElement?.scrollTop ?? 0
+  const restoreViewState = () => {
+    for (const disclosure of box.querySelectorAll('details')) {
+      if (openDisclosures.has(disclosureKey(disclosure))) disclosure.open = true
+    }
+    for (const row of box.querySelectorAll('.reconnect-agent[data-agent-codename]')) {
+      if (!expandedChecklists.has(row.dataset.agentCodename)) continue
+      row.querySelector('.reconnect-agent-toggle')?.setAttribute('aria-expanded', 'true')
+      const detail = row.querySelector('.reconnect-checklist-detail')
+      if (detail) detail.hidden = false
+    }
+    if (document.scrollingElement) document.scrollingElement.scrollTop = pageScroll
+  }
+
+  // Preserve the live Team Chat node across mission repaints. Progress,
+  // roster and messages can all update without replacing the composer the
+  // player may currently be typing into.
+  const existingChatDisclosure = box.querySelector(':scope > .reconnect-chat-disclosure')
+  const existingChat = existingChatDisclosure?.dataset.missionId === res.mission?.id
+    ? existingChatDisclosure
+    : null
+  const focusedChatInput = existingChat?.querySelector('.reconnect-chat-composer input:focus')
+  const chatSelection = focusedChatInput
+    ? { start: focusedChatInput.selectionStart, end: focusedChatInput.selectionEnd }
+    : null
+  if (existingChat) existingChat.remove()
+
   const refresh = async () => {
     const fresh = await call('getReconnectMission', { agentNo: getAgentNo(), districtId: d.id })
     if (fresh?.success) paintMissionPanel(box, d, fresh)
@@ -446,6 +569,11 @@ function paintMissionPanel(box, d, res) {
   box.appendChild(el('div', 'eyebrow', res.variant === 'invite' ? 'INVITE BACKUP' : 'CONNECT'))
   const m = res.mission
   const me = getAgentNo()
+  const sharedProgressRatio = m?.sharedTrack
+    ? Number(m.sharedTrack.progress || 0) / Math.max(1, Number(m.sharedTrack.target || 0))
+    : 0
+  box.classList.toggle('is-near-complete', m?.status === 'open' && sharedProgressRatio >= 0.8)
+  box.classList.toggle('is-complete', m?.status === 'complete')
 
   if (m?.status === 'complete') {
     // Name the partner. An agent who got here by ACCEPTING an invite never
@@ -462,6 +590,17 @@ function paintMissionPanel(box, d, res) {
         : 'Complete this district ReConnect Quest together.'
     box.appendChild(reconnectMissionBlock(d.reconnect?.label || 'ReConnect Quest', missionBody))
     box.appendChild(reconnectTeamBlock(`${esc(m.participants.filter((p) => p.status === 'joined').map((p) => p.isMe ? 'You' : p.codename).join(' + ') || 'Team complete')}`))
+    const completeScoreline = el('section', 'reconnect-coop-progress reconnect-complete-progress')
+    const joinedCount = m.participants.filter((p) => p.status === 'joined').length
+    const completeScores = el('div', 'reconnect-scoreline')
+    completeScores.appendChild(el('div', 'reconnect-score', `<b>${joinedCount}<i>/ ${m.requiredAgents}</i></b><span>ARMY together</span>`))
+    if (m.sharedTrack) {
+      completeScores.appendChild(el('div', 'reconnect-score', `<b>${m.sharedTrack.progress}<i>/ ${m.sharedTrack.target}</i></b><span>signal complete</span>`))
+    } else if (m.checklist) {
+      completeScores.appendChild(el('div', 'reconnect-score', `<b>${joinedCount}<i>/ ${joinedCount}</i></b><span>lists cleared</span>`))
+    }
+    completeScoreline.appendChild(completeScores)
+    box.appendChild(completeScoreline)
     box.appendChild(reconnectNextBlock('Quest complete — finish the district',
       m.sharedTrack ? `${esc(m.sharedTrack.label)} reached ${m.sharedTrack.target} combined plays${withWho}.`
         : m.checklist ? `Everyone cleared all ${m.checklist.total} tracks${withWho}.`
@@ -573,20 +712,7 @@ function paintMissionPanel(box, d, res) {
   // unanswered for days with no idea the whole mission was about to expire
   // out from under them. Same class, same wording pattern, so it reads as
   // the same kind of warning a player has already learned to notice.
-  if (m.expiresAt) {
-    const msLeft = new Date(m.expiresAt).getTime() - Date.now()
-    const daysLeft = Math.ceil(msLeft / 86400000)
-    if (daysLeft <= 3) {
-      // Same ≤2-day threshold the district's own deadline banner uses for
-      // "urgent" (ui-district.js) — one meaning for red across the app,
-      // not a second, slightly different cutoff someone has to relearn.
-      const urgent = daysLeft <= 2
-      const text = daysLeft <= 0 ? 'Last day for this mission'
-        : daysLeft === 1 ? '<b>1 day</b> left for this mission'
-        : `<b>${daysLeft} days</b> left for this mission`
-      problemHost.appendChild(el('div', 'board-deadline' + (urgent ? ' is-urgent' : ''), `<span class="deadline-kind">Team mission expires</span><span>⏳ ${text} — after that it expires and any invites are lost.</span>`))
-    }
-  }
+  refreshMountedMissionDeadline(box, m)
 
   const next = reconnectPlayerNext({
     variant: res.variant, myStatus: myRow?.status, need,
@@ -596,43 +722,55 @@ function paintMissionPanel(box, d, res) {
   })
   const nextTitle = esc(next.title)
   const nextBody = esc(next.body)
-  const nextBlock = reconnectNextBlock(nextTitle, nextBody)
-  box.appendChild(nextBlock)
-  const primaryHost = el('div', 'reconnect-primary-action')
-  box.appendChild(primaryHost)
-
-  box.appendChild(el('div', 'team-status', `
-    <b>Team: ${joined.length} of ${m.requiredAgents} ready</b>
-    ${need > 0 ? `<span> &middot; Need ${need} more agent${need === 1 ? '' : 's'}</span>` : ''}
+  const progressHost = el('section', 'reconnect-coop-progress')
+  const scoreline = el('div', 'reconnect-scoreline')
+  scoreline.appendChild(el('div', 'reconnect-score', `
+    <b>${joined.length}<i>/ ${m.requiredAgents}</i></b><span>ARMY here</span>
   `))
-  box.appendChild(labeledBar('Team members', `${joined.length}/${m.requiredAgents}`,
+  progressHost.appendChild(scoreline)
+  progressHost.appendChild(labeledBar('Team signal', `${joined.length}/${m.requiredAgents}`,
     Math.round((joined.length / m.requiredAgents) * 100), need === 0))
 
   if (res.variant === 'connect' && m.sharedTrack) {
     const st = m.sharedTrack
     const pct = Math.min(100, Math.round((st.progress / Math.max(1, st.target)) * 100))
-    box.appendChild(labeledBar(`Combined ${esc(st.label)} streams`, `${st.progress}/${st.target}`,
+    scoreline.appendChild(el('div', 'reconnect-score', `
+      <b>${st.progress}<i>/ ${st.target}</i></b><span>streams together</span>
+    `))
+    progressHost.appendChild(labeledBar(`Combined ${esc(st.label)} streams`, `${st.progress}/${st.target}`,
       pct, st.progress >= st.target))
-    box.appendChild(el('p', 'muted', `Everyone's own plays of ${esc(st.label)} since they personally joined, added together.`))
+    progressHost.appendChild(el('p', 'muted reconnect-together-note', `Every teammate's qualifying ${esc(st.label)} plays join this total.`))
   } else if (res.variant === 'connect' && m.checklist) {
     const total = m.checklist.total
     const myDone = Math.min(total, Number(myRow?.streams) || 0)
-    box.appendChild(labeledBar('Your playlist progress', `${myDone}/${total} tracks`,
-      Math.round((myDone / Math.max(1, total)) * 100), myDone >= total))
     const clearedCount = joined.filter((p) => Math.min(total, Number(p.streams) || 0) >= total).length
-    box.appendChild(el('p', 'muted', `${clearedCount} of ${joined.length} joined agent${joined.length === 1 ? '' : 's'} ${clearedCount === 1 ? 'has' : 'have'} completed their own list.`))
+    scoreline.appendChild(el('div', 'reconnect-score', `
+      <b>${clearedCount}<i>/ ${joined.length}</i></b><span>lists cleared</span>
+    `))
+    progressHost.appendChild(labeledBar('Your playlist progress', `${myDone}/${total} tracks`,
+      Math.round((myDone / Math.max(1, total)) * 100), myDone >= total))
+    progressHost.appendChild(el('p', 'muted reconnect-together-note', `Everyone clears the playlist once on their own.`))
     const playlistUrl = String(res.config.checklist?.playlistUrl || '')
     if (/^https:\/\/open\.spotify\.com\/playlist\//i.test(playlistUrl)) {
       const playlist = el('a', 'reconnect-playlist-link', '<span aria-hidden="true">♫</span><span><b>THIS IS RM</b><small>Open the mission playlist on Spotify</small></span><i aria-hidden="true">↗</i>')
       playlist.href = playlistUrl
       playlist.target = '_blank'
       playlist.rel = 'noopener noreferrer'
-      box.appendChild(playlist)
+      progressHost.appendChild(playlist)
     }
   } else if (res.variant === 'connect') {
     const streamedCount = joined.filter((p) => p.streamed).length
-    box.appendChild(el('p', 'muted', `${streamedCount}/${joined.length} have streamed toward their own goals here since joining.`))
+    scoreline.appendChild(el('div', 'reconnect-score', `
+      <b>${streamedCount}<i>/ ${joined.length}</i></b><span>signals sent</span>
+    `))
+    progressHost.appendChild(el('p', 'muted reconnect-together-note', `${streamedCount}/${joined.length} have streamed toward their own goals here since joining.`))
   }
+  box.appendChild(progressHost)
+
+  const nextBlock = reconnectNextBlock(nextTitle, nextBody)
+  box.appendChild(nextBlock)
+  const primaryHost = el('div', 'reconnect-primary-action')
+  box.appendChild(primaryHost)
 
   // Phase two, once the streaming target is hit and the goal carries a
   // cipher sequence (see reconnect-missions.ts's refreshMission) — the
@@ -746,6 +884,7 @@ function paintMissionPanel(box, d, res) {
       + (p.status === 'invited' ? ' is-pending' : '')
       + (p.idle ? ' is-idle' : '')
       + (p.inviteExpired || p.leftDistrict ? ' is-expired' : ''))
+    row.dataset.agentCodename = p.codename
     const head = el('div', 'reconnect-agent-head')
     let toggle = null
     if (checklistTracks) {
@@ -906,7 +1045,7 @@ function paintMissionPanel(box, d, res) {
           }[res2.emptyReason] || "Nobody's free to invite right now."
           waitList.appendChild(el('p', 'muted reconnect-empty-reason', emptyCopy))
 
-          const alertBtn = el('button', `btn ${res2.alertActive ? 'btn-ghost' : 'btn-primary'} reconnect-alert-toggle`,
+          const alertBtn = el('button', 'btn btn-ghost reconnect-alert-toggle',
             res2.alertActive ? '🔔 Partner alert is on' : '🔔 Tell me when someone is free')
           alertBtn.onclick = async () => {
             alertBtn.disabled = true
@@ -915,7 +1054,7 @@ function paintMissionPanel(box, d, res) {
             if (!r.success) { alertBtn.disabled = false; inviteMsg.textContent = reconnectError(r.error); return }
             res2.alertActive = active
             alertBtn.disabled = false
-            alertBtn.className = `btn ${active ? 'btn-ghost' : 'btn-primary'} reconnect-alert-toggle`
+            alertBtn.className = 'btn btn-ghost reconnect-alert-toggle'
             alertBtn.textContent = active ? '🔔 Partner alert is on' : '🔔 Tell me when someone is free'
             toast(active ? "We'll ring the bell when a partner is available." : 'Partner alert turned off')
           }
@@ -985,29 +1124,39 @@ function paintMissionPanel(box, d, res) {
     box.querySelector(':scope > .eyebrow'),
     box.querySelector(':scope > .reconnect-mission-core'),
     box.querySelector(':scope > .reconnect-team-core'),
-    problemHost, nextBlock, primaryHost,
+    problemHost, progressHost, nextBlock, primaryHost,
   ].filter(Boolean))
   for (const child of [...box.children]) {
     if (!keep.has(child)) detailsBody.appendChild(child)
   }
   if (detailsBody.childElementCount) box.appendChild(reconnectDisclosure('Details', detailsBody))
 
-  const chat = chatPanel(d, m, refresh)
+  const chat = existingChat?.querySelector('.reconnect-chat') || chatPanel(d, m, refresh)
+  if (existingChat) updateChatThread(chat, m.messages, {
+    emptyText: 'No messages yet — say hi to your team.',
+  })
   const unread = reconnectChatUnreadCount(m.messageCount, getReconnectChatSeen(m.id))
   const badge = reconnectChatBadgeText(unread)
-  const chatDisclosure = reconnectDisclosure(
-    `Team Chat${badge ? ` <span class="reconnect-chat-badge">${esc(badge)} new</span>` : ''}`,
-    chat,
-    !!m.cipher,
-  )
+  const chatDisclosure = existingChat || reconnectDisclosure('', chat, !!m.cipher)
+  chatDisclosure.classList.add('reconnect-chat-disclosure')
+  chatDisclosure.dataset.missionId = m.id
+  chatDisclosure.querySelector(':scope > summary').innerHTML =
+    `Team Chat${badge ? ` <span class="reconnect-chat-badge">${esc(badge)} new</span>` : ''}`
   const markChatRead = () => {
     if (!chatDisclosure.open) return
     markReconnectChatSeen(m.id, m.messageCount)
     chatDisclosure.querySelector('.reconnect-chat-badge')?.remove()
   }
-  chatDisclosure.addEventListener('toggle', markChatRead)
+  chatDisclosure.ontoggle = markChatRead
   box.appendChild(chatDisclosure)
+  if (focusedChatInput?.isConnected) {
+    focusedChatInput.focus({ preventScroll: true })
+    if (chatSelection?.start != null) {
+      focusedChatInput.setSelectionRange(chatSelection.start, chatSelection.end)
+    }
+  }
   if (chatDisclosure.open) markChatRead()
+  restoreViewState()
 }
 
 /** The mission's shared thread — an invite's optional note and the ongoing
@@ -1018,7 +1167,6 @@ function paintMissionPanel(box, d, res) {
  *  (bomb-sheet.js) — this is just the ReConnect-specific wiring on top. */
 function chatPanel(d, m, refresh) {
   const wrap = el('div')
-  wrap.appendChild(el('div', 'eyebrow', '💬 TEAM CHAT'))
   wrap.appendChild(chatThread(m.messages, {
     placeholder: 'Message your team…',
     emptyText: 'No messages yet — say hi to your team.',
