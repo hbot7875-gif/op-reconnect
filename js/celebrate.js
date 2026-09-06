@@ -96,7 +96,7 @@ export function playRestoration(d, ward, state, onDone) {
   // Peak moment, so the share sits right here rather than three taps away.
   const actions = el('div', 'cel-actions')
   const share = el('button', 'btn btn-ghost cel-share', '📤 Share this')
-  share.onclick = () => showOverlay(openShare(state))
+  share.onclick = () => showOverlay(openShare(state, { district: d, districtId: d.id, progress: 1 }))
   const close = el('button', 'btn btn-primary cel-go', 'Nice')
   close.onclick = () => { overlay.hidden = true; overlay.innerHTML = ''; onDone?.() }
   actions.append(share, close)

@@ -28,7 +28,7 @@ import { renderWardTiles, glanceStrip, wardDisplayName, districtDisplayName, HOM
 import { renderCityMap } from './city-map.js'
 import { districtIcon } from './landmarks.js'
 import { openFinder } from './search.js'
-import { openShare } from './share.js'
+import { openShare, openRedZoneShare } from './share.js'
 import { agentChargeSheet, boraMeterSheet } from './agent-charge.js'
 import { broadcastCards } from './broadcasts.js'
 import { cityFeedCard } from './city-feed.js'
@@ -750,6 +750,13 @@ function coreBlock(state) {
     // The Bomb is the entry point to everything else about the event, and a
     // sphere with no chrome doesn't read as tappable on its own.
     zone.appendChild(el('div', 'core-hint', 'Tap the ARMY Bomb for full details'))
+
+    const shareRedZone = el('button', 'core-share-btn', '↗ Share Red Zone')
+    shareRedZone.onclick = (event) => {
+      event.stopPropagation()
+      showOverlay(openRedZoneShare(window.__rcState || state))
+    }
+    zone.appendChild(shareRedZone)
 
     tickCountdowns()
     return zone

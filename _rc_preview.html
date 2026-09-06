@@ -350,7 +350,8 @@
             { name: 'ARIRANG', kind: 'album' },
             { name: 'Keep Swimming', kind: 'track' },
           ]
-        } else if (location.hash.includes('album')) STATE.bomb.defuse.targetAlbum = 'ARIRANG'
+        } else if (location.hash.includes('longalbum')) STATE.bomb.defuse.targetAlbum = 'Map of the Soul : Persona — Complete Edition'
+        else if (location.hash.includes('album')) STATE.bomb.defuse.targetAlbum = 'ARIRANG'
         else if (location.hash.includes('track')) STATE.bomb.defuse.targetTrack = 'Haegeum'
       }
     }

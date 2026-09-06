@@ -18,6 +18,7 @@ import { tickCountdowns } from './countdown.js'
 import { chatThread } from './chat-thread.js'
 import { personalSignalCopy, interpolateBombColor,
   redZoneBand, redZoneHeadline, redZoneGoalCopy } from './red-zone-ui.js'
+import { openRedZoneShare, openSuccessfulRedZoneShare } from './share.js'
 
 /* ── unread ARMY Comms ───────────────────────────────────────────────────
    Per-event, per-device, in localStorage: the number of lines the thread
@@ -196,6 +197,10 @@ export function redZoneSheet(state) {
   `))
   sheet.appendChild(how)
 
+  const share = el('button', 'btn btn-ghost rz-share-btn', '↗ SHARE RED ZONE')
+  share.onclick = () => showOverlay(openRedZoneShare(state))
+  sheet.appendChild(share)
+
   const close = el('button', 'btn btn-ghost', 'Close')
   close.onclick = hideOverlay
   sheet.appendChild(close)
@@ -293,7 +298,13 @@ export function defuseResultSheet(resolved) {
   }))
   sheet.appendChild(viewComms)
 
-  const close = el('button', 'btn btn-primary', 'Close')
+  if (success) {
+    const share = el('button', 'btn btn-primary rz-result-share', 'SHARE CITY SAFE')
+    share.onclick = () => showOverlay(openSuccessfulRedZoneShare(resolved))
+    sheet.appendChild(share)
+  }
+
+  const close = el('button', `btn ${success ? 'btn-ghost' : 'btn-primary'}`, 'Close')
   close.onclick = hideOverlay
   sheet.appendChild(close)
   return sheet

@@ -20,6 +20,7 @@ import { openPlaylistVault } from './playlist-vault-sheet.js'
 import { chatThread, updateChatThread } from './chat-thread.js'
 import { getReconnectChatSeen, markReconnectChatSeen,
   reconnectChatUnreadCount, reconnectChatBadgeText } from './reconnect-chat-unread.js'
+import { openShare } from './share.js'
 
 let teardown = null
 let sceneFor = null
@@ -84,6 +85,17 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
     locked: 'SEALED', available: 'OFFLINE', active: 'RESTORING',
     restored: 'ONLINE', centerpiece_dark: 'DORMANT', centerpiece_lit: 'AWAKE',
   }[mapD.status] || ''
+  const head = container.querySelector('.screen-head')
+  const canShareDistrict = isLiveActive || mapD.status === 'restored' || mapD.status === 'centerpiece_lit'
+  let shareDistrict = head?.querySelector('.district-share-btn')
+  if (canShareDistrict && !shareDistrict) {
+    shareDistrict = el('button', 'district-share-btn', '↗ Share')
+    head.appendChild(shareDistrict)
+  }
+  if (shareDistrict) {
+    if (!canShareDistrict) shareDistrict.remove()
+    else shareDistrict.onclick = () => showOverlay(openShare(window.__rcState || state, { districtId }))
+  }
   container.querySelector('.stage-name').textContent = districtDisplayName(mapD)
   // The agent this place is named for, on the hero — not hidden until you finish.
   container.querySelector('.stage-echo').textContent = mapD.echoOf ? `👤 ${mapD.echoOf}` : ''
