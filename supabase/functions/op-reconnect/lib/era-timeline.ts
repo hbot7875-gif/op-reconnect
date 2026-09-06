@@ -230,10 +230,26 @@ export const ERA_CATALOG: EraDef[] = [
       'DNA', 'Pied Piper', 'Best Of Me', 'Dimple', 'Skit: Billboard Music Awards Speech', 'Go Go', 'MIC Drop',
       'Outro: Her',
       'INTRO : Ringwanderung',
-      'Best Of Me - Japanese ver.', 'DNA - Japanese ver.',
-      'MIC Drop - Japanese ver.',
+      // Musicat drops the "- Japanese ver." suffix from these four —
+      // reported live by AGENT077 2026-09-06 (screenshots of her own
+      // Musicat history: "MIC Drop"/"DNA"/"Not Today" all showing bare,
+      // no Japanese-ver. marker at all). Without the bare-title alias, a
+      // stream reported that way normalizes to the exact same key as the
+      // KOREAN original ("mic drop", not "mic drop japanese ver" — the
+      // " - Japanese ver." suffix isn't parenthetical, so stripVersionSuffix
+      // never touches it either way) and gets locked to that entry
+      // instead, the same bug mots's Japanese re-recordings already had
+      // this same fix for. Bare aliases are safe here for the identical
+      // reason: catalog matching consumes plays one-to-one globally, so
+      // one ambiguous play still can't unlock both the original and the
+      // Japanese recording — it just stops being permanently misfiled as
+      // only ever the Korean one.
+      { title: 'Best Of Me - Japanese ver.', aliases: ['Best Of Me'] },
+      { title: 'DNA - Japanese ver.', aliases: ['DNA'] },
+      { title: 'MIC Drop - Japanese ver.', aliases: ['MIC Drop'] },
       "Don't Leave Me",
-      'Go Go - Japanese ver.', 'Crystal Snow', 'Let Go', 'OUTRO : Crack',
+      { title: 'Go Go - Japanese ver.', aliases: ['Go Go'] },
+      'Crystal Snow', 'Let Go', 'OUTRO : Crack',
       'Intro: Singularity',
       'Fake Love', 'The Truth Untold', '134340', 'Paradise', 'Love Maze', 'Magic Shop',
       { title: 'Airplane Pt.2', aliases: ['Airplane, Pt. 2'] },
