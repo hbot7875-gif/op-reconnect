@@ -7,6 +7,7 @@ import React from 'npm:react@18.3.1'
 import { ImageResponse } from 'npm:@vercel/og@0.8.5'
 import type { SupabaseDB } from './config.ts'
 import { getGameState } from './handlers.ts'
+import { ROAD_TO_1B_TRACK_NAMES } from './side-missions.ts'
 
 const SITE = 'https://hopetrackers.org'
 const ID_RE = /^[A-Za-z0-9_-]{22}$/
@@ -44,6 +45,37 @@ function districtLine(name: string, complete: boolean): string {
   if (/fountain|ocean|water|swim/.test(n)) return 'my district still needs more light 😭'
   if (/crossing|station|bridge|road/.test(n)) return 'my district still has a long way to go 😭'
   return 'my district is still mostly dark 😭'
+}
+
+type ShareGoal = { label: string; progress: number; target: number; kind: 'track' | 'album' }
+
+function goalName(value: unknown): string {
+  return clean(value, 44).toLowerCase().replace(/[^a-z0-9]+/g, '')
+}
+
+function districtShareGoals(active: any, frozen: any, complete: boolean): { goals: ShareGoal[]; roadTo1B: boolean } {
+  const tracks: ShareGoal[] = active
+    ? (active.trackGoals || []).map((goal: any) => ({
+        label: clean(goal.label, 44), progress: Math.max(0, Number(goal.progress) || 0),
+        target: Math.max(1, Number(goal.target) || 1), kind: 'track' as const,
+      }))
+    : (frozen?.trackGoals || []).map((goal: any) => ({
+        label: clean(goal.label, 44), progress: complete ? Math.max(1, Number(goal.target) || 1) : 0,
+        target: Math.max(1, Number(goal.target) || 1), kind: 'track' as const,
+      }))
+  const albums: ShareGoal[] = active
+    ? (active.albums || []).map((goal: any) => ({
+        label: clean(goal.label, 44), progress: Math.max(0, Number(goal.passesDone) || 0),
+        target: Math.max(1, Number(goal.target) || 1), kind: 'album' as const,
+      }))
+    : (frozen?.albumGoals || []).map((goal: any) => ({
+        label: clean(goal.label, 44), progress: complete ? Math.max(1, Number(goal.target) || 1) : 0,
+        target: Math.max(1, Number(goal.target) || 1), kind: 'album' as const,
+      }))
+  const focus = new Set(ROAD_TO_1B_TRACK_NAMES.map(goalName))
+  const focused = tracks.filter((goal) => focus.has(goalName(goal.label)))
+  if (focused.length >= 2) return { goals: focused.slice(0, 3), roadTo1B: true }
+  return { goals: [...tracks.slice(0, 2), ...albums.slice(0, 1)].slice(0, 3), roadTo1B: false }
 }
 
 function redTarget(defuse: any): { label: string; unit: string } {
@@ -92,7 +124,12 @@ export async function createShareSnapshot(supabase: SupabaseDB, params: any) {
     const percent = complete ? 100 : districtPercent(active)
     const displayName = titleCase(mapDistrict.name)
     const line = districtLine(displayName, complete)
-    const { url } = await insert(supabase, 'district', { displayName, percent, complete, line })
+    const { data: storedDistrict } = await supabase.from('rc_player_districts').select('goals')
+      .eq('agent_no', agentNo).eq('district_id', wanted).maybeSingle()
+    const goalPick = districtShareGoals(active, storedDistrict?.goals, complete)
+    const { url } = await insert(supabase, 'district', {
+      displayName, percent, complete, line, goals: goalPick.goals, roadTo1B: goalPick.roadTo1B,
+    })
     const caption = complete
       ? `${line}\n${displayName} · 100% restored ✦\nReConnect → ${url}`
       : `${line}\n${displayName} · ${percent}% restored\ncome light yours up too 💜\nReConnect → ${url}`
@@ -143,6 +180,7 @@ function card(snapshot: any) {
   const primary = district ? `${data.percent}% RESTORED${data.complete ? ' ✦' : ''}` : success ? 'DEFUSED' : `${Math.round(Number(data.progress) / Math.max(1, Number(data.target)) * 100)}% DEFUSED`
   const secondary = district ? data.line : `${Number(data.progress).toLocaleString()} / ${Number(data.target).toLocaleString()} ${String(data.unit || 'streams').toUpperCase()}`
   const timer = !district && !success ? `${String(Math.floor(data.remainingSeconds / 3600)).padStart(2, '0')}:${String(Math.floor(data.remainingSeconds % 3600 / 60)).padStart(2, '0')}:${String(data.remainingSeconds % 60).padStart(2, '0')} LEFT` : ''
+  const goals: ShareGoal[] = district && Array.isArray(data.goals) ? data.goals.slice(0, 3) : []
   const scene = district
     ? h('div', { style: { display: 'flex', position: 'relative', width: '65%', height: '100%', background: 'linear-gradient(180deg,#111126,#29204b 60%,#090913)', overflow: 'hidden' } },
         h('div', { style: { position: 'absolute', left: 70, right: 55, bottom: 95, height: 230, border: '2px solid rgba(167,139,250,.35)', background: 'linear-gradient(180deg,rgba(80,58,133,.25),rgba(8,8,18,.92))' } }),
@@ -154,8 +192,13 @@ function card(snapshot: any) {
     h('div', { style: { display: 'flex', flexDirection: 'column', width: '35%', padding: '74px 55px 42px 28px', justifyContent: 'center' } },
       h('div', { style: { color: '#aaa2b9', fontSize: 18, letterSpacing: 5, marginBottom: 25 } }, district ? 'MY DISTRICT' : 'RECONNECT · RED ZONE'),
       h('div', { style: { fontSize: district ? 40 : 36, fontWeight: 800, lineHeight: 1.12, marginBottom: 22 } }, clean(heading, 70).toUpperCase()),
-      h('div', { style: { color: accent, fontSize: 29, fontWeight: 700, marginBottom: 24 } }, primary),
-      h('div', { style: { fontSize: 23, lineHeight: 1.35, color: '#ddd7e6', marginBottom: timer ? 22 : 60 } }, secondary),
+      h('div', { style: { color: accent, fontSize: 29, fontWeight: 700, marginBottom: district && goals.length ? 18 : 24 } }, primary),
+      district && goals.length ? h('div', { style: { display: 'flex', flexDirection: 'column', width: '100%', gap: 9, marginBottom: 17 } },
+        ...goals.map((goal, index) => h('div', { key: `${goal.label}-${index}`, style: { display: 'flex', width: '100%', alignItems: 'baseline', justifyContent: 'space-between', gap: 14, fontSize: 18, lineHeight: 1.18 } },
+          h('div', { style: { color: '#ddd7e6', maxWidth: 238 } }, clean(goal.label, 34)),
+          h('div', { style: { color: goal.progress >= goal.target ? accent : '#bdb5c8', fontWeight: 700, whiteSpace: 'nowrap' } }, `${Math.min(goal.progress, goal.target).toLocaleString()} / ${goal.target.toLocaleString()}`))),
+        data.roadTo1B ? h('div', { style: { color: '#9188a1', fontSize: 14, letterSpacing: 1.2, marginTop: 2 } }, 'road to 1B ↗') : null) : null,
+      h('div', { style: { fontSize: district ? 19 : 23, lineHeight: 1.35, color: '#ddd7e6', marginBottom: timer ? 22 : district ? 28 : 60 } }, secondary),
       timer ? h('div', { style: { color: '#ff9bac', fontSize: 25, fontWeight: 700, marginBottom: 45 } }, timer) : null,
       h('div', { style: { color: '#8f879d', fontSize: 17, letterSpacing: 3, marginTop: 'auto' } }, 'RECONNECT · HOPETRACKER'),
       h('div', { style: { color: '#bbb4c5', fontSize: 18, marginTop: 8 } }, 'hopetrackers.org')))

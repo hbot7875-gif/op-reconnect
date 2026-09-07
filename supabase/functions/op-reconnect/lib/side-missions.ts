@@ -64,6 +64,10 @@ const TRACKS: SideTrackDefinition[] = [
   },
 ]
 
+// Public names of the same current four-track focus. Share cards reuse this
+// instead of carrying a second, easily-stale idea of what "road to 1B" means.
+export const ROAD_TO_1B_TRACK_NAMES = TRACKS.map((track) => track.name)
+
 function trackKeys(track: SideTrackDefinition): string[] {
   return [...new Set(track.aliases.map(normKeyFull).filter(Boolean))]
 }

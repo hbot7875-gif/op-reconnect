@@ -13,9 +13,9 @@ function findDistrict(state, districtId, suppliedDistrict) {
 async function nativeLinkShare(snapshot) {
   if (typeof navigator.share !== 'function') return 'unsupported'
   try {
-    // Put the URL in both channels. Some installed apps ignore the dedicated
-    // `url` member but preserve text; others use `url` to build the preview.
-    await navigator.share({ title: snapshot.title, text: snapshot.url, url: snapshot.url })
+    // Keep the URL in one field only. Supplying it as both text and url makes
+    // several Android share targets visibly paste the same link twice.
+    await navigator.share({ title: snapshot.title, url: snapshot.url })
     return 'shared'
   } catch (error) {
     return error?.name === 'AbortError' ? 'cancelled' : 'failed'
