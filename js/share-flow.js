@@ -22,17 +22,59 @@ async function nativeLinkShare(snapshot) {
   }
 }
 
+function shareDestination(label, href) {
+  const link = el('a', 'btn btn-ghost', label)
+  link.href = href
+  link.target = '_blank'
+  link.rel = 'noopener noreferrer'
+  return link
+}
+
+function showShareDestinations(sheet, snapshot, primary) {
+  primary.remove()
+  sheet.querySelector('.share-choice-note')?.remove()
+
+  const encodedUrl = encodeURIComponent(snapshot.url)
+  const encodedTitle = encodeURIComponent(snapshot.title || 'ReConnect')
+  const choices = el('div', 'share-destinations')
+  if (typeof navigator.share === 'function') {
+    const more = el('button', 'btn btn-primary share-more-apps', 'MORE APPS')
+    more.onclick = async () => {
+      more.disabled = true; more.textContent = 'OPENING APPS…'
+      const result = await nativeLinkShare(snapshot)
+      if (result === 'shared') { hideOverlay(); return }
+      more.disabled = false; more.textContent = 'MORE APPS'
+      if (result !== 'cancelled') toast("Couldn't open the system share menu")
+    }
+    choices.appendChild(more)
+  }
+  choices.append(
+    shareDestination('WHATSAPP', `https://wa.me/?text=${encodedUrl}`),
+    shareDestination('TELEGRAM', `https://t.me/share/url?url=${encodedUrl}`),
+    shareDestination('X', `https://twitter.com/intent/tweet?url=${encodedUrl}`),
+    shareDestination('FACEBOOK', `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`),
+    shareDestination('EMAIL', `mailto:?subject=${encodedTitle}&body=${encodedUrl}`),
+  )
+
+  const copy = el('button', 'btn btn-ghost', 'COPY LINK')
+  copy.onclick = async () => {
+    try { await navigator.clipboard.writeText(snapshot.url); toast('Link copied') }
+    catch { toast("Couldn't copy the link") }
+  }
+  choices.appendChild(copy)
+  sheet.insertBefore(choices, sheet.querySelector('button:last-child'))
+}
+
 function shareSheet(kicker, heading, createSnapshot) {
   const sheet = el('div', 'sheet share')
   sheet.append(el('div', 'eyebrow', kicker), el('div', 'share-title', heading))
-  sheet.append(el('p', 'muted', 'Share a live ReConnect link with its picture preview.'))
+  sheet.append(el('p', 'muted share-choice-note', 'Share a live ReConnect link with its picture preview.'))
   const primary = el('button', 'btn btn-primary', 'PREPARING LINK…')
   primary.disabled = true
   sheet.append(primary)
   const close = el('button', 'btn btn-ghost', 'Close')
   close.onclick = hideOverlay
   sheet.appendChild(close)
-  let sharing = false
   let snapshot = null
 
   // Prepare the small server snapshot while the sheet is open. Web Share
@@ -50,7 +92,6 @@ function shareSheet(kicker, heading, createSnapshot) {
   })
 
   primary.onclick = async () => {
-    if (sharing) return
     if (!snapshot) {
       primary.disabled = true; primary.textContent = 'PREPARING LINK…'
       try {
@@ -64,16 +105,7 @@ function shareSheet(kicker, heading, createSnapshot) {
         return
       }
     }
-    sharing = true; primary.disabled = true; primary.textContent = 'OPENING SHARE…'
-    try {
-      // snapshot is already resolved, so navigator.share() is invoked during
-      // this exact user gesture instead of after a network round trip.
-      const result = await nativeLinkShare(snapshot)
-      if (result === 'shared' || result === 'cancelled') { hideOverlay(); return }
-      await navigator.clipboard.writeText(snapshot.url)
-      toast('Sharing is unavailable here · link copied')
-    } catch { toast("Couldn't prepare this share · try again") }
-    sharing = false; primary.disabled = false; primary.textContent = 'SHARE'
+    showShareDestinations(sheet, snapshot, primary)
   }
   return sheet
 }
