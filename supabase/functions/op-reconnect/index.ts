@@ -48,6 +48,7 @@ import { getVmaStatus, logVmaVote, adminListVmaPending, adminReviewVmaVote } fro
 import { getBackupStatus, listOpenBackupRequests, openBackupRequest, joinBackupRequest, leaveBackupHelper } from './lib/backup-pass.ts'
 import { getChestStatus, openChest } from './lib/supply-chest.ts'
 import { getCommunityChestStatus, openCommunityChest } from './lib/vma-community-chest.ts'
+import { createShareSnapshot, getPublicShareSnapshot, shareImageResponse } from './lib/share-snapshots.ts'
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -77,6 +78,7 @@ const ROUTES: Record<string, Route> = {
   ping: { auth: 'public', handler: async () => ({ success: true, pong: true, at: new Date().toISOString() }) },
   // Landing page. Aggregate counts only — never anything per-player.
   getPublicStats: { auth: 'public', handler: (sb, p) => getPublicStats(sb, p) },
+  getPublicShareSnapshot: { auth: 'public', handler: (sb, p) => getPublicShareSnapshot(sb, p) },
   // Run before a session exists — issue or verify one, they don't need one yet.
   // Every one of these is rate-limited inside its own handler, since being
   // reachable without a token is exactly what makes them worth hammering.
@@ -94,6 +96,7 @@ const ROUTES: Record<string, Route> = {
   changePassword: { auth: 'agent', handler: (sb, p) => changePassword(sb, p) },
   retireAccount: { auth: 'agent', handler: (sb, p) => retireAccount(sb, p) },
   getGameState: { auth: 'agent', handler: (sb, p) => getGameState(sb, p) },
+  createShareSnapshot: { auth: 'agent', handler: (sb, p) => createShareSnapshot(sb, p) },
   trackEngagement: { auth: 'agent', handler: (sb, p) => trackEngagement(sb, p) },
   joinGame: { auth: 'agent', handler: (sb, p) => joinGame(sb, p) },
   startDistrict: { auth: 'agent', handler: (sb, p) => startDistrict(sb, p) },
@@ -265,6 +268,8 @@ Deno.serve(async (req) => {
     // and handed off before the body is touched (or with it parsed once,
     // below) so the normal action dispatch never sees them.
     const reqUrl = new URL(req.url)
+    const shareImageMatch = reqUrl.pathname.match(/\/share-image\/([A-Za-z0-9_-]{22})\.png$/)
+    if (req.method === 'GET' && shareImageMatch) return shareImageResponse(supabase, shareImageMatch[1])
     const authHeader = req.headers.get('Authorization') || ''
     if (/^token\s+/i.test(authHeader)) {
       return handleListenBrainzLike(supabase, req, reqUrl.pathname)

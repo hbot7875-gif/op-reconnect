@@ -4,6 +4,7 @@ import { getAgentNo } from './session.js'
 import { districtFraction } from './district-progress.js'
 import { districtShareAsset, liveRedZoneShareAsset, successfulRedZoneShareAsset } from './share-card.js'
 import { shareAssetNativeFirst } from './native-share.js'
+import { shareTextWithoutUrl } from './share-card-copy.js'
 
 function findDistrict(state, districtId, suppliedDistrict) {
   if (suppliedDistrict) return suppliedDistrict
@@ -33,7 +34,7 @@ async function copyCaption(asset) {
   catch { toast("Couldn't copy the caption") }
 }
 
-async function nativeShare(asset) {
+async function nativeImageShare(asset) {
   return shareAssetNativeFirst(asset, {
     share: typeof navigator.share === 'function' ? navigator.share.bind(navigator) : null,
     canShare: typeof navigator.canShare === 'function' ? navigator.canShare.bind(navigator) : null,
@@ -45,22 +46,33 @@ async function nativeShare(asset) {
   })
 }
 
+async function nativeLinkShare(snapshot) {
+  if (typeof navigator.share !== 'function') return 'unsupported'
+  try {
+    await navigator.share({ title: snapshot.title, text: shareTextWithoutUrl(snapshot.caption), url: snapshot.url })
+    return 'shared'
+  } catch (error) {
+    return error?.name === 'AbortError' ? 'cancelled' : 'failed'
+  }
+}
+
 async function freshGameState() {
   const fresh = await call('getGameState', { agentNo: getAgentNo() })
   if (!fresh?.success) throw new Error('share_refresh_failed')
   return fresh
 }
 
-function shareSheet(kicker, heading, buildAsset) {
+function shareSheet(kicker, heading, buildAsset, createSnapshot) {
   const sheet = el('div', 'sheet share share-image-sheet')
   sheet.append(el('div', 'eyebrow', kicker), el('div', 'share-title', heading))
   const preview = el('div', 'share-image-preview', '<span>MAKING YOUR SHARE…</span>')
   sheet.appendChild(preview)
   const primary = el('button', 'btn btn-primary', 'PREPARING SHARE…')
+  const imageShare = el('button', 'btn btn-ghost', 'SHARE IMAGE / STORY')
   const copy = el('button', 'btn btn-ghost', 'COPY CAPTION')
   const save = el('button', 'btn btn-ghost', 'SAVE IMAGE')
-  primary.disabled = copy.disabled = save.disabled = true
-  sheet.append(primary, copy, save)
+  primary.disabled = imageShare.disabled = copy.disabled = save.disabled = true
+  sheet.append(primary, imageShare, copy, save)
   const close = el('button', 'btn btn-ghost', 'Close')
   close.onclick = hideOverlay
   sheet.appendChild(close)
@@ -70,24 +82,43 @@ function shareSheet(kicker, heading, buildAsset) {
     const objectUrl = URL.createObjectURL(asset.blob)
     preview.innerHTML = `<img src="${esc(objectUrl)}" alt="Generated ReConnect share image">`
     primary.textContent = 'SHARE'
-    primary.disabled = copy.disabled = save.disabled = false
+    primary.disabled = imageShare.disabled = copy.disabled = save.disabled = false
     let sharing = false
+    let snapshotPromise = null
+    const ensureSnapshot = () => {
+      if (!snapshotPromise) snapshotPromise = Promise.resolve().then(createSnapshot).then((result) => {
+        if (!result?.success || !result.url) throw new Error('share_link_failed')
+        return result
+      }).catch((error) => { snapshotPromise = null; throw error })
+      return snapshotPromise
+    }
     primary.onclick = async () => {
       if (sharing) return
-      sharing = true
-      primary.disabled = true
-      primary.textContent = 'OPENING SHARE…'
-      const result = await nativeShare(asset)
-      if (result === 'shared' || result === 'cancelled') {
-        URL.revokeObjectURL(objectUrl)
-        hideOverlay()
-        return
-      }
-      sharing = false
-      primary.disabled = false
-      primary.textContent = 'SHARE'
+      sharing = true; primary.disabled = true; primary.textContent = 'PREPARING SHARE…'
+      try {
+        const snapshot = await ensureSnapshot()
+        primary.textContent = 'OPENING SHARE…'
+        const result = await nativeLinkShare(snapshot)
+        if (result === 'shared' || result === 'cancelled') { URL.revokeObjectURL(objectUrl); hideOverlay(); return }
+        await navigator.clipboard.writeText(snapshot.caption)
+        toast('Share link + caption copied')
+      } catch { toast("Couldn't prepare this share · try again") }
+      sharing = false; primary.disabled = false; primary.textContent = 'SHARE'
     }
-    copy.onclick = () => copyCaption(asset)
+    imageShare.onclick = async () => {
+      if (sharing) return
+      sharing = true; imageShare.disabled = true; imageShare.textContent = 'PREPARING IMAGE…'
+      try {
+        const snapshot = await ensureSnapshot()
+        const currentAsset = await buildAsset()
+        const result = await nativeImageShare({ ...currentAsset, title: snapshot.title, caption: snapshot.caption, url: snapshot.url })
+        if (result === 'shared' || result === 'cancelled') { URL.revokeObjectURL(objectUrl); hideOverlay(); return }
+      } catch { toast("Couldn't prepare this share · try again") }
+      sharing = false; imageShare.disabled = false; imageShare.textContent = 'SHARE IMAGE / STORY'
+    }
+    copy.onclick = async () => {
+      try { await copyCaption(await ensureSnapshot()) } catch { toast("Couldn't prepare this caption") }
+    }
     save.onclick = () => download(asset)
     close.onclick = () => { URL.revokeObjectURL(objectUrl); hideOverlay() }
   }).catch(() => { preview.innerHTML = '<span>COULDN\'T MAKE THIS SHARE · TRY AGAIN</span>' })
@@ -112,7 +143,7 @@ export function openDistrictShare(state, options = {}) {
       if (!current) throw new Error('district_not_found')
       const progress = districtProgress(fresh, current, options.progress)
       return districtShareAsset(fresh, current, progress)
-    })
+    }, () => call('createShareSnapshot', { agentNo: getAgentNo(), kind: 'district', districtId: options.districtId || district.id }))
 }
 
 /** Fetch once on open, then freeze that response. The timer, progress and
@@ -124,10 +155,11 @@ export function openRedZoneShare(state) {
     if (!snapshot.bomb?.defuse) throw new Error('red_zone_resolved')
     const capturedAt = Date.now()
     return liveRedZoneShareAsset(structuredClone(snapshot.bomb.defuse), capturedAt)
-  })
+  }, () => call('createShareSnapshot', { agentNo: getAgentNo(), kind: 'red_zone_active' }))
 }
 
 export function openSuccessfulRedZoneShare(resolved) {
   return shareSheet('SHARE THE WIN', 'The City is safe.',
-    () => successfulRedZoneShareAsset(structuredClone(resolved)))
+    () => successfulRedZoneShareAsset(structuredClone(resolved)),
+    () => call('createShareSnapshot', { agentNo: getAgentNo(), kind: 'red_zone_success', eventId: resolved.id }))
 }

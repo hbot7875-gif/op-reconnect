@@ -276,6 +276,7 @@
       'rz-50':   { progress: 500, yourStreams: 7,  defenderAgents: 11 },
       'rz-75':   { progress: 750, yourStreams: 18, defenderAgents: 19 },
       'rz-90':   { progress: 930, yourStreams: 18, defenderAgents: 22 },
+      'rz-count': { progress: 628, target: 2000, yourStreams: 12, defenderAgents: 17 },
       'rz-100':  { progress: 1000, yourStreams: 18, defenderAgents: 24, resolved: 'defused' },
       'rz-fail': { progress: 860, yourStreams: 18, defenderAgents: 21, resolved: 'failed' },
       // Legacy aliases from before the 7-stage table, kept so any old link
@@ -294,11 +295,12 @@
       .sort((a, b) => b.length - a.length)[0]
     if (rzKey) {
       const s = RZ_STAGES[rzKey]
+      const rzTarget = s.target || RZ_TARGET
       if (s.resolved) {
         try { localStorage.removeItem('rc_last_defuse_result_shown') } catch (_) {}
         STATE.bomb.resolvedDefuse = {
           id: RZ_ID, status: s.resolved, title: 'THE NETWORK IS UNDER ATTACK',
-          target: RZ_TARGET, progress: s.progress, rewardXp: 500, minimumStreams: 7,
+          target: rzTarget, progress: s.progress, rewardXp: 500, minimumStreams: 7,
           defenderAgents: s.defenderAgents, yourStreams: s.yourStreams, isQualified: true,
           yourXpAwarded: s.resolved === 'defused' ? 62 : 0,
         }
@@ -312,7 +314,7 @@
         STATE.bomb.defuse = {
           id: RZ_ID, title: 'THE NETWORK IS UNDER ATTACK',
           message: 'An infiltrator is draining the core. Stream together to defuse it.',
-          progress: s.progress, target: RZ_TARGET, yourStreams: s.yourStreams,
+          progress: s.progress, target: rzTarget, yourStreams: s.yourStreams,
           minimumStreams: 7, qualifiedAgents: Math.max(0, s.defenderAgents - 2),
           defenderAgents: s.defenderAgents, rewardXp: 500,
           activeUntil: new Date(Date.now() + (2 * 3600 + 47 * 60 + 12) * 1000).toISOString(),

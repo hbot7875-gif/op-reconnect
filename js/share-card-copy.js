@@ -54,6 +54,32 @@ export function districtCaption(name, percent) {
   return `my ${label} ${reaction}\ncome light yours up too 💜\nReConnect → ${SHARE_URL}`
 }
 
+export function districtImageLine(name, percent) {
+  const complete = Number(percent) >= 100
+  const label = titleCase(name)
+  if (complete) return personality(name) === 'journey' ? 'WE MADE IT ALL THE WAY 😭💜' : 'I FINALLY LIT IT UP 😭💜'
+  const kind = personality(name)
+  return {
+    night: 'my district is still basically dark 😭',
+    water: 'my district still needs more light 😭',
+    journey: 'my district still has a long way to go 😭',
+    bright: 'my district is only starting to glow 🥹',
+    strange: 'my district is still a little cursed 😭',
+    city: `${label} is still mostly dark 😭`,
+  }[kind]
+}
+
+export function liveRedZoneImageLine({ progress, target, activeFrom, activeUntil, capturedAt = Date.now() }) {
+  const done = Math.max(0, Number(progress) || 0)
+  const goal = Math.max(1, Number(target) || 1)
+  if (done / goal >= .9) return "wait we're actually about to do this 😭"
+  const elapsed = capturedAt - new Date(activeFrom || '').getTime()
+  const remaining = new Date(activeUntil || '').getTime() - capturedAt
+  const projectedRemaining = done > 0 ? elapsed * (goal - done) / done : Infinity
+  if (elapsed >= 15 * 60_000 && (done === 0 || projectedRemaining > remaining)) return 'okay we actually need more ARMY 😭'
+  return 'ARMY, we could use you in here 😭'
+}
+
 export function compactNumber(value) {
   const n = Math.max(0, Number(value) || 0)
   if (n >= 1000000) return `${(n / 1000000).toFixed(n >= 10000000 ? 0 : 1).replace('.0', '')}m`
@@ -77,6 +103,8 @@ export function liveRedZoneCaption({ progress, target, targetLabel, msLeft }) {
 export function successfulRedZoneCaption({ progress, target }) {
   return `WE ACTUALLY SAVED IT 😭😭\n${Number(progress || 0).toLocaleString()} / ${Number(target || 0).toLocaleString()} — Bomb defused\nReConnect → ${SHARE_URL}`
 }
+
+export function successfulRedZoneImageLine() { return 'WE ACTUALLY SAVED IT 😭' }
 
 export function shareTextWithoutUrl(caption) {
   return String(caption || '').split('\n').filter((line) => !line.startsWith('ReConnect →')).join('\n')

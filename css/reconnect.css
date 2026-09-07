@@ -1272,8 +1272,8 @@ body.red-zone .wtb.now { fill: var(--crimson); filter: drop-shadow(0 0 3px rgba(
 .core-goal { max-width: 280px; margin: 6px auto 0; color: var(--muted);
   font-size: 12.5px; line-height: 1.45; text-align: center; text-wrap: balance; }
 .core-goal b { color: var(--text); font-weight: 700; }
-.core-timer { margin-top: 9px; margin-bottom: 15px; font-family: var(--mono); font-size: 13px;
-  letter-spacing: 2px; line-height: 1; color: var(--dim); }
+.core-timer { margin-top: 9px; margin-bottom: 15px; font-family: var(--mono); font-size: 14.5px;
+  letter-spacing: 1.8px; line-height: 1; color: var(--dim); }
 .core-timer b { color: #ffb6c1; font-weight: 700; text-shadow: 0 0 8px rgba(229,56,79,.28); }
 /* "02:47:02 left" — the unit spelled out, so the number isn't left to be
    guessed at as elapsed vs remaining. */
@@ -1281,6 +1281,10 @@ body.red-zone .wtb.now { fill: var(--crimson); filter: drop-shadow(0 0 3px rgba(
   text-transform: uppercase; color: var(--dim); }
 .core-block.is-redzone .army-core { margin-top: 5px; }
 .core-read.is-redzone .core-pct { color: var(--text); letter-spacing: 1.6px; }
+/* The shared raw count is the second read after % DEFUSED. At 11.25px it is
+   ~18% larger than the base label without overtaking the 16px outcome. */
+.core-read.is-redzone .core-lbl { color: var(--muted); font-size: 11.25px;
+  font-weight: 600; letter-spacing: 1.35px; }
 .core-support-row { display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 7px;
   color: var(--dim); white-space: nowrap; }
 .core-signal { margin-top: 0; text-align: center; white-space: nowrap; }

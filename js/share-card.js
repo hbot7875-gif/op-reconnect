@@ -2,8 +2,8 @@ import { buildModel, renderScene } from './scene.js'
 import { districtDisplayName } from './ward-tiles.js'
 import { redZoneTarget } from './red-zone-ui.js'
 import {
-  SHARE_URL, SHARE_URL_LABEL, districtCaption, districtLyric,
-  liveRedZoneCaption, successfulRedZoneCaption,
+  SHARE_URL, SHARE_URL_LABEL, districtCaption, districtImageLine,
+  liveRedZoneCaption, liveRedZoneImageLine, successfulRedZoneCaption, successfulRedZoneImageLine,
 } from './share-card-copy.js'
 
 const W = 1080
@@ -125,7 +125,7 @@ export async function districtShareAsset(state, district, progress) {
   ctx.font = `800 ${nameSize}px ${DISPLAY}`; ctx.fillText(name, 76, 1004)
   ctx.fillStyle = complete ? '#e4b968' : '#a78bfa'; ctx.font = `700 39px ${MONO}`
   ctx.fillText(`${Math.round(progress * 100)}% RESTORED${complete ? ' ✦' : ''}`, 76, 1074)
-  ctx.fillStyle = '#d8d2e3'; ctx.font = `400 34px ${BODY}`; ctx.fillText(districtLyric(name, complete), 76, 1154)
+  ctx.fillStyle = '#d8d2e3'; ctx.font = `400 34px ${BODY}`; ctx.fillText(districtImageLine(name, Math.round(progress * 100)), 76, 1154)
   drawSignature(ctx)
   const blob = await new Promise((resolve) => c.toBlob(resolve, 'image/png'))
   return {
@@ -218,6 +218,8 @@ export async function liveRedZoneShareAsset(defuse, capturedAt = Date.now()) {
   const ss = String(totalSeconds % 60).padStart(2, '0')
   ctx.fillStyle = '#ff9baa'; ctx.font = `700 46px ${MONO}`; ctx.fillText(`${hh}:${mm}:${ss}`, W / 2, timerY)
   drawCenteredTracking(ctx, 'LEFT', timerY + 39, 19, '#8f879a', 5, 500)
+  ctx.fillStyle = '#d8d2e3'; ctx.font = `400 31px ${BODY}`
+  ctx.fillText(liveRedZoneImageLine({ progress: frozen.progress, target: frozen.target, activeFrom: frozen.activeFrom, activeUntil: frozen.activeUntil || frozen.endsAt, capturedAt }), W / 2, timerY + 104)
   drawSignature(ctx, true)
   const blob = await new Promise((resolve) => c.toBlob(resolve, 'image/png'))
   return {
@@ -236,6 +238,7 @@ export async function successfulRedZoneShareAsset(resolved) {
   ctx.textAlign = 'center'; ctx.fillStyle = '#e4b968'; ctx.font = `700 43px ${MONO}`
   ctx.fillText(`${Number(frozen.progress).toLocaleString()} / ${Number(frozen.target).toLocaleString()} STREAMS`, W / 2, 905)
   ctx.fillStyle = '#f2eff8'; ctx.font = `900 58px ${DISPLAY}`; ctx.fillText('DEFUSED', W / 2, 1004)
+  ctx.fillStyle = '#d8d2e3'; ctx.font = `400 34px ${BODY}`; ctx.fillText(successfulRedZoneImageLine(), W / 2, 1090)
   drawSignature(ctx, true)
   const blob = await new Promise((resolve) => c.toBlob(resolve, 'image/png'))
   return {
