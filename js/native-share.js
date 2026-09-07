@@ -1,12 +1,14 @@
-import { shareTextWithoutUrl } from './share-card-copy.js'
-
 export function nativeSharePayload(asset, FileCtor = File) {
   const file = new FileCtor([asset.blob], asset.filename, { type: 'image/png' })
   return {
     file,
     payload: {
       title: asset.title,
-      text: shareTextWithoutUrl(asset.caption),
+      // Keep the URL in the visible text too. Several Android share targets
+      // silently discard Web Share's separate `url` member when `files` is
+      // present; duplicating it here makes the destination robust while the
+      // dedicated field still enables rich link previews where supported.
+      text: asset.caption,
       url: asset.url,
       files: [file],
     },

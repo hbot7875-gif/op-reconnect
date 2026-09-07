@@ -21,7 +21,7 @@ test('native file share contains PNG, caption and ReConnect URL', async () => {
   assert.equal(result, 'shared')
   assert.equal(received.files[0].name, 'reconnect-test.png')
   assert.equal(received.files[0].type, 'image/png')
-  assert.equal(received.text, 'ARMY, we did it 💜')
+  assert.equal(received.text, 'ARMY, we did it 💜\nReConnect → https://hopetrackers.org')
   assert.equal(received.url, 'https://hopetrackers.org')
   assert.equal(fallback, 0)
 })

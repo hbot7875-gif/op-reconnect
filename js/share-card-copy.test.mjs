@@ -25,7 +25,7 @@ test('live Red Zone caption carries frozen community state', () => {
   assert.match(caption, /3h 21m left/)
 })
 
-test('native share text leaves URL to the dedicated url field', () => {
+test('caption keeps a URL that share targets can preserve in visible text', () => {
   const caption = successfulRedZoneCaption({ progress: 2000, target: 2000 })
   assert.match(caption, /Bomb defused/)
   assert.doesNotMatch(shareTextWithoutUrl(caption), /https:/)

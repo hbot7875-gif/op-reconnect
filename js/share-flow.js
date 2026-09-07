@@ -4,7 +4,6 @@ import { getAgentNo } from './session.js'
 import { districtFraction } from './district-progress.js'
 import { districtShareAsset, liveRedZoneShareAsset, successfulRedZoneShareAsset } from './share-card.js'
 import { shareAssetNativeFirst } from './native-share.js'
-import { shareTextWithoutUrl } from './share-card-copy.js'
 
 function findDistrict(state, districtId, suppliedDistrict) {
   if (suppliedDistrict) return suppliedDistrict
@@ -49,7 +48,9 @@ async function nativeImageShare(asset) {
 async function nativeLinkShare(snapshot) {
   if (typeof navigator.share !== 'function') return 'unsupported'
   try {
-    await navigator.share({ title: snapshot.title, text: shareTextWithoutUrl(snapshot.caption), url: snapshot.url })
+    // Put the URL in both channels. Some installed apps ignore the dedicated
+    // `url` member but preserve text; others use `url` to build the preview.
+    await navigator.share({ title: snapshot.title, text: snapshot.caption, url: snapshot.url })
     return 'shared'
   } catch (error) {
     return error?.name === 'AbortError' ? 'cancelled' : 'failed'
