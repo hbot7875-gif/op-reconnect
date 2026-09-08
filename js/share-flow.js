@@ -22,49 +22,6 @@ async function nativeLinkShare(snapshot) {
   }
 }
 
-function shareDestination(label, href) {
-  const link = el('a', 'btn btn-ghost', label)
-  link.href = href
-  link.target = '_blank'
-  link.rel = 'noopener noreferrer'
-  return link
-}
-
-function showShareDestinations(sheet, snapshot, primary) {
-  primary.remove()
-  sheet.querySelector('.share-choice-note')?.remove()
-
-  const encodedUrl = encodeURIComponent(snapshot.url)
-  const encodedTitle = encodeURIComponent(snapshot.title || 'ReConnect')
-  const choices = el('div', 'share-destinations')
-  if (typeof navigator.share === 'function') {
-    const more = el('button', 'btn btn-primary share-more-apps', 'MORE APPS')
-    more.onclick = async () => {
-      more.disabled = true; more.textContent = 'OPENING APPS…'
-      const result = await nativeLinkShare(snapshot)
-      if (result === 'shared') { hideOverlay(); return }
-      more.disabled = false; more.textContent = 'MORE APPS'
-      if (result !== 'cancelled') toast("Couldn't open the system share menu")
-    }
-    choices.appendChild(more)
-  }
-  choices.append(
-    shareDestination('WHATSAPP', `https://wa.me/?text=${encodedUrl}`),
-    shareDestination('TELEGRAM', `https://t.me/share/url?url=${encodedUrl}`),
-    shareDestination('X', `https://twitter.com/intent/tweet?url=${encodedUrl}`),
-    shareDestination('FACEBOOK', `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`),
-    shareDestination('EMAIL', `mailto:?subject=${encodedTitle}&body=${encodedUrl}`),
-  )
-
-  const copy = el('button', 'btn btn-ghost', 'COPY LINK')
-  copy.onclick = async () => {
-    try { await navigator.clipboard.writeText(snapshot.url); toast('Link copied') }
-    catch { toast("Couldn't copy the link") }
-  }
-  choices.appendChild(copy)
-  sheet.insertBefore(choices, sheet.querySelector('button:last-child'))
-}
-
 function shareSheet(kicker, heading, createSnapshot) {
   const sheet = el('div', 'sheet share')
   sheet.append(el('div', 'eyebrow', kicker), el('div', 'share-title', heading))
@@ -76,6 +33,7 @@ function shareSheet(kicker, heading, createSnapshot) {
   close.onclick = hideOverlay
   sheet.appendChild(close)
   let snapshot = null
+  let copyOnly = typeof navigator.share !== 'function'
 
   // Prepare the small server snapshot while the sheet is open. Web Share
   // requires a live tap gesture; waiting for this network request inside the
@@ -85,7 +43,7 @@ function shareSheet(kicker, heading, createSnapshot) {
     if (!result?.success || !result.url) throw new Error('share_link_failed')
     snapshot = result
     primary.disabled = false
-    primary.textContent = 'SHARE'
+    primary.textContent = copyOnly ? 'COPY LINK' : 'SHARE'
   }).catch(() => {
     primary.textContent = 'COULDN\'T PREPARE LINK · TRY AGAIN'
     primary.disabled = false
@@ -98,14 +56,25 @@ function shareSheet(kicker, heading, createSnapshot) {
         const result = await createSnapshot()
         if (!result?.success || !result.url) throw new Error('share_link_failed')
         snapshot = result
-        primary.disabled = false; primary.textContent = 'SHARE'
+        primary.disabled = false; primary.textContent = copyOnly ? 'COPY LINK' : 'SHARE'
         return
       } catch {
         primary.disabled = false; primary.textContent = 'TRY AGAIN'; toast("Couldn't prepare this share")
         return
       }
     }
-    showShareDestinations(sheet, snapshot, primary)
+    if (copyOnly) {
+      try { await navigator.clipboard.writeText(snapshot.url); toast('Link copied'); hideOverlay() }
+      catch { toast("Couldn't copy the link") }
+      return
+    }
+    primary.disabled = true; primary.textContent = 'OPENING SHARE…'
+    const result = await nativeLinkShare(snapshot)
+    if (result === 'shared' || result === 'cancelled') { hideOverlay(); return }
+    copyOnly = true
+    primary.disabled = false; primary.textContent = 'COPY LINK'
+    const note = sheet.querySelector('.share-choice-note')
+    if (note) note.textContent = 'Your browser could not open sharing. You can still copy the link.'
   }
   return sheet
 }
