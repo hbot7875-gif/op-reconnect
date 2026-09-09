@@ -753,29 +753,46 @@ async function excludeRetired(supabase: SupabaseDB, agentNos: string[]): Promise
   return retired.size ? agentNos.filter((a) => !retired.has(a)) : agentNos
 }
 
+/** A wildcard entry for a goal's `crossDistrictEligible` list meaning
+ *  literally any active agent anywhere qualifies as a recruitable helper,
+ *  not just a named set of other districts. Home Base's own reconnect goal
+ *  (connect-2-agents) uses this: a brand-new agent's very first team-up
+ *  step is exactly where they have the fewest teammates of their own to
+ *  draw from, so widening it to the whole active population (rather than
+ *  just Home Base's own — already large but not "anyone" — pool) is what
+ *  actually makes it easy, not just less-hard. */
+const ANY_DISTRICT = '*'
+
 /** Who can be invited/counted toward this goal — normally just whoever is
  *  actively restoring the SAME district with THIS goal frozen into their
  *  own rc_player_districts row. `crossDistrictEligible` (optional, on the
  *  goal's own config — see districts.ts's freezeGoals) widens that: any
- *  agent active on one of those OTHER listed districts also counts,
- *  regardless of what THEIR own frozen reconnect goal is, since they're
- *  being recruited as a helper, not working their own copy of this one.
- *  A district that's nearly everyone's starting point (Home Base) is the
- *  obvious candidate for this — reported live: a Hopesize Station mission
- *  stuck at 2/3 with its one non-retired, not-yet-done candidate pool on
- *  that district exhausted, while its two remaining members' own
- *  restoration deadlines kept ticking with no real prospect of a third
- *  Hopesize agent showing up in time. `stillOn` is returned alongside
- *  `eligible` since both callers (getInviteCandidates, countWaitingAgents)
- *  need the exact same active-agent set for isSpokenFor's dropped-partner
- *  check, and it must count a cross-district helper as "still on" too. */
+ *  agent active on one of those OTHER listed districts also counts (or,
+ *  with the ANY_DISTRICT wildcard, any active agent at all), regardless of
+ *  what THEIR own frozen reconnect goal is, since they're being recruited
+ *  as a helper, not working their own copy of this one. A district that's
+ *  nearly everyone's starting point (Home Base) is the obvious named
+ *  candidate for this — reported live: a Hopesize Station mission stuck
+ *  at 2/3 with its one non-retired, not-yet-done candidate pool on that
+ *  district exhausted, while its two remaining members' own restoration
+ *  deadlines kept ticking with no real prospect of a third Hopesize agent
+ *  showing up in time. `stillOn` is returned alongside `eligible` since
+ *  both callers (getInviteCandidates, countWaitingAgents) need the exact
+ *  same active-agent set for isSpokenFor's dropped-partner check, and it
+ *  must count a cross-district helper as "still on" too. */
 async function eligiblePoolForGoal(
   supabase: SupabaseDB, districtId: string, goalId: string,
   crossDistrictEligible: string[] | null | undefined, excludeAgentNo?: string,
 ): Promise<{ eligible: string[]; stillOn: Set<string> }> {
-  const districtIds = [districtId, ...(crossDistrictEligible || [])]
-  const { data: activeRows } = await supabase.from('rc_player_districts')
-    .select('agent_no, district_id, goals').in('district_id', districtIds).eq('status', 'active')
+  // '*' means literally anyone, anywhere active — see ANY_DISTRICT's own
+  // doc comment. A named district list still narrows the query with .in();
+  // '*' has to skip that filter outright rather than list every district,
+  // since new ones get added over time and a hardcoded list would go stale.
+  let query = supabase.from('rc_player_districts').select('agent_no, district_id, goals').eq('status', 'active')
+  if (!crossDistrictEligible?.includes(ANY_DISTRICT)) {
+    query = query.in('district_id', [districtId, ...(crossDistrictEligible || [])])
+  }
+  const { data: activeRows } = await query
   const stillOn = new Set<string>((activeRows || []).map((r: any) => r.agent_no as string))
   const pool = new Set<string>()
   for (const r of activeRows || []) {
@@ -921,8 +938,9 @@ function isSpokenFor(rosters: Map<string, any[]>, agentNo: string, stillOnDistri
  *  hold their active attempt somewhere else. */
 async function agentsStillOnDistrict(supabase: SupabaseDB, districtId: string | string[]): Promise<Set<string>> {
   const ids = Array.isArray(districtId) ? districtId : [districtId]
-  const { data } = await supabase.from('rc_player_districts')
-    .select('agent_no').in('district_id', ids).eq('status', 'active')
+  let query = supabase.from('rc_player_districts').select('agent_no').eq('status', 'active')
+  if (!ids.includes(ANY_DISTRICT)) query = query.in('district_id', ids)
+  const { data } = await query
   return new Set((data || []).map((r: any) => r.agent_no as string))
 }
 
@@ -1157,13 +1175,20 @@ export async function inviteReconnectMission(supabase: SupabaseDB, content: unkn
 
   // Active on the goal's own district as usual, OR — when the goal names
   // other districts as a recruiting pool (crossDistrictEligible) — active
-  // on one of those instead. A recruited helper's own frozen reconnect
-  // goal doesn't have to match this one at all; they're helping, not
-  // working their own copy of it.
+  // on one of those instead, or (the ANY_DISTRICT wildcard) active on
+  // literally anything. A recruited helper's own frozen reconnect goal
+  // doesn't have to match this one at all; they're helping, not working
+  // their own copy of it.
   let inviteeEligible = false
-  for (const d of eligibleDistricts) {
-    const inviteePd = await myActivePd(supabase, inviteeAgentNo, d)
-    if (inviteePd?.status === 'active') { inviteeEligible = true; break }
+  if (eligibleDistricts.includes(ANY_DISTRICT)) {
+    const { data: anyPd } = await supabase.from('rc_player_districts')
+      .select('district_id').eq('agent_no', inviteeAgentNo).eq('status', 'active').limit(1).maybeSingle()
+    inviteeEligible = !!anyPd
+  } else {
+    for (const d of eligibleDistricts) {
+      const inviteePd = await myActivePd(supabase, inviteeAgentNo, d)
+      if (inviteePd?.status === 'active') { inviteeEligible = true; break }
+    }
   }
   if (!inviteeEligible) return { success: false, error: 'invitee_not_eligible' }
 
