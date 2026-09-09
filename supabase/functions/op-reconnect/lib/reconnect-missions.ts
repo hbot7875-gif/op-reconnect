@@ -516,6 +516,10 @@ async function refreshMission(
     sharedTrack?: { label: string; keys: string[]; target: number } | null
     checklist?: { tracks: { label: string; keys: string[] }[]; playlistUrl?: string } | null
     ciphers?: { prompt: string; answerKeys: string[] }[] | null
+    // Other district ids whose active agents also count as legitimately
+    // "on" this goal — see eligiblePoolForGoal's doc comment. Widens the
+    // stillOn/_leftDistrict check the same way it widens who can be invited.
+    crossDistrictEligible?: string[] | null
   },
 ) {
   if (mission.status !== 'open' && mission.status !== 'complete') return mission
@@ -546,7 +550,7 @@ async function refreshMission(
   // attempt) — flagged so the person still playing is told why the team
   // stopped moving instead of watching a silent stall. isSpokenFor uses the
   // same distinction to stop a dropped partner from blocking them.
-  const stillOn = await agentsStillOnDistrict(supabase, mission.district_id)
+  const stillOn = await agentsStillOnDistrict(supabase, [mission.district_id, ...(config?.crossDistrictEligible || [])])
   for (const p of joined) p._leftDistrict = !stillOn.has(p.agent_no)
   // Days since each teammate last streamed anything — surfaced so whoever is
   // carrying the mission can see WHY it stopped moving. Stored as a count
@@ -749,6 +753,40 @@ async function excludeRetired(supabase: SupabaseDB, agentNos: string[]): Promise
   return retired.size ? agentNos.filter((a) => !retired.has(a)) : agentNos
 }
 
+/** Who can be invited/counted toward this goal — normally just whoever is
+ *  actively restoring the SAME district with THIS goal frozen into their
+ *  own rc_player_districts row. `crossDistrictEligible` (optional, on the
+ *  goal's own config — see districts.ts's freezeGoals) widens that: any
+ *  agent active on one of those OTHER listed districts also counts,
+ *  regardless of what THEIR own frozen reconnect goal is, since they're
+ *  being recruited as a helper, not working their own copy of this one.
+ *  A district that's nearly everyone's starting point (Home Base) is the
+ *  obvious candidate for this — reported live: a Hopesize Station mission
+ *  stuck at 2/3 with its one non-retired, not-yet-done candidate pool on
+ *  that district exhausted, while its two remaining members' own
+ *  restoration deadlines kept ticking with no real prospect of a third
+ *  Hopesize agent showing up in time. `stillOn` is returned alongside
+ *  `eligible` since both callers (getInviteCandidates, countWaitingAgents)
+ *  need the exact same active-agent set for isSpokenFor's dropped-partner
+ *  check, and it must count a cross-district helper as "still on" too. */
+async function eligiblePoolForGoal(
+  supabase: SupabaseDB, districtId: string, goalId: string,
+  crossDistrictEligible: string[] | null | undefined, excludeAgentNo?: string,
+): Promise<{ eligible: string[]; stillOn: Set<string> }> {
+  const districtIds = [districtId, ...(crossDistrictEligible || [])]
+  const { data: activeRows } = await supabase.from('rc_player_districts')
+    .select('agent_no, district_id, goals').in('district_id', districtIds).eq('status', 'active')
+  const stillOn = new Set<string>((activeRows || []).map((r: any) => r.agent_no as string))
+  const pool = new Set<string>()
+  for (const r of activeRows || []) {
+    if (excludeAgentNo && r.agent_no === excludeAgentNo) continue
+    const sameDistrictSameGoal = r.district_id === districtId && r.goals?.reconnect?.id === goalId
+    const recruitedHelper = r.district_id !== districtId
+    if (sameDistrictSameGoal || recruitedHelper) pool.add(r.agent_no as string)
+  }
+  return { eligible: await excludeRetired(supabase, [...pool]), stillOn }
+}
+
 /** Every open-mission participant row for this reconnect goal, grouped by
  *  mission id — the shared data both getInviteCandidates and
  *  inviteReconnectMission need to tell "genuinely paired up already" apart
@@ -823,17 +861,12 @@ export async function countWaitingAgents(supabase: SupabaseDB, agentNo: string, 
   if (pd?.status !== 'active') return 0
   const reconnect = myReconnectGoal(pd)
   if (!reconnect) return 0
-  const { data: activeRows } = await supabase.from('rc_player_districts')
-    .select('agent_no, goals').eq('district_id', pd.district_id).eq('status', 'active')
-  const eligible = await excludeRetired(supabase, (activeRows || [])
-    .filter((r: any) => r.agent_no !== agentNo && r.goals?.reconnect?.id === reconnect.id)
-    .map((r: any) => r.agent_no as string))
+  const { eligible, stillOn } = await eligiblePoolForGoal(
+    supabase, pd.district_id, reconnect.id, reconnect.config?.crossDistrictEligible, agentNo,
+  )
   if (!eligible.length) return 0
   const rosters = await openMissionRosters(supabase, pd.district_id, reconnect.id)
   const done = await agentsDoneWithGoal(supabase, pd.district_id, reconnect.id)
-  // activeRows is already every active attempt on this district, so the
-  // dropped-partner set comes free here — no extra round trip.
-  const stillOn = new Set<string>((activeRows || []).map((r: any) => r.agent_no as string))
   return freeAgentsWithWait(rosters, eligible, done, stillOn).length
 }
 
@@ -880,14 +913,16 @@ function isSpokenFor(rosters: Map<string, any[]>, agentNo: string, stillOnDistri
   return false
 }
 
-/** Everyone still holding an ACTIVE attempt on this district — the set
- *  isSpokenFor uses to tell a real partner from one who has dropped out.
- *  Deliberately keyed on the district alone, not the frozen goal, to match
- *  refreshMission's own myActivePd(agent, mission.district_id) check: an
- *  active attempt is what decides whether someone can contribute here. */
-async function agentsStillOnDistrict(supabase: SupabaseDB, districtId: string): Promise<Set<string>> {
+/** Everyone still holding an ACTIVE attempt on this district (or any of a
+ *  goal's crossDistrictEligible districts — see excludeRetired's neighbor
+ *  comment on eligiblePoolForGoal) — the set isSpokenFor uses to tell a
+ *  real partner from one who has dropped out. A recruited helper from a
+ *  different district is exactly as "still on" as a native one; they just
+ *  hold their active attempt somewhere else. */
+async function agentsStillOnDistrict(supabase: SupabaseDB, districtId: string | string[]): Promise<Set<string>> {
+  const ids = Array.isArray(districtId) ? districtId : [districtId]
   const { data } = await supabase.from('rc_player_districts')
-    .select('agent_no').eq('district_id', districtId).eq('status', 'active')
+    .select('agent_no').in('district_id', ids).eq('status', 'active')
   return new Set((data || []).map((r: any) => r.agent_no as string))
 }
 
@@ -957,11 +992,9 @@ export async function getInviteCandidates(supabase: SupabaseDB, content: GameCon
     stillOnHomeBase = count || 0
   }
 
-  const { data: activeRows } = await supabase.from('rc_player_districts')
-    .select('agent_no, goals').eq('district_id', districtId).eq('status', 'active')
-  const eligible = await excludeRetired(supabase, (activeRows || [])
-    .filter((r: any) => r.agent_no !== agentNo && r.goals?.reconnect?.id === reconnect.id)
-    .map((r: any) => r.agent_no as string))
+  const { eligible, stillOn } = await eligiblePoolForGoal(
+    supabase, districtId, reconnect.id, reconnect.config?.crossDistrictEligible, agentNo,
+  )
   if (!eligible.length) return {
     success: true, candidates: [], stillOnHomeBase, alertActive,
     emptyReason: stillOnHomeBase ? 'agents_still_on_home_base' : 'no_matching_agents',
@@ -969,7 +1002,6 @@ export async function getInviteCandidates(supabase: SupabaseDB, content: GameCon
 
   const rosters = await openMissionRosters(supabase, districtId, reconnect.id)
   const done = await agentsDoneWithGoal(supabase, districtId, reconnect.id)
-  const stillOn = new Set<string>((activeRows || []).map((r: any) => r.agent_no as string))
   const free = freeAgentsWithWait(rosters, eligible, done, stillOn)
   if (!free.length) return {
     success: true, candidates: [], stillOnHomeBase, alertActive,
@@ -1112,8 +1144,10 @@ export async function inviteReconnectMission(supabase: SupabaseDB, content: unkn
   // alone in their own still-empty mission isn't "already in a mission" in
   // any sense that should block this invite; only genuinely being spoken
   // for (pending elsewhere, or already paired with someone) does.
+  const crossDistrictEligible: string[] = reconnect.config?.crossDistrictEligible || []
+  const eligibleDistricts = [districtId, ...crossDistrictEligible]
   const rosters = await openMissionRosters(supabase, districtId, reconnect.id)
-  if (isSpokenFor(rosters, inviteeAgentNo, await agentsStillOnDistrict(supabase, districtId))) {
+  if (isSpokenFor(rosters, inviteeAgentNo, await agentsStillOnDistrict(supabase, eligibleDistricts))) {
     return { success: false, error: 'already_in_mission' }
   }
 
@@ -1121,8 +1155,17 @@ export async function inviteReconnectMission(supabase: SupabaseDB, content: unkn
   const joinedCount = (participants || []).filter((p: any) => p.status === 'joined').length
   if (joinedCount >= mission.required_agents) return { success: false, error: 'mission_full' }
 
-  const inviteePd = await myActivePd(supabase, inviteeAgentNo, districtId)
-  if (inviteePd?.status !== 'active') return { success: false, error: 'invitee_not_eligible' }
+  // Active on the goal's own district as usual, OR — when the goal names
+  // other districts as a recruiting pool (crossDistrictEligible) — active
+  // on one of those instead. A recruited helper's own frozen reconnect
+  // goal doesn't have to match this one at all; they're helping, not
+  // working their own copy of it.
+  let inviteeEligible = false
+  for (const d of eligibleDistricts) {
+    const inviteePd = await myActivePd(supabase, inviteeAgentNo, d)
+    if (inviteePd?.status === 'active') { inviteeEligible = true; break }
+  }
+  if (!inviteeEligible) return { success: false, error: 'invitee_not_eligible' }
 
   // An expired invite to this same person is deliberately kept as a record
   // for whoever sent it (see refreshMission), but (mission_id, agent_no) is
@@ -1274,7 +1317,7 @@ export async function removeReconnectParticipant(supabase: SupabaseDB, content: 
   // teammate who is still streaming stays protected no matter how much
   // slower they are than whoever is doing the removing. See IDLE_DAYS.
   if (!isLeaving && target.status === 'joined' && target.streamed_at) {
-    const stillOn = await agentsStillOnDistrict(supabase, districtId)
+    const stillOn = await agentsStillOnDistrict(supabase, [districtId, ...(reconnect.config?.crossDistrictEligible || [])])
     const quiet = (await quietDaysByAgent(supabase, [targetAgentNo])).get(targetAgentNo) ?? 0
     // Threshold comes from the REMOVER's own deadline: on the last day of a
     // restoration there is no time left to wait out a second day of silence.
@@ -1352,7 +1395,8 @@ export async function respondReconnectInvite(supabase: SupabaseDB, content: unkn
   // accept, including the legitimate first one.
   const rostersForGuard = await openMissionRosters(supabase, districtId, mission.goal_id)
   rostersForGuard.delete(mission.id)
-  if (isSpokenFor(rostersForGuard, agentNo, await agentsStillOnDistrict(supabase, districtId))) {
+  const stillOnForGuard = await agentsStillOnDistrict(supabase, [districtId, ...(goal?.config?.crossDistrictEligible || [])])
+  if (isSpokenFor(rostersForGuard, agentNo, stillOnForGuard)) {
     return { success: false, error: 'already_paired_elsewhere' }
   }
 
@@ -1496,11 +1540,7 @@ export async function adminAutoAssignMissions(supabase: SupabaseDB, params: any)
   if (!Number.isFinite(requiredAgents) || requiredAgents < 2) return { success: false, error: 'not_available' }
   const districtId = goal.district_id as string
 
-  const { data: activeRows } = await supabase.from('rc_player_districts')
-    .select('agent_no, goals').eq('district_id', districtId).eq('status', 'active')
-  const eligible = await excludeRetired(supabase, (activeRows || [])
-    .filter((r: any) => r.goals?.reconnect?.id === goalId)
-    .map((r: any) => r.agent_no as string))
+  const { eligible } = await eligiblePoolForGoal(supabase, districtId, goalId, goal.config?.crossDistrictEligible)
 
   const { data: openMissions } = await supabase.from('rc_reconnect_missions')
     .select('id').eq('goal_id', goalId).eq('status', 'open')

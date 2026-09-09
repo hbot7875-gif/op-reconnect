@@ -113,9 +113,17 @@ export function freezeGoals(content: GameContent, mode: string, district: Distri
       // second phase after the streaming target is hit: an ordered list of
       // {prompt, answerKeys} the whole team solves together before the
       // mission completes — see reconnect-missions.ts's refreshMission().
-      // Frozen verbatim like everything else here, so an admin editing it
-      // later never changes what an already-open mission is chasing.
-      ? { requiredAgents: cfg.requiredAgents, sharedTrack: cfg.sharedTrack || null, checklist: cfg.checklist || null, ciphers: cfg.ciphers || null }
+      // crossDistrictEligible (optional) widens WHO can be recruited beyond
+      // this district's own active roster — any active agent on one of
+      // those other listed districts also counts, regardless of their own
+      // frozen reconnect goal (see eligiblePoolForGoal). Frozen verbatim
+      // like everything else here, so an admin editing it later never
+      // changes what an already-open mission is chasing.
+      ? {
+          requiredAgents: cfg.requiredAgents, sharedTrack: cfg.sharedTrack || null,
+          checklist: cfg.checklist || null, ciphers: cfg.ciphers || null,
+          crossDistrictEligible: cfg.crossDistrictEligible || null,
+        }
       : variant === 'sotd'
       // A YouTube-link guess, not a text guess — frozen verbatim so an
       // admin changing the answer later can't retroactively change what an
