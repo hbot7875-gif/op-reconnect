@@ -731,6 +731,24 @@ export async function getReconnectMission(supabase: SupabaseDB, content: any, pa
   }
 }
 
+/** Strips retired agents out of an eligibility list. Retiring only gates
+ *  login (see auth.ts's retireAccount doc comment) — it deliberately leaves
+ *  rc_player_districts untouched, so a retired agent's "active on this
+ *  district" row lingers exactly as if they were still playing. Every
+ *  eligible-agent list here was built from that same table with no such
+ *  filter, so a retired agent could still surface as an inviteable
+ *  candidate and even get invited (confirmed live: AGENT081 retired
+ *  2026-08-20, then got invited into a Hopesize Station mission on
+ *  2026-09-08 — an invite nobody could ever accept, since a retired
+ *  agent's session/login is blocked). */
+async function excludeRetired(supabase: SupabaseDB, agentNos: string[]): Promise<string[]> {
+  if (!agentNos.length) return agentNos
+  const { data } = await supabase.from('rc_agents')
+    .select('agent_no').in('agent_no', agentNos).not('retired_at', 'is', null)
+  const retired = new Set((data || []).map((r: any) => r.agent_no as string))
+  return retired.size ? agentNos.filter((a) => !retired.has(a)) : agentNos
+}
+
 /** Every open-mission participant row for this reconnect goal, grouped by
  *  mission id — the shared data both getInviteCandidates and
  *  inviteReconnectMission need to tell "genuinely paired up already" apart
@@ -807,9 +825,9 @@ export async function countWaitingAgents(supabase: SupabaseDB, agentNo: string, 
   if (!reconnect) return 0
   const { data: activeRows } = await supabase.from('rc_player_districts')
     .select('agent_no, goals').eq('district_id', pd.district_id).eq('status', 'active')
-  const eligible = (activeRows || [])
+  const eligible = await excludeRetired(supabase, (activeRows || [])
     .filter((r: any) => r.agent_no !== agentNo && r.goals?.reconnect?.id === reconnect.id)
-    .map((r: any) => r.agent_no as string)
+    .map((r: any) => r.agent_no as string))
   if (!eligible.length) return 0
   const rosters = await openMissionRosters(supabase, pd.district_id, reconnect.id)
   const done = await agentsDoneWithGoal(supabase, pd.district_id, reconnect.id)
@@ -941,9 +959,9 @@ export async function getInviteCandidates(supabase: SupabaseDB, content: GameCon
 
   const { data: activeRows } = await supabase.from('rc_player_districts')
     .select('agent_no, goals').eq('district_id', districtId).eq('status', 'active')
-  const eligible = (activeRows || [])
+  const eligible = await excludeRetired(supabase, (activeRows || [])
     .filter((r: any) => r.agent_no !== agentNo && r.goals?.reconnect?.id === reconnect.id)
-    .map((r: any) => r.agent_no as string)
+    .map((r: any) => r.agent_no as string))
   if (!eligible.length) return {
     success: true, candidates: [], stillOnHomeBase, alertActive,
     emptyReason: stillOnHomeBase ? 'agents_still_on_home_base' : 'no_matching_agents',
@@ -1075,6 +1093,11 @@ export async function inviteReconnectMission(supabase: SupabaseDB, content: unkn
   const inviteeAgentNo = String(params.inviteeAgentNo || '').trim().toUpperCase()
   if (!inviteeAgentNo) return { success: false, error: 'invitee_required' }
   if (inviteeAgentNo === agentNo) return { success: false, error: 'cannot_invite_self' }
+  // Defense-in-depth alongside getInviteCandidates' own filter (see
+  // excludeRetired) — this is the actual write path, so a stale candidate
+  // list on the client, or any other caller, still can't land an invite
+  // nobody can ever accept.
+  if (!(await excludeRetired(supabase, [inviteeAgentNo])).length) return { success: false, error: 'invitee_retired' }
 
   const pd = await myActivePd(supabase, agentNo, districtId)
   if (pd?.status !== 'active') return { success: false, error: 'not_eligible' }
@@ -1475,9 +1498,9 @@ export async function adminAutoAssignMissions(supabase: SupabaseDB, params: any)
 
   const { data: activeRows } = await supabase.from('rc_player_districts')
     .select('agent_no, goals').eq('district_id', districtId).eq('status', 'active')
-  const eligible = (activeRows || [])
+  const eligible = await excludeRetired(supabase, (activeRows || [])
     .filter((r: any) => r.goals?.reconnect?.id === goalId)
-    .map((r: any) => r.agent_no as string)
+    .map((r: any) => r.agent_no as string))
 
   const { data: openMissions } = await supabase.from('rc_reconnect_missions')
     .select('id').eq('goal_id', goalId).eq('status', 'open')
