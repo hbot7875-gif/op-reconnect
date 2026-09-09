@@ -21,6 +21,8 @@ import { chatThread, updateChatThread } from './chat-thread.js'
 import { getReconnectChatSeen, markReconnectChatSeen,
   reconnectChatUnreadCount, reconnectChatBadgeText } from './reconnect-chat-unread.js'
 import { openShare } from './share.js'
+import { questShareSheet } from './quest-share.js'
+import { warmShareArtwork } from './share-scene-image.js'
 
 let teardown = null
 let sceneFor = null
@@ -96,6 +98,7 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
     if (!canShareDistrict) shareDistrict.remove()
     else shareDistrict.onclick = () => showOverlay(openShare(window.__rcState || state, { districtId }))
   }
+  if (canShareDistrict) warmShareArtwork(state, mapD)
   container.querySelector('.stage-name').textContent = districtDisplayName(mapD)
   // The agent this place is named for, on the hero — not hidden until you finish.
   container.querySelector('.stage-echo').textContent = mapD.echoOf ? `👤 ${mapD.echoOf}` : ''
@@ -582,6 +585,11 @@ function paintMissionPanel(box, d, res) {
   box.appendChild(el('div', 'eyebrow', res.variant === 'invite' ? 'INVITE BACKUP' : 'CONNECT'))
   const m = res.mission
   const me = getAgentNo()
+  if (['open', 'complete'].includes(m?.status) && m.participants?.some(p => p.isMe && p.status === 'joined')) {
+    const shareQuest = el('button', 'reconnect-quest-share', '↗ Share Quest')
+    shareQuest.onclick = () => showOverlay(questShareSheet(d.id))
+    box.appendChild(shareQuest)
+  }
   const sharedProgressRatio = m?.sharedTrack
     ? Number(m.sharedTrack.progress || 0) / Math.max(1, Number(m.sharedTrack.target || 0))
     : 0

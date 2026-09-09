@@ -48,7 +48,8 @@ import { getVmaStatus, logVmaVote, adminListVmaPending, adminReviewVmaVote } fro
 import { getBackupStatus, listOpenBackupRequests, openBackupRequest, joinBackupRequest, leaveBackupHelper } from './lib/backup-pass.ts'
 import { getChestStatus, openChest } from './lib/supply-chest.ts'
 import { getCommunityChestStatus, openCommunityChest } from './lib/vma-community-chest.ts'
-import { createShareSnapshot, getPublicShareSnapshot, shareImageResponse } from './lib/share-snapshots.ts'
+import { createShareSnapshot, getPublicShareSnapshot, shareImageResponse, attachShareImage } from './lib/share-snapshots.ts'
+import { getQuestShareSource } from './lib/reconnect-missions.ts'
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -97,6 +98,8 @@ const ROUTES: Record<string, Route> = {
   retireAccount: { auth: 'agent', handler: (sb, p) => retireAccount(sb, p) },
   getGameState: { auth: 'agent', handler: (sb, p) => getGameState(sb, p) },
   createShareSnapshot: { auth: 'agent', handler: (sb, p) => createShareSnapshot(sb, p) },
+  attachShareImage: { auth: 'agent', handler: (sb, p) => attachShareImage(sb, p) },
+  getQuestShareSource: { auth: 'agent', handler: (sb, p) => getQuestShareSource(sb, p) },
   trackEngagement: { auth: 'agent', handler: (sb, p) => trackEngagement(sb, p) },
   joinGame: { auth: 'agent', handler: (sb, p) => joinGame(sb, p) },
   startDistrict: { auth: 'agent', handler: (sb, p) => startDistrict(sb, p) },

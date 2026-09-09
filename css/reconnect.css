@@ -2590,6 +2590,17 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
   padding: 15px; margin: 14px 0 4px; white-space: pre-wrap; word-break: break-word;
   max-height: 42vh; overflow-y: auto; }
 .share .btn-primary { display: block; width: 100%; }
+.reconnect-quest-share{display:block;margin:14px 0 0;padding:8px 0;border:0;background:none;color:var(--purple-lt);font:600 14px var(--body, sans-serif);cursor:pointer}
+.quest-share-editor{width:min(94vw,560px);max-height:90dvh;overflow-y:auto;padding:18px!important;text-align:left}
+.quest-share-header{display:flex;align-items:center;justify-content:space-between;gap:16px}.quest-share-header h2{font:700 20px var(--body);margin:0}.quest-share-editor .quest-share-header .btn{width:auto;flex:0 0 auto;margin:0;padding:8px 12px}
+.quest-share-preview{margin:16px 0;background:#100d1a;min-height:100px}.quest-share-preview canvas{width:100%;height:auto;display:block}
+.quest-share-chat-switch{display:flex;align-items:center;gap:9px;font-size:15px;min-height:44px}.quest-share-chat-switch input,.quest-share-pick-row input{accent-color:#a78bfa;width:18px;height:18px;flex-shrink:0}
+.quest-share-warning{font-size:13px;line-height:1.45;color:#ddbd86;margin:8px 0}.quest-share-picker{max-height:250px;overflow:auto;border-top:1px solid var(--border);margin-bottom:16px}.quest-share-picker[hidden],.quest-share-warning[hidden]{display:none}
+.quest-share-pick-row{display:flex;gap:10px;padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer;align-items:flex-start}.quest-share-pick-row>span{min-width:0;overflow-wrap:anywhere}.quest-share-pick-row b,.quest-share-pick-row span span{display:block}.quest-share-pick-row span span{font-size:14px;line-height:1.45}.quest-share-message-error{display:block;color:#f3baab;margin-top:6px}
+.quest-share-caption-label{display:block;margin:12px 0 7px;font-size:14px}.quest-share-editor textarea{width:100%;resize:vertical;font-size:16px;min-height:96px;box-sizing:border-box}
+.quest-share-categories{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.quest-share-categories .btn{width:auto!important;font-size:12px;padding:8px 10px;margin:0}
+.quest-share-caption-option{display:block;border:0;background:none;color:#cbbadd;text-align:left;padding:10px 0;line-height:1.4;cursor:pointer;font-size:14px}
+.quest-share-status{font-size:13px;line-height:1.45;color:#d6c9e8;overflow-wrap:anywhere;min-height:18px}.quest-share-actions{display:grid;gap:8px;padding-bottom:env(safe-area-inset-bottom,0px)}.quest-share-actions .btn{width:100%;margin:0}
 .share .btn-ghost { display: block; width: 100%; margin-top: 8px; }
 .share-image-sheet { width: min(92vw, 430px); }
 .share-image-preview { width: min(100%, 286px); aspect-ratio: 4 / 5; margin: 16px auto;

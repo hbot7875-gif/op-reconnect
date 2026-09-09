@@ -1,18 +1,21 @@
 // Privacy-safe, frozen social snapshots for link-first ReConnect sharing.
-// The public row deliberately contains only words/numbers that may appear on
-// the public card. Agent identity, internal district ids, chat and lore never
-// enter the table, so neither the URL nor its public lookup can leak them.
+// Public responses are allowlisted separately from private ownership/image
+// fields. Quest chat is included only when explicitly selected and validated.
 
 import React from 'npm:react@18.3.1'
 import { ImageResponse } from 'npm:@vercel/og@0.8.5'
 import type { SupabaseDB } from './config.ts'
-import { getGameState } from './handlers.ts'
+import { readShareMoment } from './share-source.ts'
 import { ROAD_TO_1B_TRACK_NAMES } from './side-missions.ts'
+import { selectedQuestShareData } from './reconnect-missions.ts'
+import { publicSnapshot } from './quest-share-rules.js'
+import { questImageElement, questLayout, QUEST_FONTS } from './quest-share-layout.js'
+import { throttle } from './auth.ts'
 
 const SITE = 'https://hopetrackers.org'
 const ID_RE = /^[A-Za-z0-9_-]{22}$/
 
-type SnapshotKind = 'district' | 'red_zone_active' | 'red_zone_success'
+type SnapshotKind = 'district' | 'red_zone_active' | 'red_zone_success' | 'quest' | 'city_bomb'
 
 function opaqueId(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(16))
@@ -27,15 +30,6 @@ function clean(value: unknown, max = 90): string {
 
 function titleCase(value: unknown): string {
   return clean(value).toLowerCase().replace(/(^|[\s/&-])([a-z])/g, (_m, gap, c) => gap + c.toUpperCase())
-}
-
-function districtPercent(active: any): number {
-  if (!active) return 0
-  const pieces: number[] = []
-  for (const goal of active.trackGoals || []) pieces.push(Math.min(1, Number(goal.progress || 0) / Math.max(1, Number(goal.target || 1))))
-  for (const album of active.albums || []) pieces.push(Math.min(1, Number(album.passesDone || 0) / Math.max(1, Number(album.target || 1))))
-  if (active.reconnect) pieces.push(active.reconnect.done ? 1 : Math.min(.99, Number(active.reconnect.progress || 0) / Math.max(1, Number(active.reconnect.target || 1))))
-  return Math.round((pieces.length ? pieces.reduce((a, b) => a + b, 0) / pieces.length : 0) * 100)
 }
 
 function districtLine(name: string, complete: boolean): string {
@@ -100,79 +94,111 @@ function redLine(progress: number, target: number, activeFrom: string | null, en
   return 'ARMY, we could use you in here 😭'
 }
 
-async function insert(supabase: SupabaseDB, kind: SnapshotKind, data: Record<string, unknown>) {
+async function insert(supabase: SupabaseDB, kind: SnapshotKind, data: Record<string, unknown>, agentNo?:string, cacheKey?:string) {
   const id = opaqueId()
-  const { error } = await supabase.from('rc_share_snapshots').insert({ id, kind, data })
+  const { error } = await supabase.from('rc_share_snapshots').insert({ id, kind, data, ...(agentNo?{created_by:agentNo,cache_key:cacheKey}: {}) })
   if (error) throw new Error('share_snapshot_failed')
-  const pathKind = kind === 'district' ? 'district' : 'red-zone'
+  const pathKind = kind === 'city_bomb' ? 'city' : kind === 'quest' ? 'quest' : kind === 'district' ? 'district' : 'red-zone'
   const url = `${SITE}/share/${pathKind}/${id}`
   return { id, url }
 }
 
 export async function createShareSnapshot(supabase: SupabaseDB, params: any) {
   const agentNo = clean(params.agentNo, 20).toUpperCase()
-  const state: any = await getGameState(supabase, { agentNo })
-  if (!state?.success || !state?.joined) return { success: false, error: 'share_unavailable' }
+  if(params.kind === 'quest') {
+    if(!await throttle(supabase,`quest-share:${agentNo}`,12,3600)) return {success:false,error:'You have prepared several shares. Please try again later.'}
+    const selected:any = await selectedQuestShareData(supabase,params)
+    if(!selected.success) return selected
+    try { questLayout(selected.data); questLayout(selected.data,true) }
+    catch { return {success:false,error:'Selected conversation does not fit. Choose fewer messages.'} }
+    const {url} = await insert(supabase,'quest',selected.data)
+    return {success:true,url,title:selected.data.title,data:selected.data}
+  }
   const requested = clean(params.kind, 30)
+  if(!['district','city_bomb','red_zone_active','red_zone_success'].includes(requested))return {success:false,error:'invalid_share_kind'}
+  try {
+    const moment:any=await readShareMoment(supabase,agentNo,requested,clean(params.districtId,100))
+    const kind:SnapshotKind=moment.kind||'district'
+    let data:any, title:string, visual:any=null
+    if(kind==='district') {
+      const {district,active,complete,percent,frozen}=moment
+      const displayName=district.ward_id==='relay-zero'?'Home Base':titleCase(district.name), picked=districtShareGoals(active,frozen,complete)
+      data={displayName,percent,complete,line:districtLine(displayName,complete),goals:picked.goals.slice(0,2),roadTo1B:picked.roadTo1B}
+      title=`${displayName} · ${percent}% restored`
+      visual={id:district.id,name:district.name,wardId:district.ward_id,centerpiece:!!district.is_centerpiece,charge:Math.max(0,Math.min(1,Number(params.sceneCharge)||0))}
+    } else if(kind==='city_bomb') {
+      data={hoursRemaining:moment.hoursRemaining,isDark:moment.isDark,line:moment.hoursRemaining?'keeping my ARMY Bomb alive 💜':'my ARMY Bomb needs me 😭'}
+      title='My ARMY Bomb · ReConnect'
+    } else {
+      const ev=moment.event
+      if(params.eventId&&params.eventId!==ev.id)return {success:false,error:'This Red Zone has changed. Reopen Share.'}
+      const progress=Number(ev.progress)||0,target=Math.max(1,Number(ev.target)||1)
+      if(kind==='red_zone_success'){data={progress,target,line:'WE ACTUALLY SAVED IT 😭'};title='ReConnect · City safe'}
+      else {
+        const capturedAt=new Date().toISOString(),endsAt=ev.active_until
+        const info=redTarget({targetNames:ev.target_names,targetTrack:ev.target_kind==='track'?ev.target_label:null,targetAlbum:ev.target_kind==='album'?ev.target_label:null})
+        data={progress,target,targetLabel:info.label,unit:info.unit,capturedAt,endsAt,remainingSeconds:Math.max(0,Math.floor((Date.parse(endsAt)-Date.now())/1000)),line:redLine(progress,target,ev.active_from,endsAt,capturedAt)}
+        title='ReConnect · City under attack'
+      }
+    }
+    const stable={...data,capturedAt:undefined,remainingSeconds:kind==='red_zone_active'?Math.floor(data.remainingSeconds/10):undefined}
+    const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify({kind,data:stable,visual})))
+    const cacheKey=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('')
+    const {data:prior}=await supabase.from('rc_share_snapshots').select('id,data').eq('created_by',agentNo).eq('cache_key',cacheKey).not('image_png','is',null).gt('expires_at',new Date().toISOString()).limit(1).maybeSingle()
+    if(prior)return {success:true,id:prior.id,kind,url:`${SITE}/share/${kind==='district'?'district':kind==='city_bomb'?'city':'red-zone'}/${prior.id}`,title,data:prior.data,visual,imageReady:true}
+    if(!await throttle(supabase,`scene-share:${agentNo}`,30,3600))return {success:false,error:'Please wait before preparing more shares.'}
+    const saved=await insert(supabase,kind,data,agentNo,cacheKey)
+    return {success:true,...saved,kind,title,data,visual,imageReady:false}
+  }catch(e){return {success:false,error:(e as Error).message}}
+}
 
-  if (requested === 'district') {
-    const wanted = clean(params.districtId, 100)
-    const mapDistrict = (state.map?.districts || []).find((d: any) => d.id === wanted)
-    const active = state.activeDistrict?.id === wanted ? state.activeDistrict : null
-    if (!mapDistrict || (!active && !['restored', 'centerpiece_lit'].includes(mapDistrict.status))) return { success: false, error: 'district_not_shareable' }
-    const complete = ['restored', 'centerpiece_lit'].includes(mapDistrict.status)
-    const percent = complete ? 100 : districtPercent(active)
-    const displayName = titleCase(mapDistrict.name)
-    const line = districtLine(displayName, complete)
-    const { data: storedDistrict } = await supabase.from('rc_player_districts').select('goals')
-      .eq('agent_no', agentNo).eq('district_id', wanted).maybeSingle()
-    const goalPick = districtShareGoals(active, storedDistrict?.goals, complete)
-    const { url } = await insert(supabase, 'district', {
-      displayName, percent, complete, line, goals: goalPick.goals, roadTo1B: goalPick.roadTo1B,
-    })
-    const caption = complete
-      ? `${line}\n${displayName} · 100% restored ✦\nReConnect → ${url}`
-      : `${line}\n${displayName} · ${percent}% restored\ncome light yours up too 💜\nReConnect → ${url}`
-    return { success: true, url, title: `${displayName} · ${percent}% restored`, caption }
+export function decodeSharePng(value:unknown):Uint8Array {
+  if(typeof value!=='string'||value.length>700000||!/^[A-Za-z0-9+/]+={0,2}$/.test(value))throw new Error('Invalid share image')
+  const bytes=Uint8Array.from(atob(value),c=>c.charCodeAt(0))
+  if(bytes.length<33||[137,80,78,71,13,10,26,10].some((n,i)=>bytes[i]!==n))throw new Error('Expected PNG')
+  const view=new DataView(bytes.buffer)
+  if(view.getUint32(16)!==1200||view.getUint32(20)!==630)throw new Error('Expected 1200×630 image')
+  // Only a bounded, static raster. Reject metadata, animations and broken chunks.
+  let offset=8,header=false,pixels=false,ended=false
+  while(offset+12<=bytes.length){
+    const length=view.getUint32(offset),end=offset+12+length
+    if(end>bytes.length)throw new Error('Broken PNG')
+    const type=String.fromCharCode(...bytes.slice(offset+4,offset+8))
+    if(!['IHDR','IDAT','IEND','sRGB','gAMA','cHRM','pHYs'].includes(type))throw new Error('Unsupported PNG metadata')
+    let crc=0xffffffff
+    for(let i=offset+4;i<end-4;i++){crc^=bytes[i];for(let bit=0;bit<8;bit++)crc=(crc>>>1)^((crc&1)?0xedb88320:0)}
+    if(((crc^0xffffffff)>>>0)!==view.getUint32(end-4))throw new Error('Broken PNG checksum')
+    if(type==='IHDR'){if(header||offset!==8||length!==13||bytes[offset+16]!==8||![2,6].includes(bytes[offset+17])||bytes[offset+18]||bytes[offset+19]||bytes[offset+20])throw new Error('Unsupported PNG format');header=true}
+    if(type==='IDAT')pixels=true
+    if(type==='IEND'){if(length||end!==bytes.length)throw new Error('Broken PNG end');ended=true}
+    offset=end
   }
+  if(!header||!pixels||!ended||offset!==bytes.length)throw new Error('Incomplete PNG')
+  return bytes
+}
 
-  if (requested === 'red_zone_active') {
-    const defuse = state.bomb?.defuse
-    if (!defuse) return { success: false, error: 'red_zone_not_active' }
-    const capturedAt = new Date().toISOString()
-    const endsAt = clean(defuse.activeUntil || defuse.endsAt, 40)
-    const progress = Math.max(0, Number(defuse.progress) || 0)
-    const target = Math.max(1, Number(defuse.target) || 1)
-    const targetInfo = redTarget(defuse)
-    const { data: event } = await supabase.from('rc_defuse_events').select('active_from').eq('id', defuse.id).maybeSingle()
-    const line = redLine(progress, target, event?.active_from || null, endsAt, capturedAt)
-    const remainingSeconds = Math.max(0, Math.floor((new Date(endsAt).getTime() - new Date(capturedAt).getTime()) / 1000))
-    const { url } = await insert(supabase, 'red_zone_active', { targetLabel: targetInfo.label, unit: targetInfo.unit, progress, target, capturedAt, endsAt, remainingSeconds, line })
-    return { success: true, url, title: 'ReConnect · City under attack', caption: `${line}\n${progress.toLocaleString()} / ${target.toLocaleString()} ${targetInfo.unit}\nReConnect → ${url}` }
-  }
-
-  if (requested === 'red_zone_success') {
-    const resolved = state.bomb?.resolvedDefuse
-    if (!resolved || resolved.status !== 'defused' || (params.eventId && params.eventId !== resolved.id)) return { success: false, error: 'red_zone_result_unavailable' }
-    const progress = Math.max(0, Number(resolved.progress) || 0)
-    const target = Math.max(1, Number(resolved.target) || 1)
-    const line = 'WE ACTUALLY SAVED IT 😭'
-    const { url } = await insert(supabase, 'red_zone_success', { progress, target, line })
-    return { success: true, url, title: 'ReConnect · City safe', caption: `${line}\n${progress.toLocaleString()} / ${target.toLocaleString()} · Bomb defused\nReConnect → ${url}` }
-  }
-  return { success: false, error: 'invalid_share_kind' }
+export async function attachShareImage(sb:SupabaseDB,params:any) {
+  try {
+    decodeSharePng(params.png)
+    if(!ID_RE.test(params.id||''))throw new Error('Invalid share')
+    const {data,error}=await sb.from('rc_share_snapshots').update({image_png:params.png}).eq('id',params.id).eq('created_by',params.agentNo).is('image_png',null).gt('expires_at',new Date().toISOString()).select('id').maybeSingle()
+    if(error||!data)throw new Error('Could not save this share image. Reopen Share to retry.')
+    return {success:true}
+  }catch(e){return {success:false,error:(e as Error).message}}
 }
 
 export async function getPublicShareSnapshot(supabase: SupabaseDB, params: any) {
   const id = clean(params.id, 30)
   if (!ID_RE.test(id)) return { success: false, error: 'not_found' }
   const { data } = await supabase.from('rc_share_snapshots').select('id,kind,data,created_at,expires_at').eq('id', id).gt('expires_at', new Date().toISOString()).maybeSingle()
-  return data ? { success: true, snapshot: data } : { success: false, error: 'not_found' }
+  const snapshot = publicSnapshot(data)
+  return snapshot ? { success: true, snapshot } : { success: false, error: 'not_found' }
 }
 
 const h = React.createElement
 function card(snapshot: any) {
   const data = snapshot.data || {}
+  if(snapshot.kind === 'quest') return questImageElement(h,data)
   const district = snapshot.kind === 'district'
   const success = snapshot.kind === 'red_zone_success'
   const accent = district ? (data.complete ? '#e4b968' : '#a78bfa') : success ? '#e4b968' : '#d44a60'
@@ -204,10 +230,20 @@ function card(snapshot: any) {
       h('div', { style: { color: '#bbb4c5', fontSize: 18, marginTop: 8 } }, 'hopetrackers.org')))
 }
 
+let questFonts: Promise<any[]> | null = null
 export async function shareImageResponse(supabase: SupabaseDB, id: string): Promise<Response> {
+  if(!ID_RE.test(id))return new Response('Not found',{status:404})
+  const {data:stored}=await supabase.from('rc_share_snapshots').select('image_png,kind,created_by').eq('id',id).gt('expires_at',new Date().toISOString()).maybeSingle()
+  if(stored?.image_png)return new Response(decodeSharePng(stored.image_png).buffer as ArrayBuffer,{headers:{'Content-Type':'image/png','Cache-Control':'public,max-age=31536000,immutable','X-Content-Type-Options':'nosniff'}})
+  if(stored?.created_by && stored.kind!=='quest')return new Response('Image is preparing',{status:404,headers:{'Cache-Control':'no-store'}})
   const result: any = await getPublicShareSnapshot(supabase, { id })
   if (!result.success) return new Response('Not found', { status: 404 })
-  const response = new ImageResponse(card(result.snapshot) as any, { width: 1200, height: 630 })
+  let fonts:any[]|undefined
+  if(result.snapshot.kind==='quest') {
+    if(!questFonts)questFonts=Promise.all(QUEST_FONTS.map(async(font:any)=>{const r=await fetch(font.url);if(!r.ok)throw new Error('font unavailable');return {name:font.name,data:await r.arrayBuffer(),weight:font.weight,style:'normal'}})).catch(e=>{questFonts=null;throw e})
+    fonts=await questFonts
+  }
+  const response = new ImageResponse(card(result.snapshot) as any, { width: 1200, height: 630, ...(fonts?{fonts}: {}) })
   response.headers.set('Cache-Control', 'public, max-age=31536000, immutable')
   return response
 }

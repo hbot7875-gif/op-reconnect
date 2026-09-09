@@ -40,6 +40,7 @@ import { districtDeadline, DEADLINE_EXTENSION_DAYS } from './districts.ts'
 import { kstDateOf, todayKst, addDaysStr } from './kst.ts'
 import { ONLINE_WINDOW_MS } from './feed.ts'
 import { normKeyFull } from './text.ts'
+import { safeText, messageProblem, selectionProblem, publicQuest } from './quest-share-rules.js'
 import { logEngagementEvent } from './engagement.ts'
 import {
   reconnectHealthFlags, reconnectPrimaryStatus, reconnectRecommendedAction,
@@ -331,6 +332,81 @@ async function missionMessages(supabase: SupabaseDB, missionId: string, meAgentN
     body: r.body,
     at: r.created_at,
   }))
+}
+
+/** Authenticated share-only projection. Never reused by the public endpoint.
+ * Returns selectable IDs without exposing original author/roster identifiers.
+ * Internal context is checked again when the player creates a public snapshot. */
+export async function getQuestShareSource(supabase: SupabaseDB, params: any) {
+  const agentNo = String(params.agentNo || '').trim().toUpperCase()
+  const districtId = String(params.districtId || '')
+  const pd = await myActivePd(supabase, agentNo, districtId)
+  if (!pd || !['active','restored'].includes(pd.status)) return {success:false,error:'Quest sharing is unavailable for this district.'}
+  const goal = myReconnectGoal(pd)
+  if (!goal) return {success:false,error:'This Quest cannot be shared.'}
+  let mission = await findMyCompletedMission(supabase,agentNo,districtId,goal.id)
+    || await findMyMission(supabase,agentNo,districtId,{goalId:goal.id})
+  if (!mission || !['open','complete'].includes(mission.status)) return {success:false,error:'This Quest is no longer available.'}
+  const {data: membership} = await supabase.from('rc_reconnect_participants').select('status').eq('mission_id',mission.id).eq('agent_no',agentNo).maybeSingle()
+  if (membership?.status !== 'joined') return {success:false,error:'Join the Quest before sharing it.'}
+  mission = await refreshMission(supabase,mission,goal.variant as 'connect' | 'invite',goal.config)
+  if (!['open','complete'].includes(mission.status)) return {success:false,error:'This Quest has ended.'}
+  const participants = await participantsFor(supabase,mission)
+  const joined = participants.filter((p:any)=>p.status==='joined')
+  // Retained stale joined rows still occupy roster slots until explicitly removed.
+  const reserved = participants.filter((p:any)=>p.status==='invited' && !inviteExpired(p)).length
+  const complete = mission.status === 'complete'
+  const checklist = mission.checklistProgress
+  const countingType = checklist ? 'checklist' : mission.sharedTrackProgress ? 'pooled' : goal.variant === 'invite' ? 'team' : 'signals'
+  const progress = checklist ? joined.filter((p:any)=>p.contribution>=checklist.total).length
+    : mission.sharedTrackProgress ? mission.sharedTrackProgress.progress
+    : goal.variant === 'invite' ? joined.length : joined.filter((p:any)=>p.streamed_at).length
+  const {data: definition} = await supabase.from('rc_goals').select('label').eq('id',goal.id).maybeSingle()
+  const title = mission.sharedTrackProgress?.label || definition?.label || 'ReConnect Quest'
+  const quest = publicQuest({title,countingType,progress,target:mission.sharedTrackProgress?.target || mission.required_agents,complete,
+    joined:joined.length,capacity:mission.required_agents,availableSeats:complete?0:Math.max(0,mission.required_agents-joined.length-reserved),
+    capturedAt:new Date().toISOString(),messages:[]})
+  if(params.skipMessages===true)return {success:true,quest,messages:[]}
+  const {data: rows,error} = await supabase.from('rc_reconnect_messages').select('id,agent_no,body,created_at')
+    .eq('mission_id',mission.id).order('created_at',{ascending:false}).order('id',{ascending:false}).limit(50)
+  if(error) return {success:false,error:'Could not load shareable messages. Please retry.'}
+  const authors = [...new Set([agentNo,...(rows||[]).map((m:any)=>m.agent_no),...participants.map((p:any)=>p.agent_no)])]
+  const [{data: players,error:playerError},{data: accounts,error:accountError}] = await Promise.all([
+    supabase.from('rc_players').select('codename').in('agent_no',authors),
+    supabase.from('rc_agents').select('handle,lb_username,statsfm_username,musicat_public_id').in('agent_no',authors),
+  ])
+  if(playerError || accountError) return {success:false,error:'Could not check message privacy. Please retry.'}
+  const protectedWords = [...authors,...(players||[]).map((p:any)=>p.codename),...(accounts||[]).flatMap((a:any)=>Object.values(a)),
+    ...(goal.config.ciphers||[]).flatMap((c:any)=>c.answerKeys||[])].filter(Boolean)
+  const labels = new Map<string,string>()
+  const messages = (rows||[]).reverse().map((m:any)=>{
+    if(m.agent_no!==agentNo && !labels.has(m.agent_no)) labels.set(m.agent_no,labels.size===0?'AGENT':`AGENT ${labels.size+1}`)
+    return {id:String(m.id),label:m.agent_no===agentNo?'YOU':labels.get(m.agent_no),body:m.body,
+      problem:messageProblem(m.body,protectedWords)}
+  })
+  return {success:true,quest,messages}
+}
+
+export async function selectedQuestShareData(supabase: SupabaseDB, params: any) {
+  const source:any = await getQuestShareSource(supabase,{...params,skipMessages:params.includeChat!==true})
+  if(!source.success) return source
+  const ids = params.messageIds
+  if(!Array.isArray(ids) || ids.length>5 || ids.some((id:any)=>typeof id!=='string' || !/^\d+$/.test(id)) || new Set(ids).size!==ids.length)
+    return {success:false,error:'Choose up to five messages.'}
+  if(ids.length && params.includeChat !== true) return {success:false,error:'Enable Include chat moment before selecting messages.'}
+  const selected = source.messages.filter((m:any)=>ids.includes(m.id))
+  if(selected.length!==ids.length) return {success:false,error:'A selected message is no longer available. Update the selection.'}
+  const blocked = selected.find((m:any)=>m.problem)
+  if(blocked) return {success:false,error:blocked.problem,messageId:blocked.id}
+  // Relabel only selected authors, in conversation order; no source IDs stored.
+  const labels = new Map<string,string>()
+  const messages = selected.map((m:any)=>{
+    if(m.label!=='YOU' && !labels.has(m.label)) labels.set(m.label,labels.size===0?'AGENT':`AGENT ${labels.size+1}`)
+    return {label:m.label==='YOU'?'YOU':labels.get(m.label),body:safeText(m.body,150)}
+  })
+  const error = selectionProblem(messages)
+  if(error) return {success:false,error:error.reason,messageId:selected[error.index]?.id}
+  return {success:true,data:publicQuest({...source.quest,messages})}
 }
 
 /** Lightweight unread input for the normal game-state poll. Counts only

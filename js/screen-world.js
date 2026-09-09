@@ -28,7 +28,7 @@ import { renderWardTiles, glanceStrip, wardDisplayName, districtDisplayName, HOM
 import { renderCityMap } from './city-map.js'
 import { districtIcon } from './landmarks.js'
 import { openFinder } from './search.js'
-import { openShare, openRedZoneShare } from './share.js'
+import { openCityShare, openRedZoneShare } from './share.js'
 import { agentChargeSheet, boraMeterSheet } from './agent-charge.js'
 import { broadcastCards } from './broadcasts.js'
 import { cityFeedCard } from './city-feed.js'
@@ -40,6 +40,7 @@ import { tickCountdowns } from './countdown.js'
 import { redZonePercent, personalSignalCopy, redZoneHeadline, redZoneGoalCopy,
   unreadCommsCount, unreadBadgeText } from './red-zone-ui.js'
 import { bombHealthStatus, lastFedLabel } from './agent-charge-health.js'
+import { warmShareArtwork } from './share-scene-image.js'
 
 export function renderWorld(container, state) {
   container.innerHTML = ''
@@ -90,6 +91,7 @@ export function renderWorld(container, state) {
   if (state.agentCharge?.eraCards?.length) wrap.appendChild(weeklyEraCards(state))
 
   container.appendChild(wrap)
+  warmShareArtwork(state)
 }
 
 // Two clocks run this loop, and neither one is visible anywhere else in the
@@ -269,8 +271,8 @@ function commandTools(state) {
   button.onclick = () => {
     const sheet = el('div', 'sheet command-tool-sheet')
     sheet.append(el('div', 'eyebrow', 'CITY TOOLS'), el('h3', '', 'What do you need?'))
-    const share = el('button', 'btn btn-ghost', '📤 Share city progress')
-    share.onclick = () => showOverlay(openShare(state))
+    const share = el('button', 'btn btn-ghost', '📤 Share ARMY Bomb')
+    share.onclick = () => showOverlay(openCityShare())
     const find = el('button', 'btn btn-ghost', '🔍 Find an agent or district')
     find.onclick = () => { hideOverlay(); openFinder(state) }
     // Moved off the map (city-map.js's toolMarker cluster is now Candy Star
@@ -295,7 +297,7 @@ function mapHead(state) {
   row.appendChild(el('span', 'world-eyebrow', 'City map'))
   const tools = el('span', 'map-tools')
   const share = el('button', 'find-btn', '📤 Share')
-  share.onclick = () => showOverlay(openShare(state))
+  share.onclick = () => showOverlay(openCityShare())
   const find = el('button', 'find-btn', '🔍 Find')
   find.onclick = () => openFinder(state)
   tools.append(share, find)
@@ -587,14 +589,14 @@ function peekSheet(d, ward, state) {
 let bombIntroPlayed = false
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
-function coreBlock(state) {
+export function coreBlock(state, shareOnly = false) {
   const charge = state.agentCharge || { hoursRemaining: 0, isDark: false }
   const cells = Number(state.player?.chargeCells) || 0
   const hours = Math.max(0, Number(charge.hoursRemaining) || 0)
   const neverFed = !charge.isDark && hours <= 0
   const defuse = state.bomb?.defuse || null
-  const firstReveal = !bombIntroPlayed
-  bombIntroPlayed = true
+  const firstReveal = !shareOnly && !bombIntroPlayed
+  if(!shareOnly)bombIntroPlayed = true
 
   const zone = el('div', 'core-block' + (defuse ? ' is-redzone' : ''))
 
@@ -758,7 +760,7 @@ function coreBlock(state) {
     }
     zone.appendChild(shareRedZone)
 
-    tickCountdowns()
+    if(!shareOnly)tickCountdowns()
     return zone
   }
 

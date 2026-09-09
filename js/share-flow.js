@@ -1,6 +1,21 @@
 import { el, hideOverlay, toast } from './state.js'
 import { call } from './api.js'
 import { getAgentNo } from './session.js'
+import { renderShareSceneImage } from './share-scene-image.js'
+
+const preparing=new Map()
+export function prepareSceneShare(params,request=call) {
+  if(params.kind==='district')params={...params,sceneCharge:Math.max(0,Math.min(1,Number(window.__rcState?.bomb?.charge)||0))}
+  const key=JSON.stringify({agentNo:getAgentNo(),...params})
+  if(preparing.has(key))return preparing.get(key)
+  const promise=(async()=>{
+    const snapshot=await request('createShareSnapshot',{agentNo:getAgentNo(),...params})
+    if(!snapshot?.success)throw new Error(snapshot?.error||'Could not prepare share')
+    if(!snapshot.imageReady){const png=await renderShareSceneImage(snapshot);const saved=await request('attachShareImage',{agentNo:getAgentNo(),id:snapshot.id,png});if(!saved?.success)throw new Error(saved?.error||'Could not save image')}
+    return snapshot
+  })().finally(()=>preparing.delete(key))
+  preparing.set(key,promise);return promise
+}
 
 function findDistrict(state, districtId, suppliedDistrict) {
   if (suppliedDistrict) return suppliedDistrict
@@ -44,6 +59,9 @@ function shareSheet(kicker, heading, createSnapshot) {
     snapshot = result
     primary.disabled = false
     primary.textContent = copyOnly ? 'COPY LINK' : 'SHARE'
+    // Open directly when the original tap is still valid. Browsers that drop
+    // activation during async preparation keep this one small Share button.
+    if(!copyOnly && navigator.userActivation?.isActive && sheet.isConnected && !sheet.closest('[hidden]'))primary.click()
   }).catch(() => {
     primary.textContent = 'COULDN\'T PREPARE LINK · TRY AGAIN'
     primary.disabled = false
@@ -88,7 +106,7 @@ export function openDistrictShare(state, options = {}) {
     return sheet
   }
   return shareSheet('SHARE MY DISTRICT', 'Your City moment, ready to post.',
-    () => call('createShareSnapshot', { agentNo: getAgentNo(), kind: 'district', districtId: options.districtId || district.id }))
+    () => prepareSceneShare({ kind: 'district', districtId: options.districtId || district.id }))
 }
 
 /** Fetch once on open, then freeze that response. The timer, progress and
@@ -96,10 +114,14 @@ export function openDistrictShare(state, options = {}) {
  *  the PNG is rendering or the native share sheet is open. */
 export function openRedZoneShare() {
   return shareSheet('SHARE RED ZONE', 'Call ARMY into the fight.',
-    () => call('createShareSnapshot', { agentNo: getAgentNo(), kind: 'red_zone_active' }))
+    () => prepareSceneShare({ kind: 'red_zone_active' }))
 }
 
 export function openSuccessfulRedZoneShare(resolved) {
   return shareSheet('SHARE THE WIN', 'The City is safe.',
-    () => call('createShareSnapshot', { agentNo: getAgentNo(), kind: 'red_zone_success', eventId: resolved.id }))
+    () => prepareSceneShare({ kind: 'red_zone_success', eventId: resolved.id }))
+}
+
+export function openCityShare() {
+  return shareSheet('SHARE ARMY BOMB','Your ARMY Bomb, in this moment.',()=>prepareSceneShare({kind:'city_bomb'}))
 }
