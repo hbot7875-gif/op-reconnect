@@ -50,12 +50,21 @@ async function activeAgents(supabase: SupabaseDB, districtId: string) {
     .eq('district_id', districtId).eq('status', 'active').limit(200)
   const agentNos = (districts || []).map((d: any) => d.agent_no)
   if (!agentNos.length) return []
-  const { data: players } = await supabase.from('rc_players')
-    .select('agent_no,codename,last_seen_at').in('agent_no', agentNos)
-    .eq('appear_offline', false)
-    .order('last_seen_at', { ascending: false })
+  // Retirement is a soft delete: rc_players and the district row both stay
+  // as history, and rc_agents.retired_at is the authoritative flag (same
+  // gate the leaderboard and the bomb's defender list already apply).
+  // Without this a retired agent still counted here and could be sent a
+  // signal they will never read.
+  const [{ data: players }, { data: liveAgents }] = await Promise.all([
+    supabase.from('rc_players')
+      .select('agent_no,codename,last_seen_at').in('agent_no', agentNos)
+      .eq('appear_offline', false)
+      .order('last_seen_at', { ascending: false }),
+    supabase.from('rc_agents').select('agent_no').in('agent_no', agentNos).is('retired_at', null),
+  ])
+  const stillPlaying = new Set((liveAgents || []).map((a: any) => String(a.agent_no)))
   const pdByAgent = new Map((districts || []).map((d: any) => [d.agent_no, d]))
-  return (players || []).filter((p: any) => pdByAgent.has(p.agent_no))
+  return (players || []).filter((p: any) => pdByAgent.has(p.agent_no) && stillPlaying.has(String(p.agent_no)))
     .map((p: any) => ({
       ...p,
       pd: pdByAgent.get(p.agent_no),
@@ -77,13 +86,17 @@ export async function getWardRoster(supabase: SupabaseDB, content: GameContent, 
     .select('agent_no,district_id').in('district_id', districtIds).eq('status', 'active').limit(2000)
   if (error) return { success: false, error: error.message }
 
-  // Hidden agents are left out of the count as well as the list, so the
-  // number and the roster you can open can never disagree.
+  // Hidden and retired agents are left out of the count as well as the
+  // list, so the number and the roster you can open can never disagree.
   const agentNos = [...new Set((assigned || []).map((row: any) => row.agent_no))]
-  const { data: visible } = agentNos.length
-    ? await supabase.from('rc_players').select('agent_no').in('agent_no', agentNos).eq('appear_offline', false)
-    : { data: [] }
-  const shown = new Set((visible || []).map((p: any) => p.agent_no))
+  const [{ data: visible }, { data: liveAgents }] = agentNos.length
+    ? await Promise.all([
+      supabase.from('rc_players').select('agent_no').in('agent_no', agentNos).eq('appear_offline', false),
+      supabase.from('rc_agents').select('agent_no').in('agent_no', agentNos).is('retired_at', null),
+    ])
+    : [{ data: [] }, { data: [] }]
+  const stillPlaying = new Set((liveAgents || []).map((a: any) => String(a.agent_no)))
+  const shown = new Set((visible || []).map((p: any) => p.agent_no).filter((no: any) => stillPlaying.has(String(no))))
 
   const counts: Record<string, number> = {}
   for (const row of assigned || []) {
