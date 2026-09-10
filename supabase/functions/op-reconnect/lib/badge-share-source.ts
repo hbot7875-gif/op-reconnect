@@ -31,8 +31,13 @@ export async function resolveBadgeShare(sb:any,agentNo:string,badgeId:string) {
 export async function awardedArtwork(sb:any,artId:number) {
   const {data:art,error}=await sb.from('rc_badge_art').select('storage_path').eq('id',artId).maybeSingle()
   if(error||!art?.storage_path)throw new Error('The awarded badge artwork is unavailable. Please try again later.')
-  const {data:blob,error:downloadError}=await sb.storage.from('badge-art').download(art.storage_path)
-  if(downloadError||!blob||blob.size>8_000_000||!['image/png','image/jpeg','image/webp'].includes(blob.type))throw new Error('The awarded badge artwork could not be loaded.')
+  // Badge art is stored as WebP, which the satori renderer in @vercel/og cannot
+  // decode for an <img>. Pull it through Storage image transforms instead: with
+  // no "Accept: image/webp" (Deno fetch sends none) the render endpoint returns
+  // JPEG, which satori handles. resize:'cover' to a square keeps every source
+  // aspect ratio usable; the layout re-crops with its own object-fit.
+  const {data:blob,error:downloadError}=await sb.storage.from('badge-art').download(art.storage_path,{transform:{width:900,height:900,resize:'cover'}})
+  if(downloadError||!blob||blob.size>8_000_000||!['image/png','image/jpeg'].includes(blob.type))throw new Error('The awarded badge artwork could not be loaded.')
   const bytes=new Uint8Array(await blob.arrayBuffer())
   return `data:${blob.type};base64,${base64(bytes)}`
 }
