@@ -16,7 +16,7 @@ export function drawQuestCanvas(data, portrait=false) {
   const layout=questLayout(data,portrait)
   const canvas=document.createElement('canvas');canvas.width=layout.width;canvas.height=layout.height
   const ctx=canvas.getContext('2d');ctx.fillStyle=layout.background;ctx.fillRect(0,0,canvas.width,canvas.height)
-  for(const o of layout.ops){ctx.font=`${o.family?700:o.size<=25?400:o.weight} ${o.size}px "${o.family || (o.size<=25?'Share Tech Mono':'Roboto')}", sans-serif`;ctx.fillStyle=o.color;ctx.fillText(o.text,o.x,o.y)}
+  for(const o of layout.ops){ctx.font=`${o.family?o.weight:o.size<=25?400:o.weight} ${o.size}px "${o.family || (o.size<=25?'Share Tech Mono':'Roboto')}", sans-serif`;ctx.fillStyle=o.color;ctx.fillText(o.text,o.x,o.y)}
   canvas.setAttribute('role','img');canvas.setAttribute('aria-label',`${data.title}: ${data.progress} of ${data.target}, ${data.messages?.length||0} selected messages`)
   return canvas
 }

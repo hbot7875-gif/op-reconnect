@@ -62,9 +62,13 @@ export function publicQuest(data) {
 }
 
 export function publicSnapshot(row) {
-  if (!row || !['district', 'red_zone_active', 'red_zone_success', 'quest', 'city_bomb'].includes(row.kind)) return null
+  if (!row || !['district', 'red_zone_active', 'red_zone_success', 'quest', 'city_bomb', 'badge'].includes(row.kind)) return null
   const d = row.data || {}; let data
-  if (row.kind === 'quest') data = publicQuest(d)
+  if (row.kind === 'badge') {
+    if (![25,50,75,100].includes(d.milestonePercent)) return null
+    data={milestonePercent:d.milestonePercent,districtDisplayName:safeText(d.districtDisplayName,90),rarity:d.rarity==='rare'?'rare':'common',reaction:safeText(d.reaction,180),capturedAt:safeText(d.capturedAt,35),version:[2,3].includes(d.version)?d.version:2}
+  }
+  else if (row.kind === 'quest') data = publicQuest(d)
   else if(row.kind==='city_bomb')data={hoursRemaining:Math.round(Math.max(0,Number(d.hoursRemaining)||0)),isDark:d.isDark===true,line:safeText(d.line,180)}
   else if (row.kind === 'district') data = {
     displayName: safeText(d.displayName, 90), percent: Math.min(100, count(d.percent)), complete: d.complete === true,
@@ -90,5 +94,13 @@ export function captionSuggestions(q, hasChat = false) {
 }
 
 export function questLinkPayload(caption, url) {
-  return {title:'ReConnect Quest',text:String(caption || '').split(url).join('').trim(),url}
+  return shareLinkPayload('ReConnect Quest',caption,url)
+}
+
+export function shareLinkPayload(title,caption,url) {
+  return {title,text:String(caption||'').split(url).join('').trim(),url}
+}
+
+export function questCallout(q) {
+  return q.complete?'we actually did it 😭':q.availableSeats>0?'come stream with us ↗':'stream along with us ↗'
 }

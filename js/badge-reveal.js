@@ -8,6 +8,8 @@ import { badgeDrawerSheet, badgeStory } from './badge-drawer.js'
 import { collectionBadgeIds } from './badges.js'
 import { getAgentNo } from './session.js'
 import { el, esc, getState, hideOverlay, showOverlay } from './state.js'
+import { badgeShareControls } from './badge-share.js'
+import { BADGE_MILESTONES } from '../supabase/functions/op-reconnect/lib/badge-share-layout.js'
 
 const SEEN_KEY = 'rc_seen_collection_badges:'
 const pending = new Set()
@@ -81,7 +83,7 @@ function pumpRevealQueue() {
   observer.observe(overlay, { childList: true, attributes: true, attributeFilter: ['hidden'] })
 }
 
-function unlockSheet(badge, additional, state) {
+export function unlockSheet(badge, additional, state) {
   const rare = badge.rarity === 'rare'
   const sheet = el('div', 'sheet badge-unlock' + (rare ? ' is-rare' : ''))
   const art = badge.artworkUrl
@@ -109,7 +111,9 @@ function unlockSheet(badge, additional, state) {
     hideOverlay()
     setTimeout(pumpRevealQueue, 0)
   }
-  actions.append(view, later)
+  actions.append(view)
+  if (Object.hasOwn(BADGE_MILESTONES,badge.templateId)) actions.append(badgeShareControls(badge.badgeId))
+  actions.append(later)
   sheet.appendChild(actions)
   return sheet
 }

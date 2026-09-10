@@ -1,4 +1,4 @@
-import { publicQuest, questProgressLabel, wrapText, selectionProblem } from './quest-share-rules.js'
+import { publicQuest, questProgressLabel, wrapText, selectionProblem, questCallout } from './quest-share-rules.js'
 export const QUEST_FONTS = [
   {name:'Roboto',weight:400,url:'https://fonts.gstatic.com/s/roboto/v51/KFOMCnqEu92Fr1ME7kSn66aGLdTylUAMQXC89YmC2DPNWubEbWmT.ttf'},
   {name:'Roboto',weight:700,url:'https://fonts.gstatic.com/s/roboto/v51/KFOMCnqEu92Fr1ME7kSn66aGLdTylUAMQXC89YmC2DPNWuYjammT.ttf'},
@@ -15,6 +15,20 @@ export function questLayout(input, portrait = false) {
   const width = portrait ? 1080 : 1200, height = portrait ? 1350 : 630
   const ops = []; const add = (text,x,y,size,color='#eee8f6',weight=400) => ops.push({text,x,y,size,color,weight})
   const chat = q.messages.length > 0
+  if(!chat&&!portrait){
+    add('RECONNECT QUEST',64,58,28,'#ab90df',600)
+    let y=150
+    for(const line of wrapText(q.title,25)){add(line,64,y,44,'#f5effb',700);y+=55}
+    y+=45;add(`${q.progress.toLocaleString()} / ${q.target.toLocaleString()}`,64,y,80,'#c4a5ff',700)
+    y+=50;for(const line of wrapText(questProgressLabel(q),32)){add(line,64,y,29,'#b9abc9',600);y+=38}
+    add(`${q.joined} ARMY`,815,180,40,'#d8cbe9',600);add('TOGETHER',815,232,34,'#d8cbe9',600)
+    let sy=315
+    const state=q.complete?'QUEST COMPLETE':q.availableSeats?`${q.availableSeats} OPEN SEAT${q.availableSeats===1?'':'S'}`:''
+    for(const line of wrapText(state,18)){add(line,815,sy,29,q.complete?'#dfbb75':'#b49cdd',600);sy+=38}
+    sy+=32;add(questCallout(q),815,sy,28,'#cbbadd');ops.at(-1).family='Roboto'
+    add('OP: RECONNECT',64,height-65,25,'#ac9bbf',600);add('hopetrackers.org',64,height-28,27,'#cbbedd')
+    return {width,height,ops,background:'#100d1a'}
+  }
   const missionX = portrait || !chat ? 64 : 800
   const missionW = portrait ? 950 : chat ? 340 : 1070
   const longTitle=q.title.length>42
@@ -26,12 +40,13 @@ export function questLayout(input, portrait = false) {
   add(`${q.progress.toLocaleString()} / ${q.target.toLocaleString()}`,missionX,y,portrait ? 64 : 50,'#c4a5ff',700); y += portrait ? 78 : 62
   for (const line of wrapText(questProgressLabel(q),chat && !portrait ? 24 : 50)) {add(line,missionX,y,21,'#b9abc9',600); y+=28}
   y += 28
-  add(`${q.joined} / ${q.capacity} ARMY HERE`,missionX,y,25,'#d8cbe9',600)
+  add(`${q.joined} ARMY TOGETHER`,missionX,y,25,'#d8cbe9',600)
   if (q.complete) add('QUEST COMPLETE',missionX,y+43,24,'#dfbb75',600)
   else if(q.availableSeats) add(`${q.availableSeats} OPEN SEAT${q.availableSeats === 1 ? '' : 'S'}`,missionX,y+43,24,'#b49cdd',600)
-  else add('TEAM FULL',missionX,y+43,23,'#a498b4')
+  let callY=y+(q.complete||q.availableSeats?83:43)
+  add(questCallout(q),missionX,callY,portrait?30:28,'#cbbadd');ops.at(-1).family='Roboto';callY+=portrait?40:36
   if(chat) {
-    let cy = portrait ? Math.max(540,y+100) : 122
+    let cy = portrait ? Math.max(540,callY+38) : 122
     for(const m of q.messages) {
       add(m.label,64,cy,20,m.label === 'YOU' ? '#dfbb75' : '#ab90df',700);cy+=30
       for(const line of wrapText(m.body,34)) {add(line,64,cy,portrait?33:30);cy+=portrait?44:37}
@@ -47,5 +62,7 @@ export function questLayout(input, portrait = false) {
 export function questImageElement(h, data, portrait = false) {
   const layout=questLayout(data,portrait)
   return h('div',{style:{display:'flex',position:'relative',width:layout.width,height:layout.height,background:layout.background,fontFamily:'sans-serif'}},
-    ...layout.ops.map((o,i)=>h('div',{key:i,style:{display:'flex',position:'absolute',left:o.x,top:o.y- o.size,width:layout.width-o.x-24,fontSize:o.size,color:o.color,fontFamily:o.family || (o.size<=25?'Share Tech Mono':'Roboto'),fontWeight:o.family?700:o.size<=25?400:o.weight,whiteSpace:'pre'}},o.text)))
+    ...layout.ops.map((o,i)=>h('div',{key:i,style:{display:'flex',alignItems:'center',position:'absolute',left:o.x,top:o.y- o.size,width:layout.width-o.x-24,fontSize:o.size,color:o.color,fontFamily:o.family || (o.size<=25?'Share Tech Mono':'Roboto'),fontWeight:o.family?o.weight:o.size<=25?400:o.weight,whiteSpace:'pre'}},
+      h('span',{},o.text.replace(/ ↗$/,'')),
+      o.text.endsWith(' ↗')?h('svg',{width:o.size*.7,height:o.size*.7,viewBox:'0 0 24 24',style:{marginLeft:8}},h('path',{d:'M5 19L19 5M7 5H19V17',stroke:o.color,strokeWidth:2,fill:'none'})):null)))
 }

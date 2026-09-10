@@ -2,6 +2,7 @@ import { el, hideOverlay, toast } from './state.js'
 import { call } from './api.js'
 import { getAgentNo } from './session.js'
 import { renderShareSceneImage } from './share-scene-image.js'
+import { shareLinkPayload } from '../supabase/functions/op-reconnect/lib/quest-share-rules.js'
 
 const preparing=new Map()
 export function prepareSceneShare(params,request=call) {
@@ -30,7 +31,7 @@ async function nativeLinkShare(snapshot) {
   try {
     // Keep the URL in one field only. Supplying it as both text and url makes
     // several Android share targets visibly paste the same link twice.
-    await navigator.share({ title: snapshot.title, url: snapshot.url })
+    await navigator.share(shareLinkPayload(snapshot.title,snapshot.data?.reaction||snapshot.data?.line||'',snapshot.url))
     return 'shared'
   } catch (error) {
     return error?.name === 'AbortError' ? 'cancelled' : 'failed'

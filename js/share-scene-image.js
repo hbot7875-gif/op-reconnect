@@ -89,9 +89,10 @@ export async function renderShareSceneImage(snapshot) {
       y=text(ctx,`${d.percent}% RESTORED`,812,y+24,350,31,d.complete?'#e4b968':'#b99bec')+30
       for(const goal of (d.goals||[]).slice(0,2)){
         const name=goal.label.length>18?goal.label.slice(0,17)+'…':goal.label
-        text(ctx,name,812,y,350,28);y+=36;text(ctx,`${goal.progress} / ${goal.target}`,812,y,350,28,'#c9badd');y+=48
+        text(ctx,name,812,y,350,34);y+=38;text(ctx,`${goal.progress} / ${goal.target}`,812,y,350,34,'#c9badd');y+=43
       }
-      if(d.roadTo1B)text(ctx,'road to 1B ↗',812,Math.min(y+4,530),350,23,'#a99bb9')
+      text(ctx,d.complete?'go light up ur city ↗':'come light up ur city ↗',812,Math.max(y+4,497),350,29,'#cbbadd')
+      if(d.roadTo1B&&y<480)text(ctx,'road to 1B ↗',812,535,350,22,'#a99bb9')
     } else {
       const image=await bombImage(snapshot)
       const scale=Math.min(660/image.width,560/image.height)
@@ -101,7 +102,9 @@ export async function renderShareSceneImage(snapshot) {
       if(live){y=text(ctx,`${Math.round(d.progress/d.target*100)}% DEFUSED`,790,y+32,365,37)+25;y=text(ctx,`${d.progress.toLocaleString()} / ${d.target.toLocaleString()} STREAMS`,790,y,365,27)+12
         const s=d.remainingSeconds;const timer=[Math.floor(s/3600),Math.floor(s%3600/60),s%60].map(n=>String(n).padStart(2,'0')).join(':')
         y=text(ctx,timer+' LEFT',790,y,365,27,'#ffbcc6')+20
-        text(ctx,'STREAM '+d.targetLabel,790,y,365,Math.min(28, d.targetLabel.length>60?20:28))
+        const targetBottom=text(ctx,'STREAM '+d.targetLabel,790,y,365,d.targetLabel.length>60?23:28)
+        if(targetBottom<475)text(ctx,'EVERYBODY MOVE ↗',790,targetBottom+30,365,28,'#e8bcc8')
+        else text(ctx,'EVERYBODY MOVE ↗',64,570,650,30,'#e8bcc8')
       } else text(ctx,win?'DEFUSED':d.hoursRemaining?`${Math.round(d.hoursRemaining)}H CHARGED`:d.isDark?'NEEDS SOME LOVE':'WAITING FOR ITS SPARK',790,y+50,365,34,win?'#e4b968':'#c8b3ec')
     }
     text(ctx,'RECONNECT · HOPETRACKER',snapshot.kind==='district'?812:790,567,365,17,'#a493b7')

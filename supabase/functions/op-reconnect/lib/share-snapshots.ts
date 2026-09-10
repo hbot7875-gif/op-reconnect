@@ -11,11 +11,13 @@ import { selectedQuestShareData } from './reconnect-missions.ts'
 import { publicSnapshot } from './quest-share-rules.js'
 import { questImageElement, questLayout, QUEST_FONTS } from './quest-share-layout.js'
 import { throttle } from './auth.ts'
+import { resolveBadgeShare, awardedArtwork, base64 } from './badge-share-source.ts'
+import { badgeImageElement } from './badge-share-layout.js'
 
 const SITE = 'https://hopetrackers.org'
 const ID_RE = /^[A-Za-z0-9_-]{22}$/
 
-type SnapshotKind = 'district' | 'red_zone_active' | 'red_zone_success' | 'quest' | 'city_bomb'
+type SnapshotKind = 'district' | 'red_zone_active' | 'red_zone_success' | 'quest' | 'city_bomb' | 'badge'
 
 function opaqueId(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(16))
@@ -105,6 +107,7 @@ async function insert(supabase: SupabaseDB, kind: SnapshotKind, data: Record<str
 
 export async function createShareSnapshot(supabase: SupabaseDB, params: any) {
   const agentNo = clean(params.agentNo, 20).toUpperCase()
+  if(params.kind==='badge')return createBadgeShare(supabase,agentNo,String(params.badgeId||''))
   if(params.kind === 'quest') {
     if(!await throttle(supabase,`quest-share:${agentNo}`,12,3600)) return {success:false,error:'You have prepared several shares. Please try again later.'}
     const selected:any = await selectedQuestShareData(supabase,params)
@@ -142,7 +145,7 @@ export async function createShareSnapshot(supabase: SupabaseDB, params: any) {
       }
     }
     const stable={...data,capturedAt:undefined,remainingSeconds:kind==='red_zone_active'?Math.floor(data.remainingSeconds/10):undefined}
-    const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify({kind,data:stable,visual})))
+    const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify({layoutVersion:2,kind,data:stable,visual})))
     const cacheKey=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('')
     const {data:prior}=await supabase.from('rc_share_snapshots').select('id,data').eq('created_by',agentNo).eq('cache_key',cacheKey).not('image_png','is',null).gt('expires_at',new Date().toISOString()).limit(1).maybeSingle()
     if(prior)return {success:true,id:prior.id,kind,url:`${SITE}/share/${kind==='district'?'district':kind==='city_bomb'?'city':'red-zone'}/${prior.id}`,title,data:prior.data,visual,imageReady:true}
@@ -181,7 +184,7 @@ export async function attachShareImage(sb:SupabaseDB,params:any) {
   try {
     decodeSharePng(params.png)
     if(!ID_RE.test(params.id||''))throw new Error('Invalid share')
-    const {data,error}=await sb.from('rc_share_snapshots').update({image_png:params.png}).eq('id',params.id).eq('created_by',params.agentNo).is('image_png',null).gt('expires_at',new Date().toISOString()).select('id').maybeSingle()
+    const {data,error}=await sb.from('rc_share_snapshots').update({image_png:params.png}).eq('id',params.id).eq('created_by',params.agentNo).neq('kind','badge').is('image_png',null).gt('expires_at',new Date().toISOString()).select('id').maybeSingle()
     if(error||!data)throw new Error('Could not save this share image. Reopen Share to retry.')
     return {success:true}
   }catch(e){return {success:false,error:(e as Error).message}}
@@ -196,6 +199,40 @@ export async function getPublicShareSnapshot(supabase: SupabaseDB, params: any) 
 }
 
 const h = React.createElement
+let badgeFonts:Promise<any[]>|null=null
+export async function renderBadgePng(sb:any,data:any,artId:number,portrait=false) {
+  const art=await awardedArtwork(sb,artId)
+  if(!badgeFonts)badgeFonts=Promise.all(QUEST_FONTS.filter((f:any)=>f.name==='Roboto').map(async(f:any)=>{const r=await fetch(f.url);if(!r.ok)throw new Error('font unavailable');return {name:f.name,weight:f.weight,style:'normal' as const,data:await r.arrayBuffer()}})).catch(e=>{badgeFonts=null;throw e})
+  const fonts=await badgeFonts
+  const r=new ImageResponse(badgeImageElement(h,data,art,portrait) as any,{width:portrait?1080:1200,height:portrait?1350:630,fonts})
+  return base64(new Uint8Array(await r.arrayBuffer()))
+}
+async function createBadgeShare(sb:any,agentNo:string,badgeId:string) {
+  try {
+    const source=await resolveBadgeShare(sb,agentNo,badgeId)
+    const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify({badgeId,artId:source.artId,milestonePercent:source.data.milestonePercent,districtDisplayName:source.data.districtDisplayName,rarity:source.data.rarity,version:3})))
+    const cacheKey='badge:'+Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('')
+    const {data:prior}=await sb.from('rc_share_snapshots').select('id,kind,data').eq('created_by',agentNo).eq('cache_key',cacheKey).eq('kind','badge').not('image_png','is',null).gt('expires_at',new Date().toISOString()).limit(1).maybeSingle()
+    const result=(id:string,data:any)=>({success:true,id,kind:'badge',url:`${SITE}/share/badge/${id}`,title:`${data.milestonePercent}% Restored · ${data.districtDisplayName}`,data,imageReady:true,suggestions:source.suggestions})
+    if(prior)return result(prior.id,publicSnapshot(prior)!.data)
+    if(!await throttle(sb,`badge-share:${agentNo}`,12,3600))throw new Error('Please wait before preparing more badge shares.')
+    const png=await renderBadgePng(sb,source.data,source.artId)
+    if(png.length>700000)throw new Error('This badge image could not be prepared for sharing.')
+    const id=opaqueId()
+    const {error}=await sb.from('rc_share_snapshots').insert({id,kind:'badge',data:source.data,created_by:agentNo,cache_key:cacheKey,badge_art_id:source.artId,image_png:png})
+    if(error)throw new Error('Could not save the badge share. Please retry.')
+    return result(id,source.data)
+  }catch(e){return {success:false,error:(e as Error).message.startsWith('The awarded')||(e as Error).message.startsWith('This badge')||(e as Error).message.startsWith('Sharing is')||(e as Error).message.startsWith('Please wait')?(e as Error).message:'Badge sharing is unavailable right now. Your badge is safe; please retry.'}}
+}
+export async function getBadgeShareStory(sb:any,params:any) {
+  try {
+    if(!ID_RE.test(params.id||''))throw new Error('Invalid share')
+    const {data:row,error}=await sb.from('rc_share_snapshots').select('id,kind,data,badge_art_id').eq('id',params.id).eq('created_by',params.agentNo).eq('kind','badge').gt('expires_at',new Date().toISOString()).maybeSingle()
+    if(error||!row?.badge_art_id)throw new Error('Unavailable')
+    if(!await throttle(sb,`badge-story:${params.agentNo}`,12,3600))return {success:false,error:'Please wait before preparing more images.'}
+    return {success:true,png:await renderBadgePng(sb,publicSnapshot(row)!.data,row.badge_art_id,true)}
+  }catch{return {success:false,error:'Could not prepare this badge image. Your badge and share link are safe.'}}
+}
 function card(snapshot: any) {
   const data = snapshot.data || {}
   if(snapshot.kind === 'quest') return questImageElement(h,data)

@@ -2142,6 +2142,14 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 .bgu-saved { margin-top: 13px; font-family: var(--mono); font-size: 7.5px; letter-spacing: 1px; color: var(--dim); text-transform: uppercase; }
 .bgu-actions { display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 18px; }
 .bgu-actions .btn { width: 100%; margin: 0; }
+.bgu-share{border:0;background:none;color:var(--purple-lt);font:500 14px var(--body);padding:7px 10px;cursor:pointer}
+.bgu-share:disabled{opacity:.6;cursor:wait}.bgu-share[hidden]{display:none}
+.badge-share-editor{display:grid;grid-template-columns:1fr 1fr;gap:7px;text-align:left}.badge-share-editor[hidden]{display:none}
+.badge-share-label{grid-column:1/-1;font:8px var(--mono);letter-spacing:1.3px;text-transform:uppercase;color:var(--dim)}
+.badge-share-caption{grid-column:1/-1;width:100%;min-height:54px;resize:none;border:1px solid var(--line);border-radius:9px;background:rgba(8,6,14,.55);color:var(--text);font:13px/1.4 var(--body);padding:9px 10px;outline:none}
+.badge-share-caption:focus{border-color:var(--purple-lt);box-shadow:0 0 0 2px rgba(139,92,246,.13)}
+.badge-share-another{padding:8px 6px;text-align:left}.badge-share-send{font-size:12px!important;padding:9px!important}.badge-share-editor>button:last-of-type{grid-column:1/-1}
+.badge-share-status{font:12px/1.4 var(--body);color:var(--muted);margin:4px 0;overflow-wrap:anywhere}.badge-share-status:empty{display:none}
 @keyframes bguTurn { to { transform: rotate(360deg); } }
 @keyframes bguLand { from { opacity: 0; transform: translateY(12px) scale(.72); } to { opacity: 1; transform: none; } }
 @keyframes bguScan { from { top: -20%; opacity: 0; } 20% { opacity: 1; } to { top: 105%; opacity: 0; } }
