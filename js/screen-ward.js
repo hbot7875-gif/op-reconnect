@@ -6,6 +6,7 @@
 // map exists it slots in above this list, and these rows stay as they are.
 
 import { el, esc, unlockAfter, joinNames } from './state.js'
+import { wardPopulation } from './ward-population.js'
 import { goWorld, goDistrict } from './router.js'
 import { districtPercent } from './district-progress.js'
 import { districtDisplayName } from './ward-tiles.js'
@@ -134,13 +135,38 @@ function districtList(state, ward, districts) {
         ${locked ? '<span class="d-lock">Sealed</span>'
           : power === 100 ? '<span class="d-power done">Restored</span>'
           : `<span class="d-power">${power}<i>%</i></span>`}
+        <span class="d-pop" data-pop="${esc(d.id)}" hidden></span>
       </span>
       <span class="d-bar"><i style="width:${power}%"></i></span>
     `
     row.onclick = (e) => goDistrict(ward.id, d.id, { x: e.clientX, y: e.clientY })
     list.appendChild(row)
   }
+  paintWardPopulation(list, ward.id)
   return list
+}
+
+/** Assignment, not presence — someone offline right now still counts. The
+ *  fetch happens after the list paints rather than blocking it: the ward has
+ *  to render instantly and a count arriving a moment later is fine. The
+ *  cache lives in ward-population.js because the district screen needs the
+ *  same numbers. */
+function applyWardPopulation(list, counts) {
+  for (const badge of list.querySelectorAll('[data-pop]')) {
+    const count = Number(counts?.[badge.dataset.pop]) || 0
+    if (!count) { badge.hidden = true; continue }
+    badge.hidden = false
+    badge.textContent = `👥 ${count}`
+    badge.title = `${count} agent${count === 1 ? '' : 's'} restoring this district`
+  }
+}
+
+function paintWardPopulation(list, wardId) {
+  wardPopulation(wardId).then((counts) => {
+    // The screen may have moved on while this was in flight — writing into
+    // a detached list is harmless, but there is no point doing it.
+    if (list.isConnected) applyWardPopulation(list, counts)
+  })
 }
 
 export function teardownWard() {}

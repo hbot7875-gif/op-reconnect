@@ -50,7 +50,7 @@ import { getChestStatus, openChest } from './lib/supply-chest.ts'
 import { getCommunityChestStatus, openCommunityChest } from './lib/vma-community-chest.ts'
 import { createShareSnapshot, getPublicShareSnapshot, shareImageResponse, attachShareImage, getBadgeShareStory } from './lib/share-snapshots.ts'
 import { getQuestShareSource } from './lib/reconnect-missions.ts'
-import { getDistrictPresence, sendDistrictMessage } from './lib/district-presence.ts'
+import { getDistrictPresence, getWardRoster, sendDistrictMessage } from './lib/district-presence.ts'
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -103,6 +103,7 @@ const ROUTES: Record<string, Route> = {
   getBadgeShareStory: { auth: 'agent', handler: (sb, p) => getBadgeShareStory(sb, p) },
   getQuestShareSource: { auth: 'agent', handler: (sb, p) => getQuestShareSource(sb, p) },
   getDistrictPresence: { auth: 'agent', handler: async (sb, p) => getDistrictPresence(sb, await loadContent(sb), p) },
+  getWardRoster: { auth: 'agent', handler: async (sb, p) => getWardRoster(sb, await loadContent(sb), p) },
   sendDistrictMessage: { auth: 'agent', handler: (sb, p) => sendDistrictMessage(sb, p) },
   trackEngagement: { auth: 'agent', handler: (sb, p) => trackEngagement(sb, p) },
   joinGame: { auth: 'agent', handler: (sb, p) => joinGame(sb, p) },

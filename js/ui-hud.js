@@ -18,6 +18,7 @@ import { el, esc, toast, setState, showOverlay, hideOverlay } from './state.js'
 import { getScreen, goWorld, goResources, goSettings, goCandyStar, goRanking, goDistrict } from './router.js'
 import { getAgentNo } from './session.js'
 import { earnedBadgeCount, equippedBadge } from './badges.js'
+import { districtDisplayName } from './ward-tiles.js'
 import { openMoonStation } from './settings-streams.js'
 import { redZonePercent } from './red-zone-ui.js'
 import { getReconnectChatSeen, reconnectChatUnreadCount,
@@ -209,7 +210,13 @@ export function renderHud(container, state) {
 
   const invites = state.invites || []
   const reconnectAlerts = state.reconnectAlerts || []
-  const signalCount = invites.length + reconnectAlerts.length
+  // Private district signals ride the same bell as invites and partner
+  // alerts. getDistrictMessageSummary has always returned this total and
+  // nothing read it, so a message sent to someone who had left the
+  // district was invisible until they happened to walk back into it.
+  const districtUnread = unreadDistrictSignals(state)
+  const unreadTotal = districtUnread.reduce((sum, row) => sum + row.unread, 0)
+  const signalCount = invites.length + reconnectAlerts.length + unreadTotal
   const reconnectStatus = reconnectHudStatus(state)
   const reconnectMission = state.activeDistrict?.reconnect?.mission
   const reconnectUnread = reconnectMission
@@ -236,8 +243,8 @@ export function renderHud(container, state) {
         </div>
         <div class="hud-streak${streakCold}" title="${p.streak.current} days in a row">${streakLabel}</div>
         <button class="hud-sync" id="syncBtn" type="button" title="Sync streams now" aria-label="Sync streams now">🔄</button>
-        <button class="hud-bell" id="bellBtn" type="button" title="Invites"
-          aria-label="${signalCount ? `${signalCount} ReConnect signal${signalCount === 1 ? '' : 's'}` : 'No ReConnect signals'}">
+        <button class="hud-bell${unreadTotal ? ' has-messages' : ''}" id="bellBtn" type="button" title="Signals"
+          aria-label="${signalCount ? `${signalCount} signal${signalCount === 1 ? '' : 's'}${unreadTotal ? `, including ${unreadTotal} unread message${unreadTotal === 1 ? '' : 's'}` : ''}` : 'No signals'}">
           🔔${signalCount ? `<span class="hud-bell-count">${signalCount}</span>` : ''}
         </button>
       </div>
@@ -336,14 +343,56 @@ export function openProgressSheet(state) {
  *  respond rather than a local state patch: accepting can change the
  *  invitee's own district goals (the reconnect goal gets frozen in), and
  *  that's exactly the kind of derived state not worth hand-patching. */
+/** Districts holding unread private signals for this agent, busiest first.
+ *  The count comes from the server (getDistrictMessageSummary); the name and
+ *  ward come from the map the client already has, so a district that has
+ *  since left the map still lists rather than disappearing silently. */
+function unreadDistrictSignals(state) {
+  const byDistrict = state.districtMessages?.unreadByDistrict || {}
+  const districts = state.map?.districts || []
+  return Object.entries(byDistrict)
+    .map(([districtId, unread]) => {
+      const district = districts.find((d) => d.id === districtId)
+      return {
+        districtId,
+        wardId: district?.wardId || null,
+        name: districtDisplayName(district) || 'A district',
+        unread: Number(unread) || 0,
+      }
+    })
+    .filter((row) => row.unread > 0)
+    .sort((a, b) => b.unread - a.unread || a.name.localeCompare(b.name))
+}
+
 function invitesSheet(state) {
   const sheet = el('div', 'sheet')
-  sheet.appendChild(el('div', 'eyebrow', '🔔 RECONNECT SIGNALS'))
+  sheet.appendChild(el('div', 'eyebrow', '🔔 SIGNALS'))
   const invites = state.invites || []
   const alerts = state.reconnectAlerts || []
+  const unreadSignals = unreadDistrictSignals(state)
 
-  if (!invites.length && !alerts.length) {
-    sheet.appendChild(el('p', 'muted', "No pending invites or partner alerts. If another agent becomes available, it can show up here."))
+  if (!invites.length && !alerts.length && !unreadSignals.length) {
+    sheet.appendChild(el('p', 'muted', "No messages, invites or partner alerts. If another agent signals you, it shows up here."))
+  }
+
+  for (const row of unreadSignals) {
+    const block = el('div', 'bd-block')
+    block.innerHTML = `
+      <div class="bd-block-head">${esc(row.name)}</div>
+      <p class="muted invite-body">${row.unread} private signal${row.unread === 1 ? '' : 's'} waiting for you.</p>
+    `
+    const actions = el('div', 'invite-actions')
+    const open = el('button', 'btn btn-primary', 'Read')
+    // Straight to the district that holds them — the agents-here button on
+    // its stage carries the same unread count and opens the thread.
+    open.onclick = () => {
+      hideOverlay()
+      if (row.wardId) goDistrict(row.wardId, row.districtId)
+      else goWorld()
+    }
+    actions.appendChild(open)
+    block.appendChild(actions)
+    sheet.appendChild(block)
   }
 
   for (const alert of alerts) {

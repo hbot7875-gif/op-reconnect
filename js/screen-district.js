@@ -17,6 +17,8 @@ import { itemTile, itemSheet, itemsAt, itemsInPack } from './items.js'
 import { trackEngagementOnce } from './engagement.js'
 import { reconnectPlayerNext } from './reconnect-player-ui.js'
 import { openPlaylistVault } from './playlist-vault-sheet.js'
+import { renderHud } from './ui-hud.js'
+import { wardPopulation, knownDistrictPopulation } from './ward-population.js'
 import { chatThread, updateChatThread } from './chat-thread.js'
 import { getReconnectChatSeen, markReconnectChatSeen,
   reconnectChatUnreadCount, reconnectChatBadgeText } from './reconnect-chat-unread.js'
@@ -102,7 +104,13 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
   container.querySelector('.stage-name').textContent = districtDisplayName(mapD)
   // The agent this place is named for, on the hero — not hidden until you finish.
   container.querySelector('.stage-echo').textContent = mapD.echoOf ? `👤 ${mapD.echoOf}` : ''
-  paintAgentsHere(container.querySelector('.stage-agents'), state, districtId)
+  // Warm the ward's roster counts, then repaint — the button should show
+  // the real "restoring this district" number even on a first visit.
+  const agentsButton = container.querySelector('.stage-agents')
+  paintAgentsHere(agentsButton, state, districtId, wardId)
+  wardPopulation(wardId).then(() => {
+    if (agentsButton?.isConnected) paintAgentsHere(agentsButton, state, districtId, wardId)
+  })
 
   container.querySelector('.stage-eyebrow').textContent = eyebrowText
 
@@ -253,16 +261,22 @@ function districtAgentsHere(state, districtId) {
     .map((a) => ({ codename: a.codename, isMe: myCodename != null && a.codename === myCodename }))
 }
 
-function paintAgentsHere(button, state, districtId) {
+function paintAgentsHere(button, state, districtId, wardId) {
   if (!button) return
   const agents = districtAgentsHere(state, districtId)
-  const count = Number(state.onlineNow?.districtCounts?.[districtId]) || agents.length
+  const online = Number(state.onlineNow?.districtCounts?.[districtId]) || agents.length
+  // Everyone restoring this district, not just whoever is online. Gating
+  // the button on presence hid the roster exactly when it is most useful —
+  // a district whose agents are all offline is the one you most want to
+  // signal. Falls back to the presence count until the roster arrives.
+  const roster = knownDistrictPopulation(wardId, districtId)
+  const count = roster || online
   const unread = Number(state.districtMessages?.unreadByDistrict?.[districtId]) || 0
   if (!count && !unread) { button.hidden = true; return }
   button.hidden = false
   button.innerHTML = `<span aria-hidden="true">👥</span> ${count}${unread ? `<i>${unread}</i>` : ''}`
-  button.setAttribute('aria-label', `${count} agent${count === 1 ? '' : 's'} here${unread ? `, ${unread} unread message${unread === 1 ? '' : 's'}` : ''}`)
-  button.onclick = () => showOverlay(agentsHereSheet(state, districtId, button))
+  button.setAttribute('aria-label', `${count} agent${count === 1 ? '' : 's'} restoring this district${unread ? `, ${unread} unread message${unread === 1 ? '' : 's'}` : ''}`)
+  button.onclick = () => showOverlay(agentsHereSheet(state, districtId, button, wardId))
 }
 
 function districtMessageError(code) {
@@ -307,11 +321,14 @@ function districtMessageComposer(districtId, codename) {
 function paintDistrictPresence(body, data, districtId) {
   body.innerHTML = ''
   const agents = data.agents || []
-  if (!agents.length) body.appendChild(el('p', 'muted', 'No visible agents are here right now.'))
+  if (!agents.length) body.appendChild(el('p', 'muted', 'No agents are restoring this district yet.'))
   for (const agent of agents) {
-    const row = el('div', 'agent-here-row')
+    // The roster is everyone with this district active, online or not, so
+    // the dot now says who is live rather than being decoration on a list
+    // that was online-only by definition.
+    const row = el('div', `agent-here-row${agent.online ? ' is-online' : ''}`)
     row.innerHTML = `
-      <span class="agent-here-dot"></span>
+      <span class="agent-here-dot" title="${agent.online ? 'Online now' : 'Offline'}"></span>
       <span class="agent-here-who"><b>${esc(agent.codename)}</b>${agent.isMe ? '<span class="agent-here-you">You</span>' : ''}</span>
       <span class="agent-here-progress"><b>${Math.max(0, Math.min(100, Number(agent.restored) || 0))}%</b><small>restored</small></span>
     `
@@ -347,10 +364,10 @@ function paintDistrictPresence(body, data, districtId) {
   }
 }
 
-function agentsHereSheet(state, districtId, sourceButton) {
+function agentsHereSheet(state, districtId, sourceButton, wardId) {
   const sheet = el('div', 'sheet agents-here-sheet')
   sheet.appendChild(el('div', 'eyebrow', 'AGENTS IN THIS DISTRICT'))
-  sheet.appendChild(el('p', 'agents-here-note', 'Agents currently restoring here. Tap Message to send a private signal.'))
+  sheet.appendChild(el('p', 'agents-here-note', 'Everyone restoring this district. A lit dot means online now — you can signal anyone here either way.'))
   const body = el('div', 'agents-here-body')
   body.appendChild(el('p', 'muted', 'Checking who is here…'))
   sheet.appendChild(body)
@@ -360,8 +377,17 @@ function agentsHereSheet(state, districtId, sourceButton) {
   call('getDistrictPresence', { agentNo: getAgentNo(), districtId }).then((res) => {
     if (!res.success) { body.innerHTML = ''; body.appendChild(el('p', 'muted', "Couldn't check right now.")); return }
     paintDistrictPresence(body, res, districtId)
-    if (state.districtMessages?.unreadByDistrict) state.districtMessages.unreadByDistrict[districtId] = 0
-    paintAgentsHere(sourceButton, state, districtId)
+    if (state.districtMessages?.unreadByDistrict) {
+      state.districtMessages.unreadByDistrict[districtId] = 0
+      // Opening this sheet marks them read on the server, so the HUD bell
+      // has to lose them now. The count is mutated in place rather than
+      // through setState (no re-render of the screen behind this sheet
+      // mid-read), which means nothing notifies the HUD — repaint it here
+      // or the global badge keeps the old number until the next poll.
+      const hud = document.getElementById('hud')
+      if (hud) renderHud(hud, state)
+    }
+    paintAgentsHere(sourceButton, state, districtId, wardId)
   })
   return sheet
 }

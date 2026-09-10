@@ -34,8 +34,17 @@ function percent(progress: any, reconnect: any): number {
   return complete ? 100 : Math.min(99, Math.round((got / need) * 100))
 }
 
+/** Everyone with this district currently active, whether or not they are
+ *  online right now. Being "in" a district is an assignment, not a session:
+ *  the roster this feeds is for finding the people restoring it so you can
+ *  signal them, and someone who closed the app an hour ago is exactly who
+ *  you want to reach. `online` is still reported per agent so the UI can
+ *  mark who is live without hiding anyone.
+ *
+ *  appear_offline is deliberately still honoured — that is a player's own
+ *  privacy choice about being listed, not a staleness filter. */
 async function activeAgents(supabase: SupabaseDB, districtId: string) {
-  const since = new Date(Date.now() - ONLINE_WINDOW_MS).toISOString()
+  const since = Date.now() - ONLINE_WINDOW_MS
   const { data: districts } = await supabase.from('rc_player_districts')
     .select('agent_no,district_id,status,goals,baseline,activated_at')
     .eq('district_id', districtId).eq('status', 'active').limit(200)
@@ -43,11 +52,45 @@ async function activeAgents(supabase: SupabaseDB, districtId: string) {
   if (!agentNos.length) return []
   const { data: players } = await supabase.from('rc_players')
     .select('agent_no,codename,last_seen_at').in('agent_no', agentNos)
-    .eq('appear_offline', false).gte('last_seen_at', since)
+    .eq('appear_offline', false)
     .order('last_seen_at', { ascending: false })
   const pdByAgent = new Map((districts || []).map((d: any) => [d.agent_no, d]))
   return (players || []).filter((p: any) => pdByAgent.has(p.agent_no))
-    .map((p: any) => ({ ...p, pd: pdByAgent.get(p.agent_no) }))
+    .map((p: any) => ({
+      ...p,
+      pd: pdByAgent.get(p.agent_no),
+      online: new Date(p.last_seen_at || 0).getTime() >= since,
+    }))
+}
+
+/** How many agents are restoring each district in one ward. Counts only —
+ *  a ward has up to 25 districts and agentProgress() costs two queries per
+ *  agent, so percentages stay on the district screen where they are already
+ *  computed for the handful of people actually listed. */
+export async function getWardRoster(supabase: SupabaseDB, content: GameContent, params: any) {
+  const wardId = String(params.wardId || '').trim()
+  const districtIds = (content.districts || [])
+    .filter((d: any) => d.ward_id === wardId).map((d: any) => d.id)
+  if (!districtIds.length) return { success: false, error: 'ward_not_found' }
+
+  const { data: assigned, error } = await supabase.from('rc_player_districts')
+    .select('agent_no,district_id').in('district_id', districtIds).eq('status', 'active').limit(2000)
+  if (error) return { success: false, error: error.message }
+
+  // Hidden agents are left out of the count as well as the list, so the
+  // number and the roster you can open can never disagree.
+  const agentNos = [...new Set((assigned || []).map((row: any) => row.agent_no))]
+  const { data: visible } = agentNos.length
+    ? await supabase.from('rc_players').select('agent_no').in('agent_no', agentNos).eq('appear_offline', false)
+    : { data: [] }
+  const shown = new Set((visible || []).map((p: any) => p.agent_no))
+
+  const counts: Record<string, number> = {}
+  for (const row of assigned || []) {
+    if (!shown.has(row.agent_no)) continue
+    counts[row.district_id] = (counts[row.district_id] || 0) + 1
+  }
+  return { success: true, wardId, counts }
 }
 
 async function agentProgress(supabase: SupabaseDB, content: GameContent, row: any) {
@@ -76,6 +119,7 @@ export async function getDistrictPresence(supabase: SupabaseDB, content: GameCon
   const agents = await Promise.all(rows.map(async (row: any) => ({
     codename: row.codename,
     isMe: row.agent_no === agentNo,
+    online: !!row.online,
     restored: await agentProgress(supabase, content, row),
   })))
 
@@ -114,6 +158,9 @@ export async function sendDistrictMessage(supabase: SupabaseDB, params: any) {
   const body = String(params.message || '').trim().slice(0, MAX_MESSAGE_LEN)
   if (!districtId || !codename || !body) return { success: false, error: 'message_required' }
 
+  // Same roster the sheet listed, so anyone you can see you can signal —
+  // previously this re-checked an online-only list, and messaging someone
+  // who had just closed the app failed with "agent_not_here".
   const visible = await activeAgents(supabase, districtId)
   const recipient = visible.find((p: any) => p.codename.toLocaleLowerCase() === codename.toLocaleLowerCase())
   if (!recipient) return { success: false, error: 'agent_not_here' }

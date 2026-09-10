@@ -495,13 +495,26 @@
         if (body.action === 'getReconnectMission' && RECONNECT_RESPONSE) {
           return { json: async () => JSON.parse(JSON.stringify(RECONNECT_RESPONSE)) }
         }
+        if (body.action === 'getWardRoster') {
+          // A plausible spread so the ward list can be reviewed: a couple of
+          // busy districts, several with one or two agents, some with nobody.
+          const counts = {}
+          for (const d of (STATE.map?.districts || [])) {
+            if (d.wardId !== body.wardId) continue
+            const seed = String(d.id).split('').reduce((a, c) => ((a * 31 + c.charCodeAt(0)) | 0), 7)
+            const n = [4, 0, 2, 1, 0, 7, 3, 1, 0, 2][Math.abs(seed) % 10]
+            if (n) counts[d.id] = n
+          }
+          return { json: async () => ({ success: true, wardId: body.wardId, counts }) }
+        }
         if (body.action === 'getDistrictPresence') {
           return { json: async () => ({
             success: true,
             agents: [
-              { codename: 'AGENT VIOLET', isMe: true, restored: 51 },
-              { codename: 'signalbloom', isMe: false, restored: 68 },
-              { codename: 'moonchild7', isMe: false, restored: 27 },
+              { codename: 'AGENT VIOLET', isMe: true, online: true, restored: 51 },
+              { codename: 'signalbloom', isMe: false, online: true, restored: 68 },
+              { codename: 'moonchild7', isMe: false, online: false, restored: 27 },
+              { codename: 'dewzofdazzle', isMe: false, online: false, restored: 94 },
             ],
             inbox: [{ id: 'dm-1', codename: 'signalbloom', body: 'Want to finish Haegeum together?', createdAt: new Date().toISOString(), unread: true }],
           }) }
