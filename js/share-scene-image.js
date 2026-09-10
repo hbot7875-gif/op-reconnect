@@ -1,6 +1,7 @@
 import { buildModel, renderScene } from './scene.js'
 import { districtPercent } from './district-progress.js'
 import { coreBlock } from './screen-world.js'
+import { ARMY_BOMB_SHARE_CALLOUT, armyBombShareStatus } from './share-scene-copy.js'
 
 const bombFrames=new Map(),districtFrames=new Map()
 function remember(map,key,work){map.set(key,work);while(map.size>4)map.delete(map.keys().next().value);return work}
@@ -105,7 +106,10 @@ export async function renderShareSceneImage(snapshot) {
         const targetBottom=text(ctx,'STREAM '+d.targetLabel,790,y,365,d.targetLabel.length>60?23:28)
         if(targetBottom<475)text(ctx,'EVERYBODY MOVE ↗',790,targetBottom+30,365,28,'#e8bcc8')
         else text(ctx,'EVERYBODY MOVE ↗',64,570,650,30,'#e8bcc8')
-      } else text(ctx,win?'DEFUSED':d.hoursRemaining?`${Math.round(d.hoursRemaining)}H CHARGED`:d.isDark?'NEEDS SOME LOVE':'WAITING FOR ITS SPARK',790,y+50,365,34,win?'#e4b968':'#c8b3ec')
+      } else {
+        y=text(ctx,win?'DEFUSED':armyBombShareStatus(d),790,y+50,365,34,win?'#e4b968':'#c8b3ec')
+        if(!win)text(ctx,ARMY_BOMB_SHARE_CALLOUT,790,Math.max(y+50,285),365,27,'#cbbadd',500)
+      }
     }
     text(ctx,'RECONNECT · HOPETRACKER',snapshot.kind==='district'?812:790,567,365,17,'#a493b7')
     text(ctx,'hopetrackers.org',snapshot.kind==='district'?812:790,605,365,24,'#c3b4d5')

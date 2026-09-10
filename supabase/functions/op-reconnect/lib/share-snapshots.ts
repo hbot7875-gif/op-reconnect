@@ -145,7 +145,7 @@ export async function createShareSnapshot(supabase: SupabaseDB, params: any) {
       }
     }
     const stable={...data,capturedAt:undefined,remainingSeconds:kind==='red_zone_active'?Math.floor(data.remainingSeconds/10):undefined}
-    const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify({layoutVersion:2,kind,data:stable,visual})))
+    const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify({layoutVersion:kind==='city_bomb'?3:2,kind,data:stable,visual})))
     const cacheKey=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('')
     const {data:prior}=await supabase.from('rc_share_snapshots').select('id,data').eq('created_by',agentNo).eq('cache_key',cacheKey).not('image_png','is',null).gt('expires_at',new Date().toISOString()).limit(1).maybeSingle()
     if(prior)return {success:true,id:prior.id,kind,url:`${SITE}/share/${kind==='district'?'district':kind==='city_bomb'?'city':'red-zone'}/${prior.id}`,title,data:prior.data,visual,imageReady:true}
