@@ -256,32 +256,113 @@ function districtAgentsHere(state, districtId) {
 function paintAgentsHere(button, state, districtId) {
   if (!button) return
   const agents = districtAgentsHere(state, districtId)
-  if (!agents.length) { button.hidden = true; return }
+  const count = Number(state.onlineNow?.districtCounts?.[districtId]) || agents.length
+  const unread = Number(state.districtMessages?.unreadByDistrict?.[districtId]) || 0
+  if (!count && !unread) { button.hidden = true; return }
   button.hidden = false
-  button.textContent = `👥 ${agents.length} agent${agents.length === 1 ? '' : 's'} here ›`
-  button.onclick = () => showOverlay(agentsHereSheet(state, districtId))
+  button.innerHTML = `<span aria-hidden="true">👥</span> ${count}${unread ? `<i>${unread}</i>` : ''}`
+  button.setAttribute('aria-label', `${count} agent${count === 1 ? '' : 's'} here${unread ? `, ${unread} unread message${unread === 1 ? '' : 's'}` : ''}`)
+  button.onclick = () => showOverlay(agentsHereSheet(state, districtId, button))
 }
 
-function agentsHereSheet(state, districtId) {
-  const agents = districtAgentsHere(state, districtId)
-  const sheet = el('div', 'sheet agents-here-sheet')
-  sheet.appendChild(el('div', 'eyebrow', 'AGENTS IN THIS DISTRICT'))
-  if (agents.length <= 1 && agents[0]?.isMe) {
-    sheet.appendChild(el('p', 'muted', 'Just you here'))
-  } else {
-    // Solo-and-not-you can't actually happen (onlineNow always carries the
-    // caller's own poll), but guarding it costs nothing and keeps this
-    // reading correctly if that ever changes.
-    for (const agent of agents) {
-      sheet.appendChild(el('div', 'agent-here-row', `
-        <span class="agent-here-dot"></span>
-        <b>${esc(agent.codename)}</b>${agent.isMe ? '<span class="agent-here-you">You</span>' : ''}
-      `))
+function districtMessageError(code) {
+  return ({
+    message_required: 'Type a message first.',
+    agent_not_here: 'That agent just left this district.',
+    cannot_message_self: "That's you.",
+    message_rate_limited: 'Too many signals at once — wait a few minutes.',
+  })[code] || "Couldn't send that signal — try again."
+}
+
+function districtMessageComposer(districtId, codename) {
+  const form = el('div', 'agent-signal-composer')
+  const input = el('input', 'ob-input')
+  input.type = 'text'
+  input.maxLength = 240
+  input.placeholder = `Message ${codename}`
+  input.setAttribute('aria-label', `Message ${codename}`)
+  const send = el('button', 'agent-signal-send', 'Send')
+  const submit = async () => {
+    const message = input.value.trim()
+    if (!message) return
+    input.disabled = send.disabled = true
+    send.textContent = 'SENDING…'
+    const res = await call('sendDistrictMessage', { agentNo: getAgentNo(), districtId, codename, message })
+    if (res.success) {
+      toast(`Signal sent to ${codename}`)
+      form.remove()
+      return
+    }
+    input.disabled = send.disabled = false
+    send.textContent = 'Send'
+    toast(districtMessageError(res.error))
+  }
+  send.onclick = submit
+  input.onkeydown = (e) => { if (e.key === 'Enter') submit() }
+  form.append(input, send)
+  requestAnimationFrame(() => input.focus())
+  return form
+}
+
+function paintDistrictPresence(body, data, districtId) {
+  body.innerHTML = ''
+  const agents = data.agents || []
+  if (!agents.length) body.appendChild(el('p', 'muted', 'No visible agents are here right now.'))
+  for (const agent of agents) {
+    const row = el('div', 'agent-here-row')
+    row.innerHTML = `
+      <span class="agent-here-dot"></span>
+      <span class="agent-here-who"><b>${esc(agent.codename)}</b>${agent.isMe ? '<span class="agent-here-you">You</span>' : ''}</span>
+      <span class="agent-here-progress"><b>${Math.max(0, Math.min(100, Number(agent.restored) || 0))}%</b><small>restored</small></span>
+    `
+    if (!agent.isMe) {
+      const message = el('button', 'agent-here-message', 'Message')
+      message.onclick = () => {
+        const old = row.nextElementSibling
+        if (old?.classList.contains('agent-signal-composer')) { old.remove(); return }
+        body.querySelector('.agent-signal-composer')?.remove()
+        row.after(districtMessageComposer(districtId, agent.codename))
+      }
+      row.appendChild(message)
+    }
+    body.appendChild(row)
+  }
+
+  if (data.inbox?.length) {
+    body.appendChild(el('div', 'agent-signal-title', 'MESSAGES FOR YOU'))
+    const visibleNames = new Set(agents.filter((a) => !a.isMe).map((a) => a.codename))
+    for (const message of data.inbox) {
+      const row = el('div', `agent-signal${message.unread ? ' is-unread' : ''}`)
+      row.innerHTML = `<b>${esc(message.codename)}</b><span>${esc(message.body)}</span>`
+      if (visibleNames.has(message.codename)) {
+        const reply = el('button', 'agent-signal-reply', 'Reply')
+        reply.onclick = () => {
+          body.querySelector('.agent-signal-composer')?.remove()
+          row.after(districtMessageComposer(districtId, message.codename))
+        }
+        row.appendChild(reply)
+      }
+      body.appendChild(row)
     }
   }
+}
+
+function agentsHereSheet(state, districtId, sourceButton) {
+  const sheet = el('div', 'sheet agents-here-sheet')
+  sheet.appendChild(el('div', 'eyebrow', 'AGENTS IN THIS DISTRICT'))
+  sheet.appendChild(el('p', 'agents-here-note', 'Agents currently restoring here. Tap Message to send a private signal.'))
+  const body = el('div', 'agents-here-body')
+  body.appendChild(el('p', 'muted', 'Checking who is here…'))
+  sheet.appendChild(body)
   const close = el('button', 'btn btn-ghost', 'Close')
   close.onclick = hideOverlay
   sheet.appendChild(close)
+  call('getDistrictPresence', { agentNo: getAgentNo(), districtId }).then((res) => {
+    if (!res.success) { body.innerHTML = ''; body.appendChild(el('p', 'muted', "Couldn't check right now.")); return }
+    paintDistrictPresence(body, res, districtId)
+    if (state.districtMessages?.unreadByDistrict) state.districtMessages.unreadByDistrict[districtId] = 0
+    paintAgentsHere(sourceButton, state, districtId)
+  })
   return sheet
 }
 

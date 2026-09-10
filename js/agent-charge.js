@@ -260,7 +260,17 @@ function paint(body, ac, focusEraId = null) {
 
 export function agentChargeSheet(focusEraId = null) {
   const sheet = el('div', 'sheet agent-charge')
-  sheet.appendChild(el('div', 'eyebrow', '⚡ PERSONAL CHARGE'))
+  const head = el('div', 'ac-sheet-head')
+  head.appendChild(el('div', 'eyebrow', '⚡ PERSONAL CHARGE'))
+  const share = el('button', 'ac-sheet-share', '↗ Share ARMY Bomb')
+  // Lazy to avoid agent-charge -> share-scene-image -> screen-world ->
+  // agent-charge forming a module initialization cycle.
+  share.onclick = async () => {
+    const { openCityShare } = await import('./share.js')
+    showOverlay(openCityShare())
+  }
+  head.appendChild(share)
+  sheet.appendChild(head)
   const body = el('div', 'ac-body')
   sheet.appendChild(body)
   loadAndPaint(body, focusEraId)

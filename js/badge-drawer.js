@@ -10,6 +10,8 @@
 import { call } from './api.js'
 import { el, esc, getState, hideOverlay, setState, showOverlay, toast } from './state.js'
 import { getAgentNo } from './session.js'
+import { badgeShareControls } from './badge-share.js'
+import { BADGE_MILESTONES } from '../supabase/functions/op-reconnect/lib/badge-share-layout.js'
 
 const BADGE_SECTIONS = [
   { id: 'district', icon: '◇', title: 'Current District', note: 'Progress from the district you are restoring now' },
@@ -105,7 +107,8 @@ function collectionTile(e, wearing, state) {
   tile.setAttribute('aria-label', e.name)
   tile.onclick = () => showOverlay(badgeStorySheet({
     got: true, collection: true, rarity: e.rarity, photo: e.artworkUrl,
-    name: e.name, desc: badgeStory(e, state), badgeId: e.badgeId, wearing,
+    name: e.name, desc: badgeStory(e, state), badgeId: e.badgeId,
+    templateId: e.templateId, wearing,
   }, state))
   return tile
 }
@@ -150,6 +153,9 @@ export function badgeStorySheet(info, state) {
     <div class="bdr-detail-desc">${esc(info.desc)}</div>
   `
   if (info.got) {
+    if (Object.hasOwn(BADGE_MILESTONES, info.templateId)) {
+      detail.appendChild(badgeShareControls(info.badgeId))
+    }
     const wear = el('button', info.wearing ? 'btn btn-ghost bdr-wear' : 'btn btn-primary bdr-wear',
       info.wearing ? 'Use Default Agent Icon' : 'Wear as Agent Icon')
     wear.onclick = async () => {

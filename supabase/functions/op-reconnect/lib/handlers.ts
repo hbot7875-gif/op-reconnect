@@ -23,6 +23,7 @@ import { districtBadgeProgress } from './badge-rules.js'
 import { getBackupOverlay } from './backup-pass.ts'
 import { getVmaBanner } from './vma-voting.ts'
 import { isBadgeEditor } from './badge-admin.ts'
+import { getDistrictMessageSummary } from './district-presence.ts'
 
 /** Administrative grace time is stored separately from activated_at so a
  * support extension never shifts the stream-counting window or its frozen
@@ -436,6 +437,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
   // read together: "12 online now" says the city is occupied at THIS
   // instant, the ticker says what those agents have been doing recently.
   const onlineNow = await getOnlineNow(supabase, content)
+  const districtMessages = await getDistrictMessageSummary(supabase, player.agent_no)
   // (13) Resolves real Badge Collection artwork server-side so the client
   // doesn't have to guess via its own hardcoded badges.js catalog — that
   // catalog still owns legacy ids (streak/level/xp/districts), which
@@ -489,6 +491,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     cityFeed,
     waitingAgents,
     onlineNow,
+    districtMessages,
     sideMissions,
     today: {
       kstDate: today,

@@ -164,6 +164,17 @@
         ],
       },
       map: { wards: WARDS, districts },
+      onlineNow: {
+        count: 3,
+        districtCounts: { 'mono-7': 3 },
+        codenames: ['AGENT VIOLET', 'signalbloom', 'moonchild7'],
+        agents: [
+          { codename: 'AGENT VIOLET', districtId: 'mono-7', districtName: 'Zeal Arcade', wardName: 'Mono Ward' },
+          { codename: 'signalbloom', districtId: 'mono-7', districtName: 'Zeal Arcade', wardName: 'Mono Ward' },
+          { codename: 'moonchild7', districtId: 'mono-7', districtName: 'Zeal Arcade', wardName: 'Mono Ward' },
+        ],
+      },
+      districtMessages: { totalUnread: 1, unreadByDistrict: { 'mono-7': 1 } },
       eraTimeline: { eras: [
         { id: 'school', name: 'School Trilogy', icon: '📚', done: 17, total: 17, albums: ['2 Cool 4 Skool', 'O!RUL8,2?', 'Skool Luv Affair'], tracks: [] },
         { id: 'darkwild', name: 'Dark & Wild / Bridge', icon: '🌙', done: 10, total: 12, albums: ['Dark & Wild', 'Wake Up'], tracks: [] },
@@ -462,6 +473,13 @@
         if (body.action === 'getAgentCharge') {
           return { json: async () => ({ success: true, charge: JSON.parse(JSON.stringify(AGENT_CHARGE)) }) }
         }
+        if (body.action === 'getBadgeCollection') {
+          return { json: async () => ({
+            success: true, equippedBadgeId: null,
+            templates: [{ id: 'district_frag_1', section: 'district', rarity: 'common', name: 'First Light', unlockHint: 'Reach 25% restoration.' }],
+            earned: [{ badgeId: 'district_frag_1:mono-7', templateId: 'district_frag_1', scopeId: 'mono-7', name: 'First Light', rarity: 'common', section: 'district', artworkUrl: null, earnedAt: '2026-09-10T00:00:00Z' }],
+          }) }
+        }
         if (body.action === 'getDefuseMessages') {
           if (STATE.bomb.defuse && !STATE.bomb.defuse.isDefender) {
             return { json: async () => ({ success: false, error: 'not_a_defender' }) }
@@ -476,6 +494,20 @@
         }
         if (body.action === 'getReconnectMission' && RECONNECT_RESPONSE) {
           return { json: async () => JSON.parse(JSON.stringify(RECONNECT_RESPONSE)) }
+        }
+        if (body.action === 'getDistrictPresence') {
+          return { json: async () => ({
+            success: true,
+            agents: [
+              { codename: 'AGENT VIOLET', isMe: true, restored: 51 },
+              { codename: 'signalbloom', isMe: false, restored: 68 },
+              { codename: 'moonchild7', isMe: false, restored: 27 },
+            ],
+            inbox: [{ id: 'dm-1', codename: 'signalbloom', body: 'Want to finish Haegeum together?', createdAt: new Date().toISOString(), unread: true }],
+          }) }
+        }
+        if (body.action === 'sendDistrictMessage') {
+          return { json: async () => ({ success: true }) }
         }
         if (body.action === 'getInviteCandidates' && reconnectPreview) {
           return { json: async () => ({ success: true, candidates: JSON.parse(JSON.stringify(RECONNECT_CANDIDATES)), stillOnHomeBase: 0, alertActive: false }) }

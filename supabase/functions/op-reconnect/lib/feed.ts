@@ -55,6 +55,7 @@ export interface OnlineNow {
   count: number
   codenames: string[]
   agents: { codename: string; districtId: string | null; districtName: string | null; wardName: string | null }[]
+  districtCounts: Record<string, number>
 }
 
 /** Who's genuinely here right now — count plus enough rows for the City
@@ -67,7 +68,10 @@ export async function getOnlineNow(supabase: SupabaseDB, content: GameContent, s
     .eq('appear_offline', false)
     .gte('last_seen_at', since)
     .order('last_seen_at', { ascending: false })
-    .limit(sampleSize)
+    // Count/group the whole realistically-online set server-side, but only
+    // return codenames for the newest sample below. A busy City must not make
+    // a district's compact headcount silently under-report.
+    .limit(1000)
   const agentNos = (data || []).map((r: any) => r.agent_no)
   const { data: districtRows } = agentNos.length
     ? await supabase.from('rc_player_districts')
@@ -76,7 +80,7 @@ export async function getOnlineNow(supabase: SupabaseDB, content: GameContent, s
   const districtByAgent = new Map((districtRows || []).map((r: any) => [r.agent_no, r.district_id]))
   const districtById = new Map(content.districts.map((d: any) => [d.id, d]))
   const wardById = new Map(content.wards.map((w: any) => [w.id, w]))
-  const agents = (data || []).map((r: any) => {
+  const allAgents = (data || []).map((r: any) => {
     const districtId = districtByAgent.get(r.agent_no) as string | undefined
     const district = districtId ? districtById.get(districtId) as any : null
     return {
@@ -86,7 +90,12 @@ export async function getOnlineNow(supabase: SupabaseDB, content: GameContent, s
       wardName: district?.ward_id ? (wardById.get(district.ward_id) as any)?.name || null : null,
     }
   })
-  return { count: count || 0, codenames: agents.map((r) => r.codename), agents }
+  const districtCounts: Record<string, number> = {}
+  for (const agent of allAgents) {
+    if (agent.districtId) districtCounts[agent.districtId] = (districtCounts[agent.districtId] || 0) + 1
+  }
+  const agents = allAgents.slice(0, sampleSize)
+  return { count: count || 0, codenames: agents.map((r) => r.codename), agents, districtCounts }
 }
 
 export interface FeedEntry {
