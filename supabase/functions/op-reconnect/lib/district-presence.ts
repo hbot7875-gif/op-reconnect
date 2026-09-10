@@ -164,6 +164,34 @@ export async function getDistrictMessageSummary(supabase: SupabaseDB, agentNo: s
   return { totalUnread: Object.values(unreadByDistrict).reduce((a, b) => a + b, 0), unreadByDistrict }
 }
 
+/** Someone who signalled YOU about this district but is no longer on its
+ *  roster — they finished it, moved on, or dropped it. Replying to them was
+ *  impossible: the roster check is the only way in, and it no longer lists
+ *  them. That is exactly the "want a partner for the next district?"
+ *  conversation, so it has to survive the sender leaving.
+ *
+ *  Strictly a REPLY: this only ever resolves an agent who already has a
+ *  message to `me` in this district, so it opens no new way to message a
+ *  stranger. Retired agents stay excluded — they will never read it. */
+async function replyTarget(supabase: SupabaseDB, me: string, districtId: string, codename: string) {
+  const { data: theirs } = await supabase.from('rc_district_messages')
+    .select('sender_agent_no')
+    .eq('recipient_agent_no', me).eq('district_id', districtId)
+    .order('created_at', { ascending: false }).limit(50)
+  const senders = [...new Set((theirs || []).map((row: any) => String(row.sender_agent_no)))]
+  if (!senders.length) return null
+
+  const [{ data: players }, { data: liveAgents }] = await Promise.all([
+    supabase.from('rc_players').select('agent_no,codename').in('agent_no', senders),
+    supabase.from('rc_agents').select('agent_no').in('agent_no', senders).is('retired_at', null),
+  ])
+  const stillPlaying = new Set((liveAgents || []).map((a: any) => String(a.agent_no)))
+  const found = (players || []).find((p: any) =>
+    String(p.codename || '').toLocaleLowerCase() === codename.toLocaleLowerCase()
+    && stillPlaying.has(String(p.agent_no)))
+  return found ? { agent_no: found.agent_no, codename: found.codename } : null
+}
+
 export async function sendDistrictMessage(supabase: SupabaseDB, params: any) {
   const sender = String(params.agentNo || '').trim().toUpperCase()
   const districtId = String(params.districtId || '').trim()
@@ -175,7 +203,8 @@ export async function sendDistrictMessage(supabase: SupabaseDB, params: any) {
   // previously this re-checked an online-only list, and messaging someone
   // who had just closed the app failed with "agent_not_here".
   const visible = await activeAgents(supabase, districtId)
-  const recipient = visible.find((p: any) => p.codename.toLocaleLowerCase() === codename.toLocaleLowerCase())
+  const match = (p: any) => p.codename.toLocaleLowerCase() === codename.toLocaleLowerCase()
+  const recipient = visible.find(match) || await replyTarget(supabase, sender, districtId, codename)
   if (!recipient) return { success: false, error: 'agent_not_here' }
   if (recipient.agent_no === sender) return { success: false, error: 'cannot_message_self' }
 

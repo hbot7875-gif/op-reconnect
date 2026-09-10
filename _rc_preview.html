@@ -516,7 +516,11 @@
               { codename: 'moonchild7', isMe: false, online: false, restored: 27 },
               { codename: 'dewzofdazzle', isMe: false, online: false, restored: 94 },
             ],
-            inbox: [{ id: 'dm-1', codename: 'signalbloom', body: 'Want to finish Haegeum together?', createdAt: new Date().toISOString(), unread: true }],
+            inbox: [
+              { id: 'dm-1', codename: 'signalbloom', body: 'Want to finish Haegeum together?', createdAt: new Date().toISOString(), unread: true },
+              // A sender who has since left this district — the reply case.
+              { id: 'dm-2', codename: 'kavsmoved', body: 'Finished here — partner up on the next one?', createdAt: new Date().toISOString(), unread: false },
+            ],
           }) }
         }
         if (body.action === 'sendDistrictMessage') {

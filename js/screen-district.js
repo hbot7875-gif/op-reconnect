@@ -347,18 +347,22 @@ function paintDistrictPresence(body, data, districtId) {
 
   if (data.inbox?.length) {
     body.appendChild(el('div', 'agent-signal-title', 'MESSAGES FOR YOU'))
-    const visibleNames = new Set(agents.filter((a) => !a.isMe).map((a) => a.codename))
     for (const message of data.inbox) {
       const row = el('div', `agent-signal${message.unread ? ' is-unread' : ''}`)
       row.innerHTML = `<b>${esc(message.codename)}</b><span>${esc(message.body)}</span>`
-      if (visibleNames.has(message.codename)) {
-        const reply = el('button', 'agent-signal-reply', 'Reply')
-        reply.onclick = () => {
-          body.querySelector('.agent-signal-composer')?.remove()
-          row.after(districtMessageComposer(districtId, message.codename))
-        }
-        row.appendChild(reply)
+      // Reply is offered for every signal, not only for senders still on
+      // this district's roster. Someone who messaged you and then finished
+      // the district used to be unanswerable — the exact person you want to
+      // team up with next. The server allows a reply to anyone who has
+      // messaged you here (replyTarget in district-presence.ts).
+      const reply = el('button', 'agent-signal-reply', 'Reply')
+      reply.onclick = () => {
+        const open = row.nextElementSibling
+        if (open?.classList.contains('agent-signal-composer')) { open.remove(); return }
+        body.querySelector('.agent-signal-composer')?.remove()
+        row.after(districtMessageComposer(districtId, message.codename))
       }
+      row.appendChild(reply)
       body.appendChild(row)
     }
   }
