@@ -303,48 +303,75 @@ export async function checklistProgressSince(
 /** Team Boost — a reward layered on TOP of a plain 'connect' mission's own
  *  completion (no separate qualify branch in refreshMission: with no
  *  sharedTrack/checklist configured, "9 joined + everyone streamed once"
- *  is already the default connect completion rule). Once complete, each of
- *  the up-to-`requiredAgents` participants may spend their ONE pick — up to
- *  `maxPicks` of their OWN frozen track/album goals on this same district —
- *  for a flat, one-time bonus on each pick's progress (`bonusPercent`% of
- *  that goal's own target, floored at 1). This is a personal effect: it
- *  never pools between teammates and never lowers what anyone else needs,
- *  matching Backup Pass's "helps the owner, doesn't touch the collective"
- *  shape — just self-triggered by finishing the team-up instead of a helper
- *  joining. Stored on the agent's own rc_reconnect_participants row
- *  (boost_picks), so "have I already picked" is answered by that one row,
- *  not a second table. */
-const TEAM_BOOST_DEFAULT_BONUS_PERCENT = 15
+ *  is already the default connect completion rule). Once complete, the
+ *  TEAM — any one of them, once, for everyone — may spend its pick: up to
+ *  `maxPicks` of the district's own TRACK goals (album pooling isn't
+ *  modeled — an album's own "passes" metric doesn't have an obvious pooled
+ *  equivalent the way a track's play count does) get a raised, SHARED
+ *  target, and every joined member's real plays toward that track from the
+ *  moment of the pick count for every other member too — same shape as an
+ *  ordinary sharedTrack mission, just applied on top of each member's own
+ *  already-frozen track goal instead of a separate mission-level counter.
+ *  Picked once for the whole mission (stored on rc_reconnect_missions, not
+ *  per-participant) because "drag a goal" was described as a team action,
+ *  not nine separate personal ones. */
+interface TeamBoostConfig { maxPicks?: number; poolFactor?: number }
+const TEAM_BOOST_DEFAULT_POOL_FACTOR = 0.4
+interface TeamBoostPick { ref: string; label: string; keys: string[]; originalTarget: number; pooledTarget: number }
 
-interface TeamBoostConfig { maxPicks?: number; bonusPercent?: number }
-interface TeamBoostPick { kind: 'track' | 'album'; ref: string; label: string; bonus: number }
+/** Sum of every OTHER joined-and-still-on-the-district member's real plays
+ *  of `keys` since the pick was activated — deliberately excluding the
+ *  caller, whose own windowed plays districtProgress() already counts via
+ *  `total`; adding them again here would double-count the one contributor
+ *  every overlay consumer already has covered. A dropped member
+ *  (leftDistrict) still keeps whatever they already contributed — nothing
+ *  here retroactively removes a play that already happened — but stops
+ *  accruing more, same as every other mission mechanic's dropped-teammate
+ *  handling. */
+async function teamContributionExcluding(
+  supabase: SupabaseDB, missionId: string, excludeAgentNo: string, sinceIso: string, keys: string[],
+): Promise<number> {
+  const { data: joined } = await supabase.from('rc_reconnect_participants')
+    .select('agent_no').eq('mission_id', missionId).eq('status', 'joined')
+  let total = 0
+  for (const p of joined || []) {
+    if (p.agent_no === excludeAgentNo) continue
+    total += await contributionSince(supabase, p.agent_no, sinceIso, keys)
+  }
+  return total
+}
 
 /** What districts.ts's districtProgress() should add on top of a goal's own
  *  numbers for this agent — same `{ target, bonus }` overlay shape
- *  getBackupOverlay uses (handlers.ts spreads both together). `target: 0`
- *  is deliberately falsy so districtProgress()'s `backup?.target || g.target`
- *  fallback keeps the goal's real target untouched; only `bonus` (flat
- *  progress) ever applies here — Team Boost never raises anyone's target. */
+ *  getBackupOverlay uses (handlers.ts spreads both together): `target` here
+ *  is the raised, TEAM-WIDE pooledTarget (not falsy like a pure-bonus
+ *  overlay would be — Team Boost genuinely does raise what's needed, per
+ *  the site owner), and `bonus` is the rest of the team's live combined
+ *  progress toward it, recomputed fresh every call — there is nothing
+ *  cached to go stale. */
 export async function getTeamBoostOverlay(
   supabase: SupabaseDB, agentNo: string, districtId: string,
 ): Promise<Record<string, { target: number; bonus: number }>> {
   const pd = await myActivePd(supabase, agentNo, districtId)
   const reconnect = pd?.status === 'active' ? myReconnectGoal(pd) : null
-  const cfg: TeamBoostConfig | undefined = reconnect?.config?.teamBoost
-  if (!cfg) return {}
-  const mission = await findMyCompletedMission(supabase, agentNo, districtId, reconnect!.id)
-  if (!mission) return {}
-  const { data: row } = await supabase.from('rc_reconnect_participants')
-    .select('boost_picks').eq('mission_id', mission.id).eq('agent_no', agentNo).maybeSingle()
+  if (!reconnect?.config?.teamBoost) return {}
+  const mission = await findMyCompletedMission(supabase, agentNo, districtId, reconnect.id)
+  const picks: TeamBoostPick[] = mission?.team_boost_picks || []
+  if (!mission || !picks.length || !mission.team_boost_activated_at) return {}
   const overlay: Record<string, { target: number; bonus: number }> = {}
-  for (const pick of (row?.boost_picks || []) as TeamBoostPick[]) overlay[pick.ref] = { target: 0, bonus: pick.bonus }
+  for (const pick of picks) {
+    overlay[pick.ref] = {
+      target: pick.pooledTarget,
+      bonus: await teamContributionExcluding(supabase, mission.id, agentNo, mission.team_boost_activated_at, pick.keys),
+    }
+  }
   return overlay
 }
 
-/** Read-only: what this agent could pick right now, so the client can show
- *  the picker only once there's genuinely something to pick (mission
- *  complete, goal carries teamBoost, no pick spent yet) instead of guessing
- *  from mission state alone. */
+/** Read-only: what this team could pick right now (or, once picked, its
+ *  live combined progress) — the client can show the picker only once
+ *  there's genuinely something to pick, and everyone on the team (not just
+ *  whoever submits) can see the same pooled numbers via this same call. */
 export async function getTeamBoostStatus(supabase: SupabaseDB, params: any) {
   const agentNo = String(params.agentNo || '').trim().toUpperCase()
   const districtId = String(params.districtId || '')
@@ -354,26 +381,35 @@ export async function getTeamBoostStatus(supabase: SupabaseDB, params: any) {
   if (!reconnect || !cfg) return { success: true, available: false }
   const mission = await findMyCompletedMission(supabase, agentNo, districtId, reconnect.id)
   if (!mission) return { success: true, available: false, missionComplete: false }
-  const { data: row } = await supabase.from('rc_reconnect_participants')
-    .select('boost_picks').eq('mission_id', mission.id).eq('agent_no', agentNo).maybeSingle()
-  const picked: TeamBoostPick[] = row?.boost_picks || []
+
   const maxPicks = cfg.maxPicks || 3
-  const goals = [
-    ...(pd!.goals?.trackGoals || []).map((g: any) => ({ kind: 'track' as const, ref: g.id, label: g.label, target: g.target })),
-    ...(pd!.goals?.albumGoals || []).map((g: any) => ({ kind: 'album' as const, ref: g.id, label: g.label, target: g.target })),
-  ]
+  const picks: TeamBoostPick[] = mission.team_boost_picks || []
+  if (picks.length) {
+    const progress = []
+    for (const pick of picks) {
+      const myOwn = await contributionSince(supabase, agentNo, mission.team_boost_activated_at, pick.keys)
+      const others = await teamContributionExcluding(supabase, mission.id, agentNo, mission.team_boost_activated_at, pick.keys)
+      progress.push({ ref: pick.ref, label: pick.label, target: pick.pooledTarget, progress: Math.min(myOwn + others, pick.pooledTarget) })
+    }
+    return { success: true, available: true, missionComplete: true, maxPicks, alreadyPicked: true, picks: progress }
+  }
+
+  const goals = (pd!.goals?.trackGoals || []).map((g: any) => ({ ref: g.id, label: g.label, target: g.target }))
   return {
     success: true, available: true, missionComplete: true,
-    maxPicks, alreadyPicked: picked.length > 0, picks: picked, goals,
-    bonusPercent: cfg.bonusPercent ?? TEAM_BOOST_DEFAULT_BONUS_PERCENT,
+    maxPicks, alreadyPicked: false, goals,
+    poolFactor: cfg.poolFactor ?? TEAM_BOOST_DEFAULT_POOL_FACTOR,
+    requiredAgents: mission.required_agents,
   }
 }
 
-/** Spend the one-shot pick — a plain compare-and-set (`.is('boost_picks',
- *  null)`) is enough to keep two overlapping taps from both writing: only
- *  one can win the null→non-null transition, the loser's update affects
- *  zero rows and reports the same 'already_picked' error a genuine repeat
- *  attempt would. */
+/** Spend the team's one-shot pick — a plain compare-and-set
+ *  (`.is('team_boost_activated_at', null)`) keeps two teammates tapping
+ *  Apply at once from both writing: only one wins the null→non-null
+ *  transition, the loser's update affects zero rows and reports the same
+ *  'already_picked' error a genuine repeat attempt would. Any joined
+ *  member may submit — this is the team's shared decision, not the
+ *  creator's alone. */
 export async function pickTeamBoostGoals(supabase: SupabaseDB, params: any) {
   const agentNo = String(params.agentNo || '').trim().toUpperCase()
   const districtId = String(params.districtId || '')
@@ -392,23 +428,21 @@ export async function pickTeamBoostGoals(supabase: SupabaseDB, params: any) {
   if (!refs.length || refs.length > maxPicks) return { success: false, error: 'invalid_pick_count' }
 
   const trackGoals = pd.goals?.trackGoals || []
-  const albumGoals = pd.goals?.albumGoals || []
-  const bonusPercent = cfg.bonusPercent ?? TEAM_BOOST_DEFAULT_BONUS_PERCENT
+  const poolFactor = cfg.poolFactor ?? TEAM_BOOST_DEFAULT_POOL_FACTOR
+  const requiredAgents = mission.required_agents || 1
   const resolved: TeamBoostPick[] = []
   for (const ref of refs) {
-    const track = trackGoals.find((g: any) => g.id === ref)
-    const album = !track ? albumGoals.find((g: any) => g.id === ref) : null
-    const goal = track || album
+    const goal = trackGoals.find((g: any) => g.id === ref)
     if (!goal) return { success: false, error: 'invalid_goal' }
     resolved.push({
-      kind: track ? 'track' : 'album', ref: goal.id, label: goal.label,
-      bonus: Math.max(1, Math.round(goal.target * bonusPercent / 100)),
+      ref: goal.id, label: goal.label, keys: goal.keys || [], originalTarget: goal.target,
+      pooledTarget: Math.max(goal.target, Math.round(goal.target * requiredAgents * poolFactor)),
     })
   }
 
-  const { data: updated, error } = await supabase.from('rc_reconnect_participants')
-    .update({ boost_picks: resolved }).eq('mission_id', mission.id).eq('agent_no', agentNo)
-    .is('boost_picks', null).select('agent_no').maybeSingle()
+  const { data: updated, error } = await supabase.from('rc_reconnect_missions')
+    .update({ team_boost_picks: resolved, team_boost_activated_at: new Date().toISOString() })
+    .eq('id', mission.id).is('team_boost_activated_at', null).select('id').maybeSingle()
   if (error) return { success: false, error: error.message }
   if (!updated) return { success: false, error: 'already_picked' }
   return { success: true, picks: resolved }

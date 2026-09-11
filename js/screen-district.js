@@ -536,15 +536,21 @@ function teamBoostPicker(d) {
   box.appendChild(el('div', 'eyebrow', 'TEAM BOOST'))
   const body = el('div', 'muted', 'Loading your boost…')
   box.appendChild(body)
+  const paintProgress = (picks) => {
+    body.innerHTML = ''
+    body.appendChild(el('p', '', 'Boost active — every teammate’s streams count toward these, shared:'))
+    const list = el('div', 'reconnect-boost-list')
+    for (const p of picks) {
+      list.appendChild(el('div', 'reconnect-boost-row',
+        `<span>${esc(p.label)}</span><b>${p.progress}<i>/ ${p.target}</i></b>`))
+    }
+    body.appendChild(list)
+  }
   call('getTeamBoostStatus', { agentNo: getAgentNo(), districtId: d.id }).then((res) => {
     if (!res?.success || !res.available) { box.remove(); return }
     body.innerHTML = ''
-    if (res.alreadyPicked) {
-      const picks = res.picks || []
-      body.innerHTML = `<p>Boosted: ${picks.map((p) => `<b>${esc(p.label)}</b> (+${p.bonus})`).join(', ') || 'nothing picked'}.</p>`
-      return
-    }
-    body.innerHTML = `<p>Your team finished — pick up to ${res.maxPicks} of your Tae Pier goals below for a +${res.bonusPercent}% progress bonus on each.</p>`
+    if (res.alreadyPicked) { paintProgress(res.picks || []); return }
+    body.innerHTML = `<p>Your team finished — pick up to ${res.maxPicks} tracks to pool across all ${res.requiredAgents} of you. Picking raises each one's target, but every teammate's real streams toward it count for everyone — this is your whole team's one shared pick, so agree in Team Chat first.</p>`
     const list = el('div', 'reconnect-boost-list')
     const checked = new Set()
     for (const g of res.goals || []) {
@@ -558,7 +564,7 @@ function teamBoostPicker(d) {
         } else checked.delete(g.ref)
         submit.disabled = checked.size === 0
       }
-      row.append(box2, el('span', '', `${esc(g.label)} <small>(${g.kind})</small>`))
+      row.append(box2, el('span', '', `${esc(g.label)} <small>(solo target ${g.target})</small>`))
       list.appendChild(row)
     }
     body.appendChild(list)
@@ -571,8 +577,8 @@ function teamBoostPicker(d) {
         picks: [...checked].map((ref) => ({ ref })),
       })
       if (!r.success) { toast(r.error || 'Could not apply your boost'); submit.disabled = false; return }
-      toast('Boost applied')
-      body.innerHTML = `<p>Boosted: ${r.picks.map((p) => `<b>${esc(p.label)}</b> (+${p.bonus})`).join(', ')}.</p>`
+      toast('Boost applied — check back for the team’s combined progress')
+      paintProgress(r.picks.map((p) => ({ label: p.label, target: p.pooledTarget, progress: 0 })))
     }
     body.appendChild(submit)
   })
