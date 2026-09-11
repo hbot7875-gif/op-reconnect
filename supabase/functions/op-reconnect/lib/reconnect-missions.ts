@@ -37,7 +37,7 @@ import type { SupabaseDB, GameContent } from './config.ts'
 import { restorationDays } from './config.ts'
 import type { FrozenReconnectGoal } from './districts.ts'
 import { districtDeadline, DEADLINE_EXTENSION_DAYS } from './districts.ts'
-import { kstDateOf, todayKst, addDaysStr } from './kst.ts'
+import { kstDateOf, todayKst, addDaysStr, kstDayBounds } from './kst.ts'
 import { ONLINE_WINDOW_MS } from './feed.ts'
 import { normKeyFull } from './text.ts'
 import { safeText, messageProblem, selectionProblem, publicQuest } from './quest-share-rules.js'
@@ -253,49 +253,87 @@ function kstDateOfIso(iso: string): string {
   return kstDateOf(Math.floor(new Date(iso).getTime() / 1000))
 }
 
-/** Real play count of a specific track's keys, from the day this participant
- *  joined onward — day-granularity, since rc_daily_activity only ever
- *  buckets by day. Uncapped, matching how every other personal count works
- *  now (see config.ts's PERSONAL_COUNT_CAP). Both refreshMission's shared
- *  and per-agent qualify checks run off this, and its return value is what
- *  ends up as each roster row's "N streams" (see shape()). */
+const CONTRIBUTION_PAGE_SIZE = 1_000
+
+/** Every counted play since the exact moment `sinceIso` names, normalized
+ *  key -> count — the shared primitive behind contributionSince and
+ *  checklistProgressSince below.
+ *
+ *  Every KST day strictly AFTER the since-day reads from rc_daily_activity's
+ *  already-normalized bucket, same cheap sum as before. The since-day
+ *  ITSELF is read from raw rc_scrobbles with an exact `listened_at >=`
+ *  cutoff instead — reported live: an agent who joined a mission (or
+ *  activated a district) partway through a KST day they'd already streamed
+ *  matching tracks on came back "streamed since joining" the instant they
+ *  joined, day-bucket sums having no idea WHEN in that day a play landed.
+ *  Real plays that happened before the moment being measured must not
+ *  satisfy anything gated on "since then" — this is the one place that
+ *  precision actually matters (everywhere else a day-bucket sum reads,
+ *  district goal progress included, a same-day activation baseline already
+ *  handles the equivalent problem its own way — see districts.ts's
+ *  computeBaseline). Paginated the same defensive way bomb.ts's Red Zone
+ *  scrobble read is, even though one agent's one day is never realistically
+ *  going to need a second page. */
+async function contributionTotals(supabase: SupabaseDB, agentNo: string, sinceIso: string): Promise<Map<string, number>> {
+  const totals = new Map<string, number>()
+  const sinceDate = kstDateOfIso(sinceIso)
+  const sinceSec = Math.ceil(new Date(sinceIso).getTime() / 1000)
+  const today = todayKst()
+
+  if (sinceDate < today) {
+    const { data } = await supabase.from('rc_daily_activity')
+      .select('track_counts').eq('agent_no', agentNo).gt('kst_date', sinceDate)
+    for (const row of data || []) {
+      const bucket = row.track_counts || {}
+      for (const key of Object.keys(bucket)) totals.set(key, (totals.get(key) || 0) + (bucket[key]?.n || 0))
+    }
+  }
+
+  const { toTs } = kstDayBounds(sinceDate)
+  for (let offset = 0; ; offset += CONTRIBUTION_PAGE_SIZE) {
+    const { data, error } = await supabase.from('rc_scrobbles')
+      .select('track_name').eq('agent_no', agentNo)
+      .gte('listened_at', sinceSec).lt('listened_at', toTs)
+      .range(offset, offset + CONTRIBUTION_PAGE_SIZE - 1)
+    if (error || !data?.length) break
+    for (const row of data) {
+      const key = normKeyFull(row.track_name)
+      if (key) totals.set(key, (totals.get(key) || 0) + 1)
+    }
+    if (data.length < CONTRIBUTION_PAGE_SIZE) break
+  }
+  return totals
+}
+
+/** Real play count of a specific track's keys, since the exact moment this
+ *  participant joined — see contributionTotals' own doc comment for why
+ *  that's now precise to the timestamp, not just the KST day. Uncapped,
+ *  matching how every other personal count works now (see config.ts's
+ *  PERSONAL_COUNT_CAP). Both refreshMission's shared and per-agent qualify
+ *  checks run off this, and its return value is what ends up as each
+ *  roster row's "N streams" (see shape()). */
 export async function contributionSince(supabase: SupabaseDB, agentNo: string, sinceIso: string, keys: string[]): Promise<number> {
   if (!keys.length) return 0
-  const sinceDate = kstDateOfIso(sinceIso)
-  const { data } = await supabase.from('rc_daily_activity')
-    .select('track_counts').eq('agent_no', agentNo).gte('kst_date', sinceDate)
-  let total = 0
-  for (const row of data || []) {
-    const bucket = row.track_counts || {}
-    for (const k of keys) total += bucket[k]?.n || 0
-  }
-  return total
+  const totals = await contributionTotals(supabase, agentNo, sinceIso)
+  return keys.reduce((sum, k) => sum + (totals.get(k) || 0), 0)
 }
 
 /** Per-track completion for a fixed checklist (config.checklist, when a
  *  'connect' goal carries one instead of a sharedTrack) — which of the
  *  list's tracks THIS agent has personally played at least once since they
  *  joined, one boolean per track in the same order as `tracks`, plus the
- *  done count. One query for the whole list rather than one per track (a
- *  49-track checklist would otherwise be 49 round trips per participant on
- *  every poll); same day-granularity/uncapped-count reasoning as
- *  contributionSince, just checked per-track instead of summed across all
- *  of them (a person who streams one track 50 times must not look like
- *  they've cleared 50 different tracks). The per-track array is what lets
- *  a teammate's roster row expand into an actual tick-list, not just a
- *  bare "21/48" nobody can act on. */
+ *  done count. One contributionTotals call for the whole list rather than
+ *  one per track (a 49-track checklist would otherwise be 49 round trips
+ *  per participant on every poll), checked per-track instead of summed
+ *  across all of them (a person who streams one track 50 times must not
+ *  look like they've cleared 50 different tracks). The per-track array is
+ *  what lets a teammate's roster row expand into an actual tick-list, not
+ *  just a bare "21/48" nobody can act on. */
 export async function checklistProgressSince(
   supabase: SupabaseDB, agentNo: string, sinceIso: string, tracks: { label: string; keys: string[] }[],
 ): Promise<{ done: number; perTrack: boolean[] }> {
   if (!tracks.length) return { done: 0, perTrack: [] }
-  const sinceDate = kstDateOfIso(sinceIso)
-  const { data } = await supabase.from('rc_daily_activity')
-    .select('track_counts').eq('agent_no', agentNo).gte('kst_date', sinceDate)
-  const totals = new Map<string, number>()
-  for (const row of data || []) {
-    const bucket = row.track_counts || {}
-    for (const key of Object.keys(bucket)) totals.set(key, (totals.get(key) || 0) + (bucket[key]?.n || 0))
-  }
+  const totals = await contributionTotals(supabase, agentNo, sinceIso)
   const perTrack = tracks.map((t) => (t.keys || []).some((k) => (totals.get(k) || 0) > 0))
   return { done: perTrack.filter(Boolean).length, perTrack }
 }
