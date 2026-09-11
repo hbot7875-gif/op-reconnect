@@ -116,13 +116,20 @@ export function freezeGoals(content: GameContent, mode: string, district: Distri
       // crossDistrictEligible (optional) widens WHO can be recruited beyond
       // this district's own active roster — any active agent on one of
       // those other listed districts also counts, regardless of their own
-      // frozen reconnect goal (see eligiblePoolForGoal). Frozen verbatim
-      // like everything else here, so an admin editing it later never
-      // changes what an already-open mission is chasing.
+      // frozen reconnect goal (see eligiblePoolForGoal). teamBoost (optional,
+      // 'connect' only) is a reward layered on top of plain completion, not
+      // a qualify rule of its own: once the mission completes on its usual
+      // terms, each participant may spend one pick — up to maxPicks of
+      // their own track/album goals on this district — for a flat
+      // bonusPercent% progress bonus each (see reconnect-missions.ts's
+      // getTeamBoostOverlay/pickTeamBoostGoals). Frozen verbatim like
+      // everything else here, so an admin editing it later never changes
+      // what an already-open mission is chasing.
       ? {
           requiredAgents: cfg.requiredAgents, sharedTrack: cfg.sharedTrack || null,
           checklist: cfg.checklist || null, ciphers: cfg.ciphers || null,
           crossDistrictEligible: cfg.crossDistrictEligible || null,
+          teamBoost: cfg.teamBoost || null,
         }
       : variant === 'sotd'
       // A YouTube-link guess, not a text guess — frozen verbatim so an

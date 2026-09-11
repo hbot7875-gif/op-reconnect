@@ -526,6 +526,59 @@ function reconnectDisclosure(label, content, open = false) {
   return details
 }
 
+/* — Team Boost (see reconnect-missions.ts's teamBoost config) — the reward
+   for a completed team-up mission: pick up to maxPicks of your own track/
+   album goals here for a one-time progress bonus each. Self-contained
+   card, loaded lazily since the mission-complete panel already renders
+   without it — most agents on this quest never need it opened. */
+function teamBoostPicker(d) {
+  const box = el('div', 'card reconnect-team-boost')
+  box.appendChild(el('div', 'eyebrow', 'TEAM BOOST'))
+  const body = el('div', 'muted', 'Loading your boost…')
+  box.appendChild(body)
+  call('getTeamBoostStatus', { agentNo: getAgentNo(), districtId: d.id }).then((res) => {
+    if (!res?.success || !res.available) { box.remove(); return }
+    body.innerHTML = ''
+    if (res.alreadyPicked) {
+      const picks = res.picks || []
+      body.innerHTML = `<p>Boosted: ${picks.map((p) => `<b>${esc(p.label)}</b> (+${p.bonus})`).join(', ') || 'nothing picked'}.</p>`
+      return
+    }
+    body.innerHTML = `<p>Your team finished — pick up to ${res.maxPicks} of your Tae Pier goals below for a +${res.bonusPercent}% progress bonus on each.</p>`
+    const list = el('div', 'reconnect-boost-list')
+    const checked = new Set()
+    for (const g of res.goals || []) {
+      const row = el('label', 'reconnect-boost-row')
+      const box2 = el('input', '')
+      box2.type = 'checkbox'
+      box2.onchange = () => {
+        if (box2.checked) {
+          if (checked.size >= res.maxPicks) { box2.checked = false; return }
+          checked.add(g.ref)
+        } else checked.delete(g.ref)
+        submit.disabled = checked.size === 0
+      }
+      row.append(box2, el('span', '', `${esc(g.label)} <small>(${g.kind})</small>`))
+      list.appendChild(row)
+    }
+    body.appendChild(list)
+    const submit = el('button', 'btn btn-primary', 'Apply boost')
+    submit.disabled = true
+    submit.onclick = async () => {
+      submit.disabled = true
+      const r = await call('pickTeamBoostGoals', {
+        agentNo: getAgentNo(), districtId: d.id,
+        picks: [...checked].map((ref) => ({ ref })),
+      })
+      if (!r.success) { toast(r.error || 'Could not apply your boost'); submit.disabled = false; return }
+      toast('Boost applied')
+      body.innerHTML = `<p>Boosted: ${r.picks.map((p) => `<b>${esc(p.label)}</b> (+${p.bonus})`).join(', ')}.</p>`
+    }
+    body.appendChild(submit)
+  })
+  return box
+}
+
 /* — Puzzle variants (sotd / cipher / memory) — */
 
 const PUZZLE_EYEBROW = { sotd: 'SONG OF THE DAY', cipher: 'CIPHER', memory: 'MEMORY FRAGMENT' }
@@ -737,6 +790,7 @@ function paintMissionPanel(box, d, res) {
       m.sharedTrack ? `${esc(m.sharedTrack.label)} reached ${m.sharedTrack.target} combined plays${withWho}.`
         : m.checklist ? `Everyone cleared all ${m.checklist.total} tracks${withWho}.`
         : `You teamed up${withWho}.`))
+    if (res.config.teamBoost) box.appendChild(teamBoostPicker(d))
     return
   }
 

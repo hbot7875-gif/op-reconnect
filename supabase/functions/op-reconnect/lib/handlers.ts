@@ -11,7 +11,7 @@ import { resolveReconnectStatus } from './reconnect-goal.ts'
 import { todayKst, nextKstMidnightUtc, kstDateOf } from './kst.ts'
 import { getBombView, launchDefuse } from './bomb.ts'
 import { getEraTimeline } from './era-timeline.ts'
-import { getMyInvites, countWaitingAgents, getReconnectMatchAlerts } from './reconnect-missions.ts'
+import { getMyInvites, countWaitingAgents, getReconnectMatchAlerts, getTeamBoostOverlay } from './reconnect-missions.ts'
 import { creditChargeCells, STREAMS_PER_CHARGE_CELL } from './charge-economy.ts'
 import { getAgentChargeView } from './agent-charge.ts'
 import { levelFor, applyLevelUpIfNeeded, nextLevelRewards } from './leveling.ts'
@@ -180,7 +180,17 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     const albumGoalStreams = albumGoalStreamTotal(activePd.goals, activePd.baseline || {}, windowRollups || [], activePd.activated_at, content)
     const chargeCellStreams = albumGoalStreams % STREAMS_PER_CHARGE_CELL
     const backupOverlay = await getBackupOverlay(supabase, player.agent_no, activePd.district_id)
-    const progress = districtProgress(activePd.goals, activePd.baseline || {}, windowRollups || [], activePd.activated_at, content, backupOverlay)
+    // Team Boost (reconnect-missions.ts) is a second, independent overlay
+    // source using the exact same { target, bonus } shape Backup Pass
+    // already established — spread together so districtProgress() (which
+    // has no idea either mechanic exists) sees one merged map. The two are
+    // vanishingly unlikely to ever target the same goal at once (one needs
+    // a rare Supply Chest roll, the other a completed 9-agent mission);
+    // where they would collide, the later spread key wins rather than the
+    // two amounts summing — an accepted simplification, not a guarantee
+    // both bonuses always stack.
+    const teamBoostOverlay = await getTeamBoostOverlay(supabase, player.agent_no, activePd.district_id)
+    const progress = districtProgress(activePd.goals, activePd.baseline || {}, windowRollups || [], activePd.activated_at, content, { ...backupOverlay, ...teamBoostOverlay })
     const deadline = districtDeadline(activePd.activated_at, restorationDays(content), districtDeadlineExtraDays(activePd))
     // districtProgress().complete only covers solo track+album goals — the
     // reconnect goal (if any was frozen in) needs its own live resolution

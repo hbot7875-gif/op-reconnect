@@ -300,6 +300,120 @@ export async function checklistProgressSince(
   return { done: perTrack.filter(Boolean).length, perTrack }
 }
 
+/** Team Boost — a reward layered on TOP of a plain 'connect' mission's own
+ *  completion (no separate qualify branch in refreshMission: with no
+ *  sharedTrack/checklist configured, "9 joined + everyone streamed once"
+ *  is already the default connect completion rule). Once complete, each of
+ *  the up-to-`requiredAgents` participants may spend their ONE pick — up to
+ *  `maxPicks` of their OWN frozen track/album goals on this same district —
+ *  for a flat, one-time bonus on each pick's progress (`bonusPercent`% of
+ *  that goal's own target, floored at 1). This is a personal effect: it
+ *  never pools between teammates and never lowers what anyone else needs,
+ *  matching Backup Pass's "helps the owner, doesn't touch the collective"
+ *  shape — just self-triggered by finishing the team-up instead of a helper
+ *  joining. Stored on the agent's own rc_reconnect_participants row
+ *  (boost_picks), so "have I already picked" is answered by that one row,
+ *  not a second table. */
+const TEAM_BOOST_DEFAULT_BONUS_PERCENT = 15
+
+interface TeamBoostConfig { maxPicks?: number; bonusPercent?: number }
+interface TeamBoostPick { kind: 'track' | 'album'; ref: string; label: string; bonus: number }
+
+/** What districts.ts's districtProgress() should add on top of a goal's own
+ *  numbers for this agent — same `{ target, bonus }` overlay shape
+ *  getBackupOverlay uses (handlers.ts spreads both together). `target: 0`
+ *  is deliberately falsy so districtProgress()'s `backup?.target || g.target`
+ *  fallback keeps the goal's real target untouched; only `bonus` (flat
+ *  progress) ever applies here — Team Boost never raises anyone's target. */
+export async function getTeamBoostOverlay(
+  supabase: SupabaseDB, agentNo: string, districtId: string,
+): Promise<Record<string, { target: number; bonus: number }>> {
+  const pd = await myActivePd(supabase, agentNo, districtId)
+  const reconnect = pd?.status === 'active' ? myReconnectGoal(pd) : null
+  const cfg: TeamBoostConfig | undefined = reconnect?.config?.teamBoost
+  if (!cfg) return {}
+  const mission = await findMyCompletedMission(supabase, agentNo, districtId, reconnect!.id)
+  if (!mission) return {}
+  const { data: row } = await supabase.from('rc_reconnect_participants')
+    .select('boost_picks').eq('mission_id', mission.id).eq('agent_no', agentNo).maybeSingle()
+  const overlay: Record<string, { target: number; bonus: number }> = {}
+  for (const pick of (row?.boost_picks || []) as TeamBoostPick[]) overlay[pick.ref] = { target: 0, bonus: pick.bonus }
+  return overlay
+}
+
+/** Read-only: what this agent could pick right now, so the client can show
+ *  the picker only once there's genuinely something to pick (mission
+ *  complete, goal carries teamBoost, no pick spent yet) instead of guessing
+ *  from mission state alone. */
+export async function getTeamBoostStatus(supabase: SupabaseDB, params: any) {
+  const agentNo = String(params.agentNo || '').trim().toUpperCase()
+  const districtId = String(params.districtId || '')
+  const pd = await myActivePd(supabase, agentNo, districtId)
+  const reconnect = pd?.status === 'active' ? myReconnectGoal(pd) : null
+  const cfg: TeamBoostConfig | undefined = reconnect?.config?.teamBoost
+  if (!reconnect || !cfg) return { success: true, available: false }
+  const mission = await findMyCompletedMission(supabase, agentNo, districtId, reconnect.id)
+  if (!mission) return { success: true, available: false, missionComplete: false }
+  const { data: row } = await supabase.from('rc_reconnect_participants')
+    .select('boost_picks').eq('mission_id', mission.id).eq('agent_no', agentNo).maybeSingle()
+  const picked: TeamBoostPick[] = row?.boost_picks || []
+  const maxPicks = cfg.maxPicks || 3
+  const goals = [
+    ...(pd!.goals?.trackGoals || []).map((g: any) => ({ kind: 'track' as const, ref: g.id, label: g.label, target: g.target })),
+    ...(pd!.goals?.albumGoals || []).map((g: any) => ({ kind: 'album' as const, ref: g.id, label: g.label, target: g.target })),
+  ]
+  return {
+    success: true, available: true, missionComplete: true,
+    maxPicks, alreadyPicked: picked.length > 0, picks: picked, goals,
+    bonusPercent: cfg.bonusPercent ?? TEAM_BOOST_DEFAULT_BONUS_PERCENT,
+  }
+}
+
+/** Spend the one-shot pick — a plain compare-and-set (`.is('boost_picks',
+ *  null)`) is enough to keep two overlapping taps from both writing: only
+ *  one can win the null→non-null transition, the loser's update affects
+ *  zero rows and reports the same 'already_picked' error a genuine repeat
+ *  attempt would. */
+export async function pickTeamBoostGoals(supabase: SupabaseDB, params: any) {
+  const agentNo = String(params.agentNo || '').trim().toUpperCase()
+  const districtId = String(params.districtId || '')
+  const picks = Array.isArray(params.picks) ? params.picks : []
+
+  const pd = await myActivePd(supabase, agentNo, districtId)
+  if (pd?.status !== 'active') return { success: false, error: 'not_eligible' }
+  const reconnect = myReconnectGoal(pd)
+  const cfg: TeamBoostConfig | undefined = reconnect?.config?.teamBoost
+  if (!reconnect || !cfg) return { success: false, error: 'not_available' }
+  const mission = await findMyCompletedMission(supabase, agentNo, districtId, reconnect.id)
+  if (!mission) return { success: false, error: 'mission_not_complete' }
+
+  const maxPicks = cfg.maxPicks || 3
+  const refs = [...new Set(picks.map((p: any) => String(p?.ref || '')))].filter(Boolean)
+  if (!refs.length || refs.length > maxPicks) return { success: false, error: 'invalid_pick_count' }
+
+  const trackGoals = pd.goals?.trackGoals || []
+  const albumGoals = pd.goals?.albumGoals || []
+  const bonusPercent = cfg.bonusPercent ?? TEAM_BOOST_DEFAULT_BONUS_PERCENT
+  const resolved: TeamBoostPick[] = []
+  for (const ref of refs) {
+    const track = trackGoals.find((g: any) => g.id === ref)
+    const album = !track ? albumGoals.find((g: any) => g.id === ref) : null
+    const goal = track || album
+    if (!goal) return { success: false, error: 'invalid_goal' }
+    resolved.push({
+      kind: track ? 'track' : 'album', ref: goal.id, label: goal.label,
+      bonus: Math.max(1, Math.round(goal.target * bonusPercent / 100)),
+    })
+  }
+
+  const { data: updated, error } = await supabase.from('rc_reconnect_participants')
+    .update({ boost_picks: resolved }).eq('mission_id', mission.id).eq('agent_no', agentNo)
+    .is('boost_picks', null).select('agent_no').maybeSingle()
+  if (error) return { success: false, error: error.message }
+  if (!updated) return { success: false, error: 'already_picked' }
+  return { success: true, picks: resolved }
+}
+
 /** codename lookup for a set of agent numbers — same "agent numbers never
  *  leave the caller's own request" rule getMyInvites already follows below,
  *  now applied to the mission roster too: another participant's raw
@@ -805,6 +919,7 @@ export async function getReconnectMission(supabase: SupabaseDB, content: any, pa
       // what's left even before a mission exists to compute per-agent
       // progress against.
       checklist: reconnect.config.checklist || null,
+      teamBoost: reconnect.config.teamBoost || null,
     },
     idleThreshold,
     mission: mission ? await shapeWithMessages(supabase, mission, participants || [], agentNo, idleThreshold, reconnect.config.ciphers) : null,
