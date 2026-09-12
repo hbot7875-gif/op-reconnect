@@ -24,7 +24,7 @@ import { getBackupOverlay } from './backup-pass.ts'
 import { getVmaBanner } from './vma-voting.ts'
 import { isBadgeEditor } from './badge-admin.ts'
 import { getDistrictMessageSummary } from './district-presence.ts'
-import { checkModeAbuse } from './mode-guard.ts'
+import { getModeVolumeReview } from './mode-guard.ts'
 
 /** Administrative grace time is stored separately from activated_at so a
  * support extension never shifts the stream-counting window or its frozen
@@ -430,16 +430,9 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
   const streak = await computeStreak(supabase, player.agent_no, content, cap, freezeChargesAvailable, joinedDate)
   await awardStreakBadges(supabase, player.agent_no, streak.current)
 
-  // Mode integrity — see mode-guard.ts. Runs after today's rollup is
-  // settled so the check sees the freshest raw_streams. On a real trigger
-  // this rescales the active district's targets too, but that district was
-  // already read into `activeDistrict` above — this request still shows
-  // the pre-upgrade numbers; the very next poll is correct. Mutating
-  // `player.mode` here (not just returning modeUpgrade) is what makes the
-  // response's own player.mode field correct on this exact request, same
-  // reasoning setMode's handler already uses.
-  const modeUpgrade = await checkModeAbuse(supabase, content, player.agent_no, player.mode)
-  if (modeUpgrade) player.mode = modeUpgrade.to
+  // A review hint only. Provider totals cannot prove device count, so this
+  // must never change the player or rewrite their frozen district goals.
+  const modeReview = await getModeVolumeReview(supabase, player.agent_no, player.mode)
   const { data: badgeRows } = await supabase.from('rc_badges').select('badge_id').eq('agent_no', player.agent_no)
 
   // ── The shelf + Pack collection ──────────────────────────────
@@ -520,7 +513,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
       isBadgeVaultEditor,
     },
     levelUp,
-    modeUpgrade,
+    modeReview,
     map: { wards, districts },
     activeDistrict,
     expiredDistrict,

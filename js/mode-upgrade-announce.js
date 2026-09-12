@@ -1,31 +1,28 @@
-// One-shot celebration for an automatic mode upgrade (see mode-guard.ts's
-// checkModeAbuse) — same "only present on the one response that just
-// triggered it" shape as state.levelUp, not a localStorage-seen flag: this
-// is server-driven and rare, so main.js just guards on the mode already
-// shown, same pattern celebratedLevel uses.
-
 import { el, hideOverlay, showOverlay } from './state.js'
 import { esc } from './state.js'
+import { openModeSheet } from './ui-hud.js'
 
-const MODE_LABEL = { medium: 'Medium', hard: 'Hard' }
+const MODE_LABEL = { exam: 'School/Exam', easy: 'Easy', medium: 'Medium', hard: 'Hard' }
 
-export function playModeUpgrade(state) {
-  const up = state.modeUpgrade
-  if (!up) return
-  showOverlay(upgradeSheet(up))
+export function playModeReview(state) {
+  const review = state.modeReview
+  if (!review) return
+  showOverlay(reviewSheet(review, state))
 }
 
-function upgradeSheet(up) {
-  const label = MODE_LABEL[up.to] || up.to
+function reviewSheet(review, state) {
+  const label = MODE_LABEL[review.mode] || review.mode
   const sheet = el('div', 'sheet')
   sheet.innerHTML = `
-    <div class="eyebrow">🚨 MOON STATION TRANSMISSION</div>
-    <h3>Your signal's been busier than one uplink should be 👀</h3>
-    <p class="muted">HT picked up ${esc(String(up.violationDays))} days of traffic no single device could carry on its own — so we bumped your clearance up automatically.</p>
-    <p class="muted"><b>You're on ${esc(label)} mode now.</b> Bigger goals, same great you. Nothing you've already restored is affected.</p>
+    <div class="eyebrow">MOON STATION CHECK</div>
+    <h3>Check your streaming mode</h3>
+    <p class="muted">We saw high stream totals on ${esc(String(review.highVolumeDays))} recent days.</p>
+    <p class="muted">You are on <b>${esc(label)}</b>. If you use more accounts, choose the mode that fits. We did not change your mode or your goals.</p>
   `
-  const ok = el('button', 'btn btn-primary', "Got it, I'm built different")
-  ok.onclick = hideOverlay
-  sheet.appendChild(ok)
+  const check = el('button', 'btn btn-primary', 'Check mode')
+  check.onclick = () => { hideOverlay(); openModeSheet(state) }
+  const later = el('button', 'btn btn-ghost', 'Not now')
+  later.onclick = hideOverlay
+  sheet.append(check, later)
   return sheet
 }
