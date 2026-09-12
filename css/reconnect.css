@@ -3483,6 +3483,14 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .ms-beacon-row .eyebrow { margin: 0; }
 .ms-beacon { font-size: 18px; line-height: 1; animation: hudBeaconPulse 1.8s ease-in-out infinite; }
 
+/* Excess-streams-for-a-single-account list inside the same .sig-alt-warn
+   card shape used for alt warnings above it — a day-per-row breakdown of
+   flagExcessStreamDays. */
+.ms-excess-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+  padding: 6px 0; border-top: 1px solid rgba(229,56,79,0.2); font-size: 12px; }
+.ms-excess-row:first-of-type { border-top: none; margin-top: 4px; }
+.ms-excess-row span { color: var(--dim); text-align: right; }
+
 /* Own list/row, not a reuse of .sig-list/.sig-row — those are
    signalLogSheet's single-line layout (track/artist/counted), shared class
    names would either cramp a timestamp in beside them or change that

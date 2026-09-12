@@ -19,6 +19,7 @@ import { renderRanking } from './screen-ranking.js'
 import { playLevelUp } from './celebrate.js'
 import { checkForBadgeUnlocks } from './badge-reveal.js'
 import { checkForExamModeAnnounce } from './exam-mode-announce.js'
+import { playModeUpgrade } from './mode-upgrade-announce.js'
 import { districtDisplayName } from './ward-tiles.js'
 import { trackEngagement } from './engagement.js'
 
@@ -107,6 +108,7 @@ function renderScreen(state) {
 // current state, which could otherwise carry a stale levelUp along for the
 // ride and replay the celebration on an unrelated action.
 let celebratedLevel = null
+let celebratedModeUpgrade = null
 const celebratedEraCards = new Set()
 
 subscribe((state) => {
@@ -125,6 +127,10 @@ subscribe((state) => {
   if (state.levelUp && state.levelUp.level !== celebratedLevel) {
     celebratedLevel = state.levelUp.level
     playLevelUp(state)
+  }
+  if (state.modeUpgrade && state.modeUpgrade.to !== celebratedModeUpgrade) {
+    celebratedModeUpgrade = state.modeUpgrade.to
+    playModeUpgrade(state)
   }
   checkForBadgeUnlocks(state)
   checkForExamModeAnnounce(state)

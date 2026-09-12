@@ -12,7 +12,7 @@ import { getBackupOverlay } from './backup-pass.ts'
 import { BIRTHDAY_ERA_EVENTS, BIRTHDAY_LIGHTS_PER_TRACK, birthdayTrackEntries, isBirthdayEventDate } from './birthday-eras.ts'
 import { allocateTrackHits } from './era-match.js'
 import { annotateBotzStreams, botzSourceSetup, botzTrackingState } from './botz-rules.js'
-import { flagStreamRows, findPossibleAlts } from './police-check.ts'
+import { flagStreamRows, findPossibleAlts, flagExcessStreamDays } from './police-check.ts'
 import { resolveEquippedBadges } from './badge-profile.ts'
 
 export async function getSignalLog(supabase: SupabaseDB, params: Record<string, unknown>) {
@@ -201,11 +201,13 @@ export async function getMySelfCheck(supabase: SupabaseDB, params: Record<string
 
   const content = await loadContent(supabase)
   const lim = limits(content)
-  const [{ rows }, possibleAlts] = await Promise.all([
+  const [{ rows }, possibleAlts, { data: player }] = await Promise.all([
     fetchStreamRows(supabase, agent, fromTs, toTs, lim.lbMaxPages),
     findPossibleAlts(supabase, agent),
+    supabase.from('rc_players').select('mode').eq('agent_no', agentNo).maybeSingle(),
   ])
   const tracks = flagStreamRows(rows)
+  const excessStreamDays = flagExcessStreamDays(rows, player?.mode || 'easy')
 
   return {
     success: true,
@@ -216,5 +218,7 @@ export async function getMySelfCheck(supabase: SupabaseDB, params: Record<string
     flaggedCount: tracks.filter((t) => t.flags.length > 0).length,
     tracks,
     possibleAlts,
+    mode: player?.mode || null,
+    excessStreamDays,
   }
 }

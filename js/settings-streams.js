@@ -398,6 +398,23 @@ function moonStationSheet() {
       body.appendChild(el('div', 'sig-alt-warn', `<b>⚠ Possible alt account${alts.length === 1 ? '' : 's'}</b><br>${lines}`))
     }
 
+    // Excess streams for a single account — days where the raw play count
+    // physically couldn't fit in 24 hours for the mode on file (see
+    // police-check.ts's flagExcessStreamDays / mode-guard.ts's
+    // dailyStreamCeiling). Three or more of these inside a trailing week
+    // auto-upgrades the mode itself (mode-guard.ts) — this is the same
+    // evidence shown here before that ever fires, so it's never a surprise.
+    const excessStreamDays = res.excessStreamDays || []
+    if (excessStreamDays.length) {
+      const rows = excessStreamDays.map((d) =>
+        `<div class="ms-excess-row"><b>${esc(d.date)}</b><span>${d.streams} streams &middot; ~${d.impliedHours}h of nonstop listening</span></div>`).join('')
+      body.appendChild(el('div', 'sig-alt-warn', `
+        <b>⚠ Excess streams for a single account — ${excessStreamDays.length} day${excessStreamDays.length === 1 ? '' : 's'}</b>
+        <p class="muted">More plays than ${esc(res.mode || 'your mode')} mode's own device count could produce in 24 real hours.</p>
+        ${rows}
+      `))
+    }
+
     if (!res.tracks?.length) {
       body.appendChild(el('p', 'muted', 'Nothing in the last 7 days to check yet.'))
       return

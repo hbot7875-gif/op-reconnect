@@ -9,6 +9,8 @@
 import type { SupabaseDB } from './config.ts'
 import type { StreamRow } from './streams.ts'
 import { MIN_GAP_MS } from './spotify-shared.ts'
+import { kstDateOf } from './kst.ts'
+import { dailyStreamCeiling } from './mode-guard.ts'
 
 // The `repeat` flag below used to run on a made-up 45-second gap — nowhere
 // near the game's actual rule. candy-star-rules.ts's analyzeTracklist (the
@@ -58,6 +60,35 @@ export function flagStreamRows(rows: StreamRow[]): FlaggedTrack[] {
     }
   })
   return withFlags.slice().reverse()
+}
+
+export interface ExcessStreamDay {
+  date: string
+  streams: number
+  ceiling: number
+  impliedHours: number
+}
+
+/** Excess streams for a single account — days inside this window where the
+ *  raw play count physically could not fit in 24 hours for the mode this
+ *  agent has declared (see mode-guard.ts's dailyStreamCeiling: ~180s/track
+ *  x that mode's own advertised device count). Shown alongside the existing
+ *  `repeat` flag on both Moon Station surfaces (self-check and admin) —
+ *  `repeat` catches one suspicious pair of plays, this catches a whole
+ *  day's volume that couldn't have happened honestly under the declared
+ *  mode. Grouped by KST date (same calendar day the rest of the game uses
+ *  for daily rollups), not the raw rows' own UTC timestamps. */
+export function flagExcessStreamDays(rows: StreamRow[], mode: string): ExcessStreamDay[] {
+  const ceiling = dailyStreamCeiling(mode)
+  const counts = new Map<string, number>()
+  for (const r of rows) {
+    const date = kstDateOf(r.listened_at)
+    counts.set(date, (counts.get(date) || 0) + 1)
+  }
+  return [...counts.entries()]
+    .filter(([, streams]) => streams > ceiling)
+    .map(([date, streams]) => ({ date, streams, ceiling, impliedHours: Math.round(streams * 180 / 3600 * 10) / 10 }))
+    .sort((a, b) => b.date.localeCompare(a.date))
 }
 
 // Each of these is a real listening-service identity, not a game account —

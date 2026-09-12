@@ -24,6 +24,7 @@ import { getBackupOverlay } from './backup-pass.ts'
 import { getVmaBanner } from './vma-voting.ts'
 import { isBadgeEditor } from './badge-admin.ts'
 import { getDistrictMessageSummary } from './district-presence.ts'
+import { checkModeAbuse } from './mode-guard.ts'
 
 /** Administrative grace time is stored separately from activated_at so a
  * support extension never shifts the stream-counting window or its frozen
@@ -119,13 +120,35 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
   // Personal Charge decides this player's own district survival. The shared
   // Bomb is read after ensureDailyRollups below so a manual Sync persists the
   // newest timestamped listens before Red Zone evaluates its exact window.
-  const agentCharge = await getAgentChargeView(supabase, content, player.agent_no)
-  const eraTimeline = await getEraTimeline(supabase, content)
-  // Pending reconnect-mission invites — small, agent-scoped, cheap to
-  // recompute every poll (unlike eraTimeline's network-wide scan, this is
-  // just this one agent's own rc_reconnect_participants rows).
-  const { invites } = await getMyInvites(supabase, content, player.agent_no)
-  const reconnectAlerts = await getReconnectMatchAlerts(supabase, content, player.agent_no)
+  // Batch 1 — four calls that need only (supabase, content, agent_no) and
+  // none of each other's results. getAgentChargeView is the only one that
+  // writes, and it writes rc_agent_charge, this agent's own rc_players row
+  // and rc_player_districts; none of the other three read any of those for
+  // this agent (eraTimeline reads rc_daily_activity, invites reads the
+  // reconnect tables plus OTHER agents' codenames, alerts reads
+  // rc_reconnect_match_alerts), so concurrency here cannot change what any
+  // of them returns.
+  //
+  // Ordering that must NOT be folded in here:
+  //  * the rc_player_districts read below — getAgentChargeView's blackout
+  //    soft/full reset DELETEs from that exact table, so the read has to
+  //    observe those deletes. Run concurrently it could hand the rest of
+  //    this function an activePd that a reset is in the middle of removing.
+  //  * ensureDailyRollups, which needs goalXpScope from that read.
+  //  * getBombView, which must follow the rollups so a manual Sync's
+  //    listens are persisted before Red Zone evaluates its exact window.
+  // Promise.all rejects on the first failing branch, so an error in any of
+  // these still propagates exactly as it did when they were sequential.
+  const [agentCharge, eraTimeline, { invites }, reconnectAlerts] = await Promise.all([
+    getAgentChargeView(supabase, content, player.agent_no),
+    getEraTimeline(supabase, content),
+    // Pending reconnect-mission invites — small, agent-scoped, cheap to
+    // recompute every poll (unlike eraTimeline's network-wide scan, this is
+    // just this one agent's own rc_reconnect_participants rows).
+    getMyInvites(supabase, content, player.agent_no),
+    getReconnectMatchAlerts(supabase, content, player.agent_no),
+  ])
+  // Sequential on purpose: see the reset-DELETE note above.
   const { data: pdRows } = await supabase.from('rc_player_districts').select('*')
     .eq('agent_no', player.agent_no).order('activated_at')
   const restored = new Set<string>((pdRows || []).filter((r: any) => r.status === 'restored').map((r: any) => r.district_id))
@@ -406,6 +429,17 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
   const joinedDate = kstDateOf(Math.floor(new Date(player.joined_at).getTime() / 1000))
   const streak = await computeStreak(supabase, player.agent_no, content, cap, freezeChargesAvailable, joinedDate)
   await awardStreakBadges(supabase, player.agent_no, streak.current)
+
+  // Mode integrity — see mode-guard.ts. Runs after today's rollup is
+  // settled so the check sees the freshest raw_streams. On a real trigger
+  // this rescales the active district's targets too, but that district was
+  // already read into `activeDistrict` above — this request still shows
+  // the pre-upgrade numbers; the very next poll is correct. Mutating
+  // `player.mode` here (not just returning modeUpgrade) is what makes the
+  // response's own player.mode field correct on this exact request, same
+  // reasoning setMode's handler already uses.
+  const modeUpgrade = await checkModeAbuse(supabase, content, player.agent_no, player.mode)
+  if (modeUpgrade) player.mode = modeUpgrade.to
   const { data: badgeRows } = await supabase.from('rc_badges').select('badge_id').eq('agent_no', player.agent_no)
 
   // ── The shelf + Pack collection ──────────────────────────────
@@ -486,6 +520,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
       isBadgeVaultEditor,
     },
     levelUp,
+    modeUpgrade,
     map: { wards, districts },
     activeDistrict,
     expiredDistrict,
@@ -518,10 +553,20 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
 }
 
 export async function getGameState(supabase: SupabaseDB, params: any) {
-  const content = await loadContent(supabase)
-  const agent = await getAgent(supabase, params.agentNo)
+  // Batch 0 — three independent reads. loadContent reads the four content
+  // tables, getAgent reads rc_agents, getPlayer reads rc_players: no shared
+  // rows, no writes, and none of them consumes another's result, so running
+  // them together only removes waiting. The one behaviour worth naming: an
+  // unknown agent now also costs a getPlayer read that used to be skipped.
+  // It is a read of a row that cannot exist, discarded by the guard below,
+  // and the guard order itself is unchanged — 'Agent not found' still wins
+  // over the not-joined branch.
+  const [content, agent, player] = await Promise.all([
+    loadContent(supabase),
+    getAgent(supabase, params.agentNo),
+    getPlayer(supabase, params.agentNo),
+  ])
   if (!agent) return { success: false, error: 'Agent not found' }
-  const player = await getPlayer(supabase, params.agentNo)
   if (!player) {
     return {
       success: true, joined: false,

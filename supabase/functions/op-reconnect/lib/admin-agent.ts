@@ -10,7 +10,7 @@ import { totalXp } from './derive.ts'
 import { levelFor } from './leveling.ts'
 import { districtDeadline, DEADLINE_EXTENSION_DAYS } from './districts.ts'
 import { fetchStreamRows } from './streams.ts'
-import { flagStreamRows, findPossibleAlts, modesByAgentNo, IDENTITY_FIELDS } from './police-check.ts'
+import { flagStreamRows, findPossibleAlts, modesByAgentNo, IDENTITY_FIELDS, flagExcessStreamDays } from './police-check.ts'
 import { sendMail, bombReminderEmail, mailerConfigured } from './mailer.ts'
 import { adminReconnectHealthForAgent } from './reconnect-missions.ts'
 import { buildAgentDiary } from './admin-diary.js'
@@ -269,6 +269,7 @@ export async function adminGetAgentTracks(supabase: SupabaseDB, params: any) {
   ])
 
   const tracks = flagStreamRows(rows)
+  const excessStreamDays = flagExcessStreamDays(rows, playerRow?.data?.mode || 'easy')
 
   return {
     success: true,
@@ -280,6 +281,7 @@ export async function adminGetAgentTracks(supabase: SupabaseDB, params: any) {
     flaggedCount: tracks.filter((t) => t.flags.length > 0).length,
     tracks,
     possibleAlts,
+    excessStreamDays,
   }
 }
 
