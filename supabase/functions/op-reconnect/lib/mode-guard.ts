@@ -12,7 +12,7 @@ export const SECONDS_PER_DAY = 86_400
 
 // Uses the top of each advertised account range. The result is an estimated
 // review threshold, not a claim that a higher total is impossible.
-const MODE_DEVICE_COUNT: Record<string, number> = { easy: 1, medium: 4, hard: 6, exam: 1 }
+const MODE_DEVICE_COUNT: Record<string, number> = { easy: 1, steady: 2, medium: 4, hard: 6, exam: 1 }
 
 export function dailyStreamReviewThreshold(mode: string): number {
   const devices = MODE_DEVICE_COUNT[mode] ?? 1
@@ -28,13 +28,20 @@ export interface ModeVolumeReview {
   mode: string
   highVolumeDays: number
   reviewThreshold: number
+  suggestedMode: string | null
+}
+
+const NEXT_MODE: Record<string, string> = { exam: 'steady', easy: 'steady', steady: 'medium', medium: 'hard' }
+
+export function suggestedModeFor(mode: string): string | null {
+  return NEXT_MODE[mode] || null
 }
 
 export function reviewModeVolume(rawStreams: number[], mode: string): ModeVolumeReview | null {
   const reviewThreshold = dailyStreamReviewThreshold(mode)
   const highVolumeDays = rawStreams.filter((n) => Number(n || 0) > reviewThreshold).length
   return highVolumeDays >= VIOLATION_DAYS_TO_TRIGGER
-    ? { mode, highVolumeDays, reviewThreshold }
+    ? { mode, highVolumeDays, reviewThreshold, suggestedMode: suggestedModeFor(mode) }
     : null
 }
 

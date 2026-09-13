@@ -13,6 +13,7 @@ import { BIRTHDAY_ERA_EVENTS, BIRTHDAY_LIGHTS_PER_TRACK, birthdayTrackEntries, i
 import { allocateTrackHits } from './era-match.js'
 import { annotateBotzStreams, botzSourceSetup, botzTrackingState } from './botz-rules.js'
 import { flagStreamRows, findPossibleAlts, flagExcessStreamDays } from './police-check.ts'
+import { suggestedModeFor } from './mode-guard.ts'
 import { resolveEquippedBadges } from './badge-profile.ts'
 
 export async function getSignalLog(supabase: SupabaseDB, params: Record<string, unknown>) {
@@ -219,6 +220,7 @@ export async function getMySelfCheck(supabase: SupabaseDB, params: Record<string
     tracks,
     possibleAlts,
     mode: player?.mode || null,
+    suggestedMode: excessStreamDays.length ? suggestedModeFor(player?.mode || 'easy') : null,
     excessStreamDays,
   }
 }

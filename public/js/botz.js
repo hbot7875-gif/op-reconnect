@@ -860,7 +860,8 @@ const MOON_FLAG_LABEL = { repeat: '🔁 repeat' }
 // confirmed shared identity. Null means the agent registered but never
 // finished onboarding, so there's no mode to compare yet.
 function moonModeLabel(mode) {
-  return mode ? `mode: ${esc(mode)}` : 'mode: —'
+  const names = { exam: 'School/Exam', easy: 'Easy', steady: 'Easy+', medium: 'Medium', hard: 'Hard' }
+  return mode ? `mode: ${esc(names[mode] || mode)}` : 'mode: —'
 }
 
 function moonRenderResult() {
@@ -898,6 +899,15 @@ function moonRenderResult() {
         ${alts.map(a => `Same ${esc(a.via)} identity as <b>${esc(a.handle || a.agentNo)}</b> (${esc(a.agentNo)}) &middot; ${moonModeLabel(a.mode)}`).join('<br>')}
       </div>`
     : ''
+  const modeNames = { exam: 'School/Exam', easy: 'Easy', steady: 'Easy+', medium: 'Medium', hard: 'Hard' }
+  const modeDays = res.excessStreamDays || []
+  const modeWarning = modeDays.length
+    ? `<div class="botz-moon-alt-warn">
+        <b>⚠ Mode may not match recent pace</b><br>
+        ${modeDays.length} high-volume day${modeDays.length === 1 ? '' : 's'} in this check.${res.suggestedMode ? ` Consider <b>${esc(modeNames[res.suggestedMode] || res.suggestedMode)}</b>.` : ''}<br>
+        <span class="botz-moon-verdict-note">Review only — no mode or goals were changed.</span>
+      </div>`
+    : ''
 
   resultEl.innerHTML = `
     <div class="botz-moon-summary">
@@ -907,6 +917,7 @@ function moonRenderResult() {
       ${moonModeLabel(res.agent.mode)}
     </div>
     ${altWarning}
+    ${modeWarning}
     <div class="botz-moon-verdict">
       <button type="button" class="btn-outline${verdict === 'pass' ? ' botz-moon-verdict-active-pass' : ''}" onclick="moonSetVerdict('${esc(agentNo)}','pass')">✓ Pass</button>
       <button type="button" class="btn-outline${verdict === 'fail' ? ' botz-moon-verdict-active-fail' : ''}" onclick="moonSetVerdict('${esc(agentNo)}','fail')">✗ Fail</button>

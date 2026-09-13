@@ -521,9 +521,10 @@ export function renderTabbar(container, state) {
 
 const MODES = {
   exam: { title: 'School/Exam', sub: 'Lighter goals for busy weeks · 5 goal streams = 1 XP' },
-  easy: { title: 'Easy', sub: '1 device · normal targets · 10 goal streams = 1 XP' },
-  medium: { title: 'Medium', sub: '2–4 accounts · 2× targets · 20 goal streams = 1 XP' },
-  hard: { title: 'Hard', sub: '5–6 accounts · 4× targets · 30 goal streams = 1 XP' },
+  easy: { title: 'Easy', sub: '1 account · normal targets · 10 goal streams = 1 XP' },
+  steady: { title: 'Easy+', sub: 'Around 2 accounts · 2.5× targets · 15 goal streams = 1 XP' },
+  medium: { title: 'Medium', sub: '2–4 accounts · 5× targets · 20 goal streams = 1 XP' },
+  hard: { title: 'Hard', sub: '5–6 accounts · 10× targets · 30 goal streams = 1 XP' },
 }
 
 /** Exported so the Settings screen's "Streaming mode" row opens the same
@@ -536,7 +537,7 @@ export function openModeSheet(state) {
     el('p', 'muted', 'Pick what fits you. School/Exam gives lighter goals for busy weeks. Changes start with your next district; your current targets stay the same.'),
   )
   const grid = el('div', 'mode-grid')
-  for (const key of ['exam', 'easy', 'medium', 'hard']) {
+  for (const key of ['exam', 'easy', 'steady', 'medium', 'hard']) {
     const m = MODES[key]
     const opt = el('button', 'mode-opt' + (state.player.mode === key ? ' sel' : ''),
       `<div class="t">${m.title}</div><div class="s">${m.sub}</div>`)

@@ -83,15 +83,15 @@ export function renderOnboarding(container, payload, agentNo, onJoined) {
   input.maxLength = 24
   step2.appendChild(input)
 
-  step2.appendChild(el('p', 'muted', '<br>How many devices are you streaming on?'))
+  step2.appendChild(el('p', 'muted', '<br>How many accounts are you streaming on?'))
   const modeGrid = el('div', 'mode-grid')
   let selectedMode = 'easy'
-  const order = ['easy', 'medium', 'hard']
-  // 10/20/30 streams per XP on easy/medium/hard — same fixed ladder
+  const order = ['easy', 'steady', 'medium', 'hard']
+  // 10/15/20/30 streams per XP on easy/steady/medium/hard — same fixed ladder
   // config.ts's streamsPerXpFor() defaults to, shown here so the tradeoff
   // (bigger targets AND slower XP, not just bigger targets) is visible
   // before it's picked, not discovered later in Settings.
-  const STREAMS_PER_XP = { easy: 10, medium: 20, hard: 30 }
+  const STREAMS_PER_XP = { easy: 10, steady: 15, medium: 20, hard: 30 }
   for (const key of order) {
     if (!modes[key]) continue
     const opt = el('div', 'mode-opt' + (key === selectedMode ? ' sel' : ''),

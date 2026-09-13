@@ -646,7 +646,7 @@ export async function getAlpacaOptions(supabase: SupabaseDB, params: any): Promi
     .map((a: any) => ({ id: a.id, name: a.name, trackKeys: a.trackKeys, count: a.trackKeys.length }))
     .sort((a: any, b: any) => a.name.localeCompare(b.name))
 
-  const modeOrder = ['exam', 'easy', 'medium', 'hard']
+  const modeOrder = ['exam', 'easy', 'steady', 'medium', 'hard']
   const modes = Object.entries(content.config.modes || {})
     .map(([id, value]: [string, any]) => ({
       id,

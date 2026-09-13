@@ -1,7 +1,7 @@
 // Rankings — codename, level and XP for every agent, split by streaming
 // mode. Modes scale both goal targets AND the streams-per-XP rate
-// (screen-settings.js: "bigger targets and slower XP per goal stream" — 10/20/30
-// streams per XP on easy/medium/hard), so a six-account hard-mode agent and
+// (screen-settings.js: "bigger targets and slower XP per goal stream" — the
+// 5/10/15/20/30 mode ladder), so a six-account hard-mode agent and
 // a one-device easy-mode agent are playing different games in two ways now,
 // not directly comparable. Each mode gets its own board; "All" is for
 // bragging rights only and says so.
@@ -15,6 +15,7 @@ const TABS = [
   { key: 'all', label: 'All' },
   { key: 'exam', label: 'School/Exam' },
   { key: 'easy', label: 'Easy' },
+  { key: 'steady', label: 'Easy+' },
   { key: 'medium', label: 'Medium' },
   { key: 'hard', label: 'Hard' },
 ]
@@ -109,4 +110,4 @@ function paintList(body, agents, state) {
 }
 
 const MEDAL = { 1: '🥇', 2: '🥈', 3: '🥉' }
-const MODE_LABEL = { exam: 'School/Exam', easy: 'Easy', medium: 'Medium', hard: 'Hard' }
+const MODE_LABEL = { exam: 'School/Exam', easy: 'Easy', steady: 'Easy+', medium: 'Medium', hard: 'Hard' }

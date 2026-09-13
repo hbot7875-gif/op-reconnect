@@ -6,7 +6,7 @@
 //
 // Numbers here mirror the implementation: 20 album-goal streams per Charge
 // Cell and 2 hours per Cell (charge-economy.ts), 10-hour Era Cards, the
-// 10/20/30 goal-stream XP cadence (config.ts), +10/+30 Signal Sweep
+// 5/10/15/20/30 goal-stream XP cadence (config.ts), +10/+30 Signal Sweep
 // (side-missions.ts), +50 district restoration (config.ts), 24-hour invite
 // expiry (reconnect-missions.ts), and the 7/14-day safety clocks.
 
@@ -20,7 +20,7 @@ const QUICK_START = [
 ]
 
 const XP_SOURCES = [
-  ['🎵', 'Assigned goal streams', 'Easy: 10 streams = 1 XP · Medium: 20 = 1 XP · Hard: 30 = 1 XP. Only streams for your active Track and Album Goals count.'],
+  ['🎵', 'Assigned goal streams', 'School/Exam: 5 streams = 1 XP · Easy: 10 · Easy+: 15 · Medium: 20 · Hard: 30. Only streams for your active Track and Album Goals count.'],
   ['📡', 'Signal Sweep', "Stream Wild Flower, Don't Say You Love Me, Haegeum, and Killin' It Girl. All four once before midnight KST earns +10 XP; all four at 20 streams in one week earns another +30 XP."],
   ['🏙️', 'Restore a district', 'Complete every mission on its board to bring it online and earn +50 XP.'],
   ['🚨', 'Red Zone', 'Stream at least 7 times to qualify. If the network wins, the displayed XP pool is split among all qualifying agents.'],

@@ -402,11 +402,13 @@ function moonStationSheet() {
     // so high totals never change a player's mode or goals automatically.
     const excessStreamDays = res.excessStreamDays || []
     if (excessStreamDays.length) {
+      const modeNames = { exam: 'School/Exam', easy: 'Easy', steady: 'Easy+', medium: 'Medium', hard: 'Hard' }
+      const suggestion = modeNames[res.suggestedMode] || res.suggestedMode
       const rows = excessStreamDays.map((d) =>
         `<div class="ms-excess-row"><b>${esc(d.date)}</b><span>${d.streams} streams</span></div>`).join('')
       body.appendChild(el('div', 'sig-alt-warn', `
         <b>⚠ Check your streaming mode</b>
-        <p class="muted">We saw high totals on ${excessStreamDays.length} day${excessStreamDays.length === 1 ? '' : 's'}. This is only a review hint. If you use more accounts, choose the mode that fits.</p>
+        <p class="muted">We saw high totals on ${excessStreamDays.length} day${excessStreamDays.length === 1 ? '' : 's'}.${suggestion ? ` ${esc(suggestion)} may fit your recent pace better.` : ' Check that your mode still matches your accounts.'} Your mode and current goals were not changed.</p>
         ${rows}
       `))
     }
