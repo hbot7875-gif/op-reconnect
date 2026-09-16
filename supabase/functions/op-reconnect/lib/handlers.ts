@@ -25,6 +25,7 @@ import { getVmaBanner } from './vma-voting.ts'
 import { isBadgeEditor } from './badge-admin.ts'
 import { getDistrictMessageSummary } from './district-presence.ts'
 import { getModeVolumeReview } from './mode-guard.ts'
+import { activationDayBounds, activationDayCounts } from './activation-window.ts'
 
 /** Administrative grace time is stored separately from activated_at so a
  * support extension never shifts the stream-counting window or its frozen
@@ -213,7 +214,13 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     // two amounts summing — an accepted simplification, not a guarantee
     // both bonuses always stack.
     const teamBoostOverlay = await getTeamBoostOverlay(supabase, player.agent_no, activePd.district_id)
-    const progress = districtProgress(activePd.goals, activePd.baseline || {}, windowRollups || [], activePd.activated_at, content, { ...backupOverlay, ...teamBoostOverlay })
+    // "Today" resets on this district's own activation clock, not KST
+    // midnight (see activation-window.ts) — precise to the second via raw
+    // rc_scrobbles, since rc_daily_activity's whole-KST-day buckets can't
+    // answer an arbitrary-time-of-day window.
+    const todayWindow = activationDayBounds(activePd.activated_at)
+    const todayWindowCounts = await activationDayCounts(supabase, player.agent_no, todayWindow.fromSec, todayWindow.toSec)
+    const progress = districtProgress(activePd.goals, activePd.baseline || {}, windowRollups || [], activePd.activated_at, content, { ...backupOverlay, ...teamBoostOverlay }, todayWindowCounts)
     const deadline = districtDeadline(activePd.activated_at, restorationDays(content), districtDeadlineExtraDays(activePd))
     // districtProgress().complete only covers solo track+album goals — the
     // reconnect goal (if any was frozen in) needs its own live resolution

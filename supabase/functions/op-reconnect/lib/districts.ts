@@ -212,11 +212,23 @@ function windowedPlays(
   return total
 }
 
-/** Plays credited to this district today specifically — the 148 Protocol's
- *  "have you already hit today's pace" checkbox must use the same activation
- *  baseline and album-day multiplier as the progress bar. Using the raw KST
- *  bucket here used to mark a newly-activated district's queue complete with
- *  streams that happened before the player tapped Begin Restoration. */
+/** Plays credited to this district "today" — the 148 Protocol's "have you
+ *  already hit today's pace" checkbox. "Today" is the district's own
+ *  rolling day, anchored to the exact moment it was activated (site owner:
+ *  "change it to district activation time"), not the KST calendar day —
+ *  an agent who began restoration at, say, 9pm gets a fresh quota every
+ *  9pm from then on, never at midnight. `todayWindowCounts` (from
+ *  activation-window.ts's activationDayCounts, precise to the second via
+ *  raw rc_scrobbles — rc_daily_activity's whole-KST-day buckets can't
+ *  answer an arbitrary-time-of-day window) is what actually answers that;
+ *  its very first window starts exactly at activation, so nothing before
+ *  that moment can ever land in it — no separate baseline subtraction
+ *  needed here the way the cumulative total still needs one for its own
+ *  KST-day activation baseline.
+ *
+ *  Falls back to the old KST-day bucket lookup when no window map is
+ *  supplied — every districtProgress() caller except handlers.ts's own
+ *  buildState leaves `today` unread, so they're unaffected either way. */
 function todayCountFor(
   keys: string[],
   rollups: RollupRow[],
@@ -225,7 +237,20 @@ function todayCountFor(
   baseline: number,
   cap: number,
   albumDouble: boolean,
+  windowCounts?: Map<string, number>,
 ): number {
+  if (windowCounts) {
+    let today = Math.min(keys.reduce((s, k) => s + (windowCounts.get(k) || 0), 0), cap)
+    // The activation-anchored window can still fall on a KST date whose
+    // (legacy, retired) Daily Transmission already doubled album-goal plays
+    // — keep that multiplier consistent with the cumulative total's own
+    // math rather than silently dropping it here.
+    if (albumDouble) {
+      const row = rollups.find((r) => r.kst_date === todayDate)
+      if (row?.transmission?.templateId === 5) today *= 2
+    }
+    return today
+  }
   const row = rollups.find((r) => r.kst_date === todayDate)
   if (!row) return 0
   let today = Math.min(keys.reduce((s, k) => s + (row.track_counts[k]?.n || 0), 0), cap)
@@ -245,6 +270,10 @@ export function districtProgress(
   // Pass affects progress here — frozen never changes; this is read fresh
   // every call and applied on top, never written back anywhere.
   backupOverlay: Record<string, { target: number; bonus: number }> = {},
+  // Precise counts for the district's CURRENT activation-anchored day (see
+  // todayCountFor's doc comment) — undefined falls back to the old KST-day
+  // bucket lookup, which is fine for every caller that never reads `today`.
+  todayWindowCounts?: Map<string, number>,
 ): DistrictProgress {
   // District/album goal progress is uncapped — every real counted stream
   // moves the goal, same as the arirang mission. See config.ts's
@@ -257,7 +286,7 @@ export function districtProgress(
   const trackGoals = frozen.trackGoals.map((g) => {
     const total = windowedPlays(g.keys, inWindow, activationDate, baseline[`t:${g.id}`] || 0, cap, false)
     const today = todayCountFor(
-      g.keys, inWindow, todayDate, activationDate, baseline[`t:${g.id}`] || 0, cap, false,
+      g.keys, inWindow, todayDate, activationDate, baseline[`t:${g.id}`] || 0, cap, false, todayWindowCounts,
     )
     const backup = backupOverlay[g.id]
     const effectiveTarget = backup?.target || g.target
@@ -306,7 +335,7 @@ export function districtProgress(
         need: originalTarget - t.total,
         today: todayCountFor(
           t.keys, inWindow, todayDate, activationDate,
-          baseline[`a:${a.id}:${t.label}`] || 0, cap, true,
+          baseline[`a:${a.id}:${t.label}`] || 0, cap, true, todayWindowCounts,
         ),
       }))
     // Full roster, done tracks included — lets the UI expand an album's
