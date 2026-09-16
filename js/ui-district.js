@@ -165,6 +165,12 @@ export function renderBoard(board, d, opts = {}) {
       extendMsg.appendChild(rewardLink)
     }
     extendBtn.onclick = async () => {
+      // A one-time, non-refundable spend of a rare reward — easy to tap by
+      // accident right next to the deadline banner it sits under (reported
+      // live: an agent burned their charge here without meaning to). One
+      // confirm, same pattern screen-district.js's Remove/Leave buttons
+      // already use for their own irreversible actions.
+      if (!window.confirm(`Spend 1 Extension Charge for +3 days on this district?\n\nYou have ${charges} charge${charges === 1 ? '' : 's'} — this can't be undone once used here.`)) return
       extendBtn.disabled = true
       const res = await call('extendDistrictDeadline', { agentNo: getAgentNo(), districtId: d.id })
       if (res.success) {
