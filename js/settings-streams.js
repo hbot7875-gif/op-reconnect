@@ -370,7 +370,8 @@ function moonStationSheet() {
   sheet.append(
     el('div', 'ms-beacon-row', '<span class="ms-beacon" aria-hidden="true">🚨</span><span class="eyebrow">MOON STATION (UNDER TEST)</span>'),
     el('h3', '', 'Your own police check'),
-    el('p', 'muted', "The same repeat timing check HT runs on any agent, and whether your linked identity shows up on another agent file — just for your own account."),
+    el('p', 'muted', "HT checks repeat timing, linked identities and whether your daily totals fit your streaming mode."),
+    el('p', 'muted', "One high day won't trigger anything. If your totals stay much higher than your selected mode, you'll be asked to review and switch to a better fit."),
   )
   const body = el('div', 'sig-body', '<p class="muted">Checking…</p>')
   sheet.appendChild(body)
@@ -401,8 +402,8 @@ function moonStationSheet() {
     // Review hint only. We do not know track duration or device identity,
     // so high totals never change a player's mode or goals automatically.
     const excessStreamDays = res.excessStreamDays || []
+    const modeNames = { exam: 'School/Exam', easy: 'Easy', steady: 'Easy+', medium: 'Medium', hard: 'Hard' }
     if (excessStreamDays.length) {
-      const modeNames = { exam: 'School/Exam', easy: 'Easy', steady: 'Easy+', medium: 'Medium', hard: 'Hard' }
       const suggestion = modeNames[res.suggestedMode] || res.suggestedMode
       const rows = excessStreamDays.map((d) =>
         `<div class="ms-excess-row"><b>${esc(d.date)}</b><span>${d.streams} streams</span></div>`).join('')
@@ -410,6 +411,10 @@ function moonStationSheet() {
         <b>⚠ Check your streaming mode</b>
         <p class="muted">We saw high totals on ${excessStreamDays.length} day${excessStreamDays.length === 1 ? '' : 's'}.${suggestion ? ` ${esc(suggestion)} may fit your recent pace better.` : ' Check that your mode still matches your accounts.'} Your mode and current goals were not changed.</p>
         ${rows}
+      `))
+    } else if (res.mode) {
+      body.appendChild(el('div', 'sig-summary', `
+        <span><b>✓ ${esc(modeNames[res.mode] || res.mode)} fits your recent totals</b></span>
       `))
     }
 
