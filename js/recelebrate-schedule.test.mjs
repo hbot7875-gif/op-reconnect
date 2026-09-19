@@ -41,11 +41,11 @@ test('state comes from the timestamp alone, so a refresh gives the same answer',
   assert.deepEqual(watchScheduleStates(t, { partyEndsAtIso: PARTY_END }), watchScheduleStates(t, { partyEndsAtIso: PARTY_END }))
 })
 
-test('videos: SWIM is the official MV, COMEBACK LIVE the Gwanghwamun playlist, GOYANG has no link yet', () => {
+test('videos: SWIM is the official MV, COMEBACK LIVE the Gwanghwamun playlist, GOYANG the Day 1 fancam playlist', () => {
   const v = Object.fromEntries(WATCH_SCHEDULE.map((s) => [s.id, s.video]))
   assert.deepEqual(v.swim, { kind: 'video', youtubeId: 'b4iVv91Z6lY', track: 'SWIM' })
   assert.deepEqual(v['comeback-live'], { kind: 'playlist' })
-  assert.equal(v.goyang, null)
+  assert.deepEqual(v.goyang, { kind: 'list', listId: 'PLW2azHF4TGkE_xDKcIJ0dzehxk7BFGrO9', firstVideoId: 'FnS_t3uLNk4' })
 })
 
 test('the stage follows the live event, else the next one, else the latest replay', () => {

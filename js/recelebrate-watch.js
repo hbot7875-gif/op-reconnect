@@ -398,7 +398,7 @@ export function createWatchStage({ partyEndsAtIso } = {}) {
     } else if (e.data === S.PAUSED) {
       read(); setStatus('PAUSED', 'is-paused'); stopTicking()
     } else if (e.data === S.ENDED) {
-      const last = !isPlaylist() || player.getPlaylistIndex?.() >= WATCH_ITEMS.length - 1
+      const last = ev?.video?.kind === 'video' || player.getPlaylistIndex?.() >= lastListIndex()
       if (last) { setStatus("THAT'S THE SHOW ✦", 'is-ended'); stopTicking() }
     } else if (e.data === S.BUFFERING) {
       read()
@@ -407,15 +407,16 @@ export function createWatchStage({ partyEndsAtIso } = {}) {
 
   // One unavailable/blocked video never breaks the party: skip it, and only
   // fall back to "watch on YouTube" if several in a row can't play here.
+  const lastListIndex = () => (isPlaylist() ? WATCH_ITEMS.length : (player?.getPlaylist?.()?.length || 1)) - 1
   const onError = () => {
-    if (!isPlaylist()) {
+    if (ev?.video?.kind === 'video') {
       showNote(`This video can't play inside ReConnect right now. <a href="${eventUrl(ev)}" target="_blank" rel="noopener noreferrer">Watch it on YouTube ↗</a>`)
       return
     }
     skips += 1
     const index = player?.getPlaylistIndex?.() ?? -1
-    if (skips > MAX_SKIPS || index >= WATCH_ITEMS.length - 1) {
-      showNote(`These performances can't play inside ReConnect right now. <a href="${WATCH_PLAYLIST.watchUrl}" target="_blank" rel="noopener noreferrer">Watch them on YouTube ↗</a>`)
+    if (skips > MAX_SKIPS || index >= lastListIndex()) {
+      showNote(`These performances can't play inside ReConnect right now. <a href="${eventUrl(ev)}" target="_blank" rel="noopener noreferrer">Watch them on YouTube ↗</a>`)
       return
     }
     showNote("One performance can't play here — skipping to the next ✦")
@@ -437,9 +438,10 @@ export function createWatchStage({ partyEndsAtIso } = {}) {
       if (token !== loadToken) return // another event was opened meanwhile
       player = new YT.Player(host, {
         host: 'https://www.youtube-nocookie.com',
-        videoId: v.kind === 'video' ? v.youtubeId : WATCH_PLAYLIST.firstVideoId,
+        videoId: v.kind === 'video' ? v.youtubeId : v.kind === 'list' ? v.firstVideoId : WATCH_PLAYLIST.firstVideoId,
         playerVars: {
           ...(v.kind === 'playlist' ? { listType: 'playlist', list: WATCH_PLAYLIST.listId } : {}),
+          ...(v.kind === 'list' ? { listType: 'playlist', list: v.listId } : {}),
           autoplay: 1, playsinline: 1, rel: 0, modestbranding: 1,
         },
         events: {
@@ -456,6 +458,7 @@ export function createWatchStage({ partyEndsAtIso } = {}) {
   }
 
   const eventUrl = (e) => e?.video?.kind === 'video' ? `https://www.youtube.com/watch?v=${e.video.youtubeId}`
+    : e?.video?.kind === 'list' ? `https://www.youtube.com/watch?v=${e.video.firstVideoId}&list=${e.video.listId}`
     : e?.video?.kind === 'playlist' ? WATCH_PLAYLIST.watchUrl : null
   const ytLink = sec.querySelector('.rcp-yt-link')
   const HOUSE_INDEX = WATCH_ITEMS.findIndex((it) => it.kind === 'ment')
@@ -476,7 +479,8 @@ export function createWatchStage({ partyEndsAtIso } = {}) {
     ytLink.hidden = !url
     if (url) ytLink.href = url
     const upcoming = e.state === 'next' || e.state === 'later'
-    const poster = e.video ? (e.video.kind === 'video' ? e.video.youtubeId : WATCH_PLAYLIST.firstVideoId) : null
+    const poster = !e.video ? null : e.video.kind === 'video' ? e.video.youtubeId
+      : e.video.kind === 'list' ? e.video.firstVideoId : WATCH_PLAYLIST.firstVideoId
     premiereBg.src = poster ? `https://i.ytimg.com/vi/${poster}/hqdefault.jpg` : ''
     premiereBg.hidden = !poster
     if (upcoming) {
@@ -491,7 +495,9 @@ export function createWatchStage({ partyEndsAtIso } = {}) {
       screen.innerHTML = `<div class="rcp-screen-fallback"><b>${esc(e.title)}</b>
         <span>${e.state === 'now' ? 'On now' : e.state === 'replay' ? 'Replay' : `Starts ${e.timeLabel} IST`} · the video link will appear here</span></div>`
     }
-    apply(resolveMoment(e.video?.kind === 'playlist' ? 0 : e.video ? trackIndex(e.video.track) : HOUSE_INDEX, 0))
+    const kind = e.video?.kind
+    const base = resolveMoment(kind === 'playlist' ? 0 : kind === 'video' ? trackIndex(e.video.track) : HOUSE_INDEX, 0)
+    apply(kind === 'list' ? { ...base, kind: 'performance', title: e.title } : base)
     // The playlist re-applies its first song once the player reports in.
     if (isPlaylist()) moment = { ...moment, key: '' }
     setMoments([])
