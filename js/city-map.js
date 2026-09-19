@@ -18,6 +18,7 @@
 // dominates the map the way its description says it should.
 
 import { wardDisplayName } from './ward-tiles.js'
+import { fmtLeftShort } from './countdown.js'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 export function n(tag, attrs, text) {
@@ -309,7 +310,212 @@ function toolMarker(angle, icon, label, onClick, extraClass) {
   // real phone (measured at 375px: 1px apart vertically, fully overlapping
   // horizontally). Candy Star only looked fine because no ward label sits
   // under it. Pulling the label back toward its own icon clears that ring.
-  g.appendChild(n('text', { x: mx.toFixed(2), y: (my + 6.4).toFixed(2), class: 'cm-tool-label' }, label))
+  //
+  // A single centred line only works while mx has room on both sides — true
+  // at ±π/2, where mx sits dead-centre. At the horizontal extremes (angle 0
+  // or π, Candy Star/Magic Shop's spot) mx sits right by the viewBox edge,
+  // so a one-line label either clips past that edge, or — if pushed inward
+  // instead — runs straight into the ward sitting at that same angle's own
+  // name (measured: "Magic Shop" landed flush on top of "D-Day"). Splitting
+  // a two-word label onto two centred lines keeps each line's own footprint
+  // small enough to clear both problems at once without moving off-centre.
+  const nx = Math.cos(angle)
+  const words = label.split(' ')
+  if (Math.abs(nx) > 0.55 && words.length > 1) {
+    g.appendChild(n('text', { x: mx.toFixed(2), y: (my + 5.7).toFixed(2), class: 'cm-tool-label' }, words[0]))
+    g.appendChild(n('text', { x: mx.toFixed(2), y: (my + 8.1).toFixed(2), class: 'cm-tool-label' }, words.slice(1).join(' ')))
+  } else {
+    g.appendChild(n('text', { x: mx.toFixed(2), y: (my + 6.4).toFixed(2), class: 'cm-tool-label' }, label))
+  }
+  if (onClick) {
+    g.style.cursor = 'pointer'
+    g.onclick = (e) => onClick({ x: e.clientX, y: e.clientY })
+  }
+  return g
+}
+
+/** ARIRANG RE:CELEBRATE's map object — a tiny Gwanghwamun-inspired gate
+ *  landmark at its own seam (see the placement comment where this is
+ *  called), not a tool marker or a generic festival stage. Deliberately NOT
+ *  built from toolMarker: a circle + dashed tether reads as a UI control
+ *  sitting on the map (an app button), which is exactly wrong for "a real
+ *  place recreated inside the City." Simplified, ReConnect-native shapes
+ *  only — a wide hanok gate wall with arched openings, its iconic upturned
+ *  roofline above, and a lit plaza with crowd lights out front — inspired
+ *  by the comeback-day Gwanghwamun Square atmosphere, not a traced photo.
+ *  `live` changes how MUCH of it is lit (dim/mid-rig before the event, fully
+ *  alive once it opens) rather than hiding the venue behind a lock icon.
+ *  @param angle    polar angle, radians (see pt() above)
+ *  @param onClick  ({x,y}) => void
+ *  @param live     whether the party has actually opened
+ *  @param deadlineIso  ISO string the countdown label ticks down to */
+function partyVenue(angle, onClick, live, deadlineIso) {
+  // r=47, not the usual 49: this landmark's own roofline/glow reach further
+  // off its anchor point than a toolMarker's halo does, and at the top seam
+  // (mx=50, dead centre) that extra reach landed the roofline within 0.2
+  // viewBox units of the top edge at r=49 — inside the safety margin on
+  // paper, but not in practice. coastR at this exact angle is ~45.1 (well
+  // under its ~46.7 max elsewhere), so 47 still clears the coastline with
+  // room to spare while pulling the roofline back from the top edge.
+  const [mx, my] = pt(angle, 47)
+  const gx = (dx) => (mx + dx).toFixed(2)
+  const gy = (dy) => (my + dy).toFixed(2)
+  const g = n('g', { class: `cm-party ${live ? 'is-party-live' : 'is-party-setup'}` })
+
+  // Historic gate standing INSIDE a modern comeback stage: a nested LED
+  // frame and two light columns around it, red stage light washing the
+  // stone from below, a few narrow beams reaching up, a sparse row of ARMY
+  // Bombs out front. The building keeps its own warm stone/dark-tile colours;
+  // only the light is red. No halo, no bloom, no outlines.
+  const defs = n('defs', {})
+  const grad = (id, stops) => {
+    const lg = n('linearGradient', { id, x1: '0', y1: '0', x2: '0', y2: '1' })
+    stops.forEach(([o, c]) => lg.appendChild(n('stop', { offset: o, 'stop-color': c })))
+    defs.appendChild(lg)
+  }
+  grad('cm-party-stone', [['0', '#6f665d'], ['0.55', '#7d6a5f'], ['1', '#a2483f']])
+  grad('cm-party-backdrop', [['0', '#060506'], ['0.7', '#12080a'], ['1', '#2a0c10']])
+  grad('cm-party-beamfill', [['0', 'rgba(255,236,220,0)'], ['1', 'rgba(255,226,206,0.9)']])
+  grad('cm-party-redbeam', [['0', 'rgba(214,52,70,0)'], ['1', 'rgba(232,70,96,0.95)']])
+  // Red wash rising up the stone from the stage floor — light on the
+  // building, fading out well before the roof so the roofline stays dark.
+  const wash = n('linearGradient', { id: 'cm-party-wash', x1: '0', y1: '0', x2: '0', y2: '1' })
+  wash.appendChild(n('stop', { offset: '0', 'stop-color': '#e8465e', 'stop-opacity': '0' }))
+  wash.appendChild(n('stop', { offset: '1', 'stop-color': '#e8465e', 'stop-opacity': '0.75' }))
+  defs.appendChild(wash)
+  const radial = (id, stops) => {
+    const rg = n('radialGradient', { id, cx: '0.5', cy: '0.5', r: '0.5' })
+    stops.forEach(([o, c, a]) => rg.appendChild(n('stop', { offset: o, 'stop-color': c, 'stop-opacity': a })))
+    defs.appendChild(rg)
+  }
+  // Localized light pool: red/pink spill onto the map around and below the
+  // venue, and a haze behind the rig for the beams to read through. Radial
+  // gradients with hard falloff, not a blur filter — so the light stays a
+  // local pool and never smears over the architecture drawn on top.
+  radial('cm-party-spill', [['0', '#ff4f72', '0.9'], ['0.3', '#e6405a', '0.5'], ['0.65', '#c8343f', '0.16'], ['1', '#c8343f', '0']])
+  radial('cm-party-haze', [['0', '#ff6f92', '0.62'], ['0.5', '#d8364c', '0.24'], ['1', '#c8343f', '0']])
+  radial('cm-party-core', [['0', '#ff5a78', '0.85'], ['0.45', '#e03a54', '0.38'], ['1', '#c8343f', '0']])
+  g.appendChild(defs)
+
+  // Light layers, all BEHIND the structure.
+  g.appendChild(n('ellipse', { cx: gx(0), cy: gy(3.4), rx: 16, ry: 9, class: 'cm-party-spill' }))
+  g.appendChild(n('ellipse', { cx: gx(0), cy: gy(-3.4), rx: 8.2, ry: 5.6, class: 'cm-party-haze' }))
+  // Party open only: a concentrated red light pool right at the stage, so
+  // the energy reads as coming from the venue rather than a wash under the
+  // label, and the concert beams — red ones fanning high and outward, two
+  // warm-white ones between them for contrast.
+  g.appendChild(n('ellipse', { cx: gx(0), cy: gy(-2.2), rx: 7.4, ry: 4.6, class: 'cm-party-core cm-party-live-only' }))
+  ;[[-5.6, -3.4, 'cm-party-redbeam', 13.5], [-4.6, -0.9, 'cm-party-beamfill', 11.5], [0, 0, 'cm-party-redbeam', 13],
+    [4.6, 0.9, 'cm-party-beamfill', 11.5], [5.6, 3.4, 'cm-party-redbeam', 13.5]]
+    .forEach(([bx, lean, fill, h], i) => {
+      const beam = n('polygon', {
+        points: `${gx(bx - 0.14)},${gy(-0.4)} ${gx(bx + 0.14)},${gy(-0.4)} ${gx(bx + lean + 0.6)},${gy(-h)} ${gx(bx + lean - 0.6)},${gy(-h)}`,
+        class: `cm-party-skybeam ${fill === 'cm-party-redbeam' ? 'cm-party-skybeam-red' : 'cm-party-skybeam-white'} cm-party-live-only`,
+        fill: `url(#${fill})`,
+      })
+      beam.style.setProperty('--i', String(i))
+      g.appendChild(beam)
+    })
+
+  g.appendChild(n('ellipse', { cx: gx(0), cy: gy(1.0), rx: 6.0, ry: 0.8, class: 'cm-party-shadow' }))
+
+  ;[-5.3, 5.3].forEach((cx) => {
+    g.appendChild(n('rect', { x: gx(cx - 0.16), y: gy(-6.4), width: 0.32, height: 6.2, class: 'cm-party-column' }))
+  })
+
+  // Stage opening, darkest at the top so the roofline reads against it.
+  g.appendChild(n('rect', { x: gx(-4.5), y: gy(-6.1), width: 9, height: 5.8, class: 'cm-party-void' }))
+
+  // Narrow upward beams from the stage floor, behind the gate: warm white in
+  // the middle, red either side.
+  ;[[-3.3, 'cm-party-beam-red'], [0, 'cm-party-beam-white'], [3.3, 'cm-party-beam-red']].forEach(([bx, cls], i) => {
+    const beam = n('polygon', {
+      points: `${gx(bx - 0.12)},${gy(-0.4)} ${gx(bx + 0.12)},${gy(-0.4)} ${gx(bx + 0.45 * (bx >= 0 ? 1 : -1) + 0.3)},${gy(-5.9)} ${gx(bx + 0.45 * (bx >= 0 ? 1 : -1) - 0.3)},${gy(-5.9)}`,
+      class: `cm-party-beam ${cls}`,
+    })
+    beam.style.setProperty('--i', String(i))
+    g.appendChild(beam)
+  })
+
+  g.appendChild(n('rect', { x: gx(-3.3), y: gy(-2.5), width: 6.6, height: 2.2, class: 'cm-party-wall' }))
+  ;[-1.6, 0, 1.6].forEach((ax) => {
+    g.appendChild(n('path', {
+      d: `M ${gx(ax - 0.4)} ${gy(-0.3)} L ${gx(ax - 0.4)} ${gy(-1.4)}
+          A 0.4 0.4 0 0 1 ${gx(ax + 0.4)} ${gy(-1.4)} L ${gx(ax + 0.4)} ${gy(-0.3)} Z`,
+      class: 'cm-party-arch',
+    }))
+  })
+  g.appendChild(n('rect', { x: gx(-3.3), y: gy(-2.5), width: 6.6, height: 2.2, class: 'cm-party-wash', fill: 'url(#cm-party-wash)' }))
+
+  // Two roof tiers with the eave tips kicking up, wooden pavilion between.
+  g.appendChild(n('path', {
+    d: `M ${gx(-3.9)} ${gy(-2.8)} Q ${gx(-3.3)} ${gy(-2.52)} ${gx(-2.8)} ${gy(-2.47)} L ${gx(2.8)} ${gy(-2.47)}
+        Q ${gx(3.3)} ${gy(-2.52)} ${gx(3.9)} ${gy(-2.8)} L ${gx(3.1)} ${gy(-3.15)} L ${gx(-3.1)} ${gy(-3.15)} Z`,
+    class: 'cm-party-roof',
+  }))
+  g.appendChild(n('rect', { x: gx(-2.5), y: gy(-3.62), width: 5.0, height: 0.47, class: 'cm-party-band' }))
+  g.appendChild(n('path', {
+    d: `M ${gx(-3.3)} ${gy(-3.88)} Q ${gx(-2.8)} ${gy(-3.64)} ${gx(-2.4)} ${gy(-3.6)} L ${gx(2.4)} ${gy(-3.6)}
+        Q ${gx(2.8)} ${gy(-3.64)} ${gx(3.3)} ${gy(-3.88)} L ${gx(2.5)} ${gy(-4.35)} L ${gx(-2.5)} ${gy(-4.35)} Z`,
+    class: 'cm-party-roof',
+  }))
+
+  // The modern rig: nested LED frame, top truss.
+  g.appendChild(n('rect', { x: gx(-4.5), y: gy(-6.1), width: 9, height: 5.8, class: 'cm-party-frame' }))
+  g.appendChild(n('rect', { x: gx(-4.1), y: gy(-5.7), width: 8.2, height: 5.4, class: 'cm-party-frame-in' }))
+  g.appendChild(n('rect', { x: gx(-4.7), y: gy(-6.4), width: 9.4, height: 0.3, class: 'cm-party-truss' }))
+
+  // Stage deck with a row of small red uplights along its lip.
+  g.appendChild(n('rect', { x: gx(-5.8), y: gy(-0.3), width: 11.6, height: 0.5, class: 'cm-party-stage' }))
+  g.appendChild(n('rect', { x: gx(-6.2), y: gy(0.2), width: 12.4, height: 0.3, class: 'cm-party-stage' }))
+  ;[-3.6, -1.2, 1.2, 3.6].forEach((ux) => {
+    g.appendChild(n('rect', { x: gx(ux - 0.22), y: gy(-0.36), width: 0.44, height: 0.12, class: 'cm-party-uplight' }))
+  })
+
+  // A sparse row of ARMY Bombs out front.
+  ;[[-4.2, 0.95], [-2.5, 1.2], [-0.8, 0.95], [0.9, 1.2], [2.6, 0.95], [4.3, 1.15]].forEach(([dx, dy], i) => {
+    const b = n('circle', { cx: gx(dx), cy: gy(dy), r: 0.17, class: 'cm-party-bomblight' })
+    b.style.setProperty('--i', String(i))
+    g.appendChild(b)
+  })
+  // A fuller crowd once doors open — a second row filling the gaps.
+  ;[[-5.1, 1.5], [-3.35, 1.55], [-1.65, 1.5], [0.05, 1.55], [1.75, 1.5], [3.45, 1.55], [5.1, 1.45]].forEach(([dx, dy], i) => {
+    const b = n('circle', { cx: gx(dx), cy: gy(dy), r: 0.15, class: 'cm-party-bomblight cm-party-live-only' })
+    b.style.setProperty('--i', String(i + 6))
+    g.appendChild(b)
+  })
+  // Small light particles hanging in the air around the venue — a few while
+  // the lights warm up, a lot more once the party is on.
+  const SPARKS = [
+    [-6.8, -3.2, 0], [6.9, -2.6, 0], [-7.4, 0.6, 0], [7.2, 0.9, 0], [-5.9, -7.2, 0], [6.1, -7.6, 0],
+    [-8.4, -5.0, 1], [8.3, -4.6, 1], [-7.9, -1.4, 1], [8.0, -0.8, 1], [-6.4, 2.2, 1], [6.6, 2.4, 1],
+    [-3.2, -8.6, 1], [3.4, -8.8, 1], [0.2, -9.4, 1], [-9.2, -2.9, 1], [9.1, -3.3, 1], [-8.8, 1.8, 1],
+    [8.7, 1.6, 1], [-4.8, -9.6, 1], [4.9, -9.9, 1], [-7.0, -8.4, 1], [7.1, -8.1, 1],
+  ]
+  SPARKS.forEach(([dx, dy, liveOnly], i) => {
+    const sp = n('circle', {
+      cx: gx(dx), cy: gy(dy), r: (0.09 + (i % 3) * 0.03).toFixed(2),
+      class: `cm-party-spark cm-party-spark-${i % 3}${liveOnly ? ' cm-party-live-only' : ''}`,
+    })
+    sp.style.setProperty('--i', String(i))
+    g.appendChild(sp)
+  })
+
+
+  const title = n('text', { x: gx(0), y: gy(3.9), class: 'cm-party-title' }, 'RE:CELEBRATE ✦')
+  g.appendChild(title)
+
+  const cd = n('text', { x: gx(0), y: gy(6.6), class: 'cm-party-countdown' })
+  if (live) {
+    cd.appendChild(n('tspan', {}, 'PARTY LIVE ✦'))
+  } else {
+    cd.appendChild(n('tspan', {}, 'PARTY IN '))
+    const dyn = n('tspan', {}, deadlineIso ? fmtLeftShort(new Date(deadlineIso).getTime() - Date.now()) : '')
+    if (deadlineIso) { dyn.dataset.deadline = deadlineIso; dyn.dataset.format = 'short' }
+    cd.appendChild(dyn)
+  }
+  g.appendChild(cd)
+
   if (onClick) {
     g.style.cursor = 'pointer'
     g.onclick = (e) => onClick({ x: e.clientX, y: e.clientY })
@@ -336,11 +542,12 @@ function toolMarker(angle, icon, label, onClick, extraClass) {
  *                      streaming. This ring is solo, same number as the
  *                      "NOW RESTORING" card's own percentage.
  * @param onCandyStar  ({x,y}) => void — optional. Draws the Candy Star tool
- *                     marker (see toolMarker above) when passed.
+ *                     marker (see toolMarker above) when passed, flanking the
+ *                     ring's west side.
  * @param onMagicShop  ({x,y}) => void — optional. Same tool-marker treatment,
- *                     flanking Candy Star on the other side of the seam: a
- *                     real world destination you GO to (buy Wings, claim a
- *                     Ticket), not inventory — that stays in Agent Pack.
+ *                     flanking the ring's east side: a real world destination
+ *                     you GO to (buy Wings, claim a Ticket), not inventory —
+ *                     that stays in Agent Pack.
  * @param onVma        ({x,y}) => void — optional. A temporary live-event
  *                     marker, not a permanent tool like the two above — see
  *                     its own placement comment below.
@@ -348,8 +555,16 @@ function toolMarker(angle, icon, label, onClick, extraClass) {
  *                     Double Day) rather than its plain resting purple.
  * @param onGoldenCorner ({x,y}) => void — optional birthday-room location.
  * @param goldenProgress 0..1 — gently lights its map marker with the room.
+ * @param onParty      ({x,y}) => void — optional. The ARIRANG RE:CELEBRATE
+ *                     pre-event venue (see partyVenue above and
+ *                     arirang-recelebrate.js), holding the ring's top seam —
+ *                     see its own placement comment below.
+ * @param partyLive    whether the party has actually opened yet — swaps the
+ *                     venue from "being set up" to fully lit.
+ * @param partyDeadlineIso  ISO string the venue's countdown label ticks
+ *                          down to. Ignored once partyLive is true.
  */
-export function renderCityMap(wards, districts, onSelect, homeFraction, onCandyStar, onMagicShop, onVma, vmaPulse, onGoldenCorner, goldenProgress = 0) {
+export function renderCityMap(wards, districts, onSelect, homeFraction, onCandyStar, onMagicShop, onVma, vmaPulse, onGoldenCorner, goldenProgress = 0, onParty, partyLive = false, partyDeadlineIso = null) {
   const PAD = 5
   const svg = n('svg', {
     class: 'city-map', 'aria-hidden': 'true',
@@ -521,26 +736,30 @@ export function renderCityMap(wards, districts, onSelect, homeFraction, onCandyS
 
   // The seam where the ward ring closes (Old Grid back to Mono) is the one
   // angle guaranteed not to cut across the middle of a wedge's label — same
-  // reasoning wardless placement gets elsewhere in this file. Candy Star and
-  // Magic Shop flank that seam symmetrically (equal offset each side) rather
-  // than stacking both to one side — two real "go here" world locations,
-  // clearly a pair, with enough angular gap between their halos/labels not
-  // to crowd each other (0.64rad total vs. the ~0.23rad that would actually
-  // touch at this radius). Suggestions used to sit in this cluster too; it
-  // moved to the City ••• menu (screen-world.js's commandTools) since it was
-  // never a place, just a feedback form — see suggestions.js.
-  // ±0.20 rather than ±0.32: a ward's own label sits ~0.45rad off this seam,
-  // so the WIDER the tools spread the closer they crowd Mono and Old Grid.
-  // Tucking them toward the seam moves both away from the ward names while
-  // still leaving ~19 viewBox units between the two markers — plainly two
-  // separate places, neither sitting on a label.
-  if (onCandyStar) svg.appendChild(toolMarker(-Math.PI / 2 - 0.20, '🍬', 'Candy Star', onCandyStar))
-  if (onMagicShop) svg.appendChild(toolMarker(-Math.PI / 2 + 0.20, '🏪', 'Magic Shop', onMagicShop))
+  // reasoning wardless placement gets elsewhere in this file. ARIRANG
+  // RE:CELEBRATE's venue takes that seam now, alone and dead-centre (see
+  // partyVenue's own comment for why it isn't a toolMarker): a temporary
+  // event reads better holding the map's one clean top slot than tucked off
+  // to a side, and Candy Star/Magic Shop don't need that seam to read as a
+  // pair — flanking the ring left/right does that just as well.
+  if (onParty) {
+    svg.appendChild(partyVenue(-Math.PI / 2, onParty, partyLive, partyDeadlineIso))
+  }
 
-  // The opposite seam from Candy Star/Suggestions, deliberately — a
-  // temporary event marker sitting beside two permanent utilities would
-  // read as equally routine. Placed on its own side of the ring instead,
-  // like a location that appeared on the map for the event's duration.
+  // Candy Star and Magic Shop flank the ring at its two horizontal extremes
+  // — two real "go here" world locations, clearly a pair, each with a full
+  // side of the island to itself. Suggestions used to sit in the old top
+  // cluster too; it moved to the City ••• menu (screen-world.js's
+  // commandTools) since it was never a place, just a feedback form — see
+  // suggestions.js. toolMarker's label now grows away from whichever edge
+  // it's nearest (see its own comment) specifically so it can sit here
+  // without the text clipping past the viewBox.
+  if (onCandyStar) svg.appendChild(toolMarker(Math.PI, '🍬', 'Candy Star', onCandyStar))
+  if (onMagicShop) svg.appendChild(toolMarker(0, '🏪', 'Magic Shop', onMagicShop))
+
+  // The bottom seam, symmetric with the top one RE:CELEBRATE now holds — a
+  // temporary event marker sharing a side with a permanent utility would
+  // read as equally routine, so VMA/Golden Corner get this side entirely.
   if (onVma) svg.appendChild(toolMarker(Math.PI / 2 - (onGoldenCorner ? 0.20 : 0), '⚡', 'VMA', onVma, vmaPulse ? 'is-vma-pulse' : ''))
   if (onGoldenCorner) {
     const marker = toolMarker(Math.PI / 2 + (onVma ? 0.20 : 0), '🐰', 'Golden Corner', onGoldenCorner,

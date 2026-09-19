@@ -35,6 +35,7 @@ import { badgeDrawerSheet } from './badge-drawer.js'
 import { itemArt, itemSheet, RARITY } from './items.js'
 import { agentChargeSheet } from './agent-charge.js'
 import { openBackupPassFlow } from './backup-pass.js'
+import { recelebrateKeepsake } from './arirang-recelebrate.js'
 
 /* ── Agent ID ─────────────────────────────────────────────────────────── */
 function agentIdCard(state) {
@@ -517,6 +518,9 @@ export function renderResources(container, state) {
       wrap.appendChild(el('div', 'dim pack-hint', 'Nothing in this filter yet.'))
     }
   }
+
+  // ── Event keepsakes — renders nothing unless the server has a pass ──
+  wrap.appendChild(recelebrateKeepsake())
 
   // ── Quick access — the one thing that doesn't live anywhere else ──
   const quick = el('div', 'quick-links')

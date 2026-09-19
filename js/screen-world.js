@@ -28,6 +28,7 @@ import { renderWardTiles, glanceStrip, wardDisplayName, districtDisplayName, HOM
 import { renderCityMap } from './city-map.js'
 import { districtIcon } from './landmarks.js'
 import { openFinder } from './search.js'
+import { openArirangRecelebrate, arirangPartyIsLive, ARIRANG_RECELEBRATE } from './arirang-recelebrate.js'
 import { openCityShare, openRedZoneShare } from './share.js'
 import { agentChargeSheet, boraMeterSheet } from './agent-charge.js'
 import { broadcastCards } from './broadcasts.js'
@@ -347,7 +348,14 @@ function cityPlan(state) {
     state.vma ? () => openVmaMission() : null,
     !!(state.vma?.isPowerHour || state.vma?.isDoubleDay),
     golden ? (origin) => goGoldenCorner(origin) : null,
-    goldenProgress))
+    goldenProgress,
+    // ARIRANG RE:CELEBRATE — pre-event teaser only (first ReCelebrate
+    // feature). Always shown while this build ships it; a real on/off
+    // switch (rc_config-driven, matching VMA/Golden Corner) is later work
+    // once the actual event window needs to start and end on its own.
+    () => openArirangRecelebrate(),
+    arirangPartyIsLive(),
+    ARIRANG_RECELEBRATE.opensAtIso))
   return box
 }
 

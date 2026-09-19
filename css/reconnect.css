@@ -710,6 +710,105 @@ body {
 .cm-tool.is-golden-complete .cm-tool-body { stroke: var(--gold); }
 .cm-tool.is-golden-live .cm-tool-halo { fill: rgba(217,173,95,calc(.08 + var(--golden-progress) * .16)); }
 .cm-tool.is-golden-complete .cm-tool-halo { fill: rgba(217,173,95,.25); }
+/* ARIRANG RE:CELEBRATE's map object — an actual small venue (see partyVenue
+   in city-map.js), not a tool marker: a tall grey stone platform (a
+   granite wall, the way Gwanghwamun's real base reads — not a coloured
+   house wall) pierced by three true rounded arches, a wooden pavilion
+   band, and a double (two-tier) swept roof — the structure itself stays
+   stone-grey/charcoal, not purple, so it reads as architecture rather than
+   a cartoon building. Colour is reserved for lighting: a warm gold wash
+   under the eaves (real night photos show the curved eaves glowing gold
+   above the stone), purple/red lanterns in the arches, and a scatter of
+   glowing ARMY Bomb crowd lights out front.
+   --arc-red is a one-off exception, scoped to this event only: the album's
+   own concept colours are red and white, and #d1476a (a warm rose-red) reads
+   as that without being --crimson, which is reserved everywhere else in this
+   file for Red Zone and must stay that way. is-party-setup keeps the
+   lighting low (still being rigged), is-party-live turns it up and lets a
+   few lights move — the building itself never changes. */
+.cm-party { --arc-red: #d1476a; --arc-red-lt: #e8567f; }
+/* Historic gate inside a modern comeback stage. The building keeps its own
+   warm stone and dark-tile colours; red is only the stage light washing it
+   from below. --arc-red here is a deep ARIRANG red, scoped to this event and
+   deliberately not --crimson (reserved for Red Zone). */
+.cm-party { --arc-red: #c8343f; }
+.cm-party-shadow { fill: rgba(0,0,0,.45); }
+.cm-party-column { fill: #e7e2da; }
+.cm-party-void { fill: url(#cm-party-backdrop); }
+.cm-party-wall { fill: url(#cm-party-stone); }
+.cm-party-arch { fill: #1a1012; }
+.cm-party-band { fill: #5b4638; }
+.cm-party-roof { fill: #3a3431; }
+.cm-party-frame { fill: none; stroke: #ebe6de; stroke-width: .24; }
+.cm-party-frame-in { fill: none; stroke: #ebe6de; stroke-width: .1; opacity: .45; }
+.cm-party-truss { fill: #ddd7ce; }
+.cm-party-stage { fill: #121014; stroke: rgba(235,228,218,.45); stroke-width: .08; }
+.cm-party-uplight { fill: var(--arc-red); }
+.cm-party-beam { opacity: .2; }
+.cm-party-beam-white { fill: url(#cm-party-beamfill); }
+.cm-party-beam-red { fill: var(--arc-red); opacity: .16; }
+.cm-party-spill { fill: url(#cm-party-spill); mix-blend-mode: screen; }
+.cm-party-haze { fill: url(#cm-party-haze); }
+.cm-party-core { fill: url(#cm-party-core); mix-blend-mode: screen; }
+.cm-party-skybeam { opacity: .3; }
+.cm-party-wash { opacity: .3; }
+.cm-party-spark { opacity: .55; }
+.cm-party-spark-0 { fill: #ff7a92; }
+.cm-party-spark-1 { fill: #fff0e2; }
+.cm-party-spark-2 { fill: #e0424c; }
+.cm-party-bomblight { fill: #f2e8ec; }
+.cm-party-bomblight:nth-of-type(2n) { fill: #e0505e; }
+.cm-party-title { fill: #f39cc8; font-family: var(--mono); font-size: 3.2px; font-weight: 700; letter-spacing: .32px;
+  text-anchor: middle; paint-order: stroke; stroke: rgba(6,5,13,0.9); stroke-width: 0.75px; }
+.cm-party-countdown { fill: var(--muted); font-family: var(--mono); font-size: 2.3px; letter-spacing: .2px;
+  text-anchor: middle; paint-order: stroke; stroke: rgba(6,5,13,0.85); stroke-width: 0.7px; }
+.cm-party-countdown tspan:last-child { fill: #f39cc8; }
+.cm-party:hover .cm-party-frame { stroke: #ffffff; }
+
+/* Pre-party: the rig is up and the lights are warming — beams faint and
+   slowly breathing, frame and columns at part power, the crowd still thin. */
+.cm-party.is-party-setup .cm-party-frame,
+.cm-party.is-party-setup .cm-party-column,
+.cm-party.is-party-setup .cm-party-truss { opacity: .65; }
+.cm-party.is-party-setup .cm-party-frame-in { opacity: .28; }
+.cm-party.is-party-setup .cm-party-bomblight { opacity: .5; }
+.cm-party.is-party-setup .cm-party-spill { opacity: .28; }
+.cm-party.is-party-setup .cm-party-haze { opacity: .3; animation: cmPartyWarmup 4s ease-in-out infinite; }
+.cm-party.is-party-setup .cm-party-wash { opacity: .3; }
+.cm-party.is-party-setup .cm-party-spark { opacity: .4; }
+.cm-party.is-party-setup .cm-party-beam { animation: cmPartyWarmup 4s ease-in-out infinite; animation-delay: calc(var(--i, 0) * -1.3s); }
+@keyframes cmPartyWarmup { 0%,100% { opacity: .1; } 50% { opacity: .24; } }
+.cm-party.is-party-setup .cm-party-haze { animation-name: cmPartyHazeWarm; }
+@keyframes cmPartyHazeWarm { 0%,100% { opacity: .3; } 50% { opacity: .45; } }
+
+/* Party open: same structure, rig at full power, all five beams up and
+   slowly sweeping, a full crowd twinkling. Still no glow around any of it. */
+.cm-party.is-party-setup .cm-party-live-only { display: none; }
+.cm-party.is-party-live .cm-party-frame,
+.cm-party.is-party-live .cm-party-column,
+.cm-party.is-party-live .cm-party-truss { opacity: 1; }
+.cm-party.is-party-live .cm-party-frame-in { opacity: .6; }
+.cm-party.is-party-live .cm-party-uplight { fill: #e0424c; }
+.cm-party.is-party-live .cm-party-beam { transform-box: fill-box; transform-origin: 50% 100%;
+  animation: cmPartySweep 5s ease-in-out infinite alternate; animation-delay: calc(var(--i, 0) * -1.1s); }
+.cm-party.is-party-live .cm-party-beam-red { opacity: .3; }
+.cm-party.is-party-live .cm-party-beam-white { opacity: .34; }
+@keyframes cmPartySweep { 0% { transform: rotate(-4deg); } 100% { transform: rotate(4deg); } }
+.cm-party.is-party-live .cm-party-spill { opacity: .4; }
+.cm-party.is-party-live .cm-party-core { animation: cmPartyPulse 2.4s ease-in-out infinite; }
+.cm-party.is-party-live .cm-party-haze { opacity: .95; animation: cmPartyFlicker 3.1s steps(1, end) infinite; }
+.cm-party.is-party-live .cm-party-wash { opacity: .9; }
+.cm-party.is-party-live .cm-party-skybeam { opacity: .55; transform-box: fill-box; transform-origin: 50% 100%;
+  animation: cmPartySweep 4.2s ease-in-out infinite alternate; animation-delay: calc(var(--i, 0) * -1.3s); }
+.cm-party.is-party-live .cm-party-spark { animation: cmPartyTwinkle 1.6s ease-in-out infinite; animation-delay: calc(var(--i, 0) * -0.21s); }
+@keyframes cmPartyPulse { 0%,100% { opacity: .8; } 50% { opacity: 1; } }
+.cm-party.is-party-live .cm-party-skybeam-white { opacity: .45; }
+@keyframes cmPartyFlicker { 0% { opacity: .95; } 40% { opacity: .78; } 43% { opacity: 1; } 71% { opacity: .86; } 74% { opacity: .95; } }
+.cm-party.is-party-live .cm-party-bomblight { opacity: 1; animation: cmPartyTwinkle 2.2s ease-in-out infinite; animation-delay: calc(var(--i, 0) * -0.3s); }
+@keyframes cmPartyTwinkle { 0%,100% { opacity: .55; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .cm-party .cm-party-bomblight, .cm-party .cm-party-beam, .cm-party .cm-party-skybeam, .cm-party .cm-party-spark, .cm-party .cm-party-spill, .cm-party .cm-party-haze, .cm-party .cm-party-core { animation: none !important; }
+}
 
 /* Conduits — the line each ward is reconnected by. Dark while sealed, live
    while it's being restored, gold once it's whole. */
@@ -4522,3 +4621,350 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 @keyframes recordSpin{to{transform:rotate(360deg)}}
 @media(max-width:340px){.gc-room{height:auto;aspect-ratio:1/.52}}
 @media(prefers-reduced-motion:reduce){.gc-p100 .gc-cake span,.gc-fairy i,.gc-turntable i,.gc-p100 .gc-bunny{animation:none!important}}
+
+/* ARIRANG RE:CELEBRATE — pre-event teaser scene. Same .stage shell every
+   rendered district/Golden Corner already uses, a much shorter prop list
+   than Golden Corner's room (this is a locked preview, not a lived-in
+   space yet): a night sky, two soft spotlight beams crossing over a small
+   stage deck, a string of party lights, and a glowing ARMY Bomb centre
+   stage. Deliberately no tent stripes, no ring/arena shapes, no red — an
+   outdoor night show, not a battle zone or a circus. */
+/* The sheet's own background scene — same gate/arch/roof shape language as
+   the map's partyVenue (city-map.js), scaled up with room for the crowd:
+   recreating the comeback-night atmosphere (gate lit and glowing, a packed
+   square of tiny lights below, beams reaching up) as its own simplified
+   ReConnect illustration, not a traced photo. --arc-red carries over from
+   the map icon's own one-off exception (see city-map.js's comment on it). */
+.arc-scene{position:relative;height:auto;aspect-ratio:1/.62;margin:14px 0 12px;background:#08050f;overflow:hidden;
+  --arc-red:#d1476a;--arc-red-lt:#e8567f}
+.arc-props{position:absolute;inset:0}
+.arc-sky{position:absolute;inset:0;background:linear-gradient(180deg,#07060b 0%,#0c0a12 60%,#07060a 100%)}
+.arc-gate{position:absolute;left:50%;top:27%;width:84%;height:62%;transform:translateX(-50%);z-index:2}
+.arc-stage-overlay{z-index:3}
+/* Cool white LED frame + columns, a pink-lit gate face in a black opening. */
+.arc-column{fill:#e8edf4}
+.arc-void{fill:#050407}
+.arc-gate-wall{fill:url(#arcStone)}
+.arc-gate-arch{fill:#2a1a22}
+.arc-gate-band{fill:#7a5664}
+.arc-gate-sign{fill:#2a1a22}
+.arc-gate-roof{fill:#231a20;stroke:rgba(0,0,0,.5);stroke-width:.3}
+.arc-gate-ridge{fill:#3a2c33}
+.arc-frame{fill:none;stroke:#eef2f8;stroke-width:1.1}
+.arc-frame-in{fill:none;stroke:#eef2f8;stroke-width:.55;opacity:.55}
+.arc-frame-in2{opacity:.3}
+.arc-truss{fill:#dfe5ee}
+.arc-stage{fill:#121016;stroke:rgba(230,236,244,.55);stroke-width:.3}
+.arc-scene:not(.is-live) .arc-frame,.arc-scene:not(.is-live) .arc-column,.arc-scene:not(.is-live) .arc-truss{opacity:.75}
+.arc-crowd{position:absolute;inset:0;z-index:1}
+.arc-crowd i{position:absolute;width:3px;height:3px;border-radius:50%;transform:translate(-50%,-50%);
+  background:#ff8cc6;opacity:.6}
+.arc-crowd i:nth-child(3n+1){background:#ff8cc6;opacity:.8}
+.arc-crowd i:nth-child(3n+2){background:#f6d6ea;opacity:.5}
+.arc-scene.is-live .arc-crowd i{animation:arcTwinkle 2.4s ease-in-out infinite;animation-delay:calc(var(--i,0) * -0.35s)}
+.arc-shadow{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 100%,rgba(0,0,0,.5),transparent 55%)}
+.arc-stage-overlay .stage-name{text-shadow:0 2px 8px rgba(0,0,0,.9);white-space:nowrap;font-size:min(19px,4.3vw)}
+.arc-when{margin:0 0 12px;font-size:13px}
+.arc-countdown{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:11px 13px;margin-bottom:12px;
+  border-radius:var(--r);border:1px solid rgba(209,71,106,.3);background:rgba(209,71,106,.08)}
+/* Pre-party invitation — sits under the countdown, visually quieter than
+   the venue art above it but still an obvious tap target. */
+.arc-invite{display:flex;flex-direction:column;align-items:flex-start;gap:4px;margin:2px 0 14px;padding:12px 13px;
+  border-radius:var(--r);border:1px solid rgba(200,52,63,.28);background:rgba(200,52,63,.06)}
+.arc-invite-eyebrow{font:9px var(--mono);letter-spacing:1.6px;color:#f39cc8}
+.arc-invite-q{font-size:15px}
+.arc-invite-q b{color:#f39cc8;font-weight:600}
+.arc-pass-btn{margin-top:8px;padding:8px 12px;font-size:12px;letter-spacing:1px;background:transparent;
+  border:1px solid rgba(243,156,200,.55);color:#f6c3dc}
+.arc-pass-btn:hover{background:rgba(243,156,200,.1)}
+.arc-lovesong h3{margin:4px 0 6px}
+/* Love Song picker: compact music tiles — track number, title, and a small
+   heart that only appears on the pick. */
+.arc-song-list{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:12px 0 14px}
+.arc-song{display:flex;align-items:center;gap:8px;min-height:40px;padding:8px 10px;border-radius:10px;
+  border:1px solid rgba(255,255,255,.07);background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.01));
+  color:inherit;font-family:inherit;font-size:13px;line-height:1.2;text-align:left;cursor:pointer;
+  transition:border-color .15s,background .15s}
+.arc-song-no{font:9px var(--mono);letter-spacing:.5px;color:var(--muted);opacity:.7;flex:none}
+.arc-song-title{flex:1;min-width:0}
+.arc-song-heart{flex:none;font-size:12px;color:#f39cc8;opacity:0;transform:scale(.6);transition:opacity .15s,transform .15s}
+.arc-song:hover{border-color:rgba(243,156,200,.3)}
+.arc-song.is-picked{border-color:rgba(232,86,110,.8);background:linear-gradient(180deg,rgba(200,52,63,.24),rgba(200,52,63,.12));color:#fff}
+.arc-song.is-picked .arc-song-no{color:#f6c3dc;opacity:1}
+.arc-song.is-picked .arc-song-heart{opacity:1;transform:none}
+.arc-pass-confirm{display:block;width:100%;background:#c8343f}
+.arc-pass-confirm:disabled{opacity:.4;cursor:not-allowed}
+/* The Party Pass — the payoff, a collectible pass rather than a receipt:
+   ARIRANG-red header band, a faint stage-light texture behind the body, the
+   agent's Love Song as the hero line. */
+.arc-pass{position:relative;margin:4px 0 14px;border-radius:14px;overflow:hidden;
+  background:#0d0a0f;border:1px solid rgba(200,52,63,.55);box-shadow:0 14px 30px rgba(0,0,0,.45)}
+.arc-pass-bg{position:absolute;inset:0;pointer-events:none;
+  background:
+    radial-gradient(90% 70% at 100% 0%,rgba(200,52,63,.30),transparent 62%),
+    radial-gradient(70% 60% at 0% 100%,rgba(200,52,63,.14),transparent 60%),
+    linear-gradient(112deg,transparent 46%,rgba(255,226,206,.05) 49%,transparent 53%),
+    linear-gradient(68deg,transparent 58%,rgba(232,70,96,.07) 61%,transparent 65%),
+    linear-gradient(160deg,#170c12 0%,#0c0a10 55%,#140a0e 100%)}
+.arc-pass>*:not(.arc-pass-bg){position:relative}
+.arc-pass-top{display:flex;justify-content:space-between;padding:9px 16px;background:#c8343f;
+  font:9px var(--mono);letter-spacing:1.8px;color:#fff5f6}
+.arc-pass-body{padding:16px 16px 4px}
+.arc-pass-label{font:9px var(--mono);letter-spacing:1.8px;color:#f39cc8}
+.arc-pass-song{margin-top:4px;font-family:var(--disp);font-weight:800;font-size:28px;line-height:1.1;color:#fff;
+  word-break:break-word}
+.arc-pass-agent{display:flex;align-items:baseline;gap:10px;margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,.08)}
+.arc-pass-name{font-size:15px;font-weight:600;color:#f3eef2}
+.arc-pass-no{font:10px var(--mono);letter-spacing:1px;color:var(--muted)}
+.arc-pass-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-top:10px}
+.arc-pass-row span{font:9px var(--mono);letter-spacing:1.4px;color:var(--muted)}
+.arc-pass-row b{font-size:13px;color:#fff;text-align:right}
+.arc-pass-stub{display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding:10px 16px;
+  border-top:1px dashed rgba(243,156,200,.35);background:rgba(200,52,63,.10);
+  font:10px var(--mono);letter-spacing:2.2px;color:#f6c3dc}
+.arc-pass-star{color:#f39cc8;font-size:12px}
+.arc-pass.is-fresh{animation:arcPassReveal .7s cubic-bezier(.2,.8,.2,1) both}
+@keyframes arcPassReveal{0%{opacity:0;transform:translateY(14px) scale(.96)}100%{opacity:1;transform:none}}
+.arc-pass-note{margin:0 0 12px;text-align:center;color:#f6c3dc;font-size:14px}
+.arc-pass-continue{display:block;width:100%;background:transparent;border:1px solid rgba(243,156,200,.55);color:#f6c3dc;letter-spacing:1px}
+.arc-pass-continue:hover{background:rgba(243,156,200,.1)}
+@media(prefers-reduced-motion:reduce){.arc-pass.is-fresh{animation:none}}
+/* Team tags — identical shape for both sides, only the accent differs. */
+.arc-side-tag{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:999px;
+  font:9px var(--mono);letter-spacing:1.2px;border:1px solid currentColor;vertical-align:middle}
+.arc-side-tag.is-hooligans{color:#ffcf4a}
+.arc-side-tag.is-aliens{color:#79f0a4}
+/* CHOOSE UR SIDE — fast, loud, a little chaotic; both sides equal size. */
+.arc-sides{overflow:hidden}
+.arc-sides-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.arc-sides-title{font-family:var(--disp);font-weight:800;font-size:min(20px,5vw);letter-spacing:.5px;color:#fff;white-space:nowrap;
+  animation:arcSidesPop .45s cubic-bezier(.2,1.6,.4,1) both}
+.arc-sides-title span{color:#f39cc8}
+.arc-sides-timer{font:22px var(--mono);letter-spacing:1px;color:#f6c3dc}
+.arc-sides.is-hurry .arc-sides-timer{color:#ff6b7c;animation:arcTimerShake .4s ease-in-out infinite}
+.arc-sides-bar{height:4px;margin:10px 0 16px;border-radius:2px;background:rgba(255,255,255,.07);overflow:hidden}
+.arc-sides-bar i{display:block;height:100%;transform-origin:left center;
+  background:repeating-linear-gradient(90deg,#c8343f 0 10px,#f39cc8 10px 20px)}
+.arc-sides-row{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px}
+.arc-side{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:150px;
+  padding:14px 6px;border-radius:14px;border:2px solid currentColor;background:rgba(255,255,255,.03);
+  font-family:inherit;cursor:pointer;transition:transform .12s,background .12s}
+.arc-side.is-hooligans{color:#ffcf4a;transform:rotate(-2.5deg);animation:arcWobbleL 1.8s ease-in-out infinite}
+.arc-side.is-aliens{color:#79f0a4;transform:rotate(2.5deg);animation:arcWobbleR 1.8s ease-in-out infinite}
+.arc-side:hover{background:rgba(255,255,255,.07)}
+.arc-side:active{transform:scale(.96)}
+.arc-side-icon{font-size:40px;line-height:1}
+.arc-side-name{font-family:var(--disp);font-weight:800;font-size:15px;letter-spacing:1px}
+.arc-sides-vs{font-family:var(--disp);font-weight:800;font-size:16px;color:#f39cc8;animation:arcVsBounce .9s ease-in-out infinite}
+.arc-side:disabled{cursor:default;animation:none}
+.arc-side.is-picked{background:rgba(255,255,255,.1);transform:scale(1.04)}
+.arc-sides:has(.is-picked) .arc-side:not(.is-picked),.arc-sides.is-timeup .arc-side{opacity:.35}
+@keyframes arcSidesPop{0%{opacity:0;transform:scale(.7) rotate(-4deg)}100%{opacity:1;transform:none}}
+@keyframes arcWobbleL{0%,100%{transform:rotate(-2.5deg)}50%{transform:rotate(-1deg) translateY(-2px)}}
+@keyframes arcWobbleR{0%,100%{transform:rotate(2.5deg)}50%{transform:rotate(1deg) translateY(-2px)}}
+@keyframes arcVsBounce{0%,100%{transform:scale(1)}50%{transform:scale(1.2)}}
+@keyframes arcTimerShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-2px)}75%{transform:translateX(2px)}}
+/* Side result */
+.arc-side-result{text-align:center;padding-top:22px}
+.arc-side-result.is-hooligans{--side:#ffcf4a}
+.arc-side-result.is-aliens{--side:#79f0a4}
+.arc-result-eyebrow{font:10px var(--mono);letter-spacing:2px;color:#f39cc8;margin-bottom:6px}
+.arc-result-ht{font-family:var(--disp);font-weight:800;font-size:16px;letter-spacing:.8px;color:#fff}
+.arc-result-icon{font-size:64px;line-height:1.1;margin:10px 0 4px;animation:arcSidesPop .5s cubic-bezier(.2,1.6,.4,1) both}
+.arc-result-team{font-family:var(--disp);font-weight:800;font-size:min(24px,5.4vw);letter-spacing:.6px;color:var(--side);white-space:nowrap}
+.arc-result-see{margin:12px 0 18px;font:11px var(--mono);letter-spacing:2px;color:#f6c3dc}
+/* Agent Pack keepsake — a small pass-shaped card in the Pack's own section style. */
+.arc-keepsake{position:relative;display:grid;gap:3px;width:100%;margin:6px 0 4px;padding:12px 30px 12px 18px;text-align:left;
+  border-radius:12px;border:1px solid rgba(200,52,63,.45);cursor:pointer;color:inherit;font-family:inherit;
+  background:radial-gradient(80% 90% at 100% 0%,rgba(200,52,63,.22),transparent 60%),linear-gradient(160deg,#170c12,#0c0a10)}
+.arc-keepsake::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:12px 0 0 12px;background:#c8343f}
+.arc-keepsake-eyebrow{font:8px var(--mono);letter-spacing:1.8px;color:#f39cc8}
+.arc-keepsake-name{font-family:var(--disp);font-weight:800;font-size:15px;color:#fff}
+.arc-keepsake-song{font-size:14px;color:#f6c3dc}
+.arc-keepsake-foot{display:flex;align-items:center;gap:8px;margin-top:2px}
+.arc-keepsake-date{font:9px var(--mono);letter-spacing:1.4px;color:var(--muted)}
+.arc-keepsake-go{position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:20px;color:var(--muted)}
+@media(prefers-reduced-motion:reduce){.arc-side,.arc-sides-vs,.arc-sides-timer,.arc-sides-title,.arc-result-icon{animation:none!important}}
+.arc-countdown span{font:9px var(--mono);letter-spacing:1.4px;color:var(--muted);text-transform:uppercase}
+.arc-countdown b{font:15px var(--mono);letter-spacing:.5px;color:#e8567f}
+@keyframes arcTwinkle{0%,100%{opacity:.4}50%{opacity:1}}
+@media(prefers-reduced-motion:reduce){.arc-crowd i{animation:none!important}}
+
+/* ── ARIRANG RE:CELEBRATE — live Party page (screen-recelebrate.js) ─────
+   A dark concert room: the Watch stage is the centrepiece (same white LED
+   frame, red uplight and ARMY Bomb crowd as the map landmark), Battle and
+   Chat are lighter side rails, not three equal cards. Desktop shows all
+   three; phones keep one live header and switch BATTLE · WATCH · CHAT. */
+@media (min-width: 980px) {
+  .scene:has(.rcp),
+  #hud:has(~ #scene .rcp) .hud-inner,
+  #hud:has(~ #scene .rcp) .hud-xp { max-width: 1240px; }
+}
+.rcp{--rcp-red:#c8343f;--rcp-h:#ffcf4a;--rcp-a:#79f0a4;position:relative;padding-bottom:24px}
+.rcp-head{position:relative;display:grid;grid-template-columns:auto 1fr auto;grid-template-areas:'back . clock' 'titles titles titles' 'me me me';
+  gap:6px 12px;align-items:end;margin-top:8px;padding:12px 16px 14px;border-radius:16px;overflow:hidden;
+  border:1px solid rgba(200,52,63,.35);background:#0b080d}
+.rcp-head-bg{position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(70% 140% at 50% 120%,rgba(200,52,63,.35),transparent 60%),
+    linear-gradient(100deg,transparent 30%,rgba(255,236,220,.05) 34%,transparent 38%),
+    linear-gradient(80deg,transparent 62%,rgba(232,70,96,.08) 66%,transparent 70%)}
+.rcp-head>*:not(.rcp-head-bg){position:relative}
+.rcp-back{grid-area:back;justify-self:start;padding:0}
+.rcp-titles{grid-area:titles;min-width:0}
+.rcp-name{font-family:var(--disp);font-weight:800;font-size:min(24px,5.2vw);letter-spacing:.4px;color:#fff;white-space:nowrap}
+.rcp-name span{color:#f39cc8}
+.rcp-live{display:inline-flex;align-items:center;gap:7px;margin-top:4px;font:10px var(--mono);letter-spacing:2px;color:#ff8a9a}
+.rcp-live i{width:7px;height:7px;border-radius:50%;background:#ff4d62;animation:rcpLive 1.4s ease-in-out infinite}
+.rcp-clock{grid-area:clock;text-align:right;align-self:start}
+.rcp-clock span{display:block;font:9px var(--mono);letter-spacing:1.6px;color:var(--muted)}
+.rcp-clock b{font:20px var(--mono);letter-spacing:1px;color:#f6c3dc}
+.rcp-me{grid-area:me;display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-height:26px}
+.rcp-me .arc-side-tag{font-size:10px;padding:3px 9px}
+.rcp-pass-btn,.rcp-join{padding:5px 11px;border-radius:999px;background:transparent;cursor:pointer;
+  border:1px solid rgba(243,156,200,.5);color:#f6c3dc;font:10px var(--mono);letter-spacing:1.2px}
+.rcp-pass-btn{margin-left:auto}
+.rcp-join{border-color:rgba(200,52,63,.8);background:rgba(200,52,63,.18);color:#fff}
+.rcp-join b{font-weight:400;color:#f6c3dc}
+.rcp-pass-btn:hover,.rcp-join:hover{background:rgba(243,156,200,.12)}
+@keyframes rcpLive{0%,100%{opacity:1}50%{opacity:.35}}
+
+/* Mobile switcher — sticky so the party header stays one tap away. */
+.rcp-tabs{position:sticky;top:0;z-index:5;display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin:10px 0 12px;padding:4px;
+  border-radius:12px;background:rgba(11,8,13,.92);border:1px solid rgba(255,255,255,.07);backdrop-filter:blur(6px)}
+.rcp-tab{padding:9px 0;border:0;border-radius:9px;background:transparent;color:var(--muted);cursor:pointer;
+  font:11px var(--mono);letter-spacing:2px}
+.rcp-tab.is-on{background:var(--rcp-red);color:#fff}
+.rcp-room>.rcp-area{display:none}
+.rcp.is-tab-battle .rcp-battle,.rcp.is-tab-watch .rcp-watch,.rcp.is-tab-chat .rcp-chat{display:flex}
+.rcp-area{flex-direction:column;min-width:0}
+
+@media (min-width: 980px) {
+  .rcp-head{grid-template-columns:auto 1fr auto auto;grid-template-areas:'back titles me clock';align-items:center;padding:14px 20px}
+  .rcp-back{align-self:start}
+  .rcp-me{justify-content:flex-end}
+  .rcp-pass-btn{margin-left:0}
+  .rcp-tabs{display:none}
+  .rcp-room{display:grid;grid-template-columns:300px minmax(0,1fr) 300px;gap:16px;margin-top:16px;align-items:stretch}
+  .rcp-room>.rcp-area{display:flex}
+  .rcp-battle,.rcp-chat{height:680px}
+}
+
+.rcp-area-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.rcp-area-title{font:10px var(--mono);letter-spacing:2px;color:#f6c3dc}
+.rcp-preview-chip{margin-left:auto;padding:2px 6px;border-radius:4px;border:1px dashed rgba(255,255,255,.2);
+  font:8px var(--mono);letter-spacing:1px;color:var(--muted)}
+
+/* BATTLE — side rail: headline score, a 17-cell strip, compact track rows. */
+.rcp-battle{padding:14px;border-radius:14px;background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01));border:1px solid rgba(255,255,255,.06)}
+.rcp-score{text-align:center}
+.rcp-score-label{font:9px var(--mono);letter-spacing:1.8px;color:var(--muted)}
+.rcp-score.is-final .rcp-score-label{color:#f39cc8}
+.rcp-score-line{display:flex;align-items:baseline;justify-content:center;gap:14px;margin-top:2px}
+.rcp-score-side{font-size:20px}
+.rcp-score-side b{font-family:var(--disp);font-weight:800;font-size:44px;line-height:1}
+.rcp-score-side.is-hooligans b{color:var(--rcp-h)}
+.rcp-score-side.is-aliens b{color:var(--rcp-a)}
+.rcp-score-dash{font-size:24px;color:var(--muted)}
+.rcp-score-names{display:flex;justify-content:center;gap:48px;font:9px var(--mono);letter-spacing:1.4px;color:var(--muted)}
+.rcp-battle-empty{padding:24px 4px;text-align:center;font-size:13px;color:var(--muted)}
+.rcp-strip{display:grid;grid-template-columns:repeat(17,1fr);gap:3px;margin:12px 0 8px}
+.rcp-strip i{height:8px;border-radius:2px;background:rgba(255,255,255,.12)}
+.rcp-strip i.is-hooligans{background:var(--rcp-h)}
+.rcp-strip i.is-tied{background:rgba(255,255,255,.28)}
+.rcp-strip i.is-aliens{background:var(--rcp-a)}
+.rcp-battle-note{font:9px var(--mono);letter-spacing:.8px;color:var(--muted);margin-bottom:10px}
+.rcp-battle-note b{color:#f39cc8;font-weight:400}
+.rcp-tracks{list-style:none;margin:0;padding:0;overflow-y:auto;min-height:0;flex:1}
+.rcp-track{display:grid;grid-template-columns:22px minmax(0,1fr) auto auto;grid-template-areas:'no title state state' 'no h a .';
+  gap:2px 10px;align-items:baseline;padding:8px 2px;border-top:1px solid rgba(255,255,255,.05)}
+.rcp-track-no{grid-area:no;font:9px var(--mono);color:var(--muted);opacity:.7}
+.rcp-track-title{grid-area:title;font-size:13px;color:#f3eef2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rcp-track-n{font:11px var(--mono);color:var(--muted)}
+.rcp-track-n.is-h{grid-area:h}
+.rcp-track-n.is-a{grid-area:a}
+.rcp-track.lead-hooligans .rcp-track-n.is-h{color:var(--rcp-h)}
+.rcp-track.lead-aliens .rcp-track-n.is-a{color:var(--rcp-a)}
+.rcp-track-state{grid-area:state;justify-self:end;padding:1px 6px;border-radius:999px;font:8px var(--mono);letter-spacing:1.2px;border:1px solid currentColor}
+.rcp-track.lead-hooligans .rcp-track-state{color:var(--rcp-h)}
+.rcp-track.lead-aliens .rcp-track-state{color:var(--rcp-a)}
+.rcp-track.lead-tied .rcp-track-state{color:var(--muted)}
+
+/* WATCH — the stage. */
+.rcp-watch{gap:14px}
+.rcp-stage{position:relative;padding:18px 34px 44px;border-radius:18px;overflow:hidden;
+  background:radial-gradient(80% 60% at 50% 100%,rgba(200,52,63,.45),transparent 70%),linear-gradient(180deg,#07060a,#0e090d 70%,#1a0b10)}
+.rcp-stage-col{position:absolute;top:10px;bottom:44px;width:5px;border-radius:2px;background:#e7e2da;opacity:.85}
+.rcp-stage-col.is-l{left:14px}
+.rcp-stage-col.is-r{right:14px}
+.rcp-frame{padding:7px;border:2px solid #ebe6de;border-radius:4px;box-shadow:inset 0 0 0 5px #07060a,inset 0 0 0 6px rgba(235,230,222,.45)}
+.rcp-screen{position:relative;aspect-ratio:16/9;background:#000;overflow:hidden}
+.rcp-play{position:absolute;inset:0;padding:0;border:0;background:#000;cursor:pointer}
+.rcp-play img{width:100%;height:100%;object-fit:cover;opacity:.85}
+.rcp-play-btn{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:grid;place-items:center;width:58px;height:58px;
+  border-radius:50%;background:rgba(200,52,63,.92);color:#fff;font-size:20px;padding-left:4px}
+.rcp-play:hover .rcp-play-btn{background:#d9404c}
+.rcp-embed{position:absolute;inset:0;width:100%;height:100%;border:0}
+.rcp-uplights{position:absolute;left:14%;right:14%;bottom:30px;display:flex;justify-content:space-between}
+.rcp-uplights i{width:22px;height:4px;border-radius:2px;background:var(--rcp-red)}
+.rcp-crowd{position:absolute;left:4%;right:4%;bottom:8px;display:flex;justify-content:space-between}
+.rcp-crowd{align-items:flex-end}
+.rcp-bomb{display:block;width:6px;height:10px;position:relative}
+.rcp-bomb i{position:absolute;left:0;top:0;width:6px;height:6px;border-radius:50%;background:#ff8cc6;opacity:.75;animation:cmPartyTwinkle 2.2s ease-in-out infinite}
+.rcp-bomb::after{content:'';position:absolute;left:2px;top:6px;width:2px;height:4px;background:rgba(255,255,255,.25)}
+.rcp-bomb:nth-child(3n) i{background:#f6d6ea;animation-delay:-.7s}
+.rcp-bomb:nth-child(4n+1) i{animation-delay:-1.3s}
+.rcp-bomb:nth-child(5n+2){transform:translateY(-6px)}
+.rcp-bomb.is-me{width:9px;height:14px}
+.rcp-bomb.is-me i{width:9px;height:9px;background:#fff;animation:none;
+  opacity:calc(.3 + var(--charge, 0) * .7);box-shadow:0 0 0 1.5px #f39cc8}
+.rcp-bomb.is-me::after{left:3.5px;top:9px;height:5px;background:rgba(255,255,255,.5)}
+.rcp-bomb.is-me.is-dark i{background:#5a5060;box-shadow:0 0 0 1.5px rgba(243,156,200,.5)}
+.rcp-mybomb{display:flex;align-items:center;justify-content:center;gap:7px;margin-top:-6px;font:10px var(--mono);letter-spacing:1px;color:#f6c3dc}
+.rcp-mybomb span{color:var(--muted)}
+.rcp-mybomb-dot{width:8px;height:8px;border-radius:50%;background:#fff;opacity:calc(.3 + var(--charge, 0) * .7);box-shadow:0 0 0 1.5px #f39cc8}
+.rcp-program{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:8px}
+.rcp-slot{display:flex;flex-direction:column;gap:3px;padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.02)}
+.rcp-slot.is-now{border-color:rgba(200,52,63,.7);background:linear-gradient(180deg,rgba(200,52,63,.22),rgba(200,52,63,.08))}
+.rcp-slot-when{display:flex;align-items:center;gap:6px;font:8px var(--mono);letter-spacing:1.6px;color:var(--muted)}
+.rcp-slot.is-now .rcp-slot-when{color:#ff8a9a}
+.rcp-slot-when i{width:6px;height:6px;border-radius:50%;background:#ff4d62;animation:rcpLive 1.4s ease-in-out infinite}
+.rcp-slot-title{font-family:var(--disp);font-weight:800;font-size:15px;color:#fff;line-height:1.15}
+.rcp-slot-sub{font:9px var(--mono);letter-spacing:1.2px;color:#f6c3dc}
+@media (max-width: 560px) {
+  .rcp-stage{padding:14px 22px 38px}
+  .rcp-stage-col{top:8px;bottom:38px;width:4px}
+  .rcp-stage-col.is-l{left:8px}
+  .rcp-stage-col.is-r{right:8px}
+  .rcp-uplights{bottom:24px}
+  .rcp-program{grid-template-columns:1fr}
+  .rcp-slot{flex-direction:row;align-items:baseline;flex-wrap:wrap;gap:4px 10px}
+  .rcp-slot-when{width:100%}
+}
+
+/* CHAT — one room, both sides, side marked on every line. */
+.rcp-chat{padding:14px;border-radius:14px;background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01));border:1px solid rgba(255,255,255,.06)}
+.rcp-chat:not(:only-child){min-height:0}
+@media (max-width: 979px) { .rcp-chat{height:calc(100dvh - 470px);min-height:320px} }
+.rcp-here{display:inline-flex;align-items:center;gap:5px;font:9px var(--mono);color:var(--muted)}
+.rcp-here i{width:6px;height:6px;border-radius:50%;background:#4ade80}
+.rcp-msgs{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding-right:2px}
+.rcp-msg{padding-left:10px;border-left:2px solid rgba(255,255,255,.1)}
+.rcp-msg.is-hooligans{border-left-color:rgba(255,207,74,.6)}
+.rcp-msg.is-aliens{border-left-color:rgba(121,240,164,.6)}
+.rcp-msg-who{display:flex;align-items:baseline;gap:6px;font-size:12px}
+.rcp-msg-side{font-size:12px}
+.rcp-msg.is-hooligans b{color:var(--rcp-h)}
+.rcp-msg.is-aliens b{color:var(--rcp-a)}
+.rcp-msg-no,.rcp-msg-at{font:9px var(--mono);color:var(--muted)}
+.rcp-msg-at{margin-left:auto}
+.rcp-msg-text{font-size:14px;color:#f1ecf0;line-height:1.35;margin-top:2px;word-break:break-word}
+.rcp-msg.is-me{background:rgba(200,52,63,.08);border-radius:0 8px 8px 0;padding:4px 8px 4px 10px}
+.rcp-say{display:flex;gap:6px;margin-top:10px}
+.rcp-say input{flex:1;min-width:0;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.1);background:rgba(0,0,0,.35);color:#fff;font:inherit;font-size:14px}
+.rcp-say input:focus{outline:none;border-color:rgba(243,156,200,.55)}
+.rcp-say button{padding:0 14px;border-radius:10px;border:0;background:var(--rcp-red);color:#fff;font:11px var(--mono);letter-spacing:1.4px;cursor:pointer}
+@media(prefers-reduced-motion:reduce){.rcp-live i,.rcp-slot-when i,.rcp-bomb i{animation:none!important}}
+.arc-bomb-hint{margin:-4px 0 12px;text-align:center;font-size:13px;color:#f6c3dc}
+.rcp-chat-soon{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:24px 12px;text-align:center}
+.rcp-chat-soon b{font:11px var(--mono);letter-spacing:1.8px;color:#f6c3dc;font-weight:400}
+.rcp-chat-soon span{font-size:13px;color:var(--muted)}

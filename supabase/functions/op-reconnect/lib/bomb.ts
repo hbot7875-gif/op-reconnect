@@ -375,7 +375,10 @@ async function redZoneSourceMap(supabase: SupabaseDB): Promise<Map<string, strin
   return new Map((data || []).map((agent: any) => [String(agent.agent_no), String(resolvedAgentStreamSource(agent))]))
 }
 
-function redZoneSourceAllowed(selected: string | undefined, stored: string | null | undefined) {
+// Also used by the RE:CELEBRATE battle (recelebrate-battle.ts): a play only
+// counts from the source the agent currently has selected, so an agent with
+// two linked sources can never be counted twice for one listen.
+export function redZoneSourceAllowed(selected: string | undefined, stored: string | null | undefined) {
   if (!selected) return false
   if (selected === 'direct') return stored === 'webhook' || stored === 'lb-like'
   return stored === selected

@@ -52,6 +52,8 @@ import { getCommunityChestStatus, openCommunityChest } from './lib/vma-community
 import { createShareSnapshot, getPublicShareSnapshot, shareImageResponse, attachShareImage, getBadgeShareStory } from './lib/share-snapshots.ts'
 import { getQuestShareSource } from './lib/reconnect-missions.ts'
 import { getDistrictPresence, getWardRoster, sendDistrictMessage } from './lib/district-presence.ts'
+import { getRecelebrateState, issuePartyPass, startTeamChoice, chooseTeam } from './lib/recelebrate.ts'
+import { getRecelebrateBattle } from './lib/recelebrate-battle.ts'
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -108,6 +110,12 @@ const ROUTES: Record<string, Route> = {
   sendDistrictMessage: { auth: 'agent', handler: (sb, p) => sendDistrictMessage(sb, p) },
   trackEngagement: { auth: 'agent', handler: (sb, p) => trackEngagement(sb, p) },
   joinGame: { auth: 'agent', handler: (sb, p) => joinGame(sb, p) },
+  // ARIRANG RE:CELEBRATE — Love Song, Party Pass, team choice (lib/recelebrate.ts).
+  getRecelebrateState: { auth: 'agent', handler: (sb, p) => getRecelebrateState(sb, p) },
+  issuePartyPass: { auth: 'agent', handler: (sb, p) => issuePartyPass(sb, p) },
+  startTeamChoice: { auth: 'agent', handler: (sb, p) => startTeamChoice(sb, p) },
+  chooseTeam: { auth: 'agent', handler: (sb, p) => chooseTeam(sb, p) },
+  getRecelebrateBattle: { auth: 'agent', handler: (sb, p) => getRecelebrateBattle(sb, p) },
   startDistrict: { auth: 'agent', handler: (sb, p) => startDistrict(sb, p) },
   extendDistrictDeadline: { auth: 'agent', handler: (sb, p) => extendDistrictDeadline(sb, p) },
   setMode: { auth: 'agent', handler: (sb, p) => setMode(sb, p) },

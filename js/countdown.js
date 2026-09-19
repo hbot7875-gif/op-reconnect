@@ -11,9 +11,23 @@ export function fmtLeft(ms) {
   return `${h}:${m}:${String(s % 60).padStart(2, '0')}`
 }
 
+// Compact "1D 22H" / "22H 5M" / "5M 30S" form — for a countdown label sitting
+// next to other text (the ReCelebrate map venue) rather than alone in its own
+// clock-style readout, where fmtLeft's fixed HH:MM:SS is the better fit.
+export function fmtLeftShort(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000))
+  const d = Math.floor(s / 86400)
+  const h = Math.floor((s % 86400) / 3600)
+  if (d > 0) return `${d}D ${h}H`
+  const m = Math.floor((s % 3600) / 60)
+  if (h > 0) return `${h}H ${m}M`
+  return `${m}M ${s % 60}S`
+}
+
 export function tickCountdowns() {
   for (const node of document.querySelectorAll('[data-deadline]')) {
-    node.textContent = fmtLeft(new Date(node.dataset.deadline).getTime() - Date.now())
+    const ms = new Date(node.dataset.deadline).getTime() - Date.now()
+    node.textContent = node.dataset.format === 'short' ? fmtLeftShort(ms) : fmtLeft(ms)
   }
 }
 

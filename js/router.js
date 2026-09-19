@@ -55,6 +55,11 @@ export function goGoldenCorner(origin = null) {
   set({ name: 'golden-corner', wardId: null, districtId: null, origin })
 }
 
+// ARIRANG RE:CELEBRATE live Party page (screen-recelebrate.js).
+export function goRecelebrate(origin = null) {
+  set({ name: 'recelebrate', wardId: null, districtId: null, origin })
+}
+
 export function goRanking(origin = null) {
   set({ name: 'ranking', wardId: null, districtId: null, origin })
 }
