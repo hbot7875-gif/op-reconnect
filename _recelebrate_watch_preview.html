@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ReCelebrate Watch · concert control review</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./css/reconnect.css">
+  <style>
+    body{min-height:100vh;background:#08070c;color:#ece9f2}
+    .review{max-width:760px;margin:0 auto;padding:22px 16px 48px}
+    .review-head{display:flex;align-items:end;justify-content:space-between;gap:16px;margin-bottom:16px}
+    .review-head h1{font:800 22px/1.1 var(--disp);letter-spacing:.5px}
+    .review-head p{margin-top:6px;color:var(--muted);font-size:13px}
+    .review-nav{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+    .review-nav a{padding:6px 9px;border:1px solid rgba(255,255,255,.12);border-radius:999px;color:var(--muted);font:9px var(--mono);letter-spacing:.8px;text-decoration:none}
+    .review-nav a.is-on{border-color:#a855f7;color:#fff;background:rgba(168,85,247,.18)}
+    .review-label{display:flex;justify-content:space-between;align-items:center;margin:0 2px 8px;font:9px var(--mono);letter-spacing:1.6px;color:#c4b5fd}
+    .review-label span{color:var(--muted);letter-spacing:.5px}
+    .review .rcp-watch{display:flex}
+    .review .rcp-watch-note{display:none}
+    @media(max-width:560px){.review{padding-inline:10px}.review-label{align-items:flex-start;gap:12px}}
+  </style>
+</head>
+<body>
+  <main class="review">
+    <header class="review-head"><div><h1>RE:CELEBRATE · WATCH</h1><p>ReCelebrate design + Voyage concert controls · local preview only</p></div></header>
+    <nav class="review-nav" aria-label="Preview state"></nav>
+    <div class="review-label"><b></b><span></span></div>
+    <div id="mount"></div>
+  </main>
+  <script type="module">
+    import { createWatchStage } from './js/recelebrate-watch.js'
+
+    const states = {
+      restored: { label:'RESTORED RECELEBRATE WATCH', short:'RESTORED', note:'Body to Body · clean Watch layout', index:0, time:40 },
+      swim: { label:'SWIM · COLOR SYSTEM', short:'SWIM COLOR', note:'94 BPM · cyan ocean palette', index:10, time:40 },
+      swing: { label:'SWIM · SWING STATE', short:'SWIM SWING', note:'half-time physical sway · full-time light pulse', index:10, time:40, swing:true },
+      hooligan: { label:'HOOLIGAN · PERSONALITY', short:'HOOLIGAN', note:'135 BPM · red accents · harder pulse', index:1, time:40, fx:[{type:'pulse'}] },
+      ment: { label:'MENT · CALM STATE', short:'MENT', note:'slow natural sway · no BPM pulse', index:3, time:40 },
+      finale: { label:'MIKROKOSMOS · FINALE', short:'FINALE', note:'starlight palette · Bombs up · finale laser cue', index:14, time:535, duration:565,
+        fx:[{type:'bombsUp'},{type:'color',tint:'#ffe9a8'}], cues:[{type:'laser'}] },
+    }
+    const requested = new URLSearchParams(location.search).get('state') || 'restored'
+    const key = states[requested] ? requested : 'restored'
+    const state = states[key]
+    const nav = document.querySelector('.review-nav')
+    for (const [id,s] of Object.entries(states)) {
+      const a = document.createElement('a'); a.href = `?state=${id}`; a.textContent = s.short
+      a.classList.toggle('is-on', id === key); nav.appendChild(a)
+    }
+    document.querySelector('.review-label b').textContent = state.label
+    document.querySelector('.review-label span').textContent = state.note
+    const watch = createWatchStage(); document.getElementById('mount').appendChild(watch.el)
+    watch.setCharge({ hoursRemaining:32, isDark:false })
+    watch.previewMoment(state.index,state.time,{duration:state.duration || 0})
+    if (state.fx || state.cues) watch.previewFx(state.fx || [],state.cues || [])
+    if (state.swing) watch.previewPose('swing')
+  </script>
+</body>
+</html>

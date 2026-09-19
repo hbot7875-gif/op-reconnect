@@ -4829,13 +4829,13 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 @keyframes rcpLive{0%,100%{opacity:1}50%{opacity:.35}}
 
 /* Mobile switcher — sticky so the party header stays one tap away. */
-.rcp-tabs{position:sticky;top:0;z-index:5;display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin:10px 0 12px;padding:4px;
+.rcp-tabs{position:sticky;top:0;z-index:5;display:grid;grid-template-columns:repeat(2,1fr);gap:4px;margin:10px 0 12px;padding:4px;
   border-radius:12px;background:rgba(11,8,13,.92);border:1px solid rgba(255,255,255,.07);backdrop-filter:blur(6px)}
 .rcp-tab{padding:9px 0;border:0;border-radius:9px;background:transparent;color:var(--muted);cursor:pointer;
   font:11px var(--mono);letter-spacing:2px}
 .rcp-tab.is-on{background:var(--rcp-red);color:#fff}
-.rcp-room>.rcp-area{display:none}
-.rcp.is-tab-battle .rcp-battle,.rcp.is-tab-watch .rcp-watch,.rcp.is-tab-chat .rcp-chat{display:flex}
+.rcp-room>.rcp-battle,.rcp-room>.rcp-watch{display:none}
+.rcp.is-tab-battle .rcp-battle,.rcp.is-tab-watch .rcp-watch{display:flex}
 .rcp-area{flex-direction:column;min-width:0}
 
 @media (min-width: 980px) {
@@ -4844,8 +4844,10 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
   .rcp-me{justify-content:flex-end}
   .rcp-pass-btn{margin-left:0}
   .rcp-tabs{display:none}
-  .rcp-room{display:grid;grid-template-columns:300px minmax(0,1fr) 300px;gap:16px;margin-top:16px;align-items:stretch}
-  .rcp-room>.rcp-area{display:flex}
+  .rcp-room{display:grid;grid-template-columns:300px minmax(0,1fr) 300px;gap:16px;margin-top:16px;align-items:stretch;
+    transition:grid-template-columns .25s ease}
+  .rcp-room:has(.rcp-chat.is-min),.rcp-room:has(.rcp-chat.is-hidden){grid-template-columns:300px minmax(0,1fr) 56px}
+  .rcp-room>.rcp-battle,.rcp-room>.rcp-watch{display:flex}
   .rcp-battle,.rcp-chat{height:680px}
 }
 
@@ -4874,6 +4876,28 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .rcp-strip i.is-aliens{background:var(--rcp-a)}
 .rcp-battle-note{font:9px var(--mono);letter-spacing:.8px;color:var(--muted);margin-bottom:10px}
 .rcp-battle-note b{color:#f39cc8;font-weight:400}
+/* The agent's own standing, and the rules for anyone arriving mid-party. */
+.rcp-battle-me{margin:0 0 10px;font-size:12px;color:var(--muted)}
+.rcp-battle-me:empty{display:none}
+.rcp-battle-me b{font-weight:600}
+.rcp-battle-me.is-hooligans b{color:var(--rcp-h)}
+.rcp-battle-me.is-aliens b{color:var(--rcp-a)}
+.rcp-battle-me-cta{width:100%;padding:8px 10px;border-radius:10px;border:1px solid rgba(243,156,200,.35);background:rgba(200,52,63,.12);
+  color:#f6c3dc;font:inherit;font-size:12px;text-align:left;cursor:pointer}
+.rcp-battle-me-cta b{color:#fff}
+.rcp-how{margin:0 0 12px;border-radius:10px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.025)}
+.rcp-how summary{padding:8px 10px;cursor:pointer;list-style:none;font:9px var(--mono);letter-spacing:1.6px;color:#f6c3dc}
+.rcp-how summary::-webkit-details-marker{display:none}
+.rcp-how summary::after{content:'▾';float:right;color:var(--muted)}
+.rcp-how[open] summary::after{content:'▴'}
+.rcp-how-steps{margin:0;padding:0 12px 4px 28px;display:flex;flex-direction:column;gap:7px;font-size:12px;line-height:1.4;color:#d9d3da}
+.rcp-how-steps b{color:#fff;font-weight:600}
+.rcp-how-steps mark{white-space:nowrap;padding:1px 5px;border-radius:5px;background:rgba(200,52,63,.28);color:#fff;font-weight:700;
+  box-shadow:inset 0 0 0 1px rgba(243,156,200,.45)}
+.rcp-how-note{margin:8px 12px 0;font-size:11px;line-height:1.4;color:var(--muted)}
+.rcp-how-note b{color:#d9d3da;font-weight:600}
+.rcp-how-foot{margin:6px 12px 10px;font-size:11px;color:var(--muted)}
+.rcp-how-foot b{color:#f6c3dc;font-weight:600}
 .rcp-tracks{list-style:none;margin:0;padding:0;overflow-y:auto;min-height:0;flex:1}
 .rcp-track{display:grid;grid-template-columns:22px minmax(0,1fr) auto auto;grid-template-areas:'no title state state' 'no h a .';
   gap:2px 10px;align-items:baseline;padding:8px 2px;border-top:1px solid rgba(255,255,255,.05)}
@@ -4889,64 +4913,469 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .rcp-track.lead-aliens .rcp-track-state{color:var(--rcp-a)}
 .rcp-track.lead-tied .rcp-track-state{color:var(--muted)}
 
-/* WATCH — the stage. */
-.rcp-watch{gap:14px}
-.rcp-stage{position:relative;padding:18px 34px 44px;border-radius:18px;overflow:hidden;
-  background:radial-gradient(80% 60% at 50% 100%,rgba(200,52,63,.45),transparent 70%),linear-gradient(180deg,#07060a,#0e090d 70%,#1a0b10)}
-.rcp-stage-col{position:absolute;top:10px;bottom:44px;width:5px;border-radius:2px;background:#e7e2da;opacity:.85}
+.arc-bomb-hint{margin:-4px 0 12px;text-align:center;font-size:13px;color:#f6c3dc}
+
+/* ── RE:CELEBRATE Watch — the stage (recelebrate-watch.js) ──────────────
+   The venue reacts to the performance: palette (--v-glow/--v-beam/--v-haze)
+   and tempo (--sway-dur/--pulse-dur) come from recelebrate-watch-program.js.
+   The video frame itself is never tinted or covered. Colours are registered
+   so a track change fades instead of flashing. */
+@property --v-glow{syntax:'<color>';inherits:true;initial-value:#c8343f}
+@property --v-beam{syntax:'<color>';inherits:true;initial-value:#ffffff}
+@property --v-haze{syntax:'<color>';inherits:true;initial-value:#1a0b10}
+.rcp-watch{gap:12px}
+/* The day's Watch schedule: three fixed stops, read at a glance. */
+.rcp-sched{padding:10px 10px 11px;border-radius:14px;border:1px solid rgba(255,255,255,.07);
+  background:linear-gradient(180deg,rgba(200,52,63,.08),rgba(255,255,255,.015))}
+.rcp-sched-head{display:flex;justify-content:space-between;align-items:baseline;margin:0 2px 8px;font:9px var(--mono);letter-spacing:1.8px;color:#f6c3dc}
+.rcp-sched-head em{font-style:normal;color:var(--muted);letter-spacing:1.2px}
+.rcp-sched-list{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.rcp-sched-item{min-width:0;border-radius:10px;border:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.02)}
+.rcp-sched-open,.rcp-sched-body{display:flex;flex-direction:column;gap:3px;width:100%;height:100%;min-width:0;padding:8px 9px;
+  border:0;border-radius:inherit;background:none;color:inherit;font:inherit;text-align:left}
+.rcp-sched-open{cursor:pointer}
+.rcp-sched-open:hover{background:rgba(255,255,255,.04)}
+.rcp-sched-open:focus-visible{outline:2px solid #f6c3dc;outline-offset:2px}
+/* The event on the stage right now (live, or a replay the agent opened). */
+.rcp-sched-item.is-on-screen{box-shadow:0 0 0 2px rgba(246,195,220,.55)}
+.rcp-sched-item.is-now.is-on-screen{box-shadow:0 0 0 2px rgba(255,77,94,.55),0 0 18px rgba(200,52,63,.18)}
+.rcp-sched-tag{display:inline-flex;align-items:center;gap:5px;font:8px var(--mono);letter-spacing:1.3px;color:var(--muted)}
+.rcp-sched-title{font-family:var(--disp);font-weight:800;font-size:13px;line-height:1.15;color:#f1ecf0}
+.rcp-sched-time{font:9px var(--mono);letter-spacing:.5px;color:var(--muted)}
+@media (max-width: 560px){.rcp-sched{padding:9px 8px 10px}.rcp-sched-list{gap:5px}.rcp-sched-open,.rcp-sched-body{padding:7px 7px}.rcp-sched-title{font-size:12px}}
+.rcp-sched-item.is-now{border-color:rgba(200,52,63,.7);background:rgba(200,52,63,.16);box-shadow:0 0 18px rgba(200,52,63,.18)}
+.rcp-sched-item.is-now .rcp-sched-tag{color:#fff}
+.rcp-sched-item.is-now .rcp-sched-tag i{width:6px;height:6px;border-radius:50%;background:#ff4d5e;box-shadow:0 0 6px #ff4d5e;animation:rcpLive 1.4s ease-in-out infinite}
+.rcp-sched-item.is-now .rcp-sched-time{color:#f6c3dc}
+.rcp-sched-item.is-next{border-color:rgba(243,156,200,.4)}
+.rcp-sched-item.is-next .rcp-sched-tag,.rcp-sched-item.is-next .rcp-sched-time{color:#f6c3dc}
+.rcp-sched-item.is-later .rcp-sched-title{color:#cfc8d0}
+.rcp-sched-item.is-replay{background:rgba(255,255,255,.035)}
+.rcp-sched-item.is-replay .rcp-sched-tag{color:#c4b5fd}
+.rcp-sched-item.is-replay .rcp-sched-title{color:#e2dce4}
+.rcp-stage{position:relative;padding:44px 14px 122px;border-radius:18px;overflow:hidden;isolation:isolate;
+  --charge:0;background:#050508;transition:--v-glow 1.6s ease,--v-beam 1.6s ease,--v-haze 1.6s ease}
+.rcp-venue{position:absolute;inset:0;z-index:-2;transition:opacity .7s ease;
+  background:
+    radial-gradient(70% 55% at 50% 55%,color-mix(in srgb,var(--v-glow) 22%,transparent),transparent 75%),
+    radial-gradient(60% 18% at 50% 100%,color-mix(in srgb,var(--v-glow) 16%,transparent),transparent 80%),
+    linear-gradient(180deg,#07060a 0%,#050407 68%,#030204 100%)}
+.rcp-beam{position:absolute;bottom:96px;width:22%;height:92%;z-index:-1;opacity:.22;transform-origin:50% 100%;
+  background:linear-gradient(0deg,var(--v-beam),transparent 85%);clip-path:polygon(40% 100%,60% 100%,100% 0,0 0);mix-blend-mode:screen}
+.rcp-beam{display:none}
+.rcp-beam.is-l{left:4%;transform:rotate(14deg)}
+.rcp-beam.is-r{right:4%;transform:rotate(-14deg)}
+.rcp-stage.is-playing.has-pulse .rcp-beam{animation:rcpBeam calc(var(--pulse-dur) * 8) ease-in-out infinite alternate}
+.rcp-stage.is-playing.has-pulse .rcp-beam.is-r{animation-delay:calc(var(--pulse-dur) * -4)}
+@keyframes rcpBeam{0%{opacity:.14;rotate:0deg}100%{opacity:.3;rotate:-6deg}}
+.rcp-stage-col{display:none;position:absolute;top:10px;bottom:120px;width:5px;border-radius:2px;background:#e7e2da;opacity:.85;
+  box-shadow:0 0 12px color-mix(in srgb,var(--v-glow) 40%,transparent)}
 .rcp-stage-col.is-l{left:14px}
 .rcp-stage-col.is-r{right:14px}
-.rcp-frame{padding:7px;border:2px solid #ebe6de;border-radius:4px;box-shadow:inset 0 0 0 5px #07060a,inset 0 0 0 6px rgba(235,230,222,.45)}
+/* The LED sign on the truss: the track name belongs to the venue. */
+.rcp-sign{position:absolute;left:50%;top:22px;z-index:3;transform:translate(-50%,-50%);display:flex;align-items:baseline;gap:8px;
+  padding:0;background:transparent;border:0;white-space:nowrap;max-width:calc(100% - 24px);
+  text-shadow:0 2px 5px #000,0 0 9px rgba(0,0,0,.9)}
+.rcp-presence{position:absolute;right:14px;top:10px;z-index:3;display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:999px;
+  background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.12);font:9px var(--mono);letter-spacing:1px;color:#f1ecf0;backdrop-filter:blur(4px)}
+.rcp-presence i{width:6px;height:6px;border-radius:50%;background:#ff4d5e;box-shadow:0 0 6px #ff4d5e;animation:rcpLive 1.4s ease-in-out infinite}
+.rcp-here{color:#f1ecf0;letter-spacing:1.2px}
+.rcp-sign-label{display:inline-flex;align-items:center;gap:6px;font:8px var(--mono);letter-spacing:1.6px;color:color-mix(in srgb,var(--v-glow) 75%,#fff)}
+.rcp-sign-label em{font-style:normal}
+.rcp-sign-label em::after{content:' —';color:#755057}
+.rcp-sign-label i{display:none}
+.rcp-stage.is-playing .rcp-sign-label i{opacity:1;animation:rcpLive 1.4s ease-in-out infinite}
+.rcp-sign-title{font-family:var(--disp);font-weight:800;font-size:15px;color:#f4f1f2;overflow:hidden;text-overflow:ellipsis}
+.rcp-stage[data-kind="ment"] .rcp-sign-title,.rcp-stage[data-kind="transition"] .rcp-sign-title{font-size:14px;letter-spacing:1.5px}
+.rcp-frame{position:relative;z-index:1;padding:0;border:0;border-radius:6px;overflow:hidden;background:#000;
+  box-shadow:0 0 34px color-mix(in srgb,var(--v-glow) 28%,transparent),0 14px 28px rgba(0,0,0,.7);transition:box-shadow 1.6s ease}
 .rcp-screen{position:relative;aspect-ratio:16/9;background:#000;overflow:hidden}
 .rcp-play{position:absolute;inset:0;padding:0;border:0;background:#000;cursor:pointer}
-.rcp-play img{width:100%;height:100%;object-fit:cover;opacity:.85}
-.rcp-play-btn{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:grid;place-items:center;width:58px;height:58px;
-  border-radius:50%;background:rgba(200,52,63,.92);color:#fff;font-size:20px;padding-left:4px}
-.rcp-play:hover .rcp-play-btn{background:#d9404c}
-.rcp-embed{position:absolute;inset:0;width:100%;height:100%;border:0}
-.rcp-uplights{position:absolute;left:14%;right:14%;bottom:30px;display:flex;justify-content:space-between}
-.rcp-uplights i{width:22px;height:4px;border-radius:2px;background:var(--rcp-red)}
-.rcp-crowd{position:absolute;left:4%;right:4%;bottom:8px;display:flex;justify-content:space-between}
-.rcp-crowd{align-items:flex-end}
-.rcp-bomb{display:block;width:6px;height:10px;position:relative}
-.rcp-bomb i{position:absolute;left:0;top:0;width:6px;height:6px;border-radius:50%;background:#ff8cc6;opacity:.75;animation:cmPartyTwinkle 2.2s ease-in-out infinite}
-.rcp-bomb::after{content:'';position:absolute;left:2px;top:6px;width:2px;height:4px;background:rgba(255,255,255,.25)}
-.rcp-bomb:nth-child(3n) i{background:#f6d6ea;animation-delay:-.7s}
-.rcp-bomb:nth-child(4n+1) i{animation-delay:-1.3s}
-.rcp-bomb:nth-child(5n+2){transform:translateY(-6px)}
-.rcp-bomb.is-me{width:9px;height:14px}
-.rcp-bomb.is-me i{width:9px;height:9px;background:#fff;animation:none;
-  opacity:calc(.3 + var(--charge, 0) * .7);box-shadow:0 0 0 1.5px #f39cc8}
-.rcp-bomb.is-me::after{left:3.5px;top:9px;height:5px;background:rgba(255,255,255,.5)}
-.rcp-bomb.is-me.is-dark i{background:#5a5060;box-shadow:0 0 0 1.5px rgba(243,156,200,.5)}
-.rcp-mybomb{display:flex;align-items:center;justify-content:center;gap:7px;margin-top:-6px;font:10px var(--mono);letter-spacing:1px;color:#f6c3dc}
-.rcp-mybomb span{color:var(--muted)}
-.rcp-mybomb-dot{width:8px;height:8px;border-radius:50%;background:#fff;opacity:calc(.3 + var(--charge, 0) * .7);box-shadow:0 0 0 1.5px #f39cc8}
-.rcp-program{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:8px}
+.rcp-play img{width:100%;height:100%;object-fit:cover;opacity:.7}
+.rcp-play-btn{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:grid;place-items:center;width:46px;height:46px;
+  border:1px solid rgba(255,255,255,.42);border-radius:50%;background:rgba(5,5,8,.6);color:#fff;font-size:15px;padding-left:3px;
+  box-shadow:0 5px 18px rgba(0,0,0,.52);backdrop-filter:blur(3px)}
+.rcp-play-cta{display:none}
+.rcp-play:hover .rcp-play-btn{background:rgba(116,13,23,.78);border-color:rgba(255,255,255,.62)}
+.rcp-embed,.rcp-screen iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+/* Premiere: an upcoming event's waiting screen, and its last-15-minutes
+   countdown (recelebrate-watch.js paintPremiere). Sits over the screen. */
+.rcp-premiere{position:absolute;inset:0;z-index:2;display:grid;place-items:center;overflow:hidden;background:#050407;text-align:center}
+.rcp-premiere-bg{position:absolute;inset:-8%;width:116%;height:116%;object-fit:cover;filter:blur(14px) brightness(.32) saturate(1.2)}
+.rcp-premiere::after{content:'';position:absolute;inset:0;
+  background:radial-gradient(60% 70% at 50% 50%,color-mix(in srgb,var(--v-glow) 22%,transparent),transparent 70%),
+    linear-gradient(180deg,rgba(0,0,0,.35),rgba(0,0,0,.1) 40%,rgba(0,0,0,.55))}
+.rcp-premiere-in{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px}
+.rcp-premiere-eyebrow{font:10px var(--mono);letter-spacing:3px;color:color-mix(in srgb,var(--v-glow) 70%,#fff)}
+.rcp-premiere-clock{font-family:var(--disp);font-weight:900;font-size:34px;line-height:1;letter-spacing:1px;color:#fff;
+  font-variant-numeric:tabular-nums;text-shadow:0 0 18px color-mix(in srgb,var(--v-glow) 70%,transparent)}
+.rcp-premiere.is-counting .rcp-premiere-clock{font-size:clamp(44px,11vw,72px)}
+.rcp-premiere-title{font-family:var(--disp);font-weight:800;font-size:15px;letter-spacing:2px;color:#f1ecf0}
+.rcp-premiere-when{font:9px var(--mono);letter-spacing:1.4px;color:var(--muted)}
+/* Last ten seconds: the digits beat once a second, the venue breathes with them. */
+.rcp-premiere-clock.is-tick{animation:rcpPremiereTick .9s cubic-bezier(.2,.9,.3,1)}
+@keyframes rcpPremiereTick{0%{transform:scale(1.28);text-shadow:0 0 34px var(--v-glow),0 0 70px var(--v-glow)}100%{transform:scale(1)}}
+.rcp-stage.is-final-count .rcp-venue{animation:rcpPremiereBreath 1s ease-out infinite}
+@keyframes rcpPremiereBreath{0%{filter:brightness(1.7)}100%{filter:brightness(1)}}
+.rcp-premiere.is-showtime .rcp-premiere-clock{font-size:clamp(34px,8vw,56px);animation:rcpShowtime 2.6s ease-out both}
+@keyframes rcpShowtime{0%{transform:scale(.6);opacity:0}18%{transform:scale(1.12);opacity:1;text-shadow:0 0 40px var(--v-glow),0 0 90px var(--v-glow)}
+  100%{transform:scale(1);opacity:1}}
+.rcp-premiere.is-showtime::after{animation:rcpShowtimeFlash 2.6s ease-out both}
+@keyframes rcpShowtimeFlash{0%{background-color:color-mix(in srgb,var(--v-glow) 55%,transparent)}100%{background-color:transparent}}
+.rcp-screen-wait,.rcp-screen-fallback{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
+  font:10px var(--mono);letter-spacing:1.6px;color:var(--muted);text-align:center;padding:12px}
+.rcp-screen-fallback b{font:13px var(--sans,inherit);letter-spacing:0;color:#f1ecf0;font-weight:600}
+.rcp-screen-fallback a,.rcp-watch-note a{color:#f6c3dc}
+.rcp-uplights{position:absolute;left:14%;right:14%;bottom:116px;display:none;justify-content:space-between}
+.rcp-uplights i{width:22px;height:4px;border-radius:2px;background:var(--v-glow);box-shadow:0 0 10px var(--v-glow)}
+/* The ARMY Bomb crowd and the agent's own Bomb are the City-screen Bomb
+   itself (army-bomb.js + the .army-core/.rc-* rules above), never a redraw.
+   Watch only sizes them (zoom keeps the design's own proportions) and moves
+   the WHOLE Bomb with the song: the stick sways at --sway-dur (half-time for
+   fast songs), the light pulses at --pulse-dur. Crowd copies drop the
+   per-Bomb glow/ring/liquid animation so thirty of them stay cheap. */
+.rcp-crowd{position:absolute;left:2%;right:2%;bottom:2px;height:120px;z-index:1;pointer-events:none}
+.rcp-crowd-row{position:absolute;left:0;right:0;display:flex;justify-content:space-between;align-items:flex-end}
+.rcp-crowd-row.is-back{bottom:50px;opacity:.6;padding:0 4%}
+.rcp-crowd-row.is-front{bottom:0;opacity:.92}
+.rcp-cb{position:relative;display:block;transform-origin:50% 100%;translate:0 calc(var(--lift) * -1);transition:translate .9s cubic-bezier(.3,1.3,.5,1)}
+.rcp-crowd-core{display:block;width:56px;height:100px;margin:0;cursor:default;zoom:.4}
+.rcp-crowd-row.is-back .rcp-crowd-core{zoom:.3}
+.rcp-crowd-core .rc-bomb{filter:none}
+.rcp-crowd-core .rc-fill,.rcp-crowd-core .rc-fill::after{animation:none}
+.rcp-stage.has-pulse.is-playing .rcp-crowd-core{animation:rcpCrowdPulse var(--pulse-dur,1s) ease-out infinite;animation-delay:calc(var(--pulse-dur,1s) * var(--pp) * -1)}
+@keyframes rcpCrowdPulse{0%{opacity:1}100%{opacity:.8}}
+.rcp-hero{position:absolute;left:50%;right:auto;bottom:10px;width:56px;margin-left:-28px;z-index:2;pointer-events:none;
+  transform-origin:50% 92%;transition:translate .9s cubic-bezier(.3,1.3,.5,1)}
+.rcp-hero-core{display:block;margin:0;cursor:default;zoom:.9}
+/* Watch uses the personal Bomb without the City charge-orbit treatment. Its
+   real charge still controls the sphere brightness and liquid level. */
+.rcp-hero-core .core-rings,.rcp-hero-core .core-particles{display:none}
+.rcp-stage.has-pulse.is-playing .rcp-hero-core:not(.is-brownout){animation:rcpHeroPulse var(--pulse-dur,1s) ease-out infinite}
+@keyframes rcpHeroPulse{0%{filter:brightness(1.16)}100%{filter:brightness(1)}}
+/* Base STYLE (the song's personality, from the program file): a subtle,
+   continuous life. --mv picks the motion, --mv-dur its cycle, --sw its size;
+   each crowd seat scales it by its own --amp so the floor never moves as one
+   block. Authored MOMENTS (the mo- and cue- classes below) are what visibly change. */
+.rcp-stage{--mv:rcpSway;--mv-dur:var(--sway-dur,4s);--sw:4}
+.rcp-stage[data-style="groove"]{--mv:rcpGroove}
+.rcp-stage[data-style="bounce"]{--mv:rcpBounce;--mv-dur:calc(var(--sway-dur,1s) / 2)}
+.rcp-stage[data-style="ocean"]{--mv:rcpOcean;--mv-dur:calc(var(--sway-dur,4s) * 2);--sw:6}
+.rcp-stage[data-style="drift"]{--mv:rcpDrift;--mv-dur:calc(var(--sway-dur,4s) * 2)}
+.rcp-stage[data-style="float"]{--mv:rcpFloat;--mv-dur:calc(var(--sway-dur,4s) * 2);--sw:2}
+.rcp-stage[data-style="idle"]{--sw:2.5}
+.rcp-cb,.rcp-hero{animation:var(--mv) var(--mv-dur) ease-in-out infinite;animation-delay:calc(var(--mv-dur) * var(--ph,.12) * -1)}
+@keyframes rcpSway{0%,100%{rotate:calc(var(--sw) * var(--amp,1) * -1deg)}50%{rotate:calc(var(--sw) * var(--amp,1) * 1deg)}}
+@keyframes rcpGroove{0%,100%{rotate:calc(var(--sw) * var(--amp,1) * -1deg);transform:translateY(0)}
+  25%,75%{transform:translateY(calc(var(--amp,1) * -3px))}50%{rotate:calc(var(--sw) * var(--amp,1) * 1deg);transform:translateY(0)}}
+@keyframes rcpBounce{0%,100%{transform:translateY(0);rotate:calc(var(--amp,1) * -1.5deg)}
+  35%{transform:translateY(calc(var(--amp,1) * -8px));rotate:calc(var(--amp,1) * 1.5deg)}}
+@keyframes rcpOcean{0%,100%{rotate:calc(var(--sw) * var(--amp,1) * -1deg);transform:translateX(calc(var(--amp,1) * -4px))}
+  50%{rotate:calc(var(--sw) * var(--amp,1) * 1deg);transform:translateX(calc(var(--amp,1) * 4px))}}
+@keyframes rcpDrift{0%,100%{transform:translate(calc(var(--amp,1) * -6px),0);rotate:-2deg}
+  25%{transform:translate(0,-3px)}50%{transform:translate(calc(var(--amp,1) * 6px),0);rotate:2deg}75%{transform:translate(0,2px)}}
+@keyframes rcpFloat{0%,100%{rotate:calc(var(--sw) * -1deg);transform:translateY(0)}50%{rotate:calc(var(--sw) * 1deg);transform:translateY(-3px)}}
+/* Ballads and Mikrokosmos: the crowd twinkles instead of pulsing. */
+.rcp-stage[data-style="float"].is-playing .rcp-crowd-core{animation:rcpTwinkle calc(var(--pulse-dur,1s) * 4) ease-in-out infinite;
+  animation-delay:calc(var(--pulse-dur,1s) * 4 * var(--pp) * -1)}
+@keyframes rcpTwinkle{0%,100%{opacity:1}50%{opacity:.5}}
+/* Ments and between-songs: house lights, no tempo, no concert effects. */
+.rcp-stage[data-kind="ment"] .rcp-beam,.rcp-stage[data-kind="transition"] .rcp-beam{opacity:.05}
+.rcp-stage[data-kind="ment"] .rcp-venue,.rcp-stage[data-kind="transition"] .rcp-venue{opacity:.6}
+.rcp-stage[data-kind="ment"] .rcp-uplights,.rcp-stage[data-kind="transition"] .rcp-uplights{opacity:.45}
+.rcp-beam,.rcp-venue,.rcp-uplights,.rcp-stage-col{transition:opacity .7s ease}
+
+/* ── Authored MOMENTS (window states) ── */
+/* The whole crowd swings together, wide, on the tempo. */
+.rcp-stage.mo-swing{--mv:rcpSwing;--mv-dur:var(--sway-dur,2s)}
+.rcp-stage.mo-swing .rcp-cb{animation-delay:calc(var(--mv-dur) * var(--ph) * -.12)}
+@keyframes rcpSwing{0%,100%{rotate:calc((12 + var(--amp,1) * 6) * -1deg)}50%{rotate:calc((12 + var(--amp,1) * 6) * 1deg)}}
+/* Harder, synchronized beat. */
+.rcp-stage.mo-pulse.is-playing .rcp-crowd-core{animation:rcpPulseHard var(--pulse-dur,1s) ease-out infinite}
+.rcp-stage.mo-pulse.is-playing .rcp-hero-core:not(.is-brownout){animation:rcpHeroPulseHard var(--pulse-dur,1s) ease-out infinite}
+.rcp-stage.mo-pulse.is-playing .rcp-uplights i{animation:rcpPulseHard var(--pulse-dur,1s) ease-out infinite}
+@keyframes rcpPulseHard{0%{opacity:1;filter:brightness(1.6)}100%{opacity:.7;filter:brightness(1)}}
+@keyframes rcpHeroPulseHard{0%{filter:brightness(1.35)}100%{filter:brightness(1)}}
+/* Colour: the venue already takes --m-tint; Bombs take it too. Only the
+   colour changes: fill level and glow still scale with the real --charge,
+   and a dark (brownout) Bomb stays dark. */
+.rcp-stage.mo-color .rcp-crowd-core,.rcp-stage.mo-color .rcp-hero-core:not(.is-brownout){--bomb:var(--m-tint)}
+/* Bombs up: raised high and held, a slow wide wave overhead. */
+.rcp-stage.mo-up{--mv:rcpSway;--mv-dur:calc(var(--sway-dur,4s) * 2);--sw:6}
+.rcp-stage.mo-up .rcp-cb{translate:0 calc(var(--lift) * -1 - 16px)}
+.rcp-stage.mo-up .rcp-hero{translate:0 -20px}
+.rcp-stage.mo-up .rcp-crowd-core{filter:brightness(1.3)}
+/* Calm: motion eases right down before a big moment. */
+.rcp-stage.mo-calm{--mv:rcpSway;--mv-dur:calc(var(--sway-dur,4s) * 1.6);--sw:1.2}
+.rcp-stage.mo-calm .rcp-crowd-core,.rcp-stage.mo-calm .rcp-hero-core{animation:none!important}
+/* Lighting. Blackout: the room drops away and only the Bombs are left lit. */
+.rcp-stage.mo-blackout .rcp-venue{opacity:.18}
+.rcp-stage.mo-blackout .rcp-beam,.rcp-stage.mo-blackout .rcp-uplights{opacity:0}
+.rcp-stage.mo-blackout .rcp-stage-col{opacity:.25}
+/* Spot: the stage lights come up and sweep. */
+.rcp-stage.mo-spot .rcp-beam{opacity:.5;animation:rcpBeamSpot calc(var(--pulse-dur,1s) * 8) ease-in-out infinite alternate}
+.rcp-stage.mo-spot .rcp-beam.is-r{animation-delay:calc(var(--pulse-dur,1s) * -4)}
+@keyframes rcpBeamSpot{0%{opacity:.32;rotate:-8deg}100%{opacity:.6;rotate:8deg}}
+/* Strobe: beams and uplights flash on HALF the beat (well under three
+   flashes a second even for MIC DROP), never for reduced-motion users. */
+.rcp-stage.mo-strobe .rcp-beam,.rcp-stage.mo-strobe .rcp-uplights{animation:rcpStrobe calc(var(--pulse-dur,.5s) * 2) steps(1,end) infinite}
+@keyframes rcpStrobe{0%{opacity:.75}50%{opacity:.08}}
+
+/* ── Authored CUES (one-shot) ── */
+/* A wave of light runs across the crowd by seat position, ending on you. */
+.rcp-stage.cue-wave .rcp-crowd .rcp-crowd-core{animation:rcpWave 1.2s ease-out calc(var(--wx) * 1.3s) 1 both}
+.rcp-stage.cue-wave .rcp-hero-core:not(.is-brownout){animation:rcpWaveHero 1.2s ease-out 1.1s 1 both}
+@keyframes rcpWave{0%,100%{transform:translateY(0);filter:none}
+  35%{transform:translateY(-34px);filter:brightness(1.35) drop-shadow(0 0 10px var(--wave-tint)) drop-shadow(0 0 26px var(--wave-tint))}}
+@keyframes rcpWaveHero{0%,100%{filter:none}35%{filter:brightness(1.5) drop-shadow(0 0 16px var(--wave-tint))}}
+/* Lasers fan up from the stage floor, behind the screen (never across it). */
+.rcp-lasers{position:absolute;inset:0;z-index:-1;pointer-events:none;overflow:hidden}
+.rcp-lasers i{position:absolute;bottom:100px;width:2px;height:120%;transform-origin:50% 100%;opacity:0;
+  background:linear-gradient(0deg,var(--v-beam),transparent 90%);box-shadow:0 0 8px var(--v-beam)}
+.rcp-lasers i:nth-child(1){left:8%;--r0:-40deg;--r1:-10deg}
+.rcp-lasers i:nth-child(2){left:18%;--r0:-10deg;--r1:-45deg}
+.rcp-lasers i:nth-child(3){left:30%;--r0:-30deg;--r1:5deg}
+.rcp-lasers i:nth-child(4){right:30%;--r0:30deg;--r1:-5deg}
+.rcp-lasers i:nth-child(5){right:18%;--r0:10deg;--r1:45deg}
+.rcp-lasers i:nth-child(6){right:8%;--r0:40deg;--r1:10deg}
+.rcp-stage.cue-laser .rcp-lasers i{animation:rcpLaser 2.4s ease-in-out 1 both}
+.rcp-stage.cue-laser .rcp-lasers i:nth-child(even){animation-delay:.15s}
+@keyframes rcpLaser{0%{opacity:0;rotate:var(--r0)}15%{opacity:.9}85%{opacity:.8}100%{opacity:0;rotate:var(--r1)}}
+/* Idle (phone on the Battle tab, hidden page, not started): hold still. */
+.rcp-stage.is-idle *,.rcp-stage.is-unstarted .rcp-cb,.rcp-stage.is-unstarted .rcp-hero{animation-play-state:paused!important}
+/* Timed confetti: a short burst from the stage floor up the side gutters and
+   crowd — clipped to the stage, never drawn across the video. */
+.rcp-fx{position:absolute;inset:0;z-index:3;pointer-events:none;overflow:hidden}
+.rcp-conf{position:absolute;bottom:40px;width:6px;height:10px;border-radius:1px;opacity:0;
+  animation:rcpConf 1.8s cubic-bezier(.2,.7,.3,1) var(--d,0s) forwards}
+.rcp-conf.is-l{left:calc(var(--x) * .12)}
+.rcp-conf.is-r{right:calc(var(--x) * .12)}
+@keyframes rcpConf{0%{opacity:0;transform:translateY(0) rotate(0)}12%{opacity:1}
+  100%{opacity:0;transform:translateY(calc(var(--rise) * -4)) rotate(var(--spin))}}
+.rcp-program{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:stretch}
 .rcp-slot{display:flex;flex-direction:column;gap:3px;padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.02)}
-.rcp-slot.is-now{border-color:rgba(200,52,63,.7);background:linear-gradient(180deg,rgba(200,52,63,.22),rgba(200,52,63,.08))}
-.rcp-slot-when{display:flex;align-items:center;gap:6px;font:8px var(--mono);letter-spacing:1.6px;color:var(--muted)}
-.rcp-slot.is-now .rcp-slot-when{color:#ff8a9a}
-.rcp-slot-when i{width:6px;height:6px;border-radius:50%;background:#ff4d62;animation:rcpLive 1.4s ease-in-out infinite}
-.rcp-slot-title{font-family:var(--disp);font-weight:800;font-size:15px;color:#fff;line-height:1.15}
-.rcp-slot-sub{font:9px var(--mono);letter-spacing:1.2px;color:#f6c3dc}
+.rcp-slot.is-now{border-color:rgba(200,52,63,.55)}
+.rcp-slot-when{font:8px var(--mono);letter-spacing:1.6px;color:var(--muted)}
+.rcp-slot-title{font-family:var(--disp);font-weight:800;font-size:14px;color:#fff;line-height:1.15}
+.rcp-yt-link{align-self:center;padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.12);color:var(--muted);
+  font:9px var(--mono);letter-spacing:1.2px;text-decoration:none;white-space:nowrap}
+.rcp-yt-link:hover{color:#f6c3dc;border-color:rgba(243,156,200,.4)}
+.rcp-bomb-controls{border:1px solid rgba(255,255,255,.08);border-radius:12px;background:rgba(255,255,255,.025);overflow:hidden}
+.rcp-bomb-controls-toggle{display:flex;align-items:center;justify-content:space-between;width:100%;padding:8px 11px;border:0;
+  background:rgba(255,255,255,.025);color:#f6c3dc;cursor:pointer;font:9px var(--mono);letter-spacing:1.5px;text-align:left}
+.rcp-bomb-controls-toggle em{font-style:normal;color:var(--muted);font-size:8px;letter-spacing:1px}
+.rcp-bomb-controls-body{display:flex;flex-direction:column;gap:7px;padding:8px 10px 10px;border-top:1px solid rgba(255,255,255,.06)}
+.rcp-bomb-controls.is-collapsed .rcp-bomb-controls-body{display:none}
+.rcp-bomb-control-row{display:flex;align-items:center;gap:8px;min-width:0}
+.rcp-bomb-control-label{flex:0 0 auto;color:var(--muted);font:8px var(--mono);letter-spacing:1.4px}
+.rcp-bomb-pills,.rcp-bomb-colors{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.rcp-bomb-pills button,.rcp-bomb-colors button{border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.035);color:rgba(255,255,255,.62);
+  cursor:pointer;transition:border-color .18s ease,background .18s ease,color .18s ease,transform .18s ease}
+.rcp-bomb-pills button{padding:4px 7px;border-radius:7px;font:8px var(--mono);letter-spacing:.55px}
+.rcp-bomb-pills button:hover,.rcp-bomb-pills button.is-on{border-color:rgba(255,255,255,.42);background:rgba(255,255,255,.14);color:#fff}
+.rcp-bomb-colors button{width:20px;height:20px;padding:0;border-radius:50%;background:var(--swatch);box-shadow:inset 1px 1px 3px rgba(255,255,255,.35)}
+.rcp-bomb-colors button:hover,.rcp-bomb-colors button.is-on{transform:scale(1.1);border-color:#fff;box-shadow:0 0 0 2px rgba(255,255,255,.16),inset 1px 1px 3px rgba(255,255,255,.35)}
+.rcp-bomb-colors .is-auto{width:auto;padding:0 6px;border-radius:7px;background:rgba(255,255,255,.035);box-shadow:none;color:var(--muted);font:8px var(--mono)}
+.rcp-bomb-colors .is-rainbow{background:linear-gradient(135deg,#ef4444,#fbbf24,#22c55e,#3b82f6,#a855f7)}
+.rcp-bomb-colors-sep{width:1px;height:16px;margin:0 3px;background:rgba(255,255,255,.14)}
+.rcp-bomb-color-name{margin-left:4px;color:#f1ecf0;font-weight:400;letter-spacing:.8px}
+.rcp-bomb-dark-note{margin:2px 0 0;font-size:12px;line-height:1.35;color:#f6c3dc}
+
+/* Personal Voyage controls. AUTO leaves the song resolver in charge. A
+   custom movement replaces only the centered personal Bomb's physical path;
+   beat pulse, charge brightness and venue lighting remain synchronized. */
+.rcp-hero.is-user-sway{animation:rcpUserSway var(--user-move-dur,4s) ease-in-out infinite alternate}
+.rcp-hero.is-user-drift{animation:rcpUserDrift var(--user-move-dur,4s) linear infinite}
+.rcp-hero.is-user-ocean{animation:rcpUserOcean var(--user-move-dur,4s) ease-in-out infinite alternate}
+.rcp-hero.is-user-stars{animation:rcpUserStars var(--user-move-dur,4s) ease-in-out infinite alternate}
+.rcp-hero.is-user-flutter{animation:rcpUserFlutter var(--user-move-dur,4s) linear infinite}
+@keyframes rcpUserSway{0%{rotate:-24deg;scale:1}100%{rotate:24deg;scale:1.03}}
+@keyframes rcpUserDrift{0%,100%{transform:translate(0,0);rotate:0}25%{transform:translate(18px,-9px);rotate:10deg}
+  50%{transform:translate(-6px,-18px);rotate:-8deg}75%{transform:translate(-18px,-6px);rotate:6deg}}
+@keyframes rcpUserOcean{0%,100%{transform:translateY(0);rotate:0}50%{transform:translateY(-22px);rotate:12deg}}
+@keyframes rcpUserStars{0%,100%{transform:translateY(0);rotate:0;scale:1}25%{transform:translateY(-15px);rotate:8deg;scale:1.06}
+  75%{transform:translateY(-10px);rotate:-8deg;scale:.94}}
+@keyframes rcpUserFlutter{0%,100%{rotate:0}25%{transform:translate(-5px,-5px);rotate:-15deg}
+  50%{transform:translate(0,-10px);rotate:0}75%{transform:translate(5px,-5px);rotate:5deg}}
+.rcp-hero.has-user-color .rcp-hero-core:not(.is-brownout){--bomb:var(--user-bomb)}
+/* Rainbow cycles the Bomb's own colour (a registered, animatable colour), so
+   the glass, fill and glow all move through the spectrum together. It is
+   applied to .rc-bomb and .core-glow, which are what read --bomb. */
+@property --rainbow{syntax:'<color>';inherits:true;initial-value:#ef4444}
+.rcp-hero.is-user-rainbow .rcp-hero-core:not(.is-brownout) .rc-bomb,
+.rcp-hero.is-user-rainbow .rcp-hero-core:not(.is-brownout) .core-glow{--bomb:var(--rainbow);animation:rcpUserRainbow 6s linear infinite}
+@keyframes rcpUserRainbow{0%,100%{--rainbow:#ef4444}14%{--rainbow:#f97316}28%{--rainbow:#facc15}43%{--rainbow:#22c55e}
+  57%{--rainbow:#06b6d4}71%{--rainbow:#3b82f6}86%{--rainbow:#a855f7}}
+/* The glass, liquid and logo normally fade between colours (for song
+   changes). Under a continuous cycle that fade lags behind the glow, so the
+   inside and outside drift apart — switch it off so every part moves as one. */
+.rcp-hero.is-user-rainbow .rcp-hero-core .rc-sphere,.rcp-hero.is-user-rainbow .rcp-hero-core .rc-fill,
+.rcp-hero.is-user-rainbow .rcp-hero-core .rc-logo,.rcp-hero.is-user-rainbow .rcp-hero-core .core-glow{transition:none}
+.rcp-watch-note{padding:8px 12px;border-radius:10px;background:rgba(200,52,63,.12);font-size:12px;color:#f6c3dc}
 @media (max-width: 560px) {
-  .rcp-stage{padding:14px 22px 38px}
-  .rcp-stage-col{top:8px;bottom:38px;width:4px}
-  .rcp-stage-col.is-l{left:8px}
-  .rcp-stage-col.is-r{right:8px}
-  .rcp-uplights{bottom:24px}
-  .rcp-program{grid-template-columns:1fr}
-  .rcp-slot{flex-direction:row;align-items:baseline;flex-wrap:wrap;gap:4px 10px}
-  .rcp-slot-when{width:100%}
+  .rcp-stage{padding:40px 8px 100px}
+  .rcp-presence{top:auto;right:auto;left:10px;bottom:10px}
+  .rcp-stage-col{bottom:100px;width:4px}
+  .rcp-stage-col.is-l{left:7px}
+  .rcp-stage-col.is-r{right:7px}
+  .rcp-uplights{bottom:98px}
+  .rcp-crowd{height:100px}
+  .rcp-crowd-row.is-back{bottom:48px}
+  .rcp-hero{left:50%;right:auto}
+  .rcp-hero-core{zoom:.72}
+  .rcp-crowd-core{zoom:.36}
+  .rcp-crowd-row.is-back .rcp-crowd-core{zoom:.27}
+  .rcp-crowd-row.is-back{bottom:44px}
+  .rcp-sign-title{font-size:15px}
+  .rcp-program{grid-template-columns:1fr 1fr}
+  .rcp-yt-link{grid-column:1 / -1;text-align:center}
+  .rcp-bomb-control-row{align-items:flex-start;flex-wrap:wrap}
+  .rcp-bomb-control-label{padding-top:5px}
+  .rcp-bomb-pills{gap:4px}
+  .rcp-bomb-pills button{padding:4px 6px}
 }
 
-/* CHAT — one room, both sides, side marked on every line. */
-.rcp-chat{padding:14px;border-radius:14px;background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01));border:1px solid rgba(255,255,255,.06)}
-.rcp-chat:not(:only-child){min-height:0}
-@media (max-width: 979px) { .rcp-chat{height:calc(100dvh - 470px);min-height:320px} }
-.rcp-here{display:inline-flex;align-items:center;gap:5px;font:9px var(--mono);color:var(--muted)}
-.rcp-here i{width:6px;height:6px;border-radius:50%;background:#4ade80}
+/* Retired Voyage visual remake. Kept inert while the review diff is open;
+   ReCelebrate's compact stage above remains the active presentation. */
+@media not all {
+/* Launch the Voyage concert language. The performance is the room: video,
+   vignette, scattered Bomb ocean, one foreground Bomb and reactive light.
+   This intentionally replaces the experimental framed-stage/two-row crowd
+   treatment above while keeping the same resolver-driven state hooks. */
+.rcp-stage{min-height:620px;padding:0;--charge:.62;--charge-pct:62%;--charge-alpha:.68;--charge-halo:34px;
+  background:#020204;border:1px solid rgba(255,255,255,.08);box-shadow:0 28px 70px rgba(0,0,0,.5)}
+.rcp-venue{z-index:0;background:
+  radial-gradient(80% 48% at 50% 92%,color-mix(in srgb,var(--v-glow) 48%,transparent),transparent 72%),
+  linear-gradient(180deg,#020204 0%,var(--v-haze) 72%,#020204 100%)}
+.rcp-frame{position:absolute;z-index:1;inset:52px 0 138px;padding:0;border:0;border-radius:0;background:#000;
+  box-shadow:0 0 42px color-mix(in srgb,var(--v-glow) 24%,transparent)}
+.rcp-screen{width:100%;height:100%;aspect-ratio:auto}
+.rcp-play img{opacity:.88}
+.rcp-play::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.06),transparent 58%,rgba(0,0,0,.48))}
+.rcp-play-btn,.rcp-play-cta{z-index:1}
+.rcp-vignette{position:absolute;z-index:2;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse at 50% 46%,transparent 26%,rgba(0,0,0,.12) 58%,rgba(0,0,0,.9) 100%),
+    linear-gradient(180deg,rgba(0,0,0,.22),transparent 45%,rgba(0,0,0,.72))}
+.rcp-ambient{position:absolute;z-index:2;inset:0;pointer-events:none;background:var(--v-glow);opacity:.13;mix-blend-mode:screen;
+  transition:background 1s ease,opacity .8s ease}
+.rcp-stars{position:absolute;z-index:2;inset:0;pointer-events:none;overflow:hidden}
+.rcp-stars i{position:absolute;left:var(--x);top:var(--y);width:var(--s);height:var(--s);border-radius:50%;background:#fff;
+  opacity:.18;box-shadow:0 0 6px color-mix(in srgb,var(--v-beam) 70%,transparent);animation:rcpVyStar var(--d) ease-in-out var(--p) infinite}
+@keyframes rcpVyStar{0%,100%{opacity:.08;scale:.8}50%{opacity:.55;scale:1.25}}
+.rcp-sign{z-index:7;top:13px;background:rgba(0,0,0,.68);backdrop-filter:blur(8px);border-color:rgba(255,255,255,.15)}
+.rcp-beam{z-index:3;bottom:0;height:100%;opacity:.2}
+.rcp-uplights{z-index:3;left:9%;right:9%;bottom:124px}
+.rcp-lasers{z-index:3}
+.rcp-lasers i{bottom:104px;height:105%;mix-blend-mode:screen}
+.rcp-stage[data-style="bounce"].is-playing .rcp-lasers i{opacity:.12;animation:rcpVyLaser calc(var(--pulse-dur,.5s) * 10) ease-in-out infinite alternate}
+.rcp-stage[data-style="bounce"].is-playing .rcp-lasers i:nth-child(even){animation-delay:calc(var(--pulse-dur,.5s) * -4)}
+@keyframes rcpVyLaser{0%{opacity:.04;rotate:var(--r0)}100%{opacity:.3;rotate:var(--r1)}}
+
+/* The old arena's crowd was a deep, irregular field rather than a UI grid.
+   These miniature Bomb silhouettes remain atmosphere only. */
+.rcp-crowd{position:absolute;z-index:4;inset:0;width:100%;height:100%;pointer-events:none;overflow:hidden}
+.rcp-vy-cb{position:absolute;left:var(--x);top:var(--y);display:flex;flex-direction:column;align-items:center;opacity:var(--o);
+  transform-origin:50% 100%;filter:drop-shadow(0 0 7px var(--v-glow));will-change:transform}
+.rcp-vy-cb i{display:block;width:var(--cb);height:var(--cb);border-radius:50%;border:1px solid rgba(255,255,255,.22);
+  background:radial-gradient(circle at 32% 28%,rgba(255,255,255,.72),color-mix(in srgb,var(--v-glow) 68%,#14121b) 52%,rgba(0,0,0,.72));
+  box-shadow:inset 0 0 5px var(--v-glow),0 0 7px var(--v-glow)}
+.rcp-vy-cb b{display:block;width:calc(var(--cb) * .26);height:calc(var(--cb) * .82);margin-top:-1px;border-radius:0 0 2px 2px;
+  background:linear-gradient(90deg,#050505,#28252c,#050505)}
+.rcp-stage.has-pulse.is-playing .rcp-vy-cb i{animation:rcpVyCrowdPulse var(--pulse-dur,1s) ease-out infinite;
+  animation-delay:calc(var(--pulse-dur,1s) * var(--pp) * -1)}
+@keyframes rcpVyCrowdPulse{0%{filter:brightness(1.42)}100%{filter:brightness(.78)}}
+
+/* Faithful Launch the Voyage proportions: a 100px glass globe, BTS mark and
+   long dark handle. Real ReConnect charge sets its BASE intensity; concert
+   colour only lights the glass that remains available. */
+.rcp-hero{z-index:6;left:50%;right:auto;bottom:18px;transform:translateX(-50%);transform-origin:50% 100%;width:110px;height:204px}
+.rcp-hero-glow{position:absolute;left:50%;top:30%;width:200px;height:200px;border-radius:50%;transform:translate(-50%,-50%);
+  background:var(--v-glow);filter:blur(60px);opacity:var(--charge-glow-alpha,.2);transition:background .8s ease,opacity .8s ease}
+.rcp-my-bomb{position:relative;display:flex;flex-direction:column;align-items:center;transform-origin:50% 100%;filter:drop-shadow(0 14px 28px rgba(0,0,0,.7))}
+.rcp-cs-sphere{position:relative;z-index:2;display:flex;align-items:center;justify-content:center;width:100px;height:100px;border-radius:50%;
+  opacity:var(--charge-alpha);border:1.5px solid rgba(255,255,255,.4);
+  background:radial-gradient(circle at 34% 28%,rgba(255,255,255,.9),rgba(255,255,255,.12) 34%,color-mix(in srgb,var(--v-glow) var(--charge-pct),#111018) 65%,rgba(0,0,0,.72));
+  box-shadow:0 0 var(--charge-halo) var(--v-glow),inset 0 0 26px var(--v-glow);transition:background .8s ease,box-shadow .8s ease,opacity .8s ease}
+.rcp-cs-logo{position:relative;z-index:1;color:#fff;font-size:36px;font-weight:900;line-height:1;text-shadow:0 0 20px var(--v-glow);opacity:.95}
+.rcp-cs-handle{position:relative;z-index:1;width:22px;height:90px;margin-top:-6px;border:1px solid rgba(255,255,255,.15);border-radius:0 0 10px 10px;
+  background:linear-gradient(90deg,#050505,#242228 48%,#050505);box-shadow:inset 0 20px 20px rgba(0,0,0,.9)}
+.rcp-cs-handle i{position:absolute;top:14px;left:50%;width:10px;height:14px;transform:translateX(-50%);border:1px solid #35313b;border-radius:5px;background:#050505}
+.rcp-stage.is-brownout .rcp-cs-sphere{opacity:.24;box-shadow:0 0 8px color-mix(in srgb,var(--v-glow) 25%,transparent),inset 0 0 10px rgba(255,255,255,.05)}
+.rcp-stage.is-brownout .rcp-cs-logo{opacity:.24}.rcp-stage.is-brownout .rcp-hero-glow{opacity:.035}
+.rcp-stage.has-pulse.is-playing:not(.is-brownout) .rcp-cs-sphere{animation:rcpVyHeroPulse var(--pulse-dur,1s) ease-in-out infinite}
+@keyframes rcpVyHeroPulse{0%,100%{filter:brightness(.96)}50%{filter:brightness(1.22)}}
+.rcp-stage.is-doubletime.is-playing:not(.is-brownout) .rcp-cs-sphere{animation-duration:calc(var(--pulse-dur,1s) / 2)}
+
+/* Preserve the resolver's distinct physical personalities, now on the old
+   single-Bomb / light-ocean composition. Fast songs still move half-time. */
+.rcp-vy-cb,.rcp-hero{animation:var(--mv) var(--mv-dur) ease-in-out infinite;animation-delay:calc(var(--mv-dur) * var(--ph,.12) * -1)}
+.rcp-stage[data-style="float"].is-playing .rcp-vy-cb i{animation:rcpTwinkle calc(var(--pulse-dur,1s) * 4) ease-in-out infinite;
+  animation-delay:calc(var(--pulse-dur,1s) * 4 * var(--pp) * -1)}
+.rcp-stage[data-kind="ment"] .rcp-ambient,.rcp-stage[data-kind="transition"] .rcp-ambient{opacity:.045}
+.rcp-stage[data-kind="ment"] .rcp-lasers,.rcp-stage[data-kind="transition"] .rcp-lasers{display:none}
+.rcp-stage.mo-swing .rcp-vy-cb{animation-delay:calc(var(--mv-dur) * var(--ph) * -.12)}
+.rcp-stage.mo-pulse.is-playing .rcp-vy-cb i,.rcp-stage.mo-pulse.is-playing .rcp-cs-sphere,
+.rcp-stage.mo-pulse.is-playing .rcp-uplights i{animation:rcpPulseHard var(--pulse-dur,1s) ease-out infinite}
+.rcp-stage.mo-color:not(.is-brownout) .rcp-cs-sphere{--v-glow:var(--m-tint)}
+.rcp-stage.mo-up .rcp-vy-cb{translate:0 -15px}.rcp-stage.mo-up .rcp-hero{translate:0 -22px}
+.rcp-stage.mo-up .rcp-vy-cb i{filter:brightness(1.35)}
+.rcp-stage.mo-calm .rcp-vy-cb,.rcp-stage.mo-calm .rcp-hero{animation:none!important}
+.rcp-stage.cue-wave .rcp-vy-cb i{animation:rcpWave 1.2s ease-out calc(var(--wx) * 1.3s) 1 both}
+.rcp-stage.cue-wave:not(.is-brownout) .rcp-cs-sphere{animation:rcpWaveHero 1.2s ease-out 1.1s 1 both}
+
+/* Deterministic review pose: freezes one wide swing without affecting live
+   behavior. Only the local preview calls this hook. */
+.rcp-stage.is-preview-swing .rcp-hero{animation:none!important;transform:translateX(-50%) rotate(-22deg)}
+.rcp-stage.is-preview-swing .rcp-vy-cb{animation:none!important;transform:rotate(var(--pose))}
+
+@media (max-width:560px){
+  .rcp-stage{min-height:540px;padding:0}.rcp-frame{inset:50px 0 130px}.rcp-uplights{bottom:112px}
+  .rcp-hero{bottom:8px;width:92px;height:174px}.rcp-hero-glow{width:160px;height:160px;filter:blur(44px)}
+  .rcp-cs-sphere{width:84px;height:84px}.rcp-cs-logo{font-size:30px}.rcp-cs-handle{width:20px;height:76px}
+  .rcp-sign{max-width:calc(100% - 24px)}.rcp-sign-title{font-size:14px}
+}
+@media(prefers-reduced-motion:reduce){
+  .rcp-stars i,.rcp-vy-cb,.rcp-vy-cb i,.rcp-hero,.rcp-cs-sphere,.rcp-lasers i{animation:none!important}
+  .rcp-stage.is-preview-swing .rcp-hero{transform:translateX(-50%)}
+}
+}
+
+/* Voyage-derived control states on the ReCelebrate stage. Physical movement
+   stays at its authored (often half-time) sway; the small light pulse may run
+   double-time independently. */
+.rcp-stage.is-doubletime.is-playing .rcp-hero-core:not(.is-brownout) .rc-sphere,
+.rcp-stage.is-doubletime.is-playing .rcp-crowd-core .rc-sphere{
+  animation:rcpDoubleTime calc(var(--pulse-dur,1s) / 2) ease-in-out infinite}
+@keyframes rcpDoubleTime{0%,100%{filter:brightness(.95)}50%{filter:brightness(1.35)}}
+.rcp-stage .rcp-crowd-core,.rcp-stage .rcp-hero-core:not(.is-brownout){--bomb:var(--v-glow)}
+.rcp-stage.is-preview-swing .rcp-hero{animation:none!important;transform:rotate(-20deg) translateX(-8px)}
+.rcp-stage.is-preview-swing .rcp-cb{animation:none!important}
+.rcp-stage.is-preview-swing .rcp-crowd-row .rcp-cb:nth-child(odd){rotate:-13deg}
+.rcp-stage.is-preview-swing .rcp-crowd-row .rcp-cb:nth-child(even){rotate:10deg}
+
+/* ── RE:CELEBRATE Party Chat (recelebrate-chat.js) — a layer, not a tab ──
+   Desktop: the room's right-hand panel; minimised it shrinks to a slim rail
+   and the stage takes the room. Phone: a drawer docked just above the app's
+   bottom nav, over whatever is showing (Battle or Watch). */
+.rcp-chat{display:flex;flex-direction:column;min-width:0;border-radius:14px;border:1px solid rgba(255,255,255,.06);
+  background:linear-gradient(180deg,rgba(20,15,24,.97),rgba(12,10,16,.97))}
+.rcp-chat-bar{display:none;width:100%;text-align:left;border:0;background:transparent;color:inherit;cursor:pointer;padding:10px 14px;font:inherit}
+.rcp-chat-bar-top{display:flex;align-items:center;gap:6px;font:10px var(--mono);letter-spacing:1.6px;color:#f6c3dc}
+.rcp-chat-count{color:var(--muted)}
+.rcp-chat-latest{display:block;margin-top:3px;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rcp-chat-unread{min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--rcp-red);color:#fff;
+  font:10px/18px var(--mono);text-align:center;letter-spacing:0}
+.rcp-chat-bar .rcp-chat-unread{margin-left:auto}
+.rcp-chat-panel{display:flex;flex-direction:column;flex:1;min-height:0;padding:14px}
+.rcp-chat-head{display:flex;align-items:center;gap:6px;margin-bottom:10px}
+.rcp-chat-head .rcp-preview-chip{margin-left:auto}
+.rcp-chat-min,.rcp-chat-close{width:26px;height:26px;border-radius:8px;border:1px solid rgba(255,255,255,.1);background:transparent;
+  color:var(--muted);cursor:pointer;font-size:15px;line-height:1}
+.rcp-chat-head .rcp-area-title+.rcp-chat-min{margin-left:auto}
+.rcp-chat-fab{display:none}
+.rcp-chat-soon{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:24px 12px;text-align:center}
+.rcp-chat-soon b{font:11px var(--mono);letter-spacing:1.8px;color:#f6c3dc;font-weight:400}
+.rcp-chat-soon span{font-size:13px;color:var(--muted)}
 .rcp-msgs{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding-right:2px}
 .rcp-msg{padding-left:10px;border-left:2px solid rgba(255,255,255,.1)}
 .rcp-msg.is-hooligans{border-left-color:rgba(255,207,74,.6)}
@@ -4963,8 +5392,35 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .rcp-say input{flex:1;min-width:0;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.1);background:rgba(0,0,0,.35);color:#fff;font:inherit;font-size:14px}
 .rcp-say input:focus{outline:none;border-color:rgba(243,156,200,.55)}
 .rcp-say button{padding:0 14px;border-radius:10px;border:0;background:var(--rcp-red);color:#fff;font:11px var(--mono);letter-spacing:1.4px;cursor:pointer}
-@media(prefers-reduced-motion:reduce){.rcp-live i,.rcp-slot-when i,.rcp-bomb i{animation:none!important}}
-.arc-bomb-hint{margin:-4px 0 12px;text-align:center;font-size:13px;color:#f6c3dc}
-.rcp-chat-soon{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:24px 12px;text-align:center}
-.rcp-chat-soon b{font:11px var(--mono);letter-spacing:1.8px;color:#f6c3dc;font-weight:400}
-.rcp-chat-soon span{font-size:13px;color:var(--muted)}
+@media (min-width: 980px) {
+  .rcp-chat.is-min,.rcp-chat.is-hidden{overflow:hidden}
+  .rcp-chat.is-min .rcp-chat-panel,.rcp-chat.is-hidden .rcp-chat-panel{display:none}
+  .rcp-chat.is-min .rcp-chat-bar,.rcp-chat.is-hidden .rcp-chat-bar{display:flex;flex-direction:column;align-items:center;height:100%;padding:14px 0}
+  .rcp-chat.is-min .rcp-chat-bar-top,.rcp-chat.is-hidden .rcp-chat-bar-top{writing-mode:vertical-rl;gap:10px}
+  .rcp-chat.is-min .rcp-chat-latest,.rcp-chat.is-hidden .rcp-chat-latest,.rcp-chat.is-min .rcp-chat-count,.rcp-chat.is-hidden .rcp-chat-count{display:none}
+  .rcp-chat.is-min .rcp-chat-bar .rcp-chat-unread{margin:0;writing-mode:horizontal-tb}
+}
+@media (max-width: 979px) {
+  .rcp-chat{position:fixed;left:var(--gut,12px);right:var(--gut,12px);bottom:calc(92px + env(safe-area-inset-bottom));z-index:6;
+    max-width:596px;margin:0 auto;box-shadow:0 -10px 30px rgba(0,0,0,.55);border-color:rgba(243,156,200,.22)}
+  .rcp-chat.is-min .rcp-chat-panel,.rcp-chat.is-hidden .rcp-chat-panel{display:none}
+  .rcp-chat.is-min .rcp-chat-bar{display:block}
+  .rcp-chat.is-open{height:min(44dvh,380px)}
+  /* On Watch the drawer stays below the screen (the stage is scrolled to the
+     top when it opens) so the performance is never hidden by chat. */
+  .rcp.is-tab-watch .rcp-chat.is-open{height:min(30dvh,250px)}
+  .rcp-watch{scroll-margin-top:52px}
+  .rcp-chat.is-hidden{left:auto;right:calc(var(--gut,12px) + 4px);width:auto;border:0;background:transparent;box-shadow:none}
+  .rcp-chat.is-hidden .rcp-chat-fab{display:grid;place-items:center;position:relative;width:46px;height:46px;border-radius:50%;
+    border:1px solid rgba(243,156,200,.4);background:rgba(20,15,24,.95);font-size:20px;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.5)}
+  .rcp-chat.is-hidden .rcp-chat-fab .rcp-chat-unread{position:absolute;top:-4px;right:-4px}
+  /* Keep the last of the Battle list / Watch programme reachable above the
+     docked chat bar. */
+  .rcp{padding-bottom:70px}
+}
+@media(prefers-reduced-motion:reduce){
+  .rcp-presence i,.rcp-premiere-clock,.rcp-premiere::after,.rcp-stage.is-final-count .rcp-venue,.rcp-sched-item.is-now .rcp-sched-tag i,.rcp-live i,.rcp-sign-label i,.rcp-cb,.rcp-crowd-core,.rcp-hero,.rcp-hero-core,.rcp-beam,.rcp-conf,.rcp-lasers i,.rcp-uplights,.rcp-uplights i{animation:none!important}
+  .rcp-cb,.rcp-hero{transition:none}
+  .rcp-conf{display:none}
+  .rcp-stage,.rcp-room{transition:none}
+}

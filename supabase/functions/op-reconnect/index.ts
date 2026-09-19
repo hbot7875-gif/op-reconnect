@@ -54,6 +54,7 @@ import { getQuestShareSource } from './lib/reconnect-missions.ts'
 import { getDistrictPresence, getWardRoster, sendDistrictMessage } from './lib/district-presence.ts'
 import { getRecelebrateState, issuePartyPass, startTeamChoice, chooseTeam } from './lib/recelebrate.ts'
 import { getRecelebrateBattle } from './lib/recelebrate-battle.ts'
+import { pingRecelebratePresence } from './lib/recelebrate-presence.ts'
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -116,6 +117,7 @@ const ROUTES: Record<string, Route> = {
   startTeamChoice: { auth: 'agent', handler: (sb, p) => startTeamChoice(sb, p) },
   chooseTeam: { auth: 'agent', handler: (sb, p) => chooseTeam(sb, p) },
   getRecelebrateBattle: { auth: 'agent', handler: (sb, p) => getRecelebrateBattle(sb, p) },
+  pingRecelebratePresence: { auth: 'agent', handler: (sb, p) => pingRecelebratePresence(sb, p) },
   startDistrict: { auth: 'agent', handler: (sb, p) => startDistrict(sb, p) },
   extendDistrictDeadline: { auth: 'agent', handler: (sb, p) => extendDistrictDeadline(sb, p) },
   setMode: { auth: 'agent', handler: (sb, p) => setMode(sb, p) },

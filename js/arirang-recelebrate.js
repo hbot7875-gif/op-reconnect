@@ -16,9 +16,11 @@ import { ARIRANG_TRACKS } from '../supabase/functions/op-reconnect/lib/recelebra
 export const ARIRANG_RECELEBRATE = {
   id: 'arirang-recelebrate',
   name: 'ARIRANG RE:CELEBRATE',
-  whenLabel: 'Sept 20, 2026 · 9:30 AM IST',
-  // Sept 20, 2026, 9:30 AM IST (UTC+5:30) = 2026-09-20T04:00:00Z.
-  opensAtIso: '2026-09-20T04:00:00.000Z',
+  whenLabel: 'Sept 20, 2026 · 9:00 AM IST',
+  // Doors: Sept 20, 2026, 9:00 AM IST (UTC+5:30) = 2026-09-20T03:30:00Z.
+  // The Watch tab opens with them; the battle itself still starts at
+  // 9:30 AM IST (its own window, set server-side).
+  opensAtIso: '2026-09-20T03:30:00.000Z',
   // 24 hours later: Sept 21, 2026, 9:30 AM IST.
   endsAtIso: '2026-09-21T04:00:00.000Z',
 }

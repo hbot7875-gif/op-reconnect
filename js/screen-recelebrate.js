@@ -1,19 +1,21 @@
-// ARIRANG RE:CELEBRATE — the live Party page (shell).
+// ARIRANG RE:CELEBRATE — the live Party page.
 //
-// A party first, with a battle inside it: the Watch stage is the room's
-// centrepiece, Battle and Chat sit either side of it on desktop, and on a
-// phone they share one persistent live header with BATTLE · WATCH · CHAT
-// switching between them. Watch and Chat are still shells: their programme
-// slots and chat lines come from recelebrate-preview-data.js, and nothing
-// here writes anywhere.
+// A party first, with a battle inside it. Two places to look — BATTLE and
+// WATCH (the stage) — and Party Chat as a persistent layer over either one,
+// never a place of its own. Desktop shows Battle | Stage | Chat (chat
+// collapsible); a phone switches BATTLE · WATCH under one live header, with
+// chat as a drawer over the lower part of whichever is showing.
 //
-// The 90s state poll re-renders the active screen; this page only builds
-// itself once per visit and afterwards just refreshes the header, so a
-// playing video, the chosen tab and a half-typed chat line all survive it.
+// The page builds itself once per visit. The 90s state poll only refreshes
+// the header and the agent's Bomb charge, and switching Battle ↔ Watch or
+// opening/closing chat only toggles classes — so the YouTube player, the
+// chat draft and unread state all survive.
 //
 // Battle is REAL: it reads getRecelebrateBattle (lib/recelebrate-battle.ts),
 // whose totals, leaders, differences and final result are all computed on
-// the server from accepted scrobbles. The browser only draws them.
+// the server from accepted scrobbles. Watch is driven by
+// recelebrate-watch-program.js via recelebrate-watch.js. Chat has no backend
+// yet: see recelebrate-chat.js.
 
 import { el, esc } from './state.js'
 import { call } from './api.js'
@@ -24,7 +26,8 @@ import {
   ARIRANG_RECELEBRATE, getCachedPartyPass, refreshPartyPassState,
   openLoveSongFlow, openMyPartyPass, continueToSides,
 } from './arirang-recelebrate.js'
-import { PREVIEW_PROGRAM, PREVIEW_CHAT } from './recelebrate-preview-data.js'
+import { createWatchStage } from './recelebrate-watch.js'
+import { createPartyChat } from './recelebrate-chat.js'
 
 const SIDES = {
   hooligans: { name: 'HOOLIGANS', icon: '⚡' },
@@ -32,14 +35,13 @@ const SIDES = {
 }
 
 let activeTab = 'watch'
-let localChat = []
 let root = null
+let watch = null
 
 export function renderRecelebrateParty(container, state) {
-  lastState = state
   if (root && root.isConnected && container.contains(root)) {
     paintMe()
-    paintMyBomb()
+    watch?.setCharge(state?.agentCharge)
     return
   }
   container.innerHTML = ''
@@ -47,12 +49,54 @@ export function renderRecelebrateParty(container, state) {
   root.append(header(), tabs(), room())
   container.appendChild(root)
   paintMe()
-  paintMyBomb()
+  watch.setCharge(state?.agentCharge)
+  syncWatchActive()
   refreshPartyPassState().then(paintMe)
   loadBattle()
+  watch.el.addEventListener('rcp-stage-event', pingSoon)
+  pingPresence()
 }
 
-let lastState = null
+/* ── Presence: who's here, and who's watching with u ─────────────────────
+   A real check-in about once a minute while the page is open and visible
+   (lib/recelebrate-presence.ts); counts are agents seen in the last ~2.5
+   minutes, so closed tabs fall away on their own. "Watching" is sent only
+   while the Watch view is actually on screen. */
+const PRESENCE_MS = 60_000
+let presenceTimer = null
+async function pingPresence() {
+  clearTimeout(presenceTimer)
+  if (!root?.isConnected) return
+  if (!document.hidden) {
+    const watchOnScreen = window.matchMedia('(min-width: 980px)').matches || activeTab === 'watch'
+    const res = await call('pingRecelebratePresence', {
+      agentNo: getAgentNo(), watching: watchOnScreen ? watch?.stageEventId() : null,
+    })
+    if (res?.success && root?.isConnected) {
+      const here = root.querySelector('.rcp-here')
+      here.hidden = !res.here
+      here.textContent = ` · ${Number(res.here).toLocaleString('en-US')} IN THE PARTY`
+      watch?.setPresence(res)
+    }
+  }
+  if (root?.isConnected) presenceTimer = setTimeout(pingPresence, PRESENCE_MS)
+}
+// Tab switch, stage event change, coming back to the page: check in soon.
+function pingSoon() {
+  clearTimeout(presenceTimer)
+  presenceTimer = setTimeout(pingPresence, 2500)
+}
+document.addEventListener('visibilitychange', () => { if (root?.isConnected && !document.hidden) pingSoon() })
+
+// On a phone showing Battle (or a hidden tab) the stage keeps its player —
+// and audio — but stops spending frames on the venue.
+function syncWatchActive() {
+  const desktop = window.matchMedia('(min-width: 980px)').matches
+  watch?.setActive(!document.hidden && (desktop || activeTab === 'watch'))
+}
+document.addEventListener('visibilitychange', () => { if (root?.isConnected) syncWatchActive() })
+window.matchMedia('(min-width: 980px)').addEventListener?.('change', () => { if (root?.isConnected) syncWatchActive() })
+
 let battleTimer = null
 const BATTLE_POLL_MS = 60_000
 
@@ -79,7 +123,7 @@ function header() {
     <button type="button" class="back-btn rcp-back">City</button>
     <div class="rcp-titles">
       <div class="rcp-name">ARIRANG RE:CELEBRATE <span>✦</span></div>
-      <div class="rcp-live"><i></i>PARTY LIVE ✦</div>
+      <div class="rcp-live"><i></i>PARTY LIVE ✦<span class="rcp-here" hidden></span></div>
     </div>
     <div class="rcp-clock">
       <span>ENDS IN</span>
@@ -94,6 +138,7 @@ function header() {
 // The agent's own corner of the header: side + pass, or the way in if they
 // arrived during the party without a pass / before picking a side.
 function paintMe() {
+  paintBattleMe()
   const me = root?.querySelector('.rcp-me')
   if (!me) return
   const pass = getCachedPartyPass()
@@ -126,14 +171,17 @@ function paintMe() {
 function tabs() {
   const nav = el('nav', 'rcp-tabs')
   nav.setAttribute('aria-label', 'Party areas')
-  for (const [key, label] of [['battle', 'BATTLE'], ['watch', 'WATCH'], ['chat', 'CHAT']]) {
+  for (const [key, label] of [['battle', 'BATTLE'], ['watch', 'WATCH']]) {
     const b = el('button', `rcp-tab${key === activeTab ? ' is-on' : ''}`, label)
     b.type = 'button'
     b.dataset.tab = key
     b.onclick = () => {
       activeTab = key
-      root.className = `rcp is-tab-${key}`
+      root.classList.remove('is-tab-battle', 'is-tab-watch')
+      root.classList.add(`is-tab-${key}`)
       nav.querySelectorAll('.rcp-tab').forEach((x) => x.classList.toggle('is-on', x === b))
+      syncWatchActive()
+      pingSoon()
     }
     nav.appendChild(b)
   }
@@ -142,9 +190,24 @@ function tabs() {
 
 function room() {
   const r = el('div', 'rcp-room')
-  r.append(battleLoading(), watchArea(), chatArea())
+  watch = createWatchStage({ partyEndsAtIso: ARIRANG_RECELEBRATE.endsAtIso })
+  const chat = createPartyChat({
+    getSide: () => getCachedPartyPass()?.team || null,
+    // Phone, Watch tab: the drawer covers the lower screen, so bring the
+    // stage to the top — the performance stays visible above the chat.
+    onOpen: () => {
+      if (activeTab === 'watch' && !window.matchMedia('(min-width: 980px)').matches) {
+        watch.el.scrollIntoView({ block: 'start', behavior: 'smooth' })
+      }
+    },
+  })
+  r.append(battleLoading(), watch.el, chat.el)
   return r
 }
+
+// Review aid for local dev builds only (never in production): paint a
+// stage moment without playing the video.
+if (import.meta.env.DEV) window.__rcpWatch = () => watch
 
 /* ── BATTLE ─────────────────────────────────────────────────────────────
    17 separate track battles. Live, the headline is tracks CURRENTLY LEADING
@@ -154,11 +217,66 @@ function room() {
 
 const fmt = (n) => Number(n || 0).toLocaleString('en-US')
 
+// Someone arriving mid-party has never seen the rules, so the explainer
+// starts open; once an agent closes it, it stays a one-line header on this
+// device. The battle panel is rebuilt on every poll, so the state lives here.
+const HOW_KEY = 'rc-rcp-battle-how-closed'
+let howOpen = (() => { try { return localStorage.getItem(HOW_KEY) !== '1' } catch { return true } })()
+
+// Mirrors the server's rules (lib/recelebrate-battle.ts and the
+// rc_recelebrate_battle migration): 17 tracks, plays from the agent's own
+// selected source after their side is set, inside the 24h window; most
+// tracks wins, tied tracks go to total streams, late syncs until 11:00 IST.
+const HOW_IT_WORKS = `
+  <details class="rcp-how"${howOpen ? ' open' : ''}>
+    <summary>HOW THE BATTLE WORKS</summary>
+    <ol class="rcp-how-steps">
+      <li><b>Pick a side.</b><br>⚡ Hooligans or 🛸 Aliens.</li>
+      <li><b>There are 17 tracks.</b><br>Every stream you make on any of the 17 tracks adds <b>1 stream to ur side</b> for that track.</li>
+      <li><b>Win as many tracks as possible.</b><br>Whichever side has more streams on a track <b>wins that track</b>.
+        The side that wins <mark>the most tracks out of 17</mark> wins RE:CELEBRATE.</li>
+      <li><b>If both sides win the same number of tracks:</b><br>The side with <b>more total streams across all 17 tracks</b> wins.</li>
+      <li><b>The battle lasts 24 hours.</b><br>Sept 20, 9:30 AM IST → Sept 21, 9:30 AM IST.
+        Late syncs are accepted until <b>11:00 AM IST</b>, then the result is final.</li>
+    </ol>
+    <p class="rcp-how-note">Only streams from the account/source connected to ReConnect count. Streams made <b>before u picked ur side</b> and ads don't count.</p>
+    <p class="rcp-how-foot"><b>Ur streams still count everywhere else in ReConnect ✦</b></p>
+  </details>`
+
 function battleShell(inner) {
   const sec = el('section', 'rcp-area rcp-battle')
   sec.setAttribute('aria-label', 'Hooligans vs Aliens battle')
-  sec.innerHTML = `<div class="rcp-area-head"><span class="rcp-area-title">HOOLIGANS vs ALIENS</span></div>${inner}`
+  sec.innerHTML = `<div class="rcp-area-head"><span class="rcp-area-title">HOOLIGANS vs ALIENS</span></div>
+    <div class="rcp-battle-me" aria-live="polite"></div>${HOW_IT_WORKS}${inner}`
+  sec.querySelector('.rcp-how').addEventListener('toggle', (e) => {
+    howOpen = e.currentTarget.open
+    try { localStorage.setItem(HOW_KEY, howOpen ? '0' : '1') } catch { /* per-visit only */ }
+  })
+  queueMicrotask(paintBattleMe)
   return sec
+}
+
+// The agent's own place in the battle: whether their streams are counting,
+// and for whom — or the one step they're missing.
+function paintBattleMe() {
+  const slot = root?.querySelector('.rcp-battle-me')
+  if (!slot) return
+  const pass = getCachedPartyPass()
+  slot.innerHTML = ''
+  slot.className = 'rcp-battle-me'
+  if (pass === undefined) return
+  if (pass?.team) {
+    const s = SIDES[pass.team]
+    slot.classList.add(`is-${pass.team}`)
+    slot.innerHTML = `Ur streams count for <b>${s.icon} ${s.name}</b> ✦`
+    return
+  }
+  const b = el('button', 'rcp-battle-me-cta', pass
+    ? "Ur streams aren't counting yet — <b>pick ur side →</b>"
+    : "U're not in the battle yet — <b>get ur Party Pass &amp; pick a side →</b>")
+  b.type = 'button'
+  b.onclick = pass ? continueToSides : openLoveSongFlow
+  slot.appendChild(b)
 }
 
 function battleLoading() {
@@ -223,144 +341,4 @@ function finalNote(b) {
   return b.decidedBy === 'total_streams'
     ? `${who} WIN RE:CELEBRATE · tracks level, decided on total streams (${fmt(b.totalHooligans)} – ${fmt(b.totalAliens)})`
     : `${who} WIN RE:CELEBRATE ✦`
-}
-
-/* ── WATCH — the stage ──────────────────────────────────────────────────
-   Framed like the landmark: a white LED frame on a red-lit stage with the
-   crowd's ARMY Bombs below. The video is a click-to-load privacy-enhanced
-   YouTube embed (the same youtube-nocookie source ambient.js already uses)
-   — nothing is downloaded or rehosted. Sync comes later. */
-
-function watchArea() {
-  const now = PREVIEW_PROGRAM.find((p) => p.slot === 'now')
-  const sec = el('section', 'rcp-area rcp-watch')
-  sec.setAttribute('aria-label', 'Watch party stage')
-  sec.innerHTML = `
-    <div class="rcp-stage">
-      <div class="rcp-stage-col is-l" aria-hidden="true"></div>
-      <div class="rcp-stage-col is-r" aria-hidden="true"></div>
-      <div class="rcp-frame">
-        <div class="rcp-screen">
-          <button type="button" class="rcp-play" aria-label="Play ${esc(now.title)} ${esc(now.sub)}">
-            <img alt="" src="https://i.ytimg.com/vi/${now.youtubeId}/hqdefault.jpg" loading="lazy">
-            <span class="rcp-play-btn">▶</span>
-          </button>
-        </div>
-      </div>
-      <div class="rcp-uplights" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
-      <div class="rcp-crowd" aria-hidden="true">${crowdBombs()}</div>
-    </div>
-    <div class="rcp-mybomb"></div>
-    <div class="rcp-program">
-      ${PREVIEW_PROGRAM.map((p) => `
-        <div class="rcp-slot is-${p.slot}">
-          <span class="rcp-slot-when">${p.slot === 'now' ? 'NOW PLAYING <i></i>' : p.slot === 'next' ? 'UP NEXT' : 'LATER'}</span>
-          <span class="rcp-slot-title">${esc(p.title)}</span>
-          <span class="rcp-slot-sub">${esc(p.sub)}</span>
-        </div>`).join('')}
-    </div>
-  `
-  sec.querySelector('.rcp-play').onclick = (e) => {
-    const frame = document.createElement('iframe')
-    frame.className = 'rcp-embed'
-    frame.src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(now.youtubeId)}?autoplay=1&playsinline=1&rel=0`
-    frame.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen'
-    frame.allowFullscreen = true
-    frame.title = `${now.title} ${now.sub}`
-    e.currentTarget.replaceWith(frame)
-  }
-  return sec
-}
-
-/* The crowd under the stage is ARMY Bombs, one per agent — the same Bomb
-   each agent already charges in ReConnect, brought into the venue (no
-   second Bomb, no second charge). For now only the agent's own is real:
-   its brightness is their actual charge (agentCharge.hoursRemaining on the
-   Bomb's same 48h scale). The rest are placeholders shaped for a later
-   live-presence feed ("ARMY BOMBS UP ✦"). Charge never affects the battle
-   and is never required to be here. */
-const CROWD_SIZE = 26
-const MY_SEAT = 12
-
-function crowdBombs() {
-  let html = ''
-  for (let i = 0; i < CROWD_SIZE; i++) {
-    html += i === MY_SEAT
-      ? '<span class="rcp-bomb is-me" data-agent="me"><i></i></span>'
-      : '<span class="rcp-bomb is-placeholder" data-agent=""><i></i></span>'
-  }
-  return html
-}
-
-function paintMyBomb() {
-  const me = root?.querySelector('.rcp-bomb.is-me')
-  const cap = root?.querySelector('.rcp-mybomb')
-  if (!me || !cap) return
-  const charge = lastState?.agentCharge || {}
-  const hours = Math.max(0, Number(charge.hoursRemaining) || 0)
-  const frac = charge.isDark ? 0 : Math.min(1, hours / 48)
-  me.style.setProperty('--charge', frac.toFixed(2))
-  me.classList.toggle('is-dark', !!charge.isDark || hours <= 0)
-  cap.innerHTML = `<i class="rcp-mybomb-dot" style="--charge:${frac.toFixed(2)}"></i> ur ARMY Bomb is in the crowd ✦ <span>${
-    charge.isDark ? 'dark' : hours > 0 ? `${Math.round(hours)}H charge` : 'uncharged'}</span>`
-}
-
-/* ── CHAT — one room for both sides (local preview only) ────────────────── */
-
-// Preview chat lines only ever render in a local dev build. Production has
-// no realtime chat yet, so it shows an honest "opens soon" instead of fake
-// messages and a fake head-count that would look live.
-const SHOW_PREVIEW_CHAT = import.meta.env.DEV
-
-function chatArea() {
-  const sec = el('section', 'rcp-area rcp-chat')
-  sec.setAttribute('aria-label', 'Party chat')
-  if (!SHOW_PREVIEW_CHAT) {
-    sec.innerHTML = `
-      <div class="rcp-area-head"><span class="rcp-area-title">PARTY CHAT</span></div>
-      <div class="rcp-chat-soon">
-        <b>PARTY CHAT OPENS SOON ♡</b>
-        <span>One room for Hooligans and Aliens — it's not open yet.</span>
-      </div>
-    `
-    return sec
-  }
-  sec.innerHTML = `
-    <div class="rcp-area-head">
-      <span class="rcp-area-title">PARTY CHAT</span>
-      <span class="rcp-here"><i></i>${PREVIEW_CHAT.here.toLocaleString('en-US')} here</span>
-      <span class="rcp-preview-chip">PREVIEW</span>
-    </div>
-    <div class="rcp-msgs" role="log" aria-live="polite"></div>
-    <form class="rcp-say">
-      <input type="text" maxlength="200" placeholder="say something to the party…" aria-label="Chat message">
-      <button type="submit">SEND</button>
-    </form>
-  `
-  const list = sec.querySelector('.rcp-msgs')
-  const draw = () => {
-    list.innerHTML = [...PREVIEW_CHAT.messages, ...localChat].map((m) => `
-      <div class="rcp-msg is-${m.side}${m.me ? ' is-me' : ''}">
-        <div class="rcp-msg-who"><span class="rcp-msg-side">${SIDES[m.side].icon}</span>
-          <b>${esc(m.name)}</b><span class="rcp-msg-no">${esc(m.no)}</span><span class="rcp-msg-at">${esc(m.at)}</span></div>
-        <div class="rcp-msg-text">${esc(m.text)}</div>
-      </div>`).join('')
-    list.scrollTop = list.scrollHeight
-  }
-  draw()
-  sec.querySelector('.rcp-say').onsubmit = (e) => {
-    e.preventDefault()
-    const input = e.currentTarget.querySelector('input')
-    const text = input.value.trim()
-    const pass = getCachedPartyPass()
-    if (!text || !pass?.team) return
-    const d = new Date()
-    localChat.push({
-      side: pass.team, name: 'you', no: 'not sent · preview', me: true,
-      at: `${d.getHours() % 12 || 12}:${String(d.getMinutes()).padStart(2, '0')}`, text,
-    })
-    input.value = ''
-    draw()
-  }
-  return sec
 }

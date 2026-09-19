@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ReCelebrate Party · local preview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./css/reconnect.css">
+  <style>[hidden] { display: none !important; }</style>
+</head>
+<body>
+  <!-- Local review only: mounts the REAL Party screen (screen-recelebrate.js,
+       the same renderRecelebrateParty the app calls) inside the game page's
+       own #game > #scene structure. Without a signed-in agent the Battle
+       scoreboard shows its "unavailable" state; Watch, the Bomb and chat
+       render exactly as in the app. -->
+  <div id="game">
+    <main id="scene" class="scene"></main>
+  </div>
+  <script type="module">
+    import { renderRecelebrateParty } from './js/screen-recelebrate.js'
+    renderRecelebrateParty(document.getElementById('scene'), { agentCharge: { hoursRemaining: 32, isDark: false } })
+  </script>
+</body>
+</html>

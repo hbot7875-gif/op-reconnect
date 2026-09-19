@@ -1194,11 +1194,11 @@ function isSpokenFor(rosters: Map<string, any[]>, agentNo: string, stillOnDistri
 }
 
 /** Everyone still holding an ACTIVE attempt on this district (or any of a
- *  goal's crossDistrictEligible districts — see excludeRetired's neighbor
- *  comment on eligiblePoolForGoal) — the set isSpokenFor uses to tell a
- *  real partner from one who has dropped out. A recruited helper from a
- *  different district is exactly as "still on" as a native one; they just
- *  hold their active attempt somewhere else. */
+ *  goal's crossDistrictEligible districts — see eligiblePoolForGoal's doc
+ *  comment) — the set isSpokenFor uses to tell a real partner from one who
+ *  has dropped out. A recruited helper from a different district is
+ *  exactly as "still on" as a native one; they just hold their active
+ *  attempt somewhere else. */
 async function agentsStillOnDistrict(supabase: SupabaseDB, districtId: string | string[]): Promise<Set<string>> {
   const ids = Array.isArray(districtId) ? districtId : [districtId]
   let query = supabase.from('rc_player_districts').select('agent_no').eq('status', 'active')

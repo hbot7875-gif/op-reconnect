@@ -26,6 +26,7 @@ import { districtFraction } from './ui-district.js'
 import { districtGoalsLeft, districtPercent } from './district-progress.js'
 import { renderWardTiles, glanceStrip, wardDisplayName, districtDisplayName, HOME_BASE_WARD } from './ward-tiles.js'
 import { renderCityMap } from './city-map.js'
+import { armyBombInnerHtml } from './army-bomb.js'
 import { districtIcon } from './landmarks.js'
 import { openFinder } from './search.js'
 import { openArirangRecelebrate, arirangPartyIsLive, ARIRANG_RECELEBRATE } from './arirang-recelebrate.js'
@@ -643,39 +644,9 @@ export function coreBlock(state, shareOnly = false) {
       ? 'Your ARMY Bomb is dark. Tap to feed it.'
       : neverFed ? 'Your ARMY Bomb is empty. Tap to charge it.'
       : `Your ARMY Bomb has ${Math.round(hours)} hours remaining. Tap to feed it.`)
-  // Red Zone uses the Bomb itself as the progress display. It starts with
-  // one red liquid layer and drains to neutral dark glass as qualified
-  // streams arrive. Personal charge remains a separate supporting value;
-  // its purple fill, rings and particles are deliberately not rendered in
-  // the Red Zone state.
-  const CIRC = 2 * Math.PI * 106
-  const ringsHtml = `
-      <circle class="ring-outer" cx="110" cy="110" r="98"></circle>
-      <circle class="ring-inner" cx="110" cy="110" r="90"></circle>
-      <circle class="ring-charge-bg" cx="110" cy="110" r="106"></circle>
-      <circle class="ring-charge" cx="110" cy="110" r="106" transform="rotate(-90 110 110)"
-        stroke-dasharray="${(CIRC * chargeFrac).toFixed(1)} ${CIRC.toFixed(1)}"></circle>
-  `
-  const normalDecorHtml = defuse ? '' : `
-    <svg class="core-rings" viewBox="0 0 220 220" aria-hidden="true">
-      ${ringsHtml}
-    </svg>
-    <div class="core-particles"><span></span><span></span><span></span><span></span><span></span><span></span></div>
-  `
-  btn.innerHTML = `
-    <div class="core-glow"></div>
-    ${normalDecorHtml}
-      <div class="rc-bomb">
-      <div class="rc-sphere">
-        <span class="rc-fill"></span>
-        ${defuse ? '<span class="rz-liquid" aria-hidden="true"></span>' : ''}
-        <span class="rc-shine"></span>
-        <span class="rc-shine-2"></span>
-        <span class="rc-logo">⟭⟬</span>
-      </div>
-      <div class="rc-handle"><span class="rc-grip"></span><span class="rc-grip"></span></div>
-    </div>
-  `
+  // The Bomb's markup is shared with the RE:CELEBRATE Watch venue — see
+  // army-bomb.js — so the Bomb charged here is the one brought to the party.
+  btn.innerHTML = armyBombInnerHtml({ chargeFrac, defuse: !!defuse })
   btn.style.setProperty('--charge', (defuse ? 0 : mainFrac).toFixed(3))
   if (defuse) {
     btn.style.setProperty('--rz-restored', mainFrac.toFixed(3))
