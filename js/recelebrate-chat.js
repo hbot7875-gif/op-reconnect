@@ -1,36 +1,44 @@
-// ARIRANG RE:CELEBRATE Party Chat — a persistent social layer, not a tab.
+// ARIRANG RE:CELEBRATE Party Chat — one event-scoped shared room.
 //
-// One element for both layouts: on a phone it's a drawer over the lower part
-// of whatever the agent is looking at (Battle or Watch), minimisable to a
-// one-line bar; on desktop it's the collapsible right-hand panel of the
-// party room. Opening/closing only toggles classes, so it never touches the
-// YouTube player, and its state (mode, draft, unread, messages) lives in this
-// module — switching Battle ↔ Watch, or leaving and coming back, keeps it.
-//
-// There is no realtime chat backend yet. Production shows an honest
-// "opens soon" state; preview lines exist only in a local dev build.
+// The Edge Function verifies the agent session, derives the sender's team
+// from their Party Pass, and returns codenames only. This client polls the
+// compact latest-message window using the app's existing HTTP API.
 
+import { call } from './api.js'
+import { getAgentNo } from './session.js'
 import { el, esc } from './state.js'
-import { PREVIEW_CHAT } from './recelebrate-preview-data.js'
 
-const SHOW_PREVIEW_CHAT = import.meta.env.DEV
 const SIDES = { hooligans: '⚡', aliens: '🛸' }
+const POLL_MS = 5_000
 
 const chat = {
-  mode: null, // 'open' | 'min' | 'hidden'
+  mode: null,
   draft: '',
   unread: 0,
-  messages: SHOW_PREVIEW_CHAT ? [...PREVIEW_CHAT.messages] : [],
-  pending: SHOW_PREVIEW_CHAT ? [...(PREVIEW_CHAT.later || [])] : [],
-  drip: null,
+  messages: [],
+  loaded: false,
+  poll: null,
 }
 
 const isDesktop = () => window.matchMedia('(min-width: 980px)').matches
+const messageTime = (iso) => {
+  const d = new Date(iso)
+  if (!Number.isFinite(d.getTime())) return ''
+  return new Intl.DateTimeFormat('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true }).format(d)
+}
+
+const ERROR_COPY = {
+  party_not_open: 'PARTY CHAT OPENS WITH THE PARTY ♡',
+  party_over: 'THE PARTY ENDED · CHAT IS READ-ONLY',
+  team_required: 'PICK UR SIDE BEFORE U CHAT ✦',
+  slow_down: 'ONE SEC 😭 TRY AGAIN IN A MOMENT',
+  message_required: 'TYPE SOMETHING FIRST',
+  invalid_session: 'SIGN IN AGAIN TO USE PARTY CHAT',
+}
 
 export function createPartyChat({ getSide, onOpen }) {
-  // Until chat has a backend, desktop starts it as the slim rail: a full
-  // column of "opens soon" would only take width from the stage.
-  if (!chat.mode) chat.mode = isDesktop() && SHOW_PREVIEW_CHAT ? 'open' : 'min'
+  if (!chat.mode) chat.mode = 'min'
+  clearTimeout(chat.poll)
 
   const box = el('aside', 'rcp-chat')
   box.setAttribute('aria-label', 'Party chat')
@@ -42,41 +50,41 @@ export function createPartyChat({ getSide, onOpen }) {
     <div class="rcp-chat-panel">
       <div class="rcp-chat-head">
         <span class="rcp-area-title">PARTY CHAT</span>
-        ${SHOW_PREVIEW_CHAT ? '<span class="rcp-preview-chip">PREVIEW · DEV ONLY</span>' : ''}
         <button type="button" class="rcp-chat-min" aria-label="Minimise chat">–</button>
         <button type="button" class="rcp-chat-close" aria-label="Hide chat">×</button>
       </div>
-      ${SHOW_PREVIEW_CHAT ? `
-        <div class="rcp-msgs" role="log" aria-live="polite"></div>
-        <form class="rcp-say">
-          <input type="text" maxlength="200" placeholder="say something to the party…" aria-label="Chat message">
-          <button type="submit">SEND</button>
-        </form>` : `
-        <div class="rcp-chat-soon">
-          <b>PARTY CHAT OPENS SOON ♡</b>
-          <span>One room for Hooligans and Aliens — it's not open yet.</span>
-        </div>`}
+      <div class="rcp-msgs" role="log" aria-live="polite"></div>
+      <p class="rcp-chat-status" role="status" hidden></p>
+      <form class="rcp-say">
+        <input type="text" maxlength="200" placeholder="say something to the party…" aria-label="Chat message">
+        <button type="submit">SEND</button>
+      </form>
     </div>
     <button type="button" class="rcp-chat-fab" aria-label="Open party chat">💬<b class="rcp-chat-unread" hidden></b></button>
   `
 
   const list = box.querySelector('.rcp-msgs')
-  const input = box.querySelector('.rcp-say input')
-  if (input) {
-    input.value = chat.draft
-    input.addEventListener('input', () => { chat.draft = input.value })
+  const form = box.querySelector('.rcp-say')
+  const input = form.querySelector('input')
+  const send = form.querySelector('button')
+  const status = box.querySelector('.rcp-chat-status')
+  input.value = chat.draft
+  input.addEventListener('input', () => { chat.draft = input.value })
+
+  const setStatus = (text = '', error = false) => {
+    status.textContent = text
+    status.hidden = !text
+    status.classList.toggle('is-error', error)
   }
 
-  const drawMessages = (stick) => {
-    if (!list) return
+  const drawMessages = (stick = false) => {
     const atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 24
-    list.innerHTML = chat.messages.map((m) => `
-      <div class="rcp-msg is-${m.side}${m.me ? ' is-me' : ''}">
+    list.innerHTML = chat.messages.length ? chat.messages.map((m) => `
+      <div class="rcp-msg is-${esc(m.side || 'guest')}${m.me ? ' is-me' : ''}">
         <div class="rcp-msg-who"><span class="rcp-msg-side">${SIDES[m.side] || ''}</span>
-          <b>${esc(m.name)}</b><span class="rcp-msg-no">${esc(m.no)}</span><span class="rcp-msg-at">${esc(m.at)}</span></div>
+          <b>${esc(m.name || 'AGENT')}</b><span class="rcp-msg-at">${esc(messageTime(m.at))}</span></div>
         <div class="rcp-msg-text">${esc(m.text)}</div>
-      </div>`).join('')
-    // Don't yank someone who scrolled up to read back.
+      </div>`).join('') : '<div class="rcp-chat-empty">first one here 👀 say hi</div>'
     if (stick || atBottom) list.scrollTop = list.scrollHeight
   }
 
@@ -85,9 +93,9 @@ export function createPartyChat({ getSide, onOpen }) {
     box.classList.toggle('is-min', chat.mode === 'min')
     box.classList.toggle('is-hidden', chat.mode === 'hidden')
     box.querySelector('.rcp-chat-bar').setAttribute('aria-expanded', String(chat.mode === 'open'))
-    box.querySelector('.rcp-chat-count').textContent = SHOW_PREVIEW_CHAT ? `· ${chat.messages.length}` : '· OPENS SOON'
+    box.querySelector('.rcp-chat-count').textContent = `· ${chat.messages.length}`
     const last = chat.messages[chat.messages.length - 1]
-    box.querySelector('.rcp-chat-latest').textContent = last ? `${SIDES[last.side] || ''} ${last.name}: ${last.text}` : ''
+    box.querySelector('.rcp-chat-latest').textContent = last ? `${SIDES[last.side] || ''} ${last.name}: ${last.text}` : 'the room is open ✦'
     box.querySelectorAll('.rcp-chat-unread').forEach((b) => { b.hidden = !chat.unread; b.textContent = chat.unread })
   }
 
@@ -98,45 +106,84 @@ export function createPartyChat({ getSide, onOpen }) {
     if (mode === 'open') { drawMessages(true); onOpen?.() }
   }
 
+  const applyComposerState = ({ locked = false, readOnly = false } = {}) => {
+    const noSide = !getSide()
+    const disabled = locked || readOnly || noSide
+    input.disabled = disabled
+    send.disabled = disabled
+    if (locked) setStatus(ERROR_COPY.party_not_open)
+    else if (readOnly) setStatus(ERROR_COPY.party_over)
+    else if (noSide) setStatus(ERROR_COPY.team_required)
+    else if (!status.classList.contains('is-error')) setStatus('')
+  }
+
+  // Party Pass/team choice can finish while this room is already mounted.
+  // Unlock the composer immediately instead of waiting for the next poll.
+  const onPassChange = () => {
+    if (!box.isConnected) {
+      window.removeEventListener('rc-arc-pass', onPassChange)
+      return
+    }
+    applyComposerState()
+  }
+  window.addEventListener('rc-arc-pass', onPassChange)
+
+  let loading = false
+  const loadMessages = async (stick = false) => {
+    clearTimeout(chat.poll)
+    chat.poll = null
+    if (loading || !box.isConnected) return
+    loading = true
+    const res = await call('getRecelebrateMessages', { agentNo: getAgentNo() })
+    loading = false
+    if (!box.isConnected) return
+    if (res?.success) {
+      const old = new Set(chat.messages.map((m) => String(m.id)))
+      const incoming = Array.isArray(res.messages) ? res.messages : []
+      if (chat.loaded && chat.mode !== 'open') {
+        chat.unread += incoming.filter((m) => !old.has(String(m.id)) && !m.me).length
+      }
+      chat.messages = incoming
+      chat.loaded = true
+      setStatus('')
+      applyComposerState(res)
+      drawMessages(stick)
+      paint()
+    } else {
+      setStatus('CHAT IS RECONNECTING…', true)
+    }
+    chat.poll = setTimeout(() => loadMessages(false), POLL_MS)
+  }
+
   box.querySelector('.rcp-chat-bar').onclick = () => setMode(chat.mode === 'open' ? 'min' : 'open')
   box.querySelector('.rcp-chat-min').onclick = () => setMode('min')
   box.querySelector('.rcp-chat-close').onclick = () => setMode(isDesktop() ? 'min' : 'hidden')
   box.querySelector('.rcp-chat-fab').onclick = () => setMode('open')
 
-  const add = (m) => {
-    chat.messages.push(m)
-    if (chat.mode !== 'open') chat.unread += 1
-    drawMessages(false)
-    paint()
-  }
-
-  const form = box.querySelector('.rcp-say')
-  if (form) {
-    form.onsubmit = (e) => {
-      e.preventDefault()
-      const text = input.value.trim()
-      const side = getSide()
-      if (!text || !side) return
-      const d = new Date()
-      chat.messages.push({ side, name: 'you', no: 'not sent · preview', me: true, text,
-        at: `${d.getHours() % 12 || 12}:${String(d.getMinutes()).padStart(2, '0')}` })
+  form.onsubmit = async (e) => {
+    e.preventDefault()
+    const text = input.value.trim()
+    if (!text) return
+    if (!getSide()) { applyComposerState(); return }
+    input.disabled = true
+    send.disabled = true
+    send.textContent = '…'
+    const res = await call('sendRecelebrateMessage', { agentNo: getAgentNo(), message: text })
+    send.textContent = 'SEND'
+    if (res?.success) {
       input.value = ''
       chat.draft = ''
-      drawMessages(true)
-      paint()
+      setStatus('')
+      await loadMessages(true)
+    } else {
+      input.disabled = false
+      send.disabled = false
+      setStatus(ERROR_COPY[res?.error] || 'COULDN’T SEND · TRY AGAIN', true)
     }
-  }
-
-  // Dev preview only: drip a few lines in so the unread badge can be seen.
-  if (SHOW_PREVIEW_CHAT && !chat.drip && chat.pending.length) {
-    chat.drip = setInterval(() => {
-      const next = chat.pending.shift()
-      if (!next) { clearInterval(chat.drip); return }
-      if (box.isConnected) add(next); else chat.messages.push(next)
-    }, 15000)
   }
 
   drawMessages(true)
   paint()
-  return { el: box, setMode }
+  queueMicrotask(() => loadMessages(true))
+  return { el: box, setMode, refresh: () => loadMessages(true) }
 }

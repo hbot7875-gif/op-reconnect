@@ -5388,6 +5388,10 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .rcp-msg-at{margin-left:auto}
 .rcp-msg-text{font-size:14px;color:#f1ecf0;line-height:1.35;margin-top:2px;word-break:break-word}
 .rcp-msg.is-me{background:rgba(200,52,63,.08);border-radius:0 8px 8px 0;padding:4px 8px 4px 10px}
+.rcp-chat-empty{margin:auto;padding:20px;text-align:center;color:var(--muted);font-size:13px}
+.rcp-chat-status{margin:8px 0 0;text-align:center;color:#f6c3dc;font:9px var(--mono);letter-spacing:1.15px}
+.rcp-chat-status.is-error{color:#ff9aa4}
+.rcp-say input:disabled,.rcp-say button:disabled{opacity:.45;cursor:not-allowed}
 .rcp-say{display:flex;gap:6px;margin-top:10px}
 .rcp-say input{flex:1;min-width:0;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.1);background:rgba(0,0,0,.35);color:#fff;font:inherit;font-size:14px}
 .rcp-say input:focus{outline:none;border-color:rgba(243,156,200,.55)}

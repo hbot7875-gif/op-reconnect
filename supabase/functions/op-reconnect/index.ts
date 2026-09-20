@@ -55,6 +55,7 @@ import { getDistrictPresence, getWardRoster, sendDistrictMessage } from './lib/d
 import { getRecelebrateState, issuePartyPass, startTeamChoice, chooseTeam } from './lib/recelebrate.ts'
 import { getRecelebrateBattle } from './lib/recelebrate-battle.ts'
 import { pingRecelebratePresence } from './lib/recelebrate-presence.ts'
+import { getRecelebrateMessages, sendRecelebrateMessage } from './lib/recelebrate-chat.ts'
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -118,6 +119,8 @@ const ROUTES: Record<string, Route> = {
   chooseTeam: { auth: 'agent', handler: (sb, p) => chooseTeam(sb, p) },
   getRecelebrateBattle: { auth: 'agent', handler: (sb, p) => getRecelebrateBattle(sb, p) },
   pingRecelebratePresence: { auth: 'agent', handler: (sb, p) => pingRecelebratePresence(sb, p) },
+  getRecelebrateMessages: { auth: 'agent', handler: (sb, p) => getRecelebrateMessages(sb, p) },
+  sendRecelebrateMessage: { auth: 'agent', handler: (sb, p) => sendRecelebrateMessage(sb, p) },
   startDistrict: { auth: 'agent', handler: (sb, p) => startDistrict(sb, p) },
   extendDistrictDeadline: { auth: 'agent', handler: (sb, p) => extendDistrictDeadline(sb, p) },
   setMode: { auth: 'agent', handler: (sb, p) => setMode(sb, p) },
