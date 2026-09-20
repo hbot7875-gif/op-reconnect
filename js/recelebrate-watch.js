@@ -496,7 +496,8 @@ export function createWatchStage({ partyEndsAtIso } = {}) {
         <span>${e.state === 'now' ? 'On now' : e.state === 'replay' ? 'Replay' : `Starts ${e.timeLabel} IST`} · the video link will appear here</span></div>`
     }
     const kind = e.video?.kind
-    const base = resolveMoment(kind === 'playlist' ? 0 : kind === 'video' ? trackIndex(e.video.track) : HOUSE_INDEX, 0)
+    const base = resolveMoment(kind === 'playlist' ? 0
+      : kind === 'video' && e.video.track ? trackIndex(e.video.track) : HOUSE_INDEX, 0)
     apply(kind === 'list' ? { ...base, kind: 'performance', title: e.title } : base)
     // The playlist re-applies its first song once the player reports in.
     if (isPlaylist()) moment = { ...moment, key: '' }

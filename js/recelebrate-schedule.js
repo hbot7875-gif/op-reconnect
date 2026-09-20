@@ -10,9 +10,10 @@
 // instead. A finished event is never removed — it becomes a REPLAY.
 //
 // `video` is what the stage plays for the event:
-//   { kind: 'video', youtubeId, track }  one YouTube video; `track` names the
-//                                         WATCH_ITEMS song whose concert
-//                                         colour/tempo the venue uses
+//   { kind: 'video', youtubeId, track }  one YouTube video; optional `track`
+//                                         names the WATCH_ITEMS song whose
+//                                         concert colour/tempo the venue uses.
+//                                         Without it, use calm house lighting.
 //   { kind: 'playlist' }                 the Gwanghwamun playlist, with the
 //                                         full song-by-song programme
 //                                         (recelebrate-watch-program.js)
@@ -28,6 +29,9 @@ export const WATCH_SCHEDULE = [
   // 9:30 AM IST
   { id: 'swim', title: 'SWIM', startsAtIso: '2026-09-20T04:00:00.000Z',
     video: { kind: 'video', youtubeId: 'b4iVv91Z6lY', track: 'SWIM' } },
+  // 10:55 AM IST — the short Netflix intro immediately before the live show.
+  { id: 'comeback-intro', title: 'COMEBACK LIVE INTRO', startsAtIso: '2026-09-20T05:25:00.000Z', holdThroughNextPremiere: true,
+    video: { kind: 'video', youtubeId: 'd5NlnTQ_W_8' } },
   // 11:00 AM IST
   { id: 'comeback-live', title: 'COMEBACK LIVE', startsAtIso: '2026-09-20T05:30:00.000Z',
     video: { kind: 'playlist' } },
@@ -103,8 +107,13 @@ export function fmtCountdown(msLeft) {
  *  its premiere countdown, else the live one, else the next to start, else
  *  the most recent replay. */
 export function defaultStageEvent(items, nowMs) {
+  const live = items.find((s) => s.state === 'now')
+  // This five-minute pre-show must finish instead of immediately becoming
+  // the following event's countdown. Other live videos keep the established
+  // behaviour where an incoming premiere may take over the stage.
+  if (live?.holdThroughNextPremiere) return live
   const premiere = nowMs == null ? null : premiereFor(items, nowMs)
-  return premiere?.item || items.find((s) => s.state === 'now') || items.find((s) => s.state === 'next')
+  return premiere?.item || live || items.find((s) => s.state === 'next')
     || [...items].reverse().find((s) => s.state === 'replay') || items[0]
 }
 
