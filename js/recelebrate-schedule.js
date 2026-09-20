@@ -17,9 +17,10 @@
 //   { kind: 'playlist' }                 the Gwanghwamun playlist, with the
 //                                         full song-by-song programme
 //                                         (recelebrate-watch-program.js)
-//   { kind: 'list', listId, firstVideoId } any other YouTube playlist, played
-//                                         in order under the warm house light
-//                                         (no per-song programme)
+//   { kind: 'list', listId, firstVideoId } another YouTube playlist. A known
+//                                         list may have its own concert
+//                                         programme; unknown lists use the
+//                                         warm house-light fallback.
 //   null                                 no link yet — listed, not playable
 
 export const WATCH_SCHEDULE_TZ = 'Asia/Kolkata'

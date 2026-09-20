@@ -31,7 +31,7 @@
 import { el, esc } from './state.js'
 import { armyBombCharge, armyBombInnerHtml } from './army-bomb.js'
 import { WATCH_SCHEDULE_DAY, PREMIERE_LEAD_MS, watchScheduleStates, defaultStageEvent, fmtCountdown, scheduleNow } from './recelebrate-schedule.js'
-import { WATCH_PLAYLIST, WATCH_ITEMS, SONG_BOMB_COLORS, EXTRA_BOMB_COLORS, resolveMoment, activeMoments, cuesCrossed, upNext } from './recelebrate-watch-program.js'
+import { WATCH_PLAYLIST, WATCH_ITEMS, SONG_BOMB_COLORS, EXTRA_BOMB_COLORS, resolveMoment, activeMoments, cuesCrossed, programForVideo } from './recelebrate-watch-program.js'
 
 const TICK_MS = 250
 const API_TIMEOUT_MS = 12000
@@ -174,8 +174,8 @@ export function createWatchStage({ partyEndsAtIso } = {}) {
   let active = true
   let momentSig = ''
   // The schedule event on the stage (recelebrate-schedule.js). 'playlist'
-  // runs the full Gwanghwamun programme; 'video' is one video lit in its
-  // song's concert colour; no video = listed, not playable yet.
+  // runs Gwanghwamun, the known GOYANG 'list' runs its own 28-video programme,
+  // and 'video' is one video lit in its song's concert colour.
   let ev = null
   let pinned = false // the agent opened a replay themselves
   let pinnedUntilLive = false // …or chose the live event during a countdown
@@ -183,7 +183,8 @@ export function createWatchStage({ partyEndsAtIso } = {}) {
   let loadToken = 0
   // Live counts from the Party page's presence check-in (setPresence).
   let presence = null
-  const isPlaylist = () => !ev || ev.video?.kind === 'playlist'
+  const programme = () => programForVideo(ev?.video) || (!ev ? programForVideo({ kind: 'playlist' }) : null)
+  const hasProgramme = () => !!programme()
   const timers = {}
   const USER_MOVE_CLASSES = ['is-user-sway', 'is-user-drift', 'is-user-ocean', 'is-user-stars', 'is-user-flutter']
 
@@ -325,8 +326,8 @@ export function createWatchStage({ partyEndsAtIso } = {}) {
     stage.classList.toggle('has-pulse', m.pulse)
     signTitle.textContent = m.title
     nowTitle.textContent = m.title
-    if (isPlaylist()) {
-      const next = upNext(m.index, m.segment)
+    if (hasProgramme()) {
+      const next = programme().upNext(m.index, m.segment)
       nextTitle.textContent = next ? next.title : 'End of the show'
     } else {
       // One video (or none yet): the event is the show; next is the schedule.
@@ -366,12 +367,13 @@ export function createWatchStage({ partyEndsAtIso } = {}) {
   }
 
   const read = () => {
-    if (!isPlaylist() || !player?.getPlaylistIndex) return
+    const show = programme()
+    if (!show || !player?.getPlaylistIndex) return
     const index = player.getPlaylistIndex()
     const t = player.getCurrentTime?.() || 0
     const dur = player.getDuration?.() || 0
     const title = player.getVideoData?.()?.title || ''
-    const m = resolveMoment(index, t, title)
+    const m = show.resolveMoment(index, t, title)
     if (index !== lastIndex) { lastIndex = index; prevTime = t }
     if (!moment || m.key !== moment.key) {
       apply(m)
@@ -393,8 +395,8 @@ export function createWatchStage({ partyEndsAtIso } = {}) {
       skips = 0
       showNote('')
       read()
-      setStatus(isPlaylist() ? (moment?.label || 'NOW PLAYING') : ev.state === 'replay' ? 'REPLAY ↻' : 'NOW PLAYING', 'is-playing')
-      if (isPlaylist()) startTicking()
+      setStatus(hasProgramme() ? (moment?.label || 'NOW PLAYING') : ev.state === 'replay' ? 'REPLAY ↻' : 'NOW PLAYING', 'is-playing')
+      if (hasProgramme()) startTicking()
     } else if (e.data === S.PAUSED) {
       read(); setStatus('PAUSED', 'is-paused'); stopTicking()
     } else if (e.data === S.ENDED) {
@@ -407,7 +409,7 @@ export function createWatchStage({ partyEndsAtIso } = {}) {
 
   // One unavailable/blocked video never breaks the party: skip it, and only
   // fall back to "watch on YouTube" if several in a row can't play here.
-  const lastListIndex = () => (isPlaylist() ? WATCH_ITEMS.length : (player?.getPlaylist?.()?.length || 1)) - 1
+  const lastListIndex = () => (programme()?.items.length || player?.getPlaylist?.()?.length || 1) - 1
   const onError = () => {
     if (ev?.video?.kind === 'video') {
       showNote(`This video can't play inside ReConnect right now. <a href="${eventUrl(ev)}" target="_blank" rel="noopener noreferrer">Watch it on YouTube ↗</a>`)
@@ -496,11 +498,12 @@ export function createWatchStage({ partyEndsAtIso } = {}) {
         <span>${e.state === 'now' ? 'On now' : e.state === 'replay' ? 'Replay' : `Starts ${e.timeLabel} IST`} · the video link will appear here</span></div>`
     }
     const kind = e.video?.kind
-    const base = resolveMoment(kind === 'playlist' ? 0
-      : kind === 'video' && e.video.track ? trackIndex(e.video.track) : HOUSE_INDEX, 0)
-    apply(kind === 'list' ? { ...base, kind: 'performance', title: e.title } : base)
+    const show = programForVideo(e.video)
+    const base = show ? show.resolveMoment(0, 0)
+      : resolveMoment(kind === 'video' && e.video.track ? trackIndex(e.video.track) : HOUSE_INDEX, 0)
+    apply(kind === 'list' && !show ? { ...base, kind: 'performance', title: e.title } : base)
     // The playlist re-applies its first song once the player reports in.
-    if (isPlaylist()) moment = { ...moment, key: '' }
+    if (hasProgramme()) moment = { ...moment, key: '' }
     setMoments([])
     signTitle.textContent = e.title
     setStatus(preLabel(e), 'is-unstarted')
@@ -616,7 +619,7 @@ export function createWatchStage({ partyEndsAtIso } = {}) {
     const i = items.findIndex((x) => x.id === ev.id)
     const n = items[i + 1]
     nextEventLabel = n ? (n.state === 'next' || n.state === 'later' ? `${n.title} · ${n.timeLabel}` : n.title) : 'End of the day'
-    if (!isPlaylist()) nextTitle.textContent = nextEventLabel
+    if (!hasProgramme()) nextTitle.textContent = nextEventLabel
     const countdownFor = (s) => s.state === 'next' && s.startsAt - now <= PREMIERE_LEAD_MS ? `IN ${fmtCountdown(s.startsAt - now)}` : null
     const sig = `${items.map((s) => s.state).join()}|${ev.id}`
     if (sig === schedSig) {

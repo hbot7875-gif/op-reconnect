@@ -1,7 +1,7 @@
 // node --test js/recelebrate-watch-program.test.mjs
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { WATCH_ITEMS, STYLES, WINDOW_MOMENTS, CUE_MOMENTS, LIGHT_VARIANTS, resolveItem, resolveMoment, activeMoments, cuesCrossed, upNext, IDLE_SWAY_BPM, SONG_BOMB_COLORS, PALETTES } from './recelebrate-watch-program.js'
+import { WATCH_ITEMS, GOYANG_ITEMS, GOYANG_PLAYLIST, STYLES, WINDOW_MOMENTS, CUE_MOMENTS, LIGHT_VARIANTS, resolveItem, resolveMoment, resolveGoyangItem, resolveGoyangMoment, activeMoments, cuesCrossed, upNext, goyangUpNext, programForVideo, IDLE_SWAY_BPM, SONG_BOMB_COLORS, PALETTES } from './recelebrate-watch-program.js'
 
 test('playlist keeps the published order: 15 items, Ments where the playlist has them', () => {
   const labels = WATCH_ITEMS.map((it) => it.kind === 'segmented' ? 'Dynamite+Mikrokosmos' : it.title)
@@ -9,6 +9,75 @@ test('playlist keeps the published order: 15 items, Ments where the playlist has
     'Body to Body', 'Hooligan', '2.0', 'MENT', 'Butter', 'MENT', 'MIC DROP', 'Aliens', 'FYA', 'MENT',
     'SWIM', 'Like Animals', 'NORMAL', 'MENT', 'Dynamite+Mikrokosmos',
   ])
+})
+
+test('Goyang keeps all 28 published videos in their real song/ment order', () => {
+  assert.deepEqual(GOYANG_ITEMS.map((it) => it.title), [
+    'SWIM', 'NORMAL', 'Hooligan', 'Hooligan', 'Aliens', 'Run BTS', 'FIRST MENT',
+    "they don't know 'bout us", 'Like Animals', 'FAKE LOVE', 'SWIM', 'Merry Go Round',
+    '2.0', 'NORMAL', 'SECOND MENT', 'Not Today', 'MIC DROP', 'FYA + FIRE', 'THIRD MENT',
+    'Body to Body', 'Come Over', 'Butter', 'Dynamite', 'Mikrokosmos', 'I NEED U',
+    'FINAL MENT', 'Please', 'Into the Sun',
+  ])
+})
+
+test('Goyang songs drive color, BPM, movement and calm ment states', () => {
+  const swim = resolveGoyangMoment(0, 5)
+  const hooligan = resolveGoyangMoment(3, 5)
+  const run = resolveGoyangMoment(5, 5)
+  const ment = resolveGoyangMoment(6, 5)
+  assert.deepEqual([swim.paletteKey, swim.bpm, swim.style], ['swim', 94, 'ocean'])
+  assert.deepEqual([hooligan.paletteKey, hooligan.bpm, hooligan.style], ['hooligan', 135, 'bounce'])
+  assert.equal(run.bpm, 156); assert.equal(run.swayBpm, 78); assert.equal(run.pulse, true)
+  assert.equal(ment.kind, 'ment'); assert.equal(ment.bpm, null); assert.equal(ment.pulse, false)
+  assert.equal(ment.swayBpm, IDLE_SWAY_BPM); assert.equal(ment.style, 'idle')
+})
+
+test('Goyang title cross-check corrects a mismatched playlist index', () => {
+  const resolved = resolveGoyangItem(0, '260409 - Mic Drop - BTS - GOYANG D1 - 4K 직캠 FANCAM')
+  assert.equal(resolved.index, 16)
+  assert.equal(resolved.item.title, 'MIC DROP')
+})
+
+test('the correct control programme is selected from the video source', () => {
+  assert.equal(programForVideo({ kind: 'playlist' }).items, WATCH_ITEMS)
+  assert.equal(programForVideo({ kind: 'list', listId: GOYANG_PLAYLIST.listId }).items, GOYANG_ITEMS)
+  assert.equal(programForVideo({ kind: 'list', listId: 'another-list' }), null)
+})
+
+test('every real Goyang YouTube title resolves to its authored identity', () => {
+  const titles = [
+    '260409 - SOUNDCHECK - SWIM - BTS - GOYANG D1 - 4K 직캠 FANCAM',
+    '260409 - SOUNDCHECK - NORMAL - BTS - GOYANG D1 - 4K 직캠 FANCAM',
+    '260409 - SOUNDCHECK - Hooligan - BTS - GOYANG D1 - 4K 직캠 FANCAM',
+    '260409 - Hooligan - BTS - GOYANG D1 - 4K 직캠 FANCAM',
+    '260409 - Aliens - BTS - GOYANG D1 - 4K 직캠 FANCAM',
+    '260409 - Run BTS (달려라 방탄) - BTS - GOYANG D1 - 4K 직캠 FANCAM',
+    '260409 - First Ment',
+    "260409 - they don't know 'bout us - BTS - GOYANG D1 - 4K 직캠 FANCAM",
+    '260409 - Like Animals - BTS - GOYANG D1 - 4K 직캠 FANCAM',
+    '260409 - Fake Love - BTS - GOYANG D1 - 4K 직캠 FANCAM',
+    '260409 - SWIM - BTS - GOYANG D1 - 4K 직캠 FANCAM',
+    '260409 - Merry Go Round - BTS - GOYANG D1 - 4K 직캠 FANCAM',
+    '260409 - 2.0 - BTS - GOYANG D1 - 4K 직캠 FANCAM',
+    '260409 - NORMAL - BTS - GOYANG D1 - 4K 직캠 FANCAM',
+    '260409 - 2nd Ment',
+    '260409 - Not Today - BTS - GOYANG D1 - 4K 직캠 FANCAM',
+    '260409 - Mic Drop - BTS - GOYANG D1 - 4K 직캠 FANCAM',
+    '260409 - FYA + Fire - BTS - GOYANG D1 - 4K 직캠 FANCAM',
+    '260409 - 3rd Ment - BTS - GOYANG D1 - 4K 직캠 FANCAM',
+    '260409 - Body to Body - BTS - GOYANG D1 - 4K 직캠 FANCAM',
+    '260409 - Come Over - BTS - GOYANG D1 - 4K 직캠 FANCAM',
+    '260409 - Butter - BTS - GOYANG D1 - 4K 직캠 FANCAM',
+    '260409 - Dynamite - BTS - GOYANG D1 - 4K 직캠 FANCAM',
+    '260409 - Mikrokosmos - BTS - GOYANG D1 - 4K Fancam',
+    '260409 - I NEED U - BTS - GOYANG D1 - 4K 직캠 FANCAM',
+    '260409 - Final Ment - BTS - GOYANG D1 - 4K 직캠 FANCAM',
+    '260409 - Please - BTS - GOYANG D1 - 4K 직캠 FANCAM',
+    '260409 - Into The Sun - BTS - GOYANG D1 - 4K 직캠 FANCAM',
+  ]
+  assert.equal(titles.length, GOYANG_ITEMS.length)
+  titles.forEach((title, index) => assert.equal(resolveGoyangMoment(index, 0, title).title, GOYANG_ITEMS[index].title))
 })
 
 test('given BPMs; fast songs sway at half-time while the light keeps the real tempo', () => {
@@ -64,7 +133,7 @@ test('window moments are states: on inside their stretch, off outside, fine afte
 })
 
 test('every item has a known style; every moment is well-formed', () => {
-  const segs = WATCH_ITEMS.flatMap((it) => it.kind === 'segmented' ? it.segments : [it])
+  const segs = [...WATCH_ITEMS, ...GOYANG_ITEMS].flatMap((it) => it.kind === 'segmented' ? it.segments : [it])
   for (const s of segs) {
     assert.ok(STYLES.includes(s.style), `${s.title} style`)
     if (s.kind !== 'performance') assert.equal(s.moments.length, 0, 'Ments stay calm: no moments')
@@ -105,12 +174,21 @@ test('UP NEXT names the next playlist item', () => {
   assert.equal(upNext(14, 2), null) // Mikrokosmos is the last thing
 })
 
+test('Goyang UP NEXT follows its 28-video sequence including ments', () => {
+  assert.equal(goyangUpNext(0).title, 'NORMAL')
+  assert.equal(goyangUpNext(5).title, 'FIRST MENT')
+  assert.equal(goyangUpNext(25).title, 'Please')
+  assert.equal(goyangUpNext(27), null)
+})
+
 test('every song concert colour is offered for the ARMY Bomb, in playlist order', () => {
   assert.deepEqual(SONG_BOMB_COLORS.map((c) => c.label), [
     'Body to Body', 'Hooligan', '2.0', 'Butter', 'MIC DROP', 'Aliens', 'FYA',
-    'SWIM', 'Like Animals', 'NORMAL', 'Dynamite', 'Mikrokosmos',
+    'SWIM', 'Like Animals', 'NORMAL', 'Dynamite', 'Mikrokosmos', 'Run BTS',
+    "they don't know 'bout us", 'FAKE LOVE', 'Merry Go Round', 'Not Today',
+    'FYA + FIRE', 'Come Over', 'I NEED U', 'Please', 'Into the Sun',
   ])
-  const perfs = WATCH_ITEMS.flatMap((it) => it.segments || [it]).filter((it) => it.kind === 'performance')
+  const perfs = [...WATCH_ITEMS, ...GOYANG_ITEMS].flatMap((it) => it.segments || [it]).filter((it) => it.kind === 'performance')
   for (const p of perfs) {
     assert.ok(SONG_BOMB_COLORS.some((c) => c.label === p.title && c.color === PALETTES[p.palette].glow), p.title)
   }
