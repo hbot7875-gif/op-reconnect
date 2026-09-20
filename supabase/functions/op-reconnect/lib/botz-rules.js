@@ -18,6 +18,10 @@ export function annotateBotzStreams(rows, context = {}) {
     let matchedFilledGoal = false
     let matchedBeforeStart = false
 
+    // Already decided by the battle ledger server-side (signal-log.ts), so
+    // there is nothing to allocate here: the play either counted or it didn't.
+    if (row.recelebrate) row.attributions.push({ kind: 'recelebrate', ...row.recelebrate })
+
     if (birthday && row.at >= birthday.activeFrom && row.at <= birthday.activeTo) {
       const matchingSlots = birthday.slots.filter((candidate) => candidate.keys.includes(row.key))
       const slot = matchingSlots.find((candidate) => candidate.credited < candidate.limit)

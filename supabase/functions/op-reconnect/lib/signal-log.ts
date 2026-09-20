@@ -15,6 +15,7 @@ import { annotateBotzStreams, botzSourceSetup, botzTrackingState } from './botz-
 import { flagStreamRows, findPossibleAlts, flagExcessStreamDays } from './police-check.ts'
 import { suggestedModeFor } from './mode-guard.ts'
 import { resolveEquippedBadges } from './badge-profile.ts'
+import { RECELEBRATE_EVENT_ID } from './recelebrate-tracks.js'
 
 export async function getSignalLog(supabase: SupabaseDB, params: Record<string, unknown>) {
   const agentNo = String(params.agentNo || '').trim().toUpperCase()
@@ -51,7 +52,7 @@ export async function getSignalLog(supabase: SupabaseDB, params: Record<string, 
   // already filled before the rolling 24h feed begins.
   const attributionFrom = kstDayBounds(earliestDate).fromTs
 
-  const [{ rows, ok }, activeRes, rollupRes] = await Promise.all([
+  const [{ rows, ok }, activeRes, rollupRes, battleRes] = await Promise.all([
     fetchStreamRows(supabase, agentRow, attributionFrom, now, limits(content).lbMaxPages),
     supabase.from('rc_player_districts')
       .select('district_id, goals, baseline, activated_at')
@@ -59,8 +60,19 @@ export async function getSignalLog(supabase: SupabaseDB, params: Record<string, 
     supabase.from('rc_daily_activity')
       .select('kst_date, track_counts, transmission')
       .eq('agent_no', agentNo).lte('kst_date', today).order('kst_date'),
+    // The agent's own rows in the RE:CELEBRATE battle ledger. This is the
+    // same ledger the scoreboard adds up, so a stream is tagged here only if
+    // it actually counted for their side. Outside the event it comes back
+    // empty and nothing is tagged.
+    supabase.from('rc_recelebrate_battle_streams')
+      .select('listened_at, track_name')
+      .eq('event_id', RECELEBRATE_EVENT_ID).eq('agent_no', agentNo)
+      .gte('listened_at', attributionFrom),
   ])
   rows.sort((a, b) => b.listened_at - a.listened_at)
+  // Keyed on the ledger's own identity for a play: when it was heard, and
+  // the track name as the source reported it.
+  const battleHits = new Set((battleRes.data || []).map((r: any) => `${r.listened_at}|${r.track_name}`))
 
   const allStreams: any[] = rows.map((r) => {
     const key = normKeyFull(r.track_name)
@@ -74,6 +86,8 @@ export async function getSignalLog(supabase: SupabaseDB, params: Record<string, 
       eligible,
       reason: eligible ? null : 'artist_not_eligible',
       source: botzSourceSetup(agentRow).source,
+      recelebrate: battleHits.has(`${r.listened_at}|${r.track_name}`)
+        ? { id: RECELEBRATE_EVENT_ID, label: 'RE:CELEBRATE' } : null,
     }
   })
 
@@ -135,7 +149,8 @@ export async function getSignalLog(supabase: SupabaseDB, params: Record<string, 
 
   annotateBotzStreams(allStreams, { district: districtContext, birthday: birthdayContext })
   const visibleStreams = allStreams.filter((stream) => stream.at >= from)
-  const streams = visibleStreams.slice(0, 50).map(({ key: _key, ...stream }) => stream)
+  const streams = visibleStreams.slice(0, 50)
+    .map(({ key: _key, recelebrate: _rc, ...stream }) => stream)
   const todayStreams = allStreams.filter((stream) => kstDateOf(stream.at) === today)
   const helpedToday = todayStreams.filter((stream) => stream.attributions.length > 0)
   const missions: any[] = []
