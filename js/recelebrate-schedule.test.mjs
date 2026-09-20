@@ -47,7 +47,7 @@ test('videos: SWIM, the pre-show intro, COMEBACK LIVE and GOYANG use their autho
   assert.deepEqual(v.swim, { kind: 'video', youtubeId: 'b4iVv91Z6lY', track: 'SWIM' })
   assert.deepEqual(v['comeback-intro'], { kind: 'video', youtubeId: 'd5NlnTQ_W_8' })
   assert.deepEqual(v['comeback-live'], { kind: 'playlist' })
-  assert.deepEqual(v.goyang, { kind: 'list', listId: 'PLW2azHF4TGkE_xDKcIJ0dzehxk7BFGrO9', firstVideoId: 'FnS_t3uLNk4' })
+  assert.deepEqual(v.goyang, { kind: 'list', listId: 'PLSvbD_xz9XGADdXCKhhpcdvH25SEeUCZ9', firstVideoId: 'BRzkjoWq15g' })
 })
 
 test('the stage follows the live event, else the next one, else the latest replay', () => {

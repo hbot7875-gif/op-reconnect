@@ -36,9 +36,9 @@ export const WATCH_SCHEDULE = [
   { id: 'comeback-live', title: 'COMEBACK LIVE', startsAtIso: '2026-09-20T05:30:00.000Z',
     video: { kind: 'playlist' } },
   // 6:00 PM IST
-  // Goyang Day 1 (260409), K-PLANET's full-concert 4K fancam playlist.
+  // Goyang Day 1 (260409), powdrrrpuff's 28-video concert playlist.
   { id: 'goyang', title: 'GOYANG', startsAtIso: '2026-09-20T12:30:00.000Z',
-    video: { kind: 'list', listId: 'PLW2azHF4TGkE_xDKcIJ0dzehxk7BFGrO9', firstVideoId: 'FnS_t3uLNk4' } },
+    video: { kind: 'list', listId: 'PLSvbD_xz9XGADdXCKhhpcdvH25SEeUCZ9', firstVideoId: 'BRzkjoWq15g' } },
 ]
 
 /** "9:30 AM", always in the schedule's own timezone (IST), whatever the
