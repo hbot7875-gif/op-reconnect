@@ -349,8 +349,10 @@ function myStreamsBlock(b, me) {
   if (!me || !pass?.team) return ''
   const side = SIDES[pass.team]
   const titles = new Map((b.tracks || []).map((t) => [t.trackId, t.title]))
-  const top = Object.entries(me.byTrack || {})
-    .sort((x, y) => y[1] - x[1]).slice(0, 3)
+  // Every track they've actually counted on, most played first — not a top
+  // three: an agent who streamed all 17 should see all 17.
+  const counted = Object.entries(me.byTrack || {}).sort((x, y) => y[1] - x[1])
+  const top = counted
     .map(([id, n]) => `<li><span>${esc(titles.get(id) || id)}</span><b>${fmt(n)}</b></li>`).join('')
   return `
     <div class="rcp-mine is-${pass.team}">
@@ -359,7 +361,7 @@ function myStreamsBlock(b, me) {
         <b class="rcp-mine-total">${fmt(me.total)}</b>
       </div>
       <div class="rcp-mine-sub">${me.total
-        ? `counted for ${side.icon} ${side.name}`
+        ? `counted for ${side.icon} ${side.name} · ${counted.length} of 17 tracks`
         : 'nothing counted yet — stream any of the 17 tracks'}</div>
       ${top ? `<ul class="rcp-mine-tracks">${top}</ul>` : ''}
     </div>`
