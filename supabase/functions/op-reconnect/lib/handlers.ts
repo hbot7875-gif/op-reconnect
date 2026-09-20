@@ -439,7 +439,12 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
 
   // A review hint only. Provider totals cannot prove device count, so this
   // must never change the player or rewrite their frozen district goals.
-  const modeReview = await getModeVolumeReview(supabase, player.agent_no, player.mode)
+  // AGENT120 asked not to receive the automatic mode-review interruption.
+  // Keep the underlying self-check available in Moon Station; this only
+  // suppresses the unsolicited sheet returned with normal game-state polls.
+  const modeReview = player.agent_no === 'AGENT120'
+    ? null
+    : await getModeVolumeReview(supabase, player.agent_no, player.mode)
   const { data: badgeRows } = await supabase.from('rc_badges').select('badge_id').eq('agent_no', player.agent_no)
 
   // ── The shelf + Pack collection ──────────────────────────────
