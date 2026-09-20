@@ -4875,20 +4875,42 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .rcp-strip i.is-tied{background:rgba(255,255,255,.28)}
 .rcp-strip i.is-aliens{background:var(--rcp-a)}
 /* The agent's own counted streams — the same ledger the scoreboard adds up. */
-.rcp-mine{margin:0 0 10px;padding:9px 11px;border-radius:12px;border:1px solid rgba(255,255,255,.09);
+.rcp-mine{margin:0 0 10px;border-radius:12px;border:1px solid rgba(255,255,255,.09);overflow:hidden;
   background:linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,.015))}
 .rcp-mine.is-hooligans{border-color:rgba(255,207,74,.35)}
 .rcp-mine.is-aliens{border-color:rgba(121,240,164,.35)}
-.rcp-mine-top{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.rcp-mine summary{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:'copy total' 'copy toggle';align-items:center;
+  gap:1px 10px;padding:9px 11px;cursor:pointer;list-style:none}
+.rcp-mine summary::-webkit-details-marker{display:none}
+.rcp-mine-copy{grid-area:copy;display:flex;min-width:0;flex-direction:column;gap:2px}
 .rcp-mine-label{font:9px var(--mono);letter-spacing:1.8px;color:#f6c3dc}
-.rcp-mine-total{font-family:var(--disp);font-weight:800;font-size:26px;line-height:1;color:#fff;font-variant-numeric:tabular-nums}
+.rcp-mine-total{grid-area:total;justify-self:end;font-family:var(--disp);font-weight:800;font-size:26px;line-height:1;color:#fff;font-variant-numeric:tabular-nums}
 .rcp-mine.is-hooligans .rcp-mine-total{color:var(--rcp-h)}
 .rcp-mine.is-aliens .rcp-mine-total{color:var(--rcp-a)}
-.rcp-mine-sub{margin-top:2px;font-size:11px;color:var(--muted)}
+.rcp-mine-sub{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--muted)}
+.rcp-mine-toggle{grid-area:toggle;justify-self:end;font:8px var(--mono);letter-spacing:1px;color:var(--muted)}
+.rcp-mine-toggle::after{content:'  ▾'}
+.rcp-mine-toggle .when-open{display:none}
+.rcp-mine[open] .rcp-mine-toggle{color:#f6c3dc}
+.rcp-mine[open] .rcp-mine-toggle .when-open{display:inline}
+.rcp-mine[open] .rcp-mine-toggle .when-closed{display:none}
+.rcp-mine[open] .rcp-mine-toggle::after{content:'  ▴'}
+.rcp-mine-body{padding:0 11px 10px;border-top:1px solid rgba(255,255,255,.06)}
+.rcp-mine-help{padding-top:8px;font:8px var(--mono);letter-spacing:1.2px;color:var(--muted)}
 .rcp-mine-tracks{list-style:none;margin:7px 0 0;padding:0;display:flex;flex-direction:column;gap:3px}
 .rcp-mine-tracks li{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:#d9d3da}
 .rcp-mine-tracks li span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rcp-mine-tracks li b{font:11px var(--mono);color:#f1ecf0;font-weight:400}
+.rcp-mine-empty{margin:7px 0 0;font-size:11px;color:var(--muted)}
+.rcp-next{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:'label label' 'title note';align-items:baseline;
+  gap:3px 10px;margin:0 0 10px;padding:8px 10px;border-left:2px solid var(--rcp-red);background:rgba(200,52,63,.07)}
+.rcp-next>span{grid-area:label;font:8px var(--mono);letter-spacing:1.4px;color:#f39cc8}
+.rcp-next>b{grid-area:title;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:#f3eef2}
+.rcp-next>small{grid-area:note;justify-self:end;font:9px var(--mono);color:var(--muted);white-space:nowrap}
+@media(max-width:359px){
+  .rcp-next{grid-template-columns:1fr;grid-template-areas:'label' 'title' 'note'}
+  .rcp-next>small{justify-self:start;white-space:normal}
+}
 .rcp-battle-note{font:9px var(--mono);letter-spacing:.8px;color:var(--muted);margin-bottom:10px}
 .rcp-battle-note b{color:#f39cc8;font-weight:400}
 /* The agent's own standing, and the rules for anyone arriving mid-party. */

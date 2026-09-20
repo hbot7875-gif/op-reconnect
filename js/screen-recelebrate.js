@@ -227,6 +227,8 @@ const fmt = (n) => Number(n || 0).toLocaleString('en-US')
 // device. The battle panel is rebuilt on every poll, so the state lives here.
 const HOW_KEY = 'rc-rcp-battle-how-closed'
 let howOpen = (() => { try { return localStorage.getItem(HOW_KEY) !== '1' } catch { return true } })()
+const MINE_KEY = 'rc-rcp-my-streams-open'
+let mineOpen = (() => { try { return localStorage.getItem(MINE_KEY) === '1' } catch { return false } })()
 
 // Mirrors the server's rules (lib/recelebrate-battle.ts and the
 // rc_recelebrate_battle migration): 17 tracks, plays from the agent's own
@@ -256,6 +258,10 @@ function battleShell(inner) {
   sec.querySelector('.rcp-how').addEventListener('toggle', (e) => {
     howOpen = e.currentTarget.open
     try { localStorage.setItem(HOW_KEY, howOpen ? '0' : '1') } catch { /* per-visit only */ }
+  })
+  sec.querySelector('.rcp-mine')?.addEventListener('toggle', (e) => {
+    mineOpen = e.currentTarget.open
+    try { localStorage.setItem(MINE_KEY, mineOpen ? '1' : '0') } catch { /* per-visit only */ }
   })
   queueMicrotask(paintBattleMe)
   return sec
@@ -336,6 +342,7 @@ function battleArea(b, me) {
       ${(b.tracks || []).map((t) => `<i class="is-${t.leader}"></i>`).join('')}
     </div>
     ${myStreamsBlock(b, me)}
+    ${nextMoveBlock(b)}
     <div class="rcp-battle-note">${note}</div>
     <ol class="rcp-tracks">${rows}</ol>
   `)
@@ -355,16 +362,42 @@ function myStreamsBlock(b, me) {
   const top = counted
     .map(([id, n]) => `<li><span>${esc(titles.get(id) || id)}</span><b>${fmt(n)}</b></li>`).join('')
   return `
-    <div class="rcp-mine is-${pass.team}">
-      <div class="rcp-mine-top">
-        <span class="rcp-mine-label">UR STREAMS</span>
+    <details class="rcp-mine is-${pass.team}"${mineOpen ? ' open' : ''}>
+      <summary>
+        <span class="rcp-mine-copy">
+          <span class="rcp-mine-label">YOUR STREAMS</span>
+          <span class="rcp-mine-sub">${me.total
+            ? `${counted.length} of 17 tracks · ${side.icon} ${side.name}`
+            : `Nothing counted yet · ${side.icon} ${side.name}`}</span>
+        </span>
         <b class="rcp-mine-total">${fmt(me.total)}</b>
+        <span class="rcp-mine-toggle"><span class="when-closed">VIEW</span><span class="when-open">HIDE</span></span>
+      </summary>
+      <div class="rcp-mine-body">
+        <div class="rcp-mine-help">Counted track breakdown</div>
+        ${top ? `<ul class="rcp-mine-tracks">${top}</ul>` : '<p class="rcp-mine-empty">Stream any battle track to start your list.</p>'}
       </div>
-      <div class="rcp-mine-sub">${me.total
-        ? `counted for ${side.icon} ${side.name} · ${counted.length} of 17 tracks`
-        : 'nothing counted yet — stream any of the 17 tracks'}</div>
-      ${top ? `<ul class="rcp-mine-tracks">${top}</ul>` : ''}
-    </div>`
+    </details>`
+}
+
+// One useful decision from the existing scoreboard, without inventing a new
+// goal system. It answers “what should I stream next?” at a glance and stays
+// deliberately smaller than the actual battle score.
+function nextMoveBlock(b) {
+  if (b.status !== 'active') return ''
+  const pass = getCachedPartyPass()
+  if (!pass?.team || !Array.isArray(b.tracks) || !b.tracks.length) return ''
+  const us = pass.team
+  const other = us === 'hooligans' ? 'aliens' : 'hooligans'
+  const icon = SIDES[us].icon
+  const tracks = b.tracks.map((t) => ({ ...t, margin: Number(t[us] || 0) - Number(t[other] || 0) }))
+  const needsHelp = tracks.filter((t) => t.margin <= 0).sort((a, z) => z.margin - a.margin)[0]
+  if (needsHelp) {
+    const needed = 1 - needsHelp.margin
+    return `<div class="rcp-next"><span>CLOSEST TRACK TO FLIP</span><b>${esc(needsHelp.title)}</b><small>${fmt(needed)} more ${needed === 1 ? 'stream puts' : 'streams put'} ${icon} ahead</small></div>`
+  }
+  const narrowest = tracks.sort((a, z) => a.margin - z.margin)[0]
+  return `<div class="rcp-next"><span>PROTECT THIS LEAD</span><b>${esc(narrowest.title)}</b><small>${icon} ahead by ${fmt(narrowest.margin)}</small></div>`
 }
 
 function finalNote(b) {
