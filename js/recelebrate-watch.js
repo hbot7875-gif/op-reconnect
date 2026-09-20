@@ -29,6 +29,7 @@
 // level, glow strength and dark/brownout state always stay the real charge.
 
 import { el, esc } from './state.js'
+import { call } from './api.js'
 import { armyBombCharge, armyBombInnerHtml } from './army-bomb.js'
 import { WATCH_SCHEDULE_DAY, PREMIERE_LEAD_MS, watchScheduleStates, defaultStageEvent, fmtCountdown, scheduleNow } from './recelebrate-schedule.js'
 import { WATCH_PLAYLIST, WATCH_ITEMS, SONG_BOMB_COLORS, EXTRA_BOMB_COLORS, resolveMoment, activeMoments, cuesCrossed, programForVideo } from './recelebrate-watch-program.js'
@@ -104,7 +105,8 @@ export function createWatchStage({ partyEndsAtIso } = {}) {
           <span class="rcp-premiere-title"></span>
           <span class="rcp-premiere-when"></span>
         </div>
-      </div></div>
+      </div>
+</div>
       <div class="rcp-uplights" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
       <div class="rcp-hero" role="img" aria-label="Your ARMY Bomb"><div class="army-core rcp-hero-core"></div></div>
       <div class="rcp-fx" aria-hidden="true"></div>
@@ -153,6 +155,7 @@ export function createWatchStage({ partyEndsAtIso } = {}) {
     </div>
     <div class="rcp-watch-note" hidden></div>
   `
+
 
   const stage = sec.querySelector('.rcp-stage')
   const signLabel = sec.querySelector('.rcp-sign-label em')
@@ -698,11 +701,21 @@ export function createWatchStage({ partyEndsAtIso } = {}) {
       paintPremiere()
     },
     // Review aids (dev only; exposed as window.__rcpWatch in DEV builds).
-    // Paint a moment of the programme without playing the video.
-    previewMoment(index, t, { status = 'NOW PLAYING', duration = 0 } = {}) {
-      ev = { id: 'preview', title: '', video: { kind: 'playlist' } }
+    // Load a real playlist entry behind the normal play button. Playback still
+    // goes through the production YouTube/currentTime path after the click.
+    previewEvent({ title = 'GOYANG PREVIEW', video, index = 0, time = 0 } = {}) {
+      if (!video) return
       pinned = true
-      const m = resolveMoment(index, t)
+      pinnedUntilLive = false
+      loadEvent({ id: 'preview', title, state: 'replay', timeLabel: '', video })
+      const show = programForVideo(video)
+      if (show) apply(show.resolveMoment(index, time))
+    },
+    // Paint a moment of the programme without playing the video.
+    previewMoment(index, t, { status = 'NOW PLAYING', duration = 0, video = { kind: 'playlist' } } = {}) {
+      ev = { id: 'preview', title: '', video }
+      pinned = true
+      const m = (programForVideo(video) || programForVideo({ kind: 'playlist' })).resolveMoment(index, t)
       apply(m)
       setMoments(activeMoments(m, t, duration))
       setStatus(status === 'NOW PLAYING' ? m.label : status, 'is-playing')

@@ -1,0 +1,18 @@
+{
+  "version": "5",
+  "remote": {
+    "https://deno.land/std@0.224.0/encoding/_util.ts": "beacef316c1255da9bc8e95afb1fa56ed69baef919c88dc06ae6cb7a6103d376",
+    "https://deno.land/std@0.224.0/encoding/base64.ts": "dd59695391584c8ffc5a296ba82bcdba6dd8a84d41a6a539fbee8e5075286eaf"
+  },
+  "workspace": {
+    "packageJson": {
+      "dependencies": [
+        "npm:@tesseract.js-data/eng@1.0.0",
+        "npm:terser@^5.48.0",
+        "npm:tesseract.js@5.1.1",
+        "npm:vite@^6.4.0",
+        "npm:wrangler@^4.118.0"
+      ]
+    }
+  }
+}

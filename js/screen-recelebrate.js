@@ -14,8 +14,8 @@
 // Battle is REAL: it reads getRecelebrateBattle (lib/recelebrate-battle.ts),
 // whose totals, leaders, differences and final result are all computed on
 // the server from accepted scrobbles. Watch is driven by
-// recelebrate-watch-program.js via recelebrate-watch.js. Chat has no backend
-// yet: see recelebrate-chat.js.
+// recelebrate-watch-program.js via recelebrate-watch.js. Party Chat is the
+// event-scoped shared room implemented in recelebrate-chat.js.
 
 import { el, esc } from './state.js'
 import { call } from './api.js'
@@ -34,7 +34,10 @@ const SIDES = {
   aliens: { name: 'ALIENS', icon: '🛸' },
 }
 
-let activeTab = 'watch'
+// Opening on BATTLE: the scoreboard is what the party is for, and it's the
+// one thing an agent can act on the moment they arrive. Watch is a tap away
+// (and on desktop both are on screen anyway).
+let activeTab = 'battle'
 let root = null
 let watch = null
 
@@ -107,7 +110,7 @@ async function loadBattle() {
   const res = await call('getRecelebrateBattle', { agentNo: getAgentNo() })
   const area = root?.querySelector('.rcp-battle')
   if (!area?.isConnected) return
-  area.replaceWith(res?.success && res.battle ? battleArea(res.battle) : battleUnavailable())
+  area.replaceWith(res?.success && res.battle ? battleArea(res.battle, res.me) : battleUnavailable())
   battleTimer = setTimeout(() => { if (root?.isConnected) loadBattle() }, BATTLE_POLL_MS)
 }
 
@@ -190,7 +193,9 @@ function tabs() {
 
 function room() {
   const r = el('div', 'rcp-room')
-  watch = createWatchStage({ partyEndsAtIso: ARIRANG_RECELEBRATE.endsAtIso })
+  watch = createWatchStage({
+    partyEndsAtIso: ARIRANG_RECELEBRATE.endsAtIso,
+  })
   const chat = createPartyChat({
     getSide: () => getCachedPartyPass()?.team || null,
     // Phone, Watch tab: the drawer covers the lower screen, so bring the
@@ -287,7 +292,7 @@ function battleUnavailable() {
   return battleShell(`<div class="rcp-battle-empty">Scoreboard unavailable right now — it'll refresh on its own.</div>`)
 }
 
-function battleArea(b) {
+function battleArea(b, me) {
   const final = b.status === 'final'
   const h = final ? b.hooligansWon : b.hooligansLeading
   const a = final ? b.aliensWon : b.aliensLeading
@@ -330,9 +335,34 @@ function battleArea(b) {
     <div class="rcp-strip" aria-hidden="true">
       ${(b.tracks || []).map((t) => `<i class="is-${t.leader}"></i>`).join('')}
     </div>
+    ${myStreamsBlock(b, me)}
     <div class="rcp-battle-note">${note}</div>
     <ol class="rcp-tracks">${rows}</ol>
   `)
+}
+
+// The agent's own counted streams, from the same ledger the scoreboard adds
+// up (getRecelebrateBattle's `me`). Shown once they have a side; a plain 0
+// is honest — it means nothing has qualified yet, not that it's broken.
+function myStreamsBlock(b, me) {
+  const pass = getCachedPartyPass()
+  if (!me || !pass?.team) return ''
+  const side = SIDES[pass.team]
+  const titles = new Map((b.tracks || []).map((t) => [t.trackId, t.title]))
+  const top = Object.entries(me.byTrack || {})
+    .sort((x, y) => y[1] - x[1]).slice(0, 3)
+    .map(([id, n]) => `<li><span>${esc(titles.get(id) || id)}</span><b>${fmt(n)}</b></li>`).join('')
+  return `
+    <div class="rcp-mine is-${pass.team}">
+      <div class="rcp-mine-top">
+        <span class="rcp-mine-label">UR STREAMS</span>
+        <b class="rcp-mine-total">${fmt(me.total)}</b>
+      </div>
+      <div class="rcp-mine-sub">${me.total
+        ? `counted for ${side.icon} ${side.name}`
+        : 'nothing counted yet — stream any of the 17 tracks'}</div>
+      ${top ? `<ul class="rcp-mine-tracks">${top}</ul>` : ''}
+    </div>`
 }
 
 function finalNote(b) {

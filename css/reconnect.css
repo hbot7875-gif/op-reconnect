@@ -4874,6 +4874,21 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .rcp-strip i.is-hooligans{background:var(--rcp-h)}
 .rcp-strip i.is-tied{background:rgba(255,255,255,.28)}
 .rcp-strip i.is-aliens{background:var(--rcp-a)}
+/* The agent's own counted streams — the same ledger the scoreboard adds up. */
+.rcp-mine{margin:0 0 10px;padding:9px 11px;border-radius:12px;border:1px solid rgba(255,255,255,.09);
+  background:linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,.015))}
+.rcp-mine.is-hooligans{border-color:rgba(255,207,74,.35)}
+.rcp-mine.is-aliens{border-color:rgba(121,240,164,.35)}
+.rcp-mine-top{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.rcp-mine-label{font:9px var(--mono);letter-spacing:1.8px;color:#f6c3dc}
+.rcp-mine-total{font-family:var(--disp);font-weight:800;font-size:26px;line-height:1;color:#fff;font-variant-numeric:tabular-nums}
+.rcp-mine.is-hooligans .rcp-mine-total{color:var(--rcp-h)}
+.rcp-mine.is-aliens .rcp-mine-total{color:var(--rcp-a)}
+.rcp-mine-sub{margin-top:2px;font-size:11px;color:var(--muted)}
+.rcp-mine-tracks{list-style:none;margin:7px 0 0;padding:0;display:flex;flex-direction:column;gap:3px}
+.rcp-mine-tracks li{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:#d9d3da}
+.rcp-mine-tracks li span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rcp-mine-tracks li b{font:11px var(--mono);color:#f1ecf0;font-weight:400}
 .rcp-battle-note{font:9px var(--mono);letter-spacing:.8px;color:var(--muted);margin-bottom:10px}
 .rcp-battle-note b{color:#f39cc8;font-weight:400}
 /* The agent's own standing, and the rules for anyone arriving mid-party. */
@@ -5152,6 +5167,7 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .rcp-conf.is-r{right:calc(var(--x) * .12)}
 @keyframes rcpConf{0%{opacity:0;transform:translateY(0) rotate(0)}12%{opacity:1}
   100%{opacity:0;transform:translateY(calc(var(--rise) * -4)) rotate(var(--spin))}}
+
 .rcp-program{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:stretch}
 .rcp-slot{display:flex;flex-direction:column;gap:3px;padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.02)}
 .rcp-slot.is-now{border-color:rgba(200,52,63,.55)}
@@ -5391,11 +5407,11 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .rcp-chat-empty{margin:auto;padding:20px;text-align:center;color:var(--muted);font-size:13px}
 .rcp-chat-status{margin:8px 0 0;text-align:center;color:#f6c3dc;font:9px var(--mono);letter-spacing:1.15px}
 .rcp-chat-status.is-error{color:#ff9aa4}
-.rcp-say input:disabled,.rcp-say button:disabled{opacity:.45;cursor:not-allowed}
 .rcp-say{display:flex;gap:6px;margin-top:10px}
 .rcp-say input{flex:1;min-width:0;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.1);background:rgba(0,0,0,.35);color:#fff;font:inherit;font-size:14px}
 .rcp-say input:focus{outline:none;border-color:rgba(243,156,200,.55)}
 .rcp-say button{padding:0 14px;border-radius:10px;border:0;background:var(--rcp-red);color:#fff;font:11px var(--mono);letter-spacing:1.4px;cursor:pointer}
+.rcp-say input:disabled,.rcp-say button:disabled{opacity:.45;cursor:not-allowed}
 @media (min-width: 980px) {
   .rcp-chat.is-min,.rcp-chat.is-hidden{overflow:hidden}
   .rcp-chat.is-min .rcp-chat-panel,.rcp-chat.is-hidden .rcp-chat-panel{display:none}

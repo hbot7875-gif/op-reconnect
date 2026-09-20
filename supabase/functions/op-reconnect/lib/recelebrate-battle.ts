@@ -138,8 +138,27 @@ async function refreshBattle(supabase: SupabaseDB, content: GameContent, eventId
 /** The Party page's Battle read. Refreshes at most every 20s (one sweeper at
  *  a time, claimed in SQL), freezes the result once the post-event sync
  *  grace has passed, and always answers from the server's own board. */
-export async function getRecelebrateBattle(supabase: SupabaseDB, _params: any) {
+/** This agent's own counted streams: the exact total, plus how they split
+ *  across the 17 tracks. Read straight from the ledger (its primary key
+ *  starts event_id, agent_no), so it is the same source the scoreboard adds
+ *  up — never an estimate. Only plays that qualified are in there. */
+async function myStreams(supabase: SupabaseDB, eventId: string, agentNo: string) {
+  if (!agentNo) return null
+  const { count, error } = await supabase.from('rc_recelebrate_battle_streams')
+    .select('scrobble_id', { count: 'exact', head: true })
+    .eq('event_id', eventId).eq('agent_no', agentNo)
+  if (error) return null
+  // The breakdown reads rows; the total above stays exact however many there are.
+  const { data: rows } = await supabase.from('rc_recelebrate_battle_streams')
+    .select('track_id').eq('event_id', eventId).eq('agent_no', agentNo).limit(2000)
+  const byTrack: Record<string, number> = {}
+  for (const row of rows || []) byTrack[row.track_id] = (byTrack[row.track_id] || 0) + 1
+  return { total: count ?? 0, byTrack, partial: (rows?.length || 0) < (count ?? 0) }
+}
+
+export async function getRecelebrateBattle(supabase: SupabaseDB, params: any) {
   const eventId = RECELEBRATE_EVENT_ID
+  const agentNo = String(params?.agentNo || '').trim().toUpperCase()
   const { data: state } = await supabase.from('rc_recelebrate_battle_state')
     .select('opens_at, ends_at, finalize_after, finalized_at').eq('event_id', eventId).maybeSingle()
   if (!state) return { success: false, error: 'battle_not_configured' }
@@ -155,5 +174,5 @@ export async function getRecelebrateBattle(supabase: SupabaseDB, _params: any) {
   }
   const { data: board, error } = await supabase.rpc('rc_recelebrate_battle_board', { p_event: eventId })
   if (error) return { success: false, error: error.message }
-  return { success: true, battle: board }
+  return { success: true, battle: board, me: await myStreams(supabase, eventId, agentNo) }
 }
