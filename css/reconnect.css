@@ -5012,7 +5012,7 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .rcp-keepsake:after{content:'';position:absolute;inset:0;opacity:.2;pointer-events:none;background-image:repeating-linear-gradient(0deg,transparent 0 3px,rgba(255,255,255,.025) 3px 4px)}
 .rcp-keepsake small{font:8px var(--mono);letter-spacing:1.5px;color:#d9ad5f}
 .rcp-keepsake>span{display:block;margin-top:31px;font:8px var(--mono);letter-spacing:1.4px;color:#f39cc8}
-.rcp-keepsake>strong{display:block;margin-top:5px;font-family:var(--disp);font-size:clamp(23px,8vw,32px);line-height:1;color:#fff;overflow-wrap:anywhere}
+.rcp-keepsake>strong{display:block;margin-top:5px;font-family:var(--disp);font-size:clamp(23px,8vw,32px);line-height:1;color:var(--love-song-color,#f2a8d0);text-shadow:0 0 15px color-mix(in srgb,var(--love-song-color,#f2a8d0) 18%,transparent);overflow-wrap:anywhere}
 .rcp-keepsake footer{position:absolute;z-index:1;left:15px;right:15px;bottom:14px;display:flex;justify-content:space-between;gap:8px;font:7px var(--mono);color:#d4cbd5}
 .rcp-keepsake footer i{font-style:normal}.rcp-keepsake footer i:last-child{text-align:right}
 .rcp-keepsake-view{padding:7px 13px;border:1px solid rgba(243,156,200,.35);border-radius:999px;background:transparent;color:#f6c3dc;font:8px var(--mono);letter-spacing:1.1px;cursor:pointer}

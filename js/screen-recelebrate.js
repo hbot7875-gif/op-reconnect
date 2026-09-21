@@ -455,9 +455,37 @@ function giftButtons() {
   </div>`
 }
 
+// Curated print inks for the physical Love Song keepsake. They are chosen
+// for contrast on the dark sleeve rather than generated from the title, so
+// the same song always has the same little identity.
+const LOVE_SONG_COLORS = {
+  swim: '#22d3ee',
+  'body to body': '#ff6b8f',
+  hooligan: '#ef4444',
+  aliens: '#57d983',
+  fya: '#ff7a32',
+  'merry go round': '#f5a45d',
+  'one more night': '#91a7e8',
+  please: '#ca94f1',
+  'into the sun': '#f2c96d',
+  'no. 29': '#c5a064',
+  normal: '#e8c547',
+  "they don't know 'bout us": '#dc72e9',
+  '2.0': '#68a1f2',
+  'like animals': '#d9664f',
+  'wild flower': '#c2a5ef',
+  haegeum: '#e29a68',
+  "killin' it girl": '#ee91c2',
+}
+
+function loveSongColor(song) {
+  return LOVE_SONG_COLORS[String(song || '').trim().toLowerCase()] || '#f2a8d0'
+}
+
 function loveSongKeepsake(gift) {
   const team = gift.team === 'aliens' ? '🛸 ALIENS' : '⚡ HOOLIGANS'
-  return `<div class="rcp-keepsake"><small>ARIRANG<br>RE:CELEBRATE</small><span>♡ UR LOVE SONG</span><strong>${esc(gift.loveSong || 'ARIRANG')}</strong><footer><i>09.20.26<br>${team}</i><i>I WAS THERE ✦</i></footer></div><button type="button" class="rcp-keepsake-view">VIEW KEEPSAKE</button>`
+  const song = gift.loveSong || 'ARIRANG'
+  return `<div class="rcp-keepsake" style="--love-song-color:${loveSongColor(song)}"><small>ARIRANG<br>RE:CELEBRATE</small><span>♡ UR LOVE SONG</span><strong>${esc(song)}</strong><footer><i>09.20.26<br>${team}</i><i>I WAS THERE ✦</i></footer></div><button type="button" class="rcp-keepsake-view">VIEW KEEPSAKE</button>`
 }
 
 function badgeGift(gift) {
