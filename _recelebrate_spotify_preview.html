@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>After Party · compact vinyl</title>
+  <link rel="stylesheet" href="css/reconnect.css">
+  <style>
+    html,body{margin:0;min-height:100%;background:#08070d;color:#f4eff8}
+    body{display:flex;justify-content:center;padding:24px 0 70px;font-family:Arial,sans-serif}
+    .ap-preview{width:min(100%,375px);padding:16px 14px 20px;background:radial-gradient(circle at 50% 12%,#1b1020 0,#0d0a13 35%,#08070d 70%)}
+    .ap-nav{font:700 10px/1 monospace;letter-spacing:1.8px;color:#91859a;margin-bottom:18px}
+    .mono{font:700 8px/1 monospace;letter-spacing:1.8px;color:#8b789c}
+
+    /* --- stand-ins for the real final-page blocks, to judge density --- */
+    .ap-score{text-align:center;padding:10px 0 8px}
+    .ap-score b{font-size:30px}
+    .ap-score .mono{display:block;margin-bottom:6px;color:#d9ad5f}
+    .ap-block{margin:10px 0;padding:10px;border:1px solid rgba(255,255,255,.08);border-radius:10px;font-size:11px;color:#a095a2}
+    .ap-block b{display:block;color:#fff;font-size:12px;margin-bottom:3px}
+    .ap-gifts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
+    .ap-gifts span{aspect-ratio:1;border-radius:10px;background:linear-gradient(160deg,rgba(217,173,95,.2),rgba(139,92,246,.15));border:1px solid rgba(217,173,95,.35);display:grid;place-items:center;font-size:8px;letter-spacing:1px;color:#ecdcb7}
+
+    /* --- after-party record: vinyl is the player, Spotify compact embed sits under it --- */
+    .rcp-vinyl{margin:12px 0 10px;padding:12px 0 12px;border-top:1px solid rgba(164,64,78,.35);border-bottom:1px solid rgba(164,64,78,.18);text-align:center}
+    .rcp-vinyl-kicker{font:700 8px/1 monospace;letter-spacing:2.2px;color:#bd5969;margin-bottom:12px}
+    .rcp-vinyl-btn{position:relative;display:inline-block;width:128px;height:128px;padding:0;border:0;border-radius:50%;background:transparent;cursor:pointer;-webkit-tap-highlight-color:transparent}
+    .rcp-vinyl-btn:focus-visible{outline:2px solid #d9ad5f;outline-offset:4px}
+    /* Cherry-red ARIRANG pressing: translucent red base, fine grooves, fixed gloss, cream label. */
+    .rcp-vinyl-disc{position:absolute;inset:0;border-radius:50%;overflow:hidden;
+      background:
+        repeating-radial-gradient(circle at 50% 50%,rgba(0,0,0,.16) 0 .5px,rgba(255,255,255,.035) .5px 1px,transparent 1px 2.4px),
+        radial-gradient(circle at 36% 30%,#ff6b62 0,#ec2a33 30%,#c8131f 58%,#9a0b15 82%,#7a0810 100%);
+      border:1px solid #5e060d;box-shadow:0 10px 22px #000b,inset 0 0 0 1.5px rgba(255,255,255,.08),inset 0 0 18px rgba(0,0,0,.35);
+      animation:rcp-vinyl-spin 12s linear infinite;animation-play-state:paused}
+    .rcp-vinyl-btn.playing .rcp-vinyl-disc{animation-play-state:running}
+    @keyframes rcp-vinyl-spin{to{transform:rotate(360deg)}}
+    /* dead wax + label, drawn as a child so they turn with the disc */
+    .rcp-vinyl-label{position:absolute;left:50%;top:50%;width:41%;height:41%;transform:translate(-50%,-50%);border-radius:50%;
+      background:radial-gradient(circle at 40% 35%,#fbf6ec,#efe6d5 70%,#e3d8c4 100%);
+      box-shadow:0 0 0 3px rgba(0,0,0,.28),0 0 0 4px rgba(255,255,255,.06),inset 0 0 0 1px rgba(0,0,0,.08)}
+    .rcp-vinyl-label svg{position:absolute;inset:0;width:100%;height:100%}
+    .rcp-vinyl-hole{position:absolute;left:50%;top:50%;width:3px;height:3px;transform:translate(-50%,-50%);border-radius:50%;background:#100507;box-shadow:0 0 0 1px rgba(0,0,0,.25)}
+    /* gloss stays still while the record turns underneath it */
+    .rcp-vinyl-sheen{position:absolute;inset:0;border-radius:50%;pointer-events:none;
+      background:
+        conic-gradient(from 215deg at 50% 50%,transparent 0 3%,rgba(255,255,255,.30) 8%,rgba(255,255,255,.06) 13%,transparent 17%,transparent 50%,rgba(255,255,255,.16) 56%,transparent 62%),
+        radial-gradient(circle at 30% 24%,rgba(255,255,255,.22),transparent 38%)}
+    @media(prefers-reduced-motion:reduce){.rcp-vinyl-disc{animation:none}}
+    .rcp-vinyl-glyph{position:absolute;right:-2px;bottom:-2px;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:#120609;border:1px solid #873040;color:#e8b7c0;font-size:10px;line-height:1;box-shadow:0 3px 8px #000a}
+    .rcp-vinyl-glyph::before{content:'▶';padding-left:2px}
+    .rcp-vinyl-btn.playing .rcp-vinyl-glyph::before{content:'❚❚';padding-left:0;font-size:8px;letter-spacing:-1px}
+    .rcp-vinyl-btn.is-loading{opacity:.55;pointer-events:none}
+    .rcp-vinyl-embed{margin:14px auto 0;max-width:300px;overflow:hidden;border-radius:10px;opacity:.92}
+    .rcp-vinyl-embed iframe{display:block;width:100%;height:80px;border:0}
+
+    /* --- TONIGHT'S STREAMS: the night's combined numbers, nothing else --- */
+    .rcp-night{margin:0 0 10px;padding:12px 11px 10px;border-radius:12px;border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.02)}
+    .rcp-night-label{font:700 9px/1 monospace;letter-spacing:1.8px;color:#f6c3dc}
+    .rcp-night-total{margin-top:9px;font-weight:800;font-size:34px;line-height:1;color:#fff;font-variant-numeric:tabular-nums;letter-spacing:-.5px}
+    .rcp-night-total small{display:block;margin-top:6px;font:700 8px/1 monospace;letter-spacing:1.3px;color:#cdbfd0}
+    .rcp-night-split{display:flex;gap:14px;margin-top:10px;font:700 7.5px/1 monospace;letter-spacing:1px;color:#857989}
+    .rcp-night-split b{color:#cdbfd0;font-variant-numeric:tabular-nums}
+    .rcp-night-list{list-style:none;margin:11px 0 0;padding:9px 0 0;border-top:1px solid rgba(255,255,255,.06)}
+    .rcp-night-list li{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:5px 0;font-size:11px;color:#e8e2ec}
+    .rcp-night-list li span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-transform:uppercase;letter-spacing:.6px}
+    .rcp-night-list li b{font-variant-numeric:tabular-nums;color:#fff}
+    .rcp-night-list li.is-more{display:none}
+    .rcp-night.is-open .rcp-night-list li.is-more{display:flex}
+    .rcp-night-toggle{display:block;width:100%;margin-top:6px;padding:7px 0 2px;border:0;background:none;font:700 8px/1 monospace;letter-spacing:1.2px;color:#857989;cursor:pointer;text-align:center}
+    .rcp-night.is-open .rcp-night-toggle{color:#f6c3dc}
+    .rcp-night-toggle .when-open{display:none}
+    .rcp-night.is-open .rcp-night-toggle .when-open{display:inline}
+    .rcp-night.is-open .rcp-night-toggle .when-closed{display:none}
+  </style>
+</head>
+<body>
+  <main class="ap-preview">
+    <div class="ap-nav">← PARTY CITY</div>
+
+    <div class="ap-score"><span class="mono">FINAL · TRACKS WON</span><b>⚡ 9 — 8 🛸</b><div class="mono" style="margin-top:6px;color:#8b789c">HOOLIGANS &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ALIENS</div></div>
+
+    <section class="rcp-vinyl" aria-label="After Party record">
+      <div class="rcp-vinyl-kicker">AFTER PARTY</div>
+      <button class="rcp-vinyl-btn is-loading" id="vinyl" type="button" aria-label="Play Into the Sun" aria-pressed="false">
+        <span class="rcp-vinyl-disc" aria-hidden="true">
+          <span class="rcp-vinyl-label">
+            <svg viewBox="0 0 100 100" aria-hidden="true">
+              <text x="50" y="54" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-weight="700" font-size="11" letter-spacing="2.4" fill="#c4161f">ARIRANG</text>
+            </svg>
+          </span>
+          <span class="rcp-vinyl-hole"></span>
+        </span>
+        <span class="rcp-vinyl-sheen" aria-hidden="true"></span>
+        <span class="rcp-vinyl-glyph" aria-hidden="true"></span>
+      </button>
+      <div class="rcp-vinyl-embed"><div id="spotify-embed"></div></div>
+    </section>
+
+    <div class="ap-block"><b>YOUR STREAMS · 142</b>11 of 17 tracks · ⚡ HOOLIGANS</div>
+    <div id="night-slot"></div>
+    <div class="ap-block"><b>AFTER PARTY ✦</b>3 RETURN GIFTS WAITING
+      <div class="ap-gifts"><span>LOVE SONG</span><span>BADGES</span><span>SURPRISE</span></div>
+    </div>
+    <div class="ap-block"><b>01 · Into the Sun</b>HOOLIGANS WIN +312</div>
+    <div class="ap-block"><b>02 · SWIM</b>ALIENS WIN +88</div>
+    <div class="ap-block" style="text-align:center;color:#6f6478">… 15 more tracks</div>
+  </main>
+  <script>
+    window.onSpotifyIframeApiReady = (IFrameAPI) => {
+      const vinyl = document.getElementById('vinyl')
+      IFrameAPI.createController(document.getElementById('spotify-embed'), {
+        width: '100%', height: 80, theme: 'dark', uri: 'spotify:track:1ZNolq7VI7efGlh2hb2VVr'
+      }, controller => {
+        window.__ctrl = controller
+        controller.addListener('ready', () => { vinyl.classList.remove('is-loading') })
+        controller.addListener('playback_update', event => {
+          const playing = !event.data.isPaused && !event.data.isBuffering
+          vinyl.classList.toggle('playing', playing)
+          vinyl.setAttribute('aria-pressed', String(playing))
+          vinyl.setAttribute('aria-label', playing ? 'Pause Into the Sun' : 'Play Into the Sun')
+        })
+        // The vinyl is the play/pause control; Spotify's own player stays visible below it.
+        vinyl.addEventListener('click', () => controller.togglePlay())
+      })
+    }
+  </script>
+  <script type="module">
+    // Same shape the real board returns: 17 tracks, each with hooligans + aliens.
+    // PREVIEW STAND-IN NUMBERS ONLY — production reads b.tracks from getRecelebrateBattle.
+    import { ARIRANG_TRACKS } from './supabase/functions/op-reconnect/lib/recelebrate-tracks.js'
+    const titles = ['Body to Body','Hooligan','Aliens','FYA','2.0','No. 29','SWIM','Merry Go Round','NORMAL','Like Animals',"they don't know 'bout us",'One More Night','Please','Into the Sun','Wild Flower','Haegeum',"Killin' It Girl"]
+    const seed = [612,540,488,455,402,377,940,395,366,349,331,358,384,1102,712,801,690]
+    const tracks = titles.map((title, i) => ({ position: i + 1, title, hooligans: seed[i], aliens: Math.round(seed[i] * 0.72) }))
+
+    const fmt = (n) => Number(n || 0).toLocaleString('en-US')
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+    const SHOW_FIRST = 5
+
+    // Combined streams from every agent across the 17 tracks — the night's
+    // final numbers. Track name + count only; nothing is charted.
+    function tonightsStreamsBlock(tracks = []) {
+      const arirang = new Set(ARIRANG_TRACKS.map((t) => t.toLowerCase()))
+      const rows = tracks.map((t) => ({ title: t.title, n: Number(t.hooligans || 0) + Number(t.aliens || 0) }))
+        .sort((x, y) => y.n - x.n)
+      const total = rows.reduce((s, r) => s + r.n, 0)
+      const albumTotal = rows.filter((r) => arirang.has(r.title.toLowerCase())).reduce((s, r) => s + r.n, 0)
+      const roadTotal = total - albumTotal
+      const list = rows.map((r, i) => `<li${i >= SHOW_FIRST ? ' class="is-more"' : ''}><span>${esc(r.title)}</span><b>${fmt(r.n)}</b></li>`).join('')
+      return `<section class="rcp-night" aria-label="Tonight's streams">
+        <div class="rcp-night-label">TONIGHT'S STREAMS ✦</div>
+        <div class="rcp-night-total">${fmt(total)}<small>STREAMS TOGETHER</small></div>
+        <div class="rcp-night-split"><span>ARIRANG · <b>${fmt(albumTotal)}</b></span><span>ROAD TO 1B · <b>${fmt(roadTotal)}</b></span></div>
+        <ul class="rcp-night-list">${list}</ul>
+        ${rows.length > SHOW_FIRST ? `<button class="rcp-night-toggle" type="button" aria-expanded="false"><span class="when-closed">SEE ALL ${rows.length} ↓</span><span class="when-open">SHOW LESS ↑</span></button>` : ''}
+      </section>`
+    }
+
+    const slot = document.getElementById('night-slot')
+    slot.outerHTML = tonightsStreamsBlock(tracks)
+    const night = document.querySelector('.rcp-night')
+    night.querySelector('.rcp-night-toggle')?.addEventListener('click', (e) => {
+      const open = night.classList.toggle('is-open')
+      e.currentTarget.setAttribute('aria-expanded', String(open))
+    })
+  </script>
+  <script src="https://open.spotify.com/embed/iframe-api/v1" async></script>
+</body>
+</html>

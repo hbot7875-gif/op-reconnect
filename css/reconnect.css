@@ -5048,6 +5048,52 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .rcp-cell-stack{position:absolute;right:15px;top:22px;width:65px;height:78px}.rcp-cell-stack i{position:absolute;width:26px;height:48px;border:1px solid #bfa8ff;border-radius:7px;background:linear-gradient(180deg,#31264a,#171321);box-shadow:inset 0 -15px rgba(167,139,250,.22)}.rcp-cell-stack i:nth-child(1){left:0;top:14px;transform:rotate(-8deg)}.rcp-cell-stack i:nth-child(2){left:19px;top:4px}.rcp-cell-stack i:nth-child(3){left:38px;top:14px;transform:rotate(8deg)}
 .rcp-ticket,.rcp-wings{position:absolute;right:15px;top:30px;width:70px;height:46px;display:grid;place-items:center;color:#d9ad5f}.rcp-ticket{border:1px dashed #d9ad5f;background:#241c19;font:8px var(--mono);letter-spacing:.8px}.rcp-wings{font-size:38px}
 .rcp-after-hint{text-align:center!important;font:8px var(--mono)!important;letter-spacing:.9px;color:#d9ad5f!important}
+
+/* After Party record: our red ARIRANG vinyl is the control, Spotify's compact Embed plays underneath */
+.rcp-record{margin:0 0 12px;padding:12px 0;border-top:1px solid rgba(164,64,78,.35);border-bottom:1px solid rgba(164,64,78,.18);text-align:center}
+.rcp-record-kicker{font:8px var(--mono);letter-spacing:2.2px;color:#bd5969;margin-bottom:12px}
+.rcp-vinyl-btn{position:relative;display:inline-block;width:128px;height:128px;padding:0;border:0;border-radius:50%;background:transparent;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.rcp-vinyl-btn:focus-visible{outline:2px solid #d9ad5f;outline-offset:4px}
+.rcp-vinyl-btn.is-loading{opacity:.55;pointer-events:none}
+.rcp-vinyl-disc{position:absolute;inset:0;border-radius:50%;overflow:hidden;
+  background:
+    repeating-radial-gradient(circle at 50% 50%,rgba(0,0,0,.16) 0 .5px,rgba(255,255,255,.035) .5px 1px,transparent 1px 2.4px),
+    radial-gradient(circle at 36% 30%,#ff6b62 0,#ec2a33 30%,#c8131f 58%,#9a0b15 82%,#7a0810 100%);
+  border:1px solid #5e060d;box-shadow:0 10px 22px #000b,inset 0 0 0 1.5px rgba(255,255,255,.08),inset 0 0 18px rgba(0,0,0,.35);
+  animation:rcp-vinyl-spin 12s linear infinite;animation-play-state:paused}
+.rcp-vinyl-btn.playing .rcp-vinyl-disc{animation-play-state:running}
+@keyframes rcp-vinyl-spin{to{transform:rotate(360deg)}}
+.rcp-vinyl-label{position:absolute;left:50%;top:50%;width:41%;height:41%;transform:translate(-50%,-50%);border-radius:50%;
+  background:radial-gradient(circle at 40% 35%,#fbf6ec,#efe6d5 70%,#e3d8c4 100%);
+  box-shadow:0 0 0 3px rgba(0,0,0,.28),0 0 0 4px rgba(255,255,255,.06),inset 0 0 0 1px rgba(0,0,0,.08)}
+.rcp-vinyl-label svg{position:absolute;inset:0;width:100%;height:100%}
+.rcp-vinyl-hole{position:absolute;left:50%;top:50%;width:3px;height:3px;transform:translate(-50%,-50%);border-radius:50%;background:#100507;box-shadow:0 0 0 1px rgba(0,0,0,.25)}
+.rcp-vinyl-sheen{position:absolute;inset:0;border-radius:50%;pointer-events:none;
+  background:
+    conic-gradient(from 215deg at 50% 50%,transparent 0 3%,rgba(255,255,255,.30) 8%,rgba(255,255,255,.06) 13%,transparent 17%,transparent 50%,rgba(255,255,255,.16) 56%,transparent 62%),
+    radial-gradient(circle at 30% 24%,rgba(255,255,255,.22),transparent 38%)}
+.rcp-record-embed{margin:14px auto 0;max-width:300px;overflow:hidden;border-radius:10px;opacity:.92}
+.rcp-record-embed iframe{display:block;width:100%;height:80px;border:0}
+@media(prefers-reduced-motion:reduce){.rcp-vinyl-disc{animation:none}}
+
+/* Tonight's streams: the night's combined numbers — name + count only */
+.rcp-night{margin:0 0 10px;padding:12px 11px 10px;border-radius:12px;border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.02)}
+.rcp-night-label{font:9px var(--mono);letter-spacing:1.8px;color:#f6c3dc}
+.rcp-night-total{margin-top:9px;font-family:Arial,Helvetica,var(--body);font-weight:800;font-size:34px;line-height:1;color:#fff;font-variant-numeric:tabular-nums;letter-spacing:-.5px}
+.rcp-night-total small{display:block;margin-top:6px;font:8px var(--mono);letter-spacing:1.3px;color:#cdbfd0}
+.rcp-night-split{display:flex;gap:14px;margin-top:10px;font:7.5px var(--mono);letter-spacing:1px;color:#857989}
+.rcp-night-split b{font-weight:400;color:#cdbfd0;font-variant-numeric:tabular-nums}
+.rcp-night-list{list-style:none;margin:11px 0 0;padding:9px 0 0;border-top:1px solid rgba(255,255,255,.06)}
+.rcp-night-list li{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:5px 0;font-size:11px;color:#e8e2ec}
+.rcp-night-list li span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-transform:uppercase;letter-spacing:.6px}
+.rcp-night-list li b{font-family:Arial,Helvetica,var(--body);font-weight:700;font-variant-numeric:tabular-nums;color:#fff}
+.rcp-night-list li.is-more{display:none}
+.rcp-night.is-open .rcp-night-list li.is-more{display:flex}
+.rcp-night-toggle{display:block;width:100%;margin-top:6px;padding:7px 0 2px;border:0;background:none;font:8px var(--mono);letter-spacing:1.2px;color:#857989;cursor:pointer;text-align:center}
+.rcp-night.is-open .rcp-night-toggle{color:#f6c3dc}
+.rcp-night-toggle .when-open{display:none}
+.rcp-night.is-open .rcp-night-toggle .when-open{display:inline}
+.rcp-night.is-open .rcp-night-toggle .when-closed{display:none}
 @media (prefers-reduced-motion:reduce){.rcp-gift.is-opening{animation:none}}
 
 .arc-bomb-hint{margin:-4px 0 12px;text-align:center;font-size:13px;color:#f6c3dc}

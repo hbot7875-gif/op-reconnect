@@ -28,6 +28,7 @@ import {
 } from './arirang-recelebrate.js'
 import { createWatchStage } from './recelebrate-watch.js'
 import { createPartyChat } from './recelebrate-chat.js'
+import { ARIRANG_TRACKS } from '../supabase/functions/op-reconnect/lib/recelebrate-tracks.js'
 
 const SIDES = {
   hooligans: { name: 'HOOLIGANS', icon: '⚡' },
@@ -123,7 +124,7 @@ async function loadBattle() {
     }
     if (afterPartyBadgeArt.size === 0) await loadAfterPartyBadgeArt(res.afterParty.badgeIds)
   }
-  area.replaceWith(res?.success && res.battle ? battleArea(res.battle, res.me, res.afterParty) : battleUnavailable())
+  swapBattleArea(area, res?.success && res.battle ? battleArea(res.battle, res.me, res.afterParty) : battleUnavailable())
   if (res?.success && res.battle) paintEventState(res.battle.status)
   battleTimer = setTimeout(() => { if (root?.isConnected) loadBattle() }, BATTLE_POLL_MS)
 }
@@ -315,8 +316,34 @@ function battleShell(inner) {
   sec.querySelectorAll('.rcp-gift').forEach((gift) => {
     gift.onclick = () => takeAfterPartyGift(gift.dataset.gift, gift)
   })
+  sec.querySelector('.rcp-night-toggle')?.addEventListener('click', (e) => {
+    nightOpen = sec.querySelector('.rcp-night').classList.toggle('is-open')
+    e.currentTarget.setAttribute('aria-expanded', String(nightOpen))
+  })
   queueMicrotask(paintBattleMe)
   return sec
+}
+
+// The battle panel is rebuilt on every poll, but the After Party record
+// holds a Spotify iframe — detaching or even moving that node reloads it
+// and cuts the song. So once the record exists, the new panel is rebuilt
+// AROUND it: every other child is swapped, the record never leaves the DOM.
+function swapBattleArea(area, next) {
+  const record = area.querySelector('.rcp-record')
+  const slot = next.querySelector('.rcp-record-slot')
+  if (!record || !slot) {
+    area.replaceWith(next)
+    next.querySelector('.rcp-record-slot')?.replaceWith(afterPartyRecord())
+    return
+  }
+  area.className = next.className
+  for (const kid of [...area.childNodes]) if (kid !== record) kid.remove()
+  let beforeRecord = true
+  for (const kid of [...next.childNodes]) {
+    if (kid === slot) { beforeRecord = false; continue }
+    if (beforeRecord) area.insertBefore(kid, record)
+    else area.appendChild(kid)
+  }
 }
 
 // The agent's own place in the battle: whether their streams are counting,
@@ -398,7 +425,9 @@ function battleArea(b, me, afterParty) {
     <div class="rcp-strip" aria-hidden="true">
       ${(b.tracks || []).map((t) => `<i class="is-${t.leader}"></i>`).join('')}
     </div>
+    ${final ? '<div class="rcp-record-slot"></div>' : ''}
     ${myStreamsBlock(b, me)}
+    ${final ? tonightsStreamsBlock(b.tracks) : ''}
     ${nextMoveBlock(b)}
     ${final ? afterPartyBlock(afterParty) : ''}
     <div class="rcp-battle-note">${note}</div>
@@ -585,6 +614,87 @@ function nextMoveBlock(b) {
   }
   const narrowest = tracks.sort((a, z) => a.margin - z.margin)[0]
   return `<div class="rcp-next"><span>PROTECT THIS LEAD</span><b>${esc(narrowest.title)}</b><small>${icon} ahead by ${fmt(narrowest.margin)}</small></div>`
+}
+
+/* ── After Party: the ARIRANG record ─────────────────────────────────────
+   One last song while the final numbers are read. Spotify's official compact
+   Embed does the playing (kept visible, as Spotify requires); our red vinyl
+   is the control — tap to play/pause through the iFrame API, and it turns
+   only while Spotify reports playback, freezing in place on pause. */
+const AFTER_PARTY_TRACK_URI = 'spotify:track:1ZNolq7VI7efGlh2hb2VVr' // Into the Sun — BTS
+
+let spotifyApi = null
+let spotifyApiLoading = null
+function loadSpotifyIframeApi() {
+  if (spotifyApi) return Promise.resolve(spotifyApi)
+  if (spotifyApiLoading) return spotifyApiLoading
+  spotifyApiLoading = new Promise((resolve) => {
+    const prev = window.onSpotifyIframeApiReady
+    window.onSpotifyIframeApiReady = (api) => { spotifyApi = api; prev?.(api); resolve(api) }
+    const script = document.createElement('script')
+    script.src = 'https://open.spotify.com/embed/iframe-api/v1'
+    script.async = true
+    document.head.appendChild(script)
+  })
+  return spotifyApiLoading
+}
+
+function afterPartyRecord() {
+  const sec = el('section', 'rcp-record')
+  sec.setAttribute('aria-label', 'After Party record')
+  sec.innerHTML = `
+    <div class="rcp-record-kicker">AFTER PARTY</div>
+    <button class="rcp-vinyl-btn is-loading" type="button" aria-label="Play Into the Sun" aria-pressed="false">
+      <span class="rcp-vinyl-disc" aria-hidden="true">
+        <span class="rcp-vinyl-label"><svg viewBox="0 0 100 100" aria-hidden="true"><text x="50" y="54" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-weight="700" font-size="11" letter-spacing="2.4" fill="#c4161f">ARIRANG</text></svg></span>
+        <span class="rcp-vinyl-hole"></span>
+      </span>
+      <span class="rcp-vinyl-sheen" aria-hidden="true"></span>
+    </button>
+    <div class="rcp-record-embed"><div></div></div>`
+  const vinyl = sec.querySelector('.rcp-vinyl-btn')
+  loadSpotifyIframeApi().then((api) => {
+    if (!sec.isConnected) return
+    api.createController(sec.querySelector('.rcp-record-embed > div'), {
+      width: '100%', height: 80, theme: 'dark', uri: AFTER_PARTY_TRACK_URI,
+    }, (controller) => {
+      controller.addListener('ready', () => vinyl.classList.remove('is-loading'))
+      controller.addListener('playback_update', (e) => {
+        const playing = !e.data.isPaused && !e.data.isBuffering
+        vinyl.classList.toggle('playing', playing)
+        vinyl.setAttribute('aria-pressed', String(playing))
+        vinyl.setAttribute('aria-label', playing ? 'Pause Into the Sun' : 'Play Into the Sun')
+      })
+      vinyl.addEventListener('click', () => controller.togglePlay())
+    })
+  })
+  return sec
+}
+
+/* ── Tonight's streams: the night's combined numbers ─────────────────────
+   Every agent's counted streams across the 17 tracks, added up from the
+   same per-track hooligans + aliens totals the scoreboard shows. Grand
+   total first, the ARIRANG / rapline split under it, then just track name
+   and count — the closing numbers, not a chart. */
+const NIGHT_SHOW_FIRST = 5
+let nightOpen = false
+
+function tonightsStreamsBlock(tracks = []) {
+  const album = new Set(ARIRANG_TRACKS.map((t) => t.toLowerCase()))
+  const rows = tracks
+    .map((t) => ({ title: t.title, n: Number(t.hooligans || 0) + Number(t.aliens || 0) }))
+    .sort((x, y) => y.n - x.n)
+  if (!rows.length) return ''
+  const total = rows.reduce((sum, r) => sum + r.n, 0)
+  const albumTotal = rows.filter((r) => album.has(String(r.title).toLowerCase())).reduce((sum, r) => sum + r.n, 0)
+  const list = rows.map((r, i) => `<li${i >= NIGHT_SHOW_FIRST ? ' class="is-more"' : ''}><span>${esc(r.title)}</span><b>${fmt(r.n)}</b></li>`).join('')
+  return `<section class="rcp-night${nightOpen ? ' is-open' : ''}" aria-label="Tonight's streams">
+    <div class="rcp-night-label">TONIGHT'S STREAMS ✦</div>
+    <div class="rcp-night-total">${fmt(total)}<small>STREAMS TOGETHER</small></div>
+    <div class="rcp-night-split"><span>ARIRANG · <b>${fmt(albumTotal)}</b></span><span>ROAD TO 1B · <b>${fmt(total - albumTotal)}</b></span></div>
+    <ul class="rcp-night-list">${list}</ul>
+    ${rows.length > NIGHT_SHOW_FIRST ? `<button class="rcp-night-toggle" type="button" aria-expanded="${nightOpen}"><span class="when-closed">SEE ALL ${rows.length} ↓</span><span class="when-open">SHOW LESS ↑</span></button>` : ''}
+  </section>`
 }
 
 function finalNote(b) {
