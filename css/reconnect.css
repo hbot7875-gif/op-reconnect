@@ -811,6 +811,20 @@ body {
 .cm-party.is-party-complete .cm-party-bomblight,
 .cm-party.is-party-complete .cm-party-core,
 .cm-party.is-party-complete .cm-party-haze { animation:none; }
+.cm-party.is-party-complete .cm-party-live-only{display:none}
+.cm-party.is-party-complete .cm-party-spill{opacity:.18}
+.cm-party.is-party-complete .cm-party-haze{opacity:.14}
+.cm-party.is-party-complete .cm-party-wash{opacity:.24}
+.cm-party.is-party-complete .cm-party-frame,
+.cm-party.is-party-complete .cm-party-frame-in,
+.cm-party.is-party-complete .cm-party-truss{stroke:#d9ad5f}
+.cm-party.is-party-complete .cm-party-truss{fill:#d9ad5f}
+.cm-party.is-party-complete .cm-party-uplight{fill:#8e6940}
+.cm-party.is-party-complete .cm-party-bomblight{opacity:.58;fill:#ead7ad}
+.cm-party.is-party-complete .cm-party-spark{opacity:.16}
+.cm-party.is-party-complete .cm-party-title{fill:#d9ad5f}
+.cm-party-complete-mark circle{fill:#20170f;stroke:#d9ad5f;stroke-width:.22;filter:drop-shadow(0 0 .7px rgba(217,173,95,.55))}
+.cm-party-complete-mark path{fill:none;stroke:#f4dfad;stroke-width:.25;stroke-linecap:round;stroke-linejoin:round}
 .cm-party.is-party-complete .cm-party-countdown tspan:last-child{fill:#d9ad5f}
 @keyframes cmPartyTwinkle { 0%,100% { opacity: .55; } 50% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {

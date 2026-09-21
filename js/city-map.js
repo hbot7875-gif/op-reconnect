@@ -502,6 +502,18 @@ function partyVenue(angle, onClick, live, deadlineIso, complete = false) {
     g.appendChild(sp)
   })
 
+  // Once the event is archived, the animated concert rig settles into a
+  // small gold completion seal. It keeps the landmark recognizable while
+  // making it impossible to mistake the old stage for a live event.
+  if (complete) {
+    const seal = n('g', { class: 'cm-party-complete-mark', 'aria-hidden': 'true' })
+    seal.appendChild(n('circle', { cx: gx(0), cy: gy(-5.15), r: 1.15 }))
+    seal.appendChild(n('path', {
+      d: `M ${gx(-0.48)} ${gy(-5.12)} L ${gx(-0.12)} ${gy(-4.76)} L ${gx(0.58)} ${gy(-5.53)}`,
+    }))
+    g.appendChild(seal)
+  }
+
 
   const title = n('text', { x: gx(0), y: gy(3.9), class: 'cm-party-title' }, 'RE:CELEBRATE ✦')
   g.appendChild(title)
