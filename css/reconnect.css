@@ -805,6 +805,15 @@ body {
 .cm-party.is-party-live .cm-party-skybeam-white { opacity: .45; }
 @keyframes cmPartyFlicker { 0% { opacity: .95; } 40% { opacity: .78; } 43% { opacity: 1; } 71% { opacity: .86; } 74% { opacity: .95; } }
 .cm-party.is-party-live .cm-party-bomblight { opacity: 1; animation: cmPartyTwinkle 2.2s ease-in-out infinite; animation-delay: calc(var(--i, 0) * -0.3s); }
+.cm-party.is-party-counting .cm-party-beam,
+.cm-party.is-party-counting .cm-party-skybeam,
+.cm-party.is-party-counting .cm-party-spark,
+.cm-party.is-party-counting .cm-party-bomblight,
+.cm-party.is-party-counting .cm-party-core,
+.cm-party.is-party-counting .cm-party-haze{animation:none}
+.cm-party.is-party-counting .cm-party-skybeam{opacity:.18}
+.cm-party.is-party-counting .cm-party-spill{opacity:.28}
+.cm-party.is-party-counting .cm-party-countdown tspan:last-child{fill:#f2c96d}
 .cm-party.is-party-complete .cm-party-beam,
 .cm-party.is-party-complete .cm-party-skybeam,
 .cm-party.is-party-complete .cm-party-spark,

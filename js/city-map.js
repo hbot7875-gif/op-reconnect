@@ -350,7 +350,7 @@ function toolMarker(angle, icon, label, onClick, extraClass) {
  *  @param live     whether the party has actually opened
  *  @param deadlineIso  ISO string the countdown label ticks down to
  *  @param complete     whether the event is now a permanent archive */
-function partyVenue(angle, onClick, live, deadlineIso, complete = false) {
+function partyVenue(angle, onClick, live, deadlineIso, complete = false, counting = false) {
   // r=47, not the usual 49: this landmark's own roofline/glow reach further
   // off its anchor point than a toolMarker's halo does, and at the top seam
   // (mx=50, dead centre) that extra reach landed the roofline within 0.2
@@ -361,7 +361,7 @@ function partyVenue(angle, onClick, live, deadlineIso, complete = false) {
   const [mx, my] = pt(angle, 47)
   const gx = (dx) => (mx + dx).toFixed(2)
   const gy = (dy) => (my + dy).toFixed(2)
-  const g = n('g', { class: `cm-party ${live ? 'is-party-live' : 'is-party-setup'}${complete ? ' is-party-complete' : ''}` })
+  const g = n('g', { class: `cm-party ${live ? 'is-party-live' : 'is-party-setup'}${counting ? ' is-party-counting' : ''}${complete ? ' is-party-complete' : ''}` })
 
   // Historic gate standing INSIDE a modern comeback stage: a nested LED
   // frame and two light columns around it, red stage light washing the
@@ -521,6 +521,8 @@ function partyVenue(angle, onClick, live, deadlineIso, complete = false) {
   const cd = n('text', { x: gx(0), y: gy(6.6), class: 'cm-party-countdown' })
   if (complete) {
     cd.appendChild(n('tspan', {}, 'COMPLETE ✦'))
+  } else if (counting) {
+    cd.appendChild(n('tspan', {}, 'COUNTING ✦'))
   } else if (live) {
     cd.appendChild(n('tspan', {}, 'PARTY LIVE ✦'))
   } else {
@@ -580,7 +582,7 @@ function partyVenue(angle, onClick, live, deadlineIso, complete = false) {
  *                          down to. Ignored once partyLive is true.
  * @param partyComplete     whether the venue should read as an archive.
  */
-export function renderCityMap(wards, districts, onSelect, homeFraction, onCandyStar, onMagicShop, onVma, vmaPulse, onGoldenCorner, goldenProgress = 0, onParty, partyLive = false, partyDeadlineIso = null, partyComplete = false) {
+export function renderCityMap(wards, districts, onSelect, homeFraction, onCandyStar, onMagicShop, onVma, vmaPulse, onGoldenCorner, goldenProgress = 0, onParty, partyLive = false, partyDeadlineIso = null, partyComplete = false, partyCounting = false) {
   const PAD = 5
   const svg = n('svg', {
     class: 'city-map', 'aria-hidden': 'true',
@@ -759,7 +761,7 @@ export function renderCityMap(wards, districts, onSelect, homeFraction, onCandyS
   // to a side, and Candy Star/Magic Shop don't need that seam to read as a
   // pair — flanking the ring left/right does that just as well.
   if (onParty) {
-    svg.appendChild(partyVenue(-Math.PI / 2, onParty, partyLive, partyDeadlineIso, partyComplete))
+    svg.appendChild(partyVenue(-Math.PI / 2, onParty, partyLive, partyDeadlineIso, partyComplete, partyCounting))
   }
 
   // Candy Star and Magic Shop flank the ring at its two horizontal extremes

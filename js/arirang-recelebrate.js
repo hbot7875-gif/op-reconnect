@@ -36,6 +36,11 @@ export function arirangPartyIsComplete(nowMs = Date.now()) {
   return nowMs >= new Date(ARIRANG_RECELEBRATE.finalizesAtIso).getTime()
 }
 
+export function arirangPartyIsCounting(nowMs = Date.now()) {
+  return nowMs >= new Date(ARIRANG_RECELEBRATE.endsAtIso).getTime()
+    && nowMs < new Date(ARIRANG_RECELEBRATE.finalizesAtIso).getTime()
+}
+
 // Same stage as the map's own partyVenue (city-map.js) — the gate inside a
 // nested white LED frame, light columns either side, pink ARMY Bombs below —
 // just bigger. A simplified ReConnect recreation of the comeback stage, not
