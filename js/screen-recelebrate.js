@@ -393,7 +393,6 @@ function battleArea(b, me, afterParty) {
         ? '17 track battles · every qualifying stream counts for ur side'
         : `17 track battles · ends 9:30 AM IST, Sept 21${b.tiedTracks ? ` · ${b.tiedTracks} tied` : ''}`
 
-  const totalPulled = (b.tracks || []).reduce((sum, t) => sum + Number(t.hooligans || 0) + Number(t.aliens || 0), 0)
   const rows = (b.tracks || []).map((t) => {
     const lead = t.leader
     const side = lead === 'hooligans' ? 'HOOLIGANS' : lead === 'aliens' ? 'ALIENS' : null
@@ -420,7 +419,6 @@ function battleArea(b, me, afterParty) {
         <span class="rcp-score-side is-aliens"><b>${a}</b> 🛸</span>
       </div>
       <div class="rcp-score-names"><span>HOOLIGANS</span><span>ALIENS</span></div>
-      ${final ? `<div class="rcp-total-pulled"><span>TOTAL STREAMS PULLED ✦</span><b>${fmt(totalPulled)}</b></div>` : ''}
     </div>
     <div class="rcp-strip" aria-hidden="true">
       ${(b.tracks || []).map((t) => `<i class="is-${t.leader}"></i>`).join('')}
