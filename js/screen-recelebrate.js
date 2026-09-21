@@ -316,8 +316,10 @@ function battleShell(inner) {
   sec.querySelectorAll('.rcp-gift').forEach((gift) => {
     gift.onclick = () => takeAfterPartyGift(gift.dataset.gift, gift)
   })
+  // Resolve from the button, not `sec`: swapBattleArea moves these nodes
+  // into the already-mounted panel, so `sec` stops containing them.
   sec.querySelector('.rcp-night-toggle')?.addEventListener('click', (e) => {
-    nightOpen = sec.querySelector('.rcp-night').classList.toggle('is-open')
+    nightOpen = e.currentTarget.closest('.rcp-night').classList.toggle('is-open')
     e.currentTarget.setAttribute('aria-expanded', String(nightOpen))
   })
   queueMicrotask(paintBattleMe)
