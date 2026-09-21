@@ -139,6 +139,12 @@ export function badgeStory(e, state) {
   if (e.templateId === 'event_jk_birthday_2026') return "Lit every track on Jung Kook's GOLDEN Birthday Era Card."
   if (e.templateId === 'event_jk_golden_defender_2026') return 'Helped light Golden Corner before the whole City reached 100%.'
   if (e.templateId === 'event_jk_golden_encore_2026') return 'Streamed every track on the GOLDEN Birthday Era Card twice over.'
+  if (e.templateId === 'event_rc26_after_party') return 'Was there when the lights went down — streamed or watched at ARIRANG RE:CELEBRATE, Sept 20, 2026.'
+  if (e.templateId === 'event_rc26_party_crasher') return 'Streamed a battle track at ARIRANG RE:CELEBRATE.'
+  if (e.templateId === 'event_rc26_arirang_cult') return 'Streamed all 14 ARIRANG tracks during ARIRANG RE:CELEBRATE.'
+  if (e.templateId === 'event_rc26_side_quest_hooligans') return 'Streamed all 17 battle tracks for ⚡ Hooligans at ARIRANG RE:CELEBRATE.'
+  if (e.templateId === 'event_rc26_side_quest_aliens') return 'Streamed all 17 battle tracks for 🛸 Aliens at ARIRANG RE:CELEBRATE.'
+  if (e.templateId === 'event_arirang_recelebrate_2026') return 'Streamed all 17 battle tracks and joined the Watch Party at ARIRANG RE:CELEBRATE.'
   return e.unlockHint || 'Badge unlocked.'
 }
 

@@ -17,7 +17,7 @@
 // recelebrate-watch-program.js via recelebrate-watch.js. Party Chat is the
 // event-scoped shared room implemented in recelebrate-chat.js.
 
-import { el, esc, toast } from './state.js'
+import { el, esc, toast, getState, showOverlay, hideOverlay } from './state.js'
 import { call } from './api.js'
 import { getAgentNo } from './session.js'
 import { goWorld } from './router.js'
@@ -28,6 +28,7 @@ import {
 } from './arirang-recelebrate.js'
 import { createWatchStage } from './recelebrate-watch.js'
 import { createPartyChat } from './recelebrate-chat.js'
+import { badgeStory, badgeStorySheet } from './badge-drawer.js'
 import { ARIRANG_TRACKS } from '../supabase/functions/op-reconnect/lib/recelebrate-tracks.js'
 
 const SIDES = {
@@ -316,6 +317,7 @@ function battleShell(inner) {
   sec.querySelectorAll('.rcp-gift').forEach((gift) => {
     gift.onclick = () => takeAfterPartyGift(gift.dataset.gift, gift)
   })
+  wireAfterPartyBadges(sec)
   // Resolve from the button, not `sec`: swapBattleArea moves these nodes
   // into the already-mounted panel, so `sec` stops containing them.
   sec.querySelector('.rcp-night-toggle')?.addEventListener('click', (e) => {
@@ -520,10 +522,15 @@ function loveSongKeepsake(gift) {
 function badgeGift(gift) {
   const badges = (gift.badgeIds || []).map((id) => {
     const name = AFTER_PARTY_BADGES[id] || 'EVENT BADGE'
-    const art = afterPartyBadgeArt.get(id)
-    return `<span class="rcp-after-badge">${art ? `<img src="${esc(art)}" alt="">` : '<i>◇</i>'}<b>${esc(name)}</b></span>`
+    const e = afterPartyBadgeArt.get(id)
+    const art = e?.artworkUrl
+    // Tappable once the collection entry has loaded — that's what carries the story.
+    return e
+      ? `<button type="button" class="rcp-after-badge${e.rarity === 'rare' ? ' is-rare' : ''}" data-badge="${esc(id)}" aria-label="${esc(name)} — see its story">${art ? `<img src="${esc(art)}" alt="">` : '<i>◇</i>'}<b>${esc(name)}</b></button>`
+      : `<span class="rcp-after-badge">${art ? `<img src="${esc(art)}" alt="">` : '<i>◇</i>'}<b>${esc(name)}</b></span>`
   }).join('')
-  return `<div class="rcp-after-badge-stack">${badges || '<span class="rcp-after-badge"><i>◇</i><b>BADGE SAVED</b></span>'}</div>`
+  return `<div class="rcp-after-badge-stack">${badges || '<span class="rcp-after-badge"><i>◇</i><b>BADGE SAVED</b></span>'}</div>
+    ${badges ? '<p class="rcp-after-badge-hint">tap a badge to see its story ♡</p>' : ''}`
 }
 
 function surpriseGift(gift) {
@@ -561,7 +568,29 @@ async function loadAfterPartyBadgeArt(ids = []) {
   if (!ids.length) return
   const res = await call('getBadgeCollection', { agentNo: getAgentNo() })
   if (!res?.success) return
-  afterPartyBadgeArt = new Map((res.earned || []).filter((b) => ids.includes(b.badgeId)).map((b) => [b.badgeId, b.artworkUrl]))
+  afterPartyBadgeArt = new Map((res.earned || []).filter((b) => ids.includes(b.badgeId)).map((b) => [b.badgeId, b]))
+}
+
+// Same story sheet as the Badge Collection, so how a badge was earned reads
+// identically here and in the drawer; only the way back differs.
+function openAfterPartyBadgeStory(badgeId) {
+  const e = afterPartyBadgeArt.get(badgeId)
+  if (!e) return
+  const state = getState()
+  const wearing = state?.player?.equippedBadgeId === badgeId
+  const sheet = badgeStorySheet({
+    got: true, collection: true, rarity: e.rarity, photo: e.artworkUrl,
+    name: e.name, desc: badgeStory(e, state), badgeId, templateId: e.templateId, wearing,
+  }, state)
+  const back = sheet.querySelector('.bdr-back')
+  if (back) { back.textContent = 'Back to the Party'; back.onclick = hideOverlay }
+  showOverlay(sheet)
+}
+
+function wireAfterPartyBadges(scope) {
+  scope.querySelectorAll('.rcp-after-badge[data-badge]').forEach((b) => {
+    b.onclick = () => openAfterPartyBadgeStory(b.dataset.badge)
+  })
 }
 
 function repaintAfterParty() {
@@ -572,6 +601,7 @@ function repaintAfterParty() {
   const next = wrapper.firstElementChild
   current.replaceWith(next)
   next.querySelectorAll('.rcp-gift').forEach((gift) => { gift.onclick = () => takeAfterPartyGift(gift.dataset.gift, gift) })
+  wireAfterPartyBadges(next)
 }
 
 async function takeAfterPartyGift(kind, button) {
