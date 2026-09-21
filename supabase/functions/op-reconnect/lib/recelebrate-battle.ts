@@ -156,6 +156,37 @@ async function myStreams(supabase: SupabaseDB, eventId: string, agentNo: string)
   return { total: count ?? 0, byTrack, partial: (rows?.length || 0) < (count ?? 0) }
 }
 
+// Read-only gift state for the archive. Merely opening/refreshing the Party
+// must never award anything — the agent explicitly opens the boxes through
+// claimRecelebrateAfterParty below.
+async function afterPartyStatus(supabase: SupabaseDB, eventId: string, agentNo: string) {
+  const [{ data: pass }, { data: claim }, streams, watched] = await Promise.all([
+    supabase.from('rc_recelebrate_passes').select('love_song, team').eq('event_id', eventId).eq('agent_no', agentNo).maybeSingle(),
+    supabase.from('rc_recelebrate_after_party_claims').select('reward_kind, reward_amount, badge_ids').eq('event_id', eventId).eq('agent_no', agentNo).maybeSingle(),
+    supabase.from('rc_recelebrate_battle_streams').select('scrobble_id', { count: 'exact', head: true }).eq('event_id', eventId).eq('agent_no', agentNo),
+    supabase.from('rc_recelebrate_presence').select('watched_at').eq('event_id', eventId).eq('agent_no', agentNo).maybeSingle(),
+  ])
+  if (!pass) return { available: true, eligible: false, reason: 'party_pass_required' }
+  const base = { available: true, loveSong: pass.love_song, team: pass.team }
+  if (claim) return {
+    ...base, eligible: true, claimed: true,
+    reward: { kind: claim.reward_kind, amount: claim.reward_amount },
+    badgeIds: claim.badge_ids || [],
+  }
+  const eligible = Number(streams.count || 0) > 0 || !!watched.data?.watched_at
+  return { ...base, eligible, claimed: false, reason: eligible ? null : 'participation_required' }
+}
+
+export async function claimRecelebrateAfterParty(supabase: SupabaseDB, params: any) {
+  const agentNo = String(params?.agentNo || '').trim().toUpperCase()
+  const { data, error } = await supabase.rpc('rc_recelebrate_after_party_claim', {
+    p_event: RECELEBRATE_EVENT_ID, p_agent: agentNo,
+  })
+  if (error) return { success: false, error: error.message }
+  if (!data?.available || !data?.eligible) return { success: false, error: data?.reason || 'gifts_not_ready' }
+  return { success: true, afterParty: data }
+}
+
 export async function getRecelebrateBattle(supabase: SupabaseDB, params: any) {
   const eventId = RECELEBRATE_EVENT_ID
   const agentNo = String(params?.agentNo || '').trim().toUpperCase()
@@ -174,5 +205,9 @@ export async function getRecelebrateBattle(supabase: SupabaseDB, params: any) {
   }
   const { data: board, error } = await supabase.rpc('rc_recelebrate_battle_board', { p_event: eventId })
   if (error) return { success: false, error: error.message }
-  return { success: true, battle: board, me: await myStreams(supabase, eventId, agentNo) }
+  let afterParty = null
+  if (board?.status === 'final' && agentNo) {
+    afterParty = await afterPartyStatus(supabase, eventId, agentNo)
+  }
+  return { success: true, battle: board, me: await myStreams(supabase, eventId, agentNo), afterParty }
 }

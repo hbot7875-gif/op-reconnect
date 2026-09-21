@@ -53,7 +53,7 @@ import { createShareSnapshot, getPublicShareSnapshot, shareImageResponse, attach
 import { getQuestShareSource } from './lib/reconnect-missions.ts'
 import { getDistrictPresence, getWardRoster, sendDistrictMessage } from './lib/district-presence.ts'
 import { getRecelebrateState, issuePartyPass, startTeamChoice, chooseTeam } from './lib/recelebrate.ts'
-import { getRecelebrateBattle } from './lib/recelebrate-battle.ts'
+import { getRecelebrateBattle, claimRecelebrateAfterParty } from './lib/recelebrate-battle.ts'
 import { pingRecelebratePresence } from './lib/recelebrate-presence.ts'
 import { getRecelebrateMessages, sendRecelebrateMessage } from './lib/recelebrate-chat.ts'
 
@@ -118,6 +118,7 @@ const ROUTES: Record<string, Route> = {
   startTeamChoice: { auth: 'agent', handler: (sb, p) => startTeamChoice(sb, p) },
   chooseTeam: { auth: 'agent', handler: (sb, p) => chooseTeam(sb, p) },
   getRecelebrateBattle: { auth: 'agent', handler: (sb, p) => getRecelebrateBattle(sb, p) },
+  claimRecelebrateAfterParty: { auth: 'agent', handler: (sb, p) => claimRecelebrateAfterParty(sb, p) },
   pingRecelebratePresence: { auth: 'agent', handler: (sb, p) => pingRecelebratePresence(sb, p) },
   getRecelebrateMessages: { auth: 'agent', handler: (sb, p) => getRecelebrateMessages(sb, p) },
   sendRecelebrateMessage: { auth: 'agent', handler: (sb, p) => sendRecelebrateMessage(sb, p) },

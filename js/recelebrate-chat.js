@@ -68,6 +68,7 @@ export function createPartyChat({ getSide, onOpen }) {
   const input = form.querySelector('input')
   const send = form.querySelector('button')
   const status = box.querySelector('.rcp-chat-status')
+  let roomReadOnly = false
   input.value = chat.draft
   input.addEventListener('input', () => { chat.draft = input.value })
 
@@ -95,7 +96,9 @@ export function createPartyChat({ getSide, onOpen }) {
     box.querySelector('.rcp-chat-bar').setAttribute('aria-expanded', String(chat.mode === 'open'))
     box.querySelector('.rcp-chat-count').textContent = `· ${chat.messages.length}`
     const last = chat.messages[chat.messages.length - 1]
-    box.querySelector('.rcp-chat-latest').textContent = last ? `${SIDES[last.side] || ''} ${last.name}: ${last.text}` : 'the room is open ✦'
+    box.querySelector('.rcp-chat-latest').textContent = last
+      ? `${SIDES[last.side] || ''} ${last.name}: ${last.text}`
+      : roomReadOnly ? 'party ended · chat is read-only' : 'the room is open ✦'
     box.querySelectorAll('.rcp-chat-unread').forEach((b) => { b.hidden = !chat.unread; b.textContent = chat.unread })
   }
 
@@ -106,7 +109,8 @@ export function createPartyChat({ getSide, onOpen }) {
     if (mode === 'open') { drawMessages(true); onOpen?.() }
   }
 
-  const applyComposerState = ({ locked = false, readOnly = false } = {}) => {
+  const applyComposerState = ({ locked = false, readOnly = roomReadOnly } = {}) => {
+    roomReadOnly = readOnly
     const noSide = !getSide()
     const disabled = locked || readOnly || noSide
     input.disabled = disabled

@@ -17,7 +17,7 @@
 // recelebrate-watch-program.js via recelebrate-watch.js. Party Chat is the
 // event-scoped shared room implemented in recelebrate-chat.js.
 
-import { el, esc } from './state.js'
+import { el, esc, toast } from './state.js'
 import { call } from './api.js'
 import { getAgentNo } from './session.js'
 import { goWorld } from './router.js'
@@ -102,6 +102,10 @@ window.matchMedia('(min-width: 980px)').addEventListener?.('change', () => { if 
 
 let battleTimer = null
 const BATTLE_POLL_MS = 60_000
+let afterPartyClaim = null
+let afterPartyOpened = new Set()
+let afterPartyActiveGift = null
+let afterPartyBadgeArt = new Map()
 
 // The server only rescans at most every 20s however many agents are
 // watching; a minute here keeps the board fresh without hammering it.
@@ -110,7 +114,17 @@ async function loadBattle() {
   const res = await call('getRecelebrateBattle', { agentNo: getAgentNo() })
   const area = root?.querySelector('.rcp-battle')
   if (!area?.isConnected) return
-  area.replaceWith(res?.success && res.battle ? battleArea(res.battle, res.me) : battleUnavailable())
+  if (res?.afterParty?.claimed) {
+    const returningToClaim = !afterPartyClaim?.claimed
+    afterPartyClaim = res.afterParty
+    if (returningToClaim && afterPartyOpened.size === 0) {
+      afterPartyOpened = new Set(['love', 'badges', 'surprise'])
+      afterPartyActiveGift = 'all'
+    }
+    if (afterPartyBadgeArt.size === 0) await loadAfterPartyBadgeArt(res.afterParty.badgeIds)
+  }
+  area.replaceWith(res?.success && res.battle ? battleArea(res.battle, res.me, res.afterParty) : battleUnavailable())
+  if (res?.success && res.battle) paintEventState(res.battle.status)
   battleTimer = setTimeout(() => { if (root?.isConnected) loadBattle() }, BATTLE_POLL_MS)
 }
 
@@ -119,23 +133,58 @@ window.addEventListener('rc-arc-pass', () => { if (root?.isConnected) paintMe() 
 /* ── Header: identity, live clock, the agent's own side + pass ─────────── */
 
 function header() {
-  const endsLeft = new Date(ARIRANG_RECELEBRATE.endsAtIso).getTime() - Date.now()
+  const now = Date.now()
+  const endsLeft = new Date(ARIRANG_RECELEBRATE.endsAtIso).getTime() - now
+  const finalLeft = new Date(ARIRANG_RECELEBRATE.finalizesAtIso).getTime() - now
+  const complete = finalLeft <= 0
+  const counting = !complete && endsLeft <= 0
   const head = el('header', 'rcp-head')
   head.innerHTML = `
     <div class="rcp-head-bg" aria-hidden="true"></div>
     <button type="button" class="back-btn rcp-back">City</button>
     <div class="rcp-titles">
       <div class="rcp-name">ARIRANG RE:CELEBRATE <span>✦</span></div>
-      <div class="rcp-live"><i></i>PARTY LIVE ✦<span class="rcp-here" hidden></span></div>
+      <div class="rcp-live${complete ? ' is-complete' : counting ? ' is-counting' : ''}">${complete ? '' : '<i></i>'}<span class="rcp-live-label">${complete ? 'RE:CELEBRATE COMPLETE ✦' : counting ? 'COUNTING FINAL STREAMS ✦' : 'PARTY LIVE ✦'}</span><span class="rcp-here" hidden></span></div>
     </div>
     <div class="rcp-clock">
-      <span>ENDS IN</span>
-      <b data-deadline="${ARIRANG_RECELEBRATE.endsAtIso}">${fmtLeft(endsLeft)}</b>
+      <span>${complete ? 'FINAL RESULT' : counting ? 'RESULT IN' : 'ENDS IN'}</span>
+      <b${complete ? '' : ` data-deadline="${counting ? ARIRANG_RECELEBRATE.finalizesAtIso : ARIRANG_RECELEBRATE.endsAtIso}"`}>${complete ? 'ARCHIVE' : fmtLeft(counting ? finalLeft : endsLeft)}</b>
     </div>
     <div class="rcp-me"></div>
   `
   head.querySelector('.rcp-back').onclick = (e) => goWorld({ x: e.clientX, y: e.clientY })
   return head
+}
+
+// The page itself stays mounted. Polls only update these small labels and
+// the battle panel, so crossing 9:30 or 11:00 never flashes/rebuilds the
+// stage, chat, scroll position or mobile tab state.
+function paintEventState(status) {
+  const live = root?.querySelector('.rcp-live')
+  const label = root?.querySelector('.rcp-live-label')
+  const clockLabel = root?.querySelector('.rcp-clock span')
+  const clock = root?.querySelector('.rcp-clock b')
+  if (!live || !label || !clockLabel || !clock) return
+  const final = status === 'final'
+  const counting = status === 'counting'
+  live.classList.toggle('is-complete', final)
+  live.classList.toggle('is-counting', counting)
+  let dot = live.querySelector('i')
+  if (final) dot?.remove()
+  else if (!dot) { dot = document.createElement('i'); live.prepend(dot) }
+  label.textContent = final ? 'RE:CELEBRATE COMPLETE ✦' : counting ? 'COUNTING FINAL STREAMS ✦' : 'PARTY LIVE ✦'
+  clockLabel.textContent = final ? 'FINAL RESULT' : counting ? 'RESULT IN' : 'ENDS IN'
+  if (final) {
+    delete clock.dataset.deadline
+    clock.textContent = 'ARCHIVE'
+  } else {
+    const deadline = counting ? ARIRANG_RECELEBRATE.finalizesAtIso : ARIRANG_RECELEBRATE.endsAtIso
+    clock.dataset.deadline = deadline
+    clock.textContent = fmtLeft(new Date(deadline).getTime() - Date.now())
+  }
+  root?.classList.toggle('is-complete', final)
+  const watchTab = root?.querySelector('.rcp-tab[data-tab="watch"]')
+  if (watchTab) watchTab.textContent = final ? 'REPLAYS' : 'WATCH'
 }
 
 // The agent's own corner of the header: side + pass, or the way in if they
@@ -263,6 +312,9 @@ function battleShell(inner) {
     mineOpen = e.currentTarget.open
     try { localStorage.setItem(MINE_KEY, mineOpen ? '1' : '0') } catch { /* per-visit only */ }
   })
+  sec.querySelectorAll('.rcp-gift').forEach((gift) => {
+    gift.onclick = () => takeAfterPartyGift(gift.dataset.gift, gift)
+  })
   queueMicrotask(paintBattleMe)
   return sec
 }
@@ -298,7 +350,7 @@ function battleUnavailable() {
   return battleShell(`<div class="rcp-battle-empty">Scoreboard unavailable right now — it'll refresh on its own.</div>`)
 }
 
-function battleArea(b, me) {
+function battleArea(b, me, afterParty) {
   const final = b.status === 'final'
   const h = final ? b.hooligansWon : b.hooligansLeading
   const a = final ? b.aliensWon : b.aliensLeading
@@ -314,17 +366,21 @@ function battleArea(b, me) {
         ? '17 track battles · every qualifying stream counts for ur side'
         : `17 track battles · ends 9:30 AM IST, Sept 21${b.tiedTracks ? ` · ${b.tiedTracks} tied` : ''}`
 
+  const totalPulled = (b.tracks || []).reduce((sum, t) => sum + Number(t.hooligans || 0) + Number(t.aliens || 0), 0)
   const rows = (b.tracks || []).map((t) => {
     const lead = t.leader
     const side = lead === 'hooligans' ? 'HOOLIGANS' : lead === 'aliens' ? 'ALIENS' : null
     const state = !side ? 'TIED' : final ? `${side} WIN +${fmt(t.difference)}` : `${side} +${fmt(t.difference)}`
     return `
-      <li class="rcp-track lead-${lead}">
+      <li class="rcp-track lead-${lead}${final ? ' is-final' : ''}">
         <span class="rcp-track-no">${String(t.position).padStart(2, '0')}</span>
         <span class="rcp-track-title">${esc(t.title)}</span>
-        <span class="rcp-track-n is-h">⚡ ${fmt(t.hooligans)}</span>
-        <span class="rcp-track-n is-a">🛸 ${fmt(t.aliens)}</span>
         <span class="rcp-track-state">${state}</span>
+        ${final ? `<span class="rcp-track-finalstats">
+          <span class="is-h"><small>⚡ HOOLIGANS</small><b>${fmt(t.hooligans)}</b></span>
+          <span class="is-a"><small>🛸 ALIENS</small><b>${fmt(t.aliens)}</b></span>
+          <span class="is-total"><small>✦ TOGETHER</small><b>${fmt(Number(t.hooligans || 0) + Number(t.aliens || 0))}</b></span>
+        </span>` : `<span class="rcp-track-n is-h">⚡ ${fmt(t.hooligans)}</span><span class="rcp-track-n is-a">🛸 ${fmt(t.aliens)}</span>`}
       </li>`
   }).join('')
 
@@ -337,12 +393,14 @@ function battleArea(b, me) {
         <span class="rcp-score-side is-aliens"><b>${a}</b> 🛸</span>
       </div>
       <div class="rcp-score-names"><span>HOOLIGANS</span><span>ALIENS</span></div>
+      ${final ? `<div class="rcp-total-pulled"><span>TOTAL STREAMS PULLED ✦</span><b>${fmt(totalPulled)}</b></div>` : ''}
     </div>
     <div class="rcp-strip" aria-hidden="true">
       ${(b.tracks || []).map((t) => `<i class="is-${t.leader}"></i>`).join('')}
     </div>
     ${myStreamsBlock(b, me)}
     ${nextMoveBlock(b)}
+    ${final ? afterPartyBlock(afterParty) : ''}
     <div class="rcp-battle-note">${note}</div>
     <ol class="rcp-tracks">${rows}</ol>
   `)
@@ -380,11 +438,112 @@ function myStreamsBlock(b, me) {
     </details>`
 }
 
+const AFTER_PARTY_BADGES = {
+  event_rc26_after_party: 'AFTER PARTY ♡',
+  event_rc26_party_crasher: 'PARTY CRASHER ✦',
+  event_rc26_arirang_cult: 'ARIRANG CULT MEMBER ♡',
+  event_rc26_side_quest_hooligans: 'SIDE QUEST ⚡',
+  event_rc26_side_quest_aliens: 'SIDE QUEST 🛸',
+  event_arirang_recelebrate_2026: "RE:CELEBRATE '26 ✦",
+}
+function giftButtons() {
+  const open = (kind) => afterPartyOpened.has(kind) ? ' is-opened' : ''
+  return `<div class="rcp-gift-pile" aria-label="After Party return gifts">
+    <button type="button" class="rcp-gift rcp-gift-love${open('love')}" data-gift="love" aria-label="Open Love Song keepsake"><i></i><b>LOVE SONG</b></button>
+    <button type="button" class="rcp-gift rcp-gift-badges${open('badges')}" data-gift="badges" aria-label="Open badge parcel"><i></i><b>BADGES</b></button>
+    <button type="button" class="rcp-gift rcp-gift-surprise${open('surprise')}" data-gift="surprise" aria-label="Open surprise bag"><i></i><b>SURPRISE</b></button>
+  </div>`
+}
+
+function loveSongKeepsake(gift) {
+  const team = gift.team === 'aliens' ? '🛸 ALIENS' : '⚡ HOOLIGANS'
+  return `<div class="rcp-keepsake"><small>ARIRANG<br>RE:CELEBRATE</small><span>♡ UR LOVE SONG</span><strong>${esc(gift.loveSong || 'ARIRANG')}</strong><footer><i>09.20.26<br>${team}</i><i>I WAS THERE ✦</i></footer></div><button type="button" class="rcp-keepsake-view">VIEW KEEPSAKE</button>`
+}
+
+function badgeGift(gift) {
+  const badges = (gift.badgeIds || []).map((id) => {
+    const name = AFTER_PARTY_BADGES[id] || 'EVENT BADGE'
+    const art = afterPartyBadgeArt.get(id)
+    return `<span class="rcp-after-badge">${art ? `<img src="${esc(art)}" alt="">` : '<i>◇</i>'}<b>${esc(name)}</b></span>`
+  }).join('')
+  return `<div class="rcp-after-badge-stack">${badges || '<span class="rcp-after-badge"><i>◇</i><b>BADGE SAVED</b></span>'}</div>`
+}
+
+function surpriseGift(gift) {
+  const reward = gift.reward || {}
+  const amount = Number(reward.amount) || 1
+  if (reward.kind === 'charge_cells') return `<div class="rcp-surprise"><span>CHARGE CELLS</span><strong>+${amount}</strong><div class="rcp-cell-stack" aria-hidden="true"><i></i><i></i><i></i></div><p>for keeping ur ARMY Bomb glowing ✦</p></div>`
+  if (reward.kind === 'deadline_extension') return `<div class="rcp-surprise"><span>DEADLINE EXTENSION</span><strong>+${amount} TICKET${amount === 1 ? '' : 'S'}</strong><div class="rcp-ticket" aria-hidden="true">+3 DAYS</div><p>save it for when u need more time</p></div>`
+  return `<div class="rcp-surprise"><span>WINGS</span><strong>+${amount}</strong><div class="rcp-wings" aria-hidden="true">🪽</div><p>straight to ur Pack ✦</p></div>`
+}
+
+function openedGiftContent(gift) {
+  const showAll = afterPartyActiveGift === 'all'
+  return `<div class="rcp-opened-gifts">
+    ${(showAll || afterPartyActiveGift === 'love') && afterPartyOpened.has('love') ? loveSongKeepsake(gift) : ''}
+    ${(showAll || afterPartyActiveGift === 'badges') && afterPartyOpened.has('badges') ? badgeGift(gift) : ''}
+    ${(showAll || afterPartyActiveGift === 'surprise') && afterPartyOpened.has('surprise') ? surpriseGift(gift) : ''}
+  </div>`
+}
+
+function afterPartyBlock(gift) {
+  if (!gift?.available) return '<section class="rcp-after"><div class="rcp-after-title">AFTER PARTY ✦</div><p>Final gifts are getting ready.</p></section>'
+  if (!gift.eligible) return `<section class="rcp-after"><div class="rcp-after-title">AFTER PARTY ✦</div><p>Your Party Pass stays with you. Return gifts were for agents who streamed or joined the Watch Party.</p></section>`
+  const opened = gift.claimed ? afterPartyOpened.size : 0
+  const allOpen = opened === 3
+  return `<section class="rcp-after">
+    <div class="rcp-after-title">AFTER PARTY ✦</div>
+    <div class="rcp-after-kicker">${allOpen ? 'UR RETURN GIFTS' : `${3 - opened} RETURN GIFT${3 - opened === 1 ? '' : 'S'} WAITING`}</div>
+    ${giftButtons()}
+    ${gift.claimed ? openedGiftContent(gift) : ''}
+    <p class="rcp-after-hint">${allOpen ? 'ALL UR GIFTS ARE IN UR PACK ✦' : 'tap a gift to open it ♡'}</p>
+  </section>`
+}
+
+async function loadAfterPartyBadgeArt(ids = []) {
+  if (!ids.length) return
+  const res = await call('getBadgeCollection', { agentNo: getAgentNo() })
+  if (!res?.success) return
+  afterPartyBadgeArt = new Map((res.earned || []).filter((b) => ids.includes(b.badgeId)).map((b) => [b.badgeId, b.artworkUrl]))
+}
+
+function repaintAfterParty() {
+  const current = root?.querySelector('.rcp-after')
+  if (!current || !afterPartyClaim) return
+  const wrapper = document.createElement('div')
+  wrapper.innerHTML = afterPartyBlock(afterPartyClaim)
+  const next = wrapper.firstElementChild
+  current.replaceWith(next)
+  next.querySelectorAll('.rcp-gift').forEach((gift) => { gift.onclick = () => takeAfterPartyGift(gift.dataset.gift, gift) })
+}
+
+async function takeAfterPartyGift(kind, button) {
+  if (button.disabled) return
+  if (afterPartyOpened.has(kind)) { afterPartyActiveGift = kind; repaintAfterParty(); return }
+  button.disabled = true
+  button.classList.add('is-opening')
+  if (!afterPartyClaim?.claimed) {
+    const res = await call('claimRecelebrateAfterParty', { agentNo: getAgentNo() })
+    if (!res?.success) {
+      button.disabled = false
+      button.classList.remove('is-opening')
+      toast(res?.error === 'gifts_not_ready' ? 'The return gifts are not ready yet.' : "Couldn't open that gift — try again.")
+      return
+    }
+    afterPartyClaim = res.afterParty
+    await loadAfterPartyBadgeArt(afterPartyClaim.badgeIds)
+  }
+  afterPartyOpened.add(kind)
+  afterPartyActiveGift = afterPartyOpened.size === 3 ? 'all' : kind
+  repaintAfterParty()
+  if (afterPartyOpened.size === 3) toast('All ur After Party gifts are in ur Pack ✦')
+}
+
 // One useful decision from the existing scoreboard, without inventing a new
 // goal system. It answers “what should I stream next?” at a glance and stays
 // deliberately smaller than the actual battle score.
 function nextMoveBlock(b) {
-  if (b.status !== 'active') return ''
+  if (!['active', 'live'].includes(b.status)) return ''
   const pass = getCachedPartyPass()
   if (!pass?.team || !Array.isArray(b.tracks) || !b.tracks.length) return ''
   const us = pass.team

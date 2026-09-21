@@ -23,10 +23,17 @@ export const ARIRANG_RECELEBRATE = {
   opensAtIso: '2026-09-20T03:30:00.000Z',
   // 24 hours later: Sept 21, 2026, 9:30 AM IST.
   endsAtIso: '2026-09-21T04:00:00.000Z',
+  // Late-sync grace closes at 11:00 AM IST. From here the event remains
+  // available as a permanent, read-only archive with its frozen result.
+  finalizesAtIso: '2026-09-21T05:30:00.000Z',
 }
 
 export function arirangPartyIsLive(nowMs = Date.now()) {
   return nowMs >= new Date(ARIRANG_RECELEBRATE.opensAtIso).getTime()
+}
+
+export function arirangPartyIsComplete(nowMs = Date.now()) {
+  return nowMs >= new Date(ARIRANG_RECELEBRATE.finalizesAtIso).getTime()
 }
 
 // Same stage as the map's own partyVenue (city-map.js) — the gate inside a

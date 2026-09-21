@@ -348,8 +348,9 @@ function toolMarker(angle, icon, label, onClick, extraClass) {
  *  @param angle    polar angle, radians (see pt() above)
  *  @param onClick  ({x,y}) => void
  *  @param live     whether the party has actually opened
- *  @param deadlineIso  ISO string the countdown label ticks down to */
-function partyVenue(angle, onClick, live, deadlineIso) {
+ *  @param deadlineIso  ISO string the countdown label ticks down to
+ *  @param complete     whether the event is now a permanent archive */
+function partyVenue(angle, onClick, live, deadlineIso, complete = false) {
   // r=47, not the usual 49: this landmark's own roofline/glow reach further
   // off its anchor point than a toolMarker's halo does, and at the top seam
   // (mx=50, dead centre) that extra reach landed the roofline within 0.2
@@ -360,7 +361,7 @@ function partyVenue(angle, onClick, live, deadlineIso) {
   const [mx, my] = pt(angle, 47)
   const gx = (dx) => (mx + dx).toFixed(2)
   const gy = (dy) => (my + dy).toFixed(2)
-  const g = n('g', { class: `cm-party ${live ? 'is-party-live' : 'is-party-setup'}` })
+  const g = n('g', { class: `cm-party ${live ? 'is-party-live' : 'is-party-setup'}${complete ? ' is-party-complete' : ''}` })
 
   // Historic gate standing INSIDE a modern comeback stage: a nested LED
   // frame and two light columns around it, red stage light washing the
@@ -506,7 +507,9 @@ function partyVenue(angle, onClick, live, deadlineIso) {
   g.appendChild(title)
 
   const cd = n('text', { x: gx(0), y: gy(6.6), class: 'cm-party-countdown' })
-  if (live) {
+  if (complete) {
+    cd.appendChild(n('tspan', {}, 'COMPLETE ✦'))
+  } else if (live) {
     cd.appendChild(n('tspan', {}, 'PARTY LIVE ✦'))
   } else {
     cd.appendChild(n('tspan', {}, 'PARTY IN '))
@@ -563,8 +566,9 @@ function partyVenue(angle, onClick, live, deadlineIso) {
  *                     venue from "being set up" to fully lit.
  * @param partyDeadlineIso  ISO string the venue's countdown label ticks
  *                          down to. Ignored once partyLive is true.
+ * @param partyComplete     whether the venue should read as an archive.
  */
-export function renderCityMap(wards, districts, onSelect, homeFraction, onCandyStar, onMagicShop, onVma, vmaPulse, onGoldenCorner, goldenProgress = 0, onParty, partyLive = false, partyDeadlineIso = null) {
+export function renderCityMap(wards, districts, onSelect, homeFraction, onCandyStar, onMagicShop, onVma, vmaPulse, onGoldenCorner, goldenProgress = 0, onParty, partyLive = false, partyDeadlineIso = null, partyComplete = false) {
   const PAD = 5
   const svg = n('svg', {
     class: 'city-map', 'aria-hidden': 'true',
@@ -743,7 +747,7 @@ export function renderCityMap(wards, districts, onSelect, homeFraction, onCandyS
   // to a side, and Candy Star/Magic Shop don't need that seam to read as a
   // pair — flanking the ring left/right does that just as well.
   if (onParty) {
-    svg.appendChild(partyVenue(-Math.PI / 2, onParty, partyLive, partyDeadlineIso))
+    svg.appendChild(partyVenue(-Math.PI / 2, onParty, partyLive, partyDeadlineIso, partyComplete))
   }
 
   // Candy Star and Magic Shop flank the ring at its two horizontal extremes

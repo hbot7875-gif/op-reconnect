@@ -29,7 +29,7 @@ import { renderCityMap } from './city-map.js'
 import { armyBombInnerHtml } from './army-bomb.js'
 import { districtIcon } from './landmarks.js'
 import { openFinder } from './search.js'
-import { openArirangRecelebrate, arirangPartyIsLive, ARIRANG_RECELEBRATE } from './arirang-recelebrate.js'
+import { openArirangRecelebrate, arirangPartyIsLive, arirangPartyIsComplete, ARIRANG_RECELEBRATE } from './arirang-recelebrate.js'
 import { openCityShare, openRedZoneShare } from './share.js'
 import { agentChargeSheet, boraMeterSheet } from './agent-charge.js'
 import { broadcastCards } from './broadcasts.js'
@@ -356,7 +356,8 @@ function cityPlan(state) {
     // once the actual event window needs to start and end on its own.
     () => openArirangRecelebrate(),
     arirangPartyIsLive(),
-    ARIRANG_RECELEBRATE.opensAtIso))
+    ARIRANG_RECELEBRATE.opensAtIso,
+    arirangPartyIsComplete()))
   return box
 }
 
