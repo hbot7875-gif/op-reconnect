@@ -163,11 +163,25 @@ function paintSections(body, state) {
   ]))
 
   // ── Game ────────────────────────────────────────────────────────
+  const leave = state?.player?.leave || null
   body.appendChild(section('Game', 'How hard you want this', [
     {
       icon: '🎚', name: 'Streaming mode', value: state?.player?.mode || 'easy',
       body: 'Your mode sets the targets and XP pace for your next district. Your current district stays unchanged.',
       onClick: () => openModeSheet(getState() || state),
+    },
+    // Leave / pause — exams, travel, a break. Pauses the clocks that would
+    // otherwise punish being away (district deadline, ARMY Bomb, streak,
+    // inactivity), never the shared ReConnect ones. Server rules in
+    // lib/leave.ts + the rc_player_leave migration.
+    {
+      icon: leave ? '⏸' : '🌙',
+      name: leave ? 'On leave' : 'Take a leave',
+      value: leave ? `until ${fmtDate(leave.endsAt)}` : '',
+      body: leave
+        ? `Your district deadline, ARMY Bomb and streak are paused until ${fmtDate(leave.endsAt)}. Streams still count if you play.`
+        : 'Going away for a few days? Pause your district deadline, ARMY Bomb and streak for 3–14 days.',
+      onClick: () => showOverlay(leaveSheet(getState() || state)),
     },
   ]))
 
@@ -286,6 +300,88 @@ function fmtDate(iso) {
 }
 
 /* ── Sheets ───────────────────────────────────────────────────────────── */
+
+const LEAVE_OPTIONS = [3, 5, 7, 10, 14]
+
+function leaveSheet(state) {
+  const leave = state?.player?.leave || null
+  const availableAt = state?.player?.leaveAvailableAt || null
+  const sheet = el('div', 'sheet set-sheet set-leave')
+  sheet.appendChild(el('div', 'eyebrow', leave ? 'ON LEAVE' : 'TAKE A LEAVE'))
+
+  if (leave) {
+    sheet.append(
+      el('h3', '', `Paused until ${fmtDate(leave.endsAt)}`),
+      el('p', 'muted', `${leave.daysLeft} day${leave.daysLeft === 1 ? '' : 's'} left. ${leave.districtPaused ? 'Your district deadline, ' : 'Your '}ARMY Bomb and streak are all on hold. Streams still count if you do play.`),
+      el('p', 'muted', 'Ending early hands back only the unused days — nothing you already got is taken away.'),
+    )
+    const end = el('button', 'btn btn-primary', 'End leave now')
+    end.onclick = async () => {
+      end.disabled = true
+      end.textContent = 'ENDING…'
+      const res = await call('endLeave', { agentNo: getAgentNo() })
+      end.disabled = false
+      end.textContent = 'End leave now'
+      if (!res.success) { toast(errText(res.error)); return }
+      const cur = getState() || state
+      setState({ ...cur, player: { ...cur.player, leave: null, leaveAvailableAt: res.leaveAvailableAt || null } })
+      hideOverlay()
+      toast('Welcome back — your clocks are running again')
+    }
+    sheet.appendChild(end)
+  } else if (availableAt) {
+    sheet.append(
+      el('h3', '', 'Not just yet'),
+      el('p', 'muted', `Leaves are spaced out so they stay a break, not a pause button. Your next one can start on ${fmtDate(availableAt)}.`),
+    )
+  } else {
+    let days = 7
+    sheet.append(
+      el('h3', '', 'How long will you be away?'),
+      el('p', 'muted', "Starts now. While you're on leave:"),
+    )
+    const list = el('ul', 'set-leave-list')
+    list.innerHTML = `
+      <li>⏳ Your district deadline is pushed out by the same number of days${state?.activeDistrict ? '' : ' (no district is running right now)'}</li>
+      <li>💣 Your ARMY Bomb won't go dark, and no blackout clock runs</li>
+      <li>🔥 Your streak is covered every day — no Streak Freezes spent</li>
+      <li>🗂 The 14-day inactivity clock stops</li>
+      <li>🤝 ReConnect team missions keep going — those clocks belong to your teammates too</li>
+      <li>🎧 Anything you stream still counts</li>`
+    sheet.appendChild(list)
+    sheet.appendChild(el('div', 'set-leave-picks-label', 'DAYS AWAY'))
+    const picks = el('div', 'set-leave-picks')
+    const paint = () => picks.querySelectorAll('button').forEach((b) => b.classList.toggle('is-on', Number(b.dataset.days) === days))
+    for (const n of LEAVE_OPTIONS) {
+      const b = el('button', 'btn btn-ghost', String(n))
+      b.type = 'button'
+      b.dataset.days = String(n)
+      b.onclick = () => { days = n; paint() }
+      picks.appendChild(b)
+    }
+    paint()
+    sheet.appendChild(picks)
+    sheet.appendChild(el('p', 'muted set-leave-note', 'One leave at a time; the next one can start 14 days after this one ends. You can end it early any time.'))
+    const start = el('button', 'btn btn-primary', 'Start leave')
+    start.onclick = async () => {
+      start.disabled = true
+      start.textContent = 'STARTING…'
+      const res = await call('startLeave', { agentNo: getAgentNo(), days })
+      start.disabled = false
+      start.textContent = 'Start leave'
+      if (!res.success) { toast(errText(res.error)); return }
+      const cur = getState() || state
+      setState({ ...cur, player: { ...cur.player, leave: res.leave, leaveAvailableAt: null } })
+      hideOverlay()
+      toast(`On leave until ${fmtDate(res.leave.endsAt)} — see you then ♡`)
+    }
+    sheet.appendChild(start)
+  }
+  const close = el('button', 'btn btn-ghost', leave || availableAt ? 'Close' : 'Cancel')
+  close.onclick = hideOverlay
+  sheet.appendChild(close)
+  return sheet
+}
 
 function presenceSheet(acct, onSaved) {
   const hiding = !acct.appearOffline
@@ -537,6 +633,10 @@ export function errText(code) {
     rate_limited: 'Too many tries. Wait a minute and go again.',
     agent_not_found: 'Agent file not found.',
     agent_retired: 'This agent file has already been retired.',
+    already_on_leave: "You're already on leave.",
+    not_on_leave: "You're not on leave right now.",
+    leave_cooldown: 'Your next leave can start 14 days after the last one ended.',
+    leave_days_out_of_range: 'Leaves run 3 to 14 days.',
     codename_invalid: 'Codenames are 3-24 letters or numbers — and can\'t be your agent number or Instagram handle.',
     codename_taken: 'That one\'s taken. Try another.',
   }[code] || code || 'Something went wrong'

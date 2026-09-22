@@ -1446,5 +1446,6 @@ function friendly(err) {
     district_unavailable: 'You can\'t start this one directly.',
     district_already_started: 'Already started — refreshing…',
     district_not_configured: 'This district has no goals assigned yet — check back soon.',
+    on_leave: 'You\'re on leave — end it in Settings first, then start this district.',
   }[err] || err || 'Something went wrong'
 }

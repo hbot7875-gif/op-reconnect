@@ -188,6 +188,10 @@ function wireHudScrollCollapse() {
   onScroll()
 }
 
+function leaveEndLabel(iso) {
+  try { return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) } catch { return '' }
+}
+
 export function renderHud(container, state) {
   const p = state.player
   const lvl = p.level
@@ -255,6 +259,7 @@ export function renderHud(container, state) {
       ${boost ? `<span class="hud-boost">${boost.multiplier}&times; BOOST &middot; ${boost.minsLeft}m</span>` : ''}
     </div>
     ${reconnectStatus ? `<button class="hud-reconnect-status${reconnectStatus.urgent ? ' is-urgent' : ''}" id="hudReconnectStatus" type="button"><span>🤝 ReConnect</span><b>${esc(reconnectStatus.label)}</b>${reconnectBadge ? `<em class="hud-reconnect-chat-badge">💬 ${esc(reconnectBadge)}</em>` : ''}<i>›</i></button>` : ''}
+    ${state.player?.leave ? `<button class="hud-reconnect-status hud-leave-status" id="hudLeaveStatus" type="button"><span>⏸ On leave</span><b>Clocks paused until ${esc(leaveEndLabel(state.player.leave.endsAt))}</b><i>›</i></button>` : ''}
   `
   const levelPill = container.querySelector('#levelPill')
   levelPill.onclick = () => showOverlay(progressSheet(state))
@@ -267,6 +272,8 @@ export function renderHud(container, state) {
     renderHud(container, state)
   }
   container.querySelector('#bellBtn').onclick = () => showOverlay(invitesSheet(state))
+  const leaveButton = container.querySelector('#hudLeaveStatus')
+  if (leaveButton) leaveButton.onclick = (e) => goSettings({ x: e.clientX, y: e.clientY })
   const reconnectButton = container.querySelector('#hudReconnectStatus')
   if (reconnectButton) reconnectButton.onclick = () => {
     const d = state.activeDistrict

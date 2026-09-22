@@ -25,6 +25,7 @@ import { adminGetActiveDefuse, getDefuseMessages, sendDefuseMessage } from './li
 import { adminCreateBroadcast, adminListBroadcasts, adminDeleteBroadcast } from './lib/broadcasts.ts'
 import { adminDeleteAgent, adminGetAgent, adminGetAgentTracks, adminScanAltAccounts, adminResetAgentXp, adminDeleteInactiveAgents, sendInactiveReminders, adminListAgents } from './lib/admin-agent.ts'
 import { adminSyncAllStreams } from './lib/sync-all.ts'
+import { startLeave, endLeave } from './lib/leave.ts'
 import { adminListGoals, adminAddGoal, adminUpdateGoal, adminDeleteGoal } from './lib/goals.ts'
 import {
   getReconnectMission, getInviteCandidates, openReconnectMission,
@@ -129,6 +130,8 @@ const ROUTES: Record<string, Route> = {
   generateScrobblePin: { auth: 'agent', handler: (sb, p) => generateScrobblePin(sb, p) },
   getWebhookPin: { auth: 'agent', handler: (sb, p) => getWebhookPin(sb, p) },
   setStreamSource: { auth: 'agent', handler: (sb, p) => setStreamSource(sb, p) },
+  startLeave: { auth: 'agent', handler: (sb, p) => startLeave(sb, p) },
+  endLeave: { auth: 'agent', handler: (sb, p) => endLeave(sb, p) },
   placeItem: { auth: 'agent', handler: (sb, p) => placeItem(sb, p) },
   useItem: { auth: 'agent', handler: (sb, p) => useItem(sb, p) },
   getSignalLog: { auth: 'agent', handler: (sb, p) => getSignalLog(sb, p) },

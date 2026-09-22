@@ -26,6 +26,7 @@ import { isBadgeEditor } from './badge-admin.ts'
 import { getDistrictMessageSummary } from './district-presence.ts'
 import { getModeVolumeReview } from './mode-guard.ts'
 import { activationDayBounds, activationDayCounts } from './activation-window.ts'
+import { activeLeave, leaveStatus } from './leave.ts'
 
 /** Administrative grace time is stored separately from activated_at so a
  * support extension never shifts the stream-counting window or its frozen
@@ -498,6 +499,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
   // access, not just agent000 — same check badge-admin.html's own gate
   // does, just surfaced here too so the client doesn't need a second call.
   const isBadgeVaultEditor = await isBadgeEditor(supabase, player.agent_no)
+  const leaveInfo = await leaveStatus(supabase, player.agent_no)
 
   return {
     success: true,
@@ -523,6 +525,10 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
       wings: player.wings || 0,
       tickets: player.tickets || 0,
       isBadgeVaultEditor,
+      // Leave / pause (lib/leave.ts): the leave in force, and when the next
+      // one may start (null = right now).
+      leave: leaveInfo.leave,
+      leaveAvailableAt: leaveInfo.availableAt,
     },
     levelUp,
     modeReview,
@@ -650,6 +656,9 @@ export async function startDistrict(supabase: SupabaseDB, params: any) {
     .eq('agent_no', agentNo)
   const restored = new Set<string>((pdRows || []).filter((r: any) => r.status === 'restored').map((r: any) => r.district_id))
   if ((pdRows || []).some((r: any) => r.status === 'active')) return { success: false, error: 'district_already_active' }
+  // A leave pauses the clocks of the attempt that was running when it began;
+  // starting a fresh 7-day attempt mid-leave would just run down unpaused.
+  if (await activeLeave(supabase, agentNo)) return { success: false, error: 'on_leave' }
   if (restored.has(district.id)) return { success: false, error: 'district_already_restored' }
   if (!wardStates(content, restored).has(district.ward_id)) return { success: false, error: 'ward_locked' }
   // Tutorial districts source their checklist from config.tutorial.trackGoalId

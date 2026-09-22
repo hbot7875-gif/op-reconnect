@@ -11,6 +11,7 @@
 // blackout clock only starts once there's been a real charge to lose.
 
 import type { SupabaseDB, GameContent } from './config.ts'
+import { leaveOverlapMs } from './leave.ts'
 import { trackArtistOverrides } from './config.ts'
 import { todayKst, kstWeekKey } from './kst.ts'
 import { countedArtistPlays } from './text.ts'
@@ -433,7 +434,11 @@ async function bombFeedHealth(supabase: SupabaseDB, agentNo: string): Promise<{ 
   const { data: agent } = await supabase.from('rc_agents').select('created_at').eq('agent_no', agentNo).maybeSingle()
   const sinceIso = charge?.last_fed_at || legacyLastFed?.created_at || agent?.created_at
   if (!sinceIso) return null
-  const daysInactive = Math.max(0, (Date.now() - new Date(sinceIso).getTime()) / DAY_MS)
+  // Time on leave doesn't count — same exclusion rc_inactive_agent_candidates
+  // applies, so the meter and the actual deletion rule can't disagree.
+  const sinceMs = new Date(sinceIso).getTime()
+  const onLeaveMs = await leaveOverlapMs(supabase, agentNo, sinceMs, Date.now())
+  const daysInactive = Math.max(0, (Date.now() - sinceMs - onLeaveMs) / DAY_MS)
   return {
     daysSinceFeed: Math.floor(daysInactive),
     daysLeft: Math.max(0, Math.ceil(14 - daysInactive)),
