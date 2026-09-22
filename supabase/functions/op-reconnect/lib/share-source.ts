@@ -1,5 +1,6 @@
 // Share only the requested moment. No buildState/provider sync/UI refresh.
 // Existing goal helpers retain their normal settlement behavior.
+import { frozenDistrictDates } from './leave.ts'
 import { loadContent } from './config.ts'
 import { districtProgress } from './districts.ts'
 import { resolveReconnectStatus } from './reconnect-goal.ts'
@@ -22,12 +23,13 @@ export async function readShareMoment(sb:any, agentNo:string, kind:string, distr
     const complete=pd.status==='restored'
     let active:any=null
     if(!complete) {
-      const [{data:rows,error:rowError},overlay,reconnect]=await Promise.all([
+      const [{data:rows,error:rowError},overlay,reconnect,frozenDates]=await Promise.all([
         sb.from('rc_daily_activity').select('kst_date,track_counts,transmission').eq('agent_no',agentNo).gte('kst_date',kstDateOf(new Date(pd.activated_at).getTime()/1000)).order('kst_date'),
         getBackupOverlay(sb,agentNo,districtId),resolveReconnectStatus(sb,content,agentNo,districtId,pd.goals.reconnect),
+        frozenDistrictDates(sb,agentNo,pd.activated_at),
       ])
       if(rowError)throw new Error('Could not check progress. Please retry.')
-      active={...districtProgress(pd.goals,pd.baseline||{},rows||[],pd.activated_at,content,overlay),reconnect}
+      active={...districtProgress(pd.goals,pd.baseline||{},rows||[],pd.activated_at,content,overlay,undefined,frozenDates),reconnect}
     }
     return {district,complete,active,frozen:pd.goals,percent:complete?100:districtPercent(active)}
   }

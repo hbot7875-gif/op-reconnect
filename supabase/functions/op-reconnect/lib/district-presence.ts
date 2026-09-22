@@ -1,3 +1,4 @@
+import { frozenDistrictDates } from './leave.ts'
 import type { GameContent, SupabaseDB } from './config.ts'
 import { districtProgress } from './districts.ts'
 import { getMissionStatus } from './reconnect-missions.ts'
@@ -109,12 +110,13 @@ export async function getWardRoster(supabase: SupabaseDB, content: GameContent, 
 async function agentProgress(supabase: SupabaseDB, content: GameContent, row: any) {
   const pd = row.pd
   const activationDate = kstDateOf(Math.floor(new Date(pd.activated_at).getTime() / 1000))
-  const [{ data: rollups }, backup] = await Promise.all([
+  const [{ data: rollups }, backup, frozenDates] = await Promise.all([
     supabase.from('rc_daily_activity').select('kst_date,track_counts,transmission')
       .eq('agent_no', row.agent_no).gte('kst_date', activationDate).order('kst_date'),
     getBackupOverlay(supabase, row.agent_no, pd.district_id),
+    frozenDistrictDates(supabase, row.agent_no, pd.activated_at),
   ])
-  const progress = districtProgress(pd.goals, pd.baseline || {}, rollups || [], pd.activated_at, content, backup)
+  const progress = districtProgress(pd.goals, pd.baseline || {}, rollups || [], pd.activated_at, content, backup, undefined, frozenDates)
   const frozenReconnect = pd.goals?.reconnect || null
   const reconnect = frozenReconnect
     ? await getMissionStatus(supabase, row.agent_no, pd.district_id, frozenReconnect)

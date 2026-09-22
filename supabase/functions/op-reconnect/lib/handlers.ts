@@ -26,7 +26,7 @@ import { isBadgeEditor } from './badge-admin.ts'
 import { getDistrictMessageSummary } from './district-presence.ts'
 import { getModeVolumeReview } from './mode-guard.ts'
 import { activationDayBounds, activationDayCounts } from './activation-window.ts'
-import { activeLeave, leaveStatus } from './leave.ts'
+import { activeLeave, leaveStatus, frozenDistrictDates } from './leave.ts'
 
 /** Administrative grace time is stored separately from activated_at so a
  * support extension never shifts the stream-counting window or its frozen
@@ -221,7 +221,10 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     // answer an arbitrary-time-of-day window.
     const todayWindow = activationDayBounds(activePd.activated_at)
     const todayWindowCounts = await activationDayCounts(supabase, player.agent_no, todayWindow.fromSec, todayWindow.toSec)
-    const progress = districtProgress(activePd.goals, activePd.baseline || {}, windowRollups || [], activePd.activated_at, content, { ...backupOverlay, ...teamBoostOverlay }, todayWindowCounts)
+    // Leave days freeze the district: those rollup days are skipped here
+    // (and only here — Charge Cells above still count album streams).
+    const frozenDates = await frozenDistrictDates(supabase, player.agent_no, activePd.activated_at)
+    const progress = districtProgress(activePd.goals, activePd.baseline || {}, windowRollups || [], activePd.activated_at, content, { ...backupOverlay, ...teamBoostOverlay }, todayWindowCounts, frozenDates)
     const deadline = districtDeadline(activePd.activated_at, restorationDays(content), districtDeadlineExtraDays(activePd))
     // districtProgress().complete only covers solo track+album goals — the
     // reconnect goal (if any was frozen in) needs its own live resolution

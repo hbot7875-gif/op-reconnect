@@ -113,9 +113,9 @@ export function agentManualSheet() {
   // same list at the moment they take one.
   const leave = detailSection('Going away? Take a leave')
   leave.body.appendChild(infoRow('🌙', 'What it is', 'A pause for 3 to 14 days. Settings → Take a leave → pick how many days → Start. It begins right away.'))
-  leave.body.appendChild(infoRow('⏸', 'What pauses', 'Your district deadline (extra days are added), your ARMY Bomb (it will not go dark), your streak (every day away is covered for free), and the inactivity clock.'))
+  leave.body.appendChild(infoRow('⏸', 'What freezes', 'Your district (the deadline is pushed out, and streams do not move its goals until you are back), your ARMY Bomb (it will not go dark), your streak (kept alive for free — it does not grow while you are away), and the inactivity clock.'))
   leave.body.appendChild(infoRow('🤝', 'What does not pause', 'ReConnect team missions keep running, because those clocks belong to your teammates too. Finish or leave a team mission first if you are worried about it.'))
-  leave.body.appendChild(infoRow('🎧', 'Streaming while away', 'Totally fine. Anything you stream still counts, just like always.'))
+  leave.body.appendChild(infoRow('🎧', 'Streaming while away', 'Totally fine. Streams still count for XP, your Bomb, ReConnect and everything else — just not toward the frozen district. Come back early if you want them to.'))
   leave.body.appendChild(infoRow('↩️', 'Back early?', 'Open Settings → On leave → End leave now. Only the days you did not use are taken back.'))
   leave.body.appendChild(infoRow('📅', 'Limits', 'One leave at a time, and the next one can start 14 days after the last one ended. You cannot start a new district while on leave.'))
   content.appendChild(leave.section)

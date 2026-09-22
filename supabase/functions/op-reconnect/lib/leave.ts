@@ -61,6 +61,38 @@ export async function leaveOverlapMs(supabase: SupabaseDB, agentNo: string, from
   return total
 }
 
+/** KST dates on which the paused district must not move. The start day
+ *  still counts (plays made before the leave began shouldn't vanish); every
+ *  later day of the leave is frozen, including today while it's still on;
+ *  the day an agent comes back counts again. */
+export function frozenDatesFor(rows: LeaveRow[], nowMs = Date.now()): Set<string> {
+  const out = new Set<string>()
+  const DAY = 86_400_000
+  const kst = (ms: number) => new Date(ms + 9 * 3600_000).toISOString().slice(0, 10)
+  for (const r of rows) {
+    const startMs = new Date(r.starts_at).getTime()
+    const endMs = endOf(r)
+    if (startMs > nowMs) continue
+    const active = endMs > nowMs
+    const first = kst(startMs + DAY)
+    const last = active ? kst(nowMs) : kst(endMs - DAY)
+    for (let d = first; d <= last; d = new Date(new Date(d + 'T00:00:00Z').getTime() + DAY).toISOString().slice(0, 10)) {
+      out.add(d)
+    }
+  }
+  return out
+}
+
+/** The dates districtProgress should skip for this agent — every
+ *  districtProgress caller passes this so no view ever disagrees. */
+export async function frozenDistrictDates(supabase: SupabaseDB, agentNo: string, sinceIso?: string): Promise<Set<string>> {
+  let q = supabase.from('rc_player_leaves')
+    .select('starts_at, ends_at, ended_at, district_id').eq('agent_no', agentNo)
+  if (sinceIso) q = q.gte('ends_at', sinceIso)
+  const { data } = await q
+  return frozenDatesFor((data || []) as LeaveRow[])
+}
+
 export async function startLeave(supabase: SupabaseDB, params: Record<string, unknown>) {
   const agentNo = String(params.agentNo || '').trim().toUpperCase()
   const days = Math.round(Number(params.days))

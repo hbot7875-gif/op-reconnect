@@ -179,8 +179,8 @@ function paintSections(body, state) {
       name: leave ? 'On leave' : 'Take a leave',
       value: leave ? `until ${fmtDate(leave.endsAt)}` : '',
       body: leave
-        ? `Your district deadline, ARMY Bomb and streak are paused until ${fmtDate(leave.endsAt)}. Streams still count if you play.`
-        : 'Going away for a few days? Pause your district deadline, ARMY Bomb and streak for 3–14 days.',
+        ? `Your district, ARMY Bomb and streak are frozen until ${fmtDate(leave.endsAt)}. Streams still count for XP and everything else.`
+        : 'Going away for a few days? Freeze your district, ARMY Bomb and streak for 3–14 days.',
       onClick: () => showOverlay(leaveSheet(getState() || state)),
     },
   ]))
@@ -312,7 +312,7 @@ function leaveSheet(state) {
   if (leave) {
     sheet.append(
       el('h3', '', `Paused until ${fmtDate(leave.endsAt)}`),
-      el('p', 'muted', `${leave.daysLeft} day${leave.daysLeft === 1 ? '' : 's'} left. ${leave.districtPaused ? 'Your district deadline, ' : 'Your '}ARMY Bomb and streak are all on hold. Streams still count if you do play.`),
+      el('p', 'muted', `${leave.daysLeft} day${leave.daysLeft === 1 ? '' : 's'} left. ${leave.districtPaused ? "Your district is frozen (deadline paused, streams don't move it), and your " : 'Your '}ARMY Bomb and streak are on hold. Streams still count for XP and everything else.`),
       el('p', 'muted', 'Ending early hands back only the unused days — nothing you already got is taken away.'),
     )
     const end = el('button', 'btn btn-primary', 'End leave now')
@@ -342,12 +342,12 @@ function leaveSheet(state) {
     )
     const list = el('ul', 'set-leave-list')
     list.innerHTML = `
-      <li>⏳ Your district deadline is pushed out by the same number of days${state?.activeDistrict ? '' : ' (no district is running right now)'}</li>
+      <li>⏳ Your district is frozen: the deadline is pushed out by the same number of days, and streams don't move its goals until you're back${state?.activeDistrict ? '' : ' (no district is running right now)'}</li>
       <li>💣 Your ARMY Bomb won't go dark, and no blackout clock runs</li>
-      <li>🔥 Your streak is covered every day — no Streak Freezes spent</li>
+      <li>🔥 Your streak is kept alive — no Streak Freezes spent (it doesn't grow while you're away)</li>
       <li>🗂 The 14-day inactivity clock stops</li>
       <li>🤝 ReConnect team missions keep going — those clocks belong to your teammates too</li>
-      <li>🎧 Anything you stream still counts</li>`
+      <li>🎧 Streams still count for XP, your Bomb, ReConnect and everything else — just not toward the frozen district</li>`
     sheet.appendChild(list)
     sheet.appendChild(el('div', 'set-leave-picks-label', 'DAYS AWAY'))
     const picks = el('div', 'set-leave-picks')

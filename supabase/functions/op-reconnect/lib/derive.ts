@@ -284,8 +284,12 @@ export async function computeStreak(
     if (countedStreams(r.track_counts || {}, allowlist, capForPlayer, overrides) > 0) activeDays.add(String(r.kst_date))
   }
 
-  const { data: freezeRows } = await supabase.from('rc_streak_freeze_log').select('freeze_date').eq('agent_no', agentNo)
-  const frozenDays = new Set<string>((freezeRows || []).map((r: any) => String(r.freeze_date)))
+  const { data: freezeRows } = await supabase.from('rc_streak_freeze_log').select('freeze_date, kind').eq('agent_no', agentNo)
+  // Charge-spent freezes count as streak days (always have). Leave days
+  // (lib/leave.ts) only bridge: the chain survives them but doesn't grow —
+  // otherwise a free 14-day leave was +14 streak with zero streams.
+  const frozenDays = new Set<string>((freezeRows || []).filter((r: any) => r.kind !== 'leave').map((r: any) => String(r.freeze_date)))
+  const leaveDays = new Set<string>((freezeRows || []).filter((r: any) => r.kind === 'leave').map((r: any) => String(r.freeze_date)))
 
   const todayCounted = activeDays.has(today)
   let streak = 0
@@ -297,6 +301,8 @@ export async function computeStreak(
     if (cursor < joinedDate) break
     if (activeDays.has(cursor) || frozenDays.has(cursor)) {
       streak++
+    } else if (leaveDays.has(cursor)) {
+      // bridged, not counted — and never a reason to spend a charge
     } else if (chargesLeft > 0) {
       chargesLeft--
       newlyFrozen.push(cursor)

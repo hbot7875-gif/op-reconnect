@@ -2,6 +2,7 @@
 // agent already has linked. Reuses fetchStreamRows (same source resolution
 // startDistrict/getGameState already use) rather than a second ingest path.
 
+import { frozenDistrictDates } from './leave.ts'
 import type { SupabaseDB } from './config.ts'
 import { loadContent, limits, trackArtistOverrides } from './config.ts'
 import { fetchStreamRows } from './streams.ts'
@@ -97,7 +98,8 @@ export async function getSignalLog(supabase: SupabaseDB, params: Record<string, 
   let districtContext: any = null
   if (activePd?.goals) {
     const overlay = await getBackupOverlay(supabase, agentNo, activePd.district_id)
-    const before = districtProgress(activePd.goals, activePd.baseline || {}, beforeWindow, activePd.activated_at, content, overlay)
+    const frozenDates = await frozenDistrictDates(supabase, agentNo, activePd.activated_at)
+    const before = districtProgress(activePd.goals, activePd.baseline || {}, beforeWindow, activePd.activated_at, content, overlay, undefined, frozenDates)
     const district = content.districts.find((d) => d.id === activePd.district_id)
     districtContext = {
       id: activePd.district_id,

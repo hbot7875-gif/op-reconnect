@@ -274,14 +274,18 @@ export function districtProgress(
   // todayCountFor's doc comment) — undefined falls back to the old KST-day
   // bucket lookup, which is fine for every caller that never reads `today`.
   todayWindowCounts?: Map<string, number>,
+  // KST dates to skip entirely — leave days (lib/leave.ts frozenDistrictDates):
+  // the district is frozen, so plays on those days don't move it.
+  frozenDates: Set<string> = new Set(),
 ): DistrictProgress {
   // District/album goal progress is uncapped — every real counted stream
   // moves the goal, same as the arirang mission. See config.ts's
   // PERSONAL_COUNT_CAP for what still keeps a real cap (the shared Bomb).
   const cap = PERSONAL_COUNT_CAP
   const activationDate = kstDateOf(Math.floor(new Date(activatedAt).getTime() / 1000))
-  const inWindow = rollups.filter((r) => r.kst_date >= activationDate)
+  const inWindow = rollups.filter((r) => r.kst_date >= activationDate && !frozenDates.has(String(r.kst_date)))
   const todayDate = todayKst()
+  if (frozenDates.has(todayDate)) todayWindowCounts = new Map()
 
   const trackGoals = frozen.trackGoals.map((g) => {
     const total = windowedPlays(g.keys, inWindow, activationDate, baseline[`t:${g.id}`] || 0, cap, false)
