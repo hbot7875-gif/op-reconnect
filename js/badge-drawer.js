@@ -7,6 +7,7 @@
 // fire/star/XP/district emoji achievements belong to the previous badge
 // experience and are intentionally not mixed into this collection.
 
+import { badgeThumb } from './badge-art.js'
 import { call } from './api.js'
 import { el, esc, getState, hideOverlay, setState, showOverlay, toast } from './state.js'
 import { getAgentNo } from './session.js'
@@ -101,7 +102,7 @@ function badgeSlot(tile, name, rarity, earned) {
 }
 
 function collectionTile(e, wearing, state) {
-  const art = e.artworkUrl ? `<img class="bdr-photo" src="${esc(e.artworkUrl)}" alt="" loading="lazy" decoding="async">` : `<span class="bdr-icon">${e.rarity === 'rare' ? '🎖️' : '🔹'}</span>`
+  const art = e.artworkUrl ? `<img class="bdr-photo" src="${esc(badgeThumb(e.artworkUrl, 94))}" alt="" loading="lazy" decoding="async">` : `<span class="bdr-icon">${e.rarity === 'rare' ? '🎖️' : '🔹'}</span>`
   const tile = el('button', 'bdr-tile got' + (wearing ? ' equipped' : '') + (e.rarity === 'rare' ? ' rare' : ''),
     `${art}${e.rarity === 'rare' ? '<span class="bdr-rarity">RARE</span>' : ''}${wearing ? '<i>WORN</i>' : ''}`)
   tile.setAttribute('aria-label', e.name)

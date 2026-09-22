@@ -13,6 +13,7 @@
 // per-rank floor wasn't in the payload. Showing level progress instead needs
 // no guessing: xpIntoLevel/xpForNextLevel come straight from the server.
 
+import { badgeThumb } from './badge-art.js'
 import { call } from './api.js'
 import { el, esc, toast, setState, showOverlay, hideOverlay } from './state.js'
 import { getScreen, goWorld, goResources, goSettings, goCandyStar, goRanking, goDistrict } from './router.js'
@@ -235,7 +236,7 @@ export function renderHud(container, state) {
       <div class="hud-row">
         <div class="hud-identity" id="levelPill" role="button" tabindex="0" title="Open Agent Dossier">
           <span class="hud-crest${agentBadge || collectionBadge ? ' has-badge' : ''}${badgeArt ? ' has-photo' : ''}${crestRare}" aria-hidden="true"><i></i>${
-            badgeArt ? `<img class="hud-crest-photo" src="${esc(badgeArt)}" alt="">` : `<b>${collectionBadge ? '🎖️' : agentBadge ? agentBadge.icon : '⟭⟬'}</b>`
+            badgeArt ? `<img class="hud-crest-photo" src="${esc(badgeThumb(badgeArt, 48))}" alt="">` : `<b>${collectionBadge ? '🎖️' : agentBadge ? agentBadge.icon : '⟭⟬'}</b>`
           }</span>
           <span class="hud-who">
             <span class="hud-code-row">

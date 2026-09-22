@@ -6,11 +6,24 @@ import { loadContent } from './config.ts'
 import { levelFor } from './leveling.ts'
 import { resolveEquippedBadges } from './badge-profile.ts'
 import { activeRankingRows } from './ranking-rules.js'
+import { cachedJson } from './cache.ts'
+
+// The board is the same for every agent and changes slowly (XP lands on
+// polls, badges on awards), so it's computed once per 30s into rc_cache
+// (lib/cache.ts) and every other request is a single row read. Measured
+// ~1.0s per request before; the five round trips below only run on a miss.
+const LEADERBOARD_CACHE_MS = 30_000
 
 export async function getLeaderboard(supabase: SupabaseDB, _params: Record<string, unknown>) {
+  const agents = await cachedJson(supabase, 'leaderboard', LEADERBOARD_CACHE_MS, () => computeLeaderboard(supabase))
+  if (!Array.isArray(agents)) return { success: false, error: 'leaderboard_unavailable' }
+  return { success: true, agents }
+}
+
+async function computeLeaderboard(supabase: SupabaseDB) {
   const content = await loadContent(supabase)
   const { data, error } = await supabase.rpc('rc_leaderboard')
-  if (error) return { success: false, error: error.message }
+  if (error) throw new Error(error.message)
   // Retirement is intentionally a soft delete, so rc_players and the XP
   // ledger remain as historical records. rc_leaderboard therefore still
   // returns them unless this public response explicitly gates against the
@@ -44,5 +57,5 @@ export async function getLeaderboard(supabase: SupabaseDB, _params: Record<strin
     equippedBadgeArtwork: artwork.get(row.agent_no) || null,
   }))
 
-  return { success: true, agents }
+  return agents
 }

@@ -6,6 +6,7 @@
 // not directly comparable. Each mode gets its own board; "All" is for
 // bragging rights only and says so.
 
+import { badgeThumb } from './badge-art.js'
 import { call } from './api.js'
 import { el, esc } from './state.js'
 import { getAgentNo } from './session.js'
@@ -81,7 +82,7 @@ function paintList(body, agents, state) {
       + (place <= 3 ? ' is-top' : ''))
     row.innerHTML = `
       <span class="rank-place">${place <= 3 ? MEDAL[place] : place}</span>
-      <span class="rank-agent-icon">${badgeArt ? `<img class="rank-agent-photo" src="${esc(badgeArt)}" alt="">` : (collectionBadge ? '🎖️' : badge ? badge.icon : '⟭⟬')}</span>
+      <span class="rank-agent-icon">${badgeArt ? `<img class="rank-agent-photo" src="${esc(badgeThumb(badgeArt, 34))}" alt="" loading="lazy" decoding="async" width="34" height="34">` : (collectionBadge ? '🎖️' : badge ? badge.icon : '⟭⟬')}</span>
       <span class="rank-main">
         <span class="rank-name">${esc(a.codename)}</span>
         <span class="rank-sub">Level ${a.level}${activeTab === 'all' ? ` · ${esc(MODE_LABEL[a.mode] || a.mode)}` : ''}</span>
