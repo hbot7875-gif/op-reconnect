@@ -282,9 +282,14 @@ function commandTools(state) {
     // place). Still one tap away, just not competing for map real estate.
     const suggest = el('button', 'btn btn-ghost', '💡 Suggestions')
     suggest.onclick = () => { hideOverlay(); openSuggestions() }
+    // The RE:CELEBRATE archive after its venue left the map (see cityPlan):
+    // final result, Tonight's Streams, the After Party record and any
+    // unopened return gifts. Only once the event is genuinely complete.
+    const archive = arirangPartyIsComplete() ? el('button', 'btn btn-ghost', '✦ RE:CELEBRATE archive') : null
+    if (archive) archive.onclick = () => { hideOverlay(); openArirangRecelebrate() }
     const close = el('button', 'btn btn-ghost', 'Close')
     close.onclick = hideOverlay
-    sheet.append(share, find, suggest, close)
+    sheet.append(share, find, suggest, ...(archive ? [archive] : []), close)
     showOverlay(sheet)
   }
   return button
@@ -328,6 +333,9 @@ function mapHint(state) {
    never the city those wards add up to. Tapping a ward opens it, same as its
    tile. The tiles stay: this answers "how much of the world is back", the
    tiles answer "what do I do next". */
+// See cityPlan's RE:CELEBRATE note — flip to true to show the venue on the map again.
+const RECELEBRATE_ON_MAP = false
+
 function cityPlan(state) {
   const wards = state.map?.wards || []
   if (!wards.length) return el('div')
@@ -350,15 +358,21 @@ function cityPlan(state) {
     !!(state.vma?.isPowerHour || state.vma?.isDoubleDay),
     golden ? (origin) => goGoldenCorner(origin) : null,
     goldenProgress,
-    // ARIRANG RE:CELEBRATE — pre-event teaser only (first ReCelebrate
-    // feature). Always shown while this build ships it; a real on/off
-    // switch (rc_config-driven, matching VMA/Golden Corner) is later work
-    // once the actual event window needs to start and end on its own.
-    () => openArirangRecelebrate(),
-    arirangPartyIsLive(),
-    ARIRANG_RECELEBRATE.opensAtIso,
-    arirangPartyIsComplete(),
-    arirangPartyIsCounting()))
+    // ARIRANG RE:CELEBRATE's venue has left the map — the event is over,
+    // so the top seam goes back to Candy Star + Magic Shop. Nothing about
+    // the event is deleted: partyVenue in city-map.js, the Party page, the
+    // After Party gifts, battle ledger, passes and Love Songs all stay, and
+    // the archive is still one tap away in the City ••• menu (agents with
+    // unopened return gifts still need a way in). The plan is for these to
+    // resurface in a "Dear Diary" of past events; until then, pass
+    // RECELEBRATE_ON_MAP = true to put the venue back exactly as it was.
+    ...(RECELEBRATE_ON_MAP ? [
+      () => openArirangRecelebrate(),
+      arirangPartyIsLive(),
+      ARIRANG_RECELEBRATE.opensAtIso,
+      arirangPartyIsComplete(),
+      arirangPartyIsCounting(),
+    ] : [])))
   return box
 }
 

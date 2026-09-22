@@ -764,16 +764,19 @@ export function renderCityMap(wards, districts, onSelect, homeFraction, onCandyS
     svg.appendChild(partyVenue(-Math.PI / 2, onParty, partyLive, partyDeadlineIso, partyComplete, partyCounting))
   }
 
-  // Candy Star and Magic Shop flank the ring at its two horizontal extremes
-  // — two real "go here" world locations, clearly a pair, each with a full
-  // side of the island to itself. Suggestions used to sit in the old top
-  // cluster too; it moved to the City ••• menu (screen-world.js's
-  // commandTools) since it was never a place, just a feedback form — see
-  // suggestions.js. toolMarker's label now grows away from whichever edge
-  // it's nearest (see its own comment) specifically so it can sit here
-  // without the text clipping past the viewBox.
-  if (onCandyStar) svg.appendChild(toolMarker(Math.PI, '🍬', 'Candy Star', onCandyStar))
-  if (onMagicShop) svg.appendChild(toolMarker(0, '🏪', 'Magic Shop', onMagicShop))
+  // Candy Star and Magic Shop — two real "go here" world locations, clearly
+  // a pair. Their home is the top seam, side by side (the pre-RE:CELEBRATE
+  // layout); while an event venue holds that seam they flank the ring at
+  // its two horizontal extremes instead, each with a full side of the
+  // island to itself. Suggestions used to sit in the old top cluster too;
+  // it moved to the City ••• menu (screen-world.js's commandTools) since it
+  // was never a place, just a feedback form — see suggestions.js.
+  // toolMarker's label grows away from whichever edge it's nearest (see its
+  // own comment) specifically so the flanking spots don't clip the viewBox.
+  const candyAngle = onParty ? Math.PI : -Math.PI / 2 - 0.20
+  const shopAngle = onParty ? 0 : -Math.PI / 2 + 0.20
+  if (onCandyStar) svg.appendChild(toolMarker(candyAngle, '🍬', 'Candy Star', onCandyStar))
+  if (onMagicShop) svg.appendChild(toolMarker(shopAngle, '🏪', 'Magic Shop', onMagicShop))
 
   // The bottom seam, symmetric with the top one RE:CELEBRATE now holds — a
   // temporary event marker sharing a side with a permanent utility would
