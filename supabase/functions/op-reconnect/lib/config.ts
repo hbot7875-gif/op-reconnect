@@ -51,7 +51,25 @@ export interface GameContent {
   districts: DistrictRow[]
 }
 
+// The four content tables change only when the site owner edits them, yet
+// every request re-read them (rc_districts alone: 334k reads). A short
+// in-instance cache keeps them warm across the polls that land on the same
+// edge instance; 20s of staleness on config/goals is invisible to a player,
+// and admin writes call invalidateContentCache() so they see their own
+// change on the very next read.
+let contentCache: { at: number; value: GameContent } | null = null
+const CONTENT_CACHE_MS = 20_000
+
+export function invalidateContentCache() { contentCache = null }
+
 export async function loadContent(supabase: SupabaseDB): Promise<GameContent> {
+  if (contentCache && Date.now() - contentCache.at < CONTENT_CACHE_MS) return contentCache.value
+  const value = await loadContentFresh(supabase)
+  contentCache = { at: Date.now(), value }
+  return value
+}
+
+async function loadContentFresh(supabase: SupabaseDB): Promise<GameContent> {
   const [cfgRes, goalsRes, wardsRes, districtsRes] = await Promise.all([
     supabase.from('rc_config').select('key, value'),
     supabase.from('rc_goals').select('*').eq('active', true).order('sort_order'),

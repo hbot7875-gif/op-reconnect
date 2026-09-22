@@ -21,7 +21,7 @@
 // (SYNC_ADMIN_KEY via isAdminAuthorized), same CRUD shape as broadcasts.ts.
 
 import type { SupabaseDB } from './config.ts'
-import { loadContent } from './config.ts'
+import { loadContent, invalidateContentCache } from './config.ts'
 import { extractYoutubeId } from './text.ts'
 
 export interface GoalDbRow {
@@ -193,6 +193,7 @@ export async function adminUpdateGoal(supabase: SupabaseDB, params: any) {
   }
 
   const { data, error } = await supabase.from('rc_goals').update(patch).eq('id', id).select().maybeSingle()
+  invalidateContentCache()
   if (error) return { success: false, error: error.message }
   if (!data) return { success: false, error: 'goal_not_found' }
   return { success: true, goal: shape(data) }
@@ -205,6 +206,7 @@ export async function adminDeleteGoal(supabase: SupabaseDB, params: any) {
   const id = String(params.id || '')
   if (!id) return { success: false, error: 'id_required' }
   const { error } = await supabase.from('rc_goals').delete().eq('id', id)
+  invalidateContentCache()
   if (error) return { success: false, error: error.message }
   return { success: true }
 }

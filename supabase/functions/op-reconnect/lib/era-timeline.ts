@@ -18,6 +18,7 @@
 // everywhere else (BTS-artist-allowlisted) — the per-agent variety cap
 // doesn't apply here, since this measures reach, not something farmable.
 
+import { cachedJson } from './cache.ts'
 import type { SupabaseDB, GameContent } from './config.ts'
 import { trackArtistOverrides } from './config.ts'
 import { normKeyFull, countedArtistPlays } from './text.ts'
@@ -364,12 +365,16 @@ function eraCfg(content: GameContent) {
 // re-run it. A short in-memory cache (this module's instance is warm across
 // requests on the edge runtime) keeps DB load flat regardless of player
 // count — 60s of staleness on a cumulative, all-time stat is invisible.
-let cache: { at: number; value: EraTimeline } | null = null
+// The cache used to be a module-level variable; measured on getGameState it
+// missed on every poll (fresh isolate each time), so it now lives in
+// rc_cache (lib/cache.ts) where every isolate shares it.
 const CACHE_MS = 60_000
 
 export async function getEraTimeline(supabase: SupabaseDB, content: GameContent): Promise<EraTimeline> {
-  if (cache && Date.now() - cache.at < CACHE_MS) return cache.value
+  return cachedJson(supabase, 'era_timeline', CACHE_MS, () => computeEraTimeline(supabase, content))
+}
 
+async function computeEraTimeline(supabase: SupabaseDB, content: GameContent): Promise<EraTimeline> {
   const cfg = eraCfg(content)
   const allow: string[] = content.config.bts_artists || []
   const overrides = trackArtistOverrides(content)
@@ -400,8 +405,7 @@ export async function getEraTimeline(supabase: SupabaseDB, content: GameContent)
     }
   })
 
-  cache = { at: Date.now(), value: { eras } }
-  return cache.value
+  return { eras }
 }
 
 /** How many eras the network has fully unlocked — bomb.ts reads this to

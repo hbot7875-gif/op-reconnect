@@ -159,7 +159,19 @@ export async function getVmaBanner(supabase: SupabaseDB, content: GameContent, a
   if (!cfg) return null
   const now = new Date()
   const open = now >= new Date(cfg.period_start_utc) && now <= new Date(cfg.period_end_utc)
-  const chest = await getChestStatus(supabase, content, { agentNo, eventId })
+  const day = etDateOf(now)
+  // Four independent reads (own chest, own votes today, everyone's votes
+  // today, the community chest) — one round trip instead of four. The two
+  // vote reads are only needed while voting is open, but they're cheap and
+  // starting them here keeps the open path to a single await.
+  const [chest, { data: rows }, { data: communityRows }, communityChest] = await Promise.all([
+    getChestStatus(supabase, content, { agentNo, eventId }),
+    supabase.from('rc_vma_votes')
+      .select('votes_logged').eq('event_id', eventId).eq('agent_no', agentNo).eq('vote_day', day).eq('verify_status', 'verified'),
+    supabase.from('rc_vma_votes')
+      .select('votes_logged').eq('event_id', eventId).eq('vote_day', day).eq('verify_status', 'verified'),
+    getCommunityChestStatus(supabase, content, { agentNo, eventId }),
+  ])
 
   if (!open) {
     // (9) Voting closing doesn't mean saved chest progress becomes
@@ -177,9 +189,6 @@ export async function getVmaBanner(supabase: SupabaseDB, content: GameContent, a
     return null
   }
 
-  const day = etDateOf(now)
-  const { data: rows } = await supabase.from('rc_vma_votes')
-    .select('votes_logged').eq('event_id', eventId).eq('agent_no', agentNo).eq('vote_day', day).eq('verify_status', 'verified')
   const cap = boostedCap(cfg, now)
   const todayVotes = (rows || []).reduce((s: number, r: any) => s + r.votes_logged, 0)
   const todayCap = cap * cfg.categories.length
@@ -187,15 +196,11 @@ export async function getVmaBanner(supabase: SupabaseDB, content: GameContent, a
   // Every agent's votes today, not just this one's — a live "the whole
   // fandom logged N votes today" figure reads as collective momentum,
   // which a single agent's own capped count (max 20/day) can't convey.
-  const { data: communityRows } = await supabase.from('rc_vma_votes')
-    .select('votes_logged').eq('event_id', eventId).eq('vote_day', day).eq('verify_status', 'verified')
   const communityVotesToday = (communityRows || []).reduce((s: number, r: any) => s + r.votes_logged, 0)
 
   // Group Supply Chest — the fandom-wide milestone track (see
   // vma-community-chest.ts), folded in here so the banner can nudge
   // "claimable" without the World screen needing its own extra fetch.
-  const communityChest = await getCommunityChestStatus(supabase, content, { agentNo, eventId })
-
   return {
     eventId, title: cfg.title, ended: false,
     // (7) Both can be true on the same real-world day (e.g. a Double Day

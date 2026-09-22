@@ -426,12 +426,13 @@ export interface AgentChargeView {
  *  The old bomb_fed event is retained only as a legacy fallback for rows that
  *  predate the atomic timestamp migration. */
 async function bombFeedHealth(supabase: SupabaseDB, agentNo: string): Promise<{ daysSinceFeed: number; daysLeft: number; lastFedAt: string } | null> {
-  const { data: charge } = await supabase.from('rc_agent_charge')
-    .select('last_fed_at').eq('agent_no', agentNo).maybeSingle()
-  const { data: legacyLastFed } = await supabase.from('rc_feed_events')
-    .select('created_at').eq('agent_no', agentNo).eq('event_type', 'bomb_fed')
-    .order('created_at', { ascending: false }).limit(1).maybeSingle()
-  const { data: agent } = await supabase.from('rc_agents').select('created_at').eq('agent_no', agentNo).maybeSingle()
+  const [{ data: charge }, { data: legacyLastFed }, { data: agent }] = await Promise.all([
+    supabase.from('rc_agent_charge').select('last_fed_at').eq('agent_no', agentNo).maybeSingle(),
+    supabase.from('rc_feed_events')
+      .select('created_at').eq('agent_no', agentNo).eq('event_type', 'bomb_fed')
+      .order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    supabase.from('rc_agents').select('created_at').eq('agent_no', agentNo).maybeSingle(),
+  ])
   const sinceIso = charge?.last_fed_at || legacyLastFed?.created_at || agent?.created_at
   if (!sinceIso) return null
   // Time on leave doesn't count — same exclusion rc_inactive_agent_candidates
@@ -478,8 +479,11 @@ async function lifetimeChargeCellsEarned(supabase: SupabaseDB, agentNo: string):
  * re-reads the same state back.
  */
 export async function getAgentChargeView(supabase: SupabaseDB, content: GameContent, agentNo: string): Promise<AgentChargeView> {
-  const row = await getOrCreateRow(supabase, agentNo)
-  const { data: player } = await supabase.from('rc_players').select('charge_cells, streak_freeze_charges').eq('agent_no', agentNo).maybeSingle()
+  // Two reads of different tables, neither depending on the other.
+  const [row, { data: player }] = await Promise.all([
+    getOrCreateRow(supabase, agentNo),
+    supabase.from('rc_players').select('charge_cells, streak_freeze_charges').eq('agent_no', agentNo).maybeSingle(),
+  ])
   let cells = player?.charge_cells || 0
   let freezes = player?.streak_freeze_charges || 0
   const now = Date.now()
@@ -515,7 +519,18 @@ export async function getAgentChargeView(supabase: SupabaseDB, content: GameCont
     }
   }
 
-  const weekly = await computeWeeklyEraCards(supabase, content, agentNo)
+  // The four reads below the blackout evaluation don't depend on it or on
+  // each other: era cards read rc_daily_activity + rc_era_* rows, the
+  // lifetime counter is a column the blackout path never touches, feed
+  // health reads last_fed_at (the blackout path updates other columns of
+  // that row), Golden Corner reads its own tables. Start them now and
+  // await them after the blackout logic, which itself stays sequential.
+  const laterReads = Promise.all([
+    computeWeeklyEraCards(supabase, content, agentNo),
+    lifetimeChargeCellsEarned(supabase, agentNo),
+    bombFeedHealth(supabase, agentNo),
+    computeGoldenCorner(supabase, content, agentNo),
+  ])
 
   const isDark = chargedUntilMs === null ? false : chargedUntilMs <= now
   let blackoutStartMs = row.blackout_started_at ? new Date(row.blackout_started_at).getTime() : null
@@ -556,12 +571,10 @@ export async function getAgentChargeView(supabase: SupabaseDB, content: GameCont
     await supabase.from('rc_agent_charge').update({ blackout_started_at: null, soft_reset_at: null, full_reset_at: null }).eq('agent_no', agentNo)
   }
 
-  const earned = await lifetimeChargeCellsEarned(supabase, agentNo)
-  const feedHealth = await bombFeedHealth(supabase, agentNo)
+  const [weekly, earned, feedHealth, goldenCorner] = await laterReads
   const deletionWarning = feedHealth && feedHealth.daysSinceFeed >= 7 && feedHealth.daysLeft > 0
     ? { daysInactive: feedHealth.daysSinceFeed, daysLeft: feedHealth.daysLeft }
     : null
-  const goldenCorner = await computeGoldenCorner(supabase, content, agentNo)
 
   return {
     hoursRemaining: chargedUntilMs ? Math.max(0, (chargedUntilMs - now) / HOUR_MS) : 0,

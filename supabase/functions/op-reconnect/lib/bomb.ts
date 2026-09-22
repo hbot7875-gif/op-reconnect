@@ -17,6 +17,7 @@
 // (dimmer visuals, expires on its own) but never removes XP, files or
 // restored districts.
 
+import { cachedJson } from './cache.ts'
 import type { SupabaseDB, GameContent } from './config.ts'
 import { modeMultiplier, loadContent, PERSONAL_COUNT_CAP, trackArtistOverrides } from './config.ts'
 import { todayKst, addDaysStr } from './kst.ts'
@@ -238,6 +239,31 @@ async function buildDefenderRanking(supabase: SupabaseDB, eventId: string, agent
  * Read bomb state, refresh the active defuse event's progress from real
  * community activity, and resolve it if it hit target or ran out of time.
  */
+type SharedBomb = { caps: Awaited<ReturnType<typeof agentCapMap>>; days: number; pooled: number; state: any; ev: any }
+const SHARED_BOMB_MS = 30_000
+
+// Cached in rc_cache (lib/cache.ts), not in this isolate — see cache.ts for
+// why. The cap Map is stored as entries and rebuilt on read.
+async function sharedBombSnapshot(supabase: SupabaseDB, content: GameContent, cfg: BombCfg, fresh: boolean): Promise<SharedBomb> {
+  const stored = await cachedJson(supabase, 'bomb_shared', SHARED_BOMB_MS, async () => {
+    const [caps, days] = await Promise.all([agentCapMap(supabase, content), chargeWindowDays(supabase, content, cfg)])
+    const [pooled, { data: state }, { data: ev }] = await Promise.all([
+      communityStreams(supabase, content, caps, days),
+      supabase.from('rc_bomb_state').select('*').eq('id', 1).maybeSingle(),
+      // The single most recent event regardless of status — active is handled
+      // by the caller same as always; anything else (defused/failed) feeds
+      // resolvedDefuse so a poll landing just after settlement still gets to
+      // show the result once, instead of the event disappearing outright.
+      supabase.from('rc_defuse_events').select('*').order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    ])
+    return { capEntries: [...caps.map.entries()], capBase: caps.base, days, pooled, state, ev }
+  }, fresh)
+  return {
+    caps: { map: new Map<string, number>(stored.capEntries), base: stored.capBase },
+    days: stored.days, pooled: stored.pooled, state: stored.state, ev: stored.ev,
+  }
+}
+
 export async function getBombView(
   supabase: SupabaseDB,
   content: GameContent,
@@ -245,12 +271,17 @@ export async function getBombView(
   manualSync = false,
 ): Promise<BombView> {
   const cfg = bombCfg(content)
-  const caps = await agentCapMap(supabase, content)
-  const days = await chargeWindowDays(supabase, content, cfg)
-  const pooled = await communityStreams(supabase, content, caps, days)
+  // Everything up to the defuse section is network-wide and identical for
+  // every agent: the cap map (every rc_players row), the era-bonus window,
+  // the pooled community streams (a multi-day scan of rc_daily_activity),
+  // bomb state and the latest event. Recomputing it on every agent's every
+  // 90s poll was ~700ms per request; a 30s in-instance snapshot makes the
+  // shared part free for whoever lands on the same instance next. A manual
+  // Sync bypasses it (the agent just pushed new listens and expects to see
+  // them in the pool), and refreshDefuse below still runs live either way.
+  const shared = await sharedBombSnapshot(supabase, content, cfg, manualSync)
+  const { caps, days, pooled, state, ev } = shared
   const charge = Math.max(0, Math.min(1, pooled / Math.max(1, cfg.chargeFullAt)))
-
-  const { data: state } = await supabase.from('rc_bomb_state').select('*').eq('id', 1).maybeSingle()
   const nowIso = new Date().toISOString()
   const brownout = !!(state?.brownout_until && state.brownout_until > nowIso)
 
@@ -258,14 +289,6 @@ export async function getBombView(
   let multiplier = 1 + charge * (cfg.maxMultiplier - 1)
   if (brownout) multiplier *= cfg.brownoutMultiplier
   multiplier = Math.round(multiplier * 100) / 100
-
-  // The single most recent event regardless of status — active is handled
-  // below same as always; anything else (defused/failed) is what feeds
-  // resolvedDefuse so a poll landing just after settlement still gets to
-  // show the result once, instead of the event disappearing outright.
-  const { data: ev } = await supabase
-    .from('rc_defuse_events').select('*')
-    .order('created_at', { ascending: false }).limit(1).maybeSingle()
 
   let defuse: BombView['defuse'] = null
   let resolvedDefuse: BombView['resolvedDefuse'] = null

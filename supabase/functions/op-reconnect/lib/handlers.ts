@@ -100,7 +100,15 @@ function wardStates(content: GameContent, restored: Set<string>) {
   return unlockedWards
 }
 
+// Per-phase wall-clock timings for the test account only (AGENT001, see
+// docs/test-account-and-session-tokens.md) — how the 12s→? poll work was
+// measured. Never emitted for a real agent.
+const TIMING_AGENT = 'AGENT001'
+
 async function buildState(supabase: SupabaseDB, content: GameContent, agent: any, player: any, manualSync = false) {
+  const timing: Record<string, number> | null = player.agent_no === TIMING_AGENT ? {} : null
+  let tPrev = Date.now()
+  const mark = (label: string) => { if (timing) { const now = Date.now(); timing[label] = now - tPrev; tPrev = now } }
   const rules = xpRules(content)
   // Personal counting is uncapped — see config.ts's PERSONAL_COUNT_CAP.
   const cap = PERSONAL_COUNT_CAP
@@ -141,15 +149,21 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
   //    listens are persisted before Red Zone evaluates its exact window.
   // Promise.all rejects on the first failing branch, so an error in any of
   // these still propagates exactly as it did when they were sequential.
+  const timed = <T,>(label: string, p: Promise<T>): Promise<T> => {
+    if (!timing) return p
+    const t0 = Date.now()
+    return p.then((v) => { timing[`  ${label}`] = Date.now() - t0; return v })
+  }
   const [agentCharge, eraTimeline, { invites }, reconnectAlerts] = await Promise.all([
-    getAgentChargeView(supabase, content, player.agent_no),
-    getEraTimeline(supabase, content),
+    timed('agentCharge', getAgentChargeView(supabase, content, player.agent_no)),
+    timed('eraTimeline', getEraTimeline(supabase, content)),
     // Pending reconnect-mission invites — small, agent-scoped, cheap to
     // recompute every poll (unlike eraTimeline's network-wide scan, this is
     // just this one agent's own rc_reconnect_participants rows).
-    getMyInvites(supabase, content, player.agent_no),
-    getReconnectMatchAlerts(supabase, content, player.agent_no),
+    timed('invites', getMyInvites(supabase, content, player.agent_no)),
+    timed('alerts', getReconnectMatchAlerts(supabase, content, player.agent_no)),
   ])
+  mark('batch1_charge_era_invites_alerts')
   // Sequential on purpose: see the reset-DELETE note above.
   const { data: pdRows } = await supabase.from('rc_player_districts').select('*')
     .eq('agent_no', player.agent_no).order('activated_at')
@@ -158,12 +172,17 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
   const goalXpScope = activePd
     ? { goals: activePd.goals, baseline: activePd.baseline || {}, activatedAt: activePd.activated_at }
     : null
-  const rollups = await ensureDailyRollups(supabase, agent, player, content, personalBoostMult, goalXpScope)
+  mark('pd_rows')
+  // Background polls reuse a stream fetch under 3 minutes old; a manual Sync
+  // always fetches (see ensureDailyRollups's maxStaleMs).
+  const rollups = await ensureDailyRollups(supabase, agent, player, content, personalBoostMult, goalXpScope, manualSync ? 0 : 180_000)
+  mark('ensureDailyRollups')
   // Red Zone (target/contribution/reward) is network-wide. Reading it after
   // the current agent's rollup/source refresh prevents the Red Zone card
   // from lagging one Sync behind the district progress shown beside it.
   // bomb.multiplier remains display-only and is never fed into XP.
   const bomb = await getBombView(supabase, content, player.agent_no, manualSync)
+  mark('bombView')
   const todayRow = rollups.find((r) => String(r.kst_date) === today) || null
   if ((todayRow?.raw_streams || todayRow?.counted_streams || 0) > 0) {
     logEngagementEvent(supabase, {
@@ -204,33 +223,35 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     chargeCellsEarnedNow = await creditChargeCells(supabase, content, player.agent_no, activePd, windowRollups || [])
     const albumGoalStreams = albumGoalStreamTotal(activePd.goals, activePd.baseline || {}, windowRollups || [], activePd.activated_at, content)
     const chargeCellStreams = albumGoalStreams % STREAMS_PER_CHARGE_CELL
-    const backupOverlay = await getBackupOverlay(supabase, player.agent_no, activePd.district_id)
-    // Team Boost (reconnect-missions.ts) is a second, independent overlay
-    // source using the exact same { target, bonus } shape Backup Pass
-    // already established — spread together so districtProgress() (which
-    // has no idea either mechanic exists) sees one merged map. The two are
-    // vanishingly unlikely to ever target the same goal at once (one needs
-    // a rare Supply Chest roll, the other a completed 9-agent mission);
-    // where they would collide, the later spread key wins rather than the
-    // two amounts summing — an accepted simplification, not a guarantee
-    // both bonuses always stack.
-    const teamBoostOverlay = await getTeamBoostOverlay(supabase, player.agent_no, activePd.district_id)
     // "Today" resets on this district's own activation clock, not KST
     // midnight (see activation-window.ts) — precise to the second via raw
     // rc_scrobbles, since rc_daily_activity's whole-KST-day buckets can't
     // answer an arbitrary-time-of-day window.
     const todayWindow = activationDayBounds(activePd.activated_at)
-    const todayWindowCounts = await activationDayCounts(supabase, player.agent_no, todayWindow.fromSec, todayWindow.toSec)
-    // Leave days freeze the district: those rollup days are skipped here
-    // (and only here — Charge Cells above still count album streams).
-    const frozenDates = await frozenDistrictDates(supabase, player.agent_no, activePd.activated_at)
+    // Batch 2 — five reads that need only this agent + district and none of
+    // each other's results (they hit rc_backup_passes, the reconnect tables,
+    // rc_scrobbles, rc_player_leaves; resolveReconnectStatus's own writes
+    // touch rc_reconnect_participants, which none of the others read).
+    // They used to run one after another: five round trips for the price
+    // of one. Team Boost (reconnect-missions.ts) is a second, independent
+    // overlay source using the exact same { target, bonus } shape Backup
+    // Pass established — spread together so districtProgress() sees one
+    // merged map; where they would ever collide, the later key wins.
+    // Leave days freeze the district: frozenDates are skipped by
+    // districtProgress only — Charge Cells above still count album streams.
+    const [backupOverlay, teamBoostOverlay, todayWindowCounts, frozenDates, reconnect] = await Promise.all([
+      getBackupOverlay(supabase, player.agent_no, activePd.district_id),
+      getTeamBoostOverlay(supabase, player.agent_no, activePd.district_id),
+      activationDayCounts(supabase, player.agent_no, todayWindow.fromSec, todayWindow.toSec),
+      frozenDistrictDates(supabase, player.agent_no, activePd.activated_at),
+      // districtProgress().complete only covers solo track+album goals — the
+      // reconnect goal (if any was frozen in) needs its own live resolution
+      // (mission/puzzle-attempt rows), layered on rather than inside
+      // districts.ts's pure, DB-free districtProgress().
+      resolveReconnectStatus(supabase, content, player.agent_no, activePd.district_id, activePd.goals.reconnect),
+    ])
     const progress = districtProgress(activePd.goals, activePd.baseline || {}, windowRollups || [], activePd.activated_at, content, { ...backupOverlay, ...teamBoostOverlay }, todayWindowCounts, frozenDates)
     const deadline = districtDeadline(activePd.activated_at, restorationDays(content), districtDeadlineExtraDays(activePd))
-    // districtProgress().complete only covers solo track+album goals — the
-    // reconnect goal (if any was frozen in) needs its own live resolution
-    // (mission/puzzle-attempt rows), so it's layered on here rather than
-    // inside districts.ts's pure, DB-free districtProgress().
-    const reconnect = await resolveReconnectStatus(supabase, content, player.agent_no, activePd.district_id, activePd.goals.reconnect)
     const badgeProgress = districtBadgeProgress(progress, reconnect)
     for (const templateId of badgeProgress.templateIds) {
       await awardBadge(supabase, player.agent_no, templateId, activePd.district_id)
@@ -420,6 +441,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     }
   })
 
+  mark('district_block')
   // ── Player / today ─────────────────────────────────────────
   const xp = await totalXp(supabase, player.agent_no)
   const level = levelFor(content, xp)
@@ -440,21 +462,52 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
   const joinedDate = kstDateOf(Math.floor(new Date(player.joined_at).getTime() / 1000))
   const streak = await computeStreak(supabase, player.agent_no, content, cap, freezeChargesAvailable, joinedDate)
   await awardStreakBadges(supabase, player.agent_no, streak.current)
+  mark('xp_levelup_streak')
 
   // A review hint only. Provider totals cannot prove device count, so this
   // must never change the player or rewrite their frozen district goals.
   // AGENT120 asked not to receive the automatic mode-review interruption.
   // Keep the underlying self-check available in Moon Station; this only
   // suppresses the unsolicited sheet returned with normal game-state polls.
-  const modeReview = player.agent_no === 'AGENT120'
-    ? null
-    : await getModeVolumeReview(supabase, player.agent_no, player.mode)
-  const { data: badgeRows } = await supabase.from('rc_badges').select('badge_id').eq('agent_no', player.agent_no)
-
-  // ── The shelf + Pack collection ──────────────────────────────
-  const { data: itemRows } = await supabase.from('rc_player_items')
-    .select('id, item_id, district_id, used_at, rc_items(name, kind, era, rarity, blurb)')
-    .eq('agent_no', player.agent_no)
+  // Batch 3 — every remaining read is independent: each touches its own
+  // table(s) and none consumes another's result. The only ordering that
+  // matters is that they all run AFTER awardStreakBadges / the district
+  // block's awardBadge calls above (badgeRows must see those inserts), which
+  // the await on this batch preserves. Twelve round trips become one.
+  const [
+    modeReview, { data: badgeRows }, { data: itemRows }, broadcasts, cityFeed,
+    waitingAgents, onlineNow, districtMessages, equippedMap, isBadgeVaultEditor, leaveInfo, vma,
+  ] = await Promise.all([
+    // A review hint only — see the note above getModeVolumeReview's caller.
+    player.agent_no === 'AGENT120' ? Promise.resolve(null) : timed('modeReview', getModeVolumeReview(supabase, player.agent_no, player.mode)),
+    timed('badges', supabase.from('rc_badges').select('badge_id').eq('agent_no', player.agent_no)),
+    // The shelf + Pack collection
+    timed('items', supabase.from('rc_player_items')
+      .select('id, item_id, district_id, used_at, rc_items(name, kind, era, rarity, blurb)')
+      .eq('agent_no', player.agent_no)),
+    // Site-owner announcements — folded into the response every screen's
+    // poll already fetches rather than a separate mechanism (lib/broadcasts.ts).
+    timed('broadcasts', getActiveBroadcasts(supabase)),
+    // Live City Feed — same "folded into the normal poll" shape (feed.ts).
+    timed('cityFeed', getCityFeed(supabase)),
+    // "N agents are waiting for a partner" — a standing state recomputed per
+    // poll, scoped to the agent's own active district.
+    activePd ? timed('waiting', countWaitingAgents(supabase, player.agent_no, activePd)) : Promise.resolve(0),
+    // Who's genuinely here right now — a standing headcount, read together
+    // with cityFeed: "12 online now" + what they've been doing recently.
+    timed('onlineNow', getOnlineNow(supabase, content)),
+    timed('districtMessages', getDistrictMessageSummary(supabase, player.agent_no)),
+    // (13) Real Badge Collection artwork resolved server-side; legacy ids
+    // resolve to null here and fall through to badges.js unchanged.
+    timed('equippedBadge', resolveEquippedBadges(supabase, [{ agentNo: player.agent_no, badgeId: player.equipped_badge_id || null }])),
+    // Same check badge-admin.html's gate does, surfaced so Settings can show
+    // the Badge Vault row without a second call.
+    timed('badgeEditor', isBadgeEditor(supabase, player.agent_no)),
+    timed('leave', leaveStatus(supabase, player.agent_no)),
+    timed('vma', getVmaBanner(supabase, content, player.agent_no)),
+  ])
+  const equippedBadgeArtwork = equippedMap.get(player.agent_no) || null
+  mark('batch3_tail')
   const items = (itemRows || []).map((r: any) => ({
     id: r.id,
     itemId: r.item_id,
@@ -470,39 +523,6 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
 
   const bucket = todayRow?.track_counts || {}
   const counted = goalXpCountForDate(bucket, today, allowlist, cap, goalXpScope, trackArtistOverrides(content))
-  // Site-owner announcements — folded into the response every screen's poll
-  // already fetches (main.js, every 90s) rather than a separate mechanism.
-  // See lib/broadcasts.ts / migrations/031_rc_broadcasts.sql.
-  const broadcasts = await getActiveBroadcasts(supabase)
-  // Live City Feed — same "folded into the normal poll" shape as broadcasts
-  // above, so the World screen's activity card refreshes on the existing
-  // ~90s cycle with no extra client request. See feed.ts / migrations/048.
-  const cityFeed = await getCityFeed(supabase)
-  // "N agents are waiting for a partner" — a live aggregate, deliberately NOT
-  // an rc_feed_events row: it's a standing state, not a moment that happened,
-  // so it's recomputed per poll and pinned into the ticker client-side rather
-  // than logged once and left to go stale. Scoped to the agent's own active
-  // district, since that's the only place they can actually act on it.
-  const waitingAgents = activePd ? await countWaitingAgents(supabase, player.agent_no, activePd) : 0
-  // Who's genuinely here right now, not a proxy for it. Same "solo game
-  // shouldn't feel solo" goal as cityFeed above, but a standing headcount
-  // rather than a scrolling log of past moments — the two are meant to be
-  // read together: "12 online now" says the city is occupied at THIS
-  // instant, the ticker says what those agents have been doing recently.
-  const onlineNow = await getOnlineNow(supabase, content)
-  const districtMessages = await getDistrictMessageSummary(supabase, player.agent_no)
-  // (13) Resolves real Badge Collection artwork server-side so the client
-  // doesn't have to guess via its own hardcoded badges.js catalog — that
-  // catalog still owns legacy ids (streak/level/xp/districts), which
-  // resolve to null here and fall through to it unchanged.
-  const equippedBadgeArtwork = (await resolveEquippedBadges(
-    supabase, [{ agentNo: player.agent_no, badgeId: player.equipped_badge_id || null }],
-  )).get(player.agent_no) || null
-  // Lets Settings show the Badge Vault row to anyone who actually has
-  // access, not just agent000 — same check badge-admin.html's own gate
-  // does, just surfaced here too so the client doesn't need a second call.
-  const isBadgeVaultEditor = await isBadgeEditor(supabase, player.agent_no)
-  const leaveInfo = await leaveStatus(supabase, player.agent_no)
 
   return {
     success: true,
@@ -546,7 +566,8 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     invites,
     reconnectAlerts,
     broadcasts,
-    vma: await getVmaBanner(supabase, content, player.agent_no),
+    vma,
+    ...(timing ? { timing } : {}),
     cityFeed,
     waitingAgents,
     onlineNow,

@@ -182,6 +182,11 @@ export async function ensureDailyRollups(
   content: GameContent,
   personalBoostMult = 1,
   goalXpScope: GoalXpScope | null = null,
+  // Reuse today's row if it was refreshed within this many ms instead of
+  // hitting the external stream service again. The 90s background poll
+  // passes ~3 min (so streams still land within a couple of polls); the
+  // HUD's explicit Sync passes 0 and every other caller keeps the default.
+  maxStaleMs = 0,
 ): Promise<DailyRow[]> {
   const lim = limits(content)
   const allowlist: string[] = content.config.bts_artists || []
@@ -204,7 +209,10 @@ export async function ensureDailyRollups(
     const row = byDate.get(d)
     return !row || !row.finalized || d === today
   })
-  if (needed.length > 0) {
+  const todayRow = byDate.get(today) as (DailyRow & { updated_at?: string }) | undefined
+  const freshEnough = maxStaleMs > 0 && needed.length === 1 && needed[0] === today
+    && !!todayRow?.updated_at && Date.now() - new Date(todayRow.updated_at).getTime() < maxStaleMs
+  if (needed.length > 0 && !freshEnough) {
     const fromTs = kstDayBounds(needed[0]).fromTs
     const toTs = Math.min(kstDayBounds(needed[needed.length - 1]).toTs, Math.floor(Date.now() / 1000))
     const { rows, ok } = await fetchStreamRows(supabase, agent, fromTs, toTs, lim.lbMaxPages)
@@ -242,7 +250,9 @@ export async function ensureDailyRollups(
         finalized: date < today,
         mode: dayMode,
       }
-      await supabase.from('rc_daily_activity').upsert(row, { onConflict: 'agent_no, kst_date' })
+      // updated_at is what the maxStaleMs check above reads — stamp it here,
+      // the table has no trigger for it.
+      await supabase.from('rc_daily_activity').upsert({ ...row, updated_at: new Date().toISOString() }, { onConflict: 'agent_no, kst_date' })
       byDate.set(date, row)
 
       // Starting a district must never retroactively turn streams from
