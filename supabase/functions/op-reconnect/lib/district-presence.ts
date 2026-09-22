@@ -1,4 +1,5 @@
-import { frozenDistrictDates } from './leave.ts'
+import { frozenDatesFor } from './leave.ts'
+import { cachedJson } from './cache.ts'
 import type { GameContent, SupabaseDB } from './config.ts'
 import { districtProgress } from './districts.ts'
 import { getMissionStatus } from './reconnect-missions.ts'
@@ -107,21 +108,49 @@ export async function getWardRoster(supabase: SupabaseDB, content: GameContent, 
   return { success: true, wardId, counts }
 }
 
-async function agentProgress(supabase: SupabaseDB, content: GameContent, row: any) {
-  const pd = row.pd
-  const activationDate = kstDateOf(Math.floor(new Date(pd.activated_at).getTime() / 1000))
-  const [{ data: rollups }, backup, frozenDates] = await Promise.all([
-    supabase.from('rc_daily_activity').select('kst_date,track_counts,transmission')
-      .eq('agent_no', row.agent_no).gte('kst_date', activationDate).order('kst_date'),
-    getBackupOverlay(supabase, row.agent_no, pd.district_id),
-    frozenDistrictDates(supabase, row.agent_no, pd.activated_at),
+/** Restoration % for every agent on the roster, from three set-based reads
+ *  (one each for rollups, backup requests, leaves) instead of three queries
+ *  per agent — the per-agent shape put ~120 concurrent queries on the
+ *  pooler for a 30-agent district. Backup overlays and reconnect status
+ *  still resolve per agent, but only for the few agents that have one. */
+async function rosterProgress(supabase: SupabaseDB, content: GameContent, rows: any[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>()
+  if (!rows.length) return out
+  const agentNos = rows.map((r: any) => r.agent_no)
+  const activationOf = (row: any) => kstDateOf(Math.floor(new Date(row.pd.activated_at).getTime() / 1000))
+  const minActivation = rows.map(activationOf).sort()[0]
+  const [{ data: allRollups }, { data: backupOwners }, { data: leaveRows }] = await Promise.all([
+    supabase.from('rc_daily_activity').select('agent_no,kst_date,track_counts,transmission')
+      .in('agent_no', agentNos).gte('kst_date', minActivation).order('kst_date'),
+    supabase.from('rc_backup_requests').select('owner_agent_no')
+      .in('owner_agent_no', agentNos).eq('district_id', rows[0].pd.district_id).in('status', ['open', 'joined', 'banked']),
+    supabase.from('rc_player_leaves').select('agent_no, starts_at, ends_at, ended_at, district_id').in('agent_no', agentNos),
   ])
-  const progress = districtProgress(pd.goals, pd.baseline || {}, rollups || [], pd.activated_at, content, backup, undefined, frozenDates)
-  const frozenReconnect = pd.goals?.reconnect || null
-  const reconnect = frozenReconnect
-    ? await getMissionStatus(supabase, row.agent_no, pd.district_id, frozenReconnect)
-    : null
-  return percent(progress, reconnect)
+  const rollupsBy = new Map<string, any[]>()
+  for (const r of allRollups || []) {
+    const list = rollupsBy.get(r.agent_no) || []
+    list.push(r); rollupsBy.set(r.agent_no, list)
+  }
+  const hasBackup = new Set((backupOwners || []).map((b: any) => b.owner_agent_no))
+  const leavesBy = new Map<string, any[]>()
+  for (const l of leaveRows || []) {
+    const list = leavesBy.get(l.agent_no) || []
+    list.push(l); leavesBy.set(l.agent_no, list)
+  }
+  await Promise.all(rows.map(async (row: any) => {
+    const pd = row.pd
+    const activationDate = activationOf(row)
+    const rollups = (rollupsBy.get(row.agent_no) || []).filter((r) => r.kst_date >= activationDate)
+    const backup = hasBackup.has(row.agent_no) ? await getBackupOverlay(supabase, row.agent_no, pd.district_id) : {}
+    const frozenDates = frozenDatesFor(leavesBy.get(row.agent_no) || [])
+    const progress = districtProgress(pd.goals, pd.baseline || {}, rollups, pd.activated_at, content, backup, undefined, frozenDates)
+    const frozenReconnect = pd.goals?.reconnect || null
+    const reconnect = frozenReconnect
+      ? await getMissionStatus(supabase, row.agent_no, pd.district_id, frozenReconnect)
+      : null
+    out.set(row.agent_no, percent(progress, reconnect))
+  }))
+  return out
 }
 
 export async function getDistrictPresence(supabase: SupabaseDB, content: GameContent, params: any) {
@@ -130,18 +159,30 @@ export async function getDistrictPresence(supabase: SupabaseDB, content: GameCon
   if (!districtId || !content.districts.some((d: any) => d.id === districtId)) {
     return { success: false, error: 'district_not_found' }
   }
-  const rows = await activeAgents(supabase, districtId)
-  const agents = await Promise.all(rows.map(async (row: any) => ({
-    codename: row.codename,
-    isMe: row.agent_no === agentNo,
-    online: !!row.online,
-    restored: await agentProgress(supabase, content, row),
-  })))
-
-  const { data: messages } = await supabase.from('rc_district_messages')
-    .select('id,sender_agent_no,body,created_at,read_at')
-    .eq('recipient_agent_no', agentNo).eq('district_id', districtId)
-    .order('created_at', { ascending: false }).limit(20)
+  // The roster (who's restoring this district, how far along, online) is
+  // the same for everyone who opens it, and computing it costs 3–4 queries
+  // PER agent in the district — 30 agents in Relay Zero HQ meant ~120
+  // concurrent queries and a 5s wait. Cached per district for 60s in
+  // rc_cache (lib/cache.ts); only isMe is stamped per caller. The inbox
+  // below is personal and stays live, read alongside the cache lookup.
+  const [roster, { data: messages }] = await Promise.all([
+    cachedJson(supabase, `district_presence:${districtId}`, 60_000, async () => {
+      const rows = await activeAgents(supabase, districtId)
+      const restoredByAgent = await rosterProgress(supabase, content, rows)
+      return rows.map((row: any) => ({
+        agentNo: row.agent_no,
+        codename: row.codename,
+        online: !!row.online,
+        restored: restoredByAgent.get(row.agent_no) ?? 0,
+      }))
+    }),
+    supabase.from('rc_district_messages')
+      .select('id,sender_agent_no,body,created_at,read_at')
+      .eq('recipient_agent_no', agentNo).eq('district_id', districtId)
+      .order('created_at', { ascending: false }).limit(20),
+  ])
+  // agent numbers never leave this file — strip before returning.
+  const agents = (roster as any[]).map(({ agentNo: no, ...rest }) => ({ ...rest, isMe: no === agentNo }))
   const senders = [...new Set((messages || []).map((m: any) => m.sender_agent_no))]
   const { data: senderRows } = senders.length
     ? await supabase.from('rc_players').select('agent_no,codename').in('agent_no', senders)

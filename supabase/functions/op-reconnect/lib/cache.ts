@@ -12,17 +12,45 @@
 
 import type { SupabaseDB } from './config.ts'
 
+// Stale-while-revalidate: a row past its ttl is still served immediately,
+// and the recompute runs after the response via EdgeRuntime.waitUntil (a
+// Supabase Edge Functions background task). Nobody waits on a recompute —
+// the district roster's took 4–8s, and one agent a minute was paying it.
+// Past HARD_STALE × ttl (the background refresh kept failing, or nothing
+// asked for the key in a long while) the value is recomputed inline again.
+const HARD_STALE = 10
+const inflight = new Set<string>()
+
+function background(task: () => Promise<unknown>) {
+  const rt = (globalThis as any).EdgeRuntime
+  if (rt?.waitUntil) rt.waitUntil(task())
+  else task().catch(() => {})
+}
+
+async function store(supabase: SupabaseDB, key: string, value: unknown) {
+  await supabase.from('rc_cache').upsert({ key, value: value as Record<string, unknown>, updated_at: new Date().toISOString() })
+}
+
 export async function cachedJson<T>(
   supabase: SupabaseDB, key: string, ttlMs: number, compute: () => Promise<T>, fresh = false,
 ): Promise<T> {
   if (!fresh) {
     const { data } = await supabase.from('rc_cache').select('value, updated_at').eq('key', key).maybeSingle()
-    if (data && Date.now() - new Date(data.updated_at).getTime() < ttlMs) return data.value as T
+    if (data) {
+      const age = Date.now() - new Date(data.updated_at).getTime()
+      if (age < ttlMs) return data.value as T
+      if (age < ttlMs * HARD_STALE) {
+        if (!inflight.has(key)) {
+          inflight.add(key)
+          background(() => compute().then((v) => store(supabase, key, v)).finally(() => inflight.delete(key)))
+        }
+        return data.value as T
+      }
+    }
   }
   const value = await compute()
   // Fire-and-forget: the caller already has the value; a failed cache write
   // only means the next poll recomputes too.
-  supabase.from('rc_cache').upsert({ key, value: value as unknown as Record<string, unknown>, updated_at: new Date().toISOString() })
-    .then(() => {}, () => {})
+  background(() => store(supabase, key, value))
   return value
 }
