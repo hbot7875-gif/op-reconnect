@@ -816,7 +816,7 @@ async function call(action, params = {}) {
   try {
     const res = await fetch(API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-region': 'ap-northeast-2' },
       body: JSON.stringify(body),
     })
     const json = await res.json()

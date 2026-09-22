@@ -24,6 +24,9 @@ const PUBLIC_ACTIONS = new Set([
   'registerAgent', 'loginAgent', 'checkHandle', 'requestPasswordReset', 'resetPassword',
 ])
 
+// Where the Postgres instance lives (supabase/.temp/pooler-url: aws-1-ap-northeast-2).
+const DB_REGION = 'ap-northeast-2'
+
 export async function call(action, params = {}) {
   const body = { action, ...params }
   if (!PUBLIC_ACTIONS.has(action)) {
@@ -33,7 +36,11 @@ export async function call(action, params = {}) {
   try {
     const res = await fetch(API, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      // Pin the Edge Function to the database's region. Without this the
+      // function runs nearest the caller (ap-south-1 for most agents) and
+      // every one of getGameState's ~120 sequential queries pays a
+      // Mumbai↔Seoul round trip: measured 12.5s per poll vs 4.2s pinned.
+      headers: { 'Content-Type': 'application/json', 'x-region': DB_REGION },
       body: JSON.stringify(body),
     })
     return await res.json()

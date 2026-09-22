@@ -30,6 +30,7 @@ jobs:
           resp=$(curl -sS -w '\n%{http_code}' -X POST \
             "https://lcvmwlioqpyaprxicdfl.supabase.co/functions/v1/op-reconnect" \
             -H "Content-Type: application/json" \
+            -H "x-region: ap-northeast-2" \
             -d "{\"action\":\"adminSyncAllStreams\",\"adminKey\":\"$SYNC_ADMIN_KEY\"}")
           status="${resp##*$'\n'}"
           body="${resp%$'\n'*}"
