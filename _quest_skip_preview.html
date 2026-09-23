@@ -1,0 +1,32 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Skip Quest states</title><link rel="stylesheet" href="css/reconnect.css">
+<style>html,body{margin:0;background:#08070d;color:#ece9f2;font-family:-apple-system,Segoe UI,Arial,sans-serif}
+.wrap{display:flex;flex-wrap:wrap;gap:14px;padding:14px}
+.col{width:355px}.cap{font:700 9px/1 monospace;letter-spacing:1.6px;color:#8b789c;margin:0 0 6px}
+.sheet{position:static!important;transform:none!important;max-width:none!important;margin:0!important}</style>
+</head><body><div class="wrap" id="w"></div>
+<script type="module">
+import { el } from './js/state.js'
+const mod = await import('./js/quest-skip.js?t=' + Date.now())
+const src = await fetch('./js/quest-skip.js').then(r=>r.text())
+// pull the module-private sheet builder out for rendering every state
+const grab=(n)=>{const i=src.indexOf(`function ${n}(`);let d=0,j=i;for(;j<src.length;j++){if(src[j]==='{')d++;else if(src[j]==='}'){d--;if(d===0){j++;break}}}return src.slice(i,j)}
+const esc=(s)=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))
+const stubs=`const call=async()=>({success:true});const getAgentNo=()=>'X';const toast=()=>{};const hideOverlay=()=>{};const showOverlay=()=>{};const XP_ICON='✦';const CELL_ICON='⚡';const fmt=(n)=>Number(n||0).toLocaleString('en-US');`
+const code=stubs+grab('untilLabel')+grab('costChip')+grab('skipError')+grab('skipSheet')+'\nreturn skipSheet'
+const skipSheet=new Function('el','esc',code)(el,esc)
+const base={success:true,mode:'steady',costXp:150,costCells:15,balanceXp:640,balanceCells:292,shortXp:0,shortCells:0,canAfford:true,free:false,waitingPeriod:false,onCooldown:false}
+const states=[
+ ['AFFORDABLE — steady (150 XP + 15 Cells)',base],
+ ['HARD MODE (200 XP + 100 Cells)',{...base,mode:'hard',costXp:200,costCells:100,balanceCells:2255,balanceXp:2100}],
+ ['EXAM (75 XP + 2 Cells)',{...base,mode:'exam',costXp:75,costCells:2,balanceXp:310,balanceCells:19}],
+ ['INSUFFICIENT — short on both',{...base,balanceXp:40,balanceCells:6,shortXp:110,shortCells:9,canAfford:false}],
+ ['24h WAITING PERIOD',{...base,waitingPeriod:true,eligibleAt:new Date(Date.now()+5*3600e3).toISOString()}],
+ ['7-DAY COOLDOWN',{...base,onCooldown:true,cooldownUntil:new Date(Date.now()+4*86400e3).toISOString()}],
+ ['FREE — teammate rescue',{...base,free:true,freeReason:'teammate_rescue',costXp:0,costCells:0}],
+ ['FREE — expired quest',{...base,free:true,freeReason:'expired',costXp:0,costCells:0}],
+]
+const w=document.getElementById('w')
+for(const [cap,q] of states){const c=el('div','col');c.appendChild(el('p','cap',cap));c.appendChild(skipSheet(q,'d',null));w.appendChild(c)}
+</script></body></html>

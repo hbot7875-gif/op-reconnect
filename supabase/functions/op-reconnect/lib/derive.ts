@@ -350,7 +350,18 @@ export async function awardStreakBadges(supabase: SupabaseDB, agentNo: string, s
   }
 }
 
+/** XP that drives level, rank and progression. Counts 'earn' rows only, so a
+ *  Skip Quest charge (kind='spend', see the rc_quest_skip migration) can never
+ *  de-level anyone. Every row written before that migration is 'earn', so this
+ *  returns exactly what it always did. */
 export async function totalXp(supabase: SupabaseDB, agentNo: string): Promise<number> {
+  const { data } = await supabase.from('rc_xp_ledger').select('amount').eq('agent_no', agentNo).eq('kind', 'earn')
+  return (data || []).reduce((s: number, r: any) => s + (r.amount || 0), 0)
+}
+
+/** The spendable XP wallet: everything earned minus everything spent. Only
+ *  Skip Quest spends from it today. */
+export async function spendableXp(supabase: SupabaseDB, agentNo: string): Promise<number> {
   const { data } = await supabase.from('rc_xp_ledger').select('amount').eq('agent_no', agentNo)
   return (data || []).reduce((s: number, r: any) => s + (r.amount || 0), 0)
 }

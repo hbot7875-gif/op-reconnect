@@ -160,7 +160,11 @@ async function findMyMission(
   if (!missionIds.length) return null
 
   let pq = supabase.from('rc_reconnect_participants').select('mission_id').eq('agent_no', agentNo).in('mission_id', missionIds)
+  // 'left' rows are kept so the team keeps the leaver's pooled streams
+  // (quest-skip.ts), but the leaver is no longer IN the mission — without
+  // this they'd be told 'already_in_mission' and could never start another.
   if (opts.status) pq = pq.eq('status', opts.status)
+  else pq = pq.neq('status', 'left')
   const { data: rows } = await pq.order('joined_at', { ascending: false })
   if (!rows || !rows.length) return null
 
@@ -863,6 +867,12 @@ async function refreshMission(
         p.streamed_at = new Date().toISOString()
       }
     }
+    // Agents who paid to Skip Quest keep whatever they had already pooled —
+    // frozen at their exit (rc_reconnect_participants.contribution_frozen), so
+    // the teammates who stayed never lose ground because someone left.
+    for (const p of participants) {
+      if (p.status === 'left') sharedTotal += Number(p.contribution_frozen) || 0
+    }
     mission.sharedTrackProgress = { label: sharedTrack.label, target: sharedTrack.target, progress: Math.min(sharedTotal, sharedTrack.target) }
   } else if (variant === 'connect') {
     for (const p of joined) {
@@ -1380,7 +1390,12 @@ export async function openReconnectMission(supabase: SupabaseDB, content: unknow
   }).select().single()
   if (error) return { success: false, error: error.message }
 
-  await supabase.from('rc_reconnect_participants').insert({ mission_id: mission.id, agent_no: agentNo, status: 'joined' })
+  // joined_mode locks the Skip Quest price to the mode they were on when they
+  // joined — switching to a cheaper mode later must not lower the bill.
+  const { data: creatorMode } = await supabase.from('rc_players').select('mode').eq('agent_no', agentNo).maybeSingle()
+  await supabase.from('rc_reconnect_participants').insert({
+    mission_id: mission.id, agent_no: agentNo, status: 'joined', joined_mode: creatorMode?.mode || null,
+  })
   // Refresh once even though nothing can have qualified yet — for
   // sharedTrack missions this is what puts the 0/target shape on the very
   // first response, instead of the caller having to poll again to see it.
@@ -1697,6 +1712,12 @@ export async function respondReconnectInvite(supabase: SupabaseDB, content: unkn
   })
   const result = !rpcError && Array.isArray(rpcData) ? rpcData[0] : null
   if (rpcError || !result?.joined) return { success: false, error: result?.error || rpcError?.message || 'join_failed' }
+  // Same price lock as the other join paths — rc_reconnect_accept_invite flips
+  // the row inside SQL, so the mode is stamped here right after it lands.
+  const { data: joinerMode } = await supabase.from('rc_players').select('mode').eq('agent_no', agentNo).maybeSingle()
+  await supabase.from('rc_reconnect_participants')
+    .update({ joined_mode: joinerMode?.mode || null })
+    .eq('mission_id', mission.id).eq('agent_no', agentNo).is('joined_mode', null)
   await foldAwayDanglingMissions(supabase, agentNo, mission.id, mission.goal_id)
   await supabase.from('rc_reconnect_match_alerts').update({ active: false, updated_at: new Date().toISOString() })
     .eq('agent_no', agentNo).eq('district_id', districtId)
@@ -1855,8 +1876,12 @@ export async function adminAutoAssignMissions(supabase: SupabaseDB, params: any)
       created_by: '__admin__',
     }).select().single()
     if (error || !mission) continue
+    const { data: groupModes } = await supabase.from('rc_players').select('agent_no, mode').in('agent_no', group)
+    const modeOf = new Map((groupModes || []).map((r: any) => [r.agent_no, r.mode]))
     await supabase.from('rc_reconnect_participants').insert(
-      group.map((agentNo) => ({ mission_id: mission.id, agent_no: agentNo, status: 'joined' })))
+      group.map((agentNo) => ({
+        mission_id: mission.id, agent_no: agentNo, status: 'joined', joined_mode: modeOf.get(agentNo) || null,
+      })))
     created.push(mission.id)
   }
 

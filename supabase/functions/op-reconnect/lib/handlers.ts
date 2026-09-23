@@ -4,7 +4,7 @@
 
 import type { GameContent, SupabaseDB, DistrictRow } from './config.ts'
 import { loadContent, rankFor, xpRules, restorationDays, streamsPerXpFor, PERSONAL_COUNT_CAP, trackArtistOverrides } from './config.ts'
-import { ensureDailyRollups, computeStreak, awardStreakBadges, totalXp, goalXpCountForDate } from './derive.ts'
+import { ensureDailyRollups, computeStreak, awardStreakBadges, totalXp, spendableXp, goalXpCountForDate } from './derive.ts'
 import { awardDailySideMissionXp, awardWeeklySideMissionXp, buildSideMissions } from './side-missions.ts'
 import { freezeGoals, computeBaseline, districtProgress, districtDeadline, filesRevealedCount, albumGoalStreamTotal, DEADLINE_EXTENSION_DAYS } from './districts.ts'
 import { resolveReconnectStatus } from './reconnect-goal.ts'
@@ -444,6 +444,8 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
   mark('district_block')
   // ── Player / today ─────────────────────────────────────────
   const xp = await totalXp(supabase, player.agent_no)
+  // The spendable wallet (Skip Quest); level/rank keep using `xp` above.
+  const walletXp = await spendableXp(supabase, player.agent_no)
   const level = levelFor(content, xp)
   // agentCharge.freezeChargesRemaining (agent-charge.ts), not
   // player.streak_freeze_charges — the latter is a snapshot from before
@@ -528,7 +530,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     success: true,
     joined: true,
     player: {
-      codename: player.codename, mode: player.mode, xp,
+      codename: player.codename, mode: player.mode, xp, spendableXp: walletXp,
       rank: rankFor(content, xp),
       level: { ...level, nextRewards: nextLevelRewards(content) },
       streakFreezeCharges: streak.freezeChargesRemaining,

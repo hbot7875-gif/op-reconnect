@@ -6,6 +6,7 @@
 
 import { el, esc, setState, toast, unlockAfter, showOverlay, hideOverlay } from './state.js'
 import { call } from './api.js'
+import { skipQuestButton } from './quest-skip.js'
 import { getAgentNo } from './session.js'
 import { goWard } from './router.js'
 import { wardDisplayName, districtDisplayName } from './ward-tiles.js'
@@ -1200,6 +1201,12 @@ function paintMissionPanel(box, d, res) {
     row.appendChild(decline)
     box.appendChild(row)
   } else if (myRow?.status === 'joined') {
+    // The way out, kept deliberately quiet: a small outlined action under the
+    // quest's own controls, never competing with streaming or progress. The
+    // price, eligibility and free cases all come from the server (quest-skip.js).
+    const exitRow = el('div', 'qs-row')
+    exitRow.appendChild(skipQuestButton(d.id, refresh))
+    box.appendChild(exitRow)
     // A live pending invite already reserves that open seat. Do not offer a
     // second primary invite action while the screen says to wait for the
     // first response; only recruit when uncovered seats remain.
