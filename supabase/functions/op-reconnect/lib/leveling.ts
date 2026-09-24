@@ -5,6 +5,7 @@
 // ladder (rc_config.level_names — purely cosmetic, index i = level i+1).
 
 import type { GameContent, SupabaseDB } from './config.ts'
+import { backupPassLevelGrants, nextLevelGrantsBackupPass } from './backup-pass-rewards.js'
 
 export interface LevelInfo {
   level: number
@@ -18,6 +19,20 @@ export interface LevelRewardsPreview {
   streakFreeze: number
   boostMultiplier: number
   boostMinutes: number
+  /** Whether the NEXT level-up grants a Backup Pass. Alternating, so this is
+   *  false roughly half the time — previewing it unconditionally would
+   *  promise a pass the level-up then doesn't deliver. */
+  backupPass: boolean
+}
+
+/** The two Backup Pass knobs this file needs, read from the same rc_config
+ *  key the feature's other settings live under (see backup-pass.ts). */
+function backupPassLevelOpts(content: GameContent) {
+  const cfg = content.config.backup_pass || {}
+  return {
+    minLevel: Number.isFinite(Number(cfg.level_reward_from)) ? Number(cfg.level_reward_from) : 2,
+    everyOther: cfg.level_reward_every_other !== false,
+  }
 }
 
 /** What reaching the next level actually grants — same numbers
@@ -27,8 +42,15 @@ export interface LevelRewardsPreview {
  *  owner, since nothing in the game reads or spends Fuel. Extension
  *  Charges (migration 057) took its place: a rare, earned way to buy a
  *  district attempt 3 more days when the clock is about to beat it — see
- *  handlers.ts's extendDistrictDeadline. */
-export function nextLevelRewards(content: GameContent): LevelRewardsPreview {
+ *  handlers.ts's extendDistrictDeadline.
+ *
+ *  `level` and `lastPassLevel` are needed only for the Backup Pass line,
+ *  which depends on whether the level below the next one already granted
+ *  one. They are passed as plain numbers rather than the player row on
+ *  purpose: applyLevelUpIfNeeded may have just advanced the latch in the
+ *  database, so the caller's `player` snapshot can already be stale — the
+ *  same trap documented on that function's charge counters. */
+export function nextLevelRewards(content: GameContent, level?: number, lastPassLevel?: number): LevelRewardsPreview {
   const rewards = content.config.level_rewards
     || { streakFreezePerLevel: 1, extensionChargePerLevel: 1, boostMultiplier: 2, boostMinutes: 60 }
   return {
@@ -36,6 +58,9 @@ export function nextLevelRewards(content: GameContent): LevelRewardsPreview {
     streakFreeze: rewards.streakFreezePerLevel || 0,
     boostMultiplier: rewards.boostMultiplier || 1,
     boostMinutes: rewards.boostMinutes || 60,
+    backupPass: Number.isFinite(Number(level))
+      ? nextLevelGrantsBackupPass(Number(level), Number(lastPassLevel) || 0, backupPassLevelOpts(content))
+      : false,
   }
 }
 
@@ -85,6 +110,10 @@ export interface LevelUpResult {
   levelsGained: number
   streakFreezeGranted: number
   extensionChargeGranted: number
+  backupPassGranted: number
+  /** The new rc_players.last_backup_pass_level. Handed back so the response
+   *  can preview the NEXT level honestly without re-reading the row. */
+  backupPassLevel: number
   boostMultiplier: number
   boostExpiresAt: string
 }
@@ -114,7 +143,8 @@ export async function applyLevelUpIfNeeded(
   currentFreezeCharges: number, currentExtensionCharges: number,
 ): Promise<LevelUpResult | null> {
   const { level } = levelFor(content, xp)
-  const lastLevel = player.last_level || 1
+  const storedLevel = player.last_level ?? 1
+  const lastLevel = storedLevel || 1
   if (level <= lastLevel) return null
 
   const levelsGained = level - lastLevel
@@ -123,17 +153,43 @@ export async function applyLevelUpIfNeeded(
   const streakFreezeGranted = (rewards.streakFreezePerLevel || 0) * levelsGained
   const extensionChargeGranted = (rewards.extensionChargePerLevel || 0) * levelsGained
   const boostExpiresAt = new Date(Date.now() + (rewards.boostMinutes || 60) * 60000).toISOString()
+  // Backup Passes don't scale with levelsGained the way the charges above
+  // do — they alternate, so a three-level jump pays one or two, not three.
+  // backup-pass-rewards.js works that out and hands back the latch value.
+  const passes = backupPassLevelGrants({
+    fromLevel: lastLevel, toLevel: level,
+    lastPassLevel: player.last_backup_pass_level || 0,
+    ...backupPassLevelOpts(content),
+  })
 
-  await supabase.from('rc_players').update({
+  // Compare-and-set on last_level, not a bare update. getGameState is polled
+  // on a timer and can also be triggered by the player, so two requests can
+  // read the same pre-level-up row and both decide they crossed. That was
+  // survivable while every reward here was an absolute value written into a
+  // column — the second write just set the same numbers again. It is not
+  // survivable now: the Backup Pass grant below is an INSERT, and a losing
+  // race would insert it twice. Only the request that actually moves
+  // last_level off its old value proceeds.
+  const { data: claimed } = await supabase.from('rc_players').update({
     last_level: level,
+    last_backup_pass_level: passes.lastPassLevel,
     streak_freeze_charges: currentFreezeCharges + streakFreezeGranted,
     deadline_extension_charges: currentExtensionCharges + extensionChargeGranted,
     boost_multiplier: rewards.boostMultiplier || 1,
     boost_expires_at: boostExpiresAt,
-  }).eq('agent_no', player.agent_no)
+  }).eq('agent_no', player.agent_no).eq('last_level', storedLevel)
+    .select('agent_no').maybeSingle()
+  if (!claimed) return null
+
+  // district_id null puts it in the Pack, where a Backup Pass is used from.
+  if (passes.count > 0) {
+    await supabase.from('rc_player_items').insert(
+      passes.levels.map(() => ({ agent_no: player.agent_no, item_id: 'backup-pass', district_id: null })))
+  }
 
   return {
     level, name: levelName(content, level), levelsGained, streakFreezeGranted, extensionChargeGranted,
+    backupPassGranted: passes.count, backupPassLevel: passes.lastPassLevel,
     boostMultiplier: rewards.boostMultiplier || 1, boostExpiresAt,
   }
 }

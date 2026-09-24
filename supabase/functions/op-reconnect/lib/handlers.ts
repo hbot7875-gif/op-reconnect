@@ -20,7 +20,7 @@ import { logFeedEvent, getCityFeed, markOnline, getOnlineNow } from './feed.ts'
 import { logEngagementEvent } from './engagement.ts'
 import { awardBadge, resolveEquippedBadges } from './badge-profile.ts'
 import { districtBadgeProgress } from './badge-rules.js'
-import { getBackupOverlay } from './backup-pass.ts'
+import { getBackupOverlay, districtBackupPassChance } from './backup-pass.ts'
 import { getVmaBanner } from './vma-voting.ts'
 import { isBadgeEditor } from './badge-admin.ts'
 import { getDistrictMessageSummary } from './district-presence.ts'
@@ -280,6 +280,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
 
     let xpAwarded: number | null = null
     let itemDropped: any = null
+    let backupPassDropped = false
 
     if (districtComplete) {
       await supabase.from('rc_player_districts')
@@ -355,6 +356,20 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
         }
       }
 
+      // A second, independent roll: sometimes a restoration also yields a
+      // Backup Pass. Kept out of the collectible pool above on purpose — a
+      // Pack utility can't be a placed keepsake, and riding that path would
+      // satisfy rc_drop_district_item's own "already dropped?" check and
+      // cost the agent their collectible. The RPC records the roll win or
+      // lose under a row lock, so polling this district again can't reroll
+      // it into an eventual guaranteed win (migration 20260925090000).
+      const { data: passRoll } = await supabase.rpc('rc_award_district_backup_pass', {
+        p_agent_no: player.agent_no,
+        p_district_id: activePd.district_id,
+        p_chance: districtBackupPassChance(content),
+      })
+      backupPassDropped = !!passRoll?.awarded
+
       // Bake this district's resource contribution into the lifetime total.
       const trackProg = progress.trackGoals.reduce((s, g) => s + Math.min(g.progress, g.target), 0)
       const fuelProg = progress.albums.reduce((s, a) => s + Math.min(a.passesDone, a.target), 0)
@@ -383,6 +398,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
       restoredNow,
       xpAwarded,
       itemDropped,
+      backupPassDropped,
       trackGoals: progress.trackGoals,
       albums: progress.albums,
       chargeCellProgress: {
@@ -552,7 +568,8 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     player: {
       codename: player.codename, mode: player.mode, xp, spendableXp: walletXp,
       rank: rankFor(content, xp),
-      level: { ...level, nextRewards: nextLevelRewards(content) },
+      level: { ...level, nextRewards: nextLevelRewards(content, level.level,
+        levelUp?.backupPassLevel ?? (player.last_backup_pass_level || 0)) },
       streakFreezeCharges: streak.freezeChargesRemaining,
       deadlineExtensionCharges: (player.deadline_extension_charges || 0) + (levelUp?.extensionChargeGranted || 0),
       boost: levelUp

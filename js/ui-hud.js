@@ -329,6 +329,10 @@ function progressSheet(state) {
   if (rewards.extensionCharge) rewardLines.push(`<div class="bd-line"><span>Deadline Extension</span><b>+${rewards.extensionCharge}</b></div>`)
   if (rewards.streakFreeze) rewardLines.push(`<div class="bd-line"><span>Streak freeze</span><b>+${rewards.streakFreeze}</b></div>`)
   if (rewards.boostMultiplier > 1) rewardLines.push(`<div class="bd-line"><span>XP boost</span><b>${rewards.boostMultiplier}&times; for ${rewards.boostMinutes}m</b></div>`)
+  // Backup Passes alternate, so the server says whether the NEXT level pays
+  // one. Listing it unconditionally would promise a pass every other level
+  // that never arrives.
+  if (rewards.backupPass) rewardLines.push(`<div class="bd-line"><span>Backup Pass</span><b>+1</b></div>`)
   if (rewardLines.length) {
     sheet.appendChild(el('div', 'bd-block', `<div class="bd-block-head">Next level rewards</div>${rewardLines.join('')}`))
   }

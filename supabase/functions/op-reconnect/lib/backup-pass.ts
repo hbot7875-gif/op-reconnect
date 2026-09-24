@@ -19,6 +19,17 @@ function backupConfig(content: GameContent): BackupConfig {
   return { target_multiplier: 1.2, request_ttl_days: 5, ...(content.config.backup_pass || {}) }
 }
 
+/** How often restoring a district also yields a Backup Pass. A chance, not a
+ *  guarantee: the site owner's brief was "not always, not for every
+ *  district". 0.2 is about one district in five. The roll itself happens in
+ *  rc_award_district_backup_pass (migration 20260925090000), which records
+ *  losses as well as wins so a re-poll can't keep rerolling until it wins. */
+export function districtBackupPassChance(content: GameContent): number {
+  const raw = Number((content.config.backup_pass || {}).district_drop_chance)
+  if (!Number.isFinite(raw)) return 0.2
+  return Math.max(0, Math.min(1, raw))
+}
+
 /** The owner's own frozen goal this request refers to — track goals and
  *  album goals live in different arrays with different shapes, so this is
  *  the one place that normalizes both into {label, keys, target}. Album

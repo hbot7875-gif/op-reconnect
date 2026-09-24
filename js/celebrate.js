@@ -84,6 +84,17 @@ export function playRestoration(d, ward, state, onDone) {
     body.appendChild(box)
   }
 
+  // Sometimes, not every time. Deliberately a quiet line rather than a
+  // second drop card — the collectible above is the moment; this is a useful
+  // thing that happens to have landed with it.
+  if (d.backupPassDropped) {
+    body.appendChild(el('div', 'cel-bonus', `
+      <span class="cbn-ico">🤝</span>
+      <span class="cbn-copy"><b>Backup Pass</b> added to your Pack
+        <small>Open one of your goals to a teammate — their streams count with yours.</small></span>
+    `))
+  }
+
   const reveal = el('div', 'cel-reveal')
   if (d.echoOf) reveal.appendChild(el('div', 'cel-guardian', `<span>👤 Guardian</span><b>${esc(d.echoOf)}</b>`))
   // Echo Quarter lights up four at once (one per season-one team) — see
@@ -228,6 +239,7 @@ const ICONS = {
   extension: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h8M6 18h8"/><path d="M7 2v3.2c0 1.6 1.2 2.5 3 4.8 1.8-2.3 3-3.2 3-4.8V2"/><path d="M7 18v-3.2c0-1.6 1.2-2.5 3-4.8 1.8 2.3 3 3.2 3 4.8V18"/></svg>',
   freeze: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M10 2v16M3.7 5.5l12.6 9M16.3 5.5l-12.6 9"/><path d="M10 4.6 8 6M10 4.6l2 1.4M10 15.4 8 14M10 15.4l2-1.4"/></svg>',
   boost: '<svg viewBox="0 0 20 20" fill="currentColor"><path d="M11 2 4 11h5l-1 7 8-10h-5l1-6z"/></svg>',
+  backup: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="6.4" r="2.6"/><circle cx="13.6" cy="8" r="2.1"/><path d="M2.6 16.4c0-2.7 2-4.4 4.4-4.4s4.4 1.7 4.4 4.4"/><path d="M13.2 12.4c2.2 0 4.2 1.4 4.2 4"/></svg>',
 }
 
 /**
@@ -265,6 +277,12 @@ export function playLevelUp(state, onDone) {
   const rows = []
   if (levelUp.extensionChargeGranted > 0) rows.push([ICONS.extension, `+${levelUp.extensionChargeGranted} Deadline Extension`])
   if (levelUp.streakFreezeGranted > 0) rows.push([ICONS.freeze, `+${levelUp.streakFreezeGranted} Streak Freeze`])
+  // Not every level pays one (leveling.ts alternates them), so this row is
+  // absent about half the time — which is the point of it being here at all.
+  if (levelUp.backupPassGranted > 0) {
+    rows.push([ICONS.backup,
+      `+${levelUp.backupPassGranted} Backup Pass${levelUp.backupPassGranted === 1 ? '' : 'es'}`])
+  }
   if (levelUp.boostMultiplier > 1 && levelUp.boostExpiresAt) {
     rows.push([ICONS.boost,
       `${levelUp.boostMultiplier}&times; XP Boost &middot; <b class="lvlup-clock" data-deadline="${esc(levelUp.boostExpiresAt)}">--:--:--</b> remaining`])
