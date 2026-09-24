@@ -33,8 +33,8 @@ test('paid skip shows the price on the button and is actionable', () => {
   assert.equal(v.blocked, false)
   assert.equal(v.hold, null)
   assert.match(v.lede, /finish the district without it/)
-  assert.ok(v.notes.some((n) => n.includes('ReConnect requirement will be marked skipped')))
-  assert.ok(v.notes.some((n) => n.includes('Track and album goals are still required')))
+  assert.ok(v.notes.some((n) => n.includes("Waives this district's ReConnect requirement")))
+  assert.ok(v.notes.some((n) => n.includes('Track and album goals still have to be finished')))
 })
 
 test('singular Cell is not pluralised', () => {
@@ -53,6 +53,7 @@ test('each free path gets its own label and never shows a price', () => {
     // A free exit must never claim the paid 7-day cooldown or the XP caveat.
     assert.ok(!v.notes.some((n) => n.includes('7 days')), reason)
     assert.ok(!v.notes.some((n) => n.includes('Spending XP')), reason)
+    assert.ok(v.sections.find((x) => x.key === 'cost').lines.some((l) => /Free/.test(l)), reason)
   }
 })
 
@@ -67,17 +68,18 @@ test('the four free paths have distinct buttons', () => {
 test('only system-stuck free exit waives the district ReConnect requirement', () => {
   for (const reason of ['cancel_join', 'teammate_rescue', 'expired']) {
     const v = questExitView(freeQuote(reason), NOW)
-    assert.ok(!v.notes.some((n) => n.includes('marked skipped')), reason)
+    assert.ok(!v.notes.some((n) => n.includes('Waives')), reason)
+    assert.ok(v.notes.some((n) => n.includes('still needs its ReConnect Quest')), reason)
   }
   const stuck = questExitView(freeQuote('system_stuck'), NOW)
   assert.match(stuck.lede, /requirement will be skipped/)
-  assert.ok(stuck.notes.some((n) => n.includes('marked skipped')))
+  assert.ok(stuck.notes.some((n) => n.includes('Waives')))
 })
 
 test('every free path still promises teammates keep the streams', () => {
   for (const reason of ['cancel_join', 'teammate_rescue', 'expired', 'system_stuck']) {
     const v = questExitView(freeQuote(reason), NOW)
-    assert.ok(v.notes.some((n) => n.includes('remain counted for your teammates')), reason)
+    assert.ok(v.notes.some((n) => n.includes('stay counted for them')), reason)
   }
 })
 
@@ -118,8 +120,8 @@ test('a free exit is never blocked by cooldown or balance', () => {
 
 test('paid path always warns that XP spending is safe', () => {
   const v = questExitView(paid(), NOW)
-  assert.ok(v.notes.some((n) => n.includes("won't lower your level")))
-  assert.ok(v.notes.some((n) => n.includes('once every 7 days')))
+  assert.ok(v.notes.some((n) => n.includes('never lowers your level')))
+  assert.ok(v.notes.some((n) => n.includes('One paid skip every 7 days')))
 })
 
 test('an unknown action falls back to the paid path, never to free', () => {
@@ -141,4 +143,34 @@ test('untilLabel reads in minutes, hours then days', () => {
   assert.equal(untilLabel(inHours(1), NOW), 'in 1 hour')
   assert.equal(untilLabel(inHours(96), NOW), 'in 4 days')
   assert.equal(untilLabel(inHours(-3), NOW), 'shortly')
+})
+
+test('the sheet is always exactly three sections, in order', () => {
+  for (const q of [paid(), freeQuote('cancel_join'), freeQuote('system_stuck'), freeQuote('expired')]) {
+    const v = questExitView(q, NOW)
+    assert.deepEqual(v.sections.map((s) => s.key), ['effect', 'team', 'cost'])
+    for (const sec of v.sections) {
+      assert.ok(sec.heading && sec.lines.length, `${q.action}/${sec.key} needs a heading and a line`)
+    }
+  }
+})
+
+test('notes stay in sync with the sections they are flattened from', () => {
+  const v = questExitView(paid(), NOW)
+  assert.deepEqual(v.notes, v.sections.flatMap((s) => s.lines))
+})
+
+test('a free exit never quotes a price anywhere in its sections', () => {
+  for (const reason of ['cancel_join', 'teammate_rescue', 'expired', 'system_stuck']) {
+    const v = questExitView(freeQuote(reason), NOW)
+    const all = v.sections.flatMap((s) => s.lines).join(' ')
+    assert.ok(!/XP.*Cell/.test(all), `${reason} must not price a free exit: ${all}`)
+  }
+})
+
+test('every path tells the agent their seat reopens', () => {
+  for (const q of [paid(), freeQuote('cancel_join'), freeQuote('teammate_rescue')]) {
+    const v = questExitView(q, NOW)
+    assert.ok(v.sections.find((s) => s.key === 'team').lines.some((l) => /seat reopens/.test(l)))
+  }
 })

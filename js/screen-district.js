@@ -6,7 +6,7 @@
 
 import { el, esc, setState, toast, unlockAfter, showOverlay, hideOverlay } from './state.js'
 import { call } from './api.js'
-import { skipQuestButton } from './quest-skip.js'
+import { questExitRow } from './quest-skip.js'
 import { getAgentNo } from './session.js'
 import { goWard } from './router.js'
 import { wardDisplayName, districtDisplayName } from './ward-tiles.js'
@@ -1194,12 +1194,6 @@ function paintMissionPanel(box, d, res) {
     row.appendChild(decline)
     box.appendChild(row)
   } else if (myRow?.status === 'joined') {
-    // The way out, kept deliberately quiet: a small outlined action under the
-    // quest's own controls, never competing with streaming or progress. The
-    // price, eligibility and free cases all come from the server (quest-skip.js).
-    const exitRow = el('div', 'qs-row')
-    exitRow.appendChild(skipQuestButton(d.id, refresh))
-    box.appendChild(exitRow)
     // A live pending invite already reserves that open seat. Do not offer a
     // second primary invite action while the screen says to wait for the
     // first response; only recruit when uncovered seats remain.
@@ -1311,6 +1305,10 @@ function paintMissionPanel(box, d, res) {
   // Everything outside the three player questions becomes secondary. The
   // controls still exist for recovery/support, but no longer compete with
   // Mission → Team → Next Step on first glance.
+  // The exit lives between the primary action and Details: secondary, but
+  // never hidden inside a collapsed disclosure — the agents who need it most
+  // are exactly the ones who won't go looking for it.
+  const exitRow = myRow?.status === 'joined' ? questExitRow(d.id, refresh) : null
   const detailsBody = el('div', 'reconnect-details-body')
   const keep = new Set([
     box.querySelector(':scope > .eyebrow'),
@@ -1321,6 +1319,7 @@ function paintMissionPanel(box, d, res) {
   for (const child of [...box.children]) {
     if (!keep.has(child)) detailsBody.appendChild(child)
   }
+  if (exitRow) box.appendChild(exitRow)
   if (detailsBody.childElementCount) box.appendChild(reconnectDisclosure('Details', detailsBody))
 
   const chat = existingChat?.querySelector('.reconnect-chat') || chatPanel(d, m, refresh)

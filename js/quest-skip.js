@@ -67,9 +67,14 @@ function skipSheet(quote, districtId, onDone) {
     sheet.appendChild(el('div', 'qs-free', `<span>✓ No cost</span><small>${esc(v.why || '')}</small>`))
   }
 
-  const notes = el('ul', 'qs-notes')
-  notes.innerHTML = v.notes.map((n) => `<li>${esc(n)}</li>`).join('')
-  sheet.appendChild(notes)
+  // Three answers, not six near-identical bullets: what it does to the
+  // district, what it does to the team, what it costs.
+  for (const sec of v.sections) {
+    const block = el('div', `qs-sec qs-sec-${sec.key}`)
+    block.innerHTML = `<h4>${esc(sec.heading)}</h4>`
+      + `<ul>${sec.lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>`
+    sheet.appendChild(block)
+  }
 
   if (v.hold) sheet.appendChild(el('p', 'qs-hold', esc(v.hold)))
 
@@ -136,23 +141,56 @@ function skipError(res) {
 
 /** The button that opens the sheet. Returns null when the agent has no quest
  *  to leave, so the caller can simply append the result. */
-export function skipQuestButton(districtId, onDone) {
-  // One entry point. Its label only becomes specific once the server says
-  // which exit applies, so the screen never offers a free leave beside a
-  // paid one.
-  const btn = el('button', 'qs-btn', '<span aria-hidden="true">⤴</span> Leave Quest')
+/** The entry point, outside the Details disclosure so an agent stuck behind a
+ *  teammate can actually find it. Deliberately a quiet two-line row, never a
+ *  button competing with "Invite teammate" above it.
+ *
+ *  It also asks the server for a quote in the background once the panel has
+ *  painted: if this agent is entitled to a FREE exit, the row says so without
+ *  anyone having to tap or expand anything. The fetch never blocks the panel,
+ *  and a failure just leaves the neutral wording in place. */
+export function questExitRow(districtId, onDone) {
+  const row = el('div', 'qs-row')
+  const btn = el('button', 'qs-entry', `
+    <span class="qs-entry-copy">
+      <span class="qs-entry-title">Can't continue this Quest?</span>
+      <span class="qs-entry-sub">View exit and skip options</span>
+    </span>
+    <span class="qs-entry-go" aria-hidden="true">↗</span>
+  `)
   btn.type = 'button'
-  btn.setAttribute('aria-label', 'Leave this ReConnect quest')
+  btn.setAttribute('aria-label', 'View exit and skip options for this ReConnect quest')
+  row.appendChild(btn)
+
+  let cached = null
+  const open = (quote) => showOverlay(skipSheet(quote, districtId, onDone))
+
   btn.onclick = async () => {
+    if (cached) { open(cached); return }
     btn.disabled = true
     btn.classList.add('is-loading')
     const quote = await call('getQuestSkipQuote', { agentNo: getAgentNo(), districtId })
     btn.disabled = false
     btn.classList.remove('is-loading')
     if (!quote.success) { toast(skipError(quote)); return }
-    const v = questExitView(quote)
-    btn.innerHTML = `<span aria-hidden="true">⤴</span> ${esc(v.button)}`
-    showOverlay(skipSheet(quote, districtId, onDone))
+    cached = quote
+    open(quote)
   }
-  return btn
+
+  // Background: surface free eligibility without a tap. Fires after paint.
+  queueMicrotask(async () => {
+    const quote = await call('getQuestSkipQuote', { agentNo: getAgentNo(), districtId })
+    if (!quote?.success || !row.isConnected) return
+    cached = quote
+    const v = questExitView(quote)
+    const sub = row.querySelector('.qs-entry-sub')
+    if (v.free) {
+      row.classList.add('is-free')
+      sub.textContent = `${v.button} — free`
+    } else {
+      sub.textContent = 'View exit and skip options'
+    }
+  })
+
+  return row
 }

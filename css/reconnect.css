@@ -3564,15 +3564,24 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
    Deliberately secondary: an outlined pill under the quest's own controls,
    no glow, no alarm colour. The sheet reuses the standard .sheet shell. */
 .xp-spendable small { display: block; margin-top: 2px; font-size: 10px; opacity: .8; }
-.qs-row { display: flex; justify-content: flex-end; margin: 2px 0 10px; }
-.qs-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 9px 14px;
-  border: 1px solid var(--border); border-radius: 10px; background: transparent;
-  color: var(--muted); font-family: var(--mono); font-size: 10px; letter-spacing: 1px;
-  text-transform: uppercase; cursor: pointer; -webkit-tap-highlight-color: transparent; }
-.qs-btn:hover { color: var(--text); border-color: rgba(255,255,255,.22); }
-.qs-btn:focus-visible { outline: 2px solid var(--purple-lt); outline-offset: 2px; }
-.qs-btn.is-loading { opacity: .6; }
-.qs-btn span { font-size: 13px; line-height: 1; }
+.qs-row { margin: 10px 0 12px; }
+/* The entry point. Quiet on purpose — a bordered row, not a button, so it
+   never competes with the primary Invite/Stream action above it. */
+.qs-entry { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  width: 100%; min-height: 52px; padding: 10px 13px; text-align: left; cursor: pointer;
+  border: 1px solid var(--border); border-radius: 12px; background: rgba(255,255,255,.02);
+  -webkit-tap-highlight-color: transparent; }
+.qs-entry:hover { border-color: rgba(255,255,255,.2); background: rgba(255,255,255,.04); }
+.qs-entry:focus-visible { outline: 2px solid var(--purple-lt); outline-offset: 2px; }
+.qs-entry.is-loading { opacity: .6; }
+.qs-entry-copy { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.qs-entry-title { font-size: 12.5px; color: var(--text); }
+.qs-entry-sub { font-family: var(--mono); font-size: 9px; letter-spacing: .9px;
+  text-transform: uppercase; color: var(--muted); }
+.qs-entry-go { flex: none; font-size: 13px; color: var(--muted); }
+/* A free exit is worth noticing, but still not an alarm. */
+.qs-row.is-free .qs-entry { border-color: rgba(217,173,95,.4); }
+.qs-row.is-free .qs-entry-sub { color: #d9ad5f; }
 
 .qs-sheet { max-height: 88vh; overflow-y: auto; }
 .qs-title { margin: 6px 0 4px; }
@@ -3596,11 +3605,14 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
   background: rgba(217,173,95,.05); text-align: center; }
 .qs-free span { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 1.4px; color: #d9ad5f; }
 .qs-free small { display: block; margin-top: 5px; font-size: 11px; line-height: 1.4; color: var(--muted); }
-.qs-notes { margin: 14px 0 0; padding: 0; list-style: none; }
-.qs-notes li { position: relative; padding: 6px 0 6px 16px; font-size: 11.5px; line-height: 1.45; color: var(--muted);
-  border-bottom: 1px solid rgba(255,255,255,.05); }
-.qs-notes li:last-child { border-bottom: 0; }
-.qs-notes li::before { content: '·'; position: absolute; left: 4px; color: var(--purple-lt); }
+.qs-sec { margin-top: 14px; }
+.qs-sec h4 { margin: 0 0 6px; font-family: var(--mono); font-size: 8.5px; letter-spacing: 1.5px;
+  text-transform: uppercase; color: var(--purple-lt); font-weight: 400; }
+.qs-sec ul { margin: 0; padding: 0; list-style: none; }
+.qs-sec li { position: relative; padding: 4px 0 4px 14px; font-size: 11.5px; line-height: 1.45;
+  color: var(--muted); }
+.qs-sec li::before { content: '·'; position: absolute; left: 4px; color: var(--purple-lt); }
+.qs-sec-cost li:first-child { color: var(--text); }
 .qs-hold { margin: 12px 0 0; padding: 10px; border-radius: 10px; background: rgba(255,255,255,.04);
   font-size: 11.5px; line-height: 1.45; color: var(--text); }
 .qs-sheet .btn { display: block; width: 100%; margin-top: 10px; }

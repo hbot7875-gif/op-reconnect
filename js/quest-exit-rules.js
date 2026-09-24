@@ -93,17 +93,46 @@ export function questExitView(quote, now = Date.now()) {
     hold = `You need ${missing.join(' and ')} to skip this one.`
   }
 
-  // Only the paid path carries the cooldown line; a free exit never spends it.
-  const notes = [
-    ...(free ? [] : ["Spending XP won't lower your level, rank or rewards."]),
-    "This won't count as a completed ReConnect Quest.",
-    'Your existing streams will remain counted for your teammates.',
-    'Your other district progress and earned rewards will stay safe.',
-    ...(!free || action === 'system_stuck' ? [
-      'The ReConnect requirement will be marked skipped. Track and album goals are still required.',
-    ] : []),
-    ...(free ? [] : ['You can skip only once every 7 days.']),
+  // Three sections instead of a flat list of near-duplicate lines: what the
+  // exit does to the district, what it does to the team, and what it costs.
+  // Each one is a heading plus a short body, so the sheet reads as three
+  // answers rather than six bullets that all sound alike.
+  const waives = !free || action === 'system_stuck'
+  const sections = [
+    {
+      key: 'effect',
+      heading: 'What this does',
+      lines: [
+        waives
+          ? "Waives this district's ReConnect requirement. Track and album goals still have to be finished."
+          : "Leaves the team only — this district still needs its ReConnect Quest.",
+        "It won't count as a completed ReConnect Quest.",
+      ],
+    },
+    {
+      key: 'team',
+      heading: 'Your team',
+      lines: [
+        'Streams you already contributed stay counted for them.',
+        'Your seat reopens so someone else can take it.',
+      ],
+    },
+    {
+      key: 'cost',
+      heading: free ? 'Cost' : 'Cost and limits',
+      lines: free
+        ? ['Free — nothing is deducted.']
+        : [
+            `${priceLabel(quote.costXp, quote.costCells)}.`,
+            'Spending XP never lowers your level, rank or earned rewards.',
+            'One paid skip every 7 days.',
+          ],
+    },
   ]
+
+  // Kept for callers that still want the flat form (and for the tests that
+  // assert no free path ever advertises a price or the cooldown).
+  const notes = sections.flatMap((sec) => sec.lines)
 
   return {
     action,
@@ -116,6 +145,7 @@ export function questExitView(quote, now = Date.now()) {
     blocked,
     reason,
     hold,
+    sections,
     notes,
     showPrice: !free,
   }
