@@ -479,7 +479,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
   const [
     modeReview, { data: badgeRows }, { data: itemRows }, broadcasts, cityFeed,
     waitingAgents, onlineNow, districtMessages, equippedMap, isBadgeVaultEditor, leaveInfo, vma,
-    { data: backupOpenRows },
+    { data: backupOpenRows }, { data: backupMineRow },
   ] = await Promise.all([
     // A review hint only — see the note above getModeVolumeReview's caller.
     player.agent_no === 'AGENT120' ? Promise.resolve(null) : timed('modeReview', getModeVolumeReview(supabase, player.agent_no, player.mode)),
@@ -515,8 +515,20 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
       .select('opened_at').eq('status', 'open').neq('owner_agent_no', player.agent_no)
       .gt('expires_at', new Date().toISOString())
       .order('opened_at', { ascending: false }).limit(50)),
+    // This agent's OWN Backup Pass once someone has joined it. Drives the
+    // bell — their goal's target rises and a stranger's streams start pooling
+    // into it the moment this lands, so they need telling directly.
+    timed('backupMine', supabase.from('rc_backup_requests')
+      .select('id, district_id, goal_ref, goal_kind, helper_agent_no, joined_at, boosted_target, original_target')
+      .eq('owner_agent_no', player.agent_no).eq('status', 'joined').maybeSingle()),
   ])
   const equippedBadgeArtwork = equippedMap.get(player.agent_no) || null
+  // One extra read only when someone is actually helping — the codename is
+  // what makes the bell read as a person rather than a status change.
+  const backupHelperName = backupMineRow?.helper_agent_no
+    ? (await supabase.from('rc_players').select('codename')
+        .eq('agent_no', backupMineRow.helper_agent_no).maybeSingle()).data?.codename || null
+    : null
   mark('batch3_tail')
   const items = (itemRows || []).map((r: any) => ({
     id: r.id,
@@ -564,6 +576,16 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
         open: (backupOpenRows || []).length,
         latestAt: (backupOpenRows || [])[0]?.opened_at || null,
       },
+      backupMine: backupMineRow ? {
+        requestId: backupMineRow.id,
+        districtId: backupMineRow.district_id,
+        goalRef: backupMineRow.goal_ref,
+        goalKind: backupMineRow.goal_kind,
+        helperCodename: backupHelperName || 'An agent',
+        joinedAt: backupMineRow.joined_at,
+        originalTarget: backupMineRow.original_target,
+        boostedTarget: backupMineRow.boosted_target,
+      } : null,
       leave: leaveInfo.leave,
       leaveAvailableAt: leaveInfo.availableAt,
     },

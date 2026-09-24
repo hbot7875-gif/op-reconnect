@@ -179,6 +179,20 @@ function helpSheet(requests, onJoined) {
   return sheet
 }
 
+/* Whether the owner has been told that a helper joined THEIR Backup Pass.
+   Keyed by request id, so each new pairing announces itself exactly once and
+   the bell doesn't nag for the whole time the helper is active. */
+const MINE_SEEN_KEY = 'rc_backup_mine_seen'
+
+export function hasUnseenBackupHelper(backupMine) {
+  if (!backupMine?.requestId) return false
+  try { return localStorage.getItem(MINE_SEEN_KEY) !== backupMine.requestId } catch { return true }
+}
+
+export function markBackupHelperSeen(backupMine) {
+  try { if (backupMine?.requestId) localStorage.setItem(MINE_SEEN_KEY, backupMine.requestId) } catch { /* private mode */ }
+}
+
 /* Which open requests this agent has already looked at. The Pack tab's dot
    means "someone opened one since you last checked", not merely "requests
    exist" — otherwise it would be permanently lit and stop meaning anything. */

@@ -17,9 +17,13 @@ export { districtFraction } from './district-progress.js'
  *  more than a glance. A finished row drops its bar and sub-line entirely —
  *  a full 100% bar says nothing a checkmark doesn't already say, and it was
  *  most of what made completed rows as visually loud as unfinished ones. */
-function goalRow(label, sub, progress, target, done, unit) {
+/** `backup` is districts.ts's own {ownProgress, bonus, originalTarget} — present
+ *  only while a Backup Pass helper is active (or their credit is banked). The
+ *  server has always sent it; without showing it, a helper joining looked like
+ *  the target mysteriously jumping (26 -> 32) with nothing to explain it. */
+function goalRow(label, sub, progress, target, done, unit, backup = null) {
   const pct = Math.min(100, Math.round((progress / Math.max(1, target)) * 100))
-  const row = el('div', 'goal-row' + (done ? ' done' : ''))
+  const row = el('div', 'goal-row' + (done ? ' done' : '') + (backup ? ' has-backup' : ''))
   row.innerHTML = `
     <div class="gr-top">
       <span class="gr-name">${esc(label)}</span>
@@ -27,6 +31,7 @@ function goalRow(label, sub, progress, target, done, unit) {
     </div>
     ${done ? '' : `<div class="gr-bar" role="progressbar" aria-label="${esc(label)} progress" aria-valuemin="0" aria-valuemax="${target}" aria-valuenow="${Math.min(target, progress)}"><div class="gr-fill" style="width:${pct}%"></div></div>`}
     ${sub ? `<div class="gr-sub">${sub}</div>` : ''}
+    ${backup ? `<div class="gr-backup"><span class="grb-tag">🤝 Backup</span><span class="grb-split">you ${backup.ownProgress} + helper ${backup.bonus} · target raised from ${backup.originalTarget}</span></div>` : ''}
   `
   if (unit && !done) row.querySelector('.gr-count').insertAdjacentHTML('beforeend', ` <i>${unit}</i>`)
   return row
@@ -197,7 +202,7 @@ export function renderBoard(board, d, opts = {}) {
   if (goals.length) {
     const trackCard = el('div', 'card goal-card')
     renderMissionGroup(trackCard, '🎵', 'Track Mission', goals,
-      (g) => goalRow(g.label, '', g.progress, g.target, g.done, 'plays'))
+      (g) => goalRow(g.label, '', g.progress, g.target, g.done, 'plays', g.backup))
     board.appendChild(trackCard)
   }
 
@@ -206,7 +211,7 @@ export function renderBoard(board, d, opts = {}) {
     renderMissionGroup(albumCard, '💿', 'Album Mission', albums, (a) => {
       const sub = a.done || !a.nextPassTracks?.length ? ''
         : `Still need ${a.nextPassTracks.slice(0, 3).map((t) => `${esc(t.label)} ×${t.need}`).join(' · ')}`
-      const row = goalRow(`💿 ${a.label}`, sub, a.passesDone, a.target, a.done, 'passes')
+      const row = goalRow(`💿 ${a.label}`, sub, a.passesDone, a.target, a.done, 'passes', a.backup)
       // Tap to see every track in the album, not just the couple flagged above.
       if (a.tracks?.length) {
         row.classList.add('clickable')

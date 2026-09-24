@@ -14,7 +14,7 @@
 // no guessing: xpIntoLevel/xpForNextLevel come straight from the server.
 
 import { badgeThumb } from './badge-art.js'
-import { hasNewBackupRequests } from './backup-pass.js'
+import { hasNewBackupRequests, hasUnseenBackupHelper, markBackupHelperSeen } from './backup-pass.js'
 import { call } from './api.js'
 import { el, esc, toast, setState, showOverlay, hideOverlay } from './state.js'
 import { getScreen, goWorld, goResources, goSettings, goCandyStar, goRanking, goDistrict } from './router.js'
@@ -222,7 +222,12 @@ export function renderHud(container, state) {
   // district was invisible until they happened to walk back into it.
   const districtUnread = unreadDistrictSignals(state)
   const unreadTotal = districtUnread.reduce((sum, row) => sum + row.unread, 0)
-  const signalCount = invites.length + reconnectAlerts.length + unreadTotal
+  // A helper joining your own Backup Pass is personal news, not city news:
+  // their streams start pooling into your goal and its target rises, so it
+  // belongs in the bell beside invites rather than in the public ticker.
+  const backupMine = state?.player?.backupMine || null
+  const backupSignal = hasUnseenBackupHelper(backupMine) ? 1 : 0
+  const signalCount = invites.length + reconnectAlerts.length + unreadTotal + backupSignal
   const reconnectStatus = reconnectHudStatus(state)
   const reconnectMission = state.activeDistrict?.reconnect?.mission
   const reconnectUnread = reconnectMission
@@ -387,9 +392,33 @@ function invitesSheet(state) {
   const invites = state.invites || []
   const alerts = state.reconnectAlerts || []
   const unreadSignals = unreadDistrictSignals(state)
+  const backupMine = state?.player?.backupMine || null
+  const backupNew = hasUnseenBackupHelper(backupMine)
 
-  if (!invites.length && !alerts.length && !unreadSignals.length) {
+  if (!invites.length && !alerts.length && !unreadSignals.length && !backupNew) {
     sheet.appendChild(el('p', 'muted', "No messages, invites or partner alerts. If another agent signals you, it shows up here."))
+  }
+
+  if (backupNew) {
+    const block = el('div', 'bd-block')
+    block.innerHTML = `
+      <div class="bd-block-head">🤝 ${esc(backupMine.helperCodename)} is backing you up</div>
+      <p class="muted invite-body">They joined your Backup Pass, so their streams now count toward that goal with you. Its target rose from ${backupMine.originalTarget} to ${backupMine.boostedTarget} while they help.</p>
+    `
+    const actions = el('div', 'invite-actions')
+    const view = el('button', 'btn btn-primary', 'View goal')
+    view.onclick = () => {
+      markBackupHelperSeen(backupMine)
+      hideOverlay()
+      const d = state.activeDistrict
+      if (d && d.id === backupMine.districtId) goDistrict(d.wardId, d.id)
+      else goWorld()
+    }
+    const ok = el('button', 'btn btn-ghost', 'Got it')
+    ok.onclick = () => { markBackupHelperSeen(backupMine); hideOverlay() }
+    actions.append(view, ok)
+    block.appendChild(actions)
+    sheet.appendChild(block)
   }
 
   for (const row of unreadSignals) {

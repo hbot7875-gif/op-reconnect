@@ -3564,6 +3564,14 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
    Deliberately secondary: an outlined pill under the quest's own controls,
    no glow, no alarm colour. The sheet reuses the standard .sheet shell. */
 .xp-spendable small { display: block; margin-top: 2px; font-size: 10px; opacity: .8; }
+/* A goal with an active Backup Pass helper — shows whose streams are whose,
+   so the raised target reads as help rather than a glitch (js/ui-district.js) */
+.goal-row.has-backup { border-left: 2px solid rgba(217,173,95,.45); padding-left: 8px; }
+.gr-backup { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-top: 5px; }
+.grb-tag { font-family: var(--mono); font-size: 8px; letter-spacing: 1px; color: #d9ad5f;
+  border: 1px solid rgba(217,173,95,.4); border-radius: 6px; padding: 2px 6px; white-space: nowrap; }
+.grb-split { font-family: var(--mono); font-size: 8.5px; letter-spacing: .4px; color: var(--muted); }
+
 /* Pack tab dot — an agent has opened a Backup Pass since you last looked */
 .hud-tab { position: relative; }
 .hud-tab-dot { position: absolute; top: 4px; right: calc(50% - 16px); width: 7px; height: 7px;

@@ -261,6 +261,7 @@ export async function joinBackupRequest(supabase: SupabaseDB, params: Record<str
   const { data: result, error } = await supabase.rpc('rc_backup_join', { p_request_id: requestId, p_helper: agentNo })
   if (error) return { success: false, error: error.message }
   if (!result?.success) return { success: false, error: result?.error || 'join_failed' }
+
   return { success: true }
 }
 
