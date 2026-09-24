@@ -34,14 +34,14 @@ const COPY = {
   system_stuck: {
     button: 'Exit Quest',
     title: 'Exit this Quest?',
-    lede: "This quest can't be finished any more, so leaving it is free.",
+    lede: "This quest can't be finished any more. Its ReConnect requirement will be skipped for this district.",
     why: "This quest is stuck, so there's nothing to pay.",
     confirm: 'Exit Quest',
   },
   skip: {
     button: 'Skip Quest',
     title: 'Skip this Quest?',
-    lede: "You can leave this quest and start a new one. This won't count as completing it.",
+    lede: "Skip this ReConnect Quest so you can finish the district without it. This won't count as completing the Quest.",
     confirm: null, // built from the price below
   },
 }
@@ -96,9 +96,12 @@ export function questExitView(quote, now = Date.now()) {
   // Only the paid path carries the cooldown line; a free exit never spends it.
   const notes = [
     ...(free ? [] : ["Spending XP won't lower your level, rank or rewards."]),
-    "You won't receive this quest's completion rewards.",
+    "This won't count as a completed ReConnect Quest.",
     'Your existing streams will remain counted for your teammates.',
     'Your other district progress and earned rewards will stay safe.',
+    ...(!free || action === 'system_stuck' ? [
+      'The ReConnect requirement will be marked skipped. Track and album goals are still required.',
+    ] : []),
     ...(free ? [] : ['You can skip only once every 7 days.']),
   ]
 

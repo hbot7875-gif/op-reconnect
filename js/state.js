@@ -74,7 +74,13 @@ export function showOverlay(contentNode) {
   overlay.hidden = false
   document.body.classList.add('overlay-open')
   overlay.onclick = (e) => { if (e.target === overlay) hideOverlay() }
-  requestAnimationFrame(() => (overlayFocusables(overlay)[0] || contentNode).focus())
+  // Destructive confirmations can nominate their safe action. Falling back
+  // to the first focusable preserves every existing sheet's behaviour.
+  requestAnimationFrame(() => (
+    overlay.querySelector('[data-autofocus="true"]')
+    || overlayFocusables(overlay)[0]
+    || contentNode
+  ).focus())
 }
 
 export function hideOverlay() {

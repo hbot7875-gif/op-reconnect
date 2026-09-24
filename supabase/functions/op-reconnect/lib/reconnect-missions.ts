@@ -278,15 +278,18 @@ const CONTRIBUTION_PAGE_SIZE = 1_000
  *  computeBaseline). Paginated the same defensive way bomb.ts's Red Zone
  *  scrobble read is, even though one agent's one day is never realistically
  *  going to need a second page. */
-async function contributionTotals(supabase: SupabaseDB, agentNo: string, sinceIso: string): Promise<Map<string, number>> {
+async function contributionTotals(
+  supabase: SupabaseDB, agentNo: string, sinceIso: string, strict = false,
+): Promise<Map<string, number>> {
   const totals = new Map<string, number>()
   const sinceDate = kstDateOfIso(sinceIso)
   const sinceSec = Math.ceil(new Date(sinceIso).getTime() / 1000)
   const today = todayKst()
 
   if (sinceDate < today) {
-    const { data } = await supabase.from('rc_daily_activity')
+    const { data, error } = await supabase.from('rc_daily_activity')
       .select('track_counts').eq('agent_no', agentNo).gt('kst_date', sinceDate)
+    if (strict && error) throw new Error(`contribution_daily_unavailable:${error.message}`)
     for (const row of data || []) {
       const bucket = row.track_counts || {}
       for (const key of Object.keys(bucket)) totals.set(key, (totals.get(key) || 0) + (bucket[key]?.n || 0))
@@ -299,7 +302,11 @@ async function contributionTotals(supabase: SupabaseDB, agentNo: string, sinceIs
       .select('track_name').eq('agent_no', agentNo)
       .gte('listened_at', sinceSec).lt('listened_at', toTs)
       .range(offset, offset + CONTRIBUTION_PAGE_SIZE - 1)
-    if (error || !data?.length) break
+    if (error) {
+      if (strict) throw new Error(`contribution_scrobbles_unavailable:${error.message}`)
+      break
+    }
+    if (!data?.length) break
     for (const row of data) {
       const key = normKeyFull(row.track_name)
       if (key) totals.set(key, (totals.get(key) || 0) + 1)
@@ -316,9 +323,11 @@ async function contributionTotals(supabase: SupabaseDB, agentNo: string, sinceIs
  *  PERSONAL_COUNT_CAP). Both refreshMission's shared and per-agent qualify
  *  checks run off this, and its return value is what ends up as each
  *  roster row's "N streams" (see shape()). */
-export async function contributionSince(supabase: SupabaseDB, agentNo: string, sinceIso: string, keys: string[]): Promise<number> {
+export async function contributionSince(
+  supabase: SupabaseDB, agentNo: string, sinceIso: string, keys: string[], strict = false,
+): Promise<number> {
   if (!keys.length) return 0
-  const totals = await contributionTotals(supabase, agentNo, sinceIso)
+  const totals = await contributionTotals(supabase, agentNo, sinceIso, strict)
   return keys.reduce((sum, k) => sum + (totals.get(k) || 0), 0)
 }
 
@@ -334,12 +343,51 @@ export async function contributionSince(supabase: SupabaseDB, agentNo: string, s
  *  what lets a teammate's roster row expand into an actual tick-list, not
  *  just a bare "21/48" nobody can act on. */
 export async function checklistProgressSince(
-  supabase: SupabaseDB, agentNo: string, sinceIso: string, tracks: { label: string; keys: string[] }[],
+  supabase: SupabaseDB, agentNo: string, sinceIso: string, tracks: { label: string; keys: string[] }[], strict = false,
 ): Promise<{ done: number; perTrack: boolean[] }> {
   if (!tracks.length) return { done: 0, perTrack: [] }
-  const totals = await contributionTotals(supabase, agentNo, sinceIso)
+  const totals = await contributionTotals(supabase, agentNo, sinceIso, strict)
   const perTrack = tracks.map((t) => (t.keys || []).some((k) => (totals.get(k) || 0) > 0))
   return { done: perTrack.filter(Boolean).length, perTrack }
+}
+
+/** Fresh, fail-closed evidence for a Quest exit decision. This deliberately
+ * reads the same raw scrobbles/daily buckets as mission progress instead of
+ * trusting participants.streamed_at, which is only a display cache updated
+ * when somebody opens the Quest. The service passes this evidence into the
+ * row-locked SQL transaction; a missing participant entry blocks the exit. */
+export async function questExitContributionEvidence(
+  supabase: SupabaseDB,
+  mission: any,
+  variant: 'connect' | 'invite',
+  config: any,
+): Promise<Record<string, number>> {
+  const { data: joined, error } = await supabase.from('rc_reconnect_participants')
+    .select('agent_no, joined_at').eq('mission_id', mission.id).eq('status', 'joined')
+  if (error) throw new Error(`participant_evidence_unavailable:${error.message}`)
+
+  const evidence: Record<string, number> = {}
+  for (const p of joined || []) {
+    if (variant !== 'connect') {
+      // Invite-only missions have no streaming contribution requirement.
+      evidence[p.agent_no] = 0
+    } else if (config?.checklist?.tracks?.length) {
+      evidence[p.agent_no] = (await checklistProgressSince(
+        supabase, p.agent_no, p.joined_at, config.checklist.tracks, true,
+      )).done
+    } else if (config?.sharedTrack?.keys?.length) {
+      evidence[p.agent_no] = await contributionSince(
+        supabase, p.agent_no, p.joined_at, config.sharedTrack.keys, true,
+      )
+    } else {
+      const pd = await myActivePd(supabase, p.agent_no, mission.district_id)
+      const keys = pd?.status === 'active' ? ownGoalKeys(pd) : []
+      evidence[p.agent_no] = keys.length
+        ? await contributionSince(supabase, p.agent_no, p.joined_at, keys, true)
+        : 0
+    }
+  }
+  return evidence
 }
 
 /** Team Boost — a reward layered on TOP of a plain 'connect' mission's own
@@ -923,17 +971,65 @@ async function refreshMission(
   return mission
 }
 
+/** A waiver belongs to one district activation only. Keeping this lookup
+ * shared avoids refreshing the live Quest twice when the player opens its
+ * panel; ordinary polling remains as light as it was before Skip existed. */
+async function currentQuestWaiver(supabase: SupabaseDB, agentNo: string, districtId: string) {
+  const { data: attempt } = await supabase.from('rc_player_districts')
+    .select('activated_at').eq('agent_no', agentNo).eq('district_id', districtId)
+    .in('status', ['active', 'restored']).maybeSingle()
+  if (!attempt?.activated_at) return null
+  const { data } = await supabase.from('rc_quest_skips')
+    .select('id, free_reason, created_at').eq('agent_no', agentNo).eq('district_id', districtId)
+    .eq('waives_requirement', true).gte('created_at', attempt.activated_at)
+    .order('created_at', { ascending: false }).limit(1).maybeSingle()
+  return data || null
+}
+
+async function agentsWithCurrentWaiver(supabase: SupabaseDB, agentNos: string[], districtId: string) {
+  if (!agentNos.length) return new Set<string>()
+  const { data: attempts } = await supabase.from('rc_player_districts')
+    .select('agent_no, activated_at').eq('district_id', districtId).eq('status', 'active')
+    .in('agent_no', agentNos)
+  const activated = new Map((attempts || []).map((r: any) => [r.agent_no, r.activated_at]))
+  if (!activated.size) return new Set<string>()
+  const { data: waivers } = await supabase.from('rc_quest_skips')
+    .select('agent_no, created_at').eq('district_id', districtId).eq('waives_requirement', true)
+    .in('agent_no', [...activated.keys()])
+  return new Set((waivers || [])
+    .filter((r: any) => r.created_at >= activated.get(r.agent_no))
+    .map((r: any) => r.agent_no))
+}
+
 /** Called by reconnect-goal.ts's resolveReconnectStatus on every state poll
  *  — the caller's own frozen reconnect goal is already known (never
  *  re-derived live), so this just resolves live mission state against it. */
 export async function getMissionStatus(supabase: SupabaseDB, agentNo: string, districtId: string, frozenReconnect: FrozenReconnectGoal) {
   const variant = frozenReconnect.variant as 'connect' | 'invite'
+  const sharedTarget = Number(frozenReconnect.config.sharedTrack?.target) || 0
+  const checklistTracks = frozenReconnect.config.checklist?.tracks?.length || 0
+  const checklistRequired = Number(frozenReconnect.config.requiredAgents) || 0
+  const checklistTarget = checklistTracks * checklistRequired
+  const reconnectTarget = sharedTarget || checklistTarget || 1
+
+  // A paid Skip waives this player's third district criterion for this
+  // activation only. It is deliberately NOT a completed mission: no mission
+  // rewards, badge or co-op feed event. A later district attempt cannot reuse
+  // the waiver because the skip must be newer than that attempt's activation.
+  const waiver = await currentQuestWaiver(supabase, agentNo, districtId)
+  if (waiver) {
+    return {
+      variant, done: true, skipped: true, skipReason: waiver.free_reason || 'paid',
+      restorationProgress: { progress: reconnectTarget, target: reconnectTarget },
+      mission: null,
+    }
+  }
+
   let mission = await findMyCompletedMission(supabase, agentNo, districtId, frozenReconnect.id)
     || await findMyMission(supabase, agentNo, districtId, { goalId: frozenReconnect.id })
   if (mission) mission = await refreshMission(supabase, mission, variant, frozenReconnect.config)
   const participants = await participantsFor(supabase, mission)
   const done = mission?.status === 'complete'
-  const sharedTarget = Number(frozenReconnect.config.sharedTrack?.target) || 0
   const sharedProgress = Number(mission?.sharedTrackProgress?.progress) || 0
   // Checklist has no single pooled number — "combined plays toward a
   // target" doesn't apply when everyone must clear the SAME fixed list
@@ -941,9 +1037,6 @@ export async function getMissionStatus(supabase: SupabaseDB, agentNo: string, di
   // capped per agent) out of (list length × required headcount), so the
   // shared restoration meter still climbs smoothly rather than sitting at
   // 0% until every last agent finishes their very last track.
-  const checklistTracks = frozenReconnect.config.checklist?.tracks?.length || 0
-  const checklistRequired = Number(frozenReconnect.config.requiredAgents) || 0
-  const checklistTarget = checklistTracks * checklistRequired
   const checklistSum = checklistTracks > 0
     ? participants
       .filter((p: any) => p.status === 'joined')
@@ -981,6 +1074,15 @@ export async function getReconnectMission(supabase: SupabaseDB, content: any, pa
   if (pd?.status !== 'active') return { success: true, available: false }
   const reconnect = myReconnectGoal(pd)
   if (!reconnect) return { success: true, available: false }
+
+  const waiver = await currentQuestWaiver(supabase, agentNo, districtId)
+  if (waiver) {
+    return {
+      success: true, available: true, variant: reconnect.variant,
+      config: reconnect.config, done: true, skipped: true,
+      skipReason: waiver.free_reason || 'paid', mission: null,
+    }
+  }
 
   let mission = await findMyCompletedMission(supabase, agentNo, districtId, reconnect.id)
     || await findMyMission(supabase, agentNo, districtId, { goalId: reconnect.id })
@@ -1265,6 +1367,9 @@ export async function getInviteCandidates(supabase: SupabaseDB, content: GameCon
   if (pd?.status !== 'active') return { success: true, candidates: [], emptyReason: 'district_not_active', alertActive: false }
   const reconnect = myReconnectGoal(pd)
   if (!reconnect) return { success: true, candidates: [], emptyReason: 'no_team_goal', alertActive: false }
+  if (await currentQuestWaiver(supabase, agentNo, districtId)) {
+    return { success: true, candidates: [], emptyReason: 'requirement_skipped', alertActive: false }
+  }
   const { data: alertRow } = await supabase.from('rc_reconnect_match_alerts')
     .select('active').eq('agent_no', agentNo).eq('district_id', districtId).eq('goal_id', reconnect.id).maybeSingle()
   const alertActive = !!alertRow?.active
@@ -1293,7 +1398,9 @@ export async function getInviteCandidates(supabase: SupabaseDB, content: GameCon
 
   const rosters = await openMissionRosters(supabase, districtId, reconnect.id)
   const done = await agentsDoneWithGoal(supabase, districtId, reconnect.id)
-  const free = freeAgentsWithWait(rosters, eligible, done, stillOn)
+  let free = freeAgentsWithWait(rosters, eligible, done, stillOn)
+  const waived = await agentsWithCurrentWaiver(supabase, free.map((f) => f.agentNo), districtId)
+  free = free.filter((f) => !waived.has(f.agentNo))
   if (!free.length) return {
     success: true, candidates: [], stillOnHomeBase, alertActive,
     emptyReason: eligible.every((candidate: string) => done.has(candidate)) ? 'everyone_completed' : 'everyone_busy',
@@ -1372,6 +1479,7 @@ export async function openReconnectMission(supabase: SupabaseDB, content: unknow
   if (pd?.status !== 'active') return { success: false, error: 'not_eligible' }
   const reconnect = myReconnectGoal(pd)
   if (!reconnect) return { success: false, error: 'not_available' }
+  if (await currentQuestWaiver(supabase, agentNo, districtId)) return { success: false, error: 'requirement_skipped' }
   // Checked in this order (completed first) so an agent who also still has
   // a leftover dangling open mission for this same goal — see
   // findMyCompletedMission's doc comment — gets told the true, better
@@ -1380,6 +1488,15 @@ export async function openReconnectMission(supabase: SupabaseDB, content: unknow
   // left to do here.
   if (await findMyCompletedMission(supabase, agentNo, districtId, reconnect.id)) return { success: false, error: 'already_completed' }
   if (await findMyMission(supabase, agentNo, districtId)) return { success: false, error: 'already_in_mission' }
+
+  // Capture the immutable price tier before creating anything. A missing or
+  // invalid mode must fail the join rather than leave a joined row whose
+  // eventual Skip price can be influenced by a later mode change.
+  const { data: creatorMode, error: modeError } = await supabase.from('rc_players')
+    .select('mode').eq('agent_no', agentNo).maybeSingle()
+  if (modeError || !['exam', 'easy', 'steady', 'medium', 'hard'].includes(creatorMode?.mode)) {
+    return { success: false, error: 'mode_unavailable' }
+  }
 
   const { data: mission, error } = await supabase.from('rc_reconnect_missions').insert({
     district_id: districtId, goal_id: reconnect.id, required_agents: reconnect.config.requiredAgents,
@@ -1392,10 +1509,13 @@ export async function openReconnectMission(supabase: SupabaseDB, content: unknow
 
   // joined_mode locks the Skip Quest price to the mode they were on when they
   // joined — switching to a cheaper mode later must not lower the bill.
-  const { data: creatorMode } = await supabase.from('rc_players').select('mode').eq('agent_no', agentNo).maybeSingle()
-  await supabase.from('rc_reconnect_participants').insert({
-    mission_id: mission.id, agent_no: agentNo, status: 'joined', joined_mode: creatorMode?.mode || null,
+  const { error: participantError } = await supabase.from('rc_reconnect_participants').insert({
+    mission_id: mission.id, agent_no: agentNo, status: 'joined', joined_mode: creatorMode.mode,
   })
+  if (participantError) {
+    await supabase.from('rc_reconnect_missions').update({ status: 'cancelled' }).eq('id', mission.id).eq('status', 'open')
+    return { success: false, error: participantError.message }
+  }
   // Refresh once even though nothing can have qualified yet — for
   // sharedTrack missions this is what puts the 0/target shape on the very
   // first response, instead of the caller having to poll again to see it.
@@ -1426,6 +1546,9 @@ export async function inviteReconnectMission(supabase: SupabaseDB, content: unkn
   // list on the client, or any other caller, still can't land an invite
   // nobody can ever accept.
   if (!(await excludeRetired(supabase, [inviteeAgentNo])).length) return { success: false, error: 'invitee_retired' }
+  if (await currentQuestWaiver(supabase, inviteeAgentNo, districtId)) {
+    return { success: false, error: 'invitee_requirement_skipped' }
+  }
 
   const pd = await myActivePd(supabase, agentNo, districtId)
   if (pd?.status !== 'active') return { success: false, error: 'not_eligible' }
@@ -1637,20 +1760,33 @@ export async function removeReconnectParticipant(supabase: SupabaseDB, content: 
     }
   }
 
-  const { error } = await supabase.from('rc_reconnect_participants')
-    .delete().eq('mission_id', mission.id).eq('agent_no', targetAgentNo)
-  if (error) return { success: false, error: error.message }
+  let frozenContribution = 0
+  let scrobbleHighWater = 0
+  if (target.status === 'joined') {
+    try {
+      const { data: latest, error: latestError } = await supabase.from('rc_scrobbles')
+        .select('id').order('id', { ascending: false }).limit(1).maybeSingle()
+      if (latestError) return { success: false, error: 'contribution_unavailable' }
+      scrobbleHighWater = Number(latest?.id) || 0
+      const evidence = await questExitContributionEvidence(
+        supabase, mission, reconnect.variant === 'invite' ? 'invite' : 'connect', reconnect.config,
+      )
+      if (!(targetAgentNo in evidence)) return { success: false, error: 'contribution_unavailable' }
+      frozenContribution = Math.max(0, Number(evidence[targetAgentNo]) || 0)
+    } catch (_e) {
+      return { success: false, error: 'contribution_unavailable' }
+    }
+  }
+  const { data: removal, error } = await supabase.rpc('rc_reconnect_remove_participant', {
+    p_actor: agentNo,
+    p_mission: mission.id,
+    p_target: targetAgentNo,
+    p_contribution: frozenContribution,
+    p_scrobble_high_water: scrobbleHighWater,
+  })
+  if (error || !removal?.success) return { success: false, error: removal?.error || error?.message || 'remove_failed' }
 
   const { data: freshParticipants } = await supabase.from('rc_reconnect_participants').select('*').eq('mission_id', mission.id)
-  // Walking out of a mission nobody else joined leaves an empty shell that
-  // can never do anything — same dead-end foldAwayDanglingMissions clears
-  // elsewhere, so clear it here rather than leaving it as clutter that also
-  // shows up in every "N agents waiting" count.
-  if (isLeaving && !(freshParticipants || []).some((p: any) => p.status === 'joined')) {
-    await supabase.from('rc_reconnect_missions').delete().eq('id', mission.id).eq('status', 'open')
-    return { success: true, left: true, mission: null }
-  }
-  if (isLeaving) return { success: true, left: true, mission: null }
 
   return { success: true, mission: await shapeWithMessages(supabase, mission, freshParticipants || [], agentNo, IDLE_DAYS, reconnect.config.ciphers) }
 }
@@ -1692,6 +1828,13 @@ export async function respondReconnectInvite(supabase: SupabaseDB, content: unkn
     return { success: true, joined: false }
   }
 
+  // A waived ReConnect criterion cannot be reopened through a stale invite
+  // or direct API call. Declining remains allowed so the pending row can be
+  // cleaned up normally.
+  if (await currentQuestWaiver(supabase, agentNo, districtId)) {
+    return { success: false, error: 'requirement_skipped' }
+  }
+
   // Nothing used to stop an agent from accepting a brand-new invite while
   // already genuinely paired in a DIFFERENT open mission for this exact
   // goal — years of that gap left dozens of agents holding half a dozen or
@@ -1719,12 +1862,8 @@ export async function respondReconnectInvite(supabase: SupabaseDB, content: unkn
   })
   const result = !rpcError && Array.isArray(rpcData) ? rpcData[0] : null
   if (rpcError || !result?.joined) return { success: false, error: result?.error || rpcError?.message || 'join_failed' }
-  // Same price lock as the other join paths — rc_reconnect_accept_invite flips
-  // the row inside SQL, so the mode is stamped here right after it lands.
-  const { data: joinerMode } = await supabase.from('rc_players').select('mode').eq('agent_no', agentNo).maybeSingle()
-  await supabase.from('rc_reconnect_participants')
-    .update({ joined_mode: joinerMode?.mode || null })
-    .eq('mission_id', mission.id).eq('agent_no', agentNo).is('joined_mode', null)
+  // rc_reconnect_accept_invite captures joined_mode in the same row-locked
+  // update as acceptance, so there is no fallible post-join price stamp.
   await foldAwayDanglingMissions(supabase, agentNo, mission.id, mission.goal_id)
   await supabase.from('rc_reconnect_match_alerts').update({ active: false, updated_at: new Date().toISOString() })
     .eq('agent_no', agentNo).eq('district_id', districtId)
@@ -1887,7 +2026,7 @@ export async function adminAutoAssignMissions(supabase: SupabaseDB, params: any)
     const modeOf = new Map((groupModes || []).map((r: any) => [r.agent_no, r.mode]))
     await supabase.from('rc_reconnect_participants').insert(
       group.map((agentNo) => ({
-        mission_id: mission.id, agent_no: agentNo, status: 'joined', joined_mode: modeOf.get(agentNo) || null,
+        mission_id: mission.id, agent_no: agentNo, status: 'joined', joined_mode: modeOf.get(agentNo) || 'hard',
       })))
     created.push(mission.id)
   }

@@ -256,7 +256,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     for (const templateId of badgeProgress.templateIds) {
       await awardBadge(supabase, player.agent_no, templateId, activePd.district_id)
     }
-    if (reconnect?.done) await awardBadge(supabase, player.agent_no, 'mission_bond')
+    if (reconnect?.done && !reconnect?.skipped) await awardBadge(supabase, player.agent_no, 'mission_bond')
     const districtComplete = progress.complete && (!reconnect || reconnect.done)
 
     // The week ran out before restoration finished — the attempt lapses.

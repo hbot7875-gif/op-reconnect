@@ -767,6 +767,16 @@ function paintMissionPanel(box, d, res) {
   box.classList.toggle('is-near-complete', m?.status === 'open' && sharedProgressRatio >= 0.8)
   box.classList.toggle('is-complete', m?.status === 'complete')
 
+  if (res.skipped) {
+    box.classList.add('is-complete')
+    box.appendChild(reconnectMissionBlock(d.reconnect?.label || 'ReConnect Quest',
+      'This district no longer requires the ReConnect Quest.'))
+    box.appendChild(reconnectTeamBlock('ReConnect · Skipped'))
+    box.appendChild(reconnectNextBlock('Finish your track and album goals',
+      "The Quest wasn't completed. Mission Bond is only earned by completing one."))
+    return
+  }
+
   if (m?.status === 'complete') {
     // Name the partner. An agent who got here by ACCEPTING an invite never
     // sent one themselves, so a bare "everyone's in" reads as the mission

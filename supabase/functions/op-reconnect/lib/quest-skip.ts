@@ -1,9 +1,10 @@
 // Skip Quest — a paid way out of a ReConnect Quest an agent no longer wants
-// to finish. It is an exit, never a shortcut: no completion, no restoration
-// credit, no rewards, no badge.
+// to finish. It waives only this district attempt's ReConnect gate; it never
+// completes the Quest or grants its Mission Bond badge. Track and album goals
+// still have to be completed, and the team's pooled streams stay put.
 //
 // Every rule (price, 24h wait, 7-day cooldown, free paths, balances) lives in
-// SQL — rc_quest_skip_quote / rc_quest_skip, see the 20260924100000 migration.
+// SQL — the hardened v2 RPCs, see the 20260924160000 migration.
 // The quote the UI renders and the charge the server applies come from the
 // same function, so they cannot disagree, and the whole exit happens inside
 // one advisory-locked transaction: double taps, two devices and replayed
@@ -15,7 +16,7 @@
 
 import type { SupabaseDB } from './config.ts'
 import { loadContent } from './config.ts'
-import { contributionSince, getMissionStatus } from './reconnect-missions.ts'
+import { getMissionStatus, questExitContributionEvidence } from './reconnect-missions.ts'
 
 /** The mission this agent is currently in for a district, if any. Returns the
  *  joined participant row alongside it — the quote needs joined_at/mode. */
@@ -33,6 +34,21 @@ async function myOpenMission(supabase: SupabaseDB, agentNo: string, districtId: 
   return { mission: missions.find((m: any) => m.id === mine.mission_id), participant: mine }
 }
 
+async function freshEvidence(supabase: SupabaseDB, found: any) {
+  // Capture the stream-table high-water mark BEFORE counting. SQL rejects
+  // the quote/exit if any roster member receives a newer scrobble before the
+  // row-locked decision, closing the asynchronous-ingestion race safely.
+  const { data: latest, error: latestError } = await supabase.from('rc_scrobbles')
+    .select('id').order('id', { ascending: false }).limit(1).maybeSingle()
+  if (latestError) throw new Error('quest_stream_cursor_unavailable')
+  const content = await loadContent(supabase)
+  const goal = content.goals.find((g: any) => g.id === found.mission.goal_id)
+  const variant = goal?.variant === 'invite' ? 'invite' : 'connect'
+  if (!goal) throw new Error('quest_goal_unavailable')
+  const contributions = await questExitContributionEvidence(supabase, found.mission, variant, goal.config || {})
+  return { contributions, highWater: Number(latest?.id) || 0 }
+}
+
 /** Read-only: what would this cost, can they pay, and are they eligible yet.
  *  Drives the Skip Quest button's enabled/disabled state and the sheet. */
 export async function getQuestSkipQuote(supabase: SupabaseDB, params: Record<string, unknown>) {
@@ -41,8 +57,15 @@ export async function getQuestSkipQuote(supabase: SupabaseDB, params: Record<str
   if (!districtId) return { success: false, error: 'district_required' }
   const found = await myOpenMission(supabase, agentNo, districtId)
   if (!found?.mission) return { success: false, error: 'not_in_mission' }
-  const { data, error } = await supabase.rpc('rc_quest_skip_quote', {
+  let evidence: { contributions: Record<string, number>; highWater: number }
+  try {
+    evidence = await freshEvidence(supabase, found)
+  } catch (_e) {
+    return { success: false, error: 'contribution_unavailable' }
+  }
+  const { data, error } = await supabase.rpc('rc_quest_skip_quote_v2', {
     p_agent: agentNo, p_mission: found.mission.id,
+    p_evidence: evidence.contributions, p_scrobble_high_water: evidence.highWater,
   })
   if (error) return { success: false, error: error.message }
   return data?.success ? { ...data, success: true } : { success: false, error: data?.error || 'quote_failed' }
@@ -59,22 +82,18 @@ export async function skipQuest(supabase: SupabaseDB, params: Record<string, unk
   const found = await myOpenMission(supabase, agentNo, districtId)
   if (!found?.mission) return { success: false, error: 'not_in_mission' }
 
-  // What this agent has pooled toward a shared-track goal, if the quest has
-  // one. Missions without a shared track pool nothing, so it stays 0.
-  let contribution = 0
+  let evidence: { contributions: Record<string, number>; highWater: number }
   try {
-    const content = await loadContent(supabase)
-    const goal = content.goals.find((g: any) => g.id === found.mission.goal_id)
-    const keys: string[] = goal?.config?.sharedTrack?.keys || []
-    if (keys.length) contribution = await contributionSince(supabase, agentNo, found.participant.joined_at, keys)
+    evidence = await freshEvidence(supabase, found)
   } catch (_e) {
-    // A failed snapshot must not block the exit — it only means the team
-    // keeps 0 from this agent rather than their real figure.
-    contribution = 0
+    // Exiting on unverifiable data could wrongly unlock a free path or erase
+    // a teammate's real contribution. Fail closed and let the player retry.
+    return { success: false, error: 'contribution_unavailable' }
   }
 
-  const { data, error } = await supabase.rpc('rc_quest_skip', {
-    p_agent: agentNo, p_mission: found.mission.id, p_contribution: contribution,
+  const { data, error } = await supabase.rpc('rc_quest_skip_v2', {
+    p_agent: agentNo, p_mission: found.mission.id,
+    p_evidence: evidence.contributions, p_scrobble_high_water: evidence.highWater,
   })
   if (error) return { success: false, error: error.message }
   if (!data?.success) return { success: false, ...data }
@@ -85,7 +104,8 @@ export async function skipQuest(supabase: SupabaseDB, params: Record<string, unk
     costXp: data.costXp || 0,
     costCells: data.costCells || 0,
     districtId,
-    contributionKept: contribution,
+    contributionKept: Number(evidence.contributions[agentNo]) || 0,
+    waivesRequirement: !!data.waivesRequirement,
   }
 }
 

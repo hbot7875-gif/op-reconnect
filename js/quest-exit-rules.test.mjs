@@ -32,6 +32,9 @@ test('paid skip shows the price on the button and is actionable', () => {
   assert.equal(v.showPrice, true)
   assert.equal(v.blocked, false)
   assert.equal(v.hold, null)
+  assert.match(v.lede, /finish the district without it/)
+  assert.ok(v.notes.some((n) => n.includes('ReConnect requirement will be marked skipped')))
+  assert.ok(v.notes.some((n) => n.includes('Track and album goals are still required')))
 })
 
 test('singular Cell is not pluralised', () => {
@@ -59,6 +62,16 @@ test('the four free paths have distinct buttons', () => {
   assert.equal(labels[0], 'Cancel Join')
   assert.equal(labels[2], 'Exit Expired Quest')
   assert.equal(new Set(labels).size >= 3, true, 'labels should be distinguishable')
+})
+
+test('only system-stuck free exit waives the district ReConnect requirement', () => {
+  for (const reason of ['cancel_join', 'teammate_rescue', 'expired']) {
+    const v = questExitView(freeQuote(reason), NOW)
+    assert.ok(!v.notes.some((n) => n.includes('marked skipped')), reason)
+  }
+  const stuck = questExitView(freeQuote('system_stuck'), NOW)
+  assert.match(stuck.lede, /requirement will be skipped/)
+  assert.ok(stuck.notes.some((n) => n.includes('marked skipped')))
 })
 
 test('every free path still promises teammates keep the streams', () => {

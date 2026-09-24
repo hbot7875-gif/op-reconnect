@@ -7,7 +7,7 @@
 // the price charged are the same value, and mode-switching can't undercut it.
 
 import { call } from './api.js'
-import { el, esc, toast, showOverlay, hideOverlay } from './state.js'
+import { el, esc, toast, showOverlay, hideOverlay, setState } from './state.js'
 import { getAgentNo } from './session.js'
 import { questExitView } from './quest-exit-rules.js'
 
@@ -83,27 +83,40 @@ function skipSheet(quote, districtId, onDone) {
     go.disabled = true
     const label = go.textContent
     go.textContent = 'Leaving…'
-    const res = await call('skipQuest', { agentNo: getAgentNo(), districtId })
+    const agentNo = getAgentNo()
+    const res = await call('skipQuest', { agentNo, districtId })
     if (!res.success) {
       go.disabled = false
       go.textContent = label
       toast(skipError(res))
       return
     }
+    // Refresh the whole authoritative wallet/game state before confirming.
+    // The player must see the charged XP and Cells immediately, not discover
+    // a stale balance later in the HUD or Level sheet.
+    const fresh = await call('getGameState', { agentNo })
     hideOverlay()
-    toast(res.free ? 'You left the quest. You can start a new one.' : 'Quest skipped. You can start a new one.')
-    onDone?.()
+    if (fresh?.success) setState(fresh)
+    else onDone?.()
+    toast(res.waivesRequirement
+      ? 'ReConnect skipped. Finish your track and album goals to restore this district.'
+      : 'You left the quest. You can start a new one.')
   }
   sheet.appendChild(go)
 
   const keep = el('button', 'btn btn-ghost', 'Keep Playing')
   keep.type = 'button'
+  keep.dataset.autofocus = 'true'
   keep.onclick = hideOverlay
   sheet.appendChild(keep)
-
-  // Focus the safe choice, not the irreversible one.
-  queueMicrotask(() => keep.focus())
   return sheet
+}
+
+/** Deterministic visual harness hook. It uses the real production sheet
+ * builder so the eight-state preview cannot drift or break by evaluating a
+ * private function's source text. */
+export function questSkipSheetPreview(quote) {
+  return skipSheet(quote, '__preview__', null)
 }
 
 function skipError(res) {
@@ -113,6 +126,10 @@ function skipError(res) {
     insufficient: "You don't have enough XP and Cells for this yet.",
     not_in_mission: "You're not on this quest any more.",
     already_skipped: 'That quest was already skipped.',
+    already_completed: 'This Quest is already complete.',
+    contribution_unavailable: "We couldn't verify the latest Quest streams. Please try again.",
+    contribution_changed: 'A new stream just arrived. Check again to use the latest Quest progress.',
+    joined_mode_unavailable: "We couldn't verify this Quest's original mode. Please contact HQ.",
     use_quest_exit: 'Use the quest exit option to leave this quest.',
   }[res.error] || res.error || "Couldn't skip this quest"
 }

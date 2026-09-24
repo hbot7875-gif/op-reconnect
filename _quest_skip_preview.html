@@ -5,17 +5,10 @@
 .wrap{display:flex;flex-wrap:wrap;gap:14px;padding:14px}
 .col{width:355px}.cap{font:700 9px/1 monospace;letter-spacing:1.6px;color:#8b789c;margin:0 0 6px}
 .sheet{position:static!important;transform:none!important;max-width:none!important;margin:0!important}</style>
-</head><body><div class="wrap" id="w"></div>
+</head><body><div class="wrap" id="w"></div><div id="overlay" hidden></div>
 <script type="module">
-import { el } from './js/state.js'
-const mod = await import('./js/quest-skip.js?t=' + Date.now())
-const src = await fetch('./js/quest-skip.js').then(r=>r.text())
-// pull the module-private sheet builder out for rendering every state
-const grab=(n)=>{const i=src.indexOf(`function ${n}(`);let d=0,j=i;for(;j<src.length;j++){if(src[j]==='{')d++;else if(src[j]==='}'){d--;if(d===0){j++;break}}}return src.slice(i,j)}
-const esc=(s)=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))
-const stubs=`const call=async()=>({success:true});const getAgentNo=()=>'X';const toast=()=>{};const hideOverlay=()=>{};const showOverlay=()=>{};const XP_ICON='✦';const CELL_ICON='⚡';const fmt=(n)=>Number(n||0).toLocaleString('en-US');`
-const code=stubs+grab('untilLabel')+grab('costChip')+grab('skipError')+grab('skipSheet')+'\nreturn skipSheet'
-const skipSheet=new Function('el','esc',code)(el,esc)
+import { el, showOverlay } from './js/state.js'
+import { questSkipSheetPreview } from './js/quest-skip.js'
 const base={success:true,mode:'steady',costXp:150,costCells:15,balanceXp:640,balanceCells:292,shortXp:0,shortCells:0,canAfford:true,free:false,waitingPeriod:false,onCooldown:false}
 const states=[
  ['AFFORDABLE — steady (150 XP + 15 Cells)',base],
@@ -24,9 +17,10 @@ const states=[
  ['INSUFFICIENT — short on both',{...base,balanceXp:40,balanceCells:6,shortXp:110,shortCells:9,canAfford:false}],
  ['24h WAITING PERIOD',{...base,waitingPeriod:true,eligibleAt:new Date(Date.now()+5*3600e3).toISOString()}],
  ['7-DAY COOLDOWN',{...base,onCooldown:true,cooldownUntil:new Date(Date.now()+4*86400e3).toISOString()}],
- ['FREE — teammate rescue',{...base,free:true,freeReason:'teammate_rescue',costXp:0,costCells:0}],
- ['FREE — expired quest',{...base,free:true,freeReason:'expired',costXp:0,costCells:0}],
+ ['FREE — teammate rescue',{...base,action:'teammate_rescue',free:true,freeReason:'teammate_rescue',costXp:0,costCells:0}],
+ ['FREE — expired quest',{...base,action:'expired',free:true,freeReason:'expired',costXp:0,costCells:0}],
 ]
 const w=document.getElementById('w')
-for(const [cap,q] of states){const c=el('div','col');c.appendChild(el('p','cap',cap));c.appendChild(skipSheet(q,'d',null));w.appendChild(c)}
+for(const [cap,q] of states){const c=el('div','col');c.appendChild(el('p','cap',cap));c.appendChild(questSkipSheetPreview(q));w.appendChild(c)}
+if(new URLSearchParams(location.search).has('focus')) showOverlay(questSkipSheetPreview(base))
 </script></body></html>

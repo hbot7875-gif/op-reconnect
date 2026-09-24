@@ -233,7 +233,16 @@ export function renderBoard(board, d, opts = {}) {
   // It's still its own clearly-labeled section, just following the same
   // Track → Album → ReConnect reading order as the rest of the checklist.
   if (reconnect) {
-    if (reconnect.done) {
+    if (reconnect.skipped) {
+      const skippedCard = el('div', 'card goal-card')
+      skippedCard.appendChild(missionSection('↗', 'ReConnect Quest', 1, 1))
+      skippedCard.appendChild(goalRow(
+        'ReConnect Quest · Skipped',
+        'Not completed · finish Track and Album to restore this district',
+        1, 1, true,
+      ))
+      board.appendChild(skippedCard)
+    } else if (reconnect.done) {
       // Name who it was completed with. The interactive panel already says
       // this ("Done — you teamed up with X"), but that panel only exists
       // while reconnect.done is still false — the instant a poll reports it

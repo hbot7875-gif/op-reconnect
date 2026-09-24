@@ -16,7 +16,7 @@ const QUICK_START = [
   ['1', 'Check your ARMY Bomb', 'Open City and tap the Bomb. Feed it a Charge Cell, or switch on Auto Feed so it can use one when power runs out.'],
   ['2', 'Stream your assigned goals', "Open your active district and use Build today's queue. Only goals shown on that district board count toward its restoration."],
   ['3', 'Team up when ReConnect appears', 'Invite a waiting agent—or accept an invite sent to you. The mission card tells you whether acceptance completes it or the team streams toward a shared target.'],
-  ['4', 'Finish before the timer ends', 'A district attempt lasts 7 days. Complete its Track, Album, and ReConnect goals to restore it and earn XP.'],
+  ['4', 'Finish before the timer ends', 'A district attempt lasts 7 days. Finish its Track and Album goals, then complete ReConnect—or use an eligible Skip—to restore it and earn XP.'],
 ]
 
 const XP_SOURCES = [
@@ -30,6 +30,8 @@ const TEAM_STEPS = [
   ['Open the mission', 'A ReConnect quest does not pair you automatically.'],
   ['Invite or accept', 'Choose one waiting agent, or accept an invite you received. Accepting is enough—you do not also need to invite someone.'],
   ['Follow the mission card', 'Some missions complete when the invite is accepted; others combine both agents’ streams toward one shared target. Either way, completion counts for both.'],
+  ['Need to move on?', 'After 24 hours, Skip Quest can remove the ReConnect requirement from this district attempt. You must still finish its Track and Album goals.'],
+  ['Skipped is not completed', 'It will not count as a completed ReConnect Quest. Mission Bond is only earned by completing one. Streams you already added stay counted for your teammates.'],
 ]
 
 function detailSection(title, open = false) {
@@ -76,7 +78,7 @@ export function agentManualSheet() {
   const xp = detailSection('XP and Level rewards', true)
   for (const [icon, title, body] of XP_SOURCES) xp.body.appendChild(infoRow(icon, title, body))
   xp.body.appendChild(infoRow('⬆️', 'Level up', 'Every Level grants 1 Deadline Extension Charge, 1 Streak Freeze, and 2× XP for 60 minutes. Fuel is no longer a Level reward.'))
-  xp.body.appendChild(el('p', 'am-footnote', 'XP raises your Level and Rank. Buying Wings in the Magic Shop is the only action that spends XP.'))
+  xp.body.appendChild(el('p', 'am-footnote', 'XP raises your Level and Rank. Spendable XP can buy Wings or Skip a ReConnect Quest. Spending it never lowers a Level, Rank, badge, or reward you already earned.'))
   content.appendChild(xp.section)
 
   const team = detailSection('How ReConnect teams work')
@@ -87,7 +89,10 @@ export function agentManualSheet() {
       <span><b>${title}</b><small>${body}</small></span>
     `))
   }
-  team.body.appendChild(el('p', 'am-footnote', 'Unanswered invites expire after 24 hours. If a teammate goes quiet, the mission explains when they can be removed; an actively streaming teammate cannot be removed. You may leave a mission yourself at any time.'))
+  team.body.appendChild(infoRow('↗', 'Skip price', 'Exam: 75 XP + 2 Cells · Easy: 75 XP + 3 Cells · Easy+: 150 XP + 15 Cells · Medium: 150 XP + 25 Cells · Hard: 200 XP + 100 Cells. Your price uses the mode you had when you joined.'))
+  team.body.appendChild(infoRow('⏳', 'When it is available', 'Paid Skip opens 24 hours after you join and can be used once every 7 days. The Quest sheet shows your price, balances, and any time left to wait.'))
+  team.body.appendChild(infoRow('✓', 'Free exits', 'Cancel Join is free during the first 24 hours if you added no streams. Teammate Rescue is free after verified 48-hour inactivity. Expired Quests are free to exit. These exits let you try again; they do not normally skip the district requirement. A system-stuck Quest is skipped for free.'))
+  team.body.appendChild(el('p', 'am-footnote', 'Unanswered invites expire after 24 hours. Use the one Leave / Skip Quest action shown on your mission—the server decides which safe option applies.'))
   content.appendChild(team.section)
 
   const power = detailSection('Bomb power and emergency backup')
