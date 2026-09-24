@@ -495,7 +495,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
   const [
     modeReview, { data: badgeRows }, { data: itemRows }, broadcasts, cityFeed,
     waitingAgents, onlineNow, districtMessages, equippedMap, isBadgeVaultEditor, leaveInfo, vma,
-    { data: backupOpenRows }, { data: backupMineRow },
+    { data: backupOpenRows }, { data: backupMineRow }, { data: backupHelpingRow },
   ] = await Promise.all([
     // A review hint only — see the note above getModeVolumeReview's caller.
     player.agent_no === 'AGENT120' ? Promise.resolve(null) : timed('modeReview', getModeVolumeReview(supabase, player.agent_no, player.mode)),
@@ -537,6 +537,13 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     timed('backupMine', supabase.from('rc_backup_requests')
       .select('id, district_id, goal_ref, goal_kind, helper_agent_no, joined_at, boosted_target, original_target')
       .eq('owner_agent_no', player.agent_no).eq('status', 'joined').maybeSingle()),
+    // Whether this agent is out on a job for someone else. The Backup Post
+    // on the city map lights up for it, so it has to ride the same poll
+    // every screen already makes rather than a second endpoint.
+    // Appended LAST on purpose: inserting a read mid-array shifts every
+    // binding after it, which silently handed `vma` the backup rows once.
+    timed('backupHelping', supabase.from('rc_backup_requests')
+      .select('id').eq('helper_agent_no', player.agent_no).eq('status', 'joined').maybeSingle()),
   ])
   const equippedBadgeArtwork = equippedMap.get(player.agent_no) || null
   // One extra read only when someone is actually helping — the codename is
@@ -593,6 +600,9 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
         open: (backupOpenRows || []).length,
         latestAt: (backupOpenRows || [])[0]?.opened_at || null,
       },
+      // The map marker only needs "are you on a job"; the Post's own sheet
+      // fetches who, what to play and how it's going.
+      backupHelping: !!backupHelpingRow,
       backupMine: backupMineRow ? {
         requestId: backupMineRow.id,
         districtId: backupMineRow.district_id,

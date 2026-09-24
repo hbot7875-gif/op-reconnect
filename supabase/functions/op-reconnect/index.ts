@@ -49,6 +49,7 @@ import { loadContent } from './lib/config.ts'
 import { trackEngagement, adminGetEngagementReport } from './lib/engagement.ts'
 import { getVmaStatus, logVmaVote, adminListVmaPending, adminReviewVmaVote } from './lib/vma-voting.ts'
 import { getBackupStatus, listOpenBackupRequests, openBackupRequest, joinBackupRequest, leaveBackupHelper } from './lib/backup-pass.ts'
+import { getBackupPost } from './lib/backup-post.ts'
 import { getChestStatus, openChest } from './lib/supply-chest.ts'
 import { getCommunityChestStatus, openCommunityChest } from './lib/vma-community-chest.ts'
 import { createShareSnapshot, getPublicShareSnapshot, shareImageResponse, attachShareImage, getBadgeShareStory } from './lib/share-snapshots.ts'
@@ -187,6 +188,7 @@ const ROUTES: Record<string, Route> = {
 
   // ── Backup Pass — see lib/backup-pass.ts and migration 20260819110000 ──
   getBackupStatus: { auth: 'agent', handler: async (sb, p) => getBackupStatus(sb, await loadContent(sb), p) },
+  getBackupPost: { auth: 'agent', handler: async (sb, p) => getBackupPost(sb, await loadContent(sb), p) },
   listOpenBackupRequests: { auth: 'agent', handler: async (sb, p) => listOpenBackupRequests(sb, await loadContent(sb), p) },
   openBackupRequest: { auth: 'agent', handler: async (sb, p) => openBackupRequest(sb, await loadContent(sb), p) },
   joinBackupRequest: { auth: 'agent', handler: (sb, p) => joinBackupRequest(sb, p) },

@@ -19,6 +19,12 @@ const COLLECTION_TEMPLATES = new Set([
   // every GOLDEN track is counted twice. Same rc_award_badge path as
   // Defender, just personal instead of city-wide.
   'event_jk_golden_encore_2026',
+  // Backing another agent up. Same rc_award_badge path as everything above
+  // (rc_backup_close / rc_backup_complete, migration 20260925120000) — and
+  // the same reason to be listed here as the GOLDEN note above: a badge the
+  // server awards but this set omits is earned silently, with no unlock
+  // reveal and no place in the Pack's badge count.
+  'backup_helper',
 ])
 
 export const BADGE_CATALOG = []

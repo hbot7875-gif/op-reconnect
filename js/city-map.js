@@ -582,7 +582,7 @@ function partyVenue(angle, onClick, live, deadlineIso, complete = false, countin
  *                          down to. Ignored once partyLive is true.
  * @param partyComplete     whether the venue should read as an archive.
  */
-export function renderCityMap(wards, districts, onSelect, homeFraction, onCandyStar, onMagicShop, onVma, vmaPulse, onGoldenCorner, goldenProgress = 0, onParty, partyLive = false, partyDeadlineIso = null, partyComplete = false, partyCounting = false) {
+export function renderCityMap(wards, districts, onSelect, homeFraction, onCandyStar, onMagicShop, onVma, vmaPulse, onGoldenCorner, goldenProgress = 0, onParty, partyLive = false, partyDeadlineIso = null, partyComplete = false, partyCounting = false, opts = {}) {
   const PAD = 5
   const svg = n('svg', {
     class: 'city-map', 'aria-hidden': 'true',
@@ -787,6 +787,22 @@ export function renderCityMap(wards, districts, onSelect, homeFraction, onCandyS
       goldenProgress >= 1 ? 'is-golden-complete' : goldenProgress > 0 ? 'is-golden-live' : 'is-golden-dark')
     marker.style.setProperty('--golden-progress', String(Math.max(0, Math.min(1, goldenProgress))))
     svg.appendChild(marker)
+  }
+
+  // The Backup Post — a permanent place on the west seam, the one side the
+  // top (Candy Star + Magic Shop) and bottom (VMA + Golden Corner) pairs
+  // leave free. It's a place rather than a menu item because that's what it
+  // has to be: somewhere an agent who joined someone's Backup Pass can walk
+  // back to and see how the job is going. Two words so toolMarker splits the
+  // label, which is what keeps it off the ward name at this angle.
+  //
+  // The marker carries its own state, so the map answers "is anything
+  // happening" without being opened: lit while you're out on a job, pulsing
+  // while someone is waiting for a helper, dark when the city is quiet.
+  if (opts.onBackup) {
+    svg.appendChild(toolMarker(Math.PI, '🤝', 'Backup Post', opts.onBackup,
+      opts.backupState === 'helping' ? 'is-backup-helping'
+        : opts.backupState === 'wanted' ? 'is-backup-wanted' : 'is-backup-quiet'))
   }
 
   return svg

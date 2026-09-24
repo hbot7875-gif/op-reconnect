@@ -36,7 +36,7 @@ export function districtBackupPassChance(content: GameContent): number {
  *  goals pool ALL their tracks' keys together for Backup Pass purposes
  *  (helping with "the album" means streaming any of its tracks) rather than
  *  modeling per-track backup, which the design never asked for. */
-function findFrozenGoal(pd: any, goalKind: string, goalRef: string): { label: string; keys: string[]; target: number } | null {
+export function findFrozenGoal(pd: any, goalKind: string, goalRef: string): { label: string; keys: string[]; target: number } | null {
   const goals = pd?.goals || {}
   if (goalKind === 'track') {
     const g = (goals.trackGoals || []).find((t: any) => t.id === goalRef)
@@ -51,7 +51,24 @@ function findFrozenGoal(pd: any, goalKind: string, goalRef: string): { label: st
   return null
 }
 
-async function myActivePd(supabase: SupabaseDB, agentNo: string, districtId: string) {
+/** The human-readable songs behind a goal — what a helper needs to know to
+ *  actually help. findFrozenGoal answers "which plays count"; this answers
+ *  "what do I put on". A track goal is one song; an album goal is all of its
+ *  tracks, any of which counts. */
+export function goalTrackNames(pd: any, goalKind: string, goalRef: string): string[] {
+  const goals = pd?.goals || {}
+  if (goalKind === 'track') {
+    const g = (goals.trackGoals || []).find((t: any) => t.id === goalRef)
+    return g ? [g.label] : []
+  }
+  if (goalKind === 'album') {
+    const a = (goals.albumGoals || []).find((al: any) => al.id === goalRef)
+    return a ? (a.tracks || []).map((t: any) => t.label).filter(Boolean) : []
+  }
+  return []
+}
+
+export async function myActivePd(supabase: SupabaseDB, agentNo: string, districtId: string) {
   const { data } = await supabase.from('rc_player_districts')
     .select('status, goals, activated_at').eq('agent_no', agentNo).eq('district_id', districtId).maybeSingle()
   return data || null
@@ -66,7 +83,7 @@ async function myActivePd(supabase: SupabaseDB, agentNo: string, districtId: str
  *  subtraction) only ever makes that check trigger very slightly early,
  *  never late, and never affects the boosted-target overlay math at all
  *  (that still runs through districtProgress() itself). */
-async function ownerRawProgress(supabase: SupabaseDB, agentNo: string, sinceIso: string, keys: string[]): Promise<number> {
+export async function ownerRawProgress(supabase: SupabaseDB, agentNo: string, sinceIso: string, keys: string[]): Promise<number> {
   return contributionSince(supabase, agentNo, sinceIso, keys)
 }
 

@@ -36,6 +36,7 @@ import { broadcastCards } from './broadcasts.js'
 import { cityFeedCard } from './city-feed.js'
 import { openSuggestions } from './suggestions.js'
 import { openMagicShop } from './magic-shop.js'
+import { openBackupPost } from './backup-post.js'
 import { vmaEventCard, openVmaMission } from './vma.js'
 import { redZoneSheet, defuseResultSheet, defenderCommsSheet, getCommsSeen } from './bomb-sheet.js'
 import { tickCountdowns } from './countdown.js'
@@ -336,6 +337,19 @@ function mapHint(state) {
 // See cityPlan's RE:CELEBRATE note — flip to true to show the venue on the map again.
 const RECELEBRATE_ON_MAP = false
 
+/** The Backup Post's state on the map, in the order that matters to the
+ *  person looking at it: your own job first, then someone else's call for
+ *  one. A quiet Post still shows — it's a permanent place, not a
+ *  notification — it just doesn't ask for attention. */
+function backupMapOpts(state) {
+  const helping = !!state.player?.backupHelping
+  const wanted = (state.player?.backupHelp?.open || 0) > 0
+  return {
+    onBackup: (origin) => openBackupPost(origin),
+    backupState: helping ? 'helping' : wanted ? 'wanted' : 'quiet',
+  }
+}
+
 function cityPlan(state) {
   const wards = state.map?.wards || []
   if (!wards.length) return el('div')
@@ -366,13 +380,17 @@ function cityPlan(state) {
     // unopened return gifts still need a way in). The plan is for these to
     // resurface in a "Dear Diary" of past events; until then, pass
     // RECELEBRATE_ON_MAP = true to put the venue back exactly as it was.
+    // Always five values, never a conditional spread: the options object
+    // after them has a fixed argument slot, and a spread that sometimes
+    // contributes nothing would slide it into onParty's place.
     ...(RECELEBRATE_ON_MAP ? [
       () => openArirangRecelebrate(),
       arirangPartyIsLive(),
       ARIRANG_RECELEBRATE.opensAtIso,
       arirangPartyIsComplete(),
       arirangPartyIsCounting(),
-    ] : [])))
+    ] : [null, false, null, false, false]),
+    backupMapOpts(state)))
   return box
 }
 

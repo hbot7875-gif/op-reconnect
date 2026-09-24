@@ -710,6 +710,15 @@ body {
 .cm-tool.is-golden-complete .cm-tool-body { stroke: var(--gold); }
 .cm-tool.is-golden-live .cm-tool-halo { fill: rgba(217,173,95,calc(.08 + var(--golden-progress) * .16)); }
 .cm-tool.is-golden-complete .cm-tool-halo { fill: rgba(217,173,95,.25); }
+/* The Backup Post (city-map.js). Three states, because the marker is how
+   the city says whether anything is happening: lit gold while you're out on
+   a job, pulsing while another agent is waiting for one, plain when quiet.
+   A quiet Post still draws — it's a permanent place, not a notification. */
+.cm-tool.is-backup-helping .cm-tool-body { stroke: var(--gold); }
+.cm-tool.is-backup-helping .cm-tool-halo { fill: rgba(217,173,95,.24); }
+.cm-tool.is-backup-wanted .cm-tool-body { stroke: var(--gold); }
+.cm-tool.is-backup-wanted .cm-tool-halo { fill: rgba(217,173,95,0.18); animation: cmVmaPulse 1.9s ease-in-out infinite; }
+.cm-tool.is-backup-quiet .cm-tool-body { stroke: rgba(167,139,250,.38); }
 /* ARIRANG RE:CELEBRATE's map object — an actual small venue (see partyVenue
    in city-map.js), not a tool marker: a tall grey stone platform (a
    granite wall, the way Gwanghwamun's real base reads — not a coloured
@@ -5726,3 +5735,55 @@ button.rcp-after-badge:focus-visible{outline:2px solid #d9ad5f;outline-offset:3p
   .rcp-conf{display:none}
   .rcp-stage,.rcp-room{transition:none}
 }
+
+
+/* ── Backup Post sheet (js/backup-post.js) ───────────────────────────────
+   Walked into from the map marker. It leads with the split progress bar
+   because that is the thing a helper came to see: how the goal is going,
+   and how much of it is theirs. */
+.bkp-sheet { text-align: left; }
+.bkp-post-title { font-family: var(--disp); font-weight: 900; margin: 4px 0 0; }
+.bkp-sub { font-size: 12.5px; line-height: 1.5; color: var(--muted); margin: 6px 0 14px; }
+.bkp-body { display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; }
+.bkp-loading { text-align: center; padding: 18px 0; }
+
+.bkp-card { border: 1px solid var(--line); border-radius: var(--r); padding: 14px 13px;
+  background: rgba(255,255,255,0.02); }
+/* The one you're actively doing gets the accent; your own pass stays quiet. */
+.bkp-helping { border-color: rgba(217,173,95,0.42); background: rgba(217,173,95,0.05); }
+.bkp-eyebrow { font-family: var(--mono); font-size: 9px; letter-spacing: 2px;
+  text-transform: uppercase; color: var(--dim); }
+.bkp-who { font-family: var(--disp); font-weight: 900; font-size: 18px; margin: 6px 0 2px; }
+.bkp-goal { font-size: 13px; color: var(--fg); margin: 0 0 12px; }
+
+.bkp-bar { display: flex; height: 8px; border-radius: 999px; overflow: hidden;
+  background: rgba(255,255,255,0.07); }
+.bkp-bar-theirs { background: rgba(255,255,255,0.32); }
+.bkp-bar-mine { background: var(--gold); }
+.bkp-split { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 7px;
+  font-family: var(--mono); font-size: 10px; letter-spacing: .4px; color: var(--muted); }
+.bkp-split b { color: var(--fg); font-size: 12px; }
+.bkp-mine b { color: var(--gold); }
+.bkp-target { margin-left: auto; }
+.bkp-remaining { font-size: 12.5px; line-height: 1.5; color: var(--muted); margin: 10px 0 0; }
+
+/* The single most useful thing here for a helper: the songs that actually
+   count. Nothing in the old join sheet ever told them. */
+.bkp-tracks { margin-top: 12px; padding: 10px 12px; border-radius: var(--r);
+  border: 1px solid var(--line); background: rgba(0,0,0,0.22); }
+.bkp-tracks-head { font-family: var(--mono); font-size: 9px; letter-spacing: 2px;
+  text-transform: uppercase; color: var(--gold); }
+.bkp-tracks ul { margin: 6px 0 0; padding-left: 16px; }
+.bkp-tracks li { font-size: 12.5px; line-height: 1.6; }
+.bkp-clock { font-size: 11.5px; margin: 10px 0 0; }
+.bkp-actions { display: flex; gap: 8px; margin-top: 12px; }
+.bkp-actions .btn { flex: 1; }
+
+.bkp-list .bkp-req { display: flex; align-items: center; gap: 10px; padding: 11px 0;
+  border-top: 1px solid var(--line); }
+.bkp-list .bkp-req:first-of-type { border-top: 0; margin-top: 4px; }
+.bkp-req-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.bkp-req-who { font-weight: 700; font-size: 13px; }
+.bkp-req-goal { font-size: 12.5px; color: var(--fg); }
+.bkp-req-meta { font-family: var(--mono); font-size: 9px; letter-spacing: .4px; color: var(--muted); }
+.bkp-req-join { flex: 0 0 auto; padding: 7px 16px; }
