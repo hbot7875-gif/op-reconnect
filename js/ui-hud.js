@@ -310,6 +310,14 @@ function progressSheet(state) {
   // screen) reads as a mismatch/bug the moment a player checks both. Both
   // numbers are real; they're just answering different questions.
   sheet.appendChild(el('div', 'dim', `${p.xp.toLocaleString()} total XP`))
+  // A third real number appears only once an agent has actually spent XP
+  // (Skip Quest is the only sink today). Same reasoning as the two above:
+  // two figures that disagree with no label read as a bug, so the wallet is
+  // named — and it says plainly that spending never costs a level.
+  if (typeof p.spendableXp === 'number' && p.spendableXp !== p.xp) {
+    sheet.appendChild(el('div', 'dim xp-spendable',
+      `${p.spendableXp.toLocaleString()} XP to spend <small>Spending XP never lowers your level or rank.</small>`))
+  }
 
   const rewardLines = []
   if (rewards.extensionCharge) rewardLines.push(`<div class="bd-line"><span>Deadline Extension</span><b>+${rewards.extensionCharge}</b></div>`)

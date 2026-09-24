@@ -3563,6 +3563,7 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 /* ── Skip Quest (js/quest-skip.js) ──────────────────────────────────────
    Deliberately secondary: an outlined pill under the quest's own controls,
    no glow, no alarm colour. The sheet reuses the standard .sheet shell. */
+.xp-spendable small { display: block; margin-top: 2px; font-size: 10px; opacity: .8; }
 .qs-row { display: flex; justify-content: flex-end; margin: 2px 0 10px; }
 .qs-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 9px 14px;
   border: 1px solid var(--border); border-radius: 10px; background: transparent;

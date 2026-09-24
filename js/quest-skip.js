@@ -35,7 +35,7 @@ function costChip(icon, amount, label, balance, short) {
     <span class="qs-chip-icon" aria-hidden="true">${icon}</span>
     <span class="qs-chip-amount">${fmt(amount)}</span>
     <span class="qs-chip-label">${esc(label)}</span>
-    ${balance === null ? '' : `<span class="qs-chip-bal">you have ${fmt(balance)}</span>`}
+    ${balance === null ? '' : `<span class="qs-chip-bal">${fmt(balance)} to spend</span>`}
   `
   return chip
 }
@@ -79,6 +79,7 @@ function skipSheet(quote, districtId, onDone) {
   // ── What happens ───────────────────────────────────────────────────────
   const notes = el('ul', 'qs-notes')
   notes.innerHTML = `
+    <li>Spending XP won't lower your level, rank or rewards.</li>
     <li>You won't receive this quest's completion rewards.</li>
     <li>Your existing streams will remain counted for your teammates.</li>
     <li>Your other district progress and earned rewards will stay safe.</li>
