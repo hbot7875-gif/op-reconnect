@@ -41,13 +41,14 @@ export interface FlaggedTrack {
  *  anywhere real (the playlist validator has no equivalent check between
  *  different tracks); removed rather than keep an unofficial heuristic
  *  sitting next to the one rule that actually is canonical. */
-export function flagStreamRows(rows: StreamRow[]): FlaggedTrack[] {
+export function flagStreamRows(rows: StreamRow[], options: { trustSequence?: boolean } = {}): FlaggedTrack[] {
+  const trustSequence = options.trustSequence !== false
   const oldestFirst = [...rows].sort((a, b) => a.listened_at - b.listened_at)
   const withFlags = oldestFirst.map((r, i) => {
     const prev = i > 0 ? oldestFirst[i - 1] : null
     const gapSeconds = prev ? r.listened_at - prev.listened_at : null
     const flags: string[] = []
-    if (prev) {
+    if (prev && trustSequence) {
       if (gapSeconds! < REPEAT_MIN_GAP_SECONDS
         && prev.track_name.trim().toLowerCase() === r.track_name.trim().toLowerCase()) flags.push('repeat')
     }

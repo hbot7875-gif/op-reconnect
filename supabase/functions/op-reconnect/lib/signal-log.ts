@@ -5,7 +5,7 @@
 import { frozenDistrictDates } from './leave.ts'
 import type { SupabaseDB } from './config.ts'
 import { loadContent, limits, trackArtistOverrides } from './config.ts'
-import { fetchStreamRows } from './streams.ts'
+import { fetchStreamRows, resolvedAgentStreamSource } from './streams.ts'
 import { normalizeKey, normKeyFull, countedArtistPlays } from './text.ts'
 import { todayKst, kstDateOf, kstDayBounds } from './kst.ts'
 import { districtProgress } from './districts.ts'
@@ -224,7 +224,14 @@ export async function getMySelfCheck(supabase: SupabaseDB, params: Record<string
     findPossibleAlts(supabase, agent),
     supabase.from('rc_players').select('mode').eq('agent_no', agentNo).maybeSingle(),
   ])
-  const tracks = flagStreamRows(rows)
+  const streamSource = resolvedAgentStreamSource(agent)
+  // stats.fm exposes only its latest 50 streams. If a player syncs late,
+  // intervening songs can already have fallen out of that window, making
+  // two same-title rows look consecutive when they were not. Keep the rows
+  // and totals as a lower bound, but never make a repeat-timing judgment
+  // from that incomplete sequence.
+  const partialHistory = streamSource === 'statsfm'
+  const tracks = flagStreamRows(rows, { trustSequence: !partialHistory })
   const excessStreamDays = flagExcessStreamDays(rows, player?.mode || 'easy')
 
   return {
@@ -235,6 +242,8 @@ export async function getMySelfCheck(supabase: SupabaseDB, params: Record<string
     trackCount: tracks.length,
     flaggedCount: tracks.filter((t) => t.flags.length > 0).length,
     tracks,
+    streamSource,
+    partialHistory,
     possibleAlts,
     mode: player?.mode || null,
     suggestedMode: excessStreamDays.length ? suggestedModeFor(player?.mode || 'easy') : null,

@@ -388,9 +388,16 @@ function moonStationSheet() {
     }
 
     body.appendChild(el('div', 'sig-summary', `
-      <span><b>${res.trackCount}</b> streams &middot; last ${res.windowDays}d</span>
+      <span><b>${res.trackCount}${res.partialHistory ? '+' : ''}</b> streams ${res.partialHistory ? 'seen' : ''} &middot; last ${res.windowDays}d</span>
       <span class="${res.flaggedCount ? 'is-flagged' : ''}"><b>${res.flaggedCount}</b> flagged</span>
     `))
+
+    if (res.partialHistory) {
+      body.appendChild(el('div', 'ms-coverage-note', `
+        <b>Partial Stats.fm history</b>
+        <p class="muted">Stats.fm gives HT only the latest 50 streams each time you sync. If Sync happens late, some songs between them may be missing. Repeat timing and mode-fit checks are unavailable for this window.</p>
+      `))
+    }
 
     const alts = res.possibleAlts || []
     if (alts.length) {
@@ -412,7 +419,7 @@ function moonStationSheet() {
         <p class="muted">We saw high totals on ${excessStreamDays.length} day${excessStreamDays.length === 1 ? '' : 's'}.${suggestion ? ` ${esc(suggestion)} may fit your recent pace better.` : ' Check that your mode still matches your accounts.'} Your mode and current goals were not changed.</p>
         ${rows}
       `))
-    } else if (res.mode) {
+    } else if (res.mode && !res.partialHistory) {
       body.appendChild(el('div', 'sig-summary', `
         <span><b>✓ ${esc(modeNames[res.mode] || res.mode)} fits your recent totals</b></span>
       `))
