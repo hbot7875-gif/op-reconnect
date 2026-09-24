@@ -789,7 +789,7 @@ export function renderCityMap(wards, districts, onSelect, homeFraction, onCandyS
     svg.appendChild(marker)
   }
 
-  // The Backup Post — a permanent place on the west seam, the one side the
+  // The Helping Zone — a permanent place on the west seam, the one side the
   // top (Candy Star + Magic Shop) and bottom (VMA + Golden Corner) pairs
   // leave free. It's a place rather than a menu item because that's what it
   // has to be: somewhere an agent who joined someone's Backup Pass can walk
@@ -800,7 +800,7 @@ export function renderCityMap(wards, districts, onSelect, homeFraction, onCandyS
   // happening" without being opened: lit while you're out on a job, pulsing
   // while someone is waiting for a helper, dark when the city is quiet.
   if (opts.onBackup) {
-    svg.appendChild(toolMarker(Math.PI, '🤝', 'Backup Post', opts.onBackup,
+    svg.appendChild(toolMarker(Math.PI, '🤝', 'Helping Zone', opts.onBackup,
       opts.backupState === 'helping' ? 'is-backup-helping'
         : opts.backupState === 'wanted' ? 'is-backup-wanted' : 'is-backup-quiet'))
   }

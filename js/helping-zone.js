@@ -1,4 +1,4 @@
-// The Backup Post — the Backup Pass feature as a place on the city map.
+// The Helping Zone — the Backup Pass feature as a place on the city map.
 //
 // It exists because the helper's half of this feature was invisible. You
 // could answer someone's call for backup, get a toast, and then never see
@@ -8,7 +8,7 @@
 // something you agreed to without being told what to play.
 //
 // A place, not a screen: there is only ever one pairing at a time, so this
-// is a sheet you walk into from the map marker (city-map.js's Backup Post)
+// is a sheet you walk into from the map marker (city-map.js's Helping Zone)
 // and walk back out of, the same way the Magic Shop works. The marker
 // carries the state — lit while you're on a job, pulsing while someone is
 // waiting — so the city itself says whether anything is happening.
@@ -165,28 +165,28 @@ function requestRow(r, reload) {
   return row
 }
 
-/** Walk into the Post. Called by the city map's own marker. */
-export async function openBackupPost() {
+/** Walk into the Zone. Called by the city map's own marker. */
+export async function openHelpingZone() {
   const sheet = el('div', 'sheet bkp-sheet')
   sheet.append(
     el('div', 'eyebrow', 'CITY MAP · WEST SEAM'),
-    el('h3', 'bkp-post-title', '🤝 Backup Post'),
+    el('h3', 'bkp-post-title', '🤝 Helping Zone'),
     el('p', 'bkp-sub', 'Open one of your goals to another agent, or answer someone else’s. A helper’s streams count toward the goal alongside the owner’s — helping costs nothing and you keep every stream for your own goals too.'),
   )
   const body = el('div', 'bkp-body')
   body.appendChild(el('p', 'muted bkp-loading', 'Loading…'))
   sheet.appendChild(body)
-  const close = el('button', 'btn btn-ghost', 'Leave the Post')
+  const close = el('button', 'btn btn-ghost', 'Leave the Zone')
   close.type = 'button'
   close.onclick = hideOverlay
   sheet.appendChild(close)
   showOverlay(sheet)
 
-  const data = await call('getBackupPost', { agentNo: getAgentNo() })
+  const data = await call('getHelpingZone', { agentNo: getAgentNo() })
   if (!body.isConnected) return
   body.innerHTML = ''
   if (!data?.success) {
-    body.appendChild(el('p', 'muted', "Couldn't load the Post. Close this and try again."))
+    body.appendChild(el('p', 'muted', "Couldn't load the Helping Zone. Close this and try again."))
     return
   }
 
@@ -195,7 +195,7 @@ export async function openBackupPost() {
   const newest = data.openRequests.map((r) => r.expiresAt).sort().slice(-1)[0]
   markBackupHelpSeen(getState()?.player?.backupHelp?.latestAt || newest || new Date().toISOString())
 
-  if (data.asHelper) body.appendChild(helperCard(data.asHelper, openBackupPost))
+  if (data.asHelper) body.appendChild(helperCard(data.asHelper, openHelpingZone))
   if (data.asOwner) body.appendChild(ownerCard(data.asOwner))
 
   if (!data.asOwner) {
@@ -229,7 +229,7 @@ export async function openBackupPost() {
     list.appendChild(el('p', 'bkp-remaining',
       `${data.openRequests.length} agent${data.openRequests.length === 1 ? '' : 's'} waiting — you can join another once you finish backing up ${esc(data.asHelper.ownerCodename)}.`))
   } else {
-    for (const r of data.openRequests) list.appendChild(requestRow(r, openBackupPost))
+    for (const r of data.openRequests) list.appendChild(requestRow(r, openHelpingZone))
   }
   body.appendChild(list)
 }

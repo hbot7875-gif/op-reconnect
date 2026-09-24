@@ -710,10 +710,10 @@ body {
 .cm-tool.is-golden-complete .cm-tool-body { stroke: var(--gold); }
 .cm-tool.is-golden-live .cm-tool-halo { fill: rgba(217,173,95,calc(.08 + var(--golden-progress) * .16)); }
 .cm-tool.is-golden-complete .cm-tool-halo { fill: rgba(217,173,95,.25); }
-/* The Backup Post (city-map.js). Three states, because the marker is how
+/* The Helping Zone (city-map.js). Three states, because the marker is how
    the city says whether anything is happening: lit gold while you're out on
    a job, pulsing while another agent is waiting for one, plain when quiet.
-   A quiet Post still draws — it's a permanent place, not a notification. */
+   A quiet Zone still draws — it's a permanent place, not a notification. */
 .cm-tool.is-backup-helping .cm-tool-body { stroke: var(--gold); }
 .cm-tool.is-backup-helping .cm-tool-halo { fill: rgba(217,173,95,.24); }
 .cm-tool.is-backup-wanted .cm-tool-body { stroke: var(--gold); }
@@ -5737,7 +5737,7 @@ button.rcp-after-badge:focus-visible{outline:2px solid #d9ad5f;outline-offset:3p
 }
 
 
-/* ── Backup Post sheet (js/backup-post.js) ───────────────────────────────
+/* ── Helping Zone sheet (js/helping-zone.js) ─────────────────────────────
    Walked into from the map marker. It leads with the split progress bar
    because that is the thing a helper came to see: how the goal is going,
    and how much of it is theirs. */

@@ -537,7 +537,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     timed('backupMine', supabase.from('rc_backup_requests')
       .select('id, district_id, goal_ref, goal_kind, helper_agent_no, joined_at, boosted_target, original_target')
       .eq('owner_agent_no', player.agent_no).eq('status', 'joined').maybeSingle()),
-    // Whether this agent is out on a job for someone else. The Backup Post
+    // Whether this agent is out on a job for someone else. The Helping Zone
     // on the city map lights up for it, so it has to ride the same poll
     // every screen already makes rather than a second endpoint.
     // Appended LAST on purpose: inserting a read mid-array shifts every

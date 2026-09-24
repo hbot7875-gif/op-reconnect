@@ -1,4 +1,4 @@
-// Everything the Backup Post shows, in one round trip.
+// Everything the Helping Zone shows, in one round trip.
 //
 // The audit that built the helper's join flow left the helper blind twice
 // over. First, listOpenBackupRequests never returned the goal's name — the
@@ -32,12 +32,12 @@ async function districtNames(supabase: SupabaseDB, ids: string[]): Promise<Map<s
 }
 
 /**
- * One call behind the whole Post: the pass you opened, the pass you are
+ * One call behind the whole Zone: the pass you opened, the pass you are
  * answering, and everyone still waiting. Read-only — every state transition
  * still happens through backup-pass.ts's atomic write paths, and a request
  * that has silently expired is resolved by those, not here.
  */
-export async function getBackupPost(supabase: SupabaseDB, content: GameContent, params: Record<string, unknown>) {
+export async function getHelpingZone(supabase: SupabaseDB, content: GameContent, params: Record<string, unknown>) {
   const agentNo = String(params.agentNo || '').trim().toUpperCase()
 
   const [{ count: passCount }, { data: ownerRow }, { data: helperRow }, { data: openRows }] = await Promise.all([
