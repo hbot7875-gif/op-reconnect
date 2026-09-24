@@ -5737,53 +5737,94 @@ button.rcp-after-badge:focus-visible{outline:2px solid #d9ad5f;outline-offset:3p
 }
 
 
-/* ── Helping Zone sheet (js/helping-zone.js) ─────────────────────────────
-   Walked into from the map marker. It leads with the split progress bar
-   because that is the thing a helper came to see: how the goal is going,
-   and how much of it is theirs. */
-.bkp-sheet { text-align: left; }
-.bkp-post-title { font-family: var(--disp); font-weight: 900; margin: 4px 0 0; }
-.bkp-sub { font-size: 12.5px; line-height: 1.5; color: var(--muted); margin: 6px 0 14px; }
-.bkp-body { display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; }
-.bkp-loading { text-align: center; padding: 18px 0; }
+/* ── Helping Zone sheet (js/helping-zone.js) ─────────────────────
+   A small place, not a panel. Everything here is a line of text, a rule and
+   at most one action — no nested cards, no card borders, no second heading
+   style. Blocks are separated by a hairline rule rather than boxes, which is
+   what keeps six sections readable on a phone without the sheet growing. */
+.hz-sheet { text-align: left; }
+.hz-title { font-family: var(--disp); font-weight: 900; font-size: 20px; margin: 4px 0 0; }
+.hz-line { font-size: 12.5px; color: var(--muted); margin: 5px 0 0; }
+.hz-body { display: flex; flex-direction: column; margin: 16px 0 14px; }
 
-.bkp-card { border: 1px solid var(--line); border-radius: var(--r); padding: 14px 13px;
-  background: rgba(255,255,255,0.02); }
-/* The one you're actively doing gets the accent; your own pass stays quiet. */
-.bkp-helping { border-color: rgba(217,173,95,0.42); background: rgba(217,173,95,0.05); }
-.bkp-eyebrow { font-family: var(--mono); font-size: 9px; letter-spacing: 2px;
-  text-transform: uppercase; color: var(--dim); }
-.bkp-who { font-family: var(--disp); font-weight: 900; font-size: 18px; margin: 6px 0 2px; }
-.bkp-goal { font-size: 13px; color: var(--fg); margin: 0 0 12px; }
+.hz-block { padding: 13px 0; border-top: 1px solid var(--line); }
+.hz-block:first-child { border-top: 0; padding-top: 2px; }
+/* The live pairing is the only thing here with a tint — it is the one thing
+   you might be in the middle of. */
+/* Inset, not outdented: bleeding it past the body with negative side
+   margins made the sheet scroll sideways on a 375px screen. */
+.hz-live { margin: 0 0 2px; padding: 12px 11px 13px; border-top: 0; border-radius: var(--r);
+  background: rgba(167,139,250,0.07); border: 1px solid rgba(167,139,250,0.22); }
+.hz-live + .hz-block { border-top: 0; padding-top: 14px; }
 
-.bkp-bar { display: flex; height: 8px; border-radius: 999px; overflow: hidden;
-  background: rgba(255,255,255,0.07); }
-.bkp-bar-theirs { background: rgba(255,255,255,0.32); }
-.bkp-bar-mine { background: var(--gold); }
-.bkp-split { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 7px;
-  font-family: var(--mono); font-size: 10px; letter-spacing: .4px; color: var(--muted); }
-.bkp-split b { color: var(--fg); font-size: 12px; }
-.bkp-mine b { color: var(--gold); }
-.bkp-target { margin-left: auto; }
-.bkp-remaining { font-size: 12.5px; line-height: 1.5; color: var(--muted); margin: 10px 0 0; }
+.hz-sec { display: flex; align-items: baseline; gap: 8px; font-family: var(--mono);
+  font-size: 9px; letter-spacing: 1.6px; text-transform: uppercase; color: var(--dim); }
+.hz-sec b { margin-left: auto; color: var(--muted); letter-spacing: 1px; }
+.hz-song { font-size: 13.5px; margin-top: 6px; }
+.hz-meta, .hz-togo { font-family: var(--mono); font-size: 9.5px; letter-spacing: .5px;
+  color: var(--muted); margin-top: 5px; }
 
-/* The single most useful thing here for a helper: the songs that actually
-   count. Nothing in the old join sheet ever told them. */
-.bkp-tracks { margin-top: 12px; padding: 10px 12px; border-radius: var(--r);
+.hz-bar { display: flex; height: 5px; border-radius: 999px; overflow: hidden; margin-top: 9px;
+  background: rgba(255,255,255,0.08); }
+.hz-bar-them { background: rgba(255,255,255,0.3); }
+.hz-bar-you { background: var(--gold); }
+.hz-nums { display: flex; align-items: baseline; gap: 10px; margin-top: 6px; }
+.hz-nums b { font-family: var(--disp); font-weight: 900; font-size: 15px; }
+.hz-nums span { font-family: var(--mono); font-size: 9.5px; letter-spacing: .5px;
+  color: var(--muted); margin-left: auto; }
+
+/* Understated actions: a text control with a rule under it, never a filled
+   button competing with Open a pass. */
+.hz-link { display: inline-block; margin-top: 10px; padding: 6px 0; background: none; border: 0;
+  font-family: var(--mono); font-size: 10px; letter-spacing: 1px; text-transform: uppercase;
+  color: var(--purple-lt); border-bottom: 1px solid rgba(167,139,250,.35); cursor: pointer;
+  min-height: 32px; }
+.hz-link:hover { color: #fff; border-bottom-color: #fff; }
+.hz-more { margin-top: 12px; }
+
+/* Column so the button can sit at its own width, but stretched: shrinking
+   the children would collapse the section row and strand its count in the
+   middle instead of hard right. */
+.hz-passes { display: flex; flex-direction: column; align-items: stretch; }
+.hz-passes .hz-open { margin-top: 10px; width: auto; align-self: flex-start;
+  padding: 9px 18px; min-height: 40px; }
+.hz-hint { font-size: 11.5px; color: var(--dim); margin-top: 7px; }
+.hz-quiet { font-size: 12.5px; color: var(--muted); margin-top: 8px; }
+.hz-loading { margin-top: 18px; }
+
+.hz-reqs { margin-top: 4px; }
+.hz-req { display: flex; align-items: center; gap: 10px; padding: 9px 0;
+  border-top: 1px solid rgba(255,255,255,0.05); }
+.hz-req:first-child { border-top: 0; }
+.hz-req-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.hz-req-who { font-weight: 700; font-size: 13px; }
+.hz-req-song { font-size: 12.5px; color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hz-req-meta { font-family: var(--mono); font-size: 9px; letter-spacing: .5px; color: var(--dim); }
+/* Compact secondary action — still a 36px touch target on a phone. */
+.btn-mini.hz-help { flex: 0 0 auto; padding: 8px 13px; min-height: 36px;
+  border-radius: var(--r); border: 1px solid rgba(167,139,250,0.45); background: transparent;
+  color: var(--purple-lt); font-family: var(--mono); font-size: 10px; letter-spacing: 1px;
+  text-transform: uppercase; cursor: pointer; }
+.btn-mini.hz-help:hover:not(:disabled) { background: rgba(167,139,250,0.14); color: #fff; }
+.btn-mini.hz-help:disabled { opacity: .35; cursor: default; }
+
+.hz-foot { font-size: 11.5px; color: var(--dim); margin: 0 0 12px; }
+.hz-leave { width: 100%; }
+
+/* The expanded view behind "View progress" — the one place that is allowed
+   to explain itself, because someone asked for the detail. */
+.hz-detail { text-align: left; }
+.hz-detail-who { font-family: var(--disp); font-weight: 900; font-size: 19px; margin: 4px 0 0; }
+.hz-play { margin-top: 13px; padding: 10px 12px; border-radius: var(--r);
   border: 1px solid var(--line); background: rgba(0,0,0,0.22); }
-.bkp-tracks-head { font-family: var(--mono); font-size: 9px; letter-spacing: 2px;
+.hz-play-head { font-family: var(--mono); font-size: 9px; letter-spacing: 1.6px;
   text-transform: uppercase; color: var(--gold); }
-.bkp-tracks ul { margin: 6px 0 0; padding-left: 16px; }
-.bkp-tracks li { font-size: 12.5px; line-height: 1.6; }
-.bkp-clock { font-size: 11.5px; margin: 10px 0 0; }
-.bkp-actions { display: flex; gap: 8px; margin-top: 12px; }
-.bkp-actions .btn { flex: 1; }
-
-.bkp-list .bkp-req { display: flex; align-items: center; gap: 10px; padding: 11px 0;
-  border-top: 1px solid var(--line); }
-.bkp-list .bkp-req:first-of-type { border-top: 0; margin-top: 4px; }
-.bkp-req-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
-.bkp-req-who { font-weight: 700; font-size: 13px; }
-.bkp-req-goal { font-size: 12.5px; color: var(--fg); }
-.bkp-req-meta { font-family: var(--mono); font-size: 9px; letter-spacing: .4px; color: var(--muted); }
-.bkp-req-join { flex: 0 0 auto; padding: 7px 16px; }
+.hz-play ul { margin: 6px 0 0; padding-left: 16px; }
+.hz-play li { font-size: 12.5px; line-height: 1.6; }
+.hz-note { font-size: 11.5px; line-height: 1.5; color: var(--muted); margin: 12px 0 0; }
+.hz-actions { display: flex; gap: 8px; margin-top: 14px; }
+/* Not an even split: "Stop helping" is two words and wraps at 375px if it
+   only gets half the row, while "Back" never needs that much. */
+.hz-actions .hz-stop { flex: 1 1 auto; }
+.hz-actions .hz-back { flex: 0 0 34%; }

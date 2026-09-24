@@ -1,30 +1,29 @@
-// The Helping Zone — the Backup Pass feature as a place on the city map.
+// The Helping Zone — the Backup Pass feature as a small place on the city map.
 //
 // It exists because the helper's half of this feature was invisible. You
 // could answer someone's call for backup, get a toast, and then never see
 // the pairing again: no name, no song, no progress, no way out. The owner
-// watched their goal move; the person doing the work saw nothing. Worse, the
-// old join list never even named the goal ("a track goal"), so helping was
+// watched their goal move; the person doing the work saw nothing. The old
+// join list never even named the goal ("a track goal"), so helping was
 // something you agreed to without being told what to play.
 //
 // A place, not a screen: there is only ever one pairing at a time, so this
-// is a sheet you walk into from the map marker (city-map.js's Helping Zone)
-// and walk back out of, the same way the Magic Shop works. The marker
-// carries the state — lit while you're on a job, pulsing while someone is
-// waiting — so the city itself says whether anything is happening.
+// is a sheet you walk into from the map marker (city-map.js) and back out
+// of, the same way the Magic Shop works.
 //
-// Three sections, in the order they matter to whoever opened it:
-//   1. Backing up  — you are helping someone right now
-//   2. Your pass   — you opened one; waiting, or being helped
-//   3. Who needs backup — everyone still waiting
-// An agent can legitimately be in 1 and 2 at once (the server allows owning
-// one request while helping another), so these are sections, not tabs.
+// Written tight on purpose. The first version explained itself in a
+// paragraph per section and wrapped every number in its own card, which read
+// as a settings page. A meeting spot should be readable in one glance:
+// a line of state, the songs, the numbers, one action. Everything that needs
+// explaining moved behind "View progress", where someone has actually asked.
+//
+// Order is by what you are in the middle of: the job you're on first, your
+// own pass second, everyone else's calls last.
 
 import { el, esc, toast, showOverlay, hideOverlay, getState } from './state.js'
 import { call } from './api.js'
 import { getAgentNo } from './session.js'
 import { goDistrict } from './router.js'
-import { untilLabel } from './quest-exit-rules.js'
 import { openBackupPassFlow, markBackupHelpSeen } from './backup-pass.js'
 
 const JOIN_ERRORS = {
@@ -36,200 +35,302 @@ const JOIN_ERRORS = {
   already_paired_this_goal: "You've already helped this agent with that goal.",
 }
 
-/** A combined progress bar. `mine` is drawn on top of `theirs` so the split
- *  is visible at a glance — the helper can see their own contribution as a
- *  distinct band rather than a number they have to trust. */
-function splitBar(theirs, mine, target) {
+/** How many open requests show before "See all" — enough to see there's a
+ *  queue, few enough that the Zone never becomes a scrolling list. */
+const REQUESTS_SHOWN = 3
+
+/** "5d" / "9h" / "40m". Deliberately shorter than the rest of the app's
+ *  countdowns: in a list row it's the third thing on a line. */
+function leftShort(iso, now = Date.now()) {
+  const ms = new Date(iso).getTime() - now
+  if (!Number.isFinite(ms) || ms <= 0) return null
+  const mins = Math.round(ms / 60000)
+  if (mins < 60) return `${mins}m`
+  const hours = Math.round(mins / 60)
+  if (hours < 48) return `${hours}h`
+  return `${Math.round(hours / 24)}d`
+}
+
+/** For a list row: "5d left", or "ending" once it's on the clock. */
+function leftLabel(iso, now = Date.now()) {
+  const short = leftShort(iso, now)
+  return short ? `${short} left` : 'ending'
+}
+
+/** For a sentence: "Backup ends in 5d." / "Backup is ending." */
+function endsSentence(iso, now = Date.now()) {
+  const short = leftShort(iso, now)
+  return short ? `Backup ends in ${short}.` : 'Backup is ending.'
+}
+
+const songLine = (goalKind, label) => `${goalKind === 'album' ? '💿' : '♪'} ${esc(label || 'their goal')}`
+
+/** Section rule: a small caps label, optional value hard right. This is the
+ *  only heading style in the Zone — no nested card headers. */
+function sectionRow(label, value) {
+  return el('div', 'hz-sec', `<span>${esc(label)}</span>${value ? `<b>${esc(value)}</b>` : ''}`)
+}
+
+/** The one progress bar in the Zone, and only for a live pairing: their
+ *  streams, then yours on top, against the boosted target. */
+function slimBar(theirs, mine, target) {
   const total = Math.max(1, target)
   const a = Math.min(100, (theirs / total) * 100)
   const b = Math.min(100 - a, (mine / total) * 100)
-  return `<div class="bkp-bar" role="progressbar" aria-valuemin="0" aria-valuemax="${target}" aria-valuenow="${theirs + mine}">
-    <span class="bkp-bar-theirs" style="width:${a}%"></span>
-    <span class="bkp-bar-mine" style="width:${b}%"></span>
+  return `<div class="hz-bar" role="progressbar" aria-valuemin="0" aria-valuemax="${target}" aria-valuenow="${theirs + mine}">
+    <span class="hz-bar-them" style="width:${a}%"></span>
+    <span class="hz-bar-you" style="width:${b}%"></span>
   </div>`
 }
 
-/** The songs that count. This is the single most important thing here for a
- *  helper, and the one thing the old join sheet never told them. */
-function trackList(tracks) {
-  if (!tracks?.length) return ''
-  return `<div class="bkp-tracks">
-    <span class="bkp-tracks-head">What to play</span>
-    <ul>${tracks.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>
-  </div>`
+/* ── the job you're on ─────────────────────────────────────────────────── */
+
+function helpingBlock(h, api) {
+  const box = el('div', 'hz-block hz-live')
+  const togo = Math.max(0, h.boostedTarget - h.combined)
+  box.appendChild(sectionRow(`You're helping ${h.ownerCodename}`))
+  box.appendChild(el('div', 'hz-song', songLine(h.goalKind, h.goalLabel)))
+  box.insertAdjacentHTML('beforeend', slimBar(h.ownerProgress, h.myContribution, h.boostedTarget))
+  box.appendChild(el('div', 'hz-nums', `
+    <b>${h.combined} / ${h.boostedTarget}</b>
+    <span>You ${h.myContribution} · Them ${h.ownerProgress}</span>
+  `))
+  box.appendChild(el('div', 'hz-togo', togo > 0 ? `${togo} more to go` : 'Target reached'))
+  const view = el('button', 'hz-link', 'View progress ↗')
+  view.type = 'button'
+  view.onclick = () => showOverlay(progressSheet(h, api))
+  box.appendChild(view)
+  return box
 }
 
-function helperCard(h, reload) {
-  const card = el('div', 'bkp-card bkp-helping')
-  const remaining = Math.max(0, h.boostedTarget - h.combined)
-  card.innerHTML = `
-    <div class="bkp-eyebrow">YOU'RE BACKING UP</div>
-    <h3 class="bkp-who">${esc(h.ownerCodename)}</h3>
-    <p class="bkp-goal">${h.goalKind === 'album' ? '💿' : '🎵'} ${esc(h.goalLabel || 'their goal')}${
-      h.districtName ? ` · ${esc(h.districtName)}` : ''}</p>
-    ${splitBar(h.ownerProgress, h.myContribution, h.boostedTarget)}
-    <div class="bkp-split">
-      <span><b>${h.ownerProgress}</b> theirs</span>
-      <span class="bkp-mine"><b>${h.myContribution}</b> yours</span>
-      <span class="bkp-target">of ${h.boostedTarget}</span>
-    </div>
-    <p class="bkp-remaining">${remaining > 0
-      ? `${remaining} more play${remaining === 1 ? '' : 's'} to finish it together.`
-      : 'Target reached — nice work.'}</p>
-    ${trackList(h.tracks)}
-    <p class="bkp-clock muted">Backup ends ${esc(untilLabel(h.expiresAt))}.</p>
-  `
-  const stop = el('button', 'btn btn-ghost', 'Stop helping')
+/** Everything that would otherwise pad the Zone out: what to play, why the
+ *  target moved, when it ends, and the way out. Behind a tap, because only
+ *  someone who asked for detail needs it. */
+function progressSheet(h, api) {
+  const sheet = el('div', 'sheet hz-detail')
+  const togo = Math.max(0, h.boostedTarget - h.combined)
+  sheet.append(
+    el('div', 'eyebrow', 'BACKING UP'),
+    el('h3', 'hz-detail-who', esc(h.ownerCodename)),
+    el('div', 'hz-song', songLine(h.goalKind, h.goalLabel) + (h.districtName ? ` · ${esc(h.districtName)}` : '')),
+  )
+  sheet.insertAdjacentHTML('beforeend', slimBar(h.ownerProgress, h.myContribution, h.boostedTarget))
+  sheet.appendChild(el('div', 'hz-nums', `
+    <b>${h.combined} / ${h.boostedTarget}</b>
+    <span>You ${h.myContribution} · Them ${h.ownerProgress}</span>
+  `))
+  sheet.appendChild(el('div', 'hz-togo', togo > 0 ? `${togo} more to go` : 'Target reached'))
+
+  if (h.tracks?.length) {
+    sheet.appendChild(el('div', 'hz-play', `
+      <span class="hz-play-head">What to play</span>
+      <ul>${h.tracks.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>
+    `))
+  }
+  sheet.appendChild(el('p', 'hz-note',
+    `Their target rose from ${h.originalTarget} to ${h.boostedTarget} while you help. ${esc(endsSentence(h.expiresAt))}`))
+
+  const stop = el('button', 'btn btn-ghost hz-stop', 'Stop helping')
   stop.type = 'button'
   stop.onclick = async () => {
     stop.disabled = true
     stop.textContent = 'Leaving…'
-    const res = await call('leaveBackupHelper', { agentNo: getAgentNo(), requestId: h.requestId })
+    const res = await api.call('leaveBackupHelper', { agentNo: api.agentNo(), requestId: h.requestId })
     if (!res?.success) {
       stop.disabled = false
       stop.textContent = 'Stop helping'
-      toast("Couldn't leave that backup.")
+      api.toast("Couldn't leave that backup.")
       return
     }
-    toast(res.bankedCredit > 0
+    api.toast(res.bankedCredit > 0
       ? `You left. Your ${res.bankedCredit} play${res.bankedCredit === 1 ? '' : 's'} stay counted for them.`
       : 'You left that backup.')
-    reload()
+    api.reload()
   }
-  const actions = el('div', 'bkp-actions')
-  actions.appendChild(stop)
-  card.appendChild(actions)
-  return card
+  const back = el('button', 'btn btn-ghost hz-back', 'Back')
+  back.type = 'button'
+  back.onclick = () => api.reload()
+  const row = el('div', 'hz-actions')
+  row.append(stop, back)
+  sheet.appendChild(row)
+  return sheet
 }
 
-function ownerCard(o) {
-  const card = el('div', 'bkp-card bkp-owned')
+/* ── your own pass ─────────────────────────────────────────────────────── */
+
+function ownPassBlock(o, api) {
+  const box = el('div', 'hz-block')
   const helped = o.status === 'joined'
-  card.innerHTML = `
-    <div class="bkp-eyebrow">YOUR BACKUP PASS</div>
-    <h3 class="bkp-who">${helped ? `${esc(o.helperCodename)} is helping you` : 'Waiting for a helper'}</h3>
-    <p class="bkp-goal">${o.goalKind === 'album' ? '💿' : '🎵'} ${esc(o.goalLabel || 'your goal')}${
-      o.districtName ? ` · ${esc(o.districtName)}` : ''}</p>
-    ${helped
-      ? splitBar(o.ownProgress, o.helperContribution, o.boostedTarget)
-        + `<div class="bkp-split">
-             <span><b>${o.ownProgress}</b> yours</span>
-             <span class="bkp-mine"><b>${o.helperContribution}</b> theirs</span>
-             <span class="bkp-target">of ${o.boostedTarget}</span>
-           </div>
-           <p class="bkp-remaining">Target rose from ${o.originalTarget} to ${o.boostedTarget} while they help.</p>`
-      : `<p class="bkp-remaining">Any agent can answer this. Its target rises from ${o.originalTarget} to ${o.boostedTarget} the moment someone does — and if you finish it alone first, the pass simply comes back.</p>`}
-    <p class="bkp-clock muted">${helped ? 'Backup ends' : 'This request expires'} ${esc(untilLabel(o.expiresAt))}.</p>
-  `
-  if (o.districtId) {
-    const go = el('button', 'btn btn-ghost', 'View the goal')
-    go.type = 'button'
-    go.onclick = () => {
-      const d = getState()?.activeDistrict
-      if (d && d.id === o.districtId) { hideOverlay(); goDistrict(d.wardId, d.id) }
-      else toast('That district is no longer your active one.')
-    }
-    const actions = el('div', 'bkp-actions')
-    actions.appendChild(go)
-    card.appendChild(actions)
+  box.appendChild(sectionRow('Your backup pass', helped ? `${o.helperCodename} is in` : 'waiting'))
+  box.appendChild(el('div', 'hz-song', songLine(o.goalKind, o.goalLabel)))
+  if (helped) {
+    box.insertAdjacentHTML('beforeend', slimBar(o.ownProgress, o.helperContribution, o.boostedTarget))
+    box.appendChild(el('div', 'hz-nums', `
+      <b>${o.ownProgress + o.helperContribution} / ${o.boostedTarget}</b>
+      <span>You ${o.ownProgress} · Them ${o.helperContribution}</span>
+    `))
+  } else {
+    box.appendChild(el('div', 'hz-meta', `${o.originalTarget} → ${o.boostedTarget} · ${esc(leftLabel(o.expiresAt))}`))
   }
-  return card
+  const go = el('button', 'hz-link', 'View the goal ↗')
+  go.type = 'button'
+  go.onclick = () => {
+    const d = api.state()?.activeDistrict
+    if (d && d.id === o.districtId) { api.hide(); api.goDistrict(d.wardId, d.id) }
+    else api.toast('That district is no longer your active one.')
+  }
+  box.appendChild(go)
+  return box
 }
 
-function requestRow(r, reload) {
-  const row = el('div', 'bkp-req')
+function passesBlock(count, api) {
+  const box = el('div', 'hz-block hz-passes')
+  box.appendChild(sectionRow('Your backup passes', count > 0 ? `${count} available` : 'none'))
+  const open = el('button', `btn ${count > 0 ? 'btn-primary' : 'btn-ghost'} hz-open`, 'Open a pass ↗')
+  open.type = 'button'
+  if (count > 0) {
+    open.onclick = async () => {
+      const items = (api.state()?.items || []).filter((i) => i.itemId === 'backup-pass' && !i.usedAt)
+      if (!items.length) { api.toast('No Backup Pass available right now.'); return }
+      await api.openPass(items[0])
+    }
+  } else {
+    open.disabled = true
+    open.setAttribute('aria-disabled', 'true')
+  }
+  box.appendChild(open)
+  if (count === 0) box.appendChild(el('div', 'hz-hint', 'Supply Chests, level-ups and restorations drop them.'))
+  return box
+}
+
+/* ── everyone else's calls ─────────────────────────────────────────────── */
+
+function requestRow(r, api) {
+  const row = el('div', 'hz-req')
   row.innerHTML = `
-    <div class="bkp-req-copy">
-      <span class="bkp-req-who">${esc(r.ownerCodename)}</span>
-      <span class="bkp-req-goal">${r.goalKind === 'album' ? '💿' : '🎵'} ${
-        esc(r.goalLabel || (r.goalKind === 'album' ? 'an album goal' : 'a track goal'))}</span>
-      <span class="bkp-req-meta">${r.originalTarget} → ${r.boostedTarget} while you help · ends ${esc(untilLabel(r.expiresAt))}</span>
+    <div class="hz-req-main">
+      <span class="hz-req-who">${esc(r.ownerCodename)}</span>
+      <span class="hz-req-song">${songLine(r.goalKind, r.goalLabel)}</span>
+      <span class="hz-req-meta">${r.originalTarget} → ${r.boostedTarget} · ${esc(leftLabel(r.expiresAt))}</span>
     </div>
   `
-  const join = el('button', 'btn btn-primary bkp-req-join', 'Help')
+  const join = el('button', 'btn-mini hz-help', 'Help ↗')
   join.type = 'button'
   join.onclick = async () => {
     join.disabled = true
-    join.textContent = 'Joining…'
-    const res = await call('joinBackupRequest', { agentNo: getAgentNo(), requestId: r.id })
+    join.textContent = '…'
+    const res = await api.call('joinBackupRequest', { agentNo: api.agentNo(), requestId: r.id })
     if (!res?.success) {
       join.disabled = false
-      join.textContent = 'Help'
-      toast(JOIN_ERRORS[res?.error] || "Couldn't join that one.")
+      join.textContent = 'Help ↗'
+      api.toast(JOIN_ERRORS[res?.error] || "Couldn't join that one.")
       return
     }
-    toast(`You're backing up ${r.ownerCodename}.`)
-    reload()
+    api.toast(`You're backing up ${r.ownerCodename}.`)
+    api.reload()
   }
   row.appendChild(join)
   return row
 }
 
-/** Walk into the Zone. Called by the city map's own marker. */
-export async function openHelpingZone() {
-  const sheet = el('div', 'sheet bkp-sheet')
+function requestsBlock(requests, busy, api) {
+  const box = el('div', 'hz-block hz-list')
+  box.appendChild(sectionRow('Agents needing backup', requests.length ? String(requests.length) : ''))
+  if (!requests.length) {
+    box.appendChild(el('div', 'hz-quiet', 'No one needs backup right now.'))
+    return box
+  }
+  // While you're already on a job the server will refuse a second one, so
+  // the rows stay readable but the buttons don't lie about being available.
+  const rows = el('div', 'hz-reqs')
+  const shown = requests.slice(0, REQUESTS_SHOWN)
+  const paint = (list) => {
+    rows.innerHTML = ''
+    for (const r of list) {
+      const row = requestRow(r, api)
+      if (busy) {
+        const b = row.querySelector('.hz-help')
+        b.disabled = true
+        b.setAttribute('aria-disabled', 'true')
+      }
+      rows.appendChild(row)
+    }
+  }
+  paint(shown)
+  box.appendChild(rows)
+  if (requests.length > REQUESTS_SHOWN) {
+    const more = el('button', 'hz-link hz-more', `See all ${requests.length} ↗`)
+    more.type = 'button'
+    more.onclick = () => { paint(requests); more.remove() }
+    box.appendChild(more)
+  }
+  return box
+}
+
+/* ── the Zone ──────────────────────────────────────────────────────────── */
+
+/** Builds the whole sheet from one payload. Pure apart from `api`, so the
+ *  visual harness below renders the real thing rather than a copy that can
+ *  drift — same reasoning as quest-skip.js's sheet preview. */
+export function helpingZoneSheet(data, api) {
+  const sheet = el('div', 'sheet hz-sheet')
   sheet.append(
     el('div', 'eyebrow', 'CITY MAP · WEST SEAM'),
-    el('h3', 'bkp-post-title', '🤝 Helping Zone'),
-    el('p', 'bkp-sub', 'Open one of your goals to another agent, or answer someone else’s. A helper’s streams count toward the goal alongside the owner’s — helping costs nothing and you keep every stream for your own goals too.'),
+    el('h3', 'hz-title', '🤝 Helping Zone'),
+    el('p', 'hz-line', "Need backup? Or be someone's backup."),
   )
-  const body = el('div', 'bkp-body')
-  body.appendChild(el('p', 'muted bkp-loading', 'Loading…'))
+
+  const body = el('div', 'hz-body')
+  if (data.asHelper) body.appendChild(helpingBlock(data.asHelper, api))
+  body.appendChild(data.asOwner ? ownPassBlock(data.asOwner, api) : passesBlock(data.backupPasses || 0, api))
+  body.appendChild(requestsBlock(data.openRequests || [], !!data.asHelper, api))
   sheet.appendChild(body)
-  const close = el('button', 'btn btn-ghost', 'Leave the Zone')
-  close.type = 'button'
-  close.onclick = hideOverlay
-  sheet.appendChild(close)
-  showOverlay(sheet)
+
+  sheet.appendChild(el('p', 'hz-foot', 'Helping is free. Your streams count for both.'))
+  const leave = el('button', 'btn btn-ghost hz-leave', 'Leave the Zone')
+  leave.type = 'button'
+  leave.onclick = api.hide
+  sheet.appendChild(leave)
+  return sheet
+}
+
+/** Walk into the Zone. Called by the city map's own marker. */
+export async function openHelpingZone() {
+  const api = {
+    call, toast, hide: hideOverlay, state: getState, goDistrict,
+    agentNo: getAgentNo, openPass: openBackupPassFlow, reload: openHelpingZone,
+  }
+
+  const loading = el('div', 'sheet hz-sheet')
+  loading.append(
+    el('div', 'eyebrow', 'CITY MAP · WEST SEAM'),
+    el('h3', 'hz-title', '🤝 Helping Zone'),
+    el('p', 'hz-line', "Need backup? Or be someone's backup."),
+    el('div', 'hz-quiet hz-loading', 'Looking around…'),
+  )
+  showOverlay(loading)
 
   const data = await call('getHelpingZone', { agentNo: getAgentNo() })
-  if (!body.isConnected) return
-  body.innerHTML = ''
   if (!data?.success) {
-    body.appendChild(el('p', 'muted', "Couldn't load the Helping Zone. Close this and try again."))
+    toast("Couldn't load the Helping Zone.")
     return
   }
 
   // Walking in IS looking at the list, so it clears the Pack tab's "someone
   // needs backup" dot — the same thing the old join sheet did on open.
-  const newest = data.openRequests.map((r) => r.expiresAt).sort().slice(-1)[0]
+  const newest = (data.openRequests || []).map((r) => r.expiresAt).sort().slice(-1)[0]
   markBackupHelpSeen(getState()?.player?.backupHelp?.latestAt || newest || new Date().toISOString())
 
-  if (data.asHelper) body.appendChild(helperCard(data.asHelper, openHelpingZone))
-  if (data.asOwner) body.appendChild(ownerCard(data.asOwner))
+  showOverlay(helpingZoneSheet(data, api))
+}
 
-  if (!data.asOwner) {
-    const own = el('div', 'bkp-card bkp-open')
-    own.innerHTML = `
-      <div class="bkp-eyebrow">YOUR BACKUP PASS</div>
-      <p class="bkp-remaining">${data.backupPasses > 0
-        ? `You have ${data.backupPasses} pass${data.backupPasses === 1 ? '' : 'es'}. Open one on a goal you're stuck on and any agent can pitch in.`
-        : 'No passes yet. They come from Supply Chests, level-ups and the occasional district restoration.'}</p>
-    `
-    if (data.backupPasses > 0) {
-      const openBtn = el('button', 'btn btn-primary', 'Open a pass on a goal')
-      openBtn.type = 'button'
-      openBtn.onclick = async () => {
-        const items = (getState()?.items || []).filter((i) => i.itemId === 'backup-pass' && !i.usedAt)
-        if (!items.length) { toast('No Backup Pass available right now.'); return }
-        await openBackupPassFlow(items[0])
-      }
-      const actions = el('div', 'bkp-actions')
-      actions.appendChild(openBtn)
-      own.appendChild(actions)
-    }
-    body.appendChild(own)
-  }
-
-  const list = el('div', 'bkp-card bkp-list')
-  list.appendChild(el('div', 'bkp-eyebrow', 'WHO NEEDS BACKUP'))
-  if (!data.openRequests.length) {
-    list.appendChild(el('p', 'bkp-remaining', 'Nobody has an open Backup Pass right now. They only last a few days, so check back.'))
-  } else if (data.asHelper) {
-    list.appendChild(el('p', 'bkp-remaining',
-      `${data.openRequests.length} agent${data.openRequests.length === 1 ? '' : 's'} waiting — you can join another once you finish backing up ${esc(data.asHelper.ownerCodename)}.`))
-  } else {
-    for (const r of data.openRequests) list.appendChild(requestRow(r, openHelpingZone))
-  }
-  body.appendChild(list)
+/** Deterministic visual harness hook — builds the real sheet from a payload
+ *  so the state review can't drift from what players see. */
+export function helpingZonePreview(data, api = {}) {
+  const noop = () => {}
+  return helpingZoneSheet(data, {
+    call: async () => ({ success: false }), toast: noop, hide: noop,
+    state: () => ({}), goDistrict: noop, agentNo: () => 'AGENT000',
+    openPass: noop, reload: noop, ...api,
+  })
 }

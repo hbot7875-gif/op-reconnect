@@ -1,0 +1,64 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Helping Zone states</title><link rel="stylesheet" href="css/reconnect.css">
+<style>html,body{margin:0;background:#08070d;color:#ece9f2;font-family:-apple-system,Segoe UI,Arial,sans-serif}
+.wrap{display:flex;flex-wrap:wrap;gap:14px;padding:14px}
+.col{width:343px}.cap{font:700 9px/1 monospace;letter-spacing:1.6px;color:#8b789c;margin:0 0 6px}
+.sheet{position:static!important;transform:none!important;max-width:none!important;margin:0!important}</style>
+</head><body><div class="wrap" id="w"></div><div id="overlay" hidden></div>
+<script type="module">
+import { el } from './js/state.js'
+import { helpingZonePreview } from './js/helping-zone.js'
+
+const hrs = (h) => new Date(Date.now() + h * 3600e3).toISOString()
+const req = (who, song, a, b, h, kind = 'track') => ({
+  id: who, ownerCodename: who, goalKind: kind, goalLabel: song,
+  originalTarget: a, boostedTarget: b, expiresAt: hrs(h), tracks: [song],
+})
+const helping = {
+  requestId: 'r1', ownerCodename: 'Joonie_bae', goalKind: 'track', goalLabel: 'Haegeum',
+  districtName: 'Mono Heights', tracks: ['Haegeum'],
+  ownerProgress: 180, myContribution: 30, combined: 210,
+  originalTarget: 250, boostedTarget: 300, expiresAt: hrs(120),
+}
+const ownWaiting = {
+  requestId: 'o1', status: 'open', districtId: 'd1', districtName: 'Relay Zero',
+  goalKind: 'track', goalLabel: "Don't Say You Love Me", tracks: ["Don't Say You Love Me"],
+  helperCodename: null, ownProgress: 4, helperContribution: 0,
+  originalTarget: 26, boostedTarget: 32, expiresAt: hrs(120),
+}
+const ownJoined = { ...ownWaiting, status: 'joined', helperCodename: 'Dreamgirl⁷', ownProgress: 11, helperContribution: 9 }
+
+const states = [
+  ['EMPTY — no passes, no requests', { success: true, backupPasses: 0, asOwner: null, asHelper: null, openRequests: [] }],
+  ['PASSES + REQUESTS WAITING', { success: true, backupPasses: 2, asOwner: null, asHelper: null, openRequests: [
+    req('Joonie_bae', 'Haegeum', 250, 300, 120),
+  ] }],
+  ['ACTIVELY HELPING', { success: true, backupPasses: 1, asOwner: null, asHelper: helping, openRequests: [
+    req('sugarfree', 'Seven', 40, 48, 60),
+  ] }],
+  ['OWN REQUEST — waiting for a helper', { success: true, backupPasses: 0, asOwner: ownWaiting, asHelper: null, openRequests: [] }],
+  ['OWN REQUEST — helper joined', { success: true, backupPasses: 0, asOwner: ownJoined, asHelper: null, openRequests: [
+    req('minimoni', 'Butter', 30, 36, 20),
+  ] }],
+  ['MANY REQUESTS (6, three shown)', { success: true, backupPasses: 3, asOwner: null, asHelper: null, openRequests: [
+    req('Joonie_bae', 'Haegeum', 250, 300, 120),
+    req('sugarfree', 'Seven (feat. Latto)', 40, 48, 60),
+    req('minimoni', 'Proof of Inspiration', 12, 15, 9, 'album'),
+    req('taegukgi', 'Like Crazy', 88, 106, 30),
+    req('bangtangirl', 'Dynamite', 200, 240, 4),
+    req('hobiwater', 'Chicken Noodle Soup', 15, 18, 0.5),
+  ] }],
+  ['HELPING + OWN REQUEST AT ONCE', { success: true, backupPasses: 0, asOwner: ownJoined, asHelper: helping, openRequests: [
+    req('taegukgi', 'Like Crazy', 88, 106, 30),
+  ] }],
+]
+
+const w = document.getElementById('w')
+for (const [cap, data] of states) {
+  const c = el('div', 'col')
+  c.appendChild(el('p', 'cap', cap))
+  c.appendChild(helpingZonePreview(data))
+  w.appendChild(c)
+}
+</script></body></html>
