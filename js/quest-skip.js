@@ -9,6 +9,7 @@
 import { call } from './api.js'
 import { el, esc, toast, showOverlay, hideOverlay } from './state.js'
 import { getAgentNo } from './session.js'
+import { questExitView } from './quest-exit-rules.js'
 
 // The same glyphs the Pack uses for these resources (screen-resources.js
 // SLOT_DEFS), so a cost reads as the resources the agent already knows.
@@ -41,32 +42,20 @@ function costChip(icon, amount, label, balance, short) {
 }
 
 function skipSheet(quote, districtId, onDone) {
+  const v = questExitView(quote)
   const sheet = el('div', 'sheet qs-sheet')
   sheet.setAttribute('role', 'dialog')
   sheet.setAttribute('aria-modal', 'true')
   sheet.setAttribute('aria-labelledby', 'qsTitle')
 
-  const free = !!quote.free
-  const blocked = quote.waitingPeriod || quote.onCooldown
-  const short = !free && !quote.canAfford
-
   sheet.append(
     el('div', 'eyebrow', 'RECONNECT QUEST'),
-    el('h3', 'qs-title', free ? 'Leave this Quest?' : 'Skip this Quest?'),
-    el('p', 'qs-lede', free
-      ? "This quest can't be finished any more, so leaving it is free."
-      : 'You can leave this quest and start a new one. This won\'t count as completing it.'),
+    el('h3', 'qs-title', v.title),
+    el('p', 'qs-lede', v.lede),
   )
   sheet.querySelector('.qs-title').id = 'qsTitle'
 
-  // ── Price ──────────────────────────────────────────────────────────────
-  if (free) {
-    const why = quote.freeReason === 'teammate_rescue'
-      ? "A teammate hasn't answered or played for over 48 hours."
-      : quote.freeReason === 'expired' ? 'This quest has already run out of time.'
-      : "This quest is stuck, so there's nothing to pay."
-    sheet.appendChild(el('div', 'qs-free', `<span>✓ No cost</span><small>${esc(why)}</small>`))
-  } else {
+  if (v.showPrice) {
     const row = el('div', 'qs-cost')
     row.append(
       costChip(XP_ICON, quote.costXp, 'XP', quote.balanceXp, quote.shortXp > 0),
@@ -74,37 +63,19 @@ function skipSheet(quote, districtId, onDone) {
       costChip(CELL_ICON, quote.costCells, quote.costCells === 1 ? 'Cell' : 'Cells', quote.balanceCells, quote.shortCells > 0),
     )
     sheet.appendChild(row)
+  } else {
+    sheet.appendChild(el('div', 'qs-free', `<span>✓ No cost</span><small>${esc(v.why || '')}</small>`))
   }
 
-  // ── What happens ───────────────────────────────────────────────────────
   const notes = el('ul', 'qs-notes')
-  notes.innerHTML = `
-    <li>Spending XP won't lower your level, rank or rewards.</li>
-    <li>You won't receive this quest's completion rewards.</li>
-    <li>Your existing streams will remain counted for your teammates.</li>
-    <li>Your other district progress and earned rewards will stay safe.</li>
-    ${free ? '' : '<li>You can skip only once every 7 days.</li>'}
-  `
+  notes.innerHTML = v.notes.map((n) => `<li>${esc(n)}</li>`).join('')
   sheet.appendChild(notes)
 
-  // ── Blocking states ────────────────────────────────────────────────────
-  if (quote.waitingPeriod) {
-    sheet.appendChild(el('p', 'qs-hold', `You can skip this quest ${esc(untilLabel(quote.eligibleAt))}, once you've been on it for a day.`))
-  } else if (quote.onCooldown) {
-    sheet.appendChild(el('p', 'qs-hold', `You've skipped a quest recently. The next one is available ${esc(untilLabel(quote.cooldownUntil))}.`))
-  } else if (short) {
-    const missing = []
-    if (quote.shortXp > 0) missing.push(`${fmt(quote.shortXp)} more XP`)
-    if (quote.shortCells > 0) missing.push(`${fmt(quote.shortCells)} more ${quote.shortCells === 1 ? 'Cell' : 'Cells'}`)
-    sheet.appendChild(el('p', 'qs-hold', `You need ${esc(missing.join(' and '))} to skip this one.`))
-  }
+  if (v.hold) sheet.appendChild(el('p', 'qs-hold', esc(v.hold)))
 
-  // ── Actions ────────────────────────────────────────────────────────────
-  const go = el('button', 'btn btn-primary qs-go', free
-    ? 'Leave this Quest'
-    : `Skip for ${fmt(quote.costXp)} XP + ${fmt(quote.costCells)} ${quote.costCells === 1 ? 'Cell' : 'Cells'}`)
+  const go = el('button', 'btn btn-primary qs-go', v.confirm)
   go.type = 'button'
-  if (blocked || short) {
+  if (v.blocked) {
     go.disabled = true
     go.setAttribute('aria-disabled', 'true')
   }
@@ -120,7 +91,7 @@ function skipSheet(quote, districtId, onDone) {
       return
     }
     hideOverlay()
-    toast('Quest skipped. You can start a new one.')
+    toast(res.free ? 'You left the quest. You can start a new one.' : 'Quest skipped. You can start a new one.')
     onDone?.()
   }
   sheet.appendChild(go)
@@ -142,15 +113,19 @@ function skipError(res) {
     insufficient: "You don't have enough XP and Cells for this yet.",
     not_in_mission: "You're not on this quest any more.",
     already_skipped: 'That quest was already skipped.',
+    use_quest_exit: 'Use the quest exit option to leave this quest.',
   }[res.error] || res.error || "Couldn't skip this quest"
 }
 
 /** The button that opens the sheet. Returns null when the agent has no quest
  *  to leave, so the caller can simply append the result. */
 export function skipQuestButton(districtId, onDone) {
-  const btn = el('button', 'qs-btn', '<span aria-hidden="true">⤴</span> Skip Quest')
+  // One entry point. Its label only becomes specific once the server says
+  // which exit applies, so the screen never offers a free leave beside a
+  // paid one.
+  const btn = el('button', 'qs-btn', '<span aria-hidden="true">⤴</span> Leave Quest')
   btn.type = 'button'
-  btn.setAttribute('aria-label', 'Skip this ReConnect quest')
+  btn.setAttribute('aria-label', 'Leave this ReConnect quest')
   btn.onclick = async () => {
     btn.disabled = true
     btn.classList.add('is-loading')
@@ -158,6 +133,8 @@ export function skipQuestButton(districtId, onDone) {
     btn.disabled = false
     btn.classList.remove('is-loading')
     if (!quote.success) { toast(skipError(quote)); return }
+    const v = questExitView(quote)
+    btn.innerHTML = `<span aria-hidden="true">⤴</span> ${esc(v.button)}`
     showOverlay(skipSheet(quote, districtId, onDone))
   }
   return btn

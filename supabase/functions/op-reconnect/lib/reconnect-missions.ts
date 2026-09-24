@@ -1598,6 +1598,13 @@ export async function removeReconnectParticipant(supabase: SupabaseDB, content: 
   // anyone" below — meant an agent who accepted an invite had no way out of
   // a stalled pairing at all, short of waiting out the mission's 7 days.
   const isLeaving = targetAgentNo === agentNo
+  // Self-exit is priced now (lib/quest-skip.ts). This route used to let an
+  // agent remove themselves free, unconditionally, and it DELETED their row —
+  // so the team also lost the streams they had pooled. Refusing it here is
+  // what stops the old endpoint, a second tab or a direct API call from
+  // bypassing Skip Quest's price, eligibility and cooldown. Owner and
+  // moderator removal of OTHER agents is untouched below.
+  if (isLeaving) return { success: false, error: 'use_quest_exit' }
 
   const pd = await myActivePd(supabase, agentNo, districtId)
   if (pd?.status !== 'active') return { success: false, error: 'not_eligible' }

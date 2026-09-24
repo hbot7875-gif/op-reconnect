@@ -1148,27 +1148,10 @@ function paintMissionPanel(box, d, res) {
       }
       head.appendChild(removeBtn)
     }
-    // Your own way out, whoever opened the mission. The creator already had
-    // levers; an agent who accepted an invite had none at all and could only
-    // wait out the 7-day expiry.
-    if (p.isMe && p.canLeave && p.status === 'joined') {
-      const leaveBtn = el('button', 'reconnect-remove', 'Leave')
-      leaveBtn.onclick = async (e) => {
-        e.stopPropagation() // sits inside the same clickable head as the checklist toggle
-        if (!window.confirm('Leave this ReConnect mission?\n\nYour team membership will be removed and you will need to team up again.')) return
-        leaveBtn.disabled = true
-        msg.textContent = ''
-        msg.classList.remove('is-error')
-        const r = await call('removeReconnectParticipant', { agentNo: me, districtId: d.id, targetAgentNo: p.agentNo })
-        if (r.success) { toast('Left the mission — you can team up with someone else now'); refresh() }
-        else {
-          msg.textContent = reconnectError(r.error)
-          msg.classList.add('is-error')
-          leaveBtn.disabled = false
-        }
-      }
-      head.appendChild(leaveBtn)
-    }
+    // The agent's own way out now lives in one priced entry point above
+    // (quest-skip.js): a free Leave here would have sat beside it and made
+    // Skip Quest pointless — and the old self-removal deleted the row, so
+    // teammates lost the streams the leaver had already pooled.
     list.append(row, msg)
   }
   box.appendChild(list)
