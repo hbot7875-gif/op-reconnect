@@ -152,13 +152,33 @@ export async function getBackupOverlay(
 export async function getBackupStatus(supabase: SupabaseDB, content: GameContent, params: Record<string, unknown>) {
   const agentNo = String(params.agentNo || '').trim().toUpperCase()
 
-  const { count: passCount } = await supabase.from('rc_player_items')
-    .select('id', { count: 'exact', head: true }).eq('agent_no', agentNo).eq('item_id', 'backup-pass').is('used_at', null)
-
-  const { data: ownerRow } = await supabase.from('rc_backup_requests')
+  const { data: rawOwnerRow } = await supabase.from('rc_backup_requests')
     .select('*').eq('owner_agent_no', agentNo).in('status', ['open', 'joined']).maybeSingle()
-  const { data: helperRow } = await supabase.from('rc_backup_requests')
-    .select('*').eq('helper_agent_no', agentNo).eq('status', 'joined').maybeSingle()
+  // Re-evaluate before reporting. getBackupOverlay only ever refreshes
+  // requests for the owner's CURRENT district, so an agent who moved on used
+  // to see a stale "waiting for a helper" forever — with the pass they spent
+  // never refunded and rc_backup_open refusing to let them open another.
+  // Reading their own status is the natural moment to resolve that.
+  let ownerRow = rawOwnerRow
+  if (rawOwnerRow) {
+    const pd = await myActivePd(supabase, agentNo, rawOwnerRow.district_id)
+    const goal = pd ? findFrozenGoal(pd, rawOwnerRow.goal_kind, rawOwnerRow.goal_ref) : null
+    const fresh = await refreshBackupRequest(supabase, {
+      ...rawOwnerRow, _keys: goal?.keys || [], _activatedAt: pd?.activated_at,
+    })
+    ownerRow = ['open', 'joined'].includes(fresh.status) ? fresh : null
+  }
+  // Counted AFTER the refresh above: resolving an expired request refunds the
+  // pass it consumed, and reading the count first would report the pre-refund
+  // number — the agent would be told they have 0 passes in the very response
+  // that just gave one back.
+  const [{ count: passCount }, { data: helperRow }] = await Promise.all([
+    supabase.from('rc_player_items')
+      .select('id', { count: 'exact', head: true })
+      .eq('agent_no', agentNo).eq('item_id', 'backup-pass').is('used_at', null),
+    supabase.from('rc_backup_requests')
+      .select('*').eq('helper_agent_no', agentNo).eq('status', 'joined').maybeSingle(),
+  ])
 
   return {
     success: true,

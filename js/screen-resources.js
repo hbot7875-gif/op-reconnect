@@ -34,7 +34,7 @@ import { call } from './api.js'
 import { badgeDrawerSheet } from './badge-drawer.js'
 import { itemArt, itemSheet, RARITY } from './items.js'
 import { agentChargeSheet } from './agent-charge.js'
-import { openBackupPassFlow } from './backup-pass.js'
+import { openBackupPassFlow, openBackupHelpFlow, countOpenBackupRequests } from './backup-pass.js'
 import { recelebrateKeepsake } from './arirang-recelebrate.js'
 
 /* ── Agent ID ─────────────────────────────────────────────────────────── */
@@ -251,6 +251,28 @@ function frontPocket(state) {
   if (backup) backupSlot.onclick = () => openBackupPassFlow(backup)
   else backupSlot.disabled = true
   grid.appendChild(backupSlot)
+
+  // The other half of Backup Pass: answering someone else's. Helping costs
+  // nothing and needs no pass of your own, so this slot is never locked —
+  // and without it no request could ever be joined at all (see
+  // backup-pass.js's helper section).
+  const helpSlot = el('button', 'pocket-slot')
+  helpSlot.type = 'button'
+  helpSlot.innerHTML = `
+    <span class="ps-icon">🫱</span>
+    <span><span class="ps-name">Help an agent</span><span class="ps-status">See who needs backup</span></span>
+  `
+  helpSlot.onclick = () => openBackupHelpFlow()
+  grid.appendChild(helpSlot)
+  // Live count, fetched after paint so the Pack never waits on it.
+  queueMicrotask(async () => {
+    const n = await countOpenBackupRequests()
+    if (n === null || !helpSlot.isConnected) return
+    const status = helpSlot.querySelector('.ps-status')
+    status.textContent = n === 0 ? 'Nobody needs backup right now'
+      : `${n} ${n === 1 ? 'agent needs' : 'agents need'} backup`
+    if (n > 0) helpSlot.classList.add('is-live')
+  })
 
   const tickets = items.filter((i) => i.kind === 'ticket')
   const unusedTickets = tickets.filter((i) => !i.usedAt)

@@ -28,12 +28,20 @@ const BATCH_DELAY_MS = 400
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 export async function adminSyncAllStreams(supabase: SupabaseDB, _params: Record<string, unknown>) {
+  // Backup Passes whose request expired without ever finding a helper: the
+  // pass goes back to its owner. A read-time refresh can't do this on its own
+  // — it only ever runs for the owner's CURRENT district, so an owner who
+  // moved on kept the request open and the pass destroyed (15 of them, and 19
+  // agents locked out of the feature, before the repair migration). Cheap,
+  // indexed and idempotent, so the hourly job carries it.
+  const { data: swept } = await supabase.rpc('rc_backup_sweep_expired')
+
   const content = await loadContent(supabase)
 
   const { data: players, error: playersErr } = await supabase
     .from('rc_players').select('agent_no, mode, joined_at, boost_expires_at, boost_multiplier')
   if (playersErr) return { success: false, error: playersErr.message }
-  if (!players || players.length === 0) return { success: true, total: 0, synced: 0, failed: 0, errors: [] }
+  if (!players || players.length === 0) return { success: true, total: 0, synced: 0, failed: 0, errors: [], backupSweep: swept || null }
 
   const agentNos = players.map((p: any) => p.agent_no)
   const [{ data: agentRows, error: agentsErr }, { data: activeDistricts, error: pdErr }] = await Promise.all([
@@ -80,5 +88,5 @@ export async function adminSyncAllStreams(supabase: SupabaseDB, _params: Record<
   // Capped, not truncated silently — a scheduled job's log is the only
   // place anyone will ever see this, so the first failures (usually the
   // same handful of broken sources) matter more than an exhaustive list.
-  return { success: true, total: players.length, synced, failed: errors.length, errors: errors.slice(0, 20) }
+  return { success: true, total: players.length, synced, failed: errors.length, errors: errors.slice(0, 20), backupSweep: swept || null }
 }

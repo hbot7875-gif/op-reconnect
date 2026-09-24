@@ -111,3 +111,85 @@ export async function openBackupPassFlow(item) {
   }
   showOverlay(goalPicker(item, district))
 }
+
+/* ── The helper side ──────────────────────────────────────────────────────
+   The audit found the reason no Backup Pass had EVER been joined in five
+   weeks of production: listOpenBackupRequests and joinBackupRequest were
+   routed and working on the server, but nothing in the client ever called
+   them. Owners could open a request; nobody could ever answer it, so all 41
+   requests expired unhelped. This is that missing half.
+
+   Helping costs nothing and needs no pass of your own — only the owner
+   spends one (see rc_backup_open) — so this is reachable whether or not the
+   agent is holding a Backup Pass. */
+
+const JOIN_ERRORS = {
+  not_found: 'That request is no longer available.',
+  not_open: 'Someone else got there first.',
+  expired: 'That request just expired.',
+  cannot_help_self: "That's your own request.",
+  already_helping_elsewhere: "You're already helping another agent — finish that one first.",
+  already_paired_this_goal: "You've already helped this agent with that goal.",
+}
+
+function helpRow(req, onJoined) {
+  const row = el('div', 'backup-help-row')
+  const label = req.goalKind === 'album' ? '💿 an album goal' : '🎵 a track goal'
+  row.innerHTML = `
+    <span class="bh-copy">
+      <span class="bh-name">${esc(req.ownerCodename)}</span>
+      <span class="bh-goal">${label} · ${req.originalTarget} → ${req.boostedTarget} while you help</span>
+    </span>
+  `
+  const join = el('button', 'btn btn-primary bh-join', 'Help')
+  join.type = 'button'
+  join.onclick = async () => {
+    join.disabled = true
+    join.textContent = 'Joining…'
+    const res = await call('joinBackupRequest', { agentNo: getAgentNo(), requestId: req.id })
+    if (!res?.success) {
+      join.disabled = false
+      join.textContent = 'Help'
+      toast(JOIN_ERRORS[res?.error] || "Couldn't join that one.")
+      return
+    }
+    hideOverlay()
+    toast(`You're backing up ${req.ownerCodename} — your streams on that goal now count for them.`)
+    onJoined?.()
+  }
+  row.appendChild(join)
+  return row
+}
+
+function helpSheet(requests, onJoined) {
+  const sheet = el('div', 'sheet backup-sheet')
+  sheet.append(el('div', 'eyebrow', 'BACKUP PASS'), el('h3', '', 'Agents needing backup'))
+  if (!requests.length) {
+    sheet.appendChild(el('p', 'muted', 'Nobody has an open Backup Pass right now. Check back later — they only last a few days.'))
+  } else {
+    sheet.appendChild(el('p', 'muted',
+      "Your own streams on their goal count toward it while you help. It costs you nothing, and you keep every stream for your own goals too."))
+    const list = el('div', 'backup-help-list')
+    for (const r of requests) list.appendChild(helpRow(r, onJoined))
+    sheet.appendChild(list)
+  }
+  const close = el('button', 'btn btn-ghost', 'Close')
+  close.onclick = hideOverlay
+  sheet.appendChild(close)
+  return sheet
+}
+
+/** The Pack's "Help an agent" slot. Helping needs no pass, so this is always
+ *  available — it just may have nobody to show. */
+export async function openBackupHelpFlow(onJoined) {
+  const res = await call('listOpenBackupRequests', { agentNo: getAgentNo() })
+  if (!res?.success) { toast("Couldn't load who needs backup."); return }
+  showOverlay(helpSheet(res.requests || [], onJoined))
+}
+
+/** How many agents are currently waiting for a helper — for the Pack slot's
+ *  subtitle, so the count is visible without opening anything. */
+export async function countOpenBackupRequests() {
+  const res = await call('listOpenBackupRequests', { agentNo: getAgentNo() })
+  return res?.success ? (res.requests || []).length : null
+}

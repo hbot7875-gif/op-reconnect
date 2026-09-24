@@ -3564,6 +3564,17 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
    Deliberately secondary: an outlined pill under the quest's own controls,
    no glow, no alarm colour. The sheet reuses the standard .sheet shell. */
 .xp-spendable small { display: block; margin-top: 2px; font-size: 10px; opacity: .8; }
+/* Backup Pass — the helper list (js/backup-pass.js) */
+.pocket-slot.is-live .ps-status { color: #d9ad5f; }
+.backup-help-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.backup-help-row { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px;
+  background: rgba(255,255,255,.02); }
+.bh-copy { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.bh-name { font-size: 12.5px; color: var(--text); }
+.bh-goal { font-family: var(--mono); font-size: 8.5px; letter-spacing: .6px; color: var(--muted); }
+.backup-sheet .bh-join { flex: none; width: auto; margin: 0; min-height: 40px; padding: 8px 16px; font-size: 11px; }
+
 .qs-row { margin: 10px 0 12px; }
 /* The entry point. Quiet on purpose — a bordered row, not a button, so it
    never competes with the primary Invite/Stream action above it. */
