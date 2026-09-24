@@ -3564,6 +3564,10 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
    Deliberately secondary: an outlined pill under the quest's own controls,
    no glow, no alarm colour. The sheet reuses the standard .sheet shell. */
 .xp-spendable small { display: block; margin-top: 2px; font-size: 10px; opacity: .8; }
+/* Pack tab dot — an agent has opened a Backup Pass since you last looked */
+.hud-tab { position: relative; }
+.hud-tab-dot { position: absolute; top: 4px; right: calc(50% - 16px); width: 7px; height: 7px;
+  border-radius: 50%; background: #d9ad5f; box-shadow: 0 0 0 2px var(--bg, #08070d); }
 /* Backup Pass — the helper list (js/backup-pass.js) */
 .pocket-slot.is-live .ps-status { color: #d9ad5f; }
 .backup-help-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }

@@ -179,11 +179,36 @@ function helpSheet(requests, onJoined) {
   return sheet
 }
 
+/* Which open requests this agent has already looked at. The Pack tab's dot
+   means "someone opened one since you last checked", not merely "requests
+   exist" — otherwise it would be permanently lit and stop meaning anything. */
+const SEEN_KEY = 'rc_backup_help_seen'
+
+export function backupHelpSeenAt() {
+  try { return localStorage.getItem(SEEN_KEY) || null } catch { return null }
+}
+
+export function markBackupHelpSeen(latestAt) {
+  try { if (latestAt) localStorage.setItem(SEEN_KEY, latestAt) } catch { /* private mode */ }
+}
+
+/** True when there is at least one open request newer than the last one this
+ *  agent looked at. */
+export function hasNewBackupRequests(backupHelp) {
+  if (!backupHelp?.open || !backupHelp.latestAt) return false
+  const seen = backupHelpSeenAt()
+  return !seen || new Date(backupHelp.latestAt).getTime() > new Date(seen).getTime()
+}
+
 /** The Pack's "Help an agent" slot. Helping needs no pass, so this is always
  *  available — it just may have nobody to show. */
 export async function openBackupHelpFlow(onJoined) {
   const res = await call('listOpenBackupRequests', { agentNo: getAgentNo() })
   if (!res?.success) { toast("Couldn't load who needs backup."); return }
+  // Looking at the list is what clears the dot.
+  const newest = (res.requests || []).map((r) => r.expiresAt).sort().slice(-1)[0]
+  const state = getState()
+  markBackupHelpSeen(state?.player?.backupHelp?.latestAt || newest || new Date().toISOString())
   showOverlay(helpSheet(res.requests || [], onJoined))
 }
 

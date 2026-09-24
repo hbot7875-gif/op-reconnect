@@ -14,6 +14,7 @@
 // no guessing: xpIntoLevel/xpForNextLevel come straight from the server.
 
 import { badgeThumb } from './badge-art.js'
+import { hasNewBackupRequests } from './backup-pass.js'
 import { call } from './api.js'
 import { el, esc, toast, setState, showOverlay, hideOverlay } from './state.js'
 import { getScreen, goWorld, goResources, goSettings, goCandyStar, goRanking, goDistrict } from './router.js'
@@ -512,6 +513,10 @@ const TABS = [
  *  between the two containers. */
 export function renderTabbar(container, state) {
   const here = getScreen().name
+  // A dot on Pack when another agent has opened a Backup Pass since this one
+  // last looked. Backup requests were invisible until you happened to open
+  // the Pack, which is why 41 of them expired without a single helper.
+  const backupDot = hasNewBackupRequests(state?.player?.backupHelp)
   const tabsHtml = TABS.map((t) => {
     const isSel = t.sel ? t.sel(here) : false
     const tag = t.href ? 'a' : 'button'
@@ -520,9 +525,11 @@ export function renderTabbar(container, state) {
     // flagged (see moonStationSheet's own comment) — it's what tells you
     // this tab is different from the rest, not a live status readout.
     const icoClass = t.key === 'moonstation' ? 'hud-tab-ico hud-tab-beacon' : 'hud-tab-ico'
-    return `<${tag} class="hud-tab${isSel ? ' sel' : ''}" data-tab="${t.key}" title="${esc(t.title || t.label)}"${attrs}>
+    const dot = t.key === 'resources' && backupDot
+    return `<${tag} class="hud-tab${isSel ? ' sel' : ''}${dot ? ' has-dot' : ''}" data-tab="${t.key}" title="${esc(dot ? 'An agent needs backup' : t.title || t.label)}"${attrs}>
       <span class="${icoClass}" aria-hidden="true">${t.icon}</span>
       <span class="hud-tab-lbl">${esc(t.label)}</span>
+      ${dot ? '<span class="hud-tab-dot" aria-label="An agent needs backup"></span>' : ''}
     </${tag}>`
   }).join('')
   container.innerHTML = `<div class="hud-tabs">${tabsHtml}</div>`

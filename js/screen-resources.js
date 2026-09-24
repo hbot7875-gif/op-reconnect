@@ -241,12 +241,15 @@ function frontPocket(state) {
   wrap.appendChild(el('span', 'pocket-seam-label', 'FRONT POCKET'))
   const grid = el('div', 'pocket-items')
 
-  const backup = items.find((i) => i.itemId === 'backup-pass' && !i.usedAt)
+  const backupAll = items.filter((i) => i.itemId === 'backup-pass' && !i.usedAt)
+  const backup = backupAll[0]
   const backupSlot = el('button', 'pocket-slot' + (backup ? '' : ' is-locked'))
   backupSlot.type = 'button'
   backupSlot.innerHTML = `
     <span class="ps-icon">🤝</span>
-    <span><span class="ps-name">Backup Pass</span><span class="ps-status">${backup ? 'Ready — tap to open' : '0 — earn one from a Supply Chest'}</span></span>
+    <span><span class="ps-name">Backup Pass</span><span class="ps-status">${backupAll.length
+      ? `${backupAll.length} ready — tap to open`
+      : '0 — earn one from a Supply Chest'}</span></span>
   `
   if (backup) backupSlot.onclick = () => openBackupPassFlow(backup)
   else backupSlot.disabled = true

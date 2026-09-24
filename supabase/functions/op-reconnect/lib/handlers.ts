@@ -479,6 +479,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
   const [
     modeReview, { data: badgeRows }, { data: itemRows }, broadcasts, cityFeed,
     waitingAgents, onlineNow, districtMessages, equippedMap, isBadgeVaultEditor, leaveInfo, vma,
+    { data: backupOpenRows },
   ] = await Promise.all([
     // A review hint only — see the note above getModeVolumeReview's caller.
     player.agent_no === 'AGENT120' ? Promise.resolve(null) : timed('modeReview', getModeVolumeReview(supabase, player.agent_no, player.mode)),
@@ -507,6 +508,13 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     timed('badgeEditor', isBadgeEditor(supabase, player.agent_no)),
     timed('leave', leaveStatus(supabase, player.agent_no)),
     timed('vma', getVmaBanner(supabase, content, player.agent_no)),
+    // Backup Passes other agents have open right now — one small indexed
+    // read so the Pack tab can show a dot without the client polling a
+    // second endpoint. latestAt drives "new since you last looked".
+    timed('backupHelp', supabase.from('rc_backup_requests')
+      .select('opened_at').eq('status', 'open').neq('owner_agent_no', player.agent_no)
+      .gt('expires_at', new Date().toISOString())
+      .order('opened_at', { ascending: false }).limit(50)),
   ])
   const equippedBadgeArtwork = equippedMap.get(player.agent_no) || null
   mark('batch3_tail')
@@ -552,6 +560,10 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
       isBadgeVaultEditor,
       // Leave / pause (lib/leave.ts): the leave in force, and when the next
       // one may start (null = right now).
+      backupHelp: {
+        open: (backupOpenRows || []).length,
+        latestAt: (backupOpenRows || [])[0]?.opened_at || null,
+      },
       leave: leaveInfo.leave,
       leaveAvailableAt: leaveInfo.availableAt,
     },
