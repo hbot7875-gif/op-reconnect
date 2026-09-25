@@ -24,7 +24,7 @@ import { amIPlaylistMaker, deleteCandyPlaylist, getCandyPlaylistLibrary, getPlay
 import { adminGetActiveDefuse, getDefuseMessages, sendDefuseMessage } from './lib/bomb.ts'
 import { adminCreateBroadcast, adminListBroadcasts, adminDeleteBroadcast } from './lib/broadcasts.ts'
 import { adminDeleteAgent, adminGetAgent, adminGetAgentTracks, adminScanAltAccounts, adminResetAgentXp, adminDeleteInactiveAgents, sendInactiveReminders, adminListAgents } from './lib/admin-agent.ts'
-import { adminSyncAllStreams } from './lib/sync-all.ts'
+import { adminCaptureStreamSources, adminSyncAllStreams } from './lib/sync-all.ts'
 import { startLeave, endLeave } from './lib/leave.ts'
 import { getQuestSkipQuote, skipQuest } from './lib/quest-skip.ts'
 import { adminListGoals, adminAddGoal, adminUpdateGoal, adminDeleteGoal } from './lib/goals.ts'
@@ -82,7 +82,7 @@ type Handler = (supabase: unknown, params: Record<string, unknown>) => Promise<u
 // 'badge' = a verified agent session PLUS membership of rc_config.badge_editors
 // (AGENT000 always). It unlocks the Badge Vault routes and nothing else — it
 // is deliberately not a general admin role. See lib/badge-admin.ts.
-interface Route { auth: 'public' | 'agent' | 'admin' | 'badge'; handler: Handler }
+interface Route { auth: 'public' | 'agent' | 'admin' | 'badge' | 'cron'; handler: Handler }
 
 const ROUTES: Record<string, Route> = {
   ping: { auth: 'public', handler: async () => ({ success: true, pong: true, at: new Date().toISOString() }) },
@@ -268,6 +268,11 @@ const ROUTES: Record<string, Route> = {
   sendInactiveReminders: { auth: 'admin', handler: (sb, p) => sendInactiveReminders(sb, p) },
   adminResetAgentXp: { auth: 'admin', handler: (sb, p) => adminResetAgentXp(sb, p) },
   adminSyncAllStreams: { auth: 'admin', handler: (sb, p) => adminSyncAllStreams(sb, p) },
+  // Called by Supabase Cron with a dedicated token generated in database
+  // Vault by the scheduler migration.
+  // This captures provider rows only; hourly adminSyncAllStreams still owns
+  // game rollups and XP conversion.
+  adminCaptureStreamSources: { auth: 'cron', handler: (sb, p) => adminCaptureStreamSources(sb, p) },
   adminGetEngagementReport: { auth: 'admin', handler: (sb, p) => adminGetEngagementReport(sb, p) },
 
   // Batch-assign a series of connect/invite missions for one reconnect goal
@@ -339,6 +344,13 @@ Deno.serve(async (req) => {
 
     if (route.auth === 'admin' && !isAdminAuthorized(params)) {
       return jsonResponse({ success: false, error: 'Unauthorized' }, 401)
+    }
+
+    if (route.auth === 'cron') {
+      const { data: validCron } = await supabase.rpc('rc_validate_stream_sync_token', {
+        p_token: String(params.cronToken || ''),
+      })
+      if (!validCron) return jsonResponse({ success: false, error: 'Unauthorized' }, 401)
     }
 
     const result = await route.handler(supabase, params)

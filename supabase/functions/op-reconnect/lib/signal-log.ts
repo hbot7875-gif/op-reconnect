@@ -5,7 +5,7 @@
 import { frozenDistrictDates } from './leave.ts'
 import type { SupabaseDB } from './config.ts'
 import { loadContent, limits, trackArtistOverrides } from './config.ts'
-import { fetchStreamRows, resolvedAgentStreamSource } from './streams.ts'
+import { fetchStreamRows } from './streams.ts'
 import { normalizeKey, normKeyFull, countedArtistPlays } from './text.ts'
 import { todayKst, kstDateOf, kstDayBounds } from './kst.ts'
 import { districtProgress } from './districts.ts'
@@ -219,18 +219,17 @@ export async function getMySelfCheck(supabase: SupabaseDB, params: Record<string
 
   const content = await loadContent(supabase)
   const lim = limits(content)
-  const [{ rows }, possibleAlts, { data: player }] = await Promise.all([
+  const [streamResult, possibleAlts, { data: player }] = await Promise.all([
     fetchStreamRows(supabase, agent, fromTs, toTs, lim.lbMaxPages),
     findPossibleAlts(supabase, agent),
     supabase.from('rc_players').select('mode').eq('agent_no', agentNo).maybeSingle(),
   ])
-  const streamSource = resolvedAgentStreamSource(agent)
-  // stats.fm exposes only its latest 50 streams. If a player syncs late,
-  // intervening songs can already have fallen out of that window, making
-  // two same-title rows look consecutive when they were not. Keep the rows
-  // and totals as a lower bound, but never make a repeat-timing judgment
-  // from that incomplete sequence.
-  const partialHistory = streamSource === 'statsfm'
+  const { rows, source: streamSource, partialReason } = streamResult
+  // A capped or failed provider response can omit intervening songs and make
+  // two same-title rows look consecutive when they were not. Keep known rows
+  // as a lower bound, but never judge repeat timing or mode fit unless the
+  // provider and stored window both confirmed complete coverage.
+  const partialHistory = !streamResult.ok || !streamResult.complete
   const tracks = flagStreamRows(rows, { trustSequence: !partialHistory })
   const excessStreamDays = flagExcessStreamDays(rows, player?.mode || 'easy')
 
@@ -244,6 +243,7 @@ export async function getMySelfCheck(supabase: SupabaseDB, params: Record<string
     tracks,
     streamSource,
     partialHistory,
+    partialReason,
     possibleAlts,
     mode: player?.mode || null,
     suggestedMode: excessStreamDays.length ? suggestedModeFor(player?.mode || 'easy') : null,

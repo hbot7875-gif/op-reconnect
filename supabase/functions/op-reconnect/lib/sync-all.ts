@@ -12,10 +12,11 @@
 // repo secret, never checked into source.
 
 import type { SupabaseDB } from './config.ts'
-import { loadContent } from './config.ts'
+import { loadContent, limits } from './config.ts'
 import { ensureDailyRollups } from './derive.ts'
 import type { GoalXpScope } from './derive.ts'
-import type { AgentSourceRow } from './streams.ts'
+import { fetchStreamRows, resolvedAgentStreamSource } from './streams.ts'
+import type { AgentSourceRow, StreamFetchResult } from './streams.ts'
 
 // Small concurrent batches, not all-at-once — this fans out to whatever
 // external service (ListenBrainz/stats.fm/musicat) each agent is on, and
@@ -26,6 +27,139 @@ const BATCH_SIZE = 5
 const BATCH_DELAY_MS = 400
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+type ScheduledSource = 'statsfm' | 'musicat' | 'listenbrainz'
+
+interface CoverageInput {
+  source: ScheduledSource
+  previousSource?: string | null
+  previousCoverageFrom?: string | null
+  previousProviderAt?: number | null
+  attemptedFrom: number
+  result: Pick<StreamFetchResult, 'ok' | 'complete' | 'partialReason' | 'providerRowCount' | 'providerOldestAt' | 'providerNewestAt'>
+}
+
+/** Pure coverage transition, exported for regression tests. A bounded source
+ *  proves continuity by overlapping the newest play saved by the previous
+ *  successful run. If 50 newer Stats.fm rows push that checkpoint out of the
+ *  response, coverage restarts at the oldest row we can still prove. */
+export function nextStreamCoverage(input: CoverageInput) {
+  if (!input.result.ok) return null
+  const sameSource = input.previousSource === input.source
+  const previousAt = sameSource ? Number(input.previousProviderAt) || 0 : 0
+  const oldest = Number(input.result.providerOldestAt) || 0
+  const newest = Number(input.result.providerNewestAt) || previousAt
+  const previousCoverage = sameSource && input.previousCoverageFrom
+    ? Math.floor(new Date(input.previousCoverageFrom).getTime() / 1000) : 0
+
+  let coverageFrom: number
+  let gapDetected = false
+  if (input.source === 'statsfm') {
+    const overlaps = previousAt > 0 && (input.result.providerRowCount === 0 || (oldest > 0 && oldest <= previousAt))
+    gapDetected = previousAt > 0 && !overlaps
+    coverageFrom = overlaps && previousCoverage > 0 ? previousCoverage : (oldest || Math.floor(Date.now() / 1000))
+  } else if (input.result.complete) {
+    coverageFrom = previousCoverage > 0 ? Math.min(previousCoverage, input.attemptedFrom) : input.attemptedFrom
+  } else {
+    coverageFrom = oldest || input.attemptedFrom
+    gapDetected = previousAt > 0
+  }
+
+  return { coverageFrom, newestProviderAt: Math.max(previousAt, newest), gapDetected }
+}
+
+/** Lightweight server collector. It only captures provider rows into the
+ *  shared rc_scrobbles ledger and advances a per-agent checkpoint; the hourly
+ *  job remains responsible for rollups/XP. Direct Pano/Web Scrobbler events
+ *  are intentionally absent because they already arrive one-by-one. */
+async function captureStreamSource(supabase: SupabaseDB, source: ScheduledSource) {
+  const content = await loadContent(supabase)
+  const maxPages = limits(content).lbMaxPages
+  const now = Math.floor(Date.now() / 1000)
+  const initialLookback = 7 * 86400
+  const { data: agents, error: agentsError } = await supabase.from('rc_agents')
+    .select('agent_no, lb_username, stream_source_preference, statsfm_username, musicat_public_id')
+  if (agentsError) return { success: false, error: agentsError.message }
+
+  const selected = (agents || []).filter((agent: AgentSourceRow) => resolvedAgentStreamSource(agent) === source)
+  if (!selected.length) return { success: true, source, total: 0, synced: 0, failed: 0, gaps: 0, errors: [] }
+  const agentNos = selected.map((agent: AgentSourceRow) => agent.agent_no)
+  const { data: states, error: statesError } = await supabase.from('rc_stream_sync_state')
+    .select('agent_no, source, coverage_from, last_provider_at, consecutive_failures').in('agent_no', agentNos)
+  if (statesError) return { success: false, error: statesError.message }
+  const stateByAgent = new Map((states || []).map((row: any) => [row.agent_no, row]))
+
+  let synced = 0
+  let gaps = 0
+  const errors: { agentNo: string; error: string }[] = []
+  for (let index = 0; index < selected.length; index += BATCH_SIZE) {
+    const batch = selected.slice(index, index + BATCH_SIZE)
+    await Promise.all(batch.map(async (agent: AgentSourceRow) => {
+      const state: any = stateByAgent.get(agent.agent_no)
+      const priorProviderAt = state?.source === source && state?.last_provider_at
+        ? Math.floor(new Date(state.last_provider_at).getTime() / 1000) : 0
+      // Five minutes of overlap protects same-second plays and clock skew;
+      // failed runs never advance the checkpoint, so the next run retries.
+      const fromTs = priorProviderAt > 0 ? Math.max(0, priorProviderAt - 300) : now - initialLookback
+      try {
+        // The collector itself must judge the fresh provider response. It
+        // cannot use yesterday's stored coverage to certify today's fetch,
+        // otherwise a newly introduced gap could validate itself.
+        const result = await fetchStreamRows(supabase, agent, fromTs, now, maxPages, { useStoredCoverage: false })
+        const coverage = nextStreamCoverage({
+          source, previousSource: state?.source, previousCoverageFrom: state?.coverage_from,
+          previousProviderAt: priorProviderAt, attemptedFrom: fromTs, result,
+        })
+        if (!coverage) {
+          errors.push({ agentNo: agent.agent_no, error: result.partialReason || 'provider_error' })
+          const failurePatch = {
+            agent_no: agent.agent_no, source, last_attempt_at: new Date().toISOString(),
+            last_error: result.partialReason || 'provider_error',
+            consecutive_failures: (Number(state?.consecutive_failures) || 0) + 1,
+          }
+          if (state) await supabase.from('rc_stream_sync_state').update(failurePatch).eq('agent_no', agent.agent_no)
+          else await supabase.from('rc_stream_sync_state').insert(failurePatch)
+          return
+        }
+        if (coverage.gapDetected) gaps++
+        const patch = {
+          agent_no: agent.agent_no,
+          source,
+          last_attempt_at: new Date().toISOString(),
+          last_success_at: new Date().toISOString(),
+          last_provider_at: coverage.newestProviderAt > 0 ? new Date(coverage.newestProviderAt * 1000).toISOString() : null,
+          coverage_from: new Date(coverage.coverageFrom * 1000).toISOString(),
+          last_error: coverage.gapDetected ? 'coverage_gap' : null,
+          consecutive_failures: 0,
+        }
+        const { error } = await supabase.from('rc_stream_sync_state').upsert(patch, { onConflict: 'agent_no' })
+        if (error) throw error
+        synced++
+      } catch (error) {
+        errors.push({ agentNo: agent.agent_no, error: error instanceof Error ? error.message : String(error) })
+      }
+    }))
+    if (index + BATCH_SIZE < selected.length) await delay(BATCH_DELAY_MS)
+  }
+  return { success: true, source, total: selected.length, synced, failed: errors.length, gaps, errors: errors.slice(0, 20) }
+}
+
+export async function adminCaptureStreamSources(supabase: SupabaseDB, params: Record<string, unknown>) {
+  const source = String(params.source || '').toLowerCase() as ScheduledSource
+  if (!['statsfm', 'musicat', 'listenbrainz'].includes(source)) {
+    return { success: false, error: 'invalid_stream_source' }
+  }
+  const { data: locked, error: lockError } = await supabase.rpc('rc_stream_sync_try_lock', {
+    p_source: source, p_lease_seconds: source === 'statsfm' ? 240 : 720,
+  })
+  if (lockError) return { success: false, error: lockError.message }
+  if (!locked) return { success: true, source, skipped: true, reason: 'sync_already_running' }
+  try {
+    return await captureStreamSource(supabase, source)
+  } finally {
+    await supabase.rpc('rc_stream_sync_release_lock', { p_source: source })
+  }
+}
 
 export async function adminSyncAllStreams(supabase: SupabaseDB, _params: Record<string, unknown>) {
   // Backup Passes whose request expired without ever finding a helper: the

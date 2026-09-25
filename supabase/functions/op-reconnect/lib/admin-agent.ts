@@ -9,7 +9,7 @@ import { loadContent, rankFor, limits, restorationDays } from './config.ts'
 import { totalXp } from './derive.ts'
 import { levelFor } from './leveling.ts'
 import { districtDeadline, DEADLINE_EXTENSION_DAYS } from './districts.ts'
-import { fetchStreamRows, resolvedAgentStreamSource } from './streams.ts'
+import { fetchStreamRows } from './streams.ts'
 import { flagStreamRows, findPossibleAlts, modesByAgentNo, IDENTITY_FIELDS, flagExcessStreamDays } from './police-check.ts'
 import { suggestedModeFor } from './mode-guard.ts'
 import { sendMail, bombReminderEmail, mailerConfigured } from './mailer.ts'
@@ -255,7 +255,7 @@ export async function adminGetAgentTracks(supabase: SupabaseDB, params: any) {
 
   const content = await loadContent(supabase)
   const lim = limits(content)
-  const [{ rows }, possibleAlts, playerRow] = await Promise.all([
+  const [streamResult, possibleAlts, playerRow] = await Promise.all([
     fetchStreamRows(supabase, {
       agent_no: agent.agent_no,
       lb_username: agent.lb_username,
@@ -269,14 +269,8 @@ export async function adminGetAgentTracks(supabase: SupabaseDB, params: any) {
     supabase.from('rc_players').select('mode').eq('agent_no', agent.agent_no).maybeSingle(),
   ])
 
-  const streamSource = resolvedAgentStreamSource({
-    agent_no: agent.agent_no,
-    lb_username: agent.lb_username,
-    stream_source_preference: agent.stream_source_preference,
-    statsfm_username: agent.statsfm_username,
-    musicat_public_id: agent.musicat_public_id,
-  })
-  const partialHistory = streamSource === 'statsfm'
+  const { rows, source: streamSource, partialReason } = streamResult
+  const partialHistory = !streamResult.ok || !streamResult.complete
   const tracks = flagStreamRows(rows, { trustSequence: !partialHistory })
   const excessStreamDays = flagExcessStreamDays(rows, playerRow?.data?.mode || 'easy')
 
@@ -291,6 +285,7 @@ export async function adminGetAgentTracks(supabase: SupabaseDB, params: any) {
     tracks,
     streamSource,
     partialHistory,
+    partialReason,
     possibleAlts,
     suggestedMode: excessStreamDays.length ? suggestedModeFor(playerRow?.data?.mode || 'easy') : null,
     excessStreamDays,

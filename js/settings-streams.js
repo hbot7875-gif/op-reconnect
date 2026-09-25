@@ -369,9 +369,9 @@ function moonStationSheet() {
   const sheet = el('div', 'sheet set-sheet')
   sheet.append(
     el('div', 'ms-beacon-row', '<span class="ms-beacon" aria-hidden="true">🚨</span><span class="eyebrow">MOON STATION (UNDER TEST)</span>'),
-    el('h3', '', 'Your own police check'),
-    el('p', 'muted', "HT checks repeat timing, linked identities and whether your daily totals fit your streaming mode."),
-    el('p', 'muted', "One high day won't trigger anything. If your totals stay much higher than your selected mode, you'll be asked to review and switch to a better fit."),
+    el('h3', '', 'Your stream check'),
+    el('p', 'muted', "HT checks your recent streaming pattern, linked accounts and whether your daily pace matches your mode."),
+    el('p', 'muted', "One big streaming day is okay. HT only asks you to check your mode when your pace stays much higher for several days."),
   )
   const body = el('div', 'sig-body', '<p class="muted">Checking…</p>')
   sheet.appendChild(body)
@@ -388,40 +388,45 @@ function moonStationSheet() {
     }
 
     body.appendChild(el('div', 'sig-summary', `
-      <span><b>${res.trackCount}${res.partialHistory ? '+' : ''}</b> streams ${res.partialHistory ? 'seen' : ''} &middot; last ${res.windowDays}d</span>
-      <span class="${res.flaggedCount ? 'is-flagged' : ''}"><b>${res.flaggedCount}</b> flagged</span>
+      <span><b>${res.trackCount}${res.partialHistory ? '+' : ''}</b> streams checked &middot; last ${res.windowDays}d</span>
+      <span class="${res.flaggedCount ? 'is-flagged' : ''}"><b>${res.flaggedCount}</b> to review</span>
     `))
 
     if (res.partialHistory) {
+      const sourceNames = { statsfm: 'Stats.fm', musicat: 'Musicat', listenbrainz: 'ListenBrainz', direct: 'scrobbler' }
+      const sourceName = sourceNames[res.streamSource] || 'stream'
+      const coverageCopy = res.partialReason === 'database_limit'
+        ? `Your streams are safe. HT won't review your streaming pace until this check is ready.`
+        : `Some recent streams may be missing. HT won't review your streaming pace until the full history is ready.`
       body.appendChild(el('div', 'ms-coverage-note', `
-        <b>Partial Stats.fm history</b>
-        <p class="muted">Stats.fm gives HT only the latest 50 streams each time you sync. If Sync happens late, some songs between them may be missing. Repeat timing and mode-fit checks are unavailable for this window.</p>
+        <b>Sync catching up · ${esc(sourceName)}</b>
+        <p class="muted">${esc(coverageCopy)}</p>
       `))
     }
 
     const alts = res.possibleAlts || []
     if (alts.length) {
       const lines = alts.map((a) =>
-        `Same ${esc(a.via)} identity as <b>${esc(a.handle || a.agentNo)}</b> (${esc(a.agentNo)})`).join('<br>')
-      body.appendChild(el('div', 'sig-alt-warn', `<b>⚠ Possible alt account${alts.length === 1 ? '' : 's'}</b><br>${lines}`))
+        `${esc(a.via)} is also linked to <b>${esc(a.handle || a.agentNo)}</b> (${esc(a.agentNo)})`).join('<br>')
+      body.appendChild(el('div', 'sig-alt-warn', `<b>⚠ Streaming account linked twice</b><br>${lines}`))
     }
 
     // Review hint only. We do not know track duration or device identity,
     // so high totals never change a player's mode or goals automatically.
     const excessStreamDays = res.excessStreamDays || []
     const modeNames = { exam: 'School/Exam', easy: 'Easy', steady: 'Easy+', medium: 'Medium', hard: 'Hard' }
-    if (excessStreamDays.length) {
+    if (!res.partialHistory && excessStreamDays.length) {
       const suggestion = modeNames[res.suggestedMode] || res.suggestedMode
       const rows = excessStreamDays.map((d) =>
         `<div class="ms-excess-row"><b>${esc(d.date)}</b><span>${d.streams} streams</span></div>`).join('')
       body.appendChild(el('div', 'sig-alt-warn', `
-        <b>⚠ Check your streaming mode</b>
-        <p class="muted">We saw high totals on ${excessStreamDays.length} day${excessStreamDays.length === 1 ? '' : 's'}.${suggestion ? ` ${esc(suggestion)} may fit your recent pace better.` : ' Check that your mode still matches your accounts.'} Your mode and current goals were not changed.</p>
+        <b>⚠ Check your streaming pace</b>
+        <p class="muted">Your totals were above your current mode on ${excessStreamDays.length} day${excessStreamDays.length === 1 ? '' : 's'}.${suggestion ? ` Your recent pace looks closer to ${esc(suggestion)}.` : ' Check whether your mode still matches your accounts and devices.'} Nothing was changed automatically.</p>
         ${rows}
       `))
     } else if (res.mode && !res.partialHistory) {
       body.appendChild(el('div', 'sig-summary', `
-        <span><b>✓ ${esc(modeNames[res.mode] || res.mode)} fits your recent totals</b></span>
+        <span><b>✓ ${esc(modeNames[res.mode] || res.mode)} matches your streaming pace</b></span>
       `))
     }
 
@@ -442,7 +447,7 @@ function moonStationSheet() {
     sequence.forEach((t, i) => {
       const flagged = (t.flags || []).length > 0
       const badges = (t.flags || []).map((f) =>
-        `<span class="sig-badge">${f === 'repeat' ? '🔁 repeat' : esc(f)}</span>`).join('')
+        `<span class="sig-badge">${f === 'repeat' ? '🔁 played too close' : esc(f)}</span>`).join('')
       const when = new Date(t.at).toLocaleString(undefined, {
         month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
       })

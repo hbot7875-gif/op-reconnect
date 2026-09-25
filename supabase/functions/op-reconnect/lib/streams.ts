@@ -12,6 +12,19 @@ export interface StreamRow {
   listened_at: number // unix seconds
 }
 
+export type StreamCoverageReason = 'recent_limit' | 'page_limit' | 'provider_error' | 'database_limit' | 'database_error'
+
+export interface StreamFetchResult {
+  rows: StreamRow[]
+  ok: boolean
+  complete: boolean
+  partialReason: StreamCoverageReason | null
+  source: 'listenbrainz' | 'direct' | 'statsfm' | 'musicat'
+  providerRowCount: number
+  providerOldestAt: number | null
+  providerNewestAt: number | null
+}
+
 export interface AgentSourceRow {
   agent_no: string
   lb_username: string | null
@@ -51,9 +64,10 @@ const delay = (ms: number) => new Promise((r) => setTimeout(r, ms))
 // bug: a transient failure produced the same empty bucket as a real zero,
 // silently overwriting and erasing whatever real streams that day already
 // had recorded from an earlier, successful poll.
-async function fetchListenBrainz(lbUser: string, fromTs: number, toTs: number, maxPages: number): Promise<{ rows: StreamRow[]; ok: boolean }> {
+async function fetchListenBrainz(lbUser: string, fromTs: number, toTs: number, maxPages: number): Promise<{ rows: StreamRow[]; ok: boolean; complete: boolean; partialReason: StreamCoverageReason | null }> {
   const rows: StreamRow[] = []
   let cursor = toTs
+  let complete = false
   for (let page = 0; page < maxPages; page++) {
     if (page > 0) await delay(150)
     const url = `https://api.listenbrainz.org/1/user/${encodeURIComponent(lbUser)}/listens?count=100&max_ts=${cursor}`
@@ -62,11 +76,11 @@ async function fetchListenBrainz(lbUser: string, fromTs: number, toTs: number, m
       await delay(2000)
       res = await fetch(url, { headers: { 'User-Agent': 'HopeTracker/1.0' } }).catch(() => null)
     }
-    if (!res || !res.ok) return { rows, ok: false }
+    if (!res || !res.ok) return { rows, ok: false, complete: false, partialReason: 'provider_error' }
     const data = await res.json().catch(() => null)
-    if (data === null) return { rows, ok: false }
+    if (data === null) return { rows, ok: false, complete: false, partialReason: 'provider_error' }
     const listens: any[] = data?.payload?.listens || []
-    if (listens.length === 0) break
+    if (listens.length === 0) { complete = true; break }
     let oldest = cursor
     for (const l of listens) {
       const ts = l.listened_at
@@ -76,17 +90,17 @@ async function fetchListenBrainz(lbUser: string, fromTs: number, toTs: number, m
       if (ts < fromTs || ts > toTs) continue
       rows.push({ track_name: md.track_name, artist_name: md.artist_name || '', album_name: md.release_name || '', listened_at: ts })
     }
-    if (listens.length < 100) break
+    if (listens.length < 100) { complete = true; break }
     cursor = oldest - 1
-    if (cursor < fromTs) break
+    if (cursor < fromTs) { complete = true; break }
   }
-  return { rows, ok: true }
+  return { rows, ok: true, complete, partialReason: complete ? null : 'page_limit' }
 }
 
 // Both direct-scrobble protocols (Web Scrobbler's webhook, the
 // ListenBrainz-like route Pano Scrobbler uses) land in rc_scrobbles tagged
 // 'webhook'/'lb-like' — pull both, this preference doesn't distinguish them.
-async function fetchDirectScrobbles(supabase: SupabaseDB, agentNo: string, fromTs: number, toTs: number): Promise<StreamRow[]> {
+async function fetchDirectScrobbles(supabase: SupabaseDB, agentNo: string, fromTs: number, toTs: number): Promise<{ rows: StreamRow[]; ok: boolean; complete: boolean; partialReason: StreamCoverageReason | null }> {
   const PAGE = 1000
   const MAX_ROWS = 20000
   const rows: StreamRow[] = []
@@ -100,14 +114,15 @@ async function fetchDirectScrobbles(supabase: SupabaseDB, agentNo: string, fromT
       .lte('listened_at', toTs)
       .order('listened_at', { ascending: false })
       .range(offset, offset + PAGE - 1)
-    if (error || !data || data.length === 0) break
+    if (error) return { rows, ok: false, complete: false, partialReason: 'database_error' }
+    if (!data || data.length === 0) return { rows, ok: true, complete: true, partialReason: null }
     for (const r of data) {
       rows.push({ track_name: r.track_name || '', artist_name: r.artist_name || '', album_name: r.album_name || '', listened_at: r.listened_at })
     }
-    if (data.length < PAGE) break
+    if (data.length < PAGE) return { rows, ok: true, complete: true, partialReason: null }
     offset += PAGE
   }
-  return rows
+  return { rows, ok: true, complete: false, partialReason: 'database_limit' }
 }
 
 // stats.fm's public API has no date-range filter on /streams/recent — it's
@@ -120,11 +135,12 @@ async function fetchDirectScrobbles(supabase: SupabaseDB, agentNo: string, fromT
 // more than 50 times in a day) silently vanished from already-counted
 // history on the next poll — completed goals un-completing, XP dropping
 // mid-day, counts going backwards. See derive.ts ensureDailyRollups.
-async function fetchStatsFm(username: string): Promise<StreamRow[]> {
+async function fetchStatsFm(username: string): Promise<{ rows: StreamRow[]; ok: boolean }> {
   const url = `https://api.stats.fm/api/v1/users/${encodeURIComponent(username)}/streams/recent?limit=50`
   const res = await fetch(url).catch(() => null)
-  if (!res || !res.ok) return []
+  if (!res || !res.ok) return { rows: [], ok: false }
   const data = await res.json().catch(() => null)
+  if (data === null) return { rows: [], ok: false }
   const items: any[] = Array.isArray(data?.items) ? data.items : []
   const rows: StreamRow[] = []
   for (const it of items) {
@@ -140,7 +156,7 @@ async function fetchStatsFm(username: string): Promise<StreamRow[]> {
       listened_at: ts,
     })
   }
-  return rows
+  return { rows, ok: true }
 }
 
 // Musicat has no date-range filter on listening-history — pages of 50,
@@ -158,7 +174,7 @@ async function fetchStatsFm(username: string): Promise<StreamRow[]> {
 // 'Z' has to be appended before Date can parse it correctly.
 const MUSICAT_PAGE_SIZE = 50
 const MUSICAT_MAX_PAGES = 20
-async function fetchMusicat(publicId: string, fromTs: number, toTs: number): Promise<StreamRow[]> {
+async function fetchMusicat(publicId: string, fromTs: number, toTs: number): Promise<{ rows: StreamRow[]; ok: boolean; complete: boolean; partialReason: StreamCoverageReason | null }> {
   const rows: StreamRow[] = []
   for (let page = 0; page < MUSICAT_MAX_PAGES; page++) {
     if (page > 0) await delay(150)
@@ -167,9 +183,10 @@ async function fetchMusicat(publicId: string, fromTs: number, toTs: number): Pro
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer empty' },
       body: JSON.stringify({ publicUserId: publicId, range: { start: null, end: null }, sorting: 'DESC', page }),
     }).catch(() => null)
-    if (!res || !res.ok) break
+    if (!res || !res.ok) return { rows, ok: false, complete: false, partialReason: 'provider_error' }
     const items = await res.json().catch(() => null)
-    if (!Array.isArray(items) || items.length === 0) break
+    if (!Array.isArray(items)) return { rows, ok: false, complete: false, partialReason: 'provider_error' }
+    if (items.length === 0) return { rows, ok: true, complete: true, partialReason: null }
 
     let reachedOlder = false
     for (const it of items) {
@@ -188,9 +205,9 @@ async function fetchMusicat(publicId: string, fromTs: number, toTs: number): Pro
         listened_at: ts,
       })
     }
-    if (reachedOlder || items.length < MUSICAT_PAGE_SIZE) break
+    if (reachedOlder || items.length < MUSICAT_PAGE_SIZE) return { rows, ok: true, complete: true, partialReason: null }
   }
-  return rows
+  return { rows, ok: true, complete: false, partialReason: 'page_limit' }
 }
 
 // stats.fm and musicat are both bounded "recent window" APIs (50 items hard
@@ -239,33 +256,59 @@ export async function fetchStreamRows(
   fromTs: number,
   toTs: number,
   lbMaxPages: number,
-): Promise<{ rows: StreamRow[]; ok: boolean }> {
+  options: { useStoredCoverage?: boolean } = {},
+): Promise<StreamFetchResult> {
   const source = resolvedAgentStreamSource(agent)
 
   let rows: StreamRow[]
   let ok = true
+  let complete = true
+  let partialReason: StreamCoverageReason | null = null
+  let providerRows: StreamRow[] = []
   if (source === 'listenbrainz') {
     const lb = await fetchListenBrainz((agent.lb_username || '').trim(), fromTs, toTs, lbMaxPages)
     rows = lb.rows
+    providerRows = lb.rows
     ok = lb.ok
+    complete = lb.complete
+    partialReason = lb.partialReason
     // Keep the same timestamped source-of-truth every other provider uses.
     // Red Zone needs exact launch/deadline boundaries; a KST-day rollup can
     // never tell whether a play happened before launch or after expiry.
     // Persisting the successful LB window makes those exact timestamps
     // available without changing ordinary daily counting.
-    if (ok) await persistScrobbles(supabase, agent.agent_no, rows, 'listenbrainz')
+    // Rows returned before a later page failed are still valid history. Save
+    // them, but keep ok/complete false so no caller mistakes the partial
+    // window for a trustworthy full-day recompute or timing sequence.
+    if (rows.length) await persistScrobbles(supabase, agent.agent_no, rows, 'listenbrainz')
   } else {
     if (source === 'statsfm' && agent.statsfm_username) {
       // Persist the live snapshot, then read the return value back from the
       // accumulated table windowed to what was actually asked for — never
       // hand the caller the raw, possibly-truncated live fetch directly.
-      await persistScrobbles(supabase, agent.agent_no, await fetchStatsFm(agent.statsfm_username), 'statsfm')
-      rows = await fetchDirectScrobbles(supabase, agent.agent_no, fromTs, toTs)
+      const provider = await fetchStatsFm(agent.statsfm_username)
+      providerRows = provider.rows
+      if (provider.rows.length) await persistScrobbles(supabase, agent.agent_no, provider.rows, 'statsfm')
+      const stored = await fetchDirectScrobbles(supabase, agent.agent_no, fromTs, toTs)
+      rows = stored.rows
+      ok = provider.ok && stored.ok
+      complete = false
+      partialReason = provider.ok ? 'recent_limit' : 'provider_error'
     } else if (source === 'musicat' && agent.musicat_public_id) {
-      await persistScrobbles(supabase, agent.agent_no, await fetchMusicat(agent.musicat_public_id, fromTs, toTs), 'musicat')
-      rows = await fetchDirectScrobbles(supabase, agent.agent_no, fromTs, toTs)
+      const provider = await fetchMusicat(agent.musicat_public_id, fromTs, toTs)
+      providerRows = provider.rows
+      if (provider.rows.length) await persistScrobbles(supabase, agent.agent_no, provider.rows, 'musicat')
+      const stored = await fetchDirectScrobbles(supabase, agent.agent_no, fromTs, toTs)
+      rows = stored.rows
+      ok = provider.ok && stored.ok
+      complete = provider.complete && stored.complete
+      partialReason = !provider.complete ? provider.partialReason : stored.partialReason
     } else {
-      rows = await fetchDirectScrobbles(supabase, agent.agent_no, fromTs, toTs)
+      const stored = await fetchDirectScrobbles(supabase, agent.agent_no, fromTs, toTs)
+      rows = stored.rows
+      ok = stored.ok
+      complete = stored.complete
+      partialReason = stored.partialReason
     }
   }
 
@@ -279,5 +322,30 @@ export async function fetchStreamRows(
     seen.add(key)
     out.push(r)
   }
-  return { rows: out, ok }
+
+  // A recent-window source can be trustworthy once the server-side collector
+  // has maintained an unbroken overlap for the whole requested window. The
+  // provider response itself is still bounded; rc_stream_sync_state is the
+  // durable proof that the accumulated rc_scrobbles window has no known gap.
+  if (options.useStoredCoverage !== false && !complete && (source === 'statsfm' || source === 'musicat')) {
+    const { data: coverage } = await supabase.from('rc_stream_sync_state')
+      .select('source, coverage_from, last_success_at')
+      .eq('agent_no', agent.agent_no).maybeSingle()
+    const coverageFrom = coverage?.coverage_from ? Math.floor(new Date(coverage.coverage_from).getTime() / 1000) : 0
+    const lastSuccess = coverage?.last_success_at ? new Date(coverage.last_success_at).getTime() : 0
+    const freshForSource = source === 'statsfm' ? 12 * 60_000 : 35 * 60_000
+    if (coverage?.source === source && coverageFrom > 0 && coverageFrom <= fromTs
+      && lastSuccess > 0 && Date.now() - lastSuccess <= freshForSource) {
+      complete = true
+      partialReason = null
+    }
+  }
+
+  const providerTimes = providerRows.map((r) => Number(r.listened_at)).filter(Number.isFinite)
+  return {
+    rows: out, ok, complete, partialReason, source,
+    providerRowCount: providerRows.length,
+    providerOldestAt: providerTimes.length ? Math.min(...providerTimes) : null,
+    providerNewestAt: providerTimes.length ? Math.max(...providerTimes) : null,
+  }
 }
