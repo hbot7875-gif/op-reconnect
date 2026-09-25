@@ -133,6 +133,10 @@ export function badgeStory(e, state) {
   if (e.templateId === 'district_restored') return `Fully restored ${place}.`
   if (e.templateId === 'ward') return `Restored every district in ${ward?.name || e.scopeId || 'a ward'}.`
   if (e.templateId === 'mission_bond') return 'Completed a ReConnect quest with another agent.'
+  // Without this the reveal falls through to unlock_hint, which is written
+  // as an instruction ("Back up another agent's goal...") — an odd thing to
+  // read in a popup congratulating you for having already done it.
+  if (e.templateId === 'backup_helper') return 'Backed up another agent — streamed toward their goal alongside them.'
   if (e.templateId === 'event_vma_voter') return 'Voted for BTS in the 2026 MTV VMAs mission.'
   if (e.templateId === 'event_vma_power_hour') return 'Voted for BTS during a VMA Power Hour.'
   if (e.templateId === 'event_vma_double_day') return 'Voted for BTS on a VMA Double Day.'
