@@ -293,6 +293,47 @@ export async function joinBackupRequest(supabase: SupabaseDB, params: Record<str
   return { success: true }
 }
 
+/** The OWNER ends their own request. Until this existed only the helper
+ *  could end a pairing: an owner whose helper joined and then went quiet was
+ *  stuck for the full 5-day TTL — they couldn't remove them, couldn't get
+ *  the pass back, and couldn't open another, because rc_backup_open refuses
+ *  while one is open or joined. The only ways out were finishing the goal
+ *  solo or waiting for expiry.
+ *
+ *  Settlement is deliberately the SAME rule every other close path uses, so
+ *  this is an exit, not a loophole: a helper who streamed nothing means the
+ *  pass comes back; a helper who streamed anything keeps their credit banked
+ *  permanently (and their badge), and the pass stays spent. Ending early can
+ *  never claw back help that was actually given. */
+export async function closeMyBackupRequest(supabase: SupabaseDB, content: GameContent, params: Record<string, unknown>) {
+  const agentNo = String(params.agentNo || '').trim().toUpperCase()
+  const { data: row } = await supabase.from('rc_backup_requests').select('*')
+    .eq('owner_agent_no', agentNo).in('status', ['open', 'joined']).maybeSingle()
+  if (!row) return { success: false, error: 'no_open_request' }
+
+  const pd = await myActivePd(supabase, agentNo, row.district_id)
+  const goal = pd ? findFrozenGoal(pd, row.goal_kind, row.goal_ref) : null
+  const helperContribution = row.status === 'joined' && goal && row.joined_at
+    ? await contributionSince(supabase, row.helper_agent_no, row.joined_at, goal.keys)
+    : 0
+  const ownerProgress = goal && pd ? await ownerRawProgress(supabase, agentNo, pd.activated_at, goal.keys) : 0
+
+  const { data, error } = await supabase.rpc('rc_backup_close', {
+    p_request_id: row.id, p_reason: 'owner_ended',
+    p_owner_progress: ownerProgress, p_helper_contribution: helperContribution,
+  })
+  if (error) return { success: false, error: error.message }
+  if (!data?.success) return { success: false, error: data?.error || 'close_failed' }
+  return {
+    success: true,
+    status: data.status,
+    bankedCredit: data.bankedCredit || 0,
+    // The pass only comes back when nothing was contributed — rc_backup_close
+    // is the single place that decides this, for every path.
+    refunded: data.status === 'expired' || data.status === 'cancelled',
+  }
+}
+
 /** The helper explicitly leaves — one of the four things allowed to end a
  *  Backup Pass (never mere inactivity). Computes their real contribution so
  *  far and hands it to rc_backup_close, which decides refund vs. bank. */

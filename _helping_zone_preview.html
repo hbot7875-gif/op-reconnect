@@ -49,6 +49,10 @@ const states = [
     req('bangtangirl', 'Dynamite', 200, 240, 4),
     req('hobiwater', 'Chicken Noodle Soup', 15, 18, 0.5),
   ] }],
+  ['OWN REQUEST — helper joined but barely streaming', { success: true, backupPasses: 0, asHelper: null, openRequests: [], asOwner: {
+    ...ownWaiting, status: 'joined', helperCodename: 'ghosted', ownProgress: 205, helperContribution: 5,
+    originalTarget: 250, boostedTarget: 300,
+  } }],
   ['HELPING + OWN REQUEST AT ONCE', { success: true, backupPasses: 0, asOwner: ownJoined, asHelper: helping, openRequests: [
     req('taegukgi', 'Like Crazy', 88, 106, 30),
   ] }],
@@ -58,7 +62,9 @@ const w = document.getElementById('w')
 for (const [cap, data] of states) {
   const c = el('div', 'col')
   c.appendChild(el('p', 'cap', cap))
-  c.appendChild(helpingZonePreview(data))
+  // A real `show` so the sheets behind View progress / End my pass render
+  // here too, inline under their own state rather than in a modal.
+  c.appendChild(helpingZonePreview(data, { show: (node) => c.appendChild(node), reload: () => {} }))
   w.appendChild(c)
 }
 </script></body></html>

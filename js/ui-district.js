@@ -21,6 +21,29 @@ export { districtFraction } from './district-progress.js'
  *  only while a Backup Pass helper is active (or their credit is banked). The
  *  server has always sent it; without showing it, a helper joining looked like
  *  the target mysteriously jumping (26 -> 32) with nothing to explain it. */
+/** Both ways a backed-up goal can finish, said out loud.
+ *
+ *  districts.ts completes it on `total >= originalTarget || pooled >=
+ *  boostedTarget` — the raised number is an EXTRA route, never a
+ *  replacement. The row only ever showed the raised target, which reads as a
+ *  punishment when a helper joins and then contributes almost nothing: an
+ *  owner sitting on 205 saw "205 / 300" and reasonably concluded a near-idle
+ *  helper had set them back 50 streams. They hadn't — 250 of their own still
+ *  finishes it. Printing both numbers is the whole fix.
+ *
+ *  Track goals send ownProgress, album goals send ownPasses (districts.ts) —
+ *  read either, or the album row prints "you undefined". */
+function backupLine(backup, target) {
+  const own = backup.ownProgress ?? backup.ownPasses ?? 0
+  const split = `you ${own} + helper ${backup.bonus}`
+  // target > originalTarget means a helper is active. Equal means their
+  // credit is already banked and the bar is back to the original number.
+  const how = target > backup.originalTarget
+    ? `${target} together, or ${backup.originalTarget} on your own`
+    : `${backup.originalTarget} to finish`
+  return `<div class="gr-backup"><span class="grb-tag">🤝 Backup</span><span class="grb-split">${split} · ${how}</span></div>`
+}
+
 function goalRow(label, sub, progress, target, done, unit, backup = null) {
   const pct = Math.min(100, Math.round((progress / Math.max(1, target)) * 100))
   const row = el('div', 'goal-row' + (done ? ' done' : '') + (backup ? ' has-backup' : ''))
@@ -31,7 +54,7 @@ function goalRow(label, sub, progress, target, done, unit, backup = null) {
     </div>
     ${done ? '' : `<div class="gr-bar" role="progressbar" aria-label="${esc(label)} progress" aria-valuemin="0" aria-valuemax="${target}" aria-valuenow="${Math.min(target, progress)}"><div class="gr-fill" style="width:${pct}%"></div></div>`}
     ${sub ? `<div class="gr-sub">${sub}</div>` : ''}
-    ${backup ? `<div class="gr-backup"><span class="grb-tag">🤝 Backup</span><span class="grb-split">you ${backup.ownProgress} + helper ${backup.bonus} · target raised from ${backup.originalTarget}</span></div>` : ''}
+    ${backup ? backupLine(backup, target) : ''}
   `
   if (unit && !done) row.querySelector('.gr-count').insertAdjacentHTML('beforeend', ` <i>${unit}</i>`)
   return row

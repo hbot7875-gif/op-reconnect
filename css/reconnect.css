@@ -5780,6 +5780,11 @@ button.rcp-after-badge:focus-visible{outline:2px solid #d9ad5f;outline-offset:3p
   color: var(--purple-lt); border-bottom: 1px solid rgba(167,139,250,.35); cursor: pointer;
   min-height: 32px; }
 .hz-link:hover { color: #fff; border-bottom-color: #fff; }
+/* Two understated actions side by side on the owner's card. */
+.hz-links { display: flex; gap: 16px; flex-wrap: wrap; }
+/* The way out is available, not advertised. */
+.hz-end { color: var(--muted); border-bottom-color: rgba(255,255,255,.18); }
+.hz-end:hover { color: #fff; border-bottom-color: #fff; }
 .hz-more { margin-top: 12px; }
 
 /* Column so the button can sit at its own width, but stretched: shrinking

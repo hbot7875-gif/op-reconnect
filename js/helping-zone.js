@@ -98,7 +98,7 @@ function helpingBlock(h, api) {
   box.appendChild(el('div', 'hz-togo', togo > 0 ? `${togo} more to go` : 'Target reached'))
   const view = el('button', 'hz-link', 'View progress ↗')
   view.type = 'button'
-  view.onclick = () => showOverlay(progressSheet(h, api))
+  view.onclick = () => api.show(progressSheet(h, api))
   box.appendChild(view)
   return box
 }
@@ -169,9 +169,16 @@ function ownPassBlock(o, api) {
       <b>${o.ownProgress + o.helperContribution} / ${o.boostedTarget}</b>
       <span>You ${o.ownProgress} · Them ${o.helperContribution}</span>
     `))
+    // The raised target is an extra route, not a replacement — the goal also
+    // completes at the original number on the owner's own streams. Without
+    // saying so, a helper who joins and contributes little looks like a
+    // penalty (see backupLine in ui-district.js).
+    box.appendChild(el('div', 'hz-togo', `or ${o.originalTarget} on your own`))
   } else {
     box.appendChild(el('div', 'hz-meta', `${o.originalTarget} → ${o.boostedTarget} · ${esc(leftLabel(o.expiresAt))}`))
   }
+
+  const row = el('div', 'hz-links')
   const go = el('button', 'hz-link', 'View the goal ↗')
   go.type = 'button'
   go.onclick = () => {
@@ -179,8 +186,55 @@ function ownPassBlock(o, api) {
     if (d && d.id === o.districtId) { api.hide(); api.goDistrict(d.wardId, d.id) }
     else api.toast('That district is no longer your active one.')
   }
-  box.appendChild(go)
+  // The owner's own way out. Until this existed only the helper could end a
+  // pairing, so an owner whose helper went quiet was stuck for the full TTL
+  // with no pass and no way to open another.
+  const end = el('button', 'hz-link hz-end', 'End my pass ↗')
+  end.type = 'button'
+  end.onclick = () => api.show(endPassSheet(o, api))
+  row.append(go, end)
+  box.appendChild(row)
   return box
+}
+
+/** Ending early settles exactly like every other close path, so this says
+ *  which of the two outcomes applies before anything happens: nothing
+ *  contributed means the pass returns, anything contributed stays banked and
+ *  the pass is spent. */
+function endPassSheet(o, api) {
+  const sheet = el('div', 'sheet hz-detail')
+  const given = o.status === 'joined' ? (o.helperContribution || 0) : 0
+  sheet.append(
+    el('div', 'eyebrow', 'END YOUR BACKUP PASS'),
+    el('h3', 'hz-detail-who', esc(o.goalLabel || 'your goal')),
+    el('p', 'hz-note', given > 0
+      ? `${esc(o.helperCodename)} has already played ${given} toward this. Those ${given} stay counted for you and the target drops back to ${o.originalTarget} — but the pass itself is spent.`
+      : 'Nobody has streamed toward this yet, so the Backup Pass comes straight back to your Pack and you can open a new one.'),
+  )
+  const end = el('button', 'btn btn-primary hz-stop', given > 0 ? 'End it anyway' : 'End and get my pass back')
+  end.type = 'button'
+  end.onclick = async () => {
+    end.disabled = true
+    end.textContent = 'Ending…'
+    const res = await api.call('closeMyBackupRequest', { agentNo: api.agentNo() })
+    if (!res?.success) {
+      end.disabled = false
+      end.textContent = given > 0 ? 'End it anyway' : 'End and get my pass back'
+      api.toast(res?.error === 'no_open_request' ? 'That pass has already ended.' : "Couldn't end that pass.")
+      return
+    }
+    api.toast(res.refunded
+      ? 'Pass ended — it’s back in your Pack.'
+      : `Pass ended. ${res.bankedCredit} play${res.bankedCredit === 1 ? '' : 's'} stay counted for you.`)
+    api.reload()
+  }
+  const back = el('button', 'btn btn-ghost hz-back', 'Keep it')
+  back.type = 'button'
+  back.onclick = () => api.reload()
+  const row = el('div', 'hz-actions')
+  row.append(end, back)
+  sheet.appendChild(row)
+  return sheet
 }
 
 function passesBlock(count, api) {
@@ -297,7 +351,7 @@ export function helpingZoneSheet(data, api) {
 /** Walk into the Zone. Called by the city map's own marker. */
 export async function openHelpingZone() {
   const api = {
-    call, toast, hide: hideOverlay, state: getState, goDistrict,
+    call, toast, hide: hideOverlay, show: showOverlay, state: getState, goDistrict,
     agentNo: getAgentNo, openPass: openBackupPassFlow, reload: openHelpingZone,
   }
 
@@ -329,7 +383,7 @@ export async function openHelpingZone() {
 export function helpingZonePreview(data, api = {}) {
   const noop = () => {}
   return helpingZoneSheet(data, {
-    call: async () => ({ success: false }), toast: noop, hide: noop,
+    call: async () => ({ success: false }), toast: noop, hide: noop, show: noop,
     state: () => ({}), goDistrict: noop, agentNo: () => 'AGENT000',
     openPass: noop, reload: noop, ...api,
   })
