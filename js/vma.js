@@ -191,13 +191,28 @@ export function vmaEventCard(state) {
   if (v.communityChestClaimable) tags.push('<span class="vma-tag group">🎁 GROUP CHEST READY</span>')
 
   if (v.ended) {
+    // Nothing claimable means nothing to offer. The server already stops
+    // sending an ended banner in that case (vma-voting.ts); this is the
+    // second lock, because the failure it prevents is promising a reward
+    // that cannot exist — the old card said "you still have a Supply Chest
+    // to claim" over dead progress like 20/50, with a CLAIM CHEST button
+    // that led to a sheet with nothing in it.
+    if (!anyChestReady) return wrap
+    const lines = []
+    if (v.chestReady) lines.push('<div class="vma-banner-progress is-ready">📦 Supply Chest ready!</div>')
+    if (v.communityChestClaimable) lines.push('<div class="vma-banner-community is-ready">🎁 Group Supply Chest ready to claim</div>')
+    const msg = v.chestReady && v.communityChestClaimable
+      ? 'Voting has closed — your Supply Chest and a Group Chest are still waiting.'
+      : v.chestReady
+        ? 'Voting has closed, but your Supply Chest is ready to open.'
+        : 'Voting has closed, but there’s a Group Supply Chest waiting for you.'
     card.innerHTML = `
       <div class="vma-banner-head"><span class="vma-dot"></span>EVENT ENDED ${tags.join(' ')}</div>
       <div class="vma-banner-title">${esc(v.title || 'VMA Voting Mission')}</div>
-      <p class="vma-banner-msg">Voting has closed, but you still have a Supply Chest to claim.</p>
-      <div class="vma-banner-progress${v.chestReady ? ' is-ready' : ''}">${v.chestReady ? '📦 Supply Chest ready!' : `📦 ${v.chestFill}/${v.chestThreshold}`}</div>
+      <p class="vma-banner-msg">${msg}</p>
+      ${lines.join('')}
     `
-    const go = el('button', 'btn btn-primary vma-banner-btn' + (anyChestReady ? ' has-dot' : ''), 'CLAIM CHEST')
+    const go = el('button', 'btn btn-primary vma-banner-btn has-dot', 'CLAIM CHEST')
     go.onclick = () => openVmaMission()
     card.appendChild(go)
     wrap.appendChild(card)

@@ -175,15 +175,32 @@ export async function getVmaBanner(supabase: SupabaseDB, content: GameContent, a
 
   if (!open) {
     // (9) Voting closing doesn't mean saved chest progress becomes
-    // unreachable — keep a minimal claim-only banner up while there's still
-    // something in it. Once fillCount hits 0 there's genuinely nothing
-    // left to show, and the banner disappears for good.
-    if (chest.success && chest.fillCount > 0) {
+    // unreachable — keep a minimal claim-only banner up while something is
+    // genuinely CLAIMABLE.
+    //
+    // This used to test fillCount > 0, which is a different question. Chest
+    // fill only ever comes from verified votes, so once voting closes and
+    // the review queue drains, a part-filled chest is frozen below its
+    // threshold for good — it can never be opened. 59 agents were being
+    // shown "you still have a Supply Chest to claim" and a CLAIM CHEST
+    // button over progress like 20/50 that could never complete.
+    //
+    // The group chest has to be part of the test, not just the personal
+    // one: 67 agents still have unclaimed Group Chests, and this banner is
+    // also what keeps state.vma non-null, which is what puts the VMA marker
+    // on the city map. Gating on the personal chest alone would have hidden
+    // their only way in.
+    const groupClaimable = communityChest.success && communityChest.claimableIndices.length > 0
+    const chestClaimable = chest.success && chest.ready
+    if (chestClaimable || groupClaimable) {
       return {
         eventId, title: cfg.title, ended: true,
         isPowerHour: false, isDoubleDay: false, periodEndUtc: cfg.period_end_utc,
         todayVotes: 0, todayCap: 0,
-        chestFill: chest.fillCount, chestThreshold: chest.threshold, chestReady: chest.ready,
+        chestFill: chest.success ? chest.fillCount : 0,
+        chestThreshold: chest.success ? chest.threshold : null,
+        chestReady: chestClaimable,
+        communityChestClaimable: groupClaimable,
       }
     }
     return null
