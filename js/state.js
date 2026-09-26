@@ -59,10 +59,57 @@ function overlayFocusables(overlay) {
     .filter((node) => !node.hidden && node.getAttribute('aria-hidden') !== 'true')
 }
 
+/** Every sheet gets a dismiss pinned to its top-right.
+ *
+ *  Sheets are `max-height: 82vh; overflow-y: auto`, and most put their Close
+ *  at the very bottom — so on any sheet whose content outgrows that cap, the
+ *  only way out is to scroll past everything first. Measured: the VMA
+ *  mission sheet renders 753px of content into 664px and leaves its Close
+ *  24px below the fold; the Agent Manual sits exactly on the cap with
+ *  nothing to spare. Clicking the backdrop already dismissed, but nothing
+ *  ever said so.
+ *
+ *  Added here rather than sheet by sheet because showOverlay is the one
+ *  door every sheet comes through, including ones not written yet. The bar
+ *  is zero-height and sticky, so it pins to the top while the sheet scrolls
+ *  without pushing any existing layout down. Sheets that already have their
+ *  own top dismiss are left alone. */
+function addSheetDismiss(contentNode) {
+  if (!contentNode.classList?.contains('sheet')) return
+  if (contentNode.querySelector('.sheet-x, .vault-sheet-close, .rcp-chat-close')) return
+  const bar = document.createElement('div')
+  bar.className = 'sheet-x-bar'
+  const btn = document.createElement('button')
+  btn.type = 'button'
+  btn.className = 'sheet-x'
+  btn.setAttribute('aria-label', 'Close')
+  btn.textContent = '✕'
+  btn.onclick = hideOverlay
+  bar.appendChild(btn)
+  contentNode.prepend(bar)
+}
+
+// Some sheets repaint by clearing their own innerHTML after they are already
+// on screen — vma.js does it three times, and that swallowed the dismiss
+// along with everything else, so the one sheet measured to need it most was
+// also the one that lost it. Watching for that is what makes "every sheet
+// has a reachable close" a guarantee rather than a default. Re-adding is a
+// no-op once the button is back, so this cannot loop.
+let dismissWatcher = null
+function watchSheetDismiss(contentNode) {
+  dismissWatcher?.disconnect()
+  if (!contentNode.classList?.contains('sheet')) { dismissWatcher = null; return }
+  dismissWatcher = new MutationObserver(() => {
+    if (!contentNode.querySelector('.sheet-x, .vault-sheet-close, .rcp-chat-close')) addSheetDismiss(contentNode)
+  })
+  dismissWatcher.observe(contentNode, { childList: true })
+}
+
 export function showOverlay(contentNode) {
   const overlay = document.getElementById('overlay')
   if (overlay.hidden) overlayReturnFocus = document.activeElement
   overlay.innerHTML = ''
+  addSheetDismiss(contentNode)
   contentNode.setAttribute('role', 'dialog')
   contentNode.setAttribute('aria-modal', 'true')
   if (!contentNode.hasAttribute('aria-label') && !contentNode.hasAttribute('aria-labelledby')) {
@@ -71,6 +118,7 @@ export function showOverlay(contentNode) {
   }
   if (!contentNode.hasAttribute('tabindex')) contentNode.tabIndex = -1
   overlay.appendChild(contentNode)
+  watchSheetDismiss(contentNode)
   overlay.hidden = false
   document.body.classList.add('overlay-open')
   overlay.onclick = (e) => { if (e.target === overlay) hideOverlay() }
@@ -78,13 +126,18 @@ export function showOverlay(contentNode) {
   // to the first focusable preserves every existing sheet's behaviour.
   requestAnimationFrame(() => (
     overlay.querySelector('[data-autofocus="true"]')
-    || overlayFocusables(overlay)[0]
+    // Skip the dismiss when picking what to focus first: it is prepended, so
+    // without this every sheet would open focused on its own close button
+    // instead of whatever it used to focus. It stays in the tab order.
+    || overlayFocusables(overlay).filter((n) => !n.classList.contains('sheet-x'))[0]
     || contentNode
   ).focus())
 }
 
 export function hideOverlay() {
   const overlay = document.getElementById('overlay')
+  dismissWatcher?.disconnect()
+  dismissWatcher = null
   overlay.hidden = true
   overlay.innerHTML = ''
   document.body.classList.remove('overlay-open')

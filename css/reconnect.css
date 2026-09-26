@@ -3226,6 +3226,27 @@ body.overlay-open { overflow: hidden; }
 .sheet { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
   padding: 22px; max-width: 420px; width: 100%; max-height: 82vh; overflow-y: auto; }
 .sheet h3 { font-family: var(--disp); font-size: 17px; margin: 8px 0 10px; }
+/* The universal sheet dismiss (state.js's addSheetDismiss). The bar carries
+   no height and is sticky, so it pins to the sheet's top edge while the
+   sheet scrolls without pushing any existing content down — sheets are
+   capped at 82vh and most put their own Close below the fold.
+   pointer-events are off across the strip so it cannot swallow taps meant
+   for the content it floats over; only the button itself takes them. */
+.sheet-x-bar { position: sticky; top: -6px; z-index: 4; height: 0;
+  display: flex; justify-content: flex-end; pointer-events: none; }
+.sheet-x {
+  pointer-events: auto; transform: translateY(-7px);
+  width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;
+  padding: 0; border: 1px solid var(--border); border-radius: 50%;
+  background: var(--surface-2); color: var(--muted);
+  font: 12px/1 var(--body); cursor: pointer;
+  transition: color .16s ease, border-color .16s ease;
+}
+.sheet-x:hover { color: var(--text); border-color: var(--border-str); }
+.sheet-x:focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; }
+/* Only the first real child needs to clear the button — everything below it
+   is already past the dismiss. */
+.sheet > .sheet-x-bar + * { padding-right: 34px; }
 .sheet .btn-ghost { display: block; width: 100%; }
 /* …except beside a text field: a 100%-wide button in a flex row takes the
    whole line and collapses the input to a sliver (ARMY Comms' composer,
@@ -4255,22 +4276,10 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 }
 .cs-vault-more[hidden] { display: none; }
 
-/* ── Playlist Vault: dismiss, and a quieter type scale ───────────────────
-   The Vault is the one sheet that can run to dozens of rows, so its close
-   lives at the top instead of as a full-width button under the list, where
-   it was only reachable after scrolling past everything. */
-.vault-sheet { position: relative; }
+/* ── Playlist Vault: a quieter type scale ────────────────────────────────
+   Its dismiss is the shared one from showOverlay; only the head needs to
+   keep clear of it. */
 .vault-sheet .vault-sheet-head { padding-right: 34px; }
-.vault-sheet-close {
-  position: absolute; top: 14px; right: 14px; z-index: 2;
-  width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;
-  padding: 0; border: 1px solid var(--border); border-radius: 50%;
-  background: var(--surface-2); color: var(--muted);
-  font: 12px/1 var(--body); cursor: pointer;
-  transition: color .16s ease, border-color .16s ease;
-}
-.vault-sheet-close:hover { color: var(--text); border-color: var(--border-str); }
-.vault-sheet-close:focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; }
 
 /* The shared token pass moved .sheet h3 to 18px, which reads as shouting on
    a list screen where every row carries its own heading. Scoped to the Vault
@@ -4317,7 +4326,6 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
   .vault-sheet .cs-vault-card h3 { font-size: 12.5px; }
   .vault-sheet .cs-vault-recipe { font-size: 10.5px; }
   .vault-sheet .cs-vault-by { font-size: 9.5px; }
-  .vault-sheet-close { top: 12px; right: 12px; width: 28px; height: 28px; }
   .cs-vault-card h3 {
     display: -webkit-box; overflow: hidden; min-height: 2.6em;
     line-height: 1.3; white-space: normal; text-overflow: clip;
