@@ -4255,6 +4255,34 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 }
 .cs-vault-more[hidden] { display: none; }
 
+/* ── Playlist Vault: dismiss, and a quieter type scale ───────────────────
+   The Vault is the one sheet that can run to dozens of rows, so its close
+   lives at the top instead of as a full-width button under the list, where
+   it was only reachable after scrolling past everything. */
+.vault-sheet { position: relative; }
+.vault-sheet .vault-sheet-head { padding-right: 34px; }
+.vault-sheet-close {
+  position: absolute; top: 14px; right: 14px; z-index: 2;
+  width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;
+  padding: 0; border: 1px solid var(--border); border-radius: 50%;
+  background: var(--surface-2); color: var(--muted);
+  font: 12px/1 var(--body); cursor: pointer;
+  transition: color .16s ease, border-color .16s ease;
+}
+.vault-sheet-close:hover { color: var(--text); border-color: var(--border-str); }
+.vault-sheet-close:focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; }
+
+/* The shared token pass moved .sheet h3 to 18px, which reads as shouting on
+   a list screen where every row carries its own heading. Scoped to the Vault
+   so no other sheet's heading moves.
+   Two classes deep on purpose: that token block sits at the END of this
+   file, so a single-class rule here loses to it on source order alone even
+   at equal specificity. */
+.vault-sheet .vault-sheet-head h3 { font-size: 15px; }
+.vault-sheet .cs-vault-card h3 { font-size: 13px; }
+.vault-sheet .cs-vault-recipe { font-size: 11px; }
+.vault-sheet .cs-vault-match { font-size: 10px; }
+
 @media (max-width: 560px) {
   .cs-vault-hero { align-items: flex-start; flex-direction: column; }
   .vault-sheet { overflow-x: hidden; }
@@ -4285,6 +4313,11 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
   .cs-vault-art { width: 58px; border: 0; border-radius: 8px; }
   .cs-vault-body { align-self: start; }
   .cs-vault-kicker { font-size: 8.5px; }
+  .vault-sheet .vault-sheet-head h3 { font-size: 14px; }
+  .vault-sheet .cs-vault-card h3 { font-size: 12.5px; }
+  .vault-sheet .cs-vault-recipe { font-size: 10.5px; }
+  .vault-sheet .cs-vault-by { font-size: 9.5px; }
+  .vault-sheet-close { top: 12px; right: 12px; width: 28px; height: 28px; }
   .cs-vault-card h3 {
     display: -webkit-box; overflow: hidden; min-height: 2.6em;
     line-height: 1.3; white-space: normal; text-overflow: clip;

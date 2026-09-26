@@ -374,7 +374,12 @@ export function openPlaylistVault({ districtId = null, districtName = null } = {
     render()
   }
 
-  const close = el('button', 'btn btn-ghost', 'Close')
+  // Dismiss sits at the top, not as a full-width button under a list that
+  // can run to dozens of playlists — at the bottom it was only reachable
+  // after scrolling past everything, which is the opposite of an escape.
+  const close = el('button', 'vault-sheet-close', '✕')
+  close.type = 'button'
+  close.setAttribute('aria-label', 'Close the Playlist Vault')
   close.onclick = hideOverlay
   sheet.appendChild(close)
 

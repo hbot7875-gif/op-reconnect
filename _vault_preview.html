@@ -1,0 +1,104 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Playlist Vault — type scale + close</title><link rel="stylesheet" href="css/reconnect.css">
+<style>html,body{margin:0;background:#08070d;color:#ece9f2;font-family:-apple-system,Segoe UI,Arial,sans-serif}
+.wrap{display:flex;flex-wrap:wrap;gap:16px;padding:14px;align-items:flex-start}
+.col{width:375px}
+.cap{font:700 9px/1 monospace;letter-spacing:1.6px;color:#8b789c;margin:0 0 6px}
+/* Render the sheet inline instead of as a modal, and force the mobile
+   breakpoint inside each 375px column so both states are comparable. */
+.sheet{position:relative!important;transform:none!important;max-width:none!important;margin:0!important;max-height:none!important}
+/* The "before" column re-states the sizes as they were prior to this change,
+   so the comparison is real rather than remembered. */
+.before .vault-sheet .vault-sheet-head h3{font-size:18px}
+.before .vault-sheet .cs-vault-card h3{font-size:14px}
+.before .vault-sheet .cs-vault-recipe{font-size:11.5px}
+.before .vault-sheet .cs-vault-by{font-size:10px}
+.before .vault-sheet-close{display:none}
+.before .vault-sheet .vault-sheet-head{padding-right:0}
+</style>
+</head><body><div class="wrap" id="w"></div><div id="overlay" hidden></div>
+<script type="module">
+import { el, esc } from './js/state.js'
+
+const items = [
+  { name: 'Hopesize Station — full album pass, evening rotation', source: 'shared',
+    recipe: 'Arirang ×3 · Keep Swimming ×2 · BE ×2 · shuffle off', match: 4,
+    by: 'Jiminshii', meta: '48 tracks · 2h 51m · 12 saved' },
+  { name: 'D-DAY 500 Together', source: 'candy', recipe: 'Haegeum ×5 · AMYGDALA ×3 · People Pt.2 ×2',
+    match: 2, by: 'MOONCHILD', meta: '31 tracks · 1h 44m · 5 saved' },
+  { name: 'SWIM', source: 'shared', recipe: 'SWIM with RM (Chill Hip Hop Remix) ×6',
+    match: 0, by: 'Navy', meta: '6 tracks · 21m' },
+]
+
+function card(it) {
+  const c = el('article', 'cs-vault-card')
+  const art = el('div', 'cs-vault-art')
+  art.innerHTML = `<span aria-hidden="true">${it.source === 'shared' ? '♫' : '🦙'}</span>`
+  c.appendChild(art)
+  const body = el('div', 'cs-vault-body')
+  body.innerHTML = `
+    <div class="cs-vault-kicker"><span>${it.source === 'shared' ? 'Shared playlist' : 'Candy Star mix'}</span><span>26 Sep</span></div>
+    <h3>${esc(it.name)}</h3>
+    <p class="cs-vault-recipe">${esc(it.recipe)}</p>
+    ${it.match > 0 ? `<p class="cs-vault-match">Matches ${it.match} district goal${it.match === 1 ? '' : 's'}</p>` : ''}
+    <div class="cs-vault-by">By ${esc(it.by)} · ${esc(it.meta)}</div>
+  `
+  const actions = el('div', 'cs-vault-actions')
+  const open = el('a', 'cs-vault-open', 'Spotify ↗'); open.href = '#'
+  const save = el('button', 'cs-vault-action', 'Save')
+  const report = el('button', 'cs-vault-report', 'Broken link?')
+  actions.append(open, save, report)
+  body.appendChild(actions)
+  c.appendChild(body)
+  return c
+}
+
+/** Mirrors playlist-vault-sheet.js's own structure: head, tools, list, and
+ *  the top-right dismiss. */
+function vaultSheet() {
+  const sheet = el('div', 'sheet vault-sheet')
+  const head = el('div', 'vault-sheet-head')
+  head.innerHTML = `
+    <div>
+      <div class="eyebrow">PLAYLIST VAULT</div>
+      <h3>Playlists for Hopesize Station</h3>
+    </div>`
+  const toggle = el('button', 'cs-vault-share-toggle', '+ Add playlist')
+  head.appendChild(toggle)
+  sheet.appendChild(head)
+
+  const tools = el('div', 'cs-vault-tools')
+  const filters = el('div', 'cs-vault-filters')
+  for (const [i, f] of ['All', 'Shared', 'Mine'].entries()) {
+    filters.appendChild(el('button', 'cs-vault-filter' + (i === 0 ? ' is-active' : ''), f))
+  }
+  const search = el('div', 'cs-vault-search')
+  search.innerHTML = '<span>🔍</span><input placeholder="Search playlists">'
+  tools.append(filters, search)
+  sheet.appendChild(tools)
+
+  const list = el('div', 'cs-vault-list')
+  for (const it of items) list.appendChild(card(it))
+  sheet.appendChild(list)
+
+  const close = el('button', 'vault-sheet-close', '✕')
+  close.type = 'button'
+  close.setAttribute('aria-label', 'Close the Playlist Vault')
+  sheet.appendChild(close)
+  return sheet
+}
+
+const w = document.getElementById('w')
+for (const [cap, cls] of [['BEFORE — 18px heading, close at the bottom', 'before'], ['AFTER — quieter scale, ✕ at the top', 'after']]) {
+  const c = el('div', 'col ' + cls)
+  c.appendChild(el('p', 'cap', cap))
+  c.appendChild(vaultSheet())
+  if (cls === 'before') {
+    const old = el('button', 'btn btn-ghost', 'Close')
+    old.style.marginTop = '14px'
+    c.querySelector('.vault-sheet').appendChild(old)
+  }
+  w.appendChild(c)
+}
+</script></body></html>
