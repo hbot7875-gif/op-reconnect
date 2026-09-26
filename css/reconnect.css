@@ -6159,14 +6159,17 @@ body {
   .hud-bell, .hud-sync { width: 36px; height: 36px; }
   .hud-streak { padding-inline: 6px; }
   .command-scene { border-radius: var(--radius-lg); box-shadow: none; }
-  #overlay { align-items: flex-end; padding: 0; }
+  /* Mobile overlays keep the original centred-dialog behaviour. The visual
+     refinement briefly turned every sheet (including Signals) into a
+     bottom drawer, which changed where familiar controls appeared. */
+  #overlay { align-items: center; padding: 20px; }
   .sheet {
     width: 100%;
-    max-width: none;
-    max-height: 88svh;
-    padding: var(--space-5) var(--space-4) calc(var(--space-5) + env(safe-area-inset-bottom));
-    border-width: 1px 0 0;
-    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    max-width: 420px;
+    max-height: 82vh;
+    padding: 22px;
+    border-width: 1px;
+    border-radius: var(--r-lg);
   }
 }
 
