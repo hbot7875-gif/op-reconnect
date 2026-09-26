@@ -9,6 +9,7 @@ import { call } from './api.js'
 import { el, esc, toast, hideOverlay, showOverlay, getState, setState } from './state.js'
 import { getAgentNo } from './session.js'
 import { bombHealthStatus, lastFedLabel } from './agent-charge-health.js'
+import { powerEraCards } from './era-card-display.js'
 
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -175,7 +176,7 @@ function paint(body, ac, focusEraId = null) {
   autoCard.appendChild(autoBtn)
   body.appendChild(autoCard)
 
-  const eraCards = [...(ac.eraCards || [])].sort((a, b) =>
+  const eraCards = powerEraCards(ac.eraCards).sort((a, b) =>
     a.id === focusEraId ? -1 : b.id === focusEraId ? 1 : 0)
   const ready = eraCards.filter((e) => e.status === 'lit').length
   const litCard = el('div', 'ms-card ac-era-inventory')

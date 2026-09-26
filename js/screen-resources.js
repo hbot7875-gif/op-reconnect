@@ -36,6 +36,7 @@ import { itemArt, itemSheet, RARITY } from './items.js'
 import { agentChargeSheet } from './agent-charge.js'
 import { openBackupPassFlow, openBackupHelpFlow, countOpenBackupRequests } from './backup-pass.js'
 import { recelebrateKeepsake } from './arirang-recelebrate.js'
+import { powerEraCards } from './era-card-display.js'
 
 /* ── Agent ID ─────────────────────────────────────────────────────────── */
 function agentIdCard(state) {
@@ -475,7 +476,7 @@ export function renderResources(container, state) {
   // next activation, and spent cards stay visible until Monday's reset.
   // Kept clearly OUTSIDE the case (pack-after-bag) rather than crammed into
   // a compartment — these aren't things the case physically holds.
-  const eraCards = state?.agentCharge?.eraCards || []
+  const eraCards = powerEraCards(state?.agentCharge?.eraCards)
   if (eraCards.length) {
     const ready = eraCards.filter((e) => e.status === 'lit').length
     const newlyLit = new Set(state?.agentCharge?.newlyLitEraIds || [])

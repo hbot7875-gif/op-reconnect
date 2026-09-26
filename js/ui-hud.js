@@ -182,11 +182,30 @@ function wireHudScrollCollapse() {
   const COLLAPSE_AT = 80
   const EXPAND_AT = 20
   const onScroll = () => {
+    // A sticky HUD that changes its own height while a phone is scrolling
+    // can repeatedly move the scroll threshold underneath itself. Real
+    // devices show that as a visible jump/flicker (and the local 375px
+    // preview makes it especially obvious). Keep the mobile HUD mounted at
+    // one stable height; the compact treatment remains useful on desktop,
+    // where it does not compete with touch scrolling or the virtual browser
+    // chrome.
+    // `_rc_preview.html?w=375` deliberately constrains the document rather
+    // than the automation browser's outer viewport, so also inspect the
+    // actual document width. This keeps the preview faithful and prevents
+    // the same compact/full oscillation there.
+    const renderedWidth = document.body?.getBoundingClientRect().width || window.innerWidth
+    const narrowScreen = window.matchMedia('(max-width: 640px)').matches
+      || renderedWidth <= 640
+    if (narrowScreen) {
+      hud.classList.remove('is-collapsed')
+      return
+    }
     const y = window.scrollY
     if (y > COLLAPSE_AT) hud.classList.add('is-collapsed')
     else if (y < EXPAND_AT) hud.classList.remove('is-collapsed')
   }
   window.addEventListener('scroll', onScroll, { passive: true })
+  window.addEventListener('resize', onScroll, { passive: true })
   onScroll()
 }
 

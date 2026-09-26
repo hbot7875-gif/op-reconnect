@@ -44,6 +44,7 @@ import { redZonePercent, personalSignalCopy, redZoneHeadline, redZoneGoalCopy,
   unreadCommsCount, unreadBadgeText } from './red-zone-ui.js'
 import { bombHealthStatus, lastFedLabel } from './agent-charge-health.js'
 import { warmShareArtwork } from './share-scene-image.js'
+import { powerEraCards } from './era-card-display.js'
 
 export function renderWorld(container, state) {
   container.innerHTML = ''
@@ -91,7 +92,7 @@ export function renderWorld(container, state) {
   // Personal weekly Era Cards are the Bomb's emergency reserve. This is not
   // the community/all-time Era Timeline: every count here belongs to this
   // agent, resets Monday, and a lit card waits in Pack until they spend it.
-  if (state.agentCharge?.eraCards?.length) wrap.appendChild(weeklyEraCards(state))
+  if (powerEraCards(state.agentCharge?.eraCards).length) wrap.appendChild(weeklyEraCards(state))
 
   container.appendChild(wrap)
   warmShareArtwork(state)
@@ -202,7 +203,8 @@ function sideMissionSheet(mission, selectedId = null) {
 function weeklyEraCards(state) {
   const charge = state.agentCharge || {}
   const newly = new Set(charge.newlyLitEraIds || [])
-  const ready = (charge.eraCards || []).filter((e) => e.status === 'lit').length
+  const cards = powerEraCards(charge.eraCards)
+  const ready = cards.filter((e) => e.status === 'lit').length
   const wrap = el('section', 'era-strip command-era-strip')
   wrap.innerHTML = `
     <div class="era-strip-head">
@@ -210,7 +212,7 @@ function weeklyEraCards(state) {
       <span class="era-ready-count">${ready} ready · +10h each</span>
     </div>`
   const row = el('div', 'era-row')
-  for (const e of charge.eraCards || []) {
+  for (const e of cards) {
     const chip = el('button', `era-chip era-${e.status}${newly.has(e.id) ? ' just-lit' : ''}`)
     chip.type = 'button'
     const status = e.status === 'lit' ? 'READY · +10H'

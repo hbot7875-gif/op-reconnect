@@ -220,11 +220,18 @@
       chargeCells: STATE.player.chargeCells,
       litEras: ['hyyh', 'ly'],
       newlyLitEraIds: ['hyyh'],
-      eraCards: STATE.eraTimeline.eras.map((era, i) => ({
-        ...era,
-        remaining: era.total - era.done,
-        status: i === 0 || i === 6 ? 'used' : i === 2 || i === 4 ? 'lit' : 'dark',
-      })),
+      // Include both GOLDEN shapes in the fixture so the preview catches the
+      // real production collision: only the reusable weekly card belongs in
+      // the power deck; the collected dated keepsake must be filtered out.
+      eraCards: [
+        ...STATE.eraTimeline.eras.map((era, i) => ({
+          ...era,
+          remaining: era.total - era.done,
+          status: i === 0 || i === 6 ? 'used' : i === 2 || i === 4 ? 'lit' : 'dark',
+        })),
+        { id:'golden',name:'GOLDEN',icon:'🐰',done:7,total:13,remaining:6,status:'dark',tracks:[] },
+        { id:'jk-golden-birthday-2026',name:'GOLDEN Birthday',icon:'🐰',done:13,total:13,remaining:0,status:'keepsake',isSpecial:true,tracks:[] },
+      ],
     }
     STATE.agentCharge = AGENT_CHARGE
 

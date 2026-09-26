@@ -33,7 +33,7 @@
   /* Lightened from #635d78 — the old value read as low-contrast on real
      phone screens once it was carrying real explanatory sentences instead
      of just short decorative tags. Still clearly the dimmest tier. */
-  --dim: #7a7391;
+  --dim: #85809a;
 
   --body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --mono: 'Share Tech Mono', monospace;
@@ -56,6 +56,34 @@
   --fs-input: 16px;     /* mobile form inputs (iOS auto-zooms under this) */
   --fs-card-title: 16px;
   --fs-screen-title: 24px;
+
+  /* Shared visual system: one spacing rhythm, three elevations and a small
+     radius family. Legacy variables remain mapped below so older screens
+     inherit the same system without markup or behaviour changes. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --surface-raised: #16131f;
+  --surface-muted: #100e17;
+  --line: rgba(255, 255, 255, 0.09);
+  --line-strong: rgba(255, 255, 255, 0.16);
+  --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.28);
+  --shadow-float: 0 18px 46px rgba(0, 0, 0, 0.44);
+  --focus-ring: 0 0 0 3px rgba(167, 139, 250, 0.24);
+  --tap: 44px;
+
+  --r: var(--radius-md);
+  --r-lg: var(--radius-lg);
+  --border: var(--line);
+  --border-str: var(--line-strong);
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -5833,3 +5861,496 @@ button.rcp-after-badge:focus-visible{outline:2px solid #d9ad5f;outline-offset:3p
    only gets half the row, while "Back" never needs that much. */
 .hz-actions .hz-stop { flex: 1 1 auto; }
 .hz-actions .hz-back { flex: 0 0 34%; }
+
+/* ════════════════════════════════════════════════════════════════
+   VISUAL SYSTEM REFINEMENT — September 2026
+
+   This pass deliberately sits at the end of the cascade. The app grew one
+   screen at a time, so structurally identical surfaces ended up choosing
+   their own border opacity, radius, shadow and label tracking. These rules
+   bring those decisions back to the shared tokens above without changing
+   markup, artwork, navigation or interaction logic.
+   ════════════════════════════════════════════════════════════════ */
+
+html { color-scheme: dark; }
+body {
+  background:
+    radial-gradient(ellipse 54% 22% at 22% -8%, rgba(139,92,246,.065), transparent 67%),
+    var(--bg);
+  line-height: 1.45;
+}
+
+.scene { padding-inline: var(--space-4); padding-bottom: var(--space-8); }
+.world-screen { padding-top: var(--space-4); gap: var(--space-5); }
+.panel,
+.card,
+.op-card,
+.ms-card,
+.archive-card,
+.vma-banner {
+  background: var(--surface-raised);
+  border-color: var(--line);
+  border-radius: var(--radius-lg);
+}
+.panel { padding: var(--space-6); box-shadow: var(--shadow-soft); }
+.card { padding: var(--space-5); }
+
+.eyebrow,
+.op-eyebrow,
+.stage-eyebrow,
+.cel-eyebrow,
+.core-eyebrow,
+.side-mission-kicker,
+.bd-block-head,
+.cd-label,
+.lvlup-eyebrow {
+  letter-spacing: 1.35px;
+}
+.title-sm,
+.screen-title,
+.op-name,
+.pack-name,
+.stage-name,
+.cel-title,
+.board-title,
+.reconnect-next > b {
+  letter-spacing: .1px;
+}
+.muted { color: var(--muted); line-height: 1.55; }
+.dim { color: var(--dim); line-height: 1.5; }
+.muted, .dim, .sheet p, .card p { overflow-wrap: anywhere; }
+
+.btn {
+  min-height: var(--tap);
+  padding: 12px 18px;
+  border-radius: var(--radius-md);
+  font-size: 12.5px;
+  letter-spacing: .65px;
+  transition: background-color .18s ease, border-color .18s ease,
+    color .18s ease, transform .15s ease, opacity .18s ease;
+}
+.btn-primary {
+  background: #7950e8;
+  box-shadow: 0 7px 18px rgba(69,42,137,.24);
+}
+.btn-alert { box-shadow: 0 7px 18px rgba(126,25,43,.2); }
+.btn-primary:hover, .btn-alert:hover { filter: none; transform: translateY(-1px); }
+.btn-primary:active, .btn-alert:active { transform: translateY(0); }
+.btn-ghost { background: rgba(255,255,255,.025); border-color: var(--line); color: var(--muted); }
+.btn-ghost:hover { background: rgba(255,255,255,.05); border-color: var(--line-strong); color: var(--text); }
+:focus-visible { outline: 2px solid var(--purple-lt); outline-offset: 3px; box-shadow: var(--focus-ring); }
+
+.pbar, .gr-bar, .op-meter, .xp-bar, .wp-bar, .cell-progress-bar {
+  background: rgba(255,255,255,.075);
+}
+.pfill, .gr-fill { box-shadow: none; }
+
+/* Agent header: one calm information rail. The avatar and codename lead;
+   utilities no longer look like four unrelated dashboard widgets. */
+#hud {
+  background: rgba(10,9,16,.94);
+  border-bottom-color: rgba(255,255,255,.075);
+  box-shadow: 0 8px 24px rgba(0,0,0,.2);
+}
+.hud-inner { padding: 12px var(--space-4) 0; }
+.hud-row { gap: var(--space-3); }
+.hud-identity { gap: var(--space-3); }
+.hud-crest {
+  --hud-crest-size: 44px;
+  background: #141120;
+  border-color: rgba(167,139,250,.42);
+}
+.hud-code { font-size: 18px; letter-spacing: .25px; }
+.hud-meta { gap: 5px; font-size: 10.5px; letter-spacing: .35px; }
+.hud-bell, .hud-sync {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+  border-color: var(--line);
+}
+.hud-bell:hover, .hud-sync:hover:not(:disabled) { transform: none; background: var(--surface-2); }
+.hud-streak {
+  padding: 6px 8px;
+  border: 1px solid rgba(217,173,95,.22);
+  border-radius: 999px;
+  background: rgba(217,173,95,.045);
+  letter-spacing: .35px;
+}
+.hud-streak.is-cold { background: transparent; }
+.hud-xp { padding: 8px var(--space-4) 10px; gap: var(--space-2); }
+.xp-bar { height: 6px; }
+.hud-xp-note { font-size: 10.5px; letter-spacing: .25px; }
+.hud-reconnect-status,
+.gc-status-pill {
+  padding: 9px 11px;
+  border-color: var(--line);
+  border-left: 2px solid rgba(139,92,246,.72);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+}
+.gc-status-pill { border-left-color: rgba(217,173,95,.68); }
+.hud-reconnect-status span, .gc-status-pill span { letter-spacing: .45px; }
+
+/* Persistent navigation: still a thumb dock, just less glassy and less
+   detached from the rest of the product. */
+#tabbar { padding: 0 var(--space-3) calc(10px + env(safe-area-inset-bottom)); }
+.hud-tabs {
+  gap: 2px;
+  padding: 6px;
+  background: rgba(17,15,25,.975);
+  border-color: var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-float);
+  backdrop-filter: blur(8px);
+}
+.hud-tab {
+  min-height: 50px;
+  gap: 4px;
+  padding: 7px 3px;
+  border-radius: var(--radius-md);
+  font-size: 10.5px;
+  letter-spacing: .15px;
+  opacity: .82;
+}
+.hud-tab-ico { font-size: 19px; }
+.hud-tab.sel {
+  background: rgba(139,92,246,.15);
+  box-shadow: inset 0 0 0 1px rgba(167,139,250,.12);
+}
+
+/* City and district artwork remain untouched. Only their containing frame
+   is normalized so the scene, not a glowing border, owns the attention. */
+.command-scene {
+  border-color: rgba(255,255,255,.085);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-soft);
+}
+.command-tools {
+  min-width: 38px;
+  min-height: 34px;
+  border-color: var(--line);
+  background: rgba(10,8,18,.88);
+}
+.mission-beacon {
+  background: rgba(15,13,23,.94);
+  backdrop-filter: blur(6px);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  box-shadow: 0 10px 26px rgba(0,0,0,.28);
+}
+.stage {
+  border-color: rgba(255,255,255,.085);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 10px 26px rgba(0,0,0,.18);
+}
+.stage-overlay { padding: var(--space-4); }
+.stage-eyebrow { font-size: 9px; }
+.stage-name { font-size: 19px; }
+.screen-head { min-height: 54px; padding: var(--space-4) 0 4px; }
+.back-btn, .district-share-btn { min-height: var(--tap); }
+.back-btn { font-size: 12.5px; letter-spacing: .45px; }
+.district-share-btn { letter-spacing: .65px; }
+
+.board-head { margin: var(--space-6) 0 var(--space-3); }
+.board-title { font-size: 16px; }
+.board-count { letter-spacing: .45px; }
+.goal-card { padding: 3px var(--space-4); }
+.goal-row { padding: var(--space-4) 0; }
+.gr-name { font-size: 15px; }
+.gr-sub { letter-spacing: .15px; line-height: 1.45; }
+.cell-progress-bar i { background: var(--purple); box-shadow: none; }
+
+/* One strong next action, then quieter support tools. */
+.queue-btn {
+  margin-top: var(--space-3);
+  padding: 15px var(--space-4);
+  border-color: rgba(167,139,250,.38);
+  border-radius: var(--radius-lg);
+  background: #7044d6;
+  box-shadow: 0 8px 20px rgba(64,35,128,.24);
+}
+.queue-btn:hover { filter: none; transform: translateY(-1px); box-shadow: 0 10px 24px rgba(64,35,128,.3); }
+.queue-btn:active { transform: translateY(0); }
+.queue-btn.is-urgent { box-shadow: 0 8px 20px rgba(122,23,40,.22); }
+.district-vault-card {
+  margin: var(--space-5) 0;
+  padding: 12px var(--space-3);
+  border-color: rgba(255,255,255,.075);
+  border-radius: var(--radius-md);
+  background: rgba(255,255,255,.018);
+}
+
+.reconnect-card { margin-top: var(--space-6); }
+.reconnect-core { padding: var(--space-3) 0; }
+.reconnect-next { margin-top: var(--space-5); }
+.reconnect-coop-progress { padding: var(--space-4) 0; }
+.reconnect-score > b { font-size: 27px; }
+.reconnect-disclosure > summary { min-height: var(--tap); padding-block: 14px; }
+.reconnect-agent { min-height: 48px; }
+
+/* ARMY Bomb: keep the renderer and meaningful lighting; simplify only the
+   information around it into one dashboard surface with quiet dividers. */
+.bomb-dash .bd-status { letter-spacing: .1px; }
+.bg-gauge { margin-top: var(--space-5); }
+.bg-fill { filter: none; }
+.bg-stats {
+  margin-top: var(--space-5);
+  border-color: var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+}
+.bg-stat { padding: 12px var(--space-2); border-left-color: var(--line); }
+.bd-block {
+  margin-top: var(--space-4);
+  padding: 14px var(--space-4);
+  border-color: var(--line);
+  border-radius: var(--radius-md);
+  background: rgba(255,255,255,.018);
+}
+.bd-block-head { letter-spacing: 1.1px; }
+
+/* Event, list and settings surfaces use the same quiet elevation. State
+   colours remain on the edge or label rather than tinting entire cards. */
+.op-card { padding: var(--space-4); box-shadow: none; }
+.op-card.is-live { border-color: rgba(139,92,246,.34); }
+.op-card.is-spotlight { box-shadow: inset 2px 0 0 var(--purple); }
+.vma-banner { padding: 15px var(--space-4); box-shadow: none; }
+.mode-opt, .vma-tile, .backup-pass-tile {
+  border-color: var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+}
+.mode-opt { min-height: 58px; padding: 14px var(--space-4); }
+.mode-opt.sel { border-color: rgba(167,139,250,.56); box-shadow: inset 2px 0 0 var(--purple-lt); }
+.district-list { border-color: var(--line); background: var(--line); border-radius: var(--radius-lg); }
+.d-row { min-height: 64px; padding: 14px var(--space-4); background: var(--surface-raised); }
+.rank-tab { min-height: var(--tap); padding: 11px 4px 9px; }
+.rank-row { min-height: 62px; border-bottom-color: var(--line); }
+
+/* Sheets become true mobile sheets and restrained desktop dialogs. This is
+   presentation only: the existing overlay root, focus flow and actions are
+   unchanged. */
+#overlay {
+  background: rgba(4,3,8,.78);
+  backdrop-filter: blur(4px);
+  padding: var(--space-5);
+}
+.sheet {
+  max-width: 440px;
+  max-height: min(84vh, 760px);
+  padding: var(--space-6);
+  background: var(--surface-raised);
+  border-color: var(--line-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-float);
+}
+.sheet h3 { margin: var(--space-2) 0 var(--space-3); font-size: 18px; letter-spacing: .05px; }
+.sheet input, .sheet textarea, .sheet select {
+  min-height: var(--tap);
+  border-color: var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+@media (max-width: 640px) {
+  #hud { background: rgba(10,9,16,.985); box-shadow: 0 5px 18px rgba(0,0,0,.2); }
+  .hud-row { gap: 8px; }
+  .hud-bell, .hud-sync { width: 36px; height: 36px; }
+  .hud-streak { padding-inline: 6px; }
+  .command-scene { border-radius: var(--radius-lg); box-shadow: none; }
+  #overlay { align-items: flex-end; padding: 0; }
+  .sheet {
+    width: 100%;
+    max-width: none;
+    max-height: 88svh;
+    padding: var(--space-5) var(--space-4) calc(var(--space-5) + env(safe-area-inset-bottom));
+    border-width: 1px 0 0;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  }
+}
+
+@media (max-width: 380px) {
+  :root { --gut: 14px; }
+  .hud-inner { padding-inline: 14px; }
+  .hud-row { display: grid; grid-template-columns: minmax(0,1fr) 32px 32px; gap: 4px 7px; }
+  .hud-identity { gap: 6px; }
+  .hud-identity { grid-column: 1; grid-row: 1 / span 2; }
+  .hud-crest { --hud-crest-size: 34px; }
+  .hud-code { font-size: 14px; letter-spacing: 0; }
+  .hud-meta { font-size: 9.5px; }
+  .hud-streak { grid-column: 2 / 4; grid-row: 2; justify-self: end; padding: 1px 4px; border: 0; background: none; font-size: 8.5px; }
+  .hud-sync { grid-column: 2; grid-row: 1; }
+  .hud-bell { grid-column: 3; grid-row: 1; }
+  .hud-bell, .hud-sync { width: 32px; height: 32px; border-radius: 10px; }
+  .hud-tab { min-height: 48px; }
+  .card { padding: var(--space-4); }
+  .sheet { padding-inline: 14px; }
+  .stage-overlay { padding: 13px; }
+  .reconnect-score > b { font-size: 24px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn, .hud-tab, .queue-btn { transition: none; }
+}
+
+/* ── Stronger player-facing hierarchy ─────────────────────────────
+   The first token pass made the cascade consistent, but deliberately
+   conservative values left the City looking almost unchanged. This layer
+   makes that consistency visible without moving controls or touching any
+   renderer: identity, current place, next action and navigation now read as
+   four distinct levels instead of similarly weighted dark rectangles. */
+#hud {
+  background: #0d0b13;
+  box-shadow: 0 1px 0 rgba(255,255,255,.07), 0 12px 30px rgba(0,0,0,.32);
+}
+.hud-inner { padding-top: 14px; }
+.hud-code {
+  font-size: 19px;
+  line-height: 1.05;
+  color: #f7f4fb;
+}
+.hud-meta { margin-top: 4px; color: #b9b1ca; }
+.hud-bell, .hud-sync {
+  background: #17131f;
+  border-color: rgba(255,255,255,.115);
+}
+.hud-bell[aria-label*="unread"], .hud-bell.has-unread {
+  border-color: rgba(167,139,250,.48);
+  background: #1a1428;
+}
+.hud-xp { padding-bottom: 11px; }
+.xp-bar { height: 5px; background: rgba(255,255,255,.085); }
+.hud-reconnect-status {
+  margin-top: 1px;
+  padding: 11px 12px;
+  background: #12101a;
+  border-left-width: 3px;
+}
+
+.screen-head {
+  min-height: 58px;
+  border-bottom: 1px solid rgba(255,255,255,.055);
+  margin-bottom: var(--space-4);
+}
+.back-btn, .district-share-btn { color: #b7b0c7; }
+.stage {
+  border: 0;
+  border-radius: 20px;
+  box-shadow: 0 18px 42px rgba(0,0,0,.42), 0 0 0 1px rgba(255,255,255,.075);
+}
+.stage-overlay {
+  padding: 17px;
+  background: linear-gradient(180deg, rgba(7,5,12,.42) 0%, transparent 42%, rgba(7,5,12,.68) 100%);
+}
+.stage-eyebrow { color: #c2a8ff; }
+.stage-name {
+  font-size: 21px;
+  line-height: 1.08;
+  text-shadow: 0 2px 14px rgba(0,0,0,.8);
+}
+.stage-bottom { margin-top: auto; }
+.stage-meter { height: 5px; background: rgba(255,255,255,.18); }
+.stage-meter-fill { box-shadow: 0 0 12px rgba(217,173,95,.26); }
+
+.board-head:not(.mission-section) {
+  margin-top: 28px;
+  padding: 0 2px 10px;
+  border-bottom: 1px solid rgba(255,255,255,.07);
+}
+.board-head:not(.mission-section) .board-title { font-size: 18px; color: #f4f1f8; }
+.board-count {
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.045);
+  color: #a9a2ba;
+}
+.board-count.all { background: rgba(217,173,95,.1); }
+
+.queue-btn {
+  position: relative;
+  overflow: hidden;
+  min-height: 70px;
+  padding: 16px 50px 16px 17px;
+  background: #7144db;
+  border: 0;
+  box-shadow: 0 12px 28px rgba(74,42,148,.33);
+}
+.queue-btn::after {
+  content: '→';
+  position: absolute;
+  right: 17px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: var(--mono);
+  font-size: 22px;
+  color: rgba(255,255,255,.8);
+}
+.qb-title { font-size: 16px; letter-spacing: 0; }
+.qb-meta { font-size: 11.5px; line-height: 1.45; color: rgba(255,255,255,.76); }
+
+.district-vault-card {
+  padding: 14px 15px;
+  background: #100e17;
+  border-color: rgba(255,255,255,.08);
+}
+.goal-card {
+  margin-top: var(--space-4);
+  padding: 5px var(--space-4) 7px;
+  background: #14111c;
+  border-color: rgba(255,255,255,.075);
+  box-shadow: 0 10px 28px rgba(0,0,0,.17);
+}
+.goal-card .mission-section {
+  margin: 0;
+  padding: 14px 0 12px;
+  border-bottom: 1px solid rgba(255,255,255,.065);
+}
+.goal-card .board-title { font-size: 15.5px; }
+.goal-row { padding-block: 15px; }
+.goal-row + .goal-row { border-top-color: rgba(255,255,255,.055); }
+.gr-name { color: #f0edf5; }
+.gr-sub { margin-top: 3px; color: #aaa3ba; }
+
+.hud-tabs {
+  padding: 5px;
+  background: #121019;
+  border-color: rgba(255,255,255,.1);
+  border-radius: 20px;
+  box-shadow: 0 16px 38px rgba(0,0,0,.5);
+}
+.hud-tab { opacity: .68; }
+.hud-tab-ico { filter: saturate(.72); }
+.hud-tab.sel {
+  opacity: 1;
+  color: #f5f1fa;
+  background: #2a2041;
+  box-shadow: inset 0 0 0 1px rgba(167,139,250,.14);
+}
+.hud-tab.sel .hud-tab-ico { filter: none; transform: translateY(-1px); }
+
+@media (max-width: 640px) {
+  .world-screen { gap: 18px; }
+  .screen-head { margin-bottom: 14px; }
+  .stage-name { font-size: 20px; }
+  .board-head:not(.mission-section) { margin-top: 25px; }
+  .goal-card { border-radius: 16px; }
+}
+
+@media (max-width: 380px) {
+  .hud-code { font-size: 15px; }
+  .stage-overlay { padding: 14px; }
+  .queue-btn { min-height: 66px; padding-left: 15px; }
+  .board-head:not(.mission-section) .board-title { font-size: 17px; }
+}
+
+/* Candy Star already has its own back row and title. The old 26px screen
+   padding, the global 58px screen-head and its margin stacked into a large
+   empty band below the HUD. Keep one compact navigation row instead. */
+.cs-screen { padding-top: 0; }
+.cs-screen > .screen-head {
+  min-height: 46px;
+  padding: 6px 0 3px;
+  margin-bottom: 12px;
+}
+.cs-screen > .pack-head { margin-bottom: 10px; }
