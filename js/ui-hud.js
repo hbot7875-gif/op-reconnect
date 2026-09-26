@@ -272,7 +272,7 @@ export function renderHud(container, state) {
               <span class="hud-code">${displayCode}</span>
               <button class="hud-eye" id="hudEyeBtn" type="button" title="${codenameHidden ? 'Show codename' : 'Hide codename'}" aria-label="${codenameHidden ? 'Show codename' : 'Hide codename'}">${codenameHidden ? '🙈' : '👁'}</button>
             </span>
-            <span class="hud-meta"><em>${esc(p.rank.title)}</em><i>·</i><b>LV ${lvl.level}</b></span>
+            <span class="hud-meta">${lvl.name ? `<em>${esc(lvl.name)}</em><i>·</i>` : ''}<b>LV ${lvl.level}</b></span>
           </span>
         </div>
         <div class="hud-streak${streakCold}" title="${p.streak.current} days in a row">${streakLabel}</div>
@@ -369,9 +369,7 @@ function progressSheet(state) {
   }
 
   sheet.appendChild(el('div', 'bd-block', `
-    <div class="bd-block-head">Rank</div>
-    <div class="bd-line"><span>Current</span><b>${esc(p.rank.title)}</b></div>
-    ${p.rank.nextTitle ? `<div class="bd-line"><span>Next rank</span><b>${esc(p.rank.nextTitle)}</b></div>` : ''}
+    <div class="bd-block-head">Collection</div>
     <div class="bd-line"><span>Badges earned</span><b>${earnedBadgeCount(state)}</b></div>
   `))
 
