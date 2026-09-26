@@ -201,6 +201,9 @@ export async function getVmaBanner(supabase: SupabaseDB, content: GameContent, a
         chestThreshold: chest.success ? chest.threshold : null,
         chestReady: chestClaimable,
         communityChestClaimable: groupClaimable,
+        // How many, not just whether — the bell says "3 Group Chests" so
+        // the nudge is worth acting on rather than vague.
+        communityChestClaimableCount: communityChest.success ? communityChest.claimableIndices.length : 0,
       }
     }
     return null
@@ -233,6 +236,7 @@ export async function getVmaBanner(supabase: SupabaseDB, content: GameContent, a
     communityChestCumulative: communityChest.success ? communityChest.cumulativeVotes : 0,
     communityChestNextThreshold: communityChest.success ? communityChest.nextThreshold : null,
     communityChestClaimable: communityChest.success ? communityChest.claimableIndices.length > 0 : false,
+    communityChestClaimableCount: communityChest.success ? communityChest.claimableIndices.length : 0,
   }
 }
 

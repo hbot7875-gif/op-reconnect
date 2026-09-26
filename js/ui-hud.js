@@ -15,6 +15,7 @@
 
 import { badgeThumb } from './badge-art.js'
 import { hasNewBackupRequests, hasUnseenBackupHelper, markBackupHelperSeen } from './backup-pass.js'
+import { hasUnseenGroupChests, markGroupChestsSeen, unclaimedGroupChests } from './group-chest.js'
 import { call } from './api.js'
 import { el, esc, toast, setState, showOverlay, hideOverlay } from './state.js'
 import { getScreen, goWorld, goResources, goSettings, goCandyStar, goRanking, goDistrict } from './router.js'
@@ -246,7 +247,10 @@ export function renderHud(container, state) {
   // belongs in the bell beside invites rather than in the public ticker.
   const backupMine = state?.player?.backupMine || null
   const backupSignal = hasUnseenBackupHelper(backupMine) ? 1 : 0
-  const signalCount = invites.length + reconnectAlerts.length + unreadTotal + backupSignal
+  // The VMA event is over, so unclaimed Group Chests are the last rewards
+  // anyone can still collect — worth a personal nudge, once.
+  const chestSignal = hasUnseenGroupChests(state?.vma) ? 1 : 0
+  const signalCount = invites.length + reconnectAlerts.length + unreadTotal + backupSignal + chestSignal
   const reconnectStatus = reconnectHudStatus(state)
   const reconnectMission = state.activeDistrict?.reconnect?.mission
   const reconnectUnread = reconnectMission
@@ -417,9 +421,37 @@ function invitesSheet(state) {
   const unreadSignals = unreadDistrictSignals(state)
   const backupMine = state?.player?.backupMine || null
   const backupNew = hasUnseenBackupHelper(backupMine)
+  const chestsNew = hasUnseenGroupChests(state?.vma)
+  const chestCount = unclaimedGroupChests(state?.vma)
 
-  if (!invites.length && !alerts.length && !unreadSignals.length && !backupNew) {
+  if (!invites.length && !alerts.length && !unreadSignals.length && !backupNew && !chestsNew) {
     sheet.appendChild(el('p', 'muted', "No messages, invites or partner alerts. If another agent signals you, it shows up here."))
+  }
+
+  if (chestsNew) {
+    const block = el('div', 'bd-block')
+    block.innerHTML = `
+      <div class="bd-block-head">🎁 ${chestCount} Group Supply Chest${chestCount === 1 ? '' : 's'} waiting</div>
+      <p class="muted invite-body">ARMY unlocked ${chestCount === 1 ? 'one' : 'these'} together during the VMA mission and ${chestCount === 1 ? 'it is' : 'they are'} still unclaimed. Voting has closed, so nothing more will be added — but what you have earned is still yours to open.</p>
+    `
+    const actions = el('div', 'invite-actions')
+    const claim = el('button', 'btn btn-primary', 'Claim now')
+    // Goes to the City rather than opening the mission sheet from here.
+    // vma.js statically imports tesseract.js for vote-proof OCR, and
+    // ui-hud.js is pulled in by main, the district screen and settings —
+    // importing it here (even dynamically) put the OCR engine in a
+    // widely-shared chunk and the production build ran out of memory. The
+    // City is where the event card already lives, with its own working
+    // CLAIM CHEST button, so this lands them exactly one tap away.
+    claim.onclick = () => { markGroupChestsSeen(state.vma); hideOverlay(); goWorld() }
+    const ok = el('button', 'btn btn-ghost', 'Later')
+    // setState re-renders the HUD so the bell's own count drops straight
+    // away. Without it the badge keeps claiming a signal the sheet no
+    // longer shows, until the next poll happens to correct it.
+    ok.onclick = () => { markGroupChestsSeen(state.vma); hideOverlay(); setState(state) }
+    actions.append(claim, ok)
+    block.appendChild(actions)
+    sheet.appendChild(block)
   }
 
   if (backupNew) {
@@ -438,7 +470,7 @@ function invitesSheet(state) {
       else goWorld()
     }
     const ok = el('button', 'btn btn-ghost', 'Got it')
-    ok.onclick = () => { markBackupHelperSeen(backupMine); hideOverlay() }
+    ok.onclick = () => { markBackupHelperSeen(backupMine); hideOverlay(); setState(state) }
     actions.append(view, ok)
     block.appendChild(actions)
     sheet.appendChild(block)
