@@ -29,7 +29,7 @@ export function renderRanking(container, state) {
   const wrap = el('div', 'rank-screen')
 
   wrap.appendChild(el('div', 'pack-head', `
-    <span class="pack-eyebrow">🏆 Rankings</span>
+    <span class="pack-eyebrow"><span class="rank-title-icon" aria-hidden="true">🏆</span> Rankings</span>
     <span class="pack-name">Who's leading the network</span>
   `))
 

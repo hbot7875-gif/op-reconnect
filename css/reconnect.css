@@ -4466,7 +4466,7 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
   min-height: 59px; padding: 9px 5px; border: 0; border-bottom: 1px solid var(--border); background: transparent;
 }
 .rank-row.is-top { background: linear-gradient(90deg, rgba(217,173,95,.055), transparent 72%); }
-.rank-row.is-me { margin-inline: -5px; padding-inline: 10px 5px; border-left: 2px solid var(--purple-lt);
+.rank-row.is-me { margin-inline: -5px; padding-inline: 8px 10px; border-left: 2px solid var(--purple-lt);
   background: linear-gradient(90deg, rgba(139,92,246,.11), transparent 78%); }
 .rank-place {
   width: 27px; text-align: center; font-family: var(--mono); font-weight: 700;
@@ -4499,25 +4499,40 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .rank-hint { margin-top: 11px; padding-inline: 3px; font-size: 11.5px; line-height: 1.5; }
 
 @media (max-width: 560px) {
-  .rank-screen .pack-head { margin-bottom: 4px; }
+  .rank-screen .pack-head { margin-bottom: 4px; padding-top: 4px; }
   .rank-screen .pack-name { display: none; }
   .rank-screen .pack-eyebrow {
-    font-size: 11px; font-weight: 800; line-height: 1.15; letter-spacing: 1.7px;
+    display: flex; align-items: center; gap: 8px;
+    color: #f2eff7; font-family: var(--disp); font-size: 26px;
+    font-weight: 800; line-height: 1.1; letter-spacing: .15px; text-transform: none;
+  }
+  .rank-title-icon {
+    flex: none; font-family: system-ui, sans-serif; font-size: 15px;
+    line-height: 1; filter: saturate(.65) sepia(.12); transform: translateY(-1px);
   }
 
   /* Six modes must remain one touch-scrollable strip at phone widths. */
   .rank-tabs {
     display: flex; overflow-x: auto; overflow-y: hidden;
-    gap: 2px; margin: 7px 0 0;
+    gap: 22px; margin: 10px 0 0;
     overscroll-behavior-inline: contain; -webkit-overflow-scrolling: touch;
     scrollbar-width: none; -ms-overflow-style: none;
   }
   .rank-tabs::-webkit-scrollbar { display: none; }
   .rank-tab {
-    flex: 0 0 auto; min-width: max-content; min-height: 44px;
-    padding: 11px 10px 9px; scroll-snap-align: start;
-    font-size: 10px; line-height: 1; letter-spacing: .2px;
+    position: relative; flex: 0 0 auto; min-width: max-content; min-height: 44px;
+    padding: 12px 0 11px; border-bottom: 0; scroll-snap-align: start;
+    color: #a8a0b7; font-size: 14px; font-weight: 700;
+    line-height: 1; letter-spacing: 0;
   }
+  .rank-tab.sel { border-bottom-color: transparent; color: #f0ecf6; }
+  .rank-tab::after {
+    content: ''; position: absolute; right: 0; bottom: 0; left: 0;
+    height: 2px; border-radius: 999px;
+    background: linear-gradient(90deg, #d9cff0, #a8c8e2, #c3a5dc, #dce1e9);
+    opacity: 0;
+  }
+  .rank-tab.sel::after { opacity: 1; }
   .rank-tab:focus-visible { outline: 2px solid var(--purple-lt); outline-offset: -3px; }
 
   /* Keep medals, artwork, player identity and XP in separate columns. */
@@ -4527,18 +4542,37 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
     border-bottom-color: rgba(255,255,255,.09);
   }
   .rank-list { border-top-color: rgba(255,255,255,.09); }
+  .rank-row.is-me { padding-inline: 7px 9px; }
   .rank-place { width: 24px; font-size: 11px; }
   .rank-row.is-top .rank-place { font-size: 15px; }
   .rank-agent-icon,
   .rank-agent-icon.has-equipped-badge,
   .rank-row.is-top .rank-agent-icon {
-    width: 56px; height: 56px; justify-self: end; box-sizing: border-box;
-    border: 2px solid rgba(151,112,205,.52); font-size: 20px;
+    position: relative; isolation: isolate;
+    width: 56px; height: 56px; padding: 1px; justify-self: end; box-sizing: border-box;
+    border: 2px solid transparent;
+    background: linear-gradient(var(--bg), var(--bg)) padding-box,
+      linear-gradient(135deg, #d9cff0 0%, #a7c8df 33%, #c2a5d9 64%, #dce1e9 100%) border-box;
+    font-size: 20px;
   }
-  .rank-list > .rank-row:nth-child(1) .rank-agent-icon { border-color: rgba(217,173,95,.82); }
-  .rank-list > .rank-row:nth-child(2) .rank-agent-icon { border-color: rgba(192,198,212,.75); }
-  .rank-list > .rank-row:nth-child(3) .rank-agent-icon { border-color: rgba(185,126,82,.78); }
-  .rank-agent-photo { display: block; width: 100%; height: 100%; object-position: center; }
+  .rank-list > .rank-row:nth-child(-n+3) .rank-agent-icon { border-width: 3px; }
+  .rank-list > .rank-row:nth-child(1) .rank-agent-icon {
+    background: linear-gradient(var(--bg), var(--bg)) padding-box,
+      linear-gradient(135deg, #8d641f 0%, #e7c36d 24%, #fff0b3 43%, #b77e28 66%, #f1d98f 84%, #8c631f 100%) border-box;
+  }
+  .rank-list > .rank-row:nth-child(2) .rank-agent-icon {
+    background: linear-gradient(var(--bg), var(--bg)) padding-box,
+      linear-gradient(135deg, #687587 0%, #eef3fb 24%, #a9b7ca 47%, #f8f9fc 67%, #8996a9 100%) border-box;
+  }
+  .rank-list > .rank-row:nth-child(3) .rank-agent-icon {
+    background: linear-gradient(var(--bg), var(--bg)) padding-box,
+      linear-gradient(135deg, #74432d 0%, #d79464 27%, #f1c08b 45%, #9a5836 68%, #daa078 86%, #72402c 100%) border-box;
+  }
+  .rank-agent-photo {
+    position: relative; z-index: 1; display: block;
+    width: calc(100% - 2px); height: calc(100% - 2px); margin: 1px;
+    object-fit: cover; object-position: center;
+  }
   .rank-main { gap: 3px; overflow: hidden; }
   .rank-name {
     max-width: 100%; font-size: 14.5px; font-weight: 700;
