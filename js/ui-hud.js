@@ -265,7 +265,7 @@ export function renderHud(container, state) {
       <div class="hud-row">
         <div class="hud-identity" id="levelPill" role="button" tabindex="0" title="Open Agent Dossier">
           <span class="hud-crest${agentBadge || collectionBadge ? ' has-badge' : ''}${badgeArt ? ' has-photo' : ''}${crestRare}" aria-hidden="true"><i></i>${
-            badgeArt ? `<img class="hud-crest-photo" src="${esc(badgeThumb(badgeArt, 48))}" alt="">` : `<b>${collectionBadge ? '🎖️' : agentBadge ? agentBadge.icon : '⟭⟬'}</b>`
+            badgeArt ? `<img class="hud-crest-photo" src="${esc(badgeThumb(badgeArt))}" data-badge-full="${esc(badgeArt)}" alt="">` : `<b>${collectionBadge ? '🎖️' : agentBadge ? agentBadge.icon : '⟭⟬'}</b>`
           }</span>
           <span class="hud-who">
             <span class="hud-code-row">

@@ -1,15 +1,18 @@
 {
   "name": "op-reconnect",
   "version": "1.0.0",
-  "description": "OP: ReConnect — an individual streaming game for ARMY. The city went dark; every stream brings a piece of it back.",
+  "description": "OP: ReConnect \u2014 an individual streaming game for ARMY. The city went dark; every stream brings a piece of it back.",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --test \"js/**/*.test.mjs\" \"supabase/functions/**/*.test.mjs\"",
+    "badge:thumbs": "node scripts/generate-badge-thumbs.mjs"
   },
   "devDependencies": {
+    "sharp": "^0.35.2",
     "terser": "^5.48.0",
     "vite": "^6.4.0",
     "wrangler": "^4.118.0"

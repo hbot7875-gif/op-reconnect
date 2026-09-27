@@ -102,7 +102,7 @@ function badgeSlot(tile, name, rarity, earned) {
 }
 
 function collectionTile(e, wearing, state) {
-  const art = e.artworkUrl ? `<img class="bdr-photo" src="${esc(badgeThumb(e.artworkUrl, 94))}" alt="" loading="lazy" decoding="async">` : `<span class="bdr-icon">${e.rarity === 'rare' ? '🎖️' : '🔹'}</span>`
+  const art = e.artworkUrl ? `<img class="bdr-photo" src="${esc(badgeThumb(e.artworkUrl))}" data-badge-full="${esc(e.artworkUrl)}" alt="" loading="lazy" decoding="async">` : `<span class="bdr-icon">${e.rarity === 'rare' ? '🎖️' : '🔹'}</span>`
   const tile = el('button', 'bdr-tile got' + (wearing ? ' equipped' : '') + (e.rarity === 'rare' ? ' rare' : ''),
     `${art}${e.rarity === 'rare' ? '<span class="bdr-rarity">RARE</span>' : ''}${wearing ? '<i>WORN</i>' : ''}`)
   tile.setAttribute('aria-label', e.name)
