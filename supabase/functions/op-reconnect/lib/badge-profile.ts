@@ -186,6 +186,40 @@ export async function getBadgeCollection(supabase: SupabaseDB, params: Record<st
   }
 }
 
+/** Reads the award rows behind a batch of equipped badges, in full.
+ *
+ *  This filter is a CROSS PRODUCT, not a list of pairs: every agent in the
+ *  batch crossed with every badge id anyone in the batch has equipped. One
+ *  row per agent is wanted; on a 71-agent Ranking board it matched 1,276.
+ *  PostgREST caps a response at 1,000 rows by default and says nothing when
+ *  it truncates, so 276 rows were dropped and every agent whose own award
+ *  landed in the tail resolved to null — 20 agents lost their avatar from
+ *  Ranking with nothing whatsoever wrong in their data, and which 20 moved
+ *  as the board grew. Paging to exhaustion is what makes that impossible;
+ *  the explicit order makes each page stable instead of arbitrary.
+ *
+ *  Left as a cross product rather than 71 pair-filters because the rows are
+ *  small and this runs once per leaderboard cache miss (30s), not per
+ *  request — correctness first, and the shape stays one round trip per
+ *  1,000 rows instead of one per agent. */
+const AWARD_PAGE = 1000
+
+async function fetchEquippedAwards(
+  supabase: SupabaseDB, agentNos: string[], badgeIds: string[],
+): Promise<{ rows: any[]; error: any }> {
+  const rows: any[] = []
+  for (let from = 0; ; from += AWARD_PAGE) {
+    const { data, error } = await supabase.from('rc_badges')
+      .select('agent_no, badge_id, artwork_id')
+      .in('agent_no', agentNos).in('badge_id', badgeIds)
+      .order('agent_no', { ascending: true }).order('badge_id', { ascending: true })
+      .range(from, from + AWARD_PAGE - 1)
+    if (error) return { rows, error }
+    rows.push(...(data || []))
+    if (!data || data.length < AWARD_PAGE) return { rows, error: null }
+  }
+}
+
 /** (13) Batch-resolves equipped-badge artwork for player/leaderboard
  *  responses, replacing reliance on the client's hardcoded badges.js
  *  catalog for anything that's actually a Badge Collection template. Legacy
@@ -204,8 +238,8 @@ export async function resolveEquippedBadges(
   const badgeIds = [...new Set(withBadge.map((p) => p.badgeId as string))]
   const templateIds = [...new Set(badgeIds.map((b) => parseBadgeId(b).templateId))]
 
-  const [{ data: awardRows, error: awardsErr }, { data: templates, error: templatesErr }] = await Promise.all([
-    supabase.from('rc_badges').select('agent_no, badge_id, artwork_id').in('agent_no', agentNos).in('badge_id', badgeIds),
+  const [{ rows: awardRows, error: awardsErr }, { data: templates, error: templatesErr }] = await Promise.all([
+    fetchEquippedAwards(supabase, agentNos, badgeIds),
     supabase.from('rc_badge_catalog').select('id, name, rarity').in('id', templateIds),
   ])
   if (awardsErr || templatesErr) {
