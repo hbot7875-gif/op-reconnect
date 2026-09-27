@@ -20,6 +20,9 @@ export interface StreamFetchResult {
   complete: boolean
   partialReason: StreamCoverageReason | null
   source: 'listenbrainz' | 'direct' | 'statsfm' | 'musicat'
+  /** True when the rows came from rc_scrobbles because the pg_cron capture
+   *  had already covered this window, rather than from a provider call. */
+  reusedCapture?: boolean
   providerRowCount: number
   providerOldestAt: number | null
   providerNewestAt: number | null
@@ -250,6 +253,62 @@ async function persistScrobbles(supabase: SupabaseDB, agentNo: string, rows: Str
  * Source resolution mirrors the platform: ListenBrainz when pref is lb/unset
  * and an LB username exists; otherwise the agent's resolved custom source.
  */
+/** How recent a capture checkpoint must be before a fleet sync will trust
+ *  it instead of re-asking the provider. Roughly 2.5x each job's cadence
+ *  (stats.fm every 5 min, musicat and ListenBrainz every 15), so a single
+ *  missed run never causes a reuse. */
+const CAPTURE_FRESHNESS_MS: Record<string, number> = {
+  statsfm: 12 * 60_000,
+  musicat: 35 * 60_000,
+  listenbrainz: 35 * 60_000,
+}
+
+export type CaptureReuseReason =
+  | 'reuse' | 'not_polled' | 'no_state' | 'source_changed'
+  | 'capture_failing' | 'stale' | 'coverage_gap'
+
+/**
+ * Whether the pg_cron capture has already covered this window, so a fleet
+ * sync can build its rollups from rc_scrobbles instead of paging the
+ * provider again.
+ *
+ * This is the only place the reuse decision is made, and it is pure so every
+ * branch is testable without a database or a provider. It is deliberately
+ * conservative: reuse requires ALL of the conditions below, and anything
+ * unexpected falls through to a normal provider fetch. The cost of an
+ * unnecessary fetch is a slow sync; the cost of a wrong reuse is missing
+ * streams, so they are not weighed equally.
+ *
+ * Note this never skips an AGENT — ensureDailyRollups still runs for
+ * everyone, so XP, goals and daily rollups are computed exactly as before.
+ * All that is skipped is the duplicate provider round trip.
+ */
+export function captureReuse(input: {
+  source: string
+  state: { source?: string | null; coverage_from?: string | null; last_success_at?: string | null; consecutive_failures?: number | null } | null
+  fromTs: number
+  nowMs?: number
+}): { reuse: boolean; reason: CaptureReuseReason } {
+  const { source, state, fromTs } = input
+  const nowMs = input.nowMs ?? Date.now()
+  const freshness = CAPTURE_FRESHNESS_MS[source]
+  // 'direct' has no capture job and no provider call to save — its rows
+  // already come from rc_scrobbles.
+  if (!freshness) return { reuse: false, reason: 'not_polled' }
+  if (!state) return { reuse: false, reason: 'no_state' }
+  // An agent who switched provider has a checkpoint describing the old one.
+  if (state.source !== source) return { reuse: false, reason: 'source_changed' }
+  if ((Number(state.consecutive_failures) || 0) > 0) return { reuse: false, reason: 'capture_failing' }
+  const lastSuccess = state.last_success_at ? new Date(state.last_success_at).getTime() : 0
+  if (!(lastSuccess > 0) || nowMs - lastSuccess > freshness) return { reuse: false, reason: 'stale' }
+  const coverageFrom = state.coverage_from ? Math.floor(new Date(state.coverage_from).getTime() / 1000) : 0
+  // Capture must already reach back at least as far as this sync is asking
+  // for. A backfill asking for 35 days will not be covered by a checkpoint
+  // that only starts yesterday, so it falls through and pages the provider.
+  if (!(coverageFrom > 0) || coverageFrom > fromTs) return { reuse: false, reason: 'coverage_gap' }
+  return { reuse: true, reason: 'reuse' }
+}
+
 export async function fetchStreamRows(
   supabase: SupabaseDB,
   agent: AgentSourceRow,
@@ -265,7 +324,40 @@ export async function fetchStreamRows(
   let complete = true
   let partialReason: StreamCoverageReason | null = null
   let providerRows: StreamRow[] = []
-  if (source === 'listenbrainz') {
+
+  // The pg_cron capture jobs already poll every provider on their own
+  // schedule and persist into rc_scrobbles. When their checkpoint proves
+  // this window is covered, the fleet sync's own provider call is pure
+  // duplication — the same plays, fetched twice — and it is what pushes the
+  // run against the 150s Edge Function timeout. Read the accumulated rows
+  // instead.
+  //
+  // useStoredCoverage === false is the capture job calling us. It must never
+  // reuse its own checkpoint, or it would certify its own gaps and stop
+  // fetching entirely.
+  let reusedCapture = false
+  if (options.useStoredCoverage !== false) {
+    const { data: state } = await supabase.from('rc_stream_sync_state')
+      .select('source, coverage_from, last_success_at, consecutive_failures')
+      .eq('agent_no', agent.agent_no).maybeSingle()
+    const decision = captureReuse({ source, state: state || null, fromTs })
+    if (decision.reuse) {
+      const stored = await fetchDirectScrobbles(supabase, agent.agent_no, fromTs, toTs)
+      rows = stored.rows
+      ok = stored.ok
+      // Capture certified this window, so coverage is as complete as a fresh
+      // provider call would have reported.
+      complete = stored.complete
+      partialReason = stored.ok ? null : stored.partialReason
+      reusedCapture = true
+    }
+  }
+
+  if (reusedCapture) {
+    // rows already loaded from rc_scrobbles above; no provider call needed.
+    // Falls through to the shared dedup + ad filter below, so a reused fetch
+    // is normalised identically to a fetched one.
+  } else if (source === 'listenbrainz') {
     const lb = await fetchListenBrainz((agent.lb_username || '').trim(), fromTs, toTs, lbMaxPages)
     rows = lb.rows
     providerRows = lb.rows
@@ -344,6 +436,7 @@ export async function fetchStreamRows(
   const providerTimes = providerRows.map((r) => Number(r.listened_at)).filter(Number.isFinite)
   return {
     rows: out, ok, complete, partialReason, source,
+    reusedCapture,
     providerRowCount: providerRows.length,
     providerOldestAt: providerTimes.length ? Math.min(...providerTimes) : null,
     providerNewestAt: providerTimes.length ? Math.max(...providerTimes) : null,
