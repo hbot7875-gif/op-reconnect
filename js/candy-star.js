@@ -25,6 +25,7 @@
 // bug in this file.
 
 import { esc, toast } from './state.js'
+import { enhanceSelect } from './rc-select.js'
 import { getAgentNo } from './session.js'
 import { call as apiCall } from './api.js'
 
@@ -93,18 +94,18 @@ function candyGoalGuideMarkup() {
       </button>
       <div class="cs-goal-guide-panel" id="cs-goal-guide-panel" hidden>
         <div class="cs-goal-guide-controls">
-          <label>
+          <div class="cs-guide-field">
             <span>District</span>
             <select id="cs-guide-district" onchange="candySelectGuideDistrict(this.value)">
-              ${guides.map(d => `<option value="${sanitize(d.id)}"${d.id === selected.id ? ' selected' : ''}>${sanitize(d.name)}${d.isCurrent ? ' · current' : ''}</option>`).join('')}
+              ${guides.map(d => `<option value="${sanitize(d.id)}"${d.id === selected.id ? ' selected' : ''}${d.isCurrent ? ' data-current="true"' : ''}>${sanitize(d.name)}</option>`).join('')}
             </select>
-          </label>
-          <label>
+          </div>
+          <div class="cs-guide-field">
             <span>Goal size for</span>
             <select id="cs-guide-mode" onchange="candySelectGuideMode(this.value)">
               ${modes.map(mode => `<option value="${sanitize(mode.id)}"${mode.id === cs.guideMode ? ' selected' : ''}>${sanitize(candyGuideShortMode(mode.label, mode.id))}</option>`).join('')}
             </select>
-          </label>
+          </div>
         </div>
         <div id="cs-goal-guide-content"></div>
       </div>
@@ -178,6 +179,21 @@ function candyRenderGoalGuide() {
     ${albumRows ? `<div class="cs-guide-group"><div class="cs-guide-group-title"><span>Albums</span><small>${district.albums.length}</small></div>${albumRows}</div>` : ''}
     ${reconnectRows ? `<div class="cs-guide-group"><div class="cs-guide-group-title"><span>ReConnect</span><small>${district.reconnect.length > 1 ? 'one is assigned at activation' : 'team goal'}</small></div>${reconnectRows}</div>` : ''}
     <div class="cs-guide-tip"><b>Playlist tip:</b> use 1–2 focus songs with 1–2 albums. For a large district, make several focused playlists instead of squeezing every goal into one.</div>`;
+}
+
+/** The guide's two pickers open as ReConnect sheets instead of the phone's
+ *  own chooser. The <select>s keep their inline onchange= handlers and keep
+ *  holding the value — see js/rc-select.js. Called after every render of the
+ *  Candy Star panel, because that render replaces this markup wholesale. */
+function candyEnhanceGuideSelects() {
+  enhanceSelect($('cs-guide-district'), {
+    title: 'DISTRICT',
+    hint: 'See what any district needs before you build.',
+    // Ten-ish districts read fine as one scroll, and a search field over
+    // them would be UI for its own sake.
+    search: false,
+  });
+  enhanceSelect($('cs-guide-mode'), { title: 'GOAL SIZE', search: false });
 }
 
 export function candyToggleGoalGuide() {
@@ -986,6 +1002,7 @@ export async function renderCandyStar() {
   </div>`;
 
   candySyncRowControls();
+  candyEnhanceGuideSelects();
   candyQuickRefresh();
   candyUpdateEstimate();
 

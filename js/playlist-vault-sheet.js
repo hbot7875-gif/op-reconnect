@@ -189,6 +189,20 @@ export function openPlaylistVault({ districtId = null, districtName = null } = {
 
   const shareForm = el('div', 'cs-vault-share')
   shareForm.hidden = true
+  // This one stays a native <select>, and it is the only player-facing one
+  // left. js/rc-select.js opens its sheet through state.js's showOverlay,
+  // and showOverlay is single-slot: it does `overlay.innerHTML = ''` before
+  // mounting. This form lives INSIDE a sheet that showOverlay already
+  // rendered (see the showOverlay(sheet) at the end of this function), so
+  // opening a picker from here detaches the whole Vault — measured: the
+  // vault-sheet leaves the DOM, the half-typed Spotify link in the field
+  // below goes with it, and closing the picker leaves the overlay empty
+  // rather than back on the Vault.
+  //
+  // Making this work needs the shared overlay to stack, which means Escape,
+  // the backdrop click and the focus trap in state.js all have to learn
+  // about layers — every sheet in the game comes through that code. That is
+  // its own change, not a line in a selector pass.
   shareForm.innerHTML = `
     <label class="cs-field-label" for="vs-share-district">District this playlist is for</label>
     <select id="vs-share-district" class="input-field cs-vault-share-district"></select>

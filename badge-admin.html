@@ -240,10 +240,10 @@
     <p class="bv-note">Drag to frame and use Zoom. The previews below show the real circle,
       rare card and small Agent icon crops.</p>
 
-    <label class="bv-field">
+    <div class="bv-field">
       <span>Badge</span>
       <select class="input-field" id="tpl"></select>
-    </label>
+    </div>
 
     <div class="bv-field">
       <span>Photo file</span>
@@ -377,6 +377,7 @@
 <script type="module">
 import { call } from './js/api.js'
 import { getAgentNo, getSession } from './js/session.js'
+import { enhanceSelect } from './js/rc-select.js'
 import {
   artMembers,
   badgeArtMatches,
@@ -461,6 +462,7 @@ function paintTemplates() {
     for (const t of bySection[section]) {
       const o = document.createElement('option')
       o.value = t.id
+      o.dataset.rarity = t.rarity || ''
       o.textContent = `${t.name}${t.rarity === 'rare' ? ' (rare)' : ''}`
       g.appendChild(o)
     }
@@ -949,6 +951,14 @@ $('publish').onclick = async () => {
 $('tpl').onchange = paintTemplateGuidance
 $('pool').onchange = updateReviewEnabled
 
+// The badge picker opens as a ReConnect sheet rather than the phone's own
+// full-height chooser. Everything above and below still reads and writes
+// $('tpl').value exactly as before — see js/rc-select.js — including the
+// reset after publishing and paintTemplates() rebuilding the whole list.
+// Search is 'auto': the catalog grows with every migration that adds a
+// template, so it appears once the list is long enough to be worth it.
+enhanceSelect($('tpl'), { title: 'BADGE', search: 'auto', searchPlaceholder: 'Search badges' })
+
 $('memberPicker').querySelectorAll('[data-member]').forEach((button) => {
   button.onclick = () => togglePhotoMember(button.dataset.member)
 })
@@ -1060,5 +1070,6 @@ paintMemberPicker()
 
 boot()
 </script>
+<div id="overlay" hidden></div>
 </body>
 </html>
