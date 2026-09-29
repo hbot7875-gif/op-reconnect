@@ -111,7 +111,7 @@
   .adm-roster-intro { max-width: 760px; margin: 0 0 14px; }
   .adm-roster-toolbar { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(160px, 220px) auto;
     gap: 8px; align-items: center; margin-bottom: 12px; }
-  .adm-roster-toolbar .ob-input { width: 100%; }
+  .adm-roster-toolbar .ob-input:not(.rc-select-native) { width: 100%; }
   .adm-roster-summary { display: grid; grid-template-columns: repeat(6, minmax(105px, 1fr)); gap: 7px;
     margin: 2px 0 14px; }
   .adm-roster-chip { appearance: none; text-align: left; background: var(--surface-2); color: var(--muted);
@@ -243,7 +243,10 @@
   .adm-field { display: block; margin-bottom: 12px; }
   .adm-field > span { display: block; font-family: var(--mono); font-size: 11px; letter-spacing: 0.8px;
     text-transform: uppercase; color: var(--dim); margin-bottom: 6px; }
-  .adm-field .ob-input { width: 100%; font-family: inherit; font-size: 16px;
+  /* :not() so the controls rc-select/rc-multiselect hide stay hidden —
+     this block comes after reconnect.css and a two-class rule beats a
+     one-class one, which would put the real <select> back on screen. */
+  .adm-field .ob-input:not(.rc-select-native):not(.rc-multi-native) { width: 100%; font-family: inherit; font-size: 16px;
     font-weight: 500; line-height: 1.35; letter-spacing: 0.1px; }
   .adm-field .ob-input::placeholder { color: var(--dim); opacity: 0.9; font-weight: 400; }
   .adm-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -400,7 +403,10 @@
     .adm-goal-form-grid { grid-template-columns: 1fr; }
     .adm-card { padding: 16px; }
     .adm-roster-toolbar { grid-template-columns: 1fr auto; }
-    .adm-roster-toolbar select { grid-column: 1 / -1; grid-row: 2; }
+    /* the trigger is what sits in the grid now; the <select> it stands in
+       for is absolutely positioned and no longer a grid item. */
+    .adm-roster-toolbar select,
+    .adm-roster-toolbar .rc-select-trigger { grid-column: 1 / -1; grid-row: 2; }
     .adm-roster-summary { display: flex; overflow-x: auto; padding-bottom: 3px; scrollbar-width: thin; }
     .adm-roster-chip { flex: 0 0 112px; }
     .adm-roster-row { grid-template-columns: minmax(0,1fr) auto; gap: 10px; padding: 12px; }
@@ -410,7 +416,8 @@
     .adm-roster-row .arr-go { display: none; }
     .adm-roster-drawer-panel { border-left: 0; }
     .rh-toolbar { grid-template-columns: 1fr auto; }
-    .rh-toolbar select { grid-column: 1 / -1; grid-row: 2; }
+    .rh-toolbar select,
+    .rh-toolbar .rc-select-trigger { grid-column: 1 / -1; grid-row: 2; }
     .rh-meta { grid-template-columns: 1fr 1fr; }
     .rh-action { align-items: flex-start; flex-direction: column; }
     .rh-action .btn { width: 100%; }
@@ -504,11 +511,11 @@
       <label class="adm-field"><span>Duration (hours, 1–72)</span>
         <input id="rzHours" class="ob-input" type="number" min="1" max="72" value="24"></label>
     </div>
-    <label class="adm-field"><span>What counts</span>
+    <div class="adm-field"><span>What counts</span>
       <select id="rzTargetGoal" class="ob-input adm-rz-targets" multiple size="7">
         <option value="" selected>Any BTS song</option>
-      </select></label>
-    <p class="muted">Pick one, or several — ctrl/cmd-click to add, and a track and an album can be mixed.
+      </select></div>
+    <p class="muted">Pick one, or several — tick as many as you need, and a track and an album can be mixed.
       Players are told exactly what you pick: "stream the ARIRANG album and Keep Swimming", "stream Haegeum",
       or "stream any BTS song". A track counts only that track; an album counts any track on it. The choice
       is frozen when you launch, so editing a goal afterwards can't change a running event.</p>
@@ -578,11 +585,11 @@
     live in gameplay, for the same freezing reason.
   </p>
 
-  <label class="adm-field" style="max-width:360px;"><span>District</span>
+  <div class="adm-field" style="max-width:360px;"><span>District</span>
     <select id="goalDistrictFilter" class="ob-input">
       <option value="">— Unassigned goals —</option>
     </select>
-  </label>
+  </div>
 
   <div class="adm-goals-layout">
     <div class="adm-goals-lists">
@@ -643,7 +650,7 @@
       <section class="adm-card">
         <h3 style="margin:0 0 10px;">Add a ReConnect goal</h3>
         <p class="muted" id="goalReconnectDistrictNote" style="margin-bottom:10px;"></p>
-        <label class="adm-field"><span>Flavor</span>
+        <div class="adm-field"><span>Flavor</span>
           <select id="goalReconnectVariant" class="ob-input">
             <option value="sotd">🎵 Song of the Day — guess a song from a hint</option>
             <option value="cipher">🔐 Cipher — guess a song from its initials</option>
@@ -651,7 +658,7 @@
             <option value="connect">🤝 Connect — agents pair up, both keep streaming</option>
             <option value="invite">📡 Invite — invite helpers, no streaming needed from them</option>
           </select>
-        </label>
+        </div>
         <div id="goalReconnectSotdFields">
           <label class="adm-field"><span>Hint shown to the player (optional)</span>
             <input id="goalReconnectPromptSotd" class="ob-input" type="text" placeholder="e.g. It's about summer"></label>
@@ -797,6 +804,8 @@
 
 <script type="module">
 import { call as rawCall, API_URL } from './js/api.js'
+import { enhanceSelect } from './js/rc-select.js'
+import { enhanceMultiSelect } from './js/rc-multiselect.js'
 import { scanVoteProofImage } from './js/vma.js'
 import { evaluateVoteProof } from './supabase/functions/op-reconnect/lib/vma-ocr.js'
 import {
@@ -1388,6 +1397,11 @@ function wireGoalRowButtons(container) {
       }
     }
     moveSel.onclick = (e) => e.stopPropagation()
+    // The trigger stands where the <select> did, inside the row's popup.
+    // The document-level click handler above only closes menus for clicks
+    // outside .adm-goal-menu, and the trigger is inside it, so opening the
+    // sheet does not dismiss the menu holding it.
+    enhanceSelect(moveSel, { title: 'MOVE TO DISTRICT', search: 'auto', variant: 'admin' })
     moveSel.onchange = async () => {
       const districtId = moveSel.value || null
       closeAllGoalMenus()
@@ -1911,6 +1925,21 @@ $('btnLoadRoster').onclick = async () => {
 }
 $('rosterFilter').addEventListener('input', applyRosterFilter)
 $('rosterSort').addEventListener('change', applyRosterFilter)
+
+// Admin pickers, ReConnect sheet instead of the platform's own list. Every
+// one keeps its <select> as the value: the handlers on this page still read
+// $(id).value, renderDistrictFilterOptions() and the ReConnect district
+// loader still rebuild their option lists, and rc-select follows both.
+enhanceSelect($('goalDistrictFilter'), { title: 'DISTRICT', search: 'auto', variant: 'admin' })
+enhanceSelect($('goalReconnectVariant'), { title: 'FLAVOR', search: false, variant: 'admin' })
+enhanceSelect($('rosterSort'), { title: 'SORT AGENTS', search: false, variant: 'admin' })
+enhanceSelect($('reconnectDistrictFilter'), { title: 'DISTRICT', search: 'auto', variant: 'admin' })
+// Red Zone targets stay a real multi-select. Checkbox rows in place of the
+// platform's multi-choice dialog, inline so the echo line below still reads
+// alongside the list. paintRZTargetEcho() adjusts the selection during its
+// own change event (picking a goal clears "Any BTS song"); the panel
+// re-reads the DOM afterwards, so that write is what shows.
+enhanceMultiSelect($('rzTargetGoal'), { label: 'What counts', empty: 'No streamable goals loaded.' })
 document.querySelector('[data-tab="roster"]').addEventListener('click', () => { if (!rosterCache.length) $('btnLoadRoster').click() })
 
 /* ── VMA Review ── */
@@ -2304,5 +2333,6 @@ document.querySelector('[data-tab="reconnect"]').addEventListener('click', () =>
 
 tryStoredKey()
 </script>
+<div id="overlay" hidden></div>
 </body>
 </html>

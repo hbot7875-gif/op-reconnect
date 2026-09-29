@@ -75,7 +75,7 @@ function watchValue(select, onChange) {
  * @param search   true / false / 'auto' (shown once the list is long)
  * @returns {{refresh: () => void}}
  */
-export function enhanceSelect(select, { title = '', hint = '', search = 'auto', searchPlaceholder = 'Search' } = {}) {
+export function enhanceSelect(select, { title = '', hint = '', search = 'auto', searchPlaceholder = 'Search', variant = '' } = {}) {
   if (!select) return { refresh: () => {} }
   if (select.dataset.rcSelect === 'on') {
     const refresh = () => select.dispatchEvent(new CustomEvent('rc-select-refresh'))
@@ -90,7 +90,7 @@ export function enhanceSelect(select, { title = '', hint = '', search = 'auto', 
   select.setAttribute('aria-hidden', 'true')
   select.tabIndex = -1
 
-  const trigger = el('button', 'rc-select-trigger')
+  const trigger = el('button', `rc-select-trigger${variant ? ` rc-select-trigger--${variant}` : ''}`)
   trigger.type = 'button'
   trigger.setAttribute('aria-haspopup', 'dialog')
   const value = el('span', 'rc-select-value')
@@ -126,6 +126,7 @@ export function enhanceSelect(select, { title = '', hint = '', search = 'auto', 
       hint,
       search,
       searchPlaceholder,
+      variant,
       options: readOptions(select),
       value: select.value,
       onChoose: (id) => {
@@ -144,8 +145,11 @@ export function enhanceSelect(select, { title = '', hint = '', search = 'auto', 
 }
 
 /** The sheet on its own, for callers that have options but no <select>. */
-export function openSelectSheet({ title = '', hint = '', options = [], value = '', onChoose, search = 'auto', searchPlaceholder = 'Search' } = {}) {
-  const sheet = el('div', 'sheet rc-select-sheet')
+export function openSelectSheet({ title = '', hint = '', options = [], value = '', onChoose, search = 'auto', searchPlaceholder = 'Search', variant = '' } = {}) {
+  // variant only adds a class. Admin screens want the same sheet at a denser
+  // rhythm — they are read at a desk, in bulk, not one tap at a time — and a
+  // second component for that would be two things to keep in step.
+  const sheet = el('div', `sheet rc-select-sheet${variant ? ` rc-select-sheet--${variant}` : ''}`)
   const titleId = `rc-select-title-${Math.random().toString(36).slice(2, 8)}`
   sheet.setAttribute('aria-labelledby', titleId)
 

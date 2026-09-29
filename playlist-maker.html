@@ -75,8 +75,8 @@
     <h2>New playlist</h2>
     <p class="pm-note">Paste a public Spotify playlist link. The title comes from Spotify itself,
       so it always matches what agents will open.</p>
-    <label class="pm-field"><span>District</span>
-      <select id="district" class="ob-input"></select></label>
+    <div class="pm-field"><span>District</span>
+      <select id="district" class="ob-input"></select></div>
     <label class="pm-field"><span>Spotify playlist link</span>
       <input id="url" class="ob-input" type="url" inputmode="url"
         placeholder="https://open.spotify.com/playlist/..."></label>
@@ -97,6 +97,7 @@
 <script type="module">
 import { call } from './js/api.js'
 import { getAgentNo, getSession } from './js/session.js'
+import { enhanceSelect } from './js/rc-select.js'
 
 const $ = (id) => document.getElementById(id)
 const esc = (value) => String(value == null ? '' : value)
@@ -193,7 +194,14 @@ $('addBtn').onclick = async () => {
   await load()
 }
 
+// The district picker opens as a ReConnect sheet instead of the phone's own
+// chooser. load() still fills this <select> from getPlaylistMakerHub and
+// submit still reads $('district').value, both untouched — rc-select watches
+// the option list and follows it.
+enhanceSelect($('district'), { title: 'DISTRICT', search: 'auto', variant: 'admin' })
+
 boot()
 </script>
+<div id="overlay" hidden></div>
 </body>
 </html>

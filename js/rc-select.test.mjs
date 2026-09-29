@@ -182,8 +182,10 @@ test('the sheet is the existing overlay, not a second modal framework', () => {
   // Escape, the focus trap, the backdrop dismiss and the focus restore all
   // come from state.js; re-implementing any of them here would mean two.
   assert.doesNotMatch(src, /'Escape'/)
-  const sheet = code('js/rc-select.js').match(/el\('div', 'sheet rc-select-sheet'\)/)
-  assert.ok(sheet, 'the sheet must carry the shared .sheet class')
+  // The class list is built with the optional admin variant appended, but it
+  // still opens with the shared `sheet` class — that is what carries the
+  // backdrop, the dismiss and the sizing.
+  assert.match(src, /el\('div', `sheet rc-select-sheet\$\{variant \? ` rc-select-sheet--\$\{variant\}` : ''\}`\)/)
 })
 
 test('rows are options in a listbox, with a real selected state', () => {

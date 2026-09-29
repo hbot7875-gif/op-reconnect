@@ -110,6 +110,7 @@
   .cs-gen-field-label { display: block; font-size: 12.5px; color: var(--muted); margin-top: 14px; margin-bottom: 4px; }
   select.ob-input { font-family: inherit; }
   select#genIndividual { margin-top: 6px; }
+  #genIndividual + .rc-multi { margin-top: 6px; }
   .cs-gen-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin: 4px 0; }
   .cs-warn-box { font-size: 12.5px; line-height: 1.5; color: var(--purple-lt); background: var(--purple-soft); border: 1px solid rgba(139,92,246,0.3);
     border-radius: var(--r); padding: 9px 10px; margin-bottom: 10px; }
@@ -266,7 +267,7 @@
   <label class="cs-gen-field-label">Optional individual songs (added once each)</label>
   <input id="genIndividualFilter" class="ob-input" type="text" placeholder="Filter by name…" style="margin-bottom:6px;">
   <select id="genIndividual" class="ob-input" multiple size="6"></select>
-  <div class="muted" style="margin-top:4px;">ctrl/cmd-click to select more than one.</div>
+  <div class="muted" style="margin-top:4px;">Tick as many as you want. The filter above narrows the list.</div>
 
   <div class="cs-gen-grid">
     <input id="genName" class="ob-input" type="text" placeholder="Name (blank = random)">
@@ -311,6 +312,7 @@
 
 <script type="module">
 import { API_URL } from './js/api.js'
+import { enhanceMultiSelect } from './js/rc-multiselect.js'
 
 const $ = (id) => document.getElementById(id)
 const KEY_STORAGE = 'rc_admin_key'
@@ -431,6 +433,14 @@ $('genIndividual').addEventListener('change', () => {
   individualSelected = new Set([...$('genIndividual').selectedOptions].map(o => o.value))
 })
 $('genIndividualFilter').addEventListener('input', (e) => renderIndividualOptions(e.target.value))
+
+// Checkbox rows in place of the platform's multi-choice dialog. Inline, not
+// a sheet, because the filter input directly above rewrites this list as you
+// type and the two have to stay on screen together. The <select multiple>
+// keeps the selection: ticking a row sets option.selected and fires the same
+// `change` the handler above already listens for, so individualSelected is
+// still built the same way from the same selectedOptions.
+enhanceMultiSelect($('genIndividual'), { label: 'Individual songs', empty: 'No matches.' })
 
 function rebuildGenerateInputs() {
   renderIndividualOptions($('genIndividualFilter').value)

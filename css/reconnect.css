@@ -6679,3 +6679,60 @@ select.rc-select-native {
   }
   .rc-select-list { padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
 }
+
+/* ── Admin variant + multi-select (js/rc-select.js, js/rc-multiselect.js) ──
+   Admin screens are read at a desk, in bulk. Same sheet, same palette, same
+   behaviour — just a denser rhythm and no hint line, because an admin
+   filter does not need a sentence explaining it. No extra glow, no lore. */
+.rc-select-trigger--admin { min-height: 38px; padding: 7px 10px; font-size: 12.5px; }
+.rc-select-sheet--admin .rc-select-head { padding: 13px 40px 10px 13px; }
+.rc-select-sheet--admin .rc-select-title { font-size: 11px; }
+.rc-select-sheet--admin .rc-select-row { min-height: 40px; padding: 7px 13px; font-size: 13px; }
+.rc-select-sheet--admin .rc-select-section { padding: 11px 13px 5px; }
+.rc-select-sheet--admin .rc-select-search { margin-top: 9px; }
+.rc-select-sheet--admin .rc-select-search input { min-height: 34px; }
+.rc-select-sheet--admin { max-height: min(66vh, 560px); }
+/* Touch targets stay at the accessible size on a phone even in admin. */
+@media (max-width: 640px) {
+  .rc-select-sheet--admin .rc-select-row { min-height: 46px; }
+  .rc-select-trigger--admin { min-height: 44px; }
+}
+
+/* The inline checkbox list that stands in for a <select multiple>. It keeps
+   the native control's own footprint — a bordered, scrolling box directly
+   under its filter input — so the screens that pair the two still show both
+   at once. */
+select.rc-multi-native {
+  position: absolute; width: 1px; height: 1px; min-height: 0; padding: 0; margin: -1px;
+  border: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+  appearance: none; pointer-events: none;
+}
+.rc-multi {
+  max-height: 210px; overflow-y: auto; overscroll-behavior: contain;
+  border: 1px solid var(--border); border-radius: var(--r);
+  background: var(--surface-2);
+}
+.rc-multi-group {
+  position: sticky; top: 0; z-index: 1;
+  padding: 8px 11px 4px; background: var(--surface-2);
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--purple-lt); opacity: .75;
+}
+.rc-multi-row {
+  display: flex; align-items: center; gap: 9px;
+  min-height: 38px; padding: 6px 11px; cursor: pointer;
+  color: var(--text); font: 13px/1.35 var(--body);
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.04);
+}
+.rc-multi-row:last-child { box-shadow: none; }
+.rc-multi-row:hover { background: rgba(255, 255, 255, 0.035); }
+.rc-multi-row.is-on { background: var(--purple-soft); color: #fff; }
+.rc-multi-row:has(.rc-multi-box:disabled) { opacity: .45; cursor: default; }
+.rc-multi-row:has(.rc-multi-box:focus-visible) { outline: 2px solid var(--purple-lt); outline-offset: -2px; }
+.rc-multi-box { flex: 0 0 auto; width: 15px; height: 15px; margin: 0; accent-color: var(--purple); }
+.rc-multi-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rc-multi-empty { margin: 0; padding: 14px 11px; color: var(--muted); font-size: 12.5px; }
+@media (max-width: 640px) {
+  .rc-multi { max-height: 240px; }
+  .rc-multi-row { min-height: 44px; }
+}

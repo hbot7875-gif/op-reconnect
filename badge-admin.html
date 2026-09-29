@@ -149,10 +149,13 @@
 
   .bv-filter-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 9px;
     margin: 10px 0 12px; }
-  .bv-filter-grid label { min-width: 0; }
-  .bv-filter-grid span { display: block; margin-bottom: 5px; color: var(--dim);
+  .bv-filter-grid .bv-filter-field { min-width: 0; }
+  /* Direct children only: this block is in the page, so it comes AFTER
+     reconnect.css and would otherwise restyle the text inside the selector
+     trigger, and re-show the <select> that rc-select hides. */
+  .bv-filter-grid > .bv-filter-field > span { display: block; margin-bottom: 5px; color: var(--dim);
     font-family: var(--mono); font-size: 8px; letter-spacing: .8px; text-transform: uppercase; }
-  .bv-filter-grid select { width: 100%; min-width: 0; padding: 9px 8px; font-size: 11px; }
+  .bv-filter-grid select:not(.rc-select-native) { width: 100%; min-width: 0; padding: 9px 8px; font-size: 11px; }
   .bv-result-count { margin: -3px 0 11px; color: var(--dim); font-family: var(--mono); font-size: 9px; }
   .bv-more-filters { margin: 0 0 12px; border: 1px solid var(--border); border-radius: 10px;
     background: var(--surface-2); }
@@ -295,14 +298,14 @@
     </div>
 
     <div class="bv-row">
-      <label class="bv-field">
+      <div class="bv-field">
         <span>Photo style</span>
         <select class="input-field" id="pool" required>
           <option value="">Choose Cute or Hot…</option>
           <option value="cute">Cute</option>
           <option value="hot">Hot</option>
         </select>
-      </label>
+      </div>
     </div>
     <p class="bv-pool-hint" id="poolHint">Common badges prefer Cute photos. Rare badges prefer Hot photos.</p>
 
@@ -345,12 +348,12 @@
       <summary id="moreFilterSummary">More filters</summary>
       <div class="bv-more-body">
         <div class="bv-filter-grid">
-          <label><span>Badge</span><select class="input-field" id="filterTemplate"><option value="">All badges</option></select></label>
-          <label><span>Rarity</span><select class="input-field" id="filterRarity"><option value="">All rarities</option><option value="common">Common</option><option value="rare">Rare</option></select></label>
-          <label><span>Member</span><select class="input-field" id="filterMember"><option value="">All members</option></select></label>
-          <label><span>Uploader</span><select class="input-field" id="filterUploader"><option value="">All makers</option></select></label>
-          <label><span>Status</span><select class="input-field" id="filterStatus"><option value="">Active + inactive</option><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
-          <label><span>Style</span><select class="input-field" id="filterStyle"><option value="">Cute + Hot</option><option value="cute">Cute</option><option value="hot">Hot</option><option value="untagged">Legacy/untagged</option></select></label>
+          <div class="bv-filter-field"><span>Badge</span><select class="input-field" id="filterTemplate"><option value="">All badges</option></select></div>
+          <div class="bv-filter-field"><span>Rarity</span><select class="input-field" id="filterRarity"><option value="">All rarities</option><option value="common">Common</option><option value="rare">Rare</option></select></div>
+          <div class="bv-filter-field"><span>Member</span><select class="input-field" id="filterMember"><option value="">All members</option></select></div>
+          <div class="bv-filter-field"><span>Uploader</span><select class="input-field" id="filterUploader"><option value="">All makers</option></select></div>
+          <div class="bv-filter-field"><span>Status</span><select class="input-field" id="filterStatus"><option value="">Active + inactive</option><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
+          <div class="bv-filter-field"><span>Style</span><select class="input-field" id="filterStyle"><option value="">Cute + Hot</option><option value="cute">Cute</option><option value="hot">Hot</option><option value="untagged">Legacy/untagged</option></select></div>
         </div>
         <button class="bv-clear-filters" id="clearFilters" type="button">Clear all filters</button>
       </div>
@@ -958,6 +961,30 @@ $('pool').onchange = updateReviewEnabled
 // Search is 'auto': the catalog grows with every migration that adds a
 // template, so it appears once the list is long enough to be worth it.
 enhanceSelect($('tpl'), { title: 'BADGE', search: 'auto', searchPlaceholder: 'Search badges' })
+
+// The rest of this page's pickers, at the admin density. Every one keeps its
+// own <select> as the value: the handlers above and below still read
+// $(id).value, paintFilterState() still writes it back, paintFilterOptions()
+// still rebuilds the option lists, and rc-select follows all three.
+//
+// #pool is the one with a dependency — paintTemplateGuidance(), which #tpl's
+// own onchange fires, does `$('pool').value = preferred` when a template is
+// picked and the field is still empty. rc-select watches the value property,
+// so the trigger relabels itself the moment that runs.
+enhanceSelect($('pool'), { title: 'PHOTO STYLE', search: false, variant: 'admin' })
+for (const [id, title] of [
+  ['filterTemplate', 'BADGE'],
+  ['filterRarity', 'RARITY'],
+  ['filterMember', 'MEMBER'],
+  ['filterUploader', 'UPLOADER'],
+  ['filterStatus', 'STATUS'],
+  ['filterStyle', 'STYLE'],
+]) {
+  // 'auto' on all six: Badge, Member and Uploader grow with the catalog and
+  // the team, the other three are fixed three-option lists that will never
+  // reach the threshold.
+  enhanceSelect($(id), { title, search: 'auto', searchPlaceholder: 'Search', variant: 'admin' })
+}
 
 $('memberPicker').querySelectorAll('[data-member]').forEach((button) => {
   button.onclick = () => togglePhotoMember(button.dataset.member)
