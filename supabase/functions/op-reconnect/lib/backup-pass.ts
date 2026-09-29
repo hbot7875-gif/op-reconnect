@@ -153,11 +153,27 @@ export async function getBackupOverlay(
 ): Promise<Record<string, { target: number; bonus: number }>> {
   const { data: rows } = await supabase.from('rc_backup_requests')
     .select('*').eq('owner_agent_no', agentNo).eq('district_id', districtId)
-    .in('status', ['open', 'joined', 'banked'])
+    .in('status', ['open', 'joined', 'banked', 'complete'])
   const overlay: Record<string, { target: number; bonus: number }> = {}
   for (const raw of rows || []) {
     if (raw.status === 'banked') {
       overlay[raw.goal_ref] = { target: raw.original_target, bonus: raw.banked_credit }
+      continue
+    }
+    // A pass CARRIED to the boosted target stays satisfied, for the same
+    // reason a banked one keeps its credit: the goal really was met, and the
+    // helper's streams are why. 'complete' was missing from the status
+    // filter above, so the equivalent branch further down could only ever
+    // fire on the single poll that performed the transition — from the next
+    // poll onward the row dropped out of this query entirely and the goal
+    // silently reverted to the owner's solo progress against the ORIGINAL
+    // target. The first pair it happened to: 24 own plays + 30 from the
+    // helper, complete at the boosted 36, back to 24/30 next time she looked.
+    // Handled here rather than after refreshBackupRequest because that
+    // function returns a closed request untouched anyway — two queries to
+    // learn nothing.
+    if (raw.status === 'complete') {
+      overlay[raw.goal_ref] = { target: raw.boosted_target, bonus: raw.boosted_target }
       continue
     }
     const pd = await myActivePd(supabase, agentNo, districtId)
