@@ -45,7 +45,7 @@ export const LEGAL_INFO_NOTICE_ID = 'legal_info_2026_09'
  *  simply never see an informational notice about pages already sitting in
  *  their Settings. The second is recoverable; the first is a lie. So the
  *  cutoff is held at or before publication, and the gap is kept short. */
-export const LEGAL_INFO_PUBLISHED_AT = '2026-09-29T11:45:00Z'
+export const LEGAL_INFO_PUBLISHED_AT = '2026-09-29T17:50:00Z'
 
 /** True only for an agent registered before the legal pages were published.
  *  Reads rc_players.joined_at, which already exists and is already set for
