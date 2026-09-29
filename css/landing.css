@@ -62,25 +62,21 @@ body.landing {
    file's own alpha comments). */
 .crowd-photo {
   position: fixed; inset: 0; height: 100vh; z-index: 0;
-  /* TEST SWAP, not yet decided — hero2.jpg was picked specifically because
-     the members' faces read clearly, so it gets a much lighter touch than
-     hero.jpg's near-grayscale treatment below. If this isn't the keeper,
-     revert background-image to hero.jpg and the filter to:
-     grayscale(0.55) brightness(0.32) contrast(1.1) saturate(0.75)
-     with background-position: 50% 38% (portrait source, different crop math). */
+  /* hero2.jpg was chosen because the members' faces read clearly, which is why
+     the filter below is a light touch rather than a heavy desaturation. The
+     earlier portrait candidate (hero.jpg) was removed in Sep 2026 — it was
+     never referenced at runtime, and Credits could not establish its source. */
   background-image: url('../img/hero2.jpg');
   background-size: cover;
-  /* Landscape source (hero2 is ~4:3 vs hero.jpg's portrait 0.75), so `cover`
-     crops far less on a wide desktop — the whole reason this one was worth
-     testing technically, separate from the face-visibility question. Screens
-     sit upper-left-of-centre in the source; 45%/28% keeps them in frame
-     without losing too much crowd below. */
+  /* Landscape source (~4:3), so `cover` crops far less on a wide desktop.
+     Screens sit upper-left-of-centre in the source; 45%/28% keeps them in
+     frame without losing too much crowd below. */
   background-position: 45% 28%;
   background-repeat: no-repeat;
-  /* Much lighter than hero.jpg's treatment: barely desaturated (outfit colour
-     stays legible — the red/white/black is part of why faces read at all),
-     brightness roughly 50% higher, so the screens don't disappear into the
-     dark the way full grayscale+crush would take them. */
+  /* Barely desaturated — outfit colour stays legible (the red/white/black is
+     part of why faces read at all), and brightness is kept high enough that the
+     screens don't disappear into the dark the way a full grayscale crush would
+     take them. */
   filter: grayscale(0.15) brightness(0.5) contrast(1.08) saturate(0.9);
   animation: heroPan 46s ease-in-out infinite alternate;
 }
@@ -168,20 +164,31 @@ body.landing {
 
 .btn {
   display: inline-block; text-decoration: none; text-align: center;
-  padding: 16px 40px; border-radius: var(--r); border: 0;
-  font-family: var(--body); font-weight: 700; font-size: 16px;
-  letter-spacing: 0.5px; cursor: pointer;
+  padding: 14px 38px; border-radius: 10px; border: 0;
+  font-family: var(--body); font-weight: 600; font-size: 15.5px;
+  letter-spacing: 0.4px; cursor: pointer;
   transition: filter 0.15s ease, transform 0.1s ease;
 }
 .btn-primary {
-  background: var(--purple); color: #fff;
   /* The one deliberately bright thing on the page — it's the single live
      control in an otherwise dark scene — but a tap-affordance shadow, not
      a glowing halo. The old 34px/0.4 spread was doing the "everything is
-     already lit up" thing this whole pass exists to undo. */
-  box-shadow: 0 4px 14px rgba(139,92,246,0.24);
+     already lit up" thing this whole pass exists to undo.
+     The flat --purple fill read blunt at this size, so the face is now a
+     shallow top-to-bottom fall into a deeper purple: enough to give the
+     button a lit edge and a weighted base without going glossy. The
+     hairline inset is the top edge catching light, not a gloss highlight —
+     at 0.08 it is a single pixel of relief. The shadow is two parts: a
+     tight dark one that seats the button on the page, and a wider tinted
+     one that is coloured rather than glowing. */
+  background: linear-gradient(180deg, #8257e6 0%, #6a3ad2 100%);
+  color: #fff;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.08),
+    0 2px 6px rgba(7,6,13,0.45),
+    0 8px 22px -8px rgba(106,58,210,0.58);
 }
-.btn-primary:hover { filter: brightness(1.12); }
+.btn-primary:hover { filter: brightness(1.10); }
 .btn-primary:active { transform: translateY(1px); }
 .hero .btn { margin-top: 38px; }
 
@@ -218,9 +225,42 @@ body.landing {
   position: relative; z-index: 3;
   background: var(--bg);
   border-top: 1px solid var(--border);
+  /* Clips the ambient wash below. It is deliberately wider than the page so
+     its falloff runs off both edges instead of ending inside the layout —
+     unclipped that made the document 562px wide on a 375px screen and gave
+     the whole page a horizontal scrollbar. */
+  overflow: hidden;
 }
+/* Leftover light from the hero, not a new section. Flat black under the
+   readout made the bottom of the page read as unfinished rather than
+   restrained, so a single very soft purple wash sits behind the activity
+   line and the call to action — strongest right at the hero seam and gone
+   before the footer. It is deliberately one low-opacity radial with a long
+   falloff: any harder edge and it stops being haze and starts being a
+   shape. No animation, nothing to notice, only something to miss if it
+   were removed. */
+.below::before {
+  content: ''; position: absolute; z-index: 0; pointer-events: none;
+  top: 0; left: 50%; transform: translateX(-50%);
+  width: min(1180px, 150%); height: 460px;
+  background: radial-gradient(ellipse at 50% 0%,
+    rgba(139,92,246,0.10) 0%, rgba(139,92,246,0.04) 38%, rgba(139,92,246,0) 72%);
+}
+/* Everything real sits above the wash. */
+.below > * { position: relative; z-index: 1; }
 .sec { max-width: 720px; margin: 0 auto; padding: 76px 24px; }
 .sec + .sec { border-top: 1px solid var(--border); }
+
+/* Two sections sit below the hero now, not three — the dark-city map and
+   its paragraph are gone. At the shared 76px top and bottom plus a rule
+   between them, what's left read as two unrelated slabs with a lot of air
+   in the middle. The live readout and the call to action are one thought:
+   here is what the network is doing, here is how you join it. So the gap
+   between them closes and the rule goes, while the space the hero lands
+   into stays generous and the run-out to the footer is untouched. */
+.sec.activity { padding-top: 56px; padding-bottom: 36px; }
+.sec.closing { padding-top: 36px; }
+.sec.activity + .sec.closing { border-top: 0; }
 
 .sec-head {
   font-family: var(--mono); font-size: 11px; letter-spacing: 3px;
@@ -300,8 +340,28 @@ body.landing {
   letter-spacing: 0.6px; color: var(--dim);
 }
 .ticker .is-loading { animation: pulse 1.6s ease-in-out infinite; }
-.ticker #statAgents, .ticker #statDistricts, .ticker #statDistrictsTotal, .ticker #statCharge {
-  color: var(--muted); font-weight: 700;
+/* A figure and the thing it counts have to stay on the same line. Without
+   this, widths around 400–480px broke "278K ROAD TO 1B STREAMS" across a
+   line break, leaving a stranded "STREAMS" under a number. Each segment now
+   wraps as a unit; the line still reflows freely between segments. */
+.ticker-item { white-space: nowrap; }
+/* The figures read first, the labels second. Both stay inside the existing
+   palette — the numbers take --text against the readout's own --dim, which
+   is the same quiet/bright pairing used elsewhere on the page. Colour alone
+   left the totals reading as weakly as their labels, so the figures also go
+   up one step, 12px → 14px. That is the whole of the emphasis: no larger
+   jump, no glow, no box, no second accent colour. A status line that has to
+   be scannable, not a heading. */
+.ticker #statAgents, .ticker #statArirang, .ticker #statRoad1B {
+  color: var(--text); font-weight: 700; font-size: 14px;
+}
+/* Not a footnote. These totals are ReConnect's own counted streams, and
+   without this line a visitor could fairly read "440K ARIRANG STREAMS" as a
+   global Spotify figure. Quiet enough not to compete with the readout,
+   never so quiet it stops being legible. */
+.ticker-note {
+  text-align: center; font-family: var(--mono); font-size: 10.5px;
+  letter-spacing: 1px; color: var(--dim); margin-top: 7px;
 }
 .ticker-dot {
   display: inline-block; width: 5px; height: 5px; border-radius: 50%;
@@ -317,12 +377,58 @@ body.landing {
 }
 .closing-line span { color: var(--gold); }
 
+/* Four groups, and they have to read as four: the trust links, the
+   attribution line, the ARMY line, then the disclaimer. They were all
+   sitting inside one line-height:2 block, which spaced every LINE equally
+   and so grouped nothing — the whole footer arrived as one crowded column.
+   The rhythm now comes from the gaps BETWEEN groups rather than from
+   leading inside them, which is why the line-height drops as the margins
+   grow. Same content, same order, same centring. */
 .foot {
   font-family: var(--mono); font-size: 10.5px; letter-spacing: 1.5px;
   color: var(--dim); text-transform: uppercase; text-align: center;
-  padding: 30px 24px 44px; line-height: 2; border-top: 1px solid var(--border);
+  padding: 40px 24px 54px; line-height: 1.85; border-top: 1px solid var(--border);
 }
-.foot .love { display: block; color: var(--purple-lt); letter-spacing: 1px; }
+.foot .love {
+  display: block; color: var(--purple-lt); letter-spacing: 1px; margin-top: 12px;
+}
+
+/* Trust links and the unofficial-fan-project line. Both sit in the footer's
+   uppercase mono, but the disclaimer drops the letter-spacing and case —
+   it is a sentence someone may actually need to read, not a label. */
+.foot-links {
+  display: flex; flex-wrap: wrap; justify-content: center;
+  gap: 8px 20px; margin-bottom: 24px;
+}
+.foot-links a { color: var(--dim); text-decoration: none; transition: color 0.15s ease; }
+/* Hover lifts the colour and nothing else. The underline that used to come
+   with it sat under 1.5px-letter-spaced uppercase mono, where it reads as a
+   ragged rule rather than an underline — the colour shift alone is the
+   restrained version, and these sit in a nav where nothing else is text, so
+   they are still obviously links. */
+.foot-links a:hover { color: var(--purple-lt); }
+/* Keyboard focus cannot rely on that colour shift: it is one dim-to-purple
+   step on a dark background, which is exactly the "subtle colour difference"
+   a focus ring must not depend on. There was no focus style here at all, so
+   tabbing through the footer fell back to the browser default ring — barely
+   visible on #07060d. A real outline, offset so it frames the word instead
+   of touching it. */
+.foot-links a:focus-visible {
+  color: var(--text);
+  outline: 2px solid var(--purple-lt);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+/* The quietest thing on the page, and meant to be: it has to be present and
+   readable, never competing with the links above it. */
+.foot-disclaim {
+  display: block; max-width: 46ch; margin: 28px auto 0;
+  text-transform: none; letter-spacing: 0; font-size: 11px; line-height: 1.65;
+  /* .55 was quiet to the point of being hard to actually read, which is the
+     wrong trade for the one line that says this is unofficial. .65 keeps it
+     last in the footer's hierarchy without making it a squint. */
+  opacity: .65;
+}
 
 /* ── the handshake ──────────────────────────────────────────────
    Covers the navigation into the game (js/landing-boot.js). Sits above
@@ -363,6 +469,9 @@ body.landing {
 @media (max-width: 720px) {
   .hero { padding: 56px 20px 76px; }
   .sec { padding: 58px 20px; }
+  /* Same rebalance as the desktop rule above, at the narrow scale. */
+  .sec.activity { padding-top: 44px; padding-bottom: 28px; }
+  .sec.closing { padding-top: 28px; }
   .title { margin-top: 24px; }
   .hero .btn { margin-top: 30px; }
   /* One line of terminal text doesn't fit 375px in one breath — let it wrap

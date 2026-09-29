@@ -2,17 +2,17 @@
 // the page exists to make easy — start, or sign back in.
 
 import { startConcertBackground } from './concert-bg.js'
-import { renderLandingMap } from './landing-map.js'
 import { installBootSequence } from './landing-boot.js'
 import { call } from './api.js'
 import { getAgentNo } from './session.js'
+import { compact } from './compact-number.js'
 
 const canvas = document.getElementById('crowd')
 if (canvas) startConcertBackground(canvas)
 
-// The dark map. Static content — no backend, so it can't fail to a dash the
-// way the live stats below it can.
-renderLandingMap(document.getElementById('mapMount'))
+// The dark-city map that used to render here is gone from the landing page
+// (js/landing-map.js itself is kept — _preview_landing.html still mounts
+// one, and nothing shipped imports it now, so the bundler drops it).
 
 // Someone already signed in shouldn't be sold the game they're playing.
 // Swap the primary call to action for a way back into it.
@@ -35,6 +35,8 @@ installBootSequence()
    Real counts or a dash. A landing page that fakes its stats is lying to
    the exact people it's trying to recruit. */
 
+const STAT_IDS = ['statAgents', 'statArirang', 'statRoad1B']
+
 function setStat(id, value, suffix = '') {
   const el = document.getElementById(id)
   if (!el) return
@@ -42,32 +44,34 @@ function setStat(id, value, suffix = '') {
   el.textContent = value === null || value === undefined ? '—' : value.toLocaleString() + suffix
 }
 
+/** The API sends real integers; only the display is compact (see
+ *  compact-number.js for why it floors rather than rounds). */
+function setCompactStat(id, value) {
+  const el = document.getElementById(id)
+  if (!el) return
+  el.classList.remove('is-loading')
+  el.textContent = value === null || value === undefined ? '—' : compact(value)
+}
+
 call('getPublicStats', {}).then((res) => {
   if (!res || !res.success || !res.stats) {
-    for (const id of ['statAgents', 'statDistricts', 'statCharge']) setStat(id, null)
+    for (const id of STAT_IDS) setStat(id, null)
     return
   }
   const s = res.stats
   setStat('statAgents', s.agents)
 
-  // "1 agents" on the first line a stranger reads is a small thing that makes
+  // "1 AGENTS" on the first line a stranger reads is a small thing that makes
   // the whole page look unfinished. Early on, 1 is a genuinely likely count.
   const agentWord = document.getElementById('statAgentsWord')
-  if (agentWord) agentWord.textContent = s.agents === 1 ? 'agent' : 'agents'
-  setStat('statDistricts', s.districtsRestored)
-  setStat('statCharge', s.charge === null ? null : Math.round(s.charge * 100), '%')
+  if (agentWord) agentWord.textContent = s.agents === 1 ? 'AGENT' : 'AGENTS'
 
-  // "/248", set directly against statDistricts in the markup — one compact
-  // "26/248" rather than a separate "of 248 across 7 wards" line, now that
-  // this lives in a single status line instead of its own card.
-  const total = document.getElementById('statDistrictsTotal')
-  if (total && s.districtsTotal) total.textContent = `/${s.districtsTotal}`
-
-  // The shared Bomb's multiplier no longer boosts anyone's XP (retired —
-  // Personal Charge is what actually matters now, see agent-charge.js).
-  // "charge N%" above still shows real network vitality; this line used to
-  // additionally claim an XP bonus that isn't true anymore, so it's gone
-  // rather than left to advertise something that no longer happens.
+  // Two separately labelled campaign totals. SWIM is legitimately counted in
+  // both — it is an ARIRANG album track AND one of the four Road-to-1B focus
+  // songs — so these are never summed into a single "total streams" figure;
+  // doing that would double-count it by six figures.
+  setCompactStat('statArirang', s.arirangStreams)
+  setCompactStat('statRoad1B', s.roadTo1BStreams)
 }).catch(() => {
-  for (const id of ['statAgents', 'statDistricts', 'statCharge']) setStat(id, null)
+  for (const id of STAT_IDS) setStat(id, null)
 })

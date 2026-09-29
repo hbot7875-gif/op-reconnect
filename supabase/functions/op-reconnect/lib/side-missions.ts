@@ -72,6 +72,16 @@ function trackKeys(track: SideTrackDefinition): string[] {
   return [...new Set(track.aliases.map(normKeyFull).filter(Boolean))]
 }
 
+/** The same four tracks as ROAD_TO_1B_TRACK_NAMES, but carrying what it
+ *  takes to actually COUNT them: every normalized alias key, and the
+ *  btsOnly flag. The landing page's public "Road to 1B" total reads this
+ *  rather than re-deriving keys from the names above — names alone lose
+ *  the Korean aliases (야생화 / 해금) and lose the artist guard that exists
+ *  precisely because BTS's "SWIM" and Chase Atlantic's "Swim" normalize to
+ *  the same bucket key. One list, two readers; see lib/campaign-streams.ts. */
+export const ROAD_TO_1B_TRACKS: { name: string; keys: string[]; btsOnly: boolean }[] =
+  TRACKS.map((track) => ({ name: track.name, keys: trackKeys(track), btsOnly: !!track.btsOnly }))
+
 // Title match only by default, no artist filter — matching Arirang Mission's
 // own findDailyTrackScrobbles/findTrackScrobbles (the reference this loop was
 // carried forward from) and this file's sibling transmission.ts, whose

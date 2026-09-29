@@ -38,22 +38,29 @@
   <div class="crowd-scrim" aria-hidden="true"></div>
 
   <!-- ── Hero: the message and the button ──────────────────────────
-       Text-on-a-photo only. The map moved back down next to the copy
-       that actually explains it (#brief) — up here it was competing
-       with the headline for a look before the reader knows what it
-       is a map OF. -->
+       Text-on-a-photo only. The dark-city map used to sit below this with
+       a paragraph explaining it; both are gone. The lede already says what
+       this is in one sentence, and the map was asking a stranger to study
+       an unlabelled picture before they had a reason to care. What follows
+       the hero now is the live readout — evidence rather than exposition. -->
   <header class="hero">
     <div class="hero-grid">
       <div class="hero-inner">
         <div class="badge"><span class="dot" aria-hidden="true"></span> OP: <span class="brand">ReConnect</span></div>
         <h1 class="title">The city<br>went dark.</h1>
-        <p class="lede">Every stream you play turns a piece of it back on.</p>
+        <!-- The first four words are the only place above the fold that says
+             what this is. The photo behind them is dimmed to atmosphere, so a
+             visitor arriving from a shared link had no confirmation they were
+             in the right place — "BTS" appeared exactly once on the whole page,
+             in the footer disclaimer. The second sentence is unchanged, and the
+             headline still carries the hook. -->
+        <p class="lede">A BTS streaming game. Every stream you play turns a piece of it back on.</p>
         <a href="game.html" id="ctaPrimary" class="btn btn-primary">Create your agent file</a>
         <span class="cta-hint">Free · takes about 30 seconds</span>
         <a href="game.html?mode=signin" id="ctaSecondary" class="quiet-link">I already have an agent file</a>
       </div>
     </div>
-    <a href="#brief" class="scroll-cue" aria-label="Read more">
+    <a href="#activity" class="scroll-cue" aria-label="See live activity">
       <span></span>
     </a>
   </header>
@@ -61,28 +68,30 @@
   <!-- ── Below the fold: the detail ────────────────────────────── -->
   <main class="below">
 
-    <section class="sec" id="brief">
-      <p class="sec-lede">
-        Every district on this map went dark the same night — stream to bring it back, one piece at a time.
-      </p>
-      <div class="brief-map">
-        <div class="map" id="mapMount"></div>
-      </div>
-    </section>
-
     <!-- One line, not a dashboard. A stranger doesn't need three labelled
          cards to feel "something real is happening here" — a terminal
          readout does it in less space and reads as HT's own monitor, not
-         marketing copy. -->
-    <section class="sec">
+         marketing copy.
+
+         What it counts changed: "districts restored" and "charge" were
+         internal game mechanics that meant nothing to someone who had never
+         played, and the district figure was being computed wrongly besides.
+         The two numbers here now are the thing ReConnect actually exists to
+         help with — streaming toward the ARIRANG album and the four songs on
+         the road to 1B. The line underneath is load-bearing, not a footnote:
+         these are streams logged by this game's own players, and nothing here
+         knows BTS's real Spotify or YouTube totals. Without that line the
+         numbers could reasonably be read as a global count. -->
+    <section class="sec activity" id="activity">
       <div class="ticker">
         <span class="ticker-dot" aria-hidden="true"></span>
-        <span id="statAgents" class="is-loading">—</span> <span id="statAgentsWord">agents</span>
+        <span class="ticker-item"><span id="statAgents" class="is-loading">—</span> <span id="statAgentsWord">AGENTS</span></span>
         <span class="ticker-sep">·</span>
-        <span id="statDistricts" class="is-loading">—</span><span id="statDistrictsTotal"></span> districts restored
+        <span class="ticker-item"><span id="statArirang" class="is-loading">—</span> ARIRANG STREAMS</span>
         <span class="ticker-sep">·</span>
-        charge <span id="statCharge" class="is-loading">—</span>
+        <span class="ticker-item"><span id="statRoad1B" class="is-loading">—</span> ROAD TO 1B STREAMS</span>
       </div>
+      <p class="ticker-note">logged by agents on ReConnect</p>
     </section>
 
     <section class="sec closing">
