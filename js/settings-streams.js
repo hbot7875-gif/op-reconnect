@@ -15,6 +15,7 @@
 import { call, API_URL } from './api.js'
 import { el, esc, toast, hideOverlay, showOverlay } from './state.js'
 import { getAgentNo } from './session.js'
+import { streamFlag } from './signal-log-ui.js'
 
 const SOURCES = [
   {
@@ -331,10 +332,16 @@ export function signalLogSheet() {
     }
     const list = el('div', 'sig-list')
     for (const s of res.streams.slice(0, 25)) {
-      list.appendChild(el('div', 'sig-row' + (s.counted ? '' : ' skip'), `
+      // One classification, used for both the row state and the label. This
+      // used to read `s.counted`, which getSignalLog does not send — so
+      // every row went to the "skip" branch and printed "not BTS", directly
+      // contradicting the counted total rendered above it. See
+      // signal-log-ui.js.
+      const flag = streamFlag(s)
+      list.appendChild(el('div', 'sig-row' + (flag.counted ? '' : ' skip'), `
         <span class="sig-track">${esc(s.track)}</span>
         <span class="sig-artist">${esc(s.artist || '—')}</span>
-        <span class="sig-flag">${s.counted ? '✓' : 'not BTS'}</span>
+        <span class="sig-flag">${esc(flag.label)}</span>
       `))
     }
     body.appendChild(list)
