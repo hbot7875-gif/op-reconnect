@@ -1,8 +1,43 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- Public pages only. The game itself (game.html and everything behind it),
+     the admin tools and the /share/* snapshot pages are deliberately absent:
+     the share pages already send X-Robots-Tag: noindex (worker/index.js), and
+     nothing behind a session belongs in a sitemap.
+     URLs use the extensionless form the pages' own canonicals declare. -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://hopetrackers.org/</loc>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://hopetrackers.org/about</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://hopetrackers.org/privacy</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://hopetrackers.org/terms</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://hopetrackers.org/copyright</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://hopetrackers.org/credits</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://hopetrackers.org/contact</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
   </url>
 </urlset>

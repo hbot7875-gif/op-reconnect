@@ -32,7 +32,7 @@ import { openFinder } from './search.js'
 import { openArirangRecelebrate, arirangPartyIsLive, arirangPartyIsComplete, arirangPartyIsCounting, ARIRANG_RECELEBRATE } from './arirang-recelebrate.js'
 import { openCityShare, openRedZoneShare } from './share.js'
 import { agentChargeSheet, boraMeterSheet } from './agent-charge.js'
-import { broadcastCards } from './broadcasts.js'
+import { broadcastCards, legalNoticeCard } from './broadcasts.js'
 import { cityFeedCard } from './city-feed.js'
 import { openSuggestions } from './suggestions.js'
 import { openMagicShop } from './magic-shop.js'
@@ -53,6 +53,10 @@ export function renderWorld(container, state) {
 
   const bc = broadcastCards(state)
   if (bc.children.length) wrap.appendChild(bc)
+  // Same card stack, same dismissal convention — see broadcasts.js for why
+  // this is not a broadcast row and not a modal.
+  const ln = legalNoticeCard(state)
+  if (ln.children.length) wrap.appendChild(ln)
   // Red Zone no longer gets its own banner here — it's the existing ARMY
   // Bomb itself (coreBlock, below) that turns compromised/crimson and shows
   // progress. See maybeShowDefuseResult for the one-shot success/failure

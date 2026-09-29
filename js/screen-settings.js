@@ -193,6 +193,37 @@ function paintSections(body, state) {
       body: 'The game loop, every way to earn XP, and how to protect your progress.',
       onClick: () => showOverlay(agentManualSheet()),
     },
+    // The trust pages. They open in a new tab rather than a sheet because
+    // they are documents a player may want to keep open, send to someone, or
+    // read while the game keeps running behind them — and because a person
+    // looking for the privacy policy should not have to lose their place in
+    // Settings to find it. Privacy is listed before Terms deliberately: it
+    // is the one people actually come here looking for.
+    {
+      icon: '🔒', name: 'Privacy Policy', value: '',
+      body: 'What we store, who can see it, and how long it is kept.',
+      href: 'privacy.html',
+    },
+    {
+      icon: '📄', name: 'Terms of Service', value: '',
+      body: 'The rules for playing, and what happens to an inactive agent file.',
+      href: 'terms.html',
+    },
+    {
+      icon: '💜', name: 'About', value: '',
+      body: 'What this is, and who made it. An unofficial fan project.',
+      href: 'about.html',
+    },
+    {
+      icon: '🎨', name: 'Credits', value: '',
+      body: 'Who made what, and the third-party work this game is built on.',
+      href: 'credits.html',
+    },
+    {
+      icon: '✉️', name: 'Contact', value: '',
+      body: 'How to reach us — including about your data or an image.',
+      href: 'contact.html',
+    },
   ]))
 
   // Presence privacy hides only the player-facing green dot/count. The

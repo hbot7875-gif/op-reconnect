@@ -1,0 +1,105 @@
+/* Terms, Privacy, About, Copyright, Contact.
+ *
+ * These five pages are read once, usually by someone who is worried about
+ * something — a parent, a rights-holder, a player who wants their data gone.
+ * So they are plain documents: one column, generous line height, no motion,
+ * no canvas, nothing to wait for. They deliberately do NOT load the game
+ * bundle or any font from a third party; the system stack renders instantly
+ * and tells Google nothing about who is reading the privacy policy.
+ */
+
+:root {
+  --ink: #ece9f2;
+  --ink-quiet: #b3aac2;
+  --ink-faint: #8b7f9c;
+  --bg: #08070d;
+  --panel: #120e1c;
+  --line: #2a2338;
+  --accent: #a78bfa;
+  --warn-bg: #2a1f10;
+  --warn-line: #6b4d18;
+  --warn-ink: #f0d9a8;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.68 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+.legal-wrap { max-width: 720px; margin: 0 auto; padding: 0 20px 72px; }
+
+/* ── Masthead ─────────────────────────────────────────────── */
+.legal-top {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; padding: 20px 0 28px; border-bottom: 1px solid var(--line);
+  margin-bottom: 32px; flex-wrap: wrap;
+}
+.legal-home {
+  color: var(--ink); text-decoration: none; font-weight: 800;
+  letter-spacing: .01em; font-size: 15px;
+}
+.legal-home .brand { color: var(--accent); }
+.legal-back { color: var(--ink-faint); text-decoration: none; font-size: 13px; }
+.legal-back:hover { color: var(--ink); }
+
+h1 { font-size: clamp(27px, 6vw, 36px); line-height: 1.16; margin: 0 0 8px; letter-spacing: -.01em; }
+.legal-updated { color: var(--ink-faint); font-size: 13px; margin: 0 0 30px; }
+
+h2 {
+  font-size: 19px; line-height: 1.3; margin: 40px 0 12px;
+  padding-top: 22px; border-top: 1px solid var(--line);
+}
+h2:first-of-type { border-top: 0; padding-top: 0; }
+h3 { font-size: 16px; margin: 26px 0 8px; color: var(--ink); }
+
+p, li { color: var(--ink-quiet); }
+p { margin: 0 0 15px; }
+ul { margin: 0 0 15px; padding-left: 22px; }
+li { margin: 0 0 7px; }
+strong { color: var(--ink); font-weight: 650; }
+a { color: var(--accent); }
+a:hover { color: #c4aefb; }
+
+code {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: .9em; color: var(--ink); background: var(--panel);
+  padding: 1px 5px; border-radius: 4px;
+}
+
+/* A statement the reader most needs to not miss — the deletion rule, the
+ * non-affiliation line. One per page at most. */
+.legal-note {
+  background: var(--panel); border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  padding: 15px 17px; border-radius: 8px; margin: 0 0 22px;
+}
+.legal-note p:last-child { margin-bottom: 0; }
+
+/* The draft banner. Loud on purpose: these pages must not read as published
+ * policy until the owner has reviewed them. Delete the element to publish. */
+.legal-draft {
+  background: var(--warn-bg); border: 1px solid var(--warn-line);
+  color: var(--warn-ink); padding: 13px 16px; border-radius: 8px;
+  margin: 0 0 30px; font-size: 14px; line-height: 1.55;
+}
+.legal-draft b { color: #ffe9bb; }
+
+/* ── Footer, shared with the landing page's tone ───────────── */
+.legal-foot {
+  margin-top: 56px; padding-top: 24px; border-top: 1px solid var(--line);
+  color: var(--ink-faint); font-size: 13px; line-height: 1.7;
+}
+.legal-foot nav { margin-bottom: 12px; display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.legal-foot nav a { color: var(--ink-quiet); text-decoration: none; }
+.legal-foot nav a:hover { color: var(--ink); text-decoration: underline; }
+.legal-foot .disclaim { display: block; margin-top: 10px; max-width: 58ch; }
+
+@media (max-width: 480px) {
+  body { font-size: 15.5px; }
+  .legal-wrap { padding: 0 16px 56px; }
+}

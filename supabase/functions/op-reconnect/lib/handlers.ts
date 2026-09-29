@@ -15,7 +15,7 @@ import { getMyInvites, countWaitingAgents, getReconnectMatchAlerts, getTeamBoost
 import { creditChargeCells, STREAMS_PER_CHARGE_CELL } from './charge-economy.ts'
 import { getAgentChargeView } from './agent-charge.ts'
 import { levelFor, applyLevelUpIfNeeded, nextLevelRewards } from './leveling.ts'
-import { getActiveBroadcasts } from './broadcasts.ts'
+import { getActiveBroadcasts, legalInfoNoticeDue, LEGAL_INFO_NOTICE_ID } from './broadcasts.ts'
 import { logFeedEvent, getCityFeed, markOnline, getOnlineNow } from './feed.ts'
 import { logEngagementEvent } from './engagement.ts'
 import { awardBadge, resolveEquippedBadges } from './badge-profile.ts'
@@ -629,6 +629,11 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     invites,
     reconnectAlerts,
     broadcasts,
+    // The one-time legal-pages notice: the notice's own id for an agent who
+    // predates the release, otherwise null. Deliberately not joined_at —
+    // eligibility is decided here so no registration timestamp is added to
+    // the player-facing state. See lib/broadcasts.ts.
+    legalNotice: legalInfoNoticeDue(player.joined_at) ? LEGAL_INFO_NOTICE_ID : null,
     vma,
     ...(timing ? { timing } : {}),
     cityFeed,

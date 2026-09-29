@@ -9,6 +9,56 @@
 
 import type { SupabaseDB } from './config.ts'
 
+/** The one-time "we published Privacy/Terms/Credits" notice.
+ *
+ *  Not a broadcast row: a broadcast is global, and this is specifically for
+ *  agents who existed BEFORE those pages went up — someone who registers
+ *  afterwards has had them available the whole time and should not be told
+ *  they were "added". It is also not a consent gate; it informs, and the
+ *  pages themselves are reachable from Settings either way.
+ *
+ *  The cutoff is one fixed release constant, deliberately not Date.now():
+ *  evaluated per request, "new" would keep sliding forward and agents who
+ *  joined after the release would start seeing a historical notice.
+ *
+ *  The id doubles as the client's dismissal key, so publishing a later
+ *  notice means a new id rather than resetting a shared boolean. */
+export const LEGAL_INFO_NOTICE_ID = 'legal_info_2026_09'
+
+/** The instant the legal pages become publicly reachable — the STATIC
+ *  deploy, not the Edge deploy that ships this constant and not midnight on
+ *  the release date.
+ *
+ *  Midnight UTC was wrong: someone registering at 09:00 on release day, with
+ *  the pages still hours from going live, would be classified as a new agent
+ *  who had always had them.
+ *
+ *  The release procedure makes this true by construction rather than by
+ *  measurement — see docs, but in short: set this, deploy the Edge Function
+ *  (invisible: the live frontend ignores `legalNotice`), then deploy the
+ *  static site AT OR AFTER this instant. Never before it.
+ *
+ *  That ordering is deliberate about which way to be wrong. If the cutoff
+ *  landed AFTER real publication, agents who joined in between would be told
+ *  pages were "added" that existed the whole time they were here — a false
+ *  claim about their own history. If it lands slightly BEFORE, those agents
+ *  simply never see an informational notice about pages already sitting in
+ *  their Settings. The second is recoverable; the first is a lie. So the
+ *  cutoff is held at or before publication, and the gap is kept short. */
+export const LEGAL_INFO_PUBLISHED_AT = '2026-09-29T11:45:00Z'
+
+/** True only for an agent registered before the legal pages were published.
+ *  Reads rc_players.joined_at, which already exists and is already set for
+ *  every row — nothing new is stored, and the timestamp itself never leaves
+ *  the server (buildState sends the notice id or null, never the date). */
+export function legalInfoNoticeDue(joinedAt: string | null | undefined): boolean {
+  if (!joinedAt) return false
+  const joined = Date.parse(joinedAt)
+  const published = Date.parse(LEGAL_INFO_PUBLISHED_AT)
+  if (!Number.isFinite(joined)) return false
+  return joined < published
+}
+
 export interface BroadcastRow {
   id: number
   title: string

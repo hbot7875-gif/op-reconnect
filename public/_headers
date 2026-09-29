@@ -1,0 +1,31 @@
+# Baseline security headers for the STATIC side of the site.
+#
+# worker/index.js sets the same set on the responses it generates itself,
+# but those two paths are genuinely separate: wrangler.jsonc only routes
+# /share/* through the Worker (run_worker_first), so every other request is
+# answered straight from the asset layer and never reaches that code. This
+# file is what covers those. Verified in production: before it existed,
+# /share/* carried the headers and / did not.
+#
+# Not set here, on purpose:
+#   - a general Content-Security-Policy. The site loads Google Fonts, the
+#     Spotify iframe API, self-hosted tesseract wasm and inline styles; a
+#     script-src/style-src policy needs each of those proven first, and a
+#     wrong one breaks the game quietly. frame-ancestors is the one
+#     directive safe in isolation — it governs who may embed US, not what
+#     the page may load.
+#   - Strict-Transport-Security. It is a commitment covering every present
+#     and future subdomain of the apex and cannot be withdrawn inside its
+#     own max-age. That is a deliberate decision, not a line in a header
+#     pass.
+#
+# Permissions-Policy names only features this codebase never calls (checked:
+# no getUserMedia, no geolocation, no payment request). Clipboard and Web
+# Share are deliberately unlisted — they default to same-origin and the
+# share/copy flows depend on them.
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Content-Security-Policy: frame-ancestors 'none'
+  X-Frame-Options: DENY
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()

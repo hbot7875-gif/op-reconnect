@@ -4386,6 +4386,15 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .bcast-x:hover { color: var(--text); background: rgba(255,255,255,0.06); }
 .bcast-title { font-family: var(--disp); font-weight: 800; font-size: 15px; margin-top: 8px; }
 .bcast-msg { color: var(--muted); font-size: 13.5px; line-height: 1.55; margin-top: 5px; }
+/* Actions on a notice card. Reuses the game's own .btn/.btn-primary/.btn-ghost
+   rather than inventing a card-local button, so focus-visible, tap size and
+   hover all come from the existing rules; only the stack margin is reset. */
+/* A notice card with no eyebrow starts with its title, so the 8px that
+   separated the title from the head above it would become dead space
+   against the card's own padding. */
+.bcast-card > .bcast-title:first-child { margin-top: 0; }
+.bcast-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 13px; }
+.bcast-actions .btn { margin-top: 0; }
 
 /* The "who needs a partner" queue — replaced a <select> dropdown, which read
    as a menu to pick from rather than a list of people who are stuck. */

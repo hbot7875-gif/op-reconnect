@@ -119,6 +119,18 @@ export default defineConfig({
         // 404s' lesson as the three above. Unlike them, this one IS meant
         // to be linked in-game (Settings → Scrobbler PIN).
         scrobblerMobile: resolve(__dirname, 'scrobbler-mobile.html'),
+        // The five trust pages. Plain documents, no game bundle, no
+        // third-party font — someone reading the privacy policy should not
+        // have their IP handed to Google to do it. Registered here for the
+        // same 'omit it and it 404s' reason as everything above, which
+        // matters more for these than for an admin tool: a Terms link that
+        // 404s is worse than no Terms link.
+        terms: resolve(__dirname, 'terms.html'),
+        privacy: resolve(__dirname, 'privacy.html'),
+        about: resolve(__dirname, 'about.html'),
+        copyright: resolve(__dirname, 'copyright.html'),
+        credits: resolve(__dirname, 'credits.html'),
+        contact: resolve(__dirname, 'contact.html'),
       },
     },
   },
