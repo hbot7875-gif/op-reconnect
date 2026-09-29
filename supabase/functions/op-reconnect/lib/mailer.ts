@@ -19,7 +19,15 @@ export function mailerConfigured(): boolean {
   return !!Deno.env.get('RESEND_API_KEY')
 }
 
-export async function sendMail(to: string, subject: string, html: string, text: string): Promise<{ ok: boolean; error?: string }> {
+/** Sends one message.
+ *
+ *  `ok` means the provider returned 2xx. `id` means it returned an acceptance
+ *  id for the message, which is the closest thing to a receipt available here.
+ *  Neither means the mail reached an inbox — Resend can accept a message and
+ *  still have it bounce, greylist or land in spam, and nothing in this system
+ *  ever learns that. Callers that need proof of acceptance must check `id`,
+ *  not `ok`; callers that only want best-effort delivery can use `ok`. */
+export async function sendMail(to: string, subject: string, html: string, text: string): Promise<{ ok: boolean; id?: string; error?: string }> {
   const key = Deno.env.get('RESEND_API_KEY')
   if (!key) return { ok: false, error: 'mail_not_configured' }
   const from = Deno.env.get('RECOVERY_FROM') || 'Op: Reconnect <onboarding@resend.dev>'
@@ -36,7 +44,12 @@ export async function sendMail(to: string, subject: string, html: string, text: 
     console.error('resend send failed:', res.status, body.slice(0, 300))
     return { ok: false, error: 'mail_send_failed' }
   }
-  return { ok: true }
+  // A 2xx with no acceptance id is not an acceptance we can record. It has
+  // not been seen from Resend, but treating an unparseable success as proof
+  // would be exactly the kind of assumption this whole change exists to stop.
+  const body = await res.json().catch(() => null)
+  const id = typeof body?.id === 'string' && body.id ? body.id : undefined
+  return id ? { ok: true, id } : { ok: true, error: 'mail_accepted_without_id' }
 }
 
 /** The one template. In-world voice, but the code and the number are plain
@@ -85,35 +98,72 @@ export function recoveryEmail(agentNo: string, handle: string, code: string, min
  *  rc_inactive_agent_candidates already computes, so it always agrees with
  *  what the cron will actually act on. */
 export function bombReminderEmail(agentNo: string, handle: string, daysLeft: number) {
-  const subject = `Op: Reconnect — ${agentNo}, your file goes dark in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`
+  const days = `${daysLeft} day${daysLeft === 1 ? '' : 's'}`
+
+  // /game?mode=signin, not the landing page and not /game.
+  //
+  // Everyone who receives this already has an agent file, so the marketing
+  // landing page is the wrong destination and bare /game opens the auth screen
+  // on the "Create file" tab. The param preselects "I have one" instead, and is
+  // ignored entirely when a session already exists (main.js only shows the auth
+  // screen when there is no stored agent), so a signed-in reader lands straight
+  // in the game.
+  //
+  // Extensionless on purpose: /game.html 307-redirects to /game, and a redirect
+  // in an email link is one more thing between a lapsed player and coming back.
+  const site = 'https://hopetrackers.org'
+  const returnUrl = `${site}/game?mode=signin`
+
+  // Both names before the em dash: someone who has not opened the game in two
+  // weeks needs to recognise this in a notification preview, not after opening
+  // it. The old subject said only "Op: Reconnect", which meant nothing to them.
+  const subject = `HopeTrackers · OP: ReConnect — ${days} left, ${agentNo}`
+
   const text = [
-    `Agent ${agentNo} (${handle}),`,
+    `Hey ${agentNo} (${handle}),`,
     '',
-    `Your ARMY Bomb hasn't been fed in a while — if it stays that way for ${daysLeft} more day${daysLeft === 1 ? '' : 's'}, your agent file is permanently deleted.`,
+    `Your ARMY Bomb hasn't been fed in a while, so your agent file in`,
+    `OP: ReConnect is about to go quiet — ${days} left.`,
     '',
-    'Sign in and feed it (or just stream — Auto Feed handles it) to stay active.',
+    'Coming back is all it takes. Sign in and feed your Bomb, or just stream',
+    'BTS like you normally would: Auto Feed picks it up from there and your',
+    'agent stays active.',
     '',
-    "If you're done with the game, no action needed — this is just so it isn't a surprise.",
+    `  Come back → ${returnUrl}`,
+    '',
+    "If you're done with the game, no action is needed. We just didn't want it",
+    'to be a surprise — after that, the agent file and everything in it is',
+    'removed.',
+    '',
+    '— HopeTrackers · OP: ReConnect',
+    site,
   ].join('\n')
 
   const html = `
   <div style="background:#0a0910;color:#ece9f2;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:32px 20px">
     <div style="max-width:440px;margin:0 auto;background:#13111e;border:1px solid rgba(255,255,255,0.10);border-radius:16px;padding:28px">
-      <div style="font-size:11px;letter-spacing:2px;color:#a78bfa;text-transform:uppercase;font-family:monospace">Op: Reconnect &middot; HQ</div>
+      <div style="font-size:11px;letter-spacing:2px;color:#a78bfa;text-transform:uppercase;font-family:monospace">HopeTrackers &middot; OP: ReConnect</div>
       <h1 style="font-size:20px;margin:12px 0 8px">Your signal is fading</h1>
       <p style="color:#9c96b0;font-size:15px;line-height:1.6;margin:0 0 20px">
-        Agent <strong style="color:#ece9f2">${agentNo}</strong> (${handle}) — your ARMY Bomb hasn't been fed in a while.
+        Hey Agent <strong style="color:#ece9f2">${agentNo}</strong> (${handle}) — your ARMY Bomb hasn't been fed in a while, so your agent file is about to go quiet.
       </p>
-      <div style="background:rgba(220,38,38,0.13);border:1px solid #dc2626;border-radius:12px;padding:18px;text-align:center;margin-bottom:20px">
-        <div style="font-family:monospace;font-size:26px;color:#ece9f2">${daysLeft} day${daysLeft === 1 ? '' : 's'} left</div>
-        <div style="font-size:12px;color:#9c96b0;margin-top:8px">then your agent file is permanently deleted</div>
+      <div style="background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.45);border-radius:12px;padding:16px;text-align:center;margin-bottom:22px">
+        <div style="font-family:monospace;font-size:22px;color:#ece9f2">${days} left</div>
+        <div style="font-size:12px;color:#9c96b0;margin-top:6px">to feed your Bomb and stay active</div>
+      </div>
+      <div style="text-align:center;margin-bottom:22px">
+        <a href="${returnUrl}" style="display:inline-block;background:#a78bfa;color:#0b0810;font-weight:800;text-decoration:none;padding:13px 26px;border-radius:9px;font-size:15px">Come back to the city</a>
       </div>
       <p style="color:#9c96b0;font-size:14px;line-height:1.6;margin:0 0 16px">
-        Sign in and feed it, or just stream — Auto Feed handles it for you from then on.
+        Coming back is all it takes. Sign in and feed your Bomb, or just stream BTS like you normally would — Auto Feed handles it from there.
       </p>
-      <p style="color:#635d78;font-size:12.5px;line-height:1.6;margin:0">
-        If you're done with the game, no action needed — this is just so it isn't a surprise.
+      <p style="color:#635d78;font-size:12.5px;line-height:1.6;margin:0 0 20px">
+        If you're done with the game, no action is needed. We just didn't want it to be a surprise — after that, the agent file and everything in it is removed.
       </p>
+      <div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:16px;color:#635d78;font-size:12px;line-height:1.7">
+        HopeTrackers &middot; OP: ReConnect<br>
+        <a href="${site}" style="color:#8b7f9c;text-decoration:none">hopetrackers.org</a>
+      </div>
     </div>
   </div>`
 

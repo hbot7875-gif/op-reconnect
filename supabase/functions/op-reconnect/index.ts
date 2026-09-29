@@ -25,6 +25,7 @@ import { adminGetActiveDefuse, getDefuseMessages, sendDefuseMessage } from './li
 import { adminCreateBroadcast, adminListBroadcasts, adminDeleteBroadcast } from './lib/broadcasts.ts'
 import { adminDeleteAgent, adminGetAgent, adminGetAgentTracks, adminScanAltAccounts, adminResetAgentXp, adminDeleteInactiveAgents, sendInactiveReminders, adminListAgents } from './lib/admin-agent.ts'
 import { adminCaptureStreamSources, adminSyncAllStreams } from './lib/sync-all.ts'
+import { sweepStorageDeletions } from './lib/proof-retention.ts'
 import { startLeave, endLeave } from './lib/leave.ts'
 import { getQuestSkipQuote, skipQuest } from './lib/quest-skip.ts'
 import { adminListGoals, adminAddGoal, adminUpdateGoal, adminDeleteGoal } from './lib/goals.ts'
@@ -266,6 +267,12 @@ const ROUTES: Record<string, Route> = {
   adminDeleteAgent: { auth: 'admin', handler: (sb, p) => adminDeleteAgent(sb, p) },
   adminDeleteInactiveAgents: { auth: 'admin', handler: (sb, p) => adminDeleteInactiveAgents(sb, p) },
   sendInactiveReminders: { auth: 'admin', handler: (sb, p) => sendInactiveReminders(sb, p) },
+  // Same handler, reachable by pg_cron. Terms and the Privacy Policy both
+  // say a warning email goes out before an inactive file is deleted; the
+  // deletion has run daily since August but the warning has only ever been
+  // an admin route somebody had to remember to press, so that sentence was
+  // not reliably true. The admin route stays for manual sends.
+  cronInactiveReminders: { auth: 'cron', handler: (sb, p) => sendInactiveReminders(sb, p) },
   adminResetAgentXp: { auth: 'admin', handler: (sb, p) => adminResetAgentXp(sb, p) },
   adminSyncAllStreams: { auth: 'admin', handler: (sb, p) => adminSyncAllStreams(sb, p) },
   // Called by Supabase Cron with a dedicated token generated in database
@@ -273,6 +280,18 @@ const ROUTES: Record<string, Route> = {
   // This captures provider rows only; hourly adminSyncAllStreams still owns
   // game rollups and XP conversion.
   adminCaptureStreamSources: { auth: 'cron', handler: (sb, p) => adminCaptureStreamSources(sb, p) },
+  // Drains rc_storage_deletion_queue: queue anything newly due, delete the
+  // files from Storage under a lease, then clear the vote rows that pointed at
+  // them. Until now sweepStorageDeletions was only reachable through
+  // adminSyncAllStreams, and nothing has called THAT on a schedule since the
+  // fleet sync stopped running hourly -- so proof files were queued (03:40
+  // daily) and then never deleted. The 30-day deletion promise rested on
+  // somebody pressing an admin button.
+  //
+  // Deliberately takes no params: the defaults are the retention policy, and
+  // forwarding `reason` would let anything holding the cron token drain the
+  // 'qa' rehearsal rows that rc_next_storage_deletions exists to keep separate.
+  cronStorageSweep: { auth: 'cron', handler: (sb) => sweepStorageDeletions(sb) },
   adminGetEngagementReport: { auth: 'admin', handler: (sb, p) => adminGetEngagementReport(sb, p) },
 
   // Batch-assign a series of connect/invite missions for one reconnect goal

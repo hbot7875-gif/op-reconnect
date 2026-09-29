@@ -13,6 +13,7 @@ import { fetchStreamRows } from './streams.ts'
 import { flagStreamRows, findPossibleAlts, modesByAgentNo, IDENTITY_FIELDS, flagExcessStreamDays } from './police-check.ts'
 import { suggestedModeFor } from './mode-guard.ts'
 import { sendMail, bombReminderEmail, mailerConfigured } from './mailer.ts'
+import { reminderPlan } from './inactive-reminder-rules.js'
 import { adminReconnectHealthForAgent } from './reconnect-missions.ts'
 import { buildAgentDiary } from './admin-diary.js'
 
@@ -292,8 +293,39 @@ export async function adminGetAgentTracks(supabase: SupabaseDB, params: any) {
   }
 }
 
-/** Delete one test account and all agent-scoped game rows that predate the
- * rc_agents foreign key. Kept admin-only by index.ts's central route gate. */
+/** Delete one account and everything belonging to it, by delegating to the
+ *  canonical purge. Kept admin-only by index.ts's central route gate.
+ *
+ *  This used to carry its own list of tables to clear, and its docstring said
+ *  the point was "exactly one place that knows how to fully remove an agent,
+ *  not two that can drift apart". There were two, and they had drifted:
+ *  rc_purge_agent_data arrived later (20260928060000) and is what voluntary
+ *  retirement and the daily inactivity cron both call. Measured 2026-09-28,
+ *  the list here:
+ *
+ *    * missed ten tables entirely -- rc_feed_events, rc_engagement_events,
+ *      rc_reconnect_messages, rc_share_snapshots, rc_suggestions,
+ *      rc_defuse_messages and four rc_recelebrate_* tables -- none of which
+ *      cascades from rc_agents, so those rows simply stayed behind;
+ *    * never called rc_queue_agent_proof_files, so an admin delete stranded
+ *      that person's VMA proof screenshots in Storage permanently. The only
+ *      record of their paths was in the rc_vma_votes rows it had just deleted,
+ *      so nothing could ever find them again;
+ *    * DELETED generated_playlists and rc_reconnect_missions where the
+ *      canonical purge preserves them -- and deleting a mission cascades to
+ *      every participant row and message on it, including other players'.
+ *
+ *  It was also not transactional: each table was a separate PostgREST call, so
+ *  a failure part-way left an agent half-deleted with the log row already
+ *  written. That happened twice for real (rc_vma_votes, then
+ *  rc_backup_requests). rc_purge_agent_data is one function, one transaction,
+ *  and takes `for update` on the agent row so two purges cannot interleave.
+ *
+ *  There is deliberately no fallback if the RPC is missing. settings.ts's
+ *  retireAccount falls back to deactivation because a player pressing "retire"
+ *  should not get an error; an admin delete that quietly does something less
+ *  thorough than it claims is exactly what this change exists to stop, so it
+ *  fails closed instead. */
 export async function adminDeleteAgent(supabase: SupabaseDB, params: any) {
   const agentNo = String(params.agentNo || '').trim().toUpperCase()
   if (!/^AGENT\d{3,}$/.test(agentNo)) return { success: false, error: 'agent_no_invalid' }
@@ -302,72 +334,14 @@ export async function adminDeleteAgent(supabase: SupabaseDB, params: any) {
     .select('agent_no, handle, email, lb_username, created_at').eq('agent_no', agentNo).maybeSingle()
   if (!agent) return { success: false, error: 'agent_not_found' }
 
-  // Same "who was this" gap the 14-day cron hit -- deleting rc_agents below
-  // destroys the only record of who this agent even was. Logged here too,
-  // not just the scheduled path, since this same function is what the
-  // scheduled cleanup calls under the hood.
-  const { data: playerRow } = await supabase.from('rc_players')
-    .select('codename').eq('agent_no', agentNo).maybeSingle()
-  await supabase.from('rc_deleted_agent_log').insert({
-    agent_no: agent.agent_no, handle: agent.handle, email: agent.email,
-    codename: playerRow?.codename || null, lb_username: agent.lb_username,
-    joined_at: agent.created_at, reason: params.reason || 'manual_admin',
-  })
-
-  // Remove references with no FK cascade first. Missions created by this test
-  // account disappear too; their participant rows cascade from the mission.
-  const deletes: [string, string][] = [
-    ['rc_reconnect_puzzle_attempts', 'agent_no'],
-    ['rc_reconnect_participants', 'agent_no'],
-    ['rc_reconnect_missions', 'created_by'],
-    ['rc_defuse_contrib', 'agent_no'],
-    // Added 2026-08-24 — cross-checked every real FK pointing at rc_agents
-    // and found these seven missing from both this list and the scheduled
-    // cleanup's own copy (rc_delete_inactive_agents_scheduled), which is
-    // what broke the 14-day auto-delete cron for 3 nights straight on
-    // rc_vma_votes specifically. Each is a feature added after this list
-    // was first written.
-    //
-    // rc_backup_requests has to come BEFORE rc_player_items below —
-    // rc_backup_requests.spent_player_item_id is a second-order FK onto
-    // rc_player_items (not onto rc_agents directly, so the audit above
-    // missed it the first time), and broke a real scheduled run
-    // (2026-08-24) the same way rc_vma_votes broke this exact function a
-    // day earlier: "violates foreign key constraint
-    // rc_backup_requests_spent_player_item_id_fkey."
-    ['rc_backup_requests', 'owner_agent_no'],
-    ['rc_player_items', 'agent_no'],
-    ['rc_streak_freeze_log', 'agent_no'],
-    ['rc_badges', 'agent_no'],
-    ['rc_xp_ledger', 'agent_no'],
-    ['rc_daily_activity', 'agent_no'],
-    ['rc_player_districts', 'agent_no'],
-    ['rc_agent_lit_eras', 'agent_no'],
-    ['rc_agent_charge', 'agent_no'],
-    ['generated_playlists', 'agent_no'],
-    ['rc_scrobbles', 'agent_no'],
-    ['rc_password_resets', 'agent_no'],
-    ['rc_playlist_reports', 'agent_no'],
-    ['rc_playlist_saves', 'agent_no'],
-    ['rc_supply_chest_opens', 'agent_no'],
-    ['rc_supply_chest_progress', 'agent_no'],
-    ['rc_vma_community_chest_claims', 'agent_no'],
-    ['rc_vma_votes', 'agent_no'],
-    ['rc_players', 'agent_no'],
-  ]
-  for (const [table, column] of deletes) {
-    const { error } = await supabase.from(table).delete().eq(column, agentNo)
-    if (error) return { success: false, error: `delete_failed:${table}:${error.message}` }
-  }
-
-  // Invites sent by the deleted tester should no longer name a missing
-  // agent, and neither should a backup-pass helper slot that isn't theirs
-  // to delete (the request row belongs to its owner, deleted above only
-  // when THEY'RE the one being removed).
-  await supabase.from('rc_reconnect_participants').update({ invited_by: null }).eq('invited_by', agentNo)
-  await supabase.from('rc_backup_requests').update({ helper_agent_no: null }).eq('helper_agent_no', agentNo)
-  const { error } = await supabase.from('rc_agents').delete().eq('agent_no', agentNo)
-  if (error) return { success: false, error: `delete_failed:rc_agents:${error.message}` }
+  // The deletion log is written INSIDE rc_purge_agent_data, before the rows it
+  // reads from are gone. Writing one here as well would log every admin
+  // deletion twice.
+  const { data: purged, error: purgeErr } = await supabase
+    .rpc('rc_purge_agent_data', { p_agent_no: agentNo, p_reason: params.reason || 'manual_admin' })
+  if (purgeErr) return { success: false, error: `purge_failed:${purgeErr.message}` }
+  // false means the function found no such agent -- it races the lookup above.
+  if (!purged) return { success: false, error: 'agent_not_found' }
   return { success: true, deleted: { agentNo, handle: agent.handle } }
 }
 
@@ -427,26 +401,51 @@ export async function sendInactiveReminders(supabase: SupabaseDB, params: any) {
 
   const { data: candidates, error } = await supabase.rpc('rc_inactive_agent_candidates', { p_inactive_days: minDays })
   if (error) return { success: false, error: error.message }
-  const rows = (candidates || []).filter((r: any) => r.days_inactive < maxDays)
-  if (rows.length === 0) return { success: true, sent: [], failed: [], skipped: [] }
+  if (!candidates?.length) return { success: true, sent: [], failed: [], skipped: [] }
 
-  const agentNos = rows.map((r: any) => r.agent_no)
-  const { data: agents } = await supabase.from('rc_agents').select('agent_no, handle, email').in('agent_no', agentNos)
-  const byAgent = new Map((agents || []).map((a: any) => [a.agent_no, a]))
+  const agentNos = candidates.map((r: any) => r.agent_no)
+  const [{ data: agents }, { data: warnings }] = await Promise.all([
+    supabase.from('rc_agents').select('agent_no, handle, email').in('agent_no', agentNos),
+    // What we have already sent. Without this a second run of the scheduled
+    // job emails everyone in the band a second time the same morning.
+    supabase.from('rc_inactivity_warnings').select('agent_no, last_attempt_at').in('agent_no', agentNos),
+  ])
+
+  // Who to write to, and what to tell them — extracted so every edge (the
+  // band, a missing address, an agent the purge already removed, one already
+  // written to today) is testable without a mailer or a database. See
+  // inactive-reminder-rules.js.
+  const { toSend, skipped, suppressed } = reminderPlan({
+    candidates, agents: agents || [], warnings: warnings || [], minDays, maxDays,
+  })
+  if (toSend.length === 0) return { success: true, sent: [], failed: [], skipped, suppressed }
 
   const sent: string[] = []
   const failed: { agentNo: string; error: string }[] = []
-  const skipped: string[] = []
-  for (const r of rows) {
-    const agent = byAgent.get(r.agent_no)
-    if (!agent?.email) { skipped.push(r.agent_no); continue }
-    const daysLeft = Math.max(1, Math.round(maxDays - r.days_inactive))
-    const { subject, text, html } = bombReminderEmail(r.agent_no, agent.handle || r.agent_no, daysLeft)
-    const result = await sendMail(agent.email, subject, html, text)
-    if (result.ok) sent.push(r.agent_no)
-    else failed.push({ agentNo: r.agent_no, error: result.error || 'unknown' })
+  for (const r of toSend) {
+    const { subject, text, html } = bombReminderEmail(r.agentNo, r.handle, r.daysLeft)
+    const result = await sendMail(r.email, subject, html, text)
+
+    // ACCEPTANCE, not a 2xx. A warning only counts once the provider has given
+    // back an id for the message; a 200 with an unparseable body is not proof
+    // of anything, and this record is what later authorises deleting somebody's
+    // account. It is still only acceptance — the provider taking the message —
+    // and never proof it reached an inbox. Nothing in this system can know
+    // that, so nothing here pretends to.
+    const accepted = !!result.ok && !!result.id
+    const { error: recErr } = await supabase.rpc('rc_record_inactivity_warning', {
+      p_agent_no: r.agentNo,
+      p_ok: accepted,
+      p_error: accepted ? null : (result.error || 'mail_not_accepted'),
+    })
+
+    if (accepted && !recErr) sent.push(r.agentNo)
+    // No in-process retry on purpose: this runs daily, and an agent still
+    // inside the band is picked up again tomorrow. Retrying here would let a
+    // slow mail outage hold the whole job open.
+    else failed.push({ agentNo: r.agentNo, error: recErr?.message || result.error || 'mail_not_accepted' })
   }
-  return { success: true, sent, failed, skipped }
+  return { success: true, sent, failed, skipped, suppressed }
 }
 
 /** Reset visible XP without deleting historical reward rows. A compensating

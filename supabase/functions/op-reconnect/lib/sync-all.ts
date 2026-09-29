@@ -12,6 +12,7 @@
 // repo secret, never checked into source.
 
 import type { SupabaseDB } from './config.ts'
+import { sweepStorageDeletions } from './proof-retention.ts'
 import { loadContent, limits } from './config.ts'
 import { ensureDailyRollups } from './derive.ts'
 import type { GoalXpScope } from './derive.ts'
@@ -77,8 +78,14 @@ async function captureStreamSource(supabase: SupabaseDB, source: ScheduledSource
   const maxPages = limits(content).lbMaxPages
   const now = Math.floor(Date.now() / 1000)
   const initialLookback = 7 * 86400
+  // retired_at is null is the whole point of this line. This capture runs
+  // every 5-15 minutes from pg_cron and was reading every row in rc_agents,
+  // so a retired player's ListenBrainz or stats.fm account went on being
+  // polled indefinitely. It is the larger half of the 19,507 scrobbles
+  // recorded after their owners had left.
   const { data: agents, error: agentsError } = await supabase.from('rc_agents')
     .select('agent_no, lb_username, stream_source_preference, statsfm_username, musicat_public_id')
+    .is('retired_at', null)
   if (agentsError) return { success: false, error: agentsError.message }
 
   const selected = (agents || []).filter((agent: AgentSourceRow) => resolvedAgentStreamSource(agent) === source)
@@ -170,17 +177,48 @@ export async function adminSyncAllStreams(supabase: SupabaseDB, _params: Record<
   // indexed and idempotent, so the hourly job carries it.
   const { data: swept } = await supabase.rpc('rc_backup_sweep_expired')
 
+  // Files past their retention window. Rides the same hourly job for the
+  // same reasons the backup sweep does — idempotent, and it needs
+  // something that can reach Storage, which pg_cron cannot. Queue, delete,
+  // then clear references, in that order; see lib/proof-retention.ts for
+  // why the order is the whole design. Until an event is 30 days finished
+  // the usual cost is one indexed query and an empty queue.
+  const proofSweep = await sweepStorageDeletions(supabase)
+
   const content = await loadContent(supabase)
 
-  const { data: players, error: playersErr } = await supabase
+  const { data: allPlayers, error: playersErr } = await supabase
     .from('rc_players').select('agent_no, mode, joined_at, boost_expires_at, boost_multiplier')
   if (playersErr) return { success: false, error: playersErr.message }
-  if (!players || players.length === 0) return { success: true, total: 0, synced: 0, failed: 0, errors: [], backupSweep: swept || null }
+
+  // Retired agents keep their rc_players row, and the sync never checked, so
+  // it went on reading the listening history of people who had asked to leave
+  // and storing it — 19,507 scrobbles across 7 accounts, still arriving as of
+  // 27 Sep 2026. The Ranking screen has always filtered on retired_at; this
+  // never did, so the data accumulated where nobody would see it.
+  //
+  // Excluded here rather than left to fail further down, because an agent
+  // missing from the agent-row lookup is reported as `agent_row_missing`, and
+  // a retired account is not an error — it is simply out of scope.
+  const { data: retiredRows, error: retiredErr } = await supabase
+    .from('rc_agents').select('agent_no').not('retired_at', 'is', null)
+  if (retiredErr) return { success: false, error: retiredErr.message }
+  const retired = new Set((retiredRows || []).map((a: any) => String(a.agent_no)))
+
+  const players = (allPlayers || []).filter((p: any) => !retired.has(String(p.agent_no)))
+  if (players.length === 0) return { success: true, total: 0, synced: 0, failed: 0, errors: [], backupSweep: swept || null, proofSweep, skippedRetired: retired.size }
 
   const agentNos = players.map((p: any) => p.agent_no)
   const [{ data: agentRows, error: agentsErr }, { data: activeDistricts, error: pdErr }] = await Promise.all([
+    // `retired_at is null` is not an optimisation. rc_players keeps its row
+    // when someone retires, so without this filter the fleet sync went on
+    // reading the listening history of people who had asked to leave and
+    // storing it — 19,507 scrobbles across 7 retired accounts, still arriving
+    // as of 27 Sep 2026. The Ranking screen has always filtered on this; the
+    // sync never did, so the data kept accumulating where nobody could see it.
     supabase.from('rc_agents')
       .select('agent_no, lb_username, stream_source_preference, statsfm_username, musicat_public_id')
+      .is('retired_at', null)
       .in('agent_no', agentNos),
     // Only the currently-active row per agent — same thing buildState reads
     // to build goalXpScope on a real app-open. Without this, goalXpCountForDate
@@ -222,5 +260,5 @@ export async function adminSyncAllStreams(supabase: SupabaseDB, _params: Record<
   // Capped, not truncated silently — a scheduled job's log is the only
   // place anyone will ever see this, so the first failures (usually the
   // same handful of broken sources) matter more than an exhaustive list.
-  return { success: true, total: players.length, synced, failed: errors.length, errors: errors.slice(0, 20), backupSweep: swept || null }
+  return { success: true, total: players.length, synced, failed: errors.length, errors: errors.slice(0, 20), backupSweep: swept || null, proofSweep, skippedRetired: retired.size }
 }

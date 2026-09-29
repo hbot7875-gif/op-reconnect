@@ -157,7 +157,7 @@ function paintSections(body, state) {
     },
     {
       icon: '🪦', name: 'Retirement Protocol', value: '',
-      body: 'Permanently step down. Your district stays on the map, exactly as you left it.',
+      body: 'Permanently delete your agent file and everything in it. This cannot be undone.',
       onClick: () => showOverlay(retireSheet()),
     },
   ]))
@@ -597,13 +597,28 @@ function signOutSheet() {
 /** Two-step confirm: retype the handle you're retiring AND the password,
  *  before the one destructive action on this whole screen. Every other
  *  sheet here (password, sign out) needed only one of those — this is the
- *  only one that can't be undone, so it asks for both. */
+ *  only one that can't be undone, so it asks for both.
+ *
+ *  The copy here used to say XP and badges "stay exactly where they are on
+ *  the map". That was true when retiring only set retired_at; it stopped
+ *  being true the moment retirement started calling rc_purge_agent_data, and
+ *  a deletion warning that undersells what it deletes is the worst kind of
+ *  wrong. It now names what goes, and the three exceptions that do not.
+ *
+ *  The third exception is newer than the other two: rc_purge_agent_data used
+ *  to DELETE missions the retiring agent had created, which cascaded to every
+ *  participant row and message on them — other players' history, destroyed by
+ *  someone else leaving. It now anonymises the mission instead, so those
+ *  teammates keep what they earned. This sheet and Terms §7 must keep saying
+ *  the same three things; they are the same promise in two places. */
 function retireSheet() {
   const sheet = el('div', 'sheet set-sheet')
   sheet.append(
     el('div', 'eyebrow', 'RETIREMENT PROTOCOL'),
     el('h3', '', 'Retire this agent file?'),
-    el('p', 'muted', `This locks ${esc(account?.agentNo || 'your agent number')} out of the network for good — it can't be undone. Your district, XP and badges stay exactly where they are on the map; they just stop being yours to touch.`),
+    el('p', 'muted', `This permanently deletes ${esc(account?.agentNo || 'your agent file')} and everything in it — your XP, your level, your badges, your districts, your streaming history, your messages and your uploads. It cannot be undone, and we cannot bring it back.`),
+    el('p', 'muted', 'Three things do not go. Badge photos you uploaded stay in circulation, because other agents wear badges made from them — they stop being linked to you. Missions you created stay, so the teammates who joined them keep their history, with your name removed. And we keep a short record that this file was deleted, which is itself deleted after 30 days.'),
+    el('p', 'muted', 'If you just want a break, close this and request leave instead — leave pauses the inactivity clock and keeps everything.'),
   )
 
   const handle = el('input', 'ob-input')
@@ -627,7 +642,14 @@ function retireSheet() {
     if (!res.success) { toast(errText(res.error)); return }
     clearSession()
     hideOverlay()
-    toast('Agent file retired. Thank you for your service.')
+    // The server says which of the two things it did. During the window where
+    // the purge function is not yet deployed, retiring deactivates rather than
+    // erases — and telling someone their data is gone when it is not would be
+    // worse than either outcome on its own. This reads the answer rather than
+    // assuming it.
+    toast(res.mode === 'deactivated'
+      ? 'Agent file retired and signed out. Full deletion is still being rolled out.'
+      : 'Agent file retired. Everything in it has been deleted.')
     location.reload()
   }
   sheet.appendChild(go)

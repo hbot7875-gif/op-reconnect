@@ -12,8 +12,20 @@ import type { SupabaseDB } from './config.ts'
 const HEADERS = { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
 const ok = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: HEADERS })
 
+/** Resolves the PIN to an agent, and refuses a retired one.
+ *
+ *  A scrobbler app keeps posting long after its owner has stopped playing —
+ *  Web Scrobbler and Pano Scrobbler run on a phone, not on us, and nothing
+ *  tells them the account is gone. Without this check a retired player's
+ *  listening history kept arriving through the webhook and being stored. The
+ *  caller returns the same "unknown PIN" response either way, so a retired
+ *  account is indistinguishable from a wrong PIN to whatever is posting. */
 async function agentForPin(supabase: SupabaseDB, pin: string) {
-  const { data } = await supabase.from('rc_agents').select('agent_no').eq('scrobble_pin', pin).maybeSingle()
+  const { data } = await supabase.from('rc_agents')
+    .select('agent_no')
+    .eq('scrobble_pin', pin)
+    .is('retired_at', null)
+    .maybeSingle()
   return data
 }
 

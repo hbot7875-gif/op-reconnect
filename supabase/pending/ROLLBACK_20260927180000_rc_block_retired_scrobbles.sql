@@ -1,0 +1,88 @@
+-- Forward rollback for 20260927180000_rc_block_retired_scrobbles.sql
+--
+-- STAGED, NOT APPLIED. This is the undo for the retirement-protection trigger,
+-- written as a NEW migration rather than as a deletion of history.
+--
+--
+-- WHY FORWARD AND NOT BACKWARD
+--
+-- The tempting version of "undo" is to drop the trigger and then delete the
+-- row from supabase_migrations.schema_migrations so the original can be
+-- re-applied later. Do not. That row is the only record of what has actually
+-- run against this database, and editing it means:
+--
+--   * `supabase migration list` starts lying — local and remote disagree, and
+--     the next `db push` tries to re-apply a migration whose objects may still
+--     partly exist;
+--   * a restored backup and the live database no longer agree about what has
+--     been applied;
+--   * nobody reading the history afterwards can tell the trigger was ever on.
+--
+-- Applying this file instead leaves an honest trail: the trigger was added,
+-- then it was removed, and both are visible in order.
+--
+--
+-- HOW TO USE IT
+--
+-- Only if Stage 1 needs to be reversed. Rename it to a NEW timestamp ahead of
+-- the one being undone — e.g. 20260928HHMMSS_rc_drop_retired_scrobble_block.sql
+-- — move it into supabase/migrations/, and `supabase db push --linked`.
+-- The filename must sort AFTER 20260927180000 or the CLI will consider it
+-- already applied and skip it.
+--
+--
+-- THIS IS AN EMERGENCY OPTION, NOT A ROUTINE UNDO
+--
+-- Read this before running it.
+--
+-- Stage 1 has two halves, and they are not interchangeable:
+--
+--   the trigger   the database backstop, removed by this file
+--   the function  the application guards in capture, fleet sync, the webhook
+--                 PIN lookup and persistScrobbles
+--
+-- REVERSING BOTH RESTARTS COLLECTION FROM RETIRED ACCOUNTS. That is the exact
+-- behaviour Stage 1 exists to stop — 19,500+ scrobbles were recorded from
+-- people who had asked to leave — so rolling back both halves is a decision to
+-- resume collecting personal data from them, and must be made deliberately and
+-- knowingly. It is not a safe default and should never be the reflex response
+-- to an unrelated incident.
+--
+-- ORDER OF PREFERENCE, worst case last:
+--
+--   1. FIX FORWARD. Almost anything Stage 1 could break is better addressed by
+--      a new migration or a new function deploy than by resuming collection.
+--
+--   2. REVERSE THE TRIGGER ONLY (this file), leaving the deployed function in
+--      place. Collection stays stopped, because the application guards do not
+--      depend on the trigger. All that is removed is the database backstop and
+--      its per-row lookup. This is the right choice if the trigger itself is
+--      the problem — a performance regression on inserts, say.
+--
+--   3. REVERSE THE FUNCTION ONLY, leaving the trigger in place. Collection
+--      also stays stopped, because the trigger refuses the writes on its own.
+--      The right choice if the problem is in the Edge Function changes.
+--
+--   4. REVERSE BOTH. Only if the two are somehow interacting, and only with
+--      the owner's explicit agreement that collection from retired accounts is
+--      resuming. If this is done, write down when it happened: anything
+--      collected afterwards was collected without consent and should be purged
+--      once Stage 1 is restored.
+--
+-- Options 2 and 3 are both safe with respect to collection. There is no
+-- ordinary operational reason to reach option 4.
+
+begin;
+
+drop trigger if exists rc_scrobbles_block_retired on rc_scrobbles;
+drop function if exists rc_block_retired_scrobbles();
+
+commit;
+
+-- VERIFY (read-only): expect no rows.
+--
+--   select tgname from pg_trigger
+--    where tgrelid = 'rc_scrobbles'::regclass
+--      and tgname = 'rc_scrobbles_block_retired';
+--
+--   select proname from pg_proc where proname = 'rc_block_retired_scrobbles';

@@ -126,11 +126,47 @@ export async function retireAccount(supabase: SupabaseDB, params: Record<string,
     return { success: false, error: 'bad_credentials' }
   }
 
-  const { error } = await supabase.from('rc_agents')
+  // Retiring used to set retired_at and stop there: the agent file vanished
+  // from the game while the email, the connected-service username, the
+  // listening history and every message stayed in the database. That is a
+  // deactivation, and calling it deletion in the Terms would have been untrue.
+  //
+  // It now runs the same purge the inactivity sweep runs — one function, so
+  // the two paths cannot drift — and the account is gone for good. There is
+  // no undo, which is why the password check above is not optional.
+  const { data: purged, error } = await supabase
+    .rpc('rc_purge_agent_data', { p_agent_no: agentNo, p_reason: 'retired_by_player' })
+
+  if (!error) {
+    if (purged === false) return { success: false, error: 'agent_not_found' }
+    return { success: true, mode: 'deleted' }
+  }
+
+  // The purge function lives in the retention migration, which ships AFTER the
+  // retirement-protection one. Between those two deployments the Edge Function
+  // is running with the RPC not yet created, and a player who retires in that
+  // window must not simply get an error — that would leave them unable to
+  // leave at all, which is worse than the behaviour we are replacing.
+  //
+  // So it falls back to what retirement did before: mark the account retired
+  // and clear the session. That still stops all collection, because the
+  // ingestion guards and the database trigger key off retired_at, not off the
+  // data being gone. The account is deactivated rather than erased until the
+  // retention migration lands, which matches what the live UI says during that
+  // window — the wording change ships with the client, later still.
+  const missingFn = /rc_purge_agent_data|could not find the function|does not exist|PGRST202/i.test(error.message || '')
+  if (!missingFn) return { success: false, error: error.message }
+
+  const { error: fallbackErr } = await supabase.from('rc_agents')
     .update({ retired_at: new Date().toISOString(), session_token: null, session_expires_at: null })
     .eq('agent_no', agentNo)
-  if (error) return { success: false, error: error.message }
-  return { success: true }
+  if (fallbackErr) return { success: false, error: fallbackErr.message }
+  console.warn('retireAccount: rc_purge_agent_data unavailable, deactivated instead', agentNo)
+  // `mode` is the whole point of the fallback being acceptable. Returning a
+  // bare success would let the client tell someone their data had been erased
+  // when it had only been switched off — the one outcome worse than either
+  // behaviour on its own. Callers must read this, not just `success`.
+  return { success: true, mode: 'deactivated' }
 }
 
 // ── Stream sources ────────────────────────────────────────────────

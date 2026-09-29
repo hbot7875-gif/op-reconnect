@@ -221,8 +221,35 @@ async function fetchMusicat(publicId: string, fromTs: number, toTs: number): Pro
 // never be lost again just because it scrolled out of the provider's
 // shrinking "recent" window on a later poll. ignoreDuplicates makes repeated
 // polls of the same overlapping window a no-op rather than a double-count.
+/** True when this agent has retired and no more of their listening history
+ *  may be stored.
+ *
+ *  This is the last gate rather than the first. The callers that reach a
+ *  provider — the pg_cron capture, the hourly fleet sync, the admin track
+ *  view — each filter retired agents out for themselves, but they are three
+ *  separate lists that have already drifted apart once: the capture and the
+ *  sync both read every row in rc_agents and stored 19,507 scrobbles belonging
+ *  to people who had left. A fourth caller added later would repeat it. Since
+ *  every provider row in the system is written by persistScrobbles, checking
+ *  here means no future path can quietly start collecting again. */
+export async function assertMayCollect(supabase: SupabaseDB, agentNo: string): Promise<void> {
+  const { data, error } = await supabase.from('rc_agents')
+    .select('retired_at').eq('agent_no', agentNo).maybeSingle()
+
+  // Fails CLOSED, in all three directions. An earlier version returned false
+  // on a lookup error so a database blip would not stop collection for
+  // everybody — but "we could not check whether this person has left" is not
+  // a reason to store more of their listening history. A sync that throws is
+  // retried on the next run and nothing is lost; a sync that guesses wrong
+  // writes personal data that should never have been collected.
+  if (error) throw new Error(`retirement_check_failed:${error.message}`)
+  if (!data) throw new Error('retirement_check_failed:agent_row_missing')
+  if (data.retired_at) throw new Error('agent_retired')
+}
+
 async function persistScrobbles(supabase: SupabaseDB, agentNo: string, rows: StreamRow[], source: string) {
   if (rows.length === 0) return
+  await assertMayCollect(supabase, agentNo)
   let candidates = rows
   if (source === 'listenbrainz') {
     // LB can return the whole current day on every 90-second player poll.
