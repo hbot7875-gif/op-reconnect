@@ -132,8 +132,13 @@ function skipError(res) {
     not_in_mission: "You're not on this quest any more.",
     already_skipped: 'That quest was already skipped.',
     already_completed: 'This Quest is already complete.',
-    contribution_unavailable: "We couldn't verify the latest Quest streams. Please try again.",
-    contribution_changed: 'A new stream just arrived. Check again to use the latest Quest progress.',
+    // Both of these now mean the server already retried against fresh
+    // snapshots and the team's streams were still landing mid-check. So the
+    // copy has to read as "wait a moment", not as an instruction to keep
+    // hammering the button — which is what the old wording invited, and what
+    // an agent on a stalled quest actually did.
+    contribution_unavailable: 'Quest streams are updating right now. Try Skip again in a moment.',
+    contribution_changed: 'Quest streams are updating right now. Try Skip again in a moment.',
     joined_mode_unavailable: "We couldn't verify this Quest's original mode. Please contact HQ.",
     use_quest_exit: 'Use the quest exit option to leave this quest.',
   }[res.error] || res.error || "Couldn't skip this quest"

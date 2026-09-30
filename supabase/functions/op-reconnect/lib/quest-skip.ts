@@ -17,6 +17,7 @@
 import type { SupabaseDB } from './config.ts'
 import { loadContent } from './config.ts'
 import { getMissionStatus, questExitContributionEvidence } from './reconnect-missions.ts'
+import { runSkipWithEvidenceRetry } from './quest-skip-retry.ts'
 
 /** The mission this agent is currently in for a district, if any. Returns the
  *  joined participant row alongside it — the quote needs joined_at/mode. */
@@ -33,6 +34,10 @@ async function myOpenMission(supabase: SupabaseDB, agentNo: string, districtId: 
   if (!mine) return null
   return { mission: missions.find((m: any) => m.id === mine.mission_id), participant: mine }
 }
+
+/** The snapshot the SQL decides from: every joined member's counted
+ *  contribution, plus the stream cursor it was counted at. */
+interface QuestEvidence { contributions: Record<string, number>; highWater: number }
 
 async function freshEvidence(supabase: SupabaseDB, found: any) {
   // Capture the stream-table high-water mark BEFORE counting. SQL rejects
@@ -57,18 +62,18 @@ export async function getQuestSkipQuote(supabase: SupabaseDB, params: Record<str
   if (!districtId) return { success: false, error: 'district_required' }
   const found = await myOpenMission(supabase, agentNo, districtId)
   if (!found?.mission) return { success: false, error: 'not_in_mission' }
-  let evidence: { contributions: Record<string, number>; highWater: number }
-  try {
-    evidence = await freshEvidence(supabase, found)
-  } catch (_e) {
-    return { success: false, error: 'contribution_unavailable' }
-  }
-  const { data, error } = await supabase.rpc('rc_quest_skip_quote_v2', {
-    p_agent: agentNo, p_mission: found.mission.id,
-    p_evidence: evidence.contributions, p_scrobble_high_water: evidence.highWater,
+  // The quote writes nothing at all, so the same race here only ever cost the
+  // player a sheet that refused to open. Same bounded retry, same reasons.
+  const outcome = await runSkipWithEvidenceRetry<QuestEvidence, any>({
+    buildEvidence: () => freshEvidence(supabase, found),
+    callRpc: (evidence) => supabase.rpc('rc_quest_skip_quote_v2', {
+      p_agent: agentNo, p_mission: found.mission.id,
+      p_evidence: evidence.contributions, p_scrobble_high_water: evidence.highWater,
+    }) as any,
+    stillSkippable: () => true,
   })
-  if (error) return { success: false, error: error.message }
-  return data?.success ? { ...data, success: true } : { success: false, error: data?.error || 'quote_failed' }
+  if (!outcome.ok) return { success: false, error: outcome.error || 'quote_failed' }
+  return { ...outcome.data, success: true }
 }
 
 /** Performs the exit. The contribution snapshot is taken here, immediately
@@ -82,21 +87,36 @@ export async function skipQuest(supabase: SupabaseDB, params: Record<string, unk
   const found = await myOpenMission(supabase, agentNo, districtId)
   if (!found?.mission) return { success: false, error: 'not_in_mission' }
 
-  let evidence: { contributions: Record<string, number>; highWater: number }
-  try {
-    evidence = await freshEvidence(supabase, found)
-  } catch (_e) {
-    // Exiting on unverifiable data could wrongly unlock a free path or erase
-    // a teammate's real contribution. Fail closed and let the player retry.
-    return { success: false, error: 'contribution_unavailable' }
+  // The snapshot is the only volatile part of this, so it is the only part
+  // that gets another go. On an active roster a teammate's scrobble landing
+  // between the high-water read and the RPC is ordinary, not exceptional, and
+  // before this the player simply lost — every tap refused, nothing written,
+  // no way through. See quest-skip-retry.ts for why re-calling the RPC after
+  // these two rejections cannot charge twice.
+  let lastEvidence: QuestEvidence | null = null
+  const expiresAt = Date.parse(found.mission.expires_at)
+
+  const outcome = await runSkipWithEvidenceRetry<QuestEvidence, any>({
+    buildEvidence: async () => {
+      lastEvidence = await freshEvidence(supabase, found)
+      return lastEvidence
+    },
+    callRpc: (evidence) => supabase.rpc('rc_quest_skip_v2', {
+      p_agent: agentNo, p_mission: found.mission.id,
+      p_evidence: evidence.contributions, p_scrobble_high_water: evidence.highWater,
+    }) as any,
+    // An expiry that lands mid-retry must not quietly become a free Expired
+    // Exit: that one does NOT waive the district requirement, so the player
+    // would pay nothing and still be blocked, having asked for the opposite.
+    stillSkippable: () => !Number.isFinite(expiresAt) || Date.now() < expiresAt,
+  })
+
+  if (!outcome.ok) {
+    const data = outcome.data && typeof outcome.data === 'object' ? outcome.data : {}
+    return { ...data, success: false, error: outcome.error }
   }
 
-  const { data, error } = await supabase.rpc('rc_quest_skip_v2', {
-    p_agent: agentNo, p_mission: found.mission.id,
-    p_evidence: evidence.contributions, p_scrobble_high_water: evidence.highWater,
-  })
-  if (error) return { success: false, error: error.message }
-  if (!data?.success) return { success: false, ...data }
+  const data = outcome.data
   return {
     success: true,
     free: !!data.free,
@@ -104,7 +124,7 @@ export async function skipQuest(supabase: SupabaseDB, params: Record<string, unk
     costXp: data.costXp || 0,
     costCells: data.costCells || 0,
     districtId,
-    contributionKept: Number(evidence.contributions[agentNo]) || 0,
+    contributionKept: Number((lastEvidence as QuestEvidence | null)?.contributions[agentNo]) || 0,
     waivesRequirement: !!data.waivesRequirement,
   }
 }
