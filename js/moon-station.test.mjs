@@ -20,9 +20,21 @@ test('player copy uses familiar streaming language without an accusation', () =>
   assert.match(ui, /streaming pattern/)
   assert.match(ui, /Check your streaming pace/)
   assert.match(ui, /accounts and devices/)
-  assert.match(ui, /played too close/)
+  // Names the pattern instead of the person. "played too close" read as a
+  // verdict on the player, and after the Stats.fm duplicate audit it was
+  // landing on people whose only mistake was listening once.
+  assert.match(ui, /repeated-play pattern/)
+  assert.doesNotMatch(ui, /played too close/)
   assert.doesNotMatch(ui, /Your own police check/)
   assert.doesNotMatch(ui, />\d* flagged</)
+})
+
+test('a duplicate the source reported twice is explained, not silently dropped', () => {
+  // A collapsed row set must never read as lost history.
+  assert.match(ui, /ingestionDuplicates/)
+  assert.match(ui, /duplicate stream\$\{dupes === 1 \? '' : 's'\} set aside/)
+  assert.match(ui, /Nothing was removed from your history or your totals/)
+  assert.match(selfCheck, /ingestionDuplicates: countIngestionDuplicates\(rows\)/)
 })
 
 test('every incomplete provider sequence suppresses repeat judgments', () => {

@@ -399,6 +399,18 @@ function moonStationSheet() {
       <span class="${res.flaggedCount ? 'is-flagged' : ''}"><b>${res.flaggedCount}</b> to review</span>
     `))
 
+    // Rows the source reported twice and the check set aside. Shown to the
+    // agent in the same words an admin sees, so a total lower than they
+    // expected arrives with an explanation instead of looking like loss.
+    const dupes = Number(res.ingestionDuplicates || 0)
+    if (dupes) {
+      body.appendChild(el('div', 'ms-coverage-note', `
+        <b>ℹ ${dupes} duplicate stream${dupes === 1 ? '' : 's'} set aside</b>
+        <p class="muted">Same play reported twice by Stats.fm, not a repeated listen.
+        Nothing was removed from your history or your totals.</p>
+      `))
+    }
+
     if (res.partialHistory) {
       const sourceNames = { statsfm: 'Stats.fm', musicat: 'Musicat', listenbrainz: 'ListenBrainz', direct: 'scrobbler' }
       const sourceName = sourceNames[res.streamSource] || 'stream'
@@ -454,7 +466,10 @@ function moonStationSheet() {
     sequence.forEach((t, i) => {
       const flagged = (t.flags || []).length > 0
       const badges = (t.flags || []).map((f) =>
-        `<span class="sig-badge">${f === 'repeat' ? '🔁 played too close' : esc(f)}</span>`).join('')
+        // Names the pattern rather than accusing the player: this check
+        // cannot see track duration or device, so the most it can ever
+        // mean is "worth a second look".
+        `<span class="sig-badge">${f === 'repeat' ? '🔁 repeated-play pattern' : esc(f)}</span>`).join('')
       const when = new Date(t.at).toLocaleString(undefined, {
         month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
       })

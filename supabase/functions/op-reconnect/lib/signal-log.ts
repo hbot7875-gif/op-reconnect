@@ -13,7 +13,7 @@ import { getBackupOverlay } from './backup-pass.ts'
 import { BIRTHDAY_ERA_EVENTS, BIRTHDAY_LIGHTS_PER_TRACK, birthdayTrackEntries, isBirthdayEventDate } from './birthday-eras.ts'
 import { allocateTrackHits } from './era-match.js'
 import { annotateBotzStreams, botzSourceSetup, botzTrackingState } from './botz-rules.js'
-import { flagStreamRows, findPossibleAlts, flagExcessStreamDays } from './police-check.ts'
+import { flagStreamRows, findPossibleAlts, flagExcessStreamDays, countIngestionDuplicates } from './police-check.ts'
 import { suggestedModeFor } from './mode-guard.ts'
 import { resolveEquippedBadges } from './badge-profile.ts'
 import { RECELEBRATE_EVENT_ID } from './recelebrate-tracks.js'
@@ -248,5 +248,8 @@ export async function getMySelfCheck(supabase: SupabaseDB, params: Record<string
     mode: player?.mode || null,
     suggestedMode: excessStreamDays.length ? suggestedModeFor(player?.mode || 'easy') : null,
     excessStreamDays,
+    // See adminGetAgentTracks: the same count, so the agent sees the
+    // same explanation an admin does.
+    ingestionDuplicates: countIngestionDuplicates(rows),
   }
 }

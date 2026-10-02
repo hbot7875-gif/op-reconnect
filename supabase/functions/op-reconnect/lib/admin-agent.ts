@@ -10,7 +10,7 @@ import { totalXp } from './derive.ts'
 import { levelFor } from './leveling.ts'
 import { districtDeadline, DEADLINE_EXTENSION_DAYS } from './districts.ts'
 import { fetchStreamRows } from './streams.ts'
-import { flagStreamRows, findPossibleAlts, modesByAgentNo, IDENTITY_FIELDS, flagExcessStreamDays } from './police-check.ts'
+import { flagStreamRows, findPossibleAlts, modesByAgentNo, IDENTITY_FIELDS, flagExcessStreamDays, countIngestionDuplicates } from './police-check.ts'
 import { suggestedModeFor } from './mode-guard.ts'
 import { sendMail, bombReminderEmail, mailerConfigured } from './mailer.ts'
 import { reminderPlan } from './inactive-reminder-rules.js'
@@ -290,6 +290,11 @@ export async function adminGetAgentTracks(supabase: SupabaseDB, params: any) {
     possibleAlts,
     suggestedMode: excessStreamDays.length ? suggestedModeFor(playerRow?.data?.mode || 'easy') : null,
     excessStreamDays,
+    // Context for the reviewer, so a collapsed row set never reads as
+    // missing data: how many rows the canonical view set aside as the
+    // confirmed Stats.fm precision artifact. They are still in
+    // rc_scrobbles and still counted; they are just not evidence.
+    ingestionDuplicates: countIngestionDuplicates(rows),
   }
 }
 

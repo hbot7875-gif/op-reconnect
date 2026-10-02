@@ -11,6 +11,8 @@ import type { StreamRow } from './streams.ts'
 import { MIN_GAP_MS } from './spotify-shared.ts'
 import { kstDateOf } from './kst.ts'
 import { dailyStreamReviewThreshold } from './mode-guard.ts'
+import { canonicalStreamRows } from './stream-canonical.ts'
+export { countIngestionDuplicates } from './stream-canonical.ts'
 
 // The `repeat` flag below used to run on a made-up 45-second gap — nowhere
 // near the game's actual rule. candy-star-rules.ts's analyzeTracklist (the
@@ -43,7 +45,16 @@ export interface FlaggedTrack {
  *  sitting next to the one rule that actually is canonical. */
 export function flagStreamRows(rows: StreamRow[], options: { trustSequence?: boolean } = {}): FlaggedTrack[] {
   const trustSequence = options.trustSequence !== false
-  const oldestFirst = [...rows].sort((a, b) => a.listened_at - b.listened_at)
+  // Judge the canonical rows, never the raw ingestion rows. Stats.fm reports
+  // one play at two precisions, so the stored pair is the same track 1-56s
+  // apart and therefore always adjacent -- which made the gap test below fire
+  // on every duplicated play. Measured 2026-10-02: 15,715 of 22,724 repeat
+  // flags (69%) were this and nothing else. Collapsing here rather than at
+  // each call site is deliberate: this module exists so the admin view and
+  // the agent self-check can never disagree about what a flag means, and a
+  // duplicate rule living in either caller would break exactly that.
+  const canonical = canonicalStreamRows(rows)
+  const oldestFirst = [...canonical].sort((a, b) => a.listened_at - b.listened_at)
   const withFlags = oldestFirst.map((r, i) => {
     const prev = i > 0 ? oldestFirst[i - 1] : null
     const gapSeconds = prev ? r.listened_at - prev.listened_at : null
@@ -76,7 +87,12 @@ export interface ExcessStreamDay {
 export function flagExcessStreamDays(rows: StreamRow[], mode: string): ExcessStreamDay[] {
   const ceiling = dailyStreamReviewThreshold(mode)
   const counts = new Map<string, number>()
-  for (const r of rows) {
+  // Same canonical set as flagStreamRows, for the same reason: a duplicated
+  // ingestion row inflated the day's total without anyone having listened
+  // twice, which is how an ordinary listening day crossed a review ceiling.
+  // This is a review threshold only -- the counted totals behind XP, goals
+  // and the leaderboard keep reading rc_scrobbles untouched.
+  for (const r of canonicalStreamRows(rows)) {
     const date = kstDateOf(r.listened_at)
     counts.set(date, (counts.get(date) || 0) + 1)
   }

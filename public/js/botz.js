@@ -854,7 +854,10 @@ async function moonCheck() {
   moonRenderResult()
 }
 
-const MOON_FLAG_LABEL = { repeat: '🔁 repeat' }
+// Describes the pattern, not the person. A flag here is a prompt to look,
+// never a finding -- Moon Station cannot see track duration or device, so
+// the most it can ever mean is "this is worth a second look".
+const MOON_FLAG_LABEL = { repeat: '🔁 repeated-play pattern' }
 // Purely corroborating — matching modes prove nothing on their own, but
 // read as one more "these were set up the same way" alongside an already-
 // confirmed shared identity. Null means the agent registered but never
@@ -901,6 +904,20 @@ function moonRenderResult() {
     : ''
   const modeNames = { exam: 'School/Exam', easy: 'Easy', steady: 'Easy+', medium: 'Medium', hard: 'Hard' }
   const modeDays = res.excessStreamDays || []
+  // Rows the canonical view set aside as the confirmed Stats.fm precision
+  // artifact -- one play the source reported twice, once truncated to the
+  // minute. Said out loud so a shorter sequence never reads as missing
+  // data, and so nobody re-derives a repeat from rows that were never two
+  // listens.
+  const dupes = Number(res.ingestionDuplicates || 0)
+  const dupNote = dupes
+    ? `<div class="botz-moon-alt-warn">
+        <b>ℹ ${dupes} possible ingestion duplicate${dupes === 1 ? '' : 's'} excluded</b><br>
+        Same play reported twice by the source, not a repeated listen.
+        Still stored and still counted &mdash; just not evidence.<br>
+        <span class="botz-moon-verdict-note">Review only &mdash; nothing was deleted.</span>
+      </div>`
+    : ''
   const modeWarning = modeDays.length
     ? `<div class="botz-moon-alt-warn">
         <b>⚠ Mode may not match recent pace</b><br>
@@ -913,11 +930,12 @@ function moonRenderResult() {
     <div class="botz-moon-summary">
       <b>${esc(res.agent.handle || agentNo)}</b> (${esc(agentNo)}) &middot; ${esc(fromLabel)} → ${esc(toLabel)}<br>
       ${res.trackCount} track${res.trackCount === 1 ? '' : 's'} &middot;
-      <span class="${res.flaggedCount ? 'botz-moon-flag-count' : ''}">${res.flaggedCount} flagged</span> &middot;
+      <span class="${res.flaggedCount ? 'botz-moon-flag-count' : ''}">${res.flaggedCount} to review</span> &middot;
       ${moonModeLabel(res.agent.mode)}
     </div>
     ${altWarning}
     ${modeWarning}
+    ${dupNote}
     <div class="botz-moon-verdict">
       <button type="button" class="btn-outline${verdict === 'pass' ? ' botz-moon-verdict-active-pass' : ''}" onclick="moonSetVerdict('${esc(agentNo)}','pass')">✓ Pass</button>
       <button type="button" class="btn-outline${verdict === 'fail' ? ' botz-moon-verdict-active-fail' : ''}" onclick="moonSetVerdict('${esc(agentNo)}','fail')">✗ Fail</button>

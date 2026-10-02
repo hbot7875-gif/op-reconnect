@@ -10,6 +10,19 @@ export interface StreamRow {
   artist_name: string
   album_name?: string
   listened_at: number // unix seconds
+  /** The provider's own id for this play, when it supplies a stable one.
+   *  Observational only — see migration 20261002090000. Nothing dedupes on
+   *  it yet, because whether Stats.fm keeps this id across a timestamp
+   *  change is the open question it exists to answer. */
+  source_event_id?: string | null
+  /** Which provider this row was STORED under, present only on rows read
+   *  back out of rc_scrobbles. Review-only: stream-canonical.ts needs it to
+   *  recognise the Stats.fm precision artifact, and recognising that artifact
+   *  has to be a property of the row rather than of whichever provider the
+   *  agent happens to be pointed at today. Rows handed straight back from a
+   *  live provider fetch leave it undefined, which simply means nothing
+   *  collapses — the conservative direction. */
+  source?: string | null
 }
 
 export type StreamCoverageReason = 'recent_limit' | 'page_limit' | 'provider_error' | 'database_limit' | 'database_error'
@@ -111,7 +124,7 @@ async function fetchDirectScrobbles(supabase: SupabaseDB, agentNo: string, fromT
   while (offset < MAX_ROWS) {
     const { data, error } = await supabase
       .from('rc_scrobbles')
-      .select('track_name, artist_name, album_name, listened_at')
+      .select('track_name, artist_name, album_name, listened_at, source')
       .eq('agent_no', agentNo)
       .gte('listened_at', fromTs)
       .lte('listened_at', toTs)
@@ -120,7 +133,7 @@ async function fetchDirectScrobbles(supabase: SupabaseDB, agentNo: string, fromT
     if (error) return { rows, ok: false, complete: false, partialReason: 'database_error' }
     if (!data || data.length === 0) return { rows, ok: true, complete: true, partialReason: null }
     for (const r of data) {
-      rows.push({ track_name: r.track_name || '', artist_name: r.artist_name || '', album_name: r.album_name || '', listened_at: r.listened_at })
+      rows.push({ track_name: r.track_name || '', artist_name: r.artist_name || '', album_name: r.album_name || '', listened_at: r.listened_at, source: r.source || null })
     }
     if (data.length < PAGE) return { rows, ok: true, complete: true, partialReason: null }
     offset += PAGE
@@ -157,6 +170,9 @@ async function fetchStatsFm(username: string): Promise<{ rows: StreamRow[]; ok: 
       artist_name: t.artists?.[0]?.name || '',
       album_name: t.albums?.[0]?.name || t.album?.name || '',
       listened_at: ts,
+      // Stats.fm's own per-play id. Recorded, never acted on: the dedup key
+      // below is unchanged, so this cannot add or suppress a row.
+      source_event_id: typeof it.streamId === 'string' && it.streamId ? it.streamId : null,
     })
   }
   return { rows, ok: true }
@@ -270,6 +286,10 @@ async function persistScrobbles(supabase: SupabaseDB, agentNo: string, rows: Str
       album_name: r.album_name || null,
       listened_at: r.listened_at,
       source,
+      // Null for every source without a stable event id, which is all of
+      // them but Stats.fm today. onConflict below is byte-identical, so
+      // this column cannot add, suppress or merge a single row.
+      source_event_id: r.source_event_id || null,
     }))
   if (payload.length === 0) return
   await supabase.from('rc_scrobbles').upsert(payload, { onConflict: 'agent_no,listened_at,track_name', ignoreDuplicates: true })
