@@ -116,13 +116,22 @@ function coverMarkup(item) {
   return `<span class="botz-cover botz-cover-fallback" style="--cover-hue:${hue}" aria-hidden="true"><em>♪</em></span>`
 }
 
-function renderRecent(jams) {
+function renderRecent(jams, ingestionDuplicates) {
   const list = document.getElementById('recentList')
   if (!jams?.length) {
     list.innerHTML = '<div class="botz-empty-compact">No jams received in the last 24 hours.</div>'
     return
   }
-  list.innerHTML = jams.map((jam, index) => {
+  // Stats.fm reports one play twice, once truncated to the minute. Those
+  // rows are still stored and still counted; they are just not two listens,
+  // so the feed shows one row per play and explains the difference rather
+  // than leaving a shorter list to look like missing history.
+  const dupes = Number(ingestionDuplicates || 0)
+  const dupeNote = dupes
+    ? `<div class="botz-empty-compact">ℹ ${dupes} duplicate ${dupes === 1 ? 'entry' : 'entries'} set aside — `
+      + 'your source reported the same play twice. Nothing was removed from your totals.</div>'
+    : ''
+  list.innerHTML = dupeNote + jams.map((jam, index) => {
     const result = resultFor(jam)
     const time = new Date(Number(jam.at) * 1000).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
     return `<details class="botz-jam-row"><summary>
@@ -253,7 +262,7 @@ function renderView() {
   }
   label.textContent = 'Recent jams'
   renderLastPlayed(lastBotzData?.lastPlayed)
-  renderRecent(jams)
+  renderRecent(jams, lastBotzData?.ingestionDuplicates)
 }
 
 function setBotzView(view) {

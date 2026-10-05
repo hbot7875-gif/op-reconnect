@@ -13,9 +13,10 @@
 //
 // public/js holds the three CLASSIC (non-module) scripts. They live there so
 // Vite copies them through untouched instead of trying to bundle them and
-// leaving a dead <script src> in dist. botz.js especially must stay classic:
-// botz.html wires its buttons with inline onclick= handlers, which can only
-// see functions on window — module scope would break every one of them.
+// leaving a dead <script src> in dist. moon-station.js especially must stay
+// classic: botz.html wires its buttons with inline onclick= handlers, which
+// can only see functions on window — module scope would break every one of
+// them.
 
 import { resolve } from 'path'
 import { copyFileSync, mkdirSync, readFileSync } from 'fs'

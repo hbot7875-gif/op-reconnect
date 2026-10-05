@@ -90,7 +90,33 @@ export function canonicalStreamRows(
   rows: StreamRow[],
   sourceOf: (r: StreamRow) => string = (r) => (r as any).source || '',
 ): StreamRow[] {
-  if (rows.length < 2) return rows.slice()
+  return canonicalStreamResult(rows, sourceOf).rows
+}
+
+export interface CanonicalResult {
+  /** The canonical rows, in their original order. */
+  rows: StreamRow[]
+  /** Survivor -> the rows set aside as the same physical play.
+   *
+   *  Anything keyed on a row's timestamp has to be able to follow the play
+   *  across a collapse. The RE:CELEBRATE battle ledger is the live example:
+   *  it keys on (listened_at, track_name), and it holds the minute-aligned
+   *  side for some plays and the second-precision side for others, so
+   *  checking only the survivor would silently drop the badge from rows that
+   *  really are in the ledger. */
+  twins: Map<StreamRow, StreamRow[]>
+}
+
+/**
+ * Same classification as canonicalStreamRows, but it also says which row was
+ * set aside for which survivor.
+ */
+export function canonicalStreamResult(
+  rows: StreamRow[],
+  sourceOf: (r: StreamRow) => string = (r) => (r as any).source || '',
+): CanonicalResult {
+  const twins = new Map<StreamRow, StreamRow[]>()
+  if (rows.length < 2) return { rows: rows.slice(), twins }
 
   // Group only the candidates: Stats.fm rows, by minute and normalised track.
   // A non-Stats.fm row never enters a bucket, so it can never be collapsed.
@@ -113,9 +139,15 @@ export function canonicalStreamRows(
     if (aligned.length !== 1 || precise.length !== 1) continue
     if (!isStatsFmPrecisionPair(aligned[0], precise[0], sourceOf)) continue
     dropped.add(aligned[0])
+    // The second-precision row survives, so it inherits the aligned row's
+    // identity for anything that was keyed on it.
+    twins.set(precise[0], [aligned[0]])
   }
 
-  return dropped.size ? rows.filter((r) => !dropped.has(r)) : rows.slice()
+  return {
+    rows: dropped.size ? rows.filter((r) => !dropped.has(r)) : rows.slice(),
+    twins,
+  }
 }
 
 /**

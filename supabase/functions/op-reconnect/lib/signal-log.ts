@@ -6,6 +6,7 @@ import { frozenDistrictDates } from './leave.ts'
 import type { SupabaseDB } from './config.ts'
 import { loadContent, limits, trackArtistOverrides } from './config.ts'
 import { fetchStreamRows } from './streams.ts'
+import type { StreamRow } from './streams.ts'
 import { normalizeKey, normKeyFull, countedArtistPlays } from './text.ts'
 import { todayKst, kstDateOf, kstDayBounds } from './kst.ts'
 import { districtProgress } from './districts.ts'
@@ -13,7 +14,7 @@ import { getBackupOverlay } from './backup-pass.ts'
 import { BIRTHDAY_ERA_EVENTS, BIRTHDAY_LIGHTS_PER_TRACK, birthdayTrackEntries, isBirthdayEventDate } from './birthday-eras.ts'
 import { allocateTrackHits } from './era-match.js'
 import { annotateBotzStreams, botzSourceSetup, botzTrackingState } from './botz-rules.js'
-import { flagStreamRows, findPossibleAlts, flagExcessStreamDays, countIngestionDuplicates } from './police-check.ts'
+import { flagStreamRows, findPossibleAlts, flagExcessStreamDays, countIngestionDuplicates, canonicalStreamResult } from './police-check.ts'
 import { suggestedModeFor } from './mode-guard.ts'
 import { resolveEquippedBadges } from './badge-profile.ts'
 import { RECELEBRATE_EVENT_ID } from './recelebrate-tracks.js'
@@ -71,11 +72,33 @@ export async function getSignalLog(supabase: SupabaseDB, params: Record<string, 
       .gte('listened_at', attributionFrom),
   ])
   rows.sort((a, b) => b.listened_at - a.listened_at)
+  // BOTZ renders this list, and its "jams today" and 24h totals are counted
+  // off it. Stats.fm reports one play twice -- once minute-truncated, once
+  // second-precise -- so until now a player saw every Stats.fm play of
+  // theirs listed twice, with a doubled jam count above it. Measured for
+  // one agent on 2026-10-04: 546 stored rows in 24h, 232 of them the same
+  // plays reported twice.
+  //
+  // Same classification the self-check and Moon Station already use, so the
+  // three surfaces agree about what a play is. Nothing a player earns moves:
+  // rc_daily_activity, XP, goals, districts and the campaign totals are all
+  // derived from the rollups below and from rc_scrobbles directly, not from
+  // this list.
+  const canonical = canonicalStreamResult(rows)
+  const ingestionDuplicates = rows.length - canonical.rows.length
   // Keyed on the ledger's own identity for a play: when it was heard, and
   // the track name as the source reported it.
   const battleHits = new Set((battleRes.data || []).map((r: any) => `${r.listened_at}|${r.track_name}`))
+  /** True when this play is in the battle ledger under EITHER of its
+   *  reported timestamps. The ledger holds the minute-aligned side for some
+   *  plays and the second-precision side for others (measured: 1,803
+   *  aligned of 26,880 rows), so checking only the surviving row would drop
+   *  the RE:CELEBRATE badge from plays that are genuinely in it. */
+  const inBattle = (r: StreamRow) =>
+    battleHits.has(`${r.listened_at}|${r.track_name}`)
+    || (canonical.twins.get(r) || []).some((t) => battleHits.has(`${t.listened_at}|${t.track_name}`))
 
-  const allStreams: any[] = rows.map((r) => {
+  const allStreams: any[] = canonical.rows.map((r) => {
     const key = normKeyFull(r.track_name)
     const eligible = countedArtistPlays({ [normalizeKey(r.artist_name || '')]: 1 }, allowlist, key, overrides) > 0
     return {
@@ -87,7 +110,7 @@ export async function getSignalLog(supabase: SupabaseDB, params: Record<string, 
       eligible,
       reason: eligible ? null : 'artist_not_eligible',
       source: botzSourceSetup(agentRow).source,
-      recelebrate: battleHits.has(`${r.listened_at}|${r.track_name}`)
+      recelebrate: inBattle(r)
         ? { id: RECELEBRATE_EVENT_ID, label: 'RE:CELEBRATE' } : null,
     }
   })
@@ -193,6 +216,8 @@ export async function getSignalLog(supabase: SupabaseDB, params: Record<string, 
     missions,
     streams,
     totals: { streams24h: visibleStreams.length, counted24h: visibleStreams.filter((s) => s.eligible).length },
+    // Said out loud so a shorter list never reads as lost history.
+    ingestionDuplicates,
   }
 }
 

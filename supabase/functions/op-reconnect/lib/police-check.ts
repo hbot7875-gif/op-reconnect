@@ -12,7 +12,7 @@ import { MIN_GAP_MS } from './spotify-shared.ts'
 import { kstDateOf } from './kst.ts'
 import { dailyStreamReviewThreshold } from './mode-guard.ts'
 import { canonicalStreamRows } from './stream-canonical.ts'
-export { countIngestionDuplicates } from './stream-canonical.ts'
+export { countIngestionDuplicates, canonicalStreamResult } from './stream-canonical.ts'
 
 // The `repeat` flag below used to run on a made-up 45-second gap — nowhere
 // near the game's actual rule. candy-star-rules.ts's analyzeTracklist (the

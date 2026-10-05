@@ -1045,7 +1045,7 @@
   </style>
   <script>
     // Apply the saved theme before first paint — avoids a flash of the wrong
-    // theme (reconnect-botz.js itself loads at the end of body, too late for this).
+    // theme (the page scripts load at the end of body, too late for this).
     (function () {
       try {
         if (localStorage.getItem('botz_theme') === 'purple') {
@@ -1110,6 +1110,51 @@
   </section>
 </main>
 
+<!-- ── MOON STATION (admin) ──
+     The stream-review terminal. Markup and script tag were both dropped in
+     the BOTZ revamp (99c58bf) while the .botz-moon-* styles stayed behind,
+     so the panel has been unreachable since; the backend half
+     (adminGetAgentTracks / adminScanAltAccounts) never stopped working.
+     Ids here are exactly the ones js/moon-station.js looks up.
+
+     Admin-only by the shared rc_admin_key gate, same key admin.html and
+     candy-star-admin.html use. The toggle is visible to anyone, but every
+     action behind it is server-checked, so an unauthorised click gets an
+     Unauthorized back and nothing else. -->
+<div style="margin:16px 16px 0;">
+  <button type="button" class="botz-moon-toggle" id="moonToggle" onclick="moonToggleOpen()">🌙 Moon Station — stream review (admin)</button>
+  <div class="botz-moon-section" id="moonStation" style="display:none;">
+    <div id="moonLocked">
+      <div style="display:flex; gap:6px; margin-top:8px;">
+        <input id="moonAdminKey" class="botz-date-input" type="password" placeholder="Admin key" autocomplete="off" onkeydown="if(event.key==='Enter') moonUnlock()">
+        <button type="button" class="btn-outline" id="moonUnlockBtn" onclick="moonUnlock()">Unlock</button>
+      </div>
+      <div class="botz-moon-error" id="moonKeyError" style="display:none;"></div>
+    </div>
+    <div id="moonUnlocked" style="display:none;">
+      <div style="display:flex; gap:6px; margin:10px 0;">
+        <input id="moonQuery" class="botz-date-input" placeholder="Agent number or handle" onkeydown="if(event.key==='Enter') moonCheck()">
+        <select id="moonDays" class="botz-date-input" style="flex:none; width:70px;">
+          <option value="1">1d</option>
+          <option value="3">3d</option>
+          <option value="7" selected>7d</option>
+          <option value="14">14d</option>
+          <option value="30">30d</option>
+        </select>
+        <button type="button" class="btn-outline" onclick="moonCheck()">Check</button>
+      </div>
+      <div id="moonResult"></div>
+
+      <!-- Roster-wide shared-identity scan: every group of 2+ agents behind
+           one ListenBrainz/stats.fm/Musicat identity. The per-agent check
+           above surfaces this for whoever you look up; this finds it without
+           needing to suspect anyone first. -->
+      <button type="button" class="btn-ghost" style="width:100%; margin-top:14px;" onclick="moonScanAlts()">🔗 Scan for shared accounts</button>
+      <div id="moonScanResult"></div>
+    </div>
+  </div>
+</div>
+
 <!-- ── NOT LOGGED IN ── -->
 <div id="notLoggedIn" style="display:none;" class="botz-not-logged">
   <div class="botz-not-logged-icon">🔒</div>
@@ -1130,8 +1175,9 @@
   </div>
 </div>
 
-<!-- botz-api.js defines window.RCBotz and MUST load before botz.js -->
+<!-- botz-api.js defines window.RCBotz and MUST load before the two that use it -->
 <script src="js/botz-api.js"></script>
 <script src="js/botz-phase1.js"></script>
+<script src="js/moon-station.js"></script>
 </body>
 </html>

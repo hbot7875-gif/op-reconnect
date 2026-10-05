@@ -14,8 +14,8 @@
 // they report themselves as unavailable rather than erroring or, worse,
 // showing numbers that aren't real.
 //
-// Classic script on purpose: botz.js is not an ES module, so this can't be
-// one either. It publishes window.RCBotz and nothing else.
+// Classic script on purpose: the scripts that consume it are not ES modules,
+// so this can't be one either. It publishes window.RCBotz and nothing else.
 
 ;(function () {
   'use strict'
@@ -99,6 +99,10 @@
         missions: res.missions || [],
         lastPlayed: res.lastPlayed || null,
         recent: res.streams || [],
+        // How many rows the backend set aside as one play the source
+        // reported twice. Passed through so the feed can say so instead of
+        // just looking shorter than the player expects.
+        ingestionDuplicates: Number(res.ingestionDuplicates || 0),
       }
     },
 

@@ -24,8 +24,8 @@ reconnect/
 
 ### Why `public/js` exists
 
-`botz.js`, `botz-api.js` and `concert-voyage.js` are plain scripts, not ES
-modules. `botz.html` wires its buttons with inline `onclick=` handlers, which
+`botz-api.js`, `moon-station.js` and `concert-voyage.js` are plain scripts, not
+ES modules. `botz.html` wires its buttons with inline `onclick=` handlers, which
 can only reach functions on `window` — making it a module would break every
 one of them. Vite can't bundle a non-module `<script src>`, so these live in
 `public/` where it copies them through untouched. Move them into `js/` and
