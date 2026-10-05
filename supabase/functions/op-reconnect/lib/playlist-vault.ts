@@ -10,10 +10,16 @@ import type { SupabaseDB } from './spotify-shared.ts'
 import { parseSpotifyId, utcNow } from './spotify-shared.ts'
 import { getUserAccessToken } from './spotify-oauth.ts'
 import { getDistrictGoalCatalogMatch } from './candy-star.ts'
+// Reused rather than re-reading rc_config here, so the badge gate and the
+// playlist gate can never disagree about who is on the list.
+import { isBadgeEditor } from './badge-admin.ts'
 
 const PAGE_SIZE = 24
 const MAX_PAGE_SIZE = 48
-const SHARE_DAILY_LIMIT = 5
+// There is deliberately no per-day cap on adding district playlists. Adding is
+// already restricted to approved makers, and shareCandyPlaylist still refuses
+// a playlist_id that is already in the Vault, so the same link cannot be added
+// twice however many times it is submitted.
 const REPORTS_TO_HIDE = 3
 // 'relevant' scores every active generated playlist against one district's
 // goals (see districtMatch below) rather than paging through the table, so
@@ -41,9 +47,17 @@ export async function isPlaylistMaker(supabase: SupabaseDB, agentNo: string): Pr
   if (no === ALWAYS_PLAYLIST_MAKER) return true
   const { data, error } = await supabase.from('rc_config')
     .select('value').eq('key', 'playlist_makers').maybeSingle()
-  if (error || !data) return false
-  return (Array.isArray(data.value) ? data.value : [])
-    .some((entry: any) => String(entry || '').trim().toUpperCase() === no)
+  if (!error && data) {
+    const listed = (Array.isArray(data.value) ? data.value : [])
+      .some((entry: any) => String(entry || '').trim().toUpperCase() === no)
+    if (listed) return true
+  }
+  // Badge makers are playlist makers as well. Kept as a rule rather than a
+  // copied list: rc_config.badge_editors and rc_config.playlist_makers had
+  // already drifted apart by hand (AGENT120 was on one and not the other), and
+  // anyone trusted to publish badge art is trusted to attach a playlist to a
+  // district. Adding someone to badge_editors now grants both.
+  return await isBadgeEditor(supabase, no)
 }
 
 export async function amIPlaylistMaker(supabase: SupabaseDB, params: any): Promise<any> {
@@ -307,15 +321,6 @@ export async function shareCandyPlaylist(supabase: SupabaseDB, params: any): Pro
     return duplicate[0].status === 'active'
       ? { success: true, alreadyThere: true, name: duplicate[0].name }
       : { success: false, error: 'That playlist was removed from the Vault after being reported.' }
-  }
-
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-  const { count, error: countError } = await supabase.from('generated_playlists')
-    .select('playlist_id', { count: 'exact', head: true })
-    .eq('agent_no', agentNo).eq('source', 'shared').gte('created_at', since)
-  if (countError) return { success: false, error: countError.message }
-  if ((count || 0) >= SHARE_DAILY_LIMIT) {
-    return { success: false, error: `You can share up to ${SHARE_DAILY_LIMIT} playlists a day.` }
   }
 
   let meta: any

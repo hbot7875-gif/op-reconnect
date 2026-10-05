@@ -274,7 +274,7 @@ function paintSections(body, state) {
       },
       {
         icon: '🎧', name: 'Playlist Makers', value: '',
-        body: 'Add a playlist to a district Vault. Open to agent000 plus anyone listed in playlist_makers.',
+        body: 'Add a playlist to a district Vault. Open to agent000, anyone listed in playlist_makers, and every badge maker.',
         onClick: () => { window.location.href = 'playlist-maker.html' },
       },
     ]))
