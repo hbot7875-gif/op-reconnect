@@ -37,6 +37,7 @@ import { agentChargeSheet } from './agent-charge.js'
 import { openBackupPassFlow, openBackupHelpFlow, countOpenBackupRequests } from './backup-pass.js'
 import { recelebrateKeepsake } from './arirang-recelebrate.js'
 import { powerEraCards } from './era-card-display.js'
+import { goDiary } from './router.js'
 
 /* ── Agent ID ─────────────────────────────────────────────────────────── */
 function agentIdCard(state) {
@@ -62,7 +63,17 @@ function agentIdCard(state) {
   }
   const info = el('div', 'aid-info')
   info.appendChild(el('div', 'aid-codename', esc(p.codename || '')))
-  info.appendChild(el('div', 'aid-meta', `${esc(getAgentNo() || '')} · LV ${p.level?.level ?? '—'} · ${esc(p.rank?.title || '')}`))
+  // Carries the level NAME, the same one the HUD strip shows (ui-hud.js
+  // renders level.name · LV n). Without it this line read "LV 15 · Reconnect
+  // One" while the top of the same screen read "armybots · LV 15" -- the level
+  // ladder and the rank ladder are two different systems, and showing one in
+  // each place made it look like a bug.
+  //
+  // The rank title stays. It is tempting to swap it out for the level name and
+  // keep the line short, but nothing else on the card or in the Agent Dossier
+  // actually prints a rank title (the Dossier's own comment claims it does; the
+  // code does not), so dropping it here would make rank invisible everywhere.
+  info.appendChild(el('div', 'aid-meta', `${esc(getAgentNo() || '')} · ${esc(p.level?.name || '')} · LV ${p.level?.level ?? '—'} · ${esc(p.rank?.title || '')}`))
   const active = el('div', 'aid-active', '<i></i>ACTIVE')
   top.append(photo, info, active)
   card.appendChild(top)
@@ -550,10 +561,13 @@ export function renderResources(container, state) {
 
   // ── Quick access — the one thing that doesn't live anywhere else ──
   const quick = el('div', 'quick-links')
+  const diary = el('button', 'quick-link is-diary')
+  diary.innerHTML = '<span class="ql-icon">📓</span><span class="ql-name">Dear Diary</span><span class="ql-sub">Today in your agent life</span><span class="ql-go">›</span>'
+  diary.onclick = (e) => goDiary({ x: e.clientX, y: e.clientY })
   const badges = el('button', 'quick-link')
   badges.innerHTML = '<span class="ql-icon">🎖️</span><span class="ql-name">Badge Drawer</span><span class="ql-go">›</span>'
   badges.onclick = () => showOverlay(badgeDrawerSheet(state))
-  quick.append(badges)
+  quick.append(diary, badges)
   wrap.appendChild(quick)
 
   container.appendChild(wrap)

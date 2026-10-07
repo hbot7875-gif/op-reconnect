@@ -30,7 +30,8 @@ function agentIdCard(state) {
     : '🛰️'
   const info = el('div', 'aid-info')
   info.appendChild(el('div', 'aid-codename', esc(p.codename)))
-  info.appendChild(el('div', 'aid-meta', `${esc(state.agentNo)} · LV ${p.level.level} · ${esc(p.rank.title)}`))
+  // Mirrors screen-resources.js's real card exactly, rank title included.
+  info.appendChild(el('div', 'aid-meta', `${esc(state.agentNo)} · ${esc(p.level.name || '')} · LV ${p.level.level} · ${esc(p.rank.title)}`))
   const active = el('div', 'aid-active', '<i></i>ACTIVE')
   top.append(photo, info, active)
   card.appendChild(top)

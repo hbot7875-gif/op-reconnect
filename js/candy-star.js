@@ -28,6 +28,7 @@ import { esc, toast } from './state.js'
 import { enhanceSelect } from './rc-select.js'
 import { getAgentNo } from './session.js'
 import { call as apiCall } from './api.js'
+import { normKeyFull, resolveGoalSong } from './song-key-rules.js'
 
 // ── compatibility shims for the globals this section grew up with ──
 const $ = (id) => document.getElementById(id)
@@ -831,6 +832,17 @@ export async function renderCandyStar() {
     const nameLower = s.name.toLowerCase();
     (nameGroups[nameLower] = nameGroups[nameLower] || []).push(s.key);
   });
+  // A second index, keyed the way the rest of the game matches songs. The
+  // exact-name one below stays as it is because the Custom tab types into
+  // it and must keep refusing ambiguous names; this one exists so a
+  // district GOAL can always find its song even when the catalog spells it
+  // with a version suffix, a featured credit or a curly apostrophe.
+  window._candyStar.songsByNormKey = {};
+  (opt.songs || []).forEach(s => {
+    const k = normKeyFull(s.name);
+    if (!k) return;
+    (window._candyStar.songsByNormKey[k] = window._candyStar.songsByNormKey[k] || []).push(s);
+  });
   Object.entries(nameGroups).forEach(([nameLower, keys]) => {
     if (keys.length === 1) window._candyStar.songByNameLower[nameLower] = keys[0];
   });
@@ -839,8 +851,16 @@ export async function renderCandyStar() {
   // starts empty until an admin runs the refresh) just gets skipped rather
   // than showing a broken pick.
   const currentGoalNames = candyCurrentGoalNames();
+  // Measured 2026-10-07 across every active district: of 106 goal slots only
+  // 54 matched the catalog by exact name. Resolving through normKeyFull
+  // recovers 26 more -- "Killin' It Girl" against the catalog's "Killin' It
+  // Girl (Solo Version)", "they don't know 'bout us" against its curly-quoted
+  // twin, and so on. Each of those used to vanish from Quick without a word,
+  // so a district showed fewer goal songs than it actually has.
+  const byExactLower = {};
+  (opt.songs || []).forEach(s => { byExactLower[String(s.name || '').toLowerCase()] = s; });
   const goalSongs = currentGoalNames
-    .map(name => { const key = candyResolveSongKey(name); return key ? songByKey[key] : null; })
+    .map(name => resolveGoalSong(name, byExactLower, window._candyStar.songsByNormKey))
     .filter(Boolean);
   window._candyStar.frequentSongs = goalSongs;
   window._candyStar.goalSongs = goalSongs;
