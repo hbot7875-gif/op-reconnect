@@ -20,7 +20,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync } from 'node:fs'
 
-import { canonicalStreamRows, canonicalStreamResult, countIngestionDuplicates } from './stream-canonical.ts'
+import { canonicalStreamRows, canonicalStreamResult, countIngestionDuplicates, statsFmRowsToSkip } from './stream-canonical.ts'
 import { flagStreamRows, flagExcessStreamDays, REPEAT_MIN_GAP_SECONDS } from './police-check.ts'
 
 const sfm = (track, listened_at, artist = 'BTS') =>
@@ -239,18 +239,24 @@ test('the migration adds the column without constraining it', () => {
   assert.ok(!/alter column|drop column|drop constraint/.test(bare))
 })
 
-test('canonicalisation is confined to the review module', () => {
-  // If a counting, XP or progress path ever imports this, the "review only"
-  // promise is silently gone.
+test('the classifier has exactly two consumers: review and ingest', () => {
+  // The classifier decides what a duplicate IS. Two things may ask it: the
+  // review surfaces, and the collector deciding whether to write a row.
+  // Nothing that counts a stream, awards XP or moves district progress may --
+  // those still read rc_scrobbles straight, so a change here can never
+  // retroactively alter what somebody has already earned.
   const dir = new URL('./', import.meta.url)
-  const allowed = new Set(['police-check.ts', 'stream-canonical.ts', 'stream-canonical.test.mjs'])
+  const allowed = new Set([
+    'police-check.ts',             // admin review + the agent self-check
+    'streams.ts',                  // persistScrobbles: the one writer of rc_scrobbles
+    'stream-canonical.ts',
+    'stream-canonical.test.mjs',
+  ])
   for (const name of readdirSync(dir)) {
     if (allowed.has(name) || !/\.(ts|js|mjs)$/.test(name)) continue
     const src = readFileSync(new URL(name, dir), 'utf8')
-    // An IMPORT, not a mention. streams.ts names the module in a doc comment
-    // to explain why it carries `source` at all, which is not a dependency.
     assert.ok(!/\bfrom\s+['"][^'"]*stream-canonical[^'"]*['"]|\bimport\s*\(\s*['"][^'"]*stream-canonical/.test(src),
-      `${name} must not import the review-only canonical layer`)
+      `${name} must not import the canonical layer`)
   }
 })
 
@@ -314,15 +320,28 @@ test('an A-side row is recognisable without consulting arrival order', () => {
   }
 })
 
-test('capturing the event id still never affects what is stored or counted', () => {
-  // Defence in depth for the Phase 2 decision: the column exists, and it is
-  // still inert. If this ever fails, an un-approved dedup identity shipped.
+test('the collector declines rows, and never deletes or re-keys them', () => {
   const streams = readFileSync(new URL('./streams.ts', import.meta.url), 'utf8')
   const code = streams.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
+
+  // Row identity is untouched. The guard changes WHICH rows are offered to the
+  // upsert, not what makes two rows the same row, so nothing already stored
+  // can be merged, re-keyed or reinterpreted by it.
   assert.ok(code.includes("onConflict: 'agent_no,listened_at,track_name'"))
+
+  // source_event_id stays inert as an identity. streamId is one-sided --
+  // 98.2% of minute-aligned rows carry one, 0.0% of second-precision rows
+  // ever do -- so it can never link a pair, and must never become a key.
   assert.ok(!/source_event_id[^\n]*(onConflict|\.eq\(|exists|dedup)/i.test(code))
-  // And no ingestion path may consult the canonical layer.
-  assert.ok(!/stream-canonical/.test(code))
+
+  // The collector must never delete. Declining to write is recoverable on the
+  // next poll; deleting a stored play is not.
+  assert.ok(!/\.delete\(/.test(code), 'no ingest path may delete a scrobble')
+
+  // The decision has to come from the shared classifier, not a second copy of
+  // the rule living in the collector and free to drift from the review view.
+  assert.match(code, /statsFmRowsToSkip\(/)
+  assert.ok(!/% 60/.test(code), 'the collector must not re-implement alignment')
 })
 
 // ── guards for the clustered-B investigation (2026-10-02) ─────────────────
@@ -441,4 +460,105 @@ test('the three review surfaces all import the layer through police-check', () =
     assert.match(src, /from '\.\/police-check\.ts'/)
     assert.doesNotMatch(src, /from '\.\/stream-canonical\.ts'/, `${f} must go through police-check`)
   }
+})
+
+// ── the ingest guard (shipped 2026-10-07) ─────────────────────────────────
+//
+// Review-only canonicalisation stopped the artifact being held against a
+// player, but it never stopped it being created: 39,628 pairs by 2026-10-07,
+// about 2,500 a day. statsFmRowsToSkip is the refusal at the write itself.
+//
+// Its contract is narrow on purpose. Declining a write loses nothing a later
+// poll cannot bring back; writing a duplicate is repairable and visible. Both
+// of those are recoverable. Collapsing two real plays into one is not, so
+// every ambiguous shape below has to come out KEPT.
+
+const keptOf = (incoming, stored) => {
+  const skip = statsFmRowsToSkip(incoming, stored)
+  return incoming.filter((_, i) => !skip.has(i))
+}
+
+test('the second representation of a stored play is refused, either way round', () => {
+  const aligned = sfm('SWIM', BASE)
+  const precise = sfm('SWIM', BASE + 37)
+  // B stored, A offered.
+  assert.deepEqual(keptOf([aligned], [precise]), [])
+  // A stored, B offered. Order-independence is the whole point: Stats.fm
+  // flips representation between polls, and 3.1% of pairs arrived A-first.
+  assert.deepEqual(keptOf([precise], [aligned]), [])
+})
+
+test('a batch carrying both representations writes exactly one row', () => {
+  const aligned = sfm('SWIM', BASE)
+  const precise = sfm('SWIM', BASE + 37)
+  // Whichever the provider listed first survives. Keeping the precise row
+  // instead would mean deleting a stored row mid-poll, which the collector
+  // must never do -- so the trade is a truncated timestamp, not a lost play.
+  assert.deepEqual(keptOf([aligned, precise], []).map((r) => r.listened_at), [BASE])
+  assert.deepEqual(keptOf([precise, aligned], []).map((r) => r.listened_at), [BASE + 37])
+})
+
+test('a play with no twin is always written', () => {
+  assert.equal(keptOf([sfm('SWIM', BASE + 37)], []).length, 1)
+  assert.equal(keptOf([sfm('SWIM', BASE)], []).length, 1)
+  // A different track, or a different minute, is not a twin.
+  assert.equal(keptOf([sfm('SWIM', BASE)], [sfm('NORMAL', BASE + 37)]).length, 1)
+  assert.equal(keptOf([sfm('SWIM', BASE)], [sfm('SWIM', BASE + 67)]).length, 1)
+})
+
+test('one aligned row and two new plays in a minute keeps all three', () => {
+  // The defect that forced the whole-minute rule. Deciding row by row, the
+  // first new play paired off against the stored aligned row and was declined,
+  // leaving {A, B+41} -- a 1A+1B minute the review layer then collapses AGAIN,
+  // so a real play vanished with nothing recording that it had. Counting the
+  // minute first sees 1A+2B, which is not the proven shape, and keeps all of
+  // it. Overcounting is visible and repairable; this was neither.
+  const kept = keptOf([sfm('SWIM', BASE + 12), sfm('SWIM', BASE + 41)], [sfm('SWIM', BASE)])
+  assert.deepEqual(kept.map((r) => r.listened_at), [BASE + 12, BASE + 41])
+})
+
+test('ambiguity is written, never guessed at', () => {
+  // Two second-precision rows in the minute is not the proven shape -- it is
+  // either a rapid replay or the separate clustered-B defect. Either way the
+  // aligned row is kept and stays visible to a reviewer.
+  const twoB = [sfm('SWIM', BASE + 12), sfm('SWIM', BASE + 41)]
+  assert.equal(keptOf([sfm('SWIM', BASE)], twoB).length, 1)
+  // The opposite side cannot be doubled at all: minute-aligned means
+  // listened_at % 60 === 0, so one minute admits exactly one such timestamp,
+  // and (agent_no, listened_at, track_name) is unique. A 2A minute is
+  // arithmetically impossible rather than merely unobserved.
+  assert.equal(BASE % 60, 0)
+  assert.equal(keptOf([sfm('SWIM', BASE)], [sfm('SWIM', BASE)]).length, 1,
+    'an identical re-send is the upsert’s job, not the guard’s')
+})
+
+test('a different artist in the same minute is a different play', () => {
+  const kept = keptOf([sfm('SWIM', BASE, 'Chase Atlantic')], [sfm('SWIM', BASE + 37, 'BTS')])
+  assert.equal(kept.length, 1)
+  // An ABSENT artist still pairs: Stats.fm returns '' often enough that
+  // treating it as a mismatch would leave the artifact exactly where it is
+  // most common. Same rule the review path uses.
+  assert.equal(keptOf([sfm('SWIM', BASE, '')], [sfm('SWIM', BASE + 37, 'BTS')]).length, 0)
+})
+
+test('a re-sent row never blocks a collapse it should have allowed', () => {
+  // The provider listing the same play twice must not inflate a bucket to
+  // two and make the minute look ambiguous. Identity is (listened_at, track).
+  const stored = [sfm('SWIM', BASE + 37), sfm('SWIM', BASE + 37)]
+  assert.deepEqual(keptOf([sfm('SWIM', BASE)], stored), [])
+})
+
+test('the guard agrees with the review layer about the same minute', () => {
+  // If these ever disagree, the admin view starts describing a ledger that
+  // was written by a different rule -- the drift this module exists to stop.
+  const pair = [sfm('SWIM', BASE), sfm('SWIM', BASE + 37)]
+  assert.equal(canonicalStreamRows(pair).length, keptOf(pair, []).length)
+  const ambiguous = [sfm('SWIM', BASE), sfm('SWIM', BASE + 12), sfm('SWIM', BASE + 41)]
+  assert.equal(canonicalStreamRows(ambiguous).length, 3)
+  assert.equal(keptOf(ambiguous, []).length, 3)
+})
+
+test('an empty batch is a no-op', () => {
+  assert.equal(statsFmRowsToSkip([], []).size, 0)
+  assert.equal(statsFmRowsToSkip([], [sfm('SWIM', BASE)]).size, 0)
 })

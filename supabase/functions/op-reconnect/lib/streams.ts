@@ -3,6 +3,8 @@
 // pagination, same dedup, so the game counts exactly what BOTZ counts.
 
 import { isAdScrobble } from './text.ts'
+import { statsFmRowsToSkip, STATSFM_LOOKUP_LIMIT } from './stream-canonical.ts'
+import type { StatsFmCandidate } from './stream-canonical.ts'
 import type { SupabaseDB } from './config.ts'
 
 export interface StreamRow {
@@ -292,7 +294,45 @@ async function persistScrobbles(supabase: SupabaseDB, agentNo: string, rows: Str
       source_event_id: r.source_event_id || null,
     }))
   if (payload.length === 0) return
-  await supabase.from('rc_scrobbles').upsert(payload, { onConflict: 'agent_no,listened_at,track_name', ignoreDuplicates: true })
+  const writable = source === 'statsfm'
+    ? await withoutStatsFmSecondRepresentation(supabase, agentNo, payload)
+    : payload
+  if (writable.length === 0) return
+  await supabase.from('rc_scrobbles').upsert(writable, { onConflict: 'agent_no,listened_at,track_name', ignoreDuplicates: true })
+}
+
+/**
+ * Drop the rows that are Stats.fm's second representation of a play already
+ * in the ledger. The decision itself is pure and lives in stream-canonical,
+ * right next to the one the admin review uses, so the collector and the
+ * reviewer cannot drift apart about what a duplicate is; this function only
+ * fetches the minutes that decision needs.
+ *
+ * FAILS OPEN, on purpose, and in the opposite direction to assertMayCollect.
+ * If the lookup errors or comes back truncated we write everything, which is
+ * exactly today's behaviour: the cost is a duplicate row, which is visible,
+ * countable and repairable. Refusing to write would cost a real play, which
+ * is not recoverable once it falls out of the 50-item recent feed.
+ */
+async function withoutStatsFmSecondRepresentation<T extends StatsFmCandidate>(
+  supabase: SupabaseDB, agentNo: string, payload: T[],
+): Promise<T[]> {
+  // The feed is 50 plays, so this range is small and the lookup is one index
+  // scan on the (agent_no, listened_at, track_name) unique index.
+  const times = payload.map((p) => p.listened_at)
+  const lo = Math.floor(Math.min(...times) / 60) * 60
+  const hi = Math.floor(Math.max(...times) / 60) * 60 + 59
+  const { data, error } = await supabase.from('rc_scrobbles')
+    .select('listened_at, track_name, artist_name')
+    .eq('agent_no', agentNo).eq('source', 'statsfm')
+    .gte('listened_at', lo).lte('listened_at', hi)
+    .limit(STATSFM_LOOKUP_LIMIT)
+  if (error || !data) return payload
+  if (data.length >= STATSFM_LOOKUP_LIMIT) return payload
+
+  const skip = statsFmRowsToSkip(payload, data as StatsFmCandidate[])
+  if (skip.size === 0) return payload
+  return payload.filter((_, index) => !skip.has(index))
 }
 
 /**
