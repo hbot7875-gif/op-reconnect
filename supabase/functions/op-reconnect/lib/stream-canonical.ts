@@ -193,24 +193,34 @@ const asRow = (c: StatsFmCandidate): StreamRow =>
  * play that is already present — either stored, or accepted earlier in this
  * same batch. Returns the indexes to skip; everything else is written.
  *
- * The rule, and only this rule: a row is skipped when its own minute already
- * holds exactly one row of the OPPOSITE precision and none of its own, and
- * the two pass isStatsFmPrecisionPair. That makes it order-independent — if
- * the second-precision row arrives first the minute-aligned one is refused,
- * and if the minute-aligned row arrives first the second-precision one is,
- * so either way the play ends up as one row rather than two.
+ * The rule, and only this rule: count the WHOLE minute first — every stored
+ * row plus every row in this batch — and act only where that comes to exactly
+ * one minute-aligned row and one second-precision row that pass
+ * isStatsFmPrecisionPair. Then one of the two is redundant, and if either of
+ * them is new, the new one is the one declined.
  *
- * Which of the two survives is therefore whichever the provider happened to
- * report first. That is a deliberate trade. Keeping the second-precision row
- * instead would mean DELETING a stored row during a collection poll, and a
- * collector that deletes is a collector that can lose a play to a bad
- * comparison. Writing nothing is recoverable; deleting is not. Measured, the
- * second-precision row arrives first 96.9% of the time anyway.
+ * Counting the whole minute before deciding anything is what makes this
+ * order-independent, and it is also what keeps it identical to the review
+ * layer: both ask the same question of the same finished minute. An earlier
+ * draft decided row by row as the batch was walked, which looks equivalent
+ * and is not. Given one stored minute-aligned row and two genuinely distinct
+ * second-precision plays in that minute, it paired the first new play off
+ * against the aligned row and declined it — leaving a 1A+1B minute that the
+ * review layer then collapsed AGAIN, so a real play disappeared with nothing
+ * recording that it had ever existed. Deciding per minute cannot do that:
+ * 1A+2B is not the proven shape, so all three rows are kept.
  *
- * Everything ambiguous is written. Two second-precision plays in one minute
- * then a minute-aligned row is NOT this artifact, so all three are kept —
- * under-collapsing leaves a duplicate that the repair can still find, while
- * over-collapsing silently destroys a play nobody can get back.
+ * Which of the two survives when BOTH are new is whichever the provider
+ * listed first. That is a deliberate trade. Always keeping the
+ * second-precision row would mean DELETING a stored row during a collection
+ * poll, and a collector that deletes is a collector that can lose a play to a
+ * bad comparison. Declining a write is recoverable on the next poll; deleting
+ * is not. Measured, the second-precision row arrives first 96.9% of the time
+ * anyway, so the cost is a truncated timestamp on a small minority of plays.
+ *
+ * Everything ambiguous is written, in both directions. Under-collapsing
+ * leaves a duplicate that is visible, countable and repairable;
+ * over-collapsing destroys a play nobody can get back.
  *
  * Known and accepted: a play whose real end time lands exactly on :00 is
  * indistinguishable from the truncated representation, so a genuine replay of
