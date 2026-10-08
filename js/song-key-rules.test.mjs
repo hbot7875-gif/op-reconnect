@@ -90,6 +90,55 @@ test('the mismatches that were losing goal songs now resolve together', () => {
   }
 })
 
+test('a parenthetical holding a TRANSLATED title is not a version suffix', () => {
+  // The trap that broke Excusemeee Boulevard's Hangsang goal on 2026-10-06.
+  // stripVersionSuffix removes trailing parentheticals, which is right for
+  // "(Live)" or "(Instrumental)" — but some titles put the ENGLISH NAME in
+  // there, so the half a goal label is written from is the half that gets
+  // discarded. 919 of 1,271 Hangsang plays (72%) keyed as "항상" and matched
+  // nothing until the Korean alias was added.
+  assert.equal(normKeyFull('항상 (HANGSANG)'), normKeyFull('항상'))
+  assert.equal(normKeyFull('Hangsang (feat. Supreme Boi)'), 'hangsang')
+  assert.notEqual(normKeyFull('항상 (HANGSANG)'), normKeyFull('Hangsang (feat. Supreme Boi)'))
+  // Same shape, already handled by an alias since the goal was written.
+  assert.equal(normKeyFull('야생화 (Wild Flower)'), normKeyFull('야생화'))
+  // So a goal for one of these needs BOTH spellings as keys. Nothing in the
+  // normalizer can infer one from the other, and it should not try: collapsing
+  // a parenthetical into its stem is what makes "(Live)" work.
+})
+
+test('a Korean key is NFD Jamo, not the precomposed syllables you type', () => {
+  // The subtler half, and the one that nearly shipped a fix that did nothing.
+  // normalizeKey runs NFD to strip diacritics, and NFD also DECOMPOSES Hangul
+  // syllables. So the emitted key is Jamo, and a precomposed literal written
+  // into a frozen goal's keys array would be stored, match nothing, and look
+  // identical in every log and query output.
+  const key = normKeyFull('항상 (HANGSANG)')
+  assert.equal([...key].map((c) => c.codePointAt(0).toString(16)).join(' '),
+    '1112 1161 11bc 1109 1161 11bc')
+  assert.notEqual(key, '항상', 'precomposed must NOT equal the key')
+  assert.equal(key.normalize('NFC'), '항상', 'but it is the same text')
+  // Aliases are safe either way, because goalKeys runs normKeyFull over each
+  // one at read time. Only post-normalization keys stored in the frozen
+  // rc_player_districts.goals have to be written decomposed.
+  assert.equal(normKeyFull('항상'), key)
+})
+
+test('a version named only in a parenthetical cannot be told from the original', () => {
+  // The other half of the same incident: the quest checklist carried both
+  // "Be Mine" and "Be Mine - English Version" as separate entries, but the
+  // provider reports the latter as "Be Mine (English Version)". Both reduce to
+  // one key, so the English entry was unreachable and the quest unwinnable.
+  assert.equal(normKeyFull('Be Mine (English Version)'), 'be mine')
+  assert.equal(normKeyFull('Be Mine'), 'be mine')
+  // The dash spelling survives, which is exactly why the two disagreed.
+  assert.equal(normKeyFull('Be Mine - English Version'), 'be mine english version')
+  // Therefore: two checklist entries must never rely on a parenthetical to
+  // tell them apart. Same for every other remix/version pair.
+  assert.equal(normKeyFull('Like Crazy (English Version)'), normKeyFull('Like Crazy'))
+  assert.equal(normKeyFull('Like Crazy (Deep House Remix)'), normKeyFull('Like Crazy'))
+})
+
 test('songs that are genuinely different still key apart', () => {
   // The whole risk of normalizing is collapsing two real songs into one.
   const distinct = [
