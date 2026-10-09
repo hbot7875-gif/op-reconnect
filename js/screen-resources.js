@@ -37,7 +37,6 @@ import { agentChargeSheet } from './agent-charge.js'
 import { openBackupPassFlow, openBackupHelpFlow, countOpenBackupRequests } from './backup-pass.js'
 import { recelebrateKeepsake } from './arirang-recelebrate.js'
 import { powerEraCards } from './era-card-display.js'
-import { goDiary } from './router.js'
 
 /* ── Agent ID ─────────────────────────────────────────────────────────── */
 function agentIdCard(state) {
@@ -561,13 +560,10 @@ export function renderResources(container, state) {
 
   // ── Quick access — the one thing that doesn't live anywhere else ──
   const quick = el('div', 'quick-links')
-  const diary = el('button', 'quick-link is-diary')
-  diary.innerHTML = '<span class="ql-icon">📓</span><span class="ql-name">Dear Diary</span><span class="ql-sub">Today in your agent life</span><span class="ql-go">›</span>'
-  diary.onclick = (e) => goDiary({ x: e.clientX, y: e.clientY })
   const badges = el('button', 'quick-link')
   badges.innerHTML = '<span class="ql-icon">🎖️</span><span class="ql-name">Badge Drawer</span><span class="ql-go">›</span>'
   badges.onclick = () => showOverlay(badgeDrawerSheet(state))
-  quick.append(diary, badges)
+  quick.append(badges)
   wrap.appendChild(quick)
 
   container.appendChild(wrap)
