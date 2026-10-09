@@ -12,7 +12,7 @@ import { todayKst, nextKstMidnightUtc, kstDateOf } from './kst.ts'
 import { getBombView, launchDefuse } from './bomb.ts'
 import { getEraTimeline } from './era-timeline.ts'
 import { getMyInvites, countWaitingAgents, getReconnectMatchAlerts, getTeamBoostOverlay } from './reconnect-missions.ts'
-import { creditChargeCells, STREAMS_PER_CHARGE_CELL } from './charge-economy.ts'
+import { creditChargeCells, resolveWalletCells, STREAMS_PER_CHARGE_CELL } from './charge-economy.ts'
 import { getAgentChargeView } from './agent-charge.ts'
 import { levelFor, applyLevelUpIfNeeded, nextLevelRewards } from './leveling.ts'
 import { getActiveBroadcasts, legalInfoNoticeDue, LEGAL_INFO_NOTICE_ID } from './broadcasts.ts'
@@ -203,10 +203,25 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
   let activeDistrict: any = null
   let restoredNow = false
   let expiredDistrict: { id: string; name: string } | null = null
-  // Set below if creditChargeCells() awards anything this request — added to
-  // player.charge_cells for the response, since `player` was already fetched
-  // before the credit landed in the DB.
+  // Cells credited by THIS request, for the "+N earned" toast only.
   let chargeCellsEarnedNow = 0
+  // The authoritative wallet, and the only number any surface may render.
+  //
+  // This used to be reconstructed as `player.charge_cells + chargeCellsEarnedNow`,
+  // because `player` was fetched before the credit landed. That arithmetic is
+  // what AGENT047 reported: getAgentChargeView had already read the wallet at
+  // its PRE-credit value, so one response told the Pack W+D and the ARMY Bomb
+  // W, and two overlapping polls could hand back W after W+D and look like the
+  // cells had vanished.
+  //
+  // getAgentChargeView cannot simply be moved after the credit — its blackout
+  // reset DELETEs from rc_player_districts and the read below has to observe
+  // that, which is why it stays in batch 1. So the credit RPC now returns the
+  // post-credit balance instead (migration 20261009100000), and that value
+  // overrides what the charge view read earlier. When nothing is credited the
+  // charge view's own figure already IS the truth, including any auto-feed it
+  // spent, so it stands.
+  let walletCells = agentCharge.chargeCells
   // Lifetime contribution totals only ever go up — start from the baked-in
   // total, add whatever's live below. A just-completed district's
   // contribution gets baked in this same pass, so it's added once, not
@@ -220,7 +235,12 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
       .eq('agent_no', player.agent_no).gte('kst_date', activationDate).order('kst_date')
     // Charge Cells (BOTZ redesign Phase 2) — same album-goal stream data this
     // request already fetched for districtProgress, no extra query.
-    chargeCellsEarnedNow = await creditChargeCells(supabase, content, player.agent_no, activePd, windowRollups || [])
+    const credited = await creditChargeCells(supabase, content, player.agent_no, activePd, windowRollups || [])
+    chargeCellsEarnedNow = credited.delta
+    // null means the RPC was never reached, so nothing moved after the charge
+    // view read the wallet and its figure is still correct. Never add the
+    // delta to a row read earlier — that is the defect being fixed.
+    walletCells = resolveWalletCells(walletCells, credited)
     const albumGoalStreams = albumGoalStreamTotal(activePd.goals, activePd.baseline || {}, windowRollups || [], activePd.activated_at, content)
     const chargeCellStreams = albumGoalStreams % STREAMS_PER_CHARGE_CELL
     // "Today" resets on this district's own activation clock, not KST
@@ -590,7 +610,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
       equippedBadgeArtwork,
       avatarCrop: player.avatar_crop || null,
       // BOTZ redesign Phase 2 — see charge-economy.ts / magic-shop.ts.
-      chargeCells: (player.charge_cells || 0) + chargeCellsEarnedNow,
+      chargeCells: walletCells,
       wings: player.wings || 0,
       tickets: player.tickets || 0,
       isBadgeVaultEditor,
@@ -624,7 +644,17 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     resources,
     items,
     bomb,
-    agentCharge,
+    // One balance, both surfaces. agentCharge read the wallet in batch 1,
+    // before the credit above could land, so its own figure is stale whenever
+    // anything was credited this request. chargeCellsSpent is derived
+    // (earned all-time minus what is still held), so it has to move with it
+    // or the sheet contradicts itself — "19 earned · 0 fed" while holding 19
+    // is the exact confusion migration 20260812080000 set out to remove.
+    agentCharge: {
+      ...agentCharge,
+      chargeCells: walletCells,
+      chargeCellsSpent: Math.max(0, agentCharge.chargeCellsEarned - walletCells),
+    },
     eraTimeline,
     invites,
     reconnectAlerts,
