@@ -1,10 +1,28 @@
-// Shared "PL rules" logic — the timing-flag algorithm and the shared-
-// identity alt check, used by BOTH the admin-only Moon Station tools
-// (admin-agent.ts's adminGetAgentTracks/adminScanAltAccounts) and the
-// agent-facing self-check (signal-log.ts's getMySelfCheck). Pulled out here
-// so the two surfaces can never quietly drift apart on what counts as a
-// flag — an agent checking themselves and an admin checking that same
-// agent should always see the identical verdict.
+// Shared review logic — the timing-flag algorithm and the shared-identity alt
+// check, used by BOTH the admin-only Moon Station tools (admin-agent.ts's
+// adminGetAgentTracks/adminScanAltAccounts) and the agent-facing self-check
+// (signal-log.ts's getMySelfCheck). Pulled out here so the two surfaces can
+// never quietly drift apart on what counts as a flag — an agent checking
+// themselves and an admin checking that same agent should always see the
+// identical verdict.
+//
+// ── what this can and cannot know ────────────────────────────────────────
+//
+// This reads scrobbles. It does not read the playlist anybody actually
+// played. HopeTracker is not connected to the Spotify or Apple Music queue,
+// so a listening history cannot prove anything about the playlist that
+// produced it: not its length, not where it started or ended, not how many
+// focus songs were requested, not which multiplier was intended, not whether
+// the filler schedule was followed, not whether every entry carried a valid
+// link. Those are guarantees the playlist GENERATOR makes at build time
+// (candy-star-rules.ts's analyzeTracklist, behind "Validate a playlist"),
+// where the tracklist is actually in hand.
+//
+// So this module deliberately checks only what a stream of plays can show on
+// its own: when a song came back, and whether it came back immediately. If a
+// comment or a label here ever starts describing this as validating "the PL
+// rules", it is overclaiming — the playlist validator verifies playlists,
+// and this looks at listening patterns.
 
 import type { SupabaseDB } from './config.ts'
 import type { StreamRow } from './streams.ts'
@@ -28,15 +46,38 @@ export interface FlaggedTrack {
   track: string
   artist: string
   at: string
+  /** Seconds since the previous scrobble of ANY song. Context for a reader,
+   *  never the repeat evidence — that is sinceSameSong. */
   gapSeconds: number | null
+  /** Seconds since this same song last played, or null if this is its first
+   *  play in the window. What the 8-minute rule is actually measured on. */
+  sinceSameSong: number | null
+  /** Observable patterns only, and never a verdict:
+   *    repeat        this song returned inside REPEAT_MIN_GAP_SECONDS
+   *    back_to_back  the immediately preceding scrobble was this same song
+   *  They are separate on purpose and can both apply. A song replayed after
+   *  nine minutes with nothing in between breaks no gap rule but is still
+   *  consecutive, and a reviewer should be able to see that without the
+   *  tool implying the two are the same finding. */
   flags: string[]
 }
 
-/** One timing-only flag per row, since a scrobble carries no play-duration
- *  or skip data to check against: `repeat` (the same track again inside the
- *  game's actual minimum-gap rule). Doesn't decide pass/fail — that stays a
- *  human call (or, for the self-check, the agent's own judgment). Output is
+/** Timing-only flags, since a scrobble carries no play-duration or skip data
+ *  to check against: `repeat` (this song returned inside the game's actual
+ *  minimum-gap rule) and `back_to_back` (this song was the scrobble
+ *  immediately before). Neither decides pass/fail — that stays a human call
+ *  (or, for the self-check, the agent's own judgment). Output is
  *  newest-first, same as any activity log.
+ *
+ *  The repeat rule is measured against the previous play of THE SAME SONG,
+ *  which is not the same thing as the previous row. Comparing adjacent rows
+ *  meant one unrelated track in between hid the repeat entirely:
+ *
+ *      12:00  SWIM      12:03  Film out      12:06  SWIM
+ *
+ *  SWIM came back after six minutes, but the row before it was Film out, so
+ *  nothing fired. A last-seen map per song is what makes the window mean
+ *  what it says regardless of how much played in between.
  *
  *  Used to also flag `too_fast` — any two consecutive plays, same track or
  *  not, under 45s apart — but that threshold was never ported from
@@ -66,16 +107,62 @@ function primaryArtist(name: string | null | undefined): string {
  * — every one of them an accusation about something the player never did.
  *
  * Artist is effectively always present (33 rows missing one out of
- * 1,510,754), so requiring it costs nothing. When it genuinely is absent
- * there is nothing to compare, and the title match stands rather than
- * silently switching the check off.
+ * 1,510,754), so requiring it costs nothing. When it genuinely is absent the
+ * recording cannot be identified, and two plays are NOT treated as the same
+ * song — see songKey. Matching on title alone in that case would rebuild the
+ * very false positive this function exists to prevent.
  */
 function sameRecording(a: StreamRow, b: StreamRow): boolean {
-  if (a.track_name.trim().toLowerCase() !== b.track_name.trim().toLowerCase()) return false
-  const left = primaryArtist(a.artist_name)
-  const right = primaryArtist(b.artist_name)
-  if (!left || !right) return true
+  const left = songKey(a)
+  const right = songKey(b)
+  if (left === null || right === null) return false
   return left === right
+}
+
+const titleKey = (row: StreamRow) => row.track_name.trim().toLowerCase()
+
+/**
+ * This row's song, or null when the source gave no artist and the recording
+ * therefore cannot be identified.
+ *
+ * Null rather than a title-only key on purpose. An earlier version let a row
+ * with no artist match any play of the same title, reasoning that there was
+ * nothing to tell them apart. That reasoning is backwards for a review tool:
+ * "Life Goes On" with no artist beside "Life Goes On — Agust D" could just as
+ * easily be the BTS song, and matching them recreates exactly the
+ * false-positive class the primary-artist fix removed — accusing a player of
+ * a replay on the strength of a shared title.
+ *
+ * Unknown identity produces no evidence. The play still appears in the log in
+ * the ordinary way; it simply cannot be half of a timing flag, and nothing
+ * new is raised about the missing metadata itself. It costs almost nothing:
+ * 33 rows carry no artist out of 1,510,754.
+ */
+function songKey(row: StreamRow): string | null {
+  const artist = primaryArtist(row.artist_name)
+  if (!artist) return null
+  // \u0000 cannot occur in either half, so no title/artist pair can collide
+  // with a different one by straddling the separator.
+  return `${titleKey(row)}\u0000${artist}`
+}
+
+/** When each identifiable song was last played. Rows with no usable artist
+ *  are never stored and never looked up, so they match nothing — including
+ *  each other. */
+type LastPlays = Map<string, number>
+
+/** When this row's song was last played before now, or null if never — or if
+ *  the row cannot be identified at all. */
+function previousPlayOf(seen: LastPlays, row: StreamRow): number | null {
+  const key = songKey(row)
+  if (key === null) return null
+  return seen.get(key) ?? null
+}
+
+function rememberPlay(seen: LastPlays, row: StreamRow): void {
+  const key = songKey(row)
+  if (key === null) return
+  seen.set(key, row.listened_at)
 }
 
 export function flagStreamRows(rows: StreamRow[], options: { trustSequence?: boolean } = {}): FlaggedTrack[] {
@@ -90,18 +177,25 @@ export function flagStreamRows(rows: StreamRow[], options: { trustSequence?: boo
   // duplicate rule living in either caller would break exactly that.
   const canonical = canonicalStreamRows(rows)
   const oldestFirst = [...canonical].sort((a, b) => a.listened_at - b.listened_at)
+  const seen: LastPlays = new Map()
   const withFlags = oldestFirst.map((r, i) => {
     const prev = i > 0 ? oldestFirst[i - 1] : null
     const gapSeconds = prev ? r.listened_at - prev.listened_at : null
+    // Against the last play of THIS song, not the last scrobble of any song.
+    const previousSame = previousPlayOf(seen, r)
+    const sinceSameSong = previousSame === null ? null : r.listened_at - previousSame
     const flags: string[] = []
-    if (prev && trustSequence) {
-      if (gapSeconds! < REPEAT_MIN_GAP_SECONDS && sameRecording(prev, r)) flags.push('repeat')
+    if (trustSequence) {
+      if (sinceSameSong !== null && sinceSameSong < REPEAT_MIN_GAP_SECONDS) flags.push('repeat')
+      if (prev && sameRecording(prev, r)) flags.push('back_to_back')
     }
+    rememberPlay(seen, r)
     return {
       track: r.track_name,
       artist: r.artist_name,
       at: new Date(r.listened_at * 1000).toISOString(),
       gapSeconds,
+      sinceSameSong,
       flags,
     }
   })

@@ -3766,57 +3766,10 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
   background: var(--crimson-soft); border: 1px solid rgba(229,56,79,0.4);
   font-size: 12.5px; color: var(--text); line-height: 1.7; }
 .sig-alt-warn b { color: var(--crimson); }
-.ms-coverage-note { padding: 11px 13px; margin-bottom: 12px; border: 1px solid var(--line);
-  border-radius: var(--r); background: rgba(139,92,246,0.06); }
-.ms-coverage-note b { color: var(--lavender); }
-.ms-coverage-note p { margin: 5px 0 0; }
 .sig-row.is-flagged { background: rgba(229,56,79,0.06); }
 .sig-badge { font-family: var(--mono); font-size: 9px; font-weight: 700; letter-spacing: 0.5px;
   color: var(--crimson); text-transform: uppercase; padding: 2px 6px; border-radius: 999px;
   background: rgba(229,56,79,0.12); border: 1px solid rgba(229,56,79,0.25); margin-left: 6px; }
-/* Same beacon as the tab bar's, just bigger — the sheet's own "you're in
-   Moon Station" marker. Reuses .eyebrow's own type styling, just no
-   longer a block on its own since the siren needs to sit next to it. */
-.ms-beacon-row { display: flex; align-items: center; gap: 8px; }
-.ms-beacon-row .eyebrow { margin: 0; }
-.ms-beacon { font-size: 18px; line-height: 1; animation: hudBeaconPulse 1.8s ease-in-out infinite; }
-
-/* Excess-streams-for-a-single-account list inside the same .sig-alt-warn
-   card shape used for alt warnings above it — a day-per-row breakdown of
-   flagExcessStreamDays. */
-.ms-excess-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
-  padding: 6px 0; border-top: 1px solid rgba(229,56,79,0.2); font-size: 12px; }
-.ms-excess-row:first-of-type { border-top: none; margin-top: 4px; }
-.ms-excess-row span { color: var(--dim); text-align: right; }
-
-/* Own list/row, not a reuse of .sig-list/.sig-row — those are
-   signalLogSheet's single-line layout (track/artist/counted), shared class
-   names would either cramp a timestamp in beside them or change that
-   other sheet's layout by accident. A flag with no "when" attached to it
-   is nothing an agent can actually check against their own memory, so
-   every row carries what played, then when and how far apart from the
-   play before it — the exact question "why was this flagged".
-   Laid out as a numbered sequence with a pass/fail icon, same report shape
-   as the Candy Star playlist validator (candy-star-admin.html's .cs-report-
-   row: icon, title, detail) — one existing pattern for "here's every item
-   in order, and whether it's clean," reused instead of inventing a second
-   one that looks different for no reason. */
-.ms-list { display: flex; flex-direction: column; gap: 6px; }
-.ms-row { display: flex; align-items: flex-start; gap: 10px;
-  padding: 9px 12px; border-radius: var(--r); background: var(--surface); border: 1px solid var(--border); }
-.ms-row.is-flagged { background: var(--crimson-soft); border-color: rgba(229,56,79,0.35); }
-.ms-seq { font-family: var(--mono); font-size: 10px; color: var(--dim); flex-shrink: 0;
-  min-width: 16px; text-align: right; padding-top: 2px; }
-.ms-ico { flex-shrink: 0; font-weight: 900; color: var(--gold); padding-top: 1px; }
-.ms-row.is-flagged .ms-ico { color: var(--crimson); }
-.ms-row-body { flex: 1; min-width: 0; }
-.ms-row-top { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
-.ms-track { font-weight: 600; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ms-artist { font-size: 11.5px; color: var(--dim); flex-shrink: 0; }
-.ms-row-bottom { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 3px; }
-.ms-time { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
-.ms-row.is-flagged .ms-time { color: var(--text); }
-.ms-flags { display: flex; gap: 4px; flex-shrink: 0; }
 
 /* auth additions: handle availability + the recovery link */
 .ob-input.is-good { border-color: rgba(217,173,95,0.65); }
@@ -6736,3 +6689,70 @@ select.rc-multi-native {
   .rc-multi { max-height: 240px; }
   .rc-multi-row { min-height: 44px; }
 }
+
+/* ── Moon Station screen ────────────────────────────────────────────────
+   Was a sheet; became a screen once it carried two checks, three notes and
+   a 25-row sequence. Visual sibling of BOTZ, not a dashboard: flat rows,
+   hairline dividers, one accent colour, no card-per-item. Purple for
+   structure, crimson ONLY where something actually needs a second look —
+   a screen where every block glows tells the player nothing about which
+   block matters. ── */
+.moon-screen { padding: 0 0 12px; }
+.moon-beacon { animation: hudBeaconPulse 1.8s ease-in-out infinite; display: inline-block; }
+.moon-intro { margin: 10px 0 4px; font-size: 12.5px; color: var(--muted); line-height: 1.65; }
+
+/* Each check is a section separated by a hairline, not a floating card —
+   two bordered boxes side by side read as a comparison, and these are
+   independent questions rather than two halves of one score. */
+.moon-check { padding: 16px 0 4px; border-top: 1px solid var(--line); margin-top: 12px; }
+.moon-check:first-of-type { border-top: none; }
+.moon-check-title { margin: 0 0 8px; font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.9px; text-transform: uppercase; color: var(--lavender); font-weight: 700; }
+.moon-verdict { margin: 0 0 6px; font-size: 15px; color: var(--text); line-height: 1.45;
+  overflow-wrap: anywhere; }
+.moon-verdict.is-review { color: var(--crimson); }
+.moon-check-what { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.7;
+  overflow-wrap: anywhere; }
+
+/* Informational, never a warning: the source double-reported a play, or a
+   sync is still catching up. Neither is something the player did. */
+.moon-note { margin: 10px 0 0; padding: 10px 12px; border-left: 2px solid var(--lavender);
+  background: rgba(139,92,246,0.06); border-radius: 0 var(--r) var(--r) 0; font-size: 12px; }
+.moon-note b { color: var(--lavender); font-weight: 600; }
+.moon-note p { margin: 4px 0 0; color: var(--muted); line-height: 1.6; }
+
+/* Small label over the high-volume day list. Deliberately NOT another
+   bordered panel — the rows stay flat under the copy they explain. */
+.moon-days-title { margin: 14px 0 2px; font-family: var(--mono); font-size: 9.5px;
+  letter-spacing: 0.8px; text-transform: uppercase; color: var(--dim); }
+.moon-days { margin-top: 4px; }
+.moon-day { display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+  padding: 7px 0; border-top: 1px solid var(--line); font-size: 12px; }
+.moon-day span { color: var(--dim); text-align: right; }
+
+/* The sequence. Ordinary listens stay visually quiet; only a row needing a
+   look gets the tint and the side accent. */
+.moon-list { margin-top: 4px; }
+.moon-row { display: flex; gap: 12px; padding: 11px 0; border-top: 1px solid var(--line); }
+.moon-row:first-child { border-top: none; }
+.moon-row.is-review { background: rgba(229,56,79,0.05); border-left: 2px solid var(--crimson);
+  padding-left: 10px; margin-left: -12px; }
+.moon-seq { flex: 0 0 auto; width: 22px; font-family: var(--mono); font-size: 11px;
+  color: var(--dim); padding-top: 2px; }
+.moon-row-body { min-width: 0; flex: 1 1 auto; }
+.moon-row-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.moon-track { font-size: 13.5px; color: var(--text); font-weight: 600;
+  overflow-wrap: anywhere; min-width: 0; }
+.moon-artist { flex: 0 0 auto; font-size: 11.5px; color: var(--dim); text-align: right;
+  overflow-wrap: anywhere; max-width: 42%; }
+.moon-row-meta { margin-top: 3px; font-family: var(--mono); font-size: 10.5px; color: var(--dim); }
+.moon-gap { display: block; margin-top: 2px; font-size: 11px; color: var(--muted); }
+.moon-row-flags { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px; }
+.moon-flag { font-size: 10.5px; color: var(--crimson); background: rgba(229,56,79,0.1);
+  border: 1px solid rgba(229,56,79,0.22); border-radius: 999px; padding: 3px 9px;
+  overflow-wrap: anywhere; }
+
+.moon-alt { padding: 11px 13px; border-radius: var(--r); background: var(--crimson-soft);
+  border: 1px solid rgba(229,56,79,0.4); font-size: 12.5px; line-height: 1.7; }
+.moon-alt b { color: var(--crimson); }
+.moon-alt p { margin: 4px 0 0; }

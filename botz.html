@@ -43,7 +43,14 @@
        theme tokens, so the tabs don't vanish just because you tapped in
        here — every other tab still leaves the page (back to game.html,
        which always boots to the City screen), same as the ← BACK link
-       already did; only BOTZ itself renders as the current tab. */
+       already did; only BOTZ itself renders as the current tab.
+
+       This list is hand-written, which is how it drifted: MOON was absent
+       because Moon Station used to be a SHEET, with no ?screen= target to
+       link to, so there was nothing to put here. It is a screen now
+       (?screen=moon), so the two bars list the same seven destinations
+       again. If a tab is ever added to ui-hud.js's TABS, add it here too —
+       a tab that cannot be deep-linked cannot appear on this page. */
     #botzTabbar {
       position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
       display: flex; justify-content: center; pointer-events: none;
@@ -1170,6 +1177,7 @@
     <a href="game.html?screen=resources" class="botz-tab" title="Pack"><span class="botz-tab-ico" aria-hidden="true">🎒</span><span class="botz-tab-lbl">Pack</span></a>
     <a href="game.html?screen=candystar" class="botz-tab" title="Candy Star"><span class="botz-tab-ico" aria-hidden="true">🍬</span><span class="botz-tab-lbl">Candy</span></a>
     <span class="botz-tab sel" title="BOTZ"><span class="botz-tab-ico" aria-hidden="true">📻</span><span class="botz-tab-lbl">BOTZ</span></span>
+    <a href="game.html?screen=moon" class="botz-tab" title="Moon Station"><span class="botz-tab-ico" aria-hidden="true">🚨</span><span class="botz-tab-lbl">Moon</span></a>
     <a href="game.html?screen=ranking" class="botz-tab" title="Rankings"><span class="botz-tab-ico" aria-hidden="true">🏆</span><span class="botz-tab-lbl">Ranks</span></a>
     <a href="game.html?screen=settings" class="botz-tab" title="Settings"><span class="botz-tab-ico" aria-hidden="true">⚙️</span><span class="botz-tab-lbl">Settings</span></a>
   </div>

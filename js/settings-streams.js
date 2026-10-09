@@ -16,6 +16,7 @@ import { call, API_URL } from './api.js'
 import { el, esc, toast, hideOverlay, showOverlay } from './state.js'
 import { getAgentNo } from './session.js'
 import { streamFlag } from './signal-log-ui.js'
+import { goMoon } from './router.js'
 
 const SOURCES = [
   {
@@ -350,154 +351,10 @@ export function signalLogSheet() {
   return sheet
 }
 
-function formatGapSeconds(s) {
-  if (s < 60) return `${Math.round(s)}s`
-  const m = Math.floor(s / 60)
-  const rem = Math.round(s % 60)
-  return rem ? `${m}m ${rem}s` : `${m}m`
-}
-
-/* ── Streaming integrity self-check ───────────────────────────────────────
-   The same "PL rules" checks Moon Station (BOTZ, admin-only) runs on any
-   agent, here scoped to your own account: getMySelfCheck is `auth: 'agent'`,
-   verified against your own session, so this can only ever answer "is MY
-   account clean" — it can't look anyone else up. It CAN tell you that your
-   own linked ListenBrainz/stats.fm/Musicat identity is also on another
-   agent number, which does reveal that other agent's number/handle; that's
-   a deliberate choice (an agent should be able to notice "oh, I forgot I
-   made a second file"), not an oversight.
-   Named and lit the same as BOTZ's admin tool (Moon Station) on purpose —
-   one name for one mechanic, whether HT is running it on you or you're
-   running it on yourself. The spinning red beacon is flavor, not a status
-   readout — it's on regardless of whether anything's actually flagged,
-   same as a real police light doesn't dim itself when there's no one to
-   pull over. */
-function moonStationSheet() {
-  const sheet = el('div', 'sheet set-sheet')
-  sheet.append(
-    el('div', 'ms-beacon-row', '<span class="ms-beacon" aria-hidden="true">🚨</span><span class="eyebrow">MOON STATION (UNDER TEST)</span>'),
-    el('h3', '', 'Your stream check'),
-    el('p', 'muted', "HT checks your recent streaming pattern, linked accounts and whether your daily pace matches your mode."),
-    el('p', 'muted', "One big streaming day is okay. HT only asks you to check your mode when your pace stays much higher for several days."),
-  )
-  const body = el('div', 'sig-body', '<p class="muted">Checking…</p>')
-  sheet.appendChild(body)
-
-  const close = el('button', 'btn btn-ghost', 'Close')
-  close.onclick = hideOverlay
-  sheet.appendChild(close)
-
-  call('getMySelfCheck', { agentNo: getAgentNo(), days: 7 }).then((res) => {
-    body.innerHTML = ''
-    if (!res.success) {
-      body.appendChild(el('p', 'muted', esc(res.error || "Couldn't run the check")))
-      return
-    }
-
-    body.appendChild(el('div', 'sig-summary', `
-      <span><b>${res.trackCount}${res.partialHistory ? '+' : ''}</b> streams checked &middot; last ${res.windowDays}d</span>
-      <span class="${res.flaggedCount ? 'is-flagged' : ''}"><b>${res.flaggedCount}</b> to review</span>
-    `))
-
-    // Rows the source reported twice and the check set aside. Shown to the
-    // agent in the same words an admin sees, so a total lower than they
-    // expected arrives with an explanation instead of looking like loss.
-    const dupes = Number(res.ingestionDuplicates || 0)
-    if (dupes) {
-      body.appendChild(el('div', 'ms-coverage-note', `
-        <b>ℹ ${dupes} duplicate stream${dupes === 1 ? '' : 's'} set aside</b>
-        <p class="muted">Same play reported twice by Stats.fm, not a repeated listen.
-        Nothing was removed from your history or your totals.</p>
-      `))
-    }
-
-    if (res.partialHistory) {
-      const sourceNames = { statsfm: 'Stats.fm', musicat: 'Musicat', listenbrainz: 'ListenBrainz', direct: 'scrobbler' }
-      const sourceName = sourceNames[res.streamSource] || 'stream'
-      const coverageCopy = res.partialReason === 'database_limit'
-        ? `Your streams are safe. HT won't review your streaming pace until this check is ready.`
-        : `Some recent streams may be missing. HT won't review your streaming pace until the full history is ready.`
-      body.appendChild(el('div', 'ms-coverage-note', `
-        <b>Sync catching up · ${esc(sourceName)}</b>
-        <p class="muted">${esc(coverageCopy)}</p>
-      `))
-    }
-
-    const alts = res.possibleAlts || []
-    if (alts.length) {
-      const lines = alts.map((a) =>
-        `${esc(a.via)} is also linked to <b>${esc(a.handle || a.agentNo)}</b> (${esc(a.agentNo)})`).join('<br>')
-      body.appendChild(el('div', 'sig-alt-warn', `<b>⚠ Streaming account linked twice</b><br>${lines}`))
-    }
-
-    // Review hint only. We do not know track duration or device identity,
-    // so high totals never change a player's mode or goals automatically.
-    const excessStreamDays = res.excessStreamDays || []
-    const modeNames = { exam: 'School/Exam', easy: 'Easy', steady: 'Easy+', medium: 'Medium', hard: 'Hard' }
-    if (!res.partialHistory && excessStreamDays.length) {
-      const suggestion = modeNames[res.suggestedMode] || res.suggestedMode
-      const rows = excessStreamDays.map((d) =>
-        `<div class="ms-excess-row"><b>${esc(d.date)}</b><span>${d.streams} streams</span></div>`).join('')
-      body.appendChild(el('div', 'sig-alt-warn', `
-        <b>⚠ Check your streaming pace</b>
-        <p class="muted">Your totals were above your current mode on ${excessStreamDays.length} day${excessStreamDays.length === 1 ? '' : 's'}.${suggestion ? ` Your recent pace looks closer to ${esc(suggestion)}.` : ' Check whether your mode still matches your accounts and devices.'} Nothing was changed automatically.</p>
-        ${rows}
-      `))
-    } else if (res.mode && !res.partialHistory) {
-      body.appendChild(el('div', 'sig-summary', `
-        <span><b>✓ ${esc(modeNames[res.mode] || res.mode)} matches your streaming pace</b></span>
-      `))
-    }
-
-    if (!res.tracks?.length) {
-      body.appendChild(el('p', 'muted', 'Nothing in the last 7 days to check yet.'))
-      return
-    }
-    // The full sequence, not just the flagged tracks — same report shape as
-    // the Candy Star playlist validator (candy-star-admin.html's Validate a
-    // playlist: numbered rows, a pass/fail icon, one detail line each), so
-    // "why was this flagged" reads the same way "why did this rule fail"
-    // already does elsewhere in the game. Backend hands tracks back
-    // newest-first (an activity log); reversed here to oldest-first because
-    // a SEQUENCE — "first you played this, then this, then this" — has to
-    // read top-to-bottom in the order it actually happened, not backwards.
-    const sequence = res.tracks.slice(0, 25).slice().reverse()
-    const list = el('div', 'ms-list')
-    sequence.forEach((t, i) => {
-      const flagged = (t.flags || []).length > 0
-      const badges = (t.flags || []).map((f) =>
-        // Names the pattern rather than accusing the player: this check
-        // cannot see track duration or device, so the most it can ever
-        // mean is "worth a second look".
-        `<span class="sig-badge">${f === 'repeat' ? '🔁 repeated-play pattern' : esc(f)}</span>`).join('')
-      const when = new Date(t.at).toLocaleString(undefined, {
-        month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
-      })
-      const gapText = typeof t.gapSeconds === 'number'
-        ? `${formatGapSeconds(t.gapSeconds)} after the previous play`
-        : 'first play in this window'
-      list.appendChild(el('div', 'ms-row' + (flagged ? ' is-flagged' : ''), `
-        <span class="ms-seq">${i + 1}</span>
-        <span class="ms-ico">${flagged ? '⚠' : '✓'}</span>
-        <div class="ms-row-body">
-          <div class="ms-row-top">
-            <span class="ms-track">${esc(t.track)}</span>
-            <span class="ms-artist">${esc(t.artist || '—')}</span>
-          </div>
-          <div class="ms-row-bottom">
-            <span class="ms-time">${esc(when)} &middot; ${esc(gapText)}</span>
-            <span class="ms-flags">${badges}</span>
-          </div>
-        </div>
-      `))
-    })
-    body.appendChild(list)
-  })
-
-  return sheet
-}
-
 export function openStreamSource(account, onSaved) { showOverlay(streamSourceSheet(account, onSaved)) }
 export function openPin(account, onChanged) { showOverlay(pinSheet(account, onChanged)) }
 export function openSignalLog() { showOverlay(signalLogSheet()) }
-export function openMoonStation() { showOverlay(moonStationSheet()) }
+/** Moon Station is a screen now, not a sheet. Kept as a named export so the
+ *  Settings row keeps its one-line call site; it navigates instead of
+ *  stacking a modal over whatever is already open. */
+export function openMoonStation() { goMoon() }

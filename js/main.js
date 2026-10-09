@@ -17,6 +17,7 @@ import { renderResources } from './screen-resources.js'
 import { renderSettings } from './screen-settings.js'
 import { renderCandyStar } from './screen-candystar.js'
 import { renderRanking } from './screen-ranking.js'
+import { renderMoonStation } from './screen-moon.js'
 import { playLevelUp } from './celebrate.js'
 import { checkForBadgeUnlocks } from './badge-reveal.js'
 import { checkForExamModeAnnounce } from './exam-mode-announce.js'
@@ -79,6 +80,7 @@ function renderScreen(state) {
     else if (scr.name === 'ranking') renderRanking(scene, state)
     else if (scr.name === 'golden-corner') renderGoldenCorner(scene, state)
     else if (scr.name === 'recelebrate') renderRecelebrateParty(scene, state)
+    else if (scr.name === 'moon') renderMoonStation(scene, state)
     else renderWorld(scene, state)
     if (isNav) {
       scene.classList.remove('scene-out')

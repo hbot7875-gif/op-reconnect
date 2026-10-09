@@ -18,11 +18,10 @@ import { hasNewBackupRequests, hasUnseenBackupHelper, markBackupHelperSeen } fro
 import { hasUnseenGroupChests, markGroupChestsSeen, unclaimedGroupChests } from './group-chest.js'
 import { call } from './api.js'
 import { el, esc, toast, setState, showOverlay, hideOverlay } from './state.js'
-import { getScreen, goWorld, goResources, goSettings, goCandyStar, goRanking, goDistrict } from './router.js'
+import { getScreen, goWorld, goResources, goSettings, goCandyStar, goRanking, goDistrict, goMoon } from './router.js'
 import { getAgentNo } from './session.js'
 import { earnedBadgeCount, equippedBadge } from './badges.js'
 import { districtDisplayName } from './ward-tiles.js'
-import { openMoonStation } from './settings-streams.js'
 import { redZonePercent } from './red-zone-ui.js'
 import { getReconnectChatSeen, reconnectChatUnreadCount,
   reconnectChatBadgeText } from './reconnect-chat-unread.js'
@@ -570,18 +569,20 @@ function invitesSheet(state) {
 // others do, same as any link out.
 const TABS = [
   { key: 'network', icon: '🏙️', label: 'City', go: goWorld,
-    sel: (here) => here !== 'resources' && here !== 'settings' && here !== 'candystar' && here !== 'ranking' },
+    sel: (here) => here !== 'resources' && here !== 'moon' && here !== 'settings' && here !== 'candystar' && here !== 'ranking' },
   { key: 'resources', icon: '🎒', label: 'Pack', go: goResources,
     sel: (here) => here === 'resources' },
   { key: 'candystar', icon: '🍬', label: 'Candy', go: goCandyStar,
     sel: (here) => here === 'candystar' },
   { key: 'botz', icon: '📻', label: 'BOTZ',
     href: () => 'botz.html' + (getAgentNo() ? `?agent=${encodeURIComponent(getAgentNo())}` : '') },
-  // A sheet, not a screen — nothing to navigate to, so onClick opens it
-  // straight over whichever screen is already up rather than pushing a
-  // router state that has nowhere real to point. Never shows as .sel for
-  // the same reason BOTZ's <a> never does: there's no "here" for it to be.
-  { key: 'moonstation', icon: '🚨', label: 'Moon', title: 'Moon Station (under test)', onClick: () => openMoonStation() },
+  // A real screen since 2026-10-09, so it routes and lights up like the
+  // rest. It was a sheet, which is why this tab used to be an onClick with
+  // no `sel` — there was no "here" for it to be. Being a screen is also what
+  // lets botz.html's standalone tab bar link to it; while it was a sheet it
+  // had no ?screen= target, which is exactly how MOON went missing there.
+  { key: 'moonstation', icon: '🚨', label: 'Moon', go: goMoon,
+    sel: (here) => here === 'moon' },
   { key: 'ranking', icon: '🏆', label: 'Ranks', go: goRanking,
     sel: (here) => here === 'ranking' },
   { key: 'settings', icon: '⚙️', label: 'Settings', go: goSettings,

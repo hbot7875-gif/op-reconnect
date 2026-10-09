@@ -175,15 +175,30 @@ test('a genuine too-close replay is still flagged', () => {
   assert.ok(100 < REPEAT_MIN_GAP_SECONDS)
 })
 
-test('a replay beyond the gap rule stays unflagged', () => {
+test('a replay beyond the gap rule raises no gap flag', () => {
   const rows = [sfm('SWIM', BASE + 11), sfm('SWIM', BASE + 11 + REPEAT_MIN_GAP_SECONDS + 1)]
-  assert.ok(flagStreamRows(rows).every((t) => t.flags.length === 0))
+  const flags = flagStreamRows(rows).flatMap((t) => t.flags)
+  assert.ok(!flags.includes('repeat'), 'the 8-minute window is satisfied')
+  // These two plays are still consecutive, which is a separate rule and
+  // deliberately a separate flag — the gap being fine does not make a song
+  // following itself unremarkable.
+  assert.deepEqual(flags, ['back_to_back'])
 })
 
-test('the flag id stays `repeat` so both UIs keep rendering it', () => {
-  // js/settings-streams.js and public/js/moon-station.js map this id to a label.
+test('the flag ids stay stable so both UIs keep rendering them', () => {
+  // js/settings-streams.js and public/js/moon-station.js map these ids to
+  // labels and fall back to printing the raw id, so a rename here shows up
+  // as gibberish in two admin surfaces.
   const rows = [sfm('SWIM', BASE + 11), sfm('SWIM', BASE + 111)]
-  assert.deepEqual(flagStreamRows(rows).find((t) => t.flags.length)?.flags, ['repeat'])
+  assert.deepEqual(flagStreamRows(rows).find((t) => t.flags.length)?.flags,
+    ['repeat', 'back_to_back'])
+
+  const selfCheck = readFileSync(new URL('../../../../js/screen-moon.js', import.meta.url), 'utf8')
+  const moon = readFileSync(new URL('../../../../public/js/moon-station.js', import.meta.url), 'utf8')
+  for (const [name, src] of [['screen-moon.js', selfCheck], ['moon-station.js', moon]]) {
+    assert.match(src, /repeat:/, `${name} must label repeat`)
+    assert.match(src, /back_to_back:/, `${name} must label back_to_back`)
+  }
 })
 
 test('a partial provider window still refuses to judge timing', () => {
@@ -594,7 +609,8 @@ test('the same song actually replayed is still flagged', () => {
     sfm('Life Goes On', BASE + 285, 'BTS'),
   ]
   const flags = flagStreamRows(rows).flatMap((f) => f.flags)
-  assert.deepEqual(flags, ['repeat'])
+  // Adjacent as well as inside the window, so both patterns apply.
+  assert.deepEqual(flags, ['repeat', 'back_to_back'])
 })
 
 test('a featured credit is the same performer, not a different one', () => {
@@ -606,7 +622,8 @@ test('a featured credit is the same performer, not a different one', () => {
     sfm('Haegeum', BASE + 285, 'Agust D, RM'),
   ]
   const flags = flagStreamRows(rows).flatMap((f) => f.flags)
-  assert.deepEqual(flags, ['repeat'], 'Agust D and "Agust D, RM" are one performer')
+  assert.deepEqual(flags, ['repeat', 'back_to_back'],
+    'Agust D and "Agust D, RM" are one performer')
 })
 
 test('artist comparison ignores case and surrounding space', () => {
@@ -614,17 +631,60 @@ test('artist comparison ignores case and surrounding space', () => {
     sfm('Haegeum', BASE + 120, ' agust d '),
     sfm('Haegeum', BASE + 285, 'Agust D'),
   ]
-  assert.deepEqual(flagStreamRows(rows).flatMap((f) => f.flags), ['repeat'])
+  assert.deepEqual(flagStreamRows(rows).flatMap((f) => f.flags), ['repeat', 'back_to_back'])
 })
 
-test('a missing artist leaves the title match standing', () => {
-  // 33 rows in 1,510,754 carry no artist. With nothing to compare, the check
-  // must not silently switch itself off.
+test('a missing artist cannot be matched to a known recording', () => {
+  // 33 rows in 1,510,754 carry no artist. An earlier version let those match
+  // any play of the same title, which rebuilds the exact false positive the
+  // primary-artist rule removed: untitled "Haegeum" could be anyone's.
+  // Unknown identity produces no evidence, in either direction.
   const rows = [
     sfm('Haegeum', BASE + 120, ''),
     sfm('Haegeum', BASE + 285, 'Agust D'),
   ]
-  assert.deepEqual(flagStreamRows(rows).flatMap((f) => f.flags), ['repeat'])
+  assert.deepEqual(flagStreamRows(rows).flatMap((f) => f.flags), [])
+})
+
+test('a missing artist cannot be matched the other way round either', () => {
+  const rows = [
+    sfm('Life Goes On', BASE + 120, 'Agust D'),
+    sfm('Life Goes On', BASE + 285, ''),
+  ]
+  assert.deepEqual(flagStreamRows(rows).flatMap((f) => f.flags), [],
+    'the second play could just as easily be the BTS song')
+})
+
+test('a missing artist followed by a known one is still unknown', () => {
+  const rows = [
+    sfm('Life Goes On', BASE + 120, ''),
+    sfm('Life Goes On', BASE + 285, 'BTS'),
+  ]
+  assert.deepEqual(flagStreamRows(rows).flatMap((f) => f.flags), [])
+})
+
+test('two plays that both lack an artist match nothing, including each other', () => {
+  // Unknown and unknown is not a pair. Neither can be placed, so neither can
+  // be evidence about the other.
+  const rows = [
+    sfm('Haegeum', BASE + 120, ''),
+    sfm('Haegeum', BASE + 285, ''),
+  ]
+  assert.deepEqual(flagStreamRows(rows).flatMap((f) => f.flags), [])
+})
+
+test('an unidentifiable play still appears in the log, with no new warning', () => {
+  // Moon Station is a review surface. A row it cannot identify is shown
+  // normally; it does not vanish, and missing metadata is not itself a flag.
+  const rows = [
+    sfm('Haegeum', BASE + 120, ''),
+    sfm('Haegeum', BASE + 285, 'Agust D'),
+  ]
+  const out = flagStreamRows(rows)
+  assert.equal(out.length, 2, 'both plays are listed')
+  assert.equal(out.find((r) => r.artist === '')?.sinceSameSong, null,
+    'an unidentifiable play reports no same-song gap')
+  for (const r of out) assert.deepEqual(r.flags, [])
 })
 
 test('a different title is never a repeat, whatever the artist', () => {
@@ -633,4 +693,176 @@ test('a different title is never a repeat, whatever the artist', () => {
     sfm('AMYGDALA', BASE + 285, 'Agust D'),
   ]
   assert.deepEqual(flagStreamRows(rows).flatMap((f) => f.flags), [])
+})
+
+// ── the 8-minute rule measures the same SONG, not the previous row ────────
+//
+// The window only means what it says if it is measured against the last time
+// THIS song played. Comparing adjacent rows meant a single unrelated track in
+// between hid the repeat completely.
+
+const flagsOf = (rows) => flagStreamRows(rows).slice().reverse().map((f) => f.flags)
+
+test('one track in between no longer hides a six-minute repeat', () => {
+  // The reported failure. SWIM returns after 6 minutes, but the row before it
+  // is Film out, so an adjacent comparison saw nothing.
+  const rows = [
+    sfm('SWIM', BASE, 'BTS'),
+    sfm('Film out', BASE + 3 * MIN, 'BTS'),
+    sfm('SWIM', BASE + 6 * MIN, 'BTS'),
+  ]
+  assert.deepEqual(flagsOf(rows), [[], [], ['repeat']])
+})
+
+test('eight minutes exactly is not inside the window', () => {
+  const rows = [
+    sfm('SWIM', BASE, 'BTS'),
+    sfm('Film out', BASE + 3 * MIN, 'BTS'),
+    sfm('SWIM', BASE + 8 * MIN, 'BTS'),
+  ]
+  assert.equal(REPEAT_MIN_GAP_SECONDS, 8 * MIN)
+  assert.deepEqual(flagsOf(rows), [[], [], []])
+})
+
+test('a legitimate ten-minute gap stays clean across two fillers', () => {
+  const rows = [
+    sfm('SWIM', BASE, 'BTS'),
+    sfm('Film out', BASE + 3 * MIN, 'BTS'),
+    sfm('Haegeum', BASE + 6 * MIN, 'Agust D'),
+    sfm('SWIM', BASE + 10 * MIN, 'BTS'),
+  ]
+  assert.deepEqual(flagsOf(rows), [[], [], [], []])
+})
+
+test('the rule does not depend on adjacency at any distance', () => {
+  // Five unrelated tracks in between, still inside the window at the end.
+  const rows = [
+    sfm('SWIM', BASE, 'BTS'),
+    sfm('Film out', BASE + 1 * MIN, 'BTS'),
+    sfm('Haegeum', BASE + 2 * MIN, 'Agust D'),
+    sfm('NORMAL', BASE + 3 * MIN, 'BTS'),
+    sfm('tokyo', BASE + 4 * MIN, 'RM'),
+    sfm('Promise', BASE + 5 * MIN, 'Jimin'),
+    sfm('SWIM', BASE + 7 * MIN, 'BTS'),
+  ]
+  const flags = flagsOf(rows)
+  assert.deepEqual(flags[6], ['repeat'], 'six rows apart and still inside 8 minutes')
+  assert.deepEqual(flags.slice(0, 6), [[], [], [], [], [], []])
+})
+
+test('each song carries its own clock', () => {
+  // Two songs interleaved, only one of them repeating too soon.
+  const rows = [
+    sfm('SWIM', BASE, 'BTS'),
+    sfm('Haegeum', BASE + 1 * MIN, 'Agust D'),
+    sfm('SWIM', BASE + 9 * MIN, 'BTS'),        // 9 min, clean
+    sfm('Haegeum', BASE + 10 * MIN, 'Agust D'), // 9 min, clean
+    sfm('SWIM', BASE + 12 * MIN, 'BTS'),        // 3 min since SWIM, flagged
+  ]
+  assert.deepEqual(flagsOf(rows), [[], [], [], [], ['repeat']])
+})
+
+// ── back-to-back is a separate rule from the gap ──────────────────────────
+
+test('a nine-minute replay with nothing in between is consecutive, not a gap breach', () => {
+  const rows = [
+    sfm('SWIM', BASE, 'BTS'),
+    sfm('SWIM', BASE + 9 * MIN, 'BTS'),
+  ]
+  assert.deepEqual(flagsOf(rows), [[], ['back_to_back']],
+    'the 8-minute rule passes; the plays are still consecutive')
+})
+
+test('an immediate replay inside the window carries both patterns', () => {
+  // They are separate concepts and both are true here.
+  const rows = [
+    sfm('SWIM', BASE, 'BTS'),
+    sfm('SWIM', BASE + 2 * MIN, 'BTS'),
+  ]
+  assert.deepEqual(flagsOf(rows), [[], ['repeat', 'back_to_back']])
+})
+
+test('a filler in between is never back-to-back, whatever the gap', () => {
+  const rows = [
+    sfm('SWIM', BASE, 'BTS'),
+    sfm('Film out', BASE + 3 * MIN, 'BTS'),
+    sfm('SWIM', BASE + 6 * MIN, 'BTS'),
+  ]
+  assert.deepEqual(flagsOf(rows), [[], [], ['repeat']])
+})
+
+// ── song identity survives the rewrite ────────────────────────────────────
+
+test('two songs sharing a title still key apart under the last-seen map', () => {
+  const rows = [
+    sfm('Life Goes On', BASE, 'Agust D'),
+    sfm('Life Goes On', BASE + 165, 'BTS'),
+  ]
+  assert.deepEqual(flagsOf(rows), [[], []])
+})
+
+test('a featured credit is still one performer under the last-seen map', () => {
+  const rows = [
+    sfm('Haegeum', BASE, 'Agust D'),
+    sfm('Film out', BASE + 2 * MIN, 'BTS'),
+    sfm('Haegeum', BASE + 5 * MIN, 'Agust D, RM'),
+  ]
+  assert.deepEqual(flagsOf(rows), [[], [], ['repeat']])
+})
+
+test('a missing artist is not matched across intervening tracks either', () => {
+  // The non-adjacent path uses the same identity as the adjacent one, so an
+  // unidentifiable play cannot become evidence just because something else
+  // played in between.
+  const rows = [
+    sfm('Haegeum', BASE, ''),
+    sfm('Film out', BASE + 2 * MIN, 'BTS'),
+    sfm('Haegeum', BASE + 5 * MIN, 'Agust D'),
+  ]
+  assert.deepEqual(flagsOf(rows), [[], [], []])
+})
+
+test('a known recording still repeats across an unidentifiable play of itself', () => {
+  // The unknown row in the middle must neither satisfy nor break the rule:
+  // the two Agust D plays are 5 minutes apart and that is what counts.
+  const rows = [
+    sfm('Haegeum', BASE, 'Agust D'),
+    sfm('Haegeum', BASE + 2 * MIN, ''),
+    sfm('Haegeum', BASE + 5 * MIN, 'Agust D'),
+  ]
+  assert.deepEqual(flagsOf(rows), [[], [], ['repeat']])
+})
+
+test('sinceSameSong reports the gap the rule actually used', () => {
+  const rows = [
+    sfm('SWIM', BASE, 'BTS'),
+    sfm('Film out', BASE + 3 * MIN, 'BTS'),
+    sfm('SWIM', BASE + 6 * MIN, 'BTS'),
+  ]
+  const oldestFirst = flagStreamRows(rows).slice().reverse()
+  assert.equal(oldestFirst[0].sinceSameSong, null, 'first play of SWIM')
+  assert.equal(oldestFirst[1].sinceSameSong, null, 'first play of Film out')
+  assert.equal(oldestFirst[2].sinceSameSong, 6 * MIN, 'measured against SWIM, not Film out')
+  assert.equal(oldestFirst[2].gapSeconds, 3 * MIN, 'gapSeconds still describes the previous row')
+})
+
+test('an ingestion duplicate pair is still never repeat evidence', () => {
+  // The Stats.fm precision artifact: one play stored twice, 37s apart. It
+  // must stay collapsed before any of this runs, or every duplicated play
+  // reads as both a repeat and a back-to-back.
+  const rows = [sfm('SWIM', BASE, 'BTS'), sfm('SWIM', BASE + 37, 'BTS')]
+  const out = flagStreamRows(rows)
+  assert.equal(out.length, 1, 'collapsed to one play')
+  assert.deepEqual(out[0].flags, [])
+})
+
+test('partial history still suppresses every flag', () => {
+  const rows = [
+    sfm('SWIM', BASE, 'BTS'),
+    sfm('Film out', BASE + 3 * MIN, 'BTS'),
+    sfm('SWIM', BASE + 6 * MIN, 'BTS'),
+  ]
+  const out = flagStreamRows(rows, { trustSequence: false })
+  assert.deepEqual(out.flatMap((f) => f.flags), [],
+    'an incomplete window cannot support a sequence claim')
 })

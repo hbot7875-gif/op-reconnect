@@ -2,38 +2,89 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
-const ui = readFileSync('js/settings-streams.js', 'utf8')
+// Moon Station moved from a sheet inside settings-streams.js to its own
+// screen on 2026-10-09; the copy assertions follow it. settings-streams.js
+// keeps only a one-line shim so the Settings row navigates instead of
+// stacking a modal.
+const ui = readFileSync('js/screen-moon.js', 'utf8')
+const settingsStreams = readFileSync('js/settings-streams.js', 'utf8')
 const selfCheck = readFileSync('supabase/functions/op-reconnect/lib/signal-log.ts', 'utf8')
 const streams = readFileSync('supabase/functions/op-reconnect/lib/streams.ts', 'utf8')
 
 test('partial provider history is explained and never gets a mode verdict', () => {
   assert.match(ui, /Sync catching up · \$\{esc\(sourceName\)\}/)
   assert.match(ui, /Some recent streams may be missing/)
-  assert.match(ui, /won't review your streaming pace until the full history is ready/)
+  assert.match(ui, /Review resumes when the full history is ready/)
   assert.doesNotMatch(ui, /latest 50 streams before the next pull/)
-  assert.match(ui, /!res\.partialHistory && excessStreamDays\.length/)
-  assert.match(ui, /res\.mode && !res\.partialHistory/)
+  // An incomplete window is reported as "not checked yet", never as a pass:
+  // a half-synced week looks like a quiet week.
+  assert.match(ui, /modeReview = !res\.partialHistory && excessStreamDays\.length > 0/)
+  assert.match(ui, /modeChecked = !res\.partialHistory && !!res\.mode/)
+  assert.match(ui, /Not checked yet/)
+})
+
+test('the two checks are presented as separate, independent questions', () => {
+  // The whole point of the layout. A player with clean spacing but a busy
+  // week used to see one red sheet and assume the repeat check caused it.
+  // Each check is its own section with its own verdict line, so neither can
+  // be read as half of a combined score. There is deliberately NO intro
+  // paragraph explaining that they are separate — the layout shows it, and
+  // explaining it made a routine check sound like it needed defending.
+  assert.doesNotMatch(ui, /runs two separate checks/)
+  assert.doesNotMatch(ui, /One does not affect the other/)
+  assert.match(ui, /Streaming pattern/)
+  assert.match(ui, /Mode check/)
+  assert.match(ui, /Spacing &amp; repeats/)
+  assert.match(ui, /Daily volume vs selected mode/)
+  assert.match(ui, /moon-check-title/)
+  assert.match(ui, /moon-verdict/)
+  // flaggedCount belongs to the pattern check alone. It must appear in the
+  // pattern section and nowhere near the mode verdict.
+  const patternAt = ui.indexOf("'Streaming pattern'")
+  const modeAt = ui.indexOf("'Mode check'")
+  assert.ok(patternAt > 0 && modeAt > patternAt, 'pattern section precedes mode section')
+  assert.ok(ui.slice(patternAt, modeAt).includes('res.flaggedCount'),
+    'flaggedCount lives in the Streaming Pattern section')
+  assert.ok(!ui.slice(modeAt).includes('res.flaggedCount'),
+    'flaggedCount must never reach the Mode Check section')
+  // Shared listening identity is neither check, so it sits below both.
+  assert.match(ui, /Account connection/)
+  assert.match(ui, /This streaming account is also linked to another agent file/)
+  assert.ok(ui.indexOf('Account connection') > modeAt, 'account section comes after both checks')
 })
 
 test('player copy uses familiar streaming language without an accusation', () => {
-  assert.match(ui, /Your stream check/)
-  assert.match(ui, /streaming pattern/)
-  assert.match(ui, /Check your streaming pace/)
-  assert.match(ui, /accounts and devices/)
-  // Names the pattern instead of the person. "played too close" read as a
-  // verdict on the player, and after the Stats.fm duplicate audit it was
-  // landing on people whose only mistake was listening once.
-  assert.match(ui, /repeated-play pattern/)
+  assert.match(ui, /Stream review/)
+  assert.match(ui, /⚠ Review mode/)
+  assert.match(ui, /Current: \$\{esc\(modeLabel\)\}/)
+  assert.match(ui, /Recent pace: \$\{esc\(suggestion\)\}/)
+  // Names the rule instead of the person, so a player can tell what to
+  // change. "played too close" read as a verdict, and "repeated-play
+  // pattern" described a suspicion rather than the actual spacing rule.
+  assert.match(ui, /Same song replayed within 8 min/)
+  assert.match(ui, /Same song played twice in a row/)
   assert.doesNotMatch(ui, /played too close/)
   assert.doesNotMatch(ui, /Your own police check/)
   assert.doesNotMatch(ui, />\d* flagged</)
+  // Nothing in the sheet may tell a player their account failed. Scoped to
+  // moonStationSheet rather than the file: "Copy failed" lives in an
+  // unrelated clipboard toast further down.
+  const start = ui.indexOf('export function renderMoonStation')
+  assert.ok(start > 0, 'renderMoonStation not found')
+  const sheetSrc = ui.slice(start)
+  assert.doesNotMatch(sheetSrc, /\bfailed\b/i)
+  assert.doesNotMatch(sheetSrc, /\bcheating\b/i)
 })
 
 test('a duplicate the source reported twice is explained, not silently dropped', () => {
-  // A collapsed row set must never read as lost history.
+  // A collapsed row set must never read as lost history, and must not look
+  // like a warning — the source double-reported, the player did nothing.
   assert.match(ui, /ingestionDuplicates/)
-  assert.match(ui, /duplicate stream\$\{dupes === 1 \? '' : 's'\} set aside/)
-  assert.match(ui, /Nothing was removed from your history or your totals/)
+  assert.match(ui, /duplicate report\$\{dupes === 1 \? '' : 's'\} excluded/)
+  assert.match(ui, /Totals unchanged/)
+  // Quiet and informational, never the crimson warning shape.
+  assert.match(ui, /moon-note/)
+  assert.doesNotMatch(ui, /moon-alt[^]{0,80}duplicate report/)
   assert.match(selfCheck, /ingestionDuplicates: countIngestionDuplicates\(rows\)/)
 })
 
@@ -150,4 +201,102 @@ test('BOTZ explains a de-duplicated feed instead of just showing fewer rows', ()
   assert.match(botzPhase1, /Nothing was removed from your totals/)
   // Neutral: it describes the source, never the player.
   assert.doesNotMatch(botzPhase1, /looping|cheat|suspicious/i)
+})
+
+// ── the two tab bars must list the same destinations ──────────────────────
+//
+// botz.html is its own page, so it hand-writes a copy of ui-hud.js's TABS.
+// That copy silently lost MOON: Moon Station was a SHEET, with no ?screen=
+// target to link to, so there was nothing to put in the standalone bar. It
+// is a screen now, and this test exists so the two lists cannot drift apart
+// again without something failing.
+
+const uiHud = readFileSync('js/ui-hud.js', 'utf8')
+const botz = readFileSync('botz.html', 'utf8')
+
+test('BOTZ offers every destination the in-app tab bar does', () => {
+  const tabsBlock = uiHud.slice(uiHud.indexOf('const TABS = ['), uiHud.indexOf('/** The nav strip'))
+  const appKeys = [...tabsBlock.matchAll(/key: '([a-z]+)'/g)].map((m) => m[1])
+  assert.deepEqual(appKeys,
+    ['network', 'resources', 'candystar', 'botz', 'moonstation', 'ranking', 'settings'],
+    'the in-app tab order changed — update botz.html to match')
+
+  const barStart = botz.indexOf('<div class="botz-tabs">')
+  const botzBar = botz.slice(barStart, botz.indexOf('</div>', barStart + 1))
+  // Every router-backed tab must be reachable from the standalone page.
+  const expectedHrefs = ['screen=world', 'screen=resources', 'screen=candystar', 'screen=moon',
+    'screen=ranking', 'screen=settings']
+  for (const href of expectedHrefs) {
+    assert.ok(botzBar.includes(href), `botz.html tab bar is missing ${href}`)
+  }
+  // BOTZ itself is the current page, so it is a span rather than a link.
+  assert.match(botzBar, /<span class="botz-tab sel"[^>]*title="BOTZ"/)
+  // The tab elements themselves, not their .botz-tab-ico/.botz-tab-lbl children.
+  assert.equal((botzBar.match(/class="botz-tab[" ]/g) || []).length, 7,
+    'botz.html must show all seven destinations')
+})
+
+test('Moon Station is a routable screen, not a sheet', () => {
+  // The property that lets botz.html link to it at all.
+  const router = readFileSync('js/router.js', 'utf8')
+  assert.match(router, /DEEP_LINKABLE = new Set\(\[[^\]]*'moon'/)
+  assert.match(router, /export function goMoon/)
+  assert.match(uiHud, /key: 'moonstation'[^}]*go: goMoon/)
+  assert.match(uiHud, /here === 'moon'/)
+  // And the City tab must not light up while Moon is the active screen.
+  assert.match(uiHud, /here !== 'moon'/)
+  // The Settings row navigates rather than stacking a modal.
+  assert.match(settingsStreams, /export function openMoonStation\(\) \{ goMoon\(\) \}/)
+  assert.doesNotMatch(settingsStreams, /moonStationSheet/)
+})
+
+test('an unsynced window can never render a green Streaming Pattern', () => {
+  // flaggedCount is 0 while partialHistory is true because trustSequence is
+  // off and the timing rules were never RUN. Reading that 0 as a pass is the
+  // false green Mode Check already avoids; both checks must be able to say
+  // they do not know yet. Asserted on source because the verdict is chosen
+  // before any DOM exists.
+  const start = ui.indexOf('const pattern = el(')
+  const end = ui.indexOf('body.appendChild(pattern)')
+  assert.ok(start > 0 && end > start, 'pattern section not found')
+  const block = ui.slice(start, end)
+  // The partial branch comes first and owns the verdict in that state.
+  const partialAt = block.indexOf('if (res.partialHistory)')
+  const clearAt = block.indexOf("'✓ Clear'")
+  assert.ok(partialAt > -1, 'partialHistory must be handled before any verdict')
+  assert.ok(clearAt > partialAt, "'✓ Clear' must live in the else branch")
+  assert.ok(block.includes("'· Not checked yet'"), 'pattern needs a not-checked verdict')
+  assert.ok(block.includes("'Syncing recent streams'"))
+  // And the else branch is the only place a pass or a count can be produced.
+  const elseAt = block.indexOf('} else {')
+  assert.ok(elseAt > -1 && elseAt < clearAt, 'the pass must be inside else')
+  // Comments stripped: the branch explains itself by naming flaggedCount,
+  // which is prose, not a read.
+  const partialCode = block.slice(partialAt, elseAt).replace(/\/\/[^\n]*/g, '')
+  assert.ok(!partialCode.includes('flaggedCount'),
+    'flaggedCount must not be read in the partial-history branch')
+})
+
+test('the high-volume day list is labelled, and stays flat', () => {
+  assert.match(ui, /Recent high-volume days/)
+  assert.match(ui, /moon-days-title/)
+  // Not wrapped in another card or bordered panel.
+  const css = readFileSync('css/reconnect.css', 'utf8')
+  const rule = css.slice(css.indexOf('.moon-days-title'), css.indexOf('.moon-days {'))
+  assert.doesNotMatch(rule, /border:|background:/)
+})
+
+test('the tone stays procedural: neither customer support nor interrogation', () => {
+  // A routine integrity review. Reassurance reads as apology and implies
+  // there was something to apologise for; accusation language implies a
+  // verdict this check cannot reach.
+  const src = ui.slice(ui.indexOf('export function renderMoonStation'))
+  const banned = [
+    /don'?t worry/i, /nothing bad happened/i, /your streams are safe/i,
+    /we'?re just checking/i, /your stream health/i, /suspicious activity/i,
+    /\bviolation\b/i, /cheating detected/i, /\bfailed\b/i,
+  ]
+  for (const re of banned) {
+    assert.doesNotMatch(src, re, `Moon Station copy must not use ${re}`)
+  }
 })

@@ -123,7 +123,22 @@
   // Describes the pattern, not the person. A flag here is a prompt to look,
   // never a finding -- Moon Station cannot see track duration or device, so
   // the most it can ever mean is "this is worth a second look".
-  const MOON_FLAG_LABEL = { repeat: '🔁 repeated-play pattern' }
+  // Two separate observable patterns, never a verdict. A song can be both:
+  // returning inside the gap AND immediately consecutive.
+  // Seconds -> "6m 30s", so a reviewer can read the same-song gap at a glance
+  // instead of subtracting two timestamps by eye.
+  function moonGap(s) {
+    const total = Math.max(0, Math.round(Number(s) || 0))
+    const m = Math.floor(total / 60)
+    const rem = total % 60
+    if (!m) return `${rem}s`
+    return rem ? `${m}m ${rem}s` : `${m}m`
+  }
+
+  const MOON_FLAG_LABEL = {
+    repeat: '🔁 repeated-play pattern',
+    back_to_back: '⏭️ played twice in a row',
+  }
   // Purely corroborating — matching modes prove nothing on their own, but
   // read as one more "these were set up the same way" alongside an already-
   // confirmed shared identity. Null means the agent registered but never
@@ -155,6 +170,9 @@
               </div>
               <div class="botz-recent-right">
                 <div class="botz-recent-time">${d.toLocaleString()}</div>
+                ${typeof t.sinceSameSong === 'number'
+                  ? `<div class="botz-recent-time">${moonGap(t.sinceSameSong)} since this song last played</div>`
+                  : ''}
                 ${badges}
               </div>
             </div>`

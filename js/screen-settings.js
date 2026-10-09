@@ -146,7 +146,7 @@ function paintSections(body, state) {
       onClick: () => showOverlay(passwordSheet()),
     },
     {
-      icon: '🚨', name: 'Moon Station (under test)', value: '',
+      icon: '🚨', name: 'Moon Station', value: '',
       body: 'The same repeat check HT runs, and whether your linked identity shows up on another agent file. Also on the tab bar.',
       onClick: () => openMoonStation(),
     },

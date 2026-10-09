@@ -13,7 +13,7 @@
 // which was tapped. A ?screen= query param read once at boot is what lets
 // those links actually mean what their labels say; goWorld/goResources/etc.
 // still work exactly as before for every in-app navigation after that.
-const DEEP_LINKABLE = new Set(['world', 'resources', 'settings', 'candystar', 'ranking'])
+const DEEP_LINKABLE = new Set(['world', 'resources', 'moon', 'settings', 'candystar', 'ranking'])
 function initialScreen() {
   const requested = new URLSearchParams(location.search).get('screen')
   return { name: DEEP_LINKABLE.has(requested) ? requested : 'world', wardId: null, districtId: null, origin: null }
@@ -62,6 +62,14 @@ export function goRecelebrate(origin = null) {
 
 export function goRanking(origin = null) {
   set({ name: 'ranking', wardId: null, districtId: null, origin })
+}
+
+/** Moon Station. A screen rather than a sheet since 2026-10-09 — it carries
+ *  two independent checks and a 25-row sequence, which is more than a modal
+ *  should hold. Deep-linkable so botz.html's own tab bar can reach it the
+ *  same way its other tabs reach City/Pack/Candy/Ranks/Settings. */
+export function goMoon(origin = null) {
+  set({ name: 'moon', wardId: null, districtId: null, origin })
 }
 
 export function goWard(wardId, origin = null) {
