@@ -99,12 +99,14 @@ export function renderMoonStation(container, state) {
       pattern.appendChild(el('p', 'moon-verdict', '· Not checked yet'))
       pattern.appendChild(el('p', 'moon-check-what', 'Syncing recent streams'))
     } else {
-      pattern.appendChild(el('p', 'moon-verdict' + (res.flaggedCount ? ' is-review' : ''),
-        res.flaggedCount ? `⚠ ${res.flaggedCount} to review` : '✓ Clear'))
-      pattern.appendChild(el('p', 'moon-check-what', `
-        Spacing &amp; repeats<br>
-        ${res.trackCount} streams · ${res.windowDays} days
+      // Verdict and window on one line, the description under it. Two
+      // stacked sentences made a one-word answer look like a paragraph.
+      pattern.appendChild(el('div', 'moon-verdict-row', `
+        <span class="moon-verdict${res.flaggedCount ? ' is-review' : ''}">${
+          res.flaggedCount ? `⚠ ${res.flaggedCount} to review` : '✓ Clear'}</span>
+        <span class="moon-count">${res.trackCount} · ${res.windowDays}d</span>
       `))
+      pattern.appendChild(el('p', 'moon-check-what', 'Spacing &amp; repeats'))
     }
 
     // Rows Stats.fm reported twice, set aside before anything was judged.
@@ -117,7 +119,12 @@ export function renderMoonStation(container, state) {
         <p>Stats.fm reported the same play more than once. Totals unchanged.</p>
       `))
     }
-    body.appendChild(pattern)
+    // One panel for both checks, divided by an inset rule rather than two
+    // full-bleed ones. They stay separate questions; they stop reading as two
+    // unrelated bands floating on the page.
+    const panel = el('div', 'moon-panel')
+    panel.appendChild(pattern)
+    body.appendChild(panel)
 
     // ── Mode Check ───────────────────────────────────────────────────────
     const mode = el('section', 'moon-check')
@@ -144,7 +151,7 @@ export function renderMoonStation(container, state) {
       mode.appendChild(el('p', 'moon-verdict', `✓ ${esc(modeLabel)} fits`))
       mode.appendChild(el('p', 'moon-check-what', 'Daily volume vs selected mode'))
     }
-    body.appendChild(mode)
+    panel.appendChild(mode)
 
     // ── Recent streams ───────────────────────────────────────────────────
     //
@@ -152,10 +159,14 @@ export function renderMoonStation(container, state) {
     // should look ordinary. Only a row that needs a second look is tinted,
     // so the eye lands on those four and not on all twenty-five.
     const seq = el('section', 'moon-check')
+    // Lighter than the checks panel on purpose: the checks are the finding,
+    // the log is the evidence behind it.
+    const streams = el('div', 'moon-streams')
+    streams.appendChild(seq)
     seq.appendChild(el('h3', 'moon-check-title', 'Recent streams'))
     if (!res.tracks?.length) {
       seq.appendChild(el('p', 'moon-check-what', 'Nothing in the last 7 days to check yet.'))
-      body.appendChild(seq)
+      body.appendChild(streams)
       renderAccountConnection()
       return
     }
@@ -195,7 +206,7 @@ export function renderMoonStation(container, state) {
       `))
     })
     seq.appendChild(list)
-    body.appendChild(seq)
+    body.appendChild(streams)
 
     renderAccountConnection()
 

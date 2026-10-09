@@ -6691,46 +6691,60 @@ select.rc-multi-native {
 }
 
 /* ── Moon Station screen ────────────────────────────────────────────────
-   Typed to BOTZ, deliberately. BOTZ is the sibling tool and its largest
-   heading is .botz-brand-name at 1.06rem; Moon opened with Orbitron 900 at
-   25px, which made a review tool shout louder than the page it sits beside.
-   Section labels copy .botz-section-label: mono, 0.575rem, 3px tracking,
-   ghosted, with the rule UNDER the label rather than a box around the
-   section. Recent rows copy .botz-recent-row. Crimson appears only on a row
-   that needs a second look. ── */
-.moon-screen { padding: 0 0 12px; }
+   Typed to BOTZ, and grouped like the sheet this replaced. The full-screen
+   conversion dropped two levels of containment at once -- the bounded card
+   and the bounded row -- leaving only whitespace to hold the page together,
+   across a 620px measure. Both come back here, without the modal.
+
+   The content heading matches BOTZ's own content heading (botz.html:1020,
+   .botz-recent-heading .botz-section-label): display 700 / .92rem / .2px /
+   sentence case. Section labels match .botz-section-label. ── */
+.moon-screen { max-width: 440px; margin-inline: auto; padding: 0 0 12px; }
 .moon-beacon { animation: hudBeaconPulse 1.8s ease-in-out infinite; display: inline-block; }
 
-/* Header at BOTZ's scale. Overrides .pack-name's 25px display face, which
-   every other screen uses as a title and which is simply too loud here. */
 .moon-screen .pack-head { margin-bottom: 10px; }
 .moon-screen .pack-name { font-family: var(--disp); font-weight: 700; font-size: 14.7px;
   letter-spacing: 0.2px; text-transform: none; color: var(--text); margin-top: 3px; }
 
-/* .botz-section-label, in the game's own tokens. */
-.moon-check { margin: 0; padding: 0 0 6px; }
-.moon-check-title { margin: 0 0 8px; font-family: var(--mono); font-size: 9.2px;
-  letter-spacing: 3px; text-transform: uppercase; color: var(--dim);
-  padding: 14px 0 8px; border-bottom: 1px solid var(--line); }
-.moon-check:first-of-type .moon-check-title { padding-top: 4px; }
+/* The two checks share one panel, divided by an INSET rule. They remain two
+   separate questions -- a mode warning must never read as a consequence of a
+   timing flag -- but they stop floating as unrelated bands. */
+.moon-panel { background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-lg); padding: 12px 14px; margin: 10px 0; }
+.moon-panel .moon-check { margin: 0; padding: 0; }
+.moon-panel .moon-check + .moon-check { margin-top: 9px; padding-top: 9px;
+  border-top: 1px solid var(--line); }
 
-/* The verdict is the one piece of real information per section; it reads at
-   .botz-recent-name weight rather than as a banner. */
-.moon-verdict { margin: 0 0 4px; font-family: var(--body); font-weight: 700;
+/* Lighter than the checks panel: half the border opacity and a barely-there
+   fill, so the checks read as the finding and the log as its evidence. */
+.moon-streams { background: rgba(255,255,255,0.012);
+  border: 1px solid rgba(255,255,255,0.045); border-radius: var(--r-lg);
+  padding: 12px 14px 16px; }
+.moon-streams .moon-check { margin: 0; padding: 0; }
+
+.moon-check-title { margin: 0 0 5px; padding: 0 0 5px; font-family: var(--mono);
+  font-size: 9.2px; letter-spacing: 3px; text-transform: uppercase; color: var(--dim); }
+
+/* Verdict and window on one line. */
+.moon-verdict-row { display: flex; justify-content: space-between;
+  align-items: baseline; gap: 10px; }
+.moon-verdict { margin: 0 0 2px; font-family: var(--body); font-weight: 700;
   font-size: 13.6px; color: var(--text); line-height: 1.45; overflow-wrap: anywhere; }
 .moon-verdict.is-review { color: var(--crimson); }
-.moon-check-what { margin: 0; font-family: var(--mono); font-size: 10.2px;
-  letter-spacing: 0.6px; color: var(--muted); line-height: 1.75; overflow-wrap: anywhere; }
+.moon-count { flex: 0 0 auto; font-family: var(--mono); font-size: 9.4px;
+  letter-spacing: 0.4px; color: var(--dim); white-space: nowrap; }
+.moon-check-what { margin: 0; font-family: var(--mono); font-size: 10.6px;
+  letter-spacing: 0.2px; color: var(--muted); line-height: 1.7; overflow-wrap: anywhere; }
 
 /* Informational, never a warning: the source double-reported, or a sync is
    still catching up. Neither is something the player did. */
 .moon-note { margin: 9px 0 2px; padding: 9px 11px; border-left: 2px solid var(--lavender);
   background: rgba(139,92,246,0.05); border-radius: 0 var(--r) var(--r) 0; }
-.moon-note b { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.8px;
-  color: var(--lavender); font-weight: 700; }
+.moon-note b { display: block; font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.4px; color: var(--lavender); font-weight: 700; }
 .moon-note p { margin: 3px 0 0; font-size: 11.5px; color: var(--muted); line-height: 1.6; }
 
-.moon-days-title { margin: 12px 0 2px; font-family: var(--mono); font-size: 8.8px;
+.moon-days-title { margin: 10px 0 2px; font-family: var(--mono); font-size: 8.8px;
   letter-spacing: 2.2px; text-transform: uppercase; color: var(--dim); }
 .moon-days { margin-top: 2px; }
 .moon-day { display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
@@ -6738,35 +6752,39 @@ select.rc-multi-native {
 .moon-day b { color: var(--text); font-weight: 400; }
 .moon-day span { color: var(--dim); text-align: right; }
 
-/* .botz-recent-row: a quiet bordered row, not a card and not a bare line. */
+/* Title / artist / timestamp, stacked and left-aligned. A right-aligned
+   artist column fought every long title for the same horizontal space and
+   broke both across four lines; stacking lets each wrap on its own. */
 .moon-list { margin-top: 2px; }
-.moon-row { display: flex; align-items: flex-start; gap: 10px; padding: 9px 0;
+.moon-row { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0;
   border-top: 1px solid var(--line); }
 .moon-row:first-child { border-top: none; }
-/* The only row that gets colour is one a reviewer has to read. A left rule
-   rather than a filled card, so twenty-five ordinary listens stay quiet. */
-.moon-row.is-review { border-left: 2px solid rgba(229,56,79,0.55); padding-left: 9px;
-  margin-left: -11px; background: rgba(229,56,79,0.035); }
 .moon-seq { flex: 0 0 auto; width: 18px; font-family: var(--mono); font-size: 10px;
   color: var(--dim); padding-top: 2px; }
 .moon-row-body { min-width: 0; flex: 1 1 auto; }
-.moon-row-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
-.moon-track { font-family: var(--body); font-weight: 700; font-size: 13.6px; color: var(--text);
-  overflow-wrap: anywhere; min-width: 0; }
-.moon-artist { flex: 0 0 auto; font-family: var(--mono); font-size: 8.8px; letter-spacing: 1px;
-  color: var(--dim); text-align: right; overflow-wrap: anywhere; max-width: 40%; }
-.moon-row-meta { margin-top: 2px; font-family: var(--mono); font-size: 8.8px;
-  letter-spacing: 0.8px; color: var(--muted); }
-.moon-gap { display: block; margin-top: 2px; font-family: var(--mono); font-size: 9.2px;
-  letter-spacing: 0.5px; color: var(--muted); }
+.moon-row-top { display: block; }
+.moon-track { display: block; font-family: var(--body); font-weight: 700; font-size: 14px;
+  line-height: 1.3; color: var(--text); overflow-wrap: anywhere; }
+.moon-artist { display: block; margin-top: 1px; font-family: var(--body); font-size: 11.6px;
+  letter-spacing: 0; color: var(--muted); overflow-wrap: anywhere; }
+.moon-row-meta { margin-top: 2px; font-family: var(--mono); font-size: 9.6px;
+  letter-spacing: 0.2px; color: var(--dim); }
+.moon-gap { display: block; margin-top: 2px; font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.2px; color: var(--text); }
 .moon-row-flags { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 5px; }
-.moon-flag { font-family: var(--mono); font-size: 8.6px; letter-spacing: 0.7px;
+.moon-flag { font-family: var(--mono); font-size: 9.2px; letter-spacing: 0.2px;
   color: var(--crimson); background: rgba(229,56,79,0.1);
-  border: 1px solid rgba(229,56,79,0.22); border-radius: 999px; padding: 3px 8px;
+  border: 1px solid rgba(229,56,79,0.22); border-radius: 999px; padding: 3px 9px;
   overflow-wrap: anywhere; }
+
+/* The one row a reviewer has to read becomes a contained object again. */
+.moon-row.is-review { border: 1px solid rgba(229,56,79,0.3); border-radius: var(--r);
+  background: var(--crimson-soft); padding: 9px 11px; margin: 6px 0; }
+.moon-row.is-review + .moon-row { border-top: none; }
+.moon-row.is-review .moon-row-meta { color: var(--muted); }
 
 .moon-alt { padding: 10px 12px; border-radius: var(--r); background: rgba(229,56,79,0.05);
   border: 1px solid rgba(229,56,79,0.3); font-size: 12px; line-height: 1.65; }
-.moon-alt b { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.8px;
+.moon-alt b { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.4px;
   color: var(--crimson); }
 .moon-alt p { margin: 4px 0 0; color: var(--muted); }

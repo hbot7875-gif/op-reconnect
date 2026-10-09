@@ -257,7 +257,8 @@ test('an unsynced window can never render a green Streaming Pattern', () => {
   // they do not know yet. Asserted on source because the verdict is chosen
   // before any DOM exists.
   const start = ui.indexOf('const pattern = el(')
-  const end = ui.indexOf('body.appendChild(pattern)')
+  // The section now ends where it is wrapped into the shared checks panel.
+  const end = ui.indexOf("const panel = el('div', 'moon-panel')")
   assert.ok(start > 0 && end > start, 'pattern section not found')
   const block = ui.slice(start, end)
   // The partial branch comes first and owns the verdict in that state.
@@ -298,5 +299,41 @@ test('the tone stays procedural: neither customer support nor interrogation', ()
   ]
   for (const re of banned) {
     assert.doesNotMatch(src, re, `Moon Station copy must not use ${re}`)
+  }
+})
+
+test('the two checks share a panel and the log sits in a lighter one', () => {
+  // Containment is what the full-screen conversion lost: the old sheet bounded
+  // everything in one card, and each row in a smaller one. Both are back
+  // without the modal. The checks stay separate inside the shared panel -- an
+  // inset divider, not two full-bleed rules -- so a mode warning still cannot
+  // read as a consequence of a timing flag.
+  assert.match(ui, /el\('div', 'moon-panel'\)/)
+  assert.match(ui, /el\('div', 'moon-streams'\)/)
+  assert.match(ui, /panel\.appendChild\(pattern\)/)
+  assert.match(ui, /panel\.appendChild\(mode\)/)
+  assert.match(ui, /streams\.appendChild\(seq\)/)
+
+  const css = readFileSync('css/reconnect.css', 'utf8')
+  const panel = css.slice(css.indexOf('.moon-panel {'), css.indexOf('.moon-check-title {'))
+  assert.match(panel, /\.moon-panel \.moon-check \+ \.moon-check \{[^}]*border-top/,
+    'the divider between the checks must be inset, not full-bleed')
+  // The log reads lighter than the checks it explains.
+  assert.match(css, /\.moon-streams \{[^}]*rgba\(255,255,255,0\.045\)/)
+})
+
+test('a stream row stacks title, artist and timestamp on the left', () => {
+  // A right-aligned artist column fought every long title for the same
+  // horizontal space; "Angel Pt. 2 (feat. Jimin of BTS, Charlie Puth and Muni
+  // Long / FAST X Soundtrack)" broke across four lines with the artist
+  // stacking beside it. Each wraps on its own now.
+  const css = readFileSync('css/reconnect.css', 'utf8')
+  assert.match(css, /\.moon-row-top \{ display: block; \}/)
+  assert.match(css, /\.moon-artist \{ display: block;[^}]*letter-spacing: 0;/)
+  assert.ok(!/\.moon-artist \{[^}]*text-align: right/.test(css))
+  // Long values must wrap rather than widen the viewport.
+  for (const sel of ['.moon-track', '.moon-artist']) {
+    const rule = css.slice(css.indexOf(sel + ' {'), css.indexOf('}', css.indexOf(sel + ' {')))
+    assert.match(rule, /overflow-wrap: anywhere/, `${sel} must wrap`)
   }
 })
