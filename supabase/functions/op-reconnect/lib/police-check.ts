@@ -43,6 +43,41 @@ export interface FlaggedTrack {
  *  anywhere real (the playlist validator has no equivalent check between
  *  different tracks); removed rather than keep an unofficial heuristic
  *  sitting next to the one rule that actually is canonical. */
+/** The first name in a credit. "Agust D, RM" and "Agust D" are the same
+ *  performer; "Agust D" and "BTS" are not. Scrobble sources disagree about
+ *  whether to list featured artists at all, so comparing the whole credit
+ *  string would call one play of a song a different song from the next. */
+function primaryArtist(name: string | null | undefined): string {
+  return String(name || '').split(',')[0].trim().toLowerCase()
+}
+
+/**
+ * Whether two adjacent plays are the same RECORDING, rather than merely
+ * sharing a title.
+ *
+ * Reported by AGENT000 against their own log: "Life Goes On — Agust D" at
+ * 12:40 followed by "Life Goes On — BTS" at 12:43 drew a repeated-play
+ * warning. They are two different songs that happen to share a name, and
+ * this check compared titles alone.
+ *
+ * It is not a rare collision. Measured on production: 992 distinct titles
+ * are carried by two or more different primary artists, and 473 of the
+ * same-title-inside-8-minutes pairs across 48 agents are artist mismatches
+ * — every one of them an accusation about something the player never did.
+ *
+ * Artist is effectively always present (33 rows missing one out of
+ * 1,510,754), so requiring it costs nothing. When it genuinely is absent
+ * there is nothing to compare, and the title match stands rather than
+ * silently switching the check off.
+ */
+function sameRecording(a: StreamRow, b: StreamRow): boolean {
+  if (a.track_name.trim().toLowerCase() !== b.track_name.trim().toLowerCase()) return false
+  const left = primaryArtist(a.artist_name)
+  const right = primaryArtist(b.artist_name)
+  if (!left || !right) return true
+  return left === right
+}
+
 export function flagStreamRows(rows: StreamRow[], options: { trustSequence?: boolean } = {}): FlaggedTrack[] {
   const trustSequence = options.trustSequence !== false
   // Judge the canonical rows, never the raw ingestion rows. Stats.fm reports
@@ -60,8 +95,7 @@ export function flagStreamRows(rows: StreamRow[], options: { trustSequence?: boo
     const gapSeconds = prev ? r.listened_at - prev.listened_at : null
     const flags: string[] = []
     if (prev && trustSequence) {
-      if (gapSeconds! < REPEAT_MIN_GAP_SECONDS
-        && prev.track_name.trim().toLowerCase() === r.track_name.trim().toLowerCase()) flags.push('repeat')
+      if (gapSeconds! < REPEAT_MIN_GAP_SECONDS && sameRecording(prev, r)) flags.push('repeat')
     }
     return {
       track: r.track_name,

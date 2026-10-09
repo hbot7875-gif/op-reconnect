@@ -562,3 +562,75 @@ test('an empty batch is a no-op', () => {
   assert.equal(statsFmRowsToSkip([], []).size, 0)
   assert.equal(statsFmRowsToSkip([], [sfm('SWIM', BASE)]).size, 0)
 })
+
+// ── a repeat is the same RECORDING, not the same title (2026-10-09) ───────
+//
+// AGENT000 reported a red "repeated-play pattern" on their own log for
+// "Life Goes On — Agust D" at 12:40 followed by "Life Goes On — BTS" at
+// 12:43. Two different songs sharing a name. The check compared titles only.
+//
+// Measured on production: 992 distinct titles are carried by two or more
+// different primary artists, and 473 same-title-inside-8-minutes pairs across
+// 48 agents are artist mismatches — every one an accusation about a replay
+// that never happened.
+
+test('two different songs sharing a title are not a repeat', () => {
+  // The exact pair from the report, at the real 2m 45s gap.
+  const rows = [
+    sfm('Life Goes On', BASE + 120, 'Agust D'),
+    sfm('Life Goes On', BASE + 285, 'BTS'),
+  ]
+  const flagged = flagStreamRows(rows)
+  assert.equal(flagged.length, 2)
+  for (const f of flagged) {
+    assert.deepEqual(f.flags, [], `${f.artist} must not be flagged`)
+  }
+})
+
+test('the same song actually replayed is still flagged', () => {
+  // The check must keep doing its job — this is what it exists for.
+  const rows = [
+    sfm('Life Goes On', BASE + 120, 'BTS'),
+    sfm('Life Goes On', BASE + 285, 'BTS'),
+  ]
+  const flags = flagStreamRows(rows).flatMap((f) => f.flags)
+  assert.deepEqual(flags, ['repeat'])
+})
+
+test('a featured credit is the same performer, not a different one', () => {
+  // Sources disagree about listing featured artists, so comparing the whole
+  // credit string would read one play as a different song from the next and
+  // quietly stop flagging real repeats.
+  const rows = [
+    sfm('Haegeum', BASE + 120, 'Agust D'),
+    sfm('Haegeum', BASE + 285, 'Agust D, RM'),
+  ]
+  const flags = flagStreamRows(rows).flatMap((f) => f.flags)
+  assert.deepEqual(flags, ['repeat'], 'Agust D and "Agust D, RM" are one performer')
+})
+
+test('artist comparison ignores case and surrounding space', () => {
+  const rows = [
+    sfm('Haegeum', BASE + 120, ' agust d '),
+    sfm('Haegeum', BASE + 285, 'Agust D'),
+  ]
+  assert.deepEqual(flagStreamRows(rows).flatMap((f) => f.flags), ['repeat'])
+})
+
+test('a missing artist leaves the title match standing', () => {
+  // 33 rows in 1,510,754 carry no artist. With nothing to compare, the check
+  // must not silently switch itself off.
+  const rows = [
+    sfm('Haegeum', BASE + 120, ''),
+    sfm('Haegeum', BASE + 285, 'Agust D'),
+  ]
+  assert.deepEqual(flagStreamRows(rows).flatMap((f) => f.flags), ['repeat'])
+})
+
+test('a different title is never a repeat, whatever the artist', () => {
+  const rows = [
+    sfm('Haegeum', BASE + 120, 'Agust D'),
+    sfm('AMYGDALA', BASE + 285, 'Agust D'),
+  ]
+  assert.deepEqual(flagStreamRows(rows).flatMap((f) => f.flags), [])
+})
