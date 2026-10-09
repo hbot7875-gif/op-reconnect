@@ -174,7 +174,11 @@ export function renderMoonStation(container, state) {
       // The repeat rule measures the gap to the previous play of THIS song,
       // which is often not the previous row — naming only "the previous
       // play" beside a repeat badge would point at a different track.
-      const sameSong = typeof t.sinceSameSong === 'number'
+      //
+      // Shown on flagged rows only. On an ordinary row it is the answer to a
+      // question nobody asked, and printing it under all 25 made the two rows
+      // that actually need reading look like the rest.
+      const sameSong = flagged && typeof t.sinceSameSong === 'number'
         ? `<span class="moon-gap">${esc(formatGapSeconds(t.sinceSameSong))} since this song last played</span>`
         : ''
       list.appendChild(el('div', 'moon-row' + (flagged ? ' is-review' : ''), `
