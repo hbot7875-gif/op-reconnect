@@ -103,6 +103,7 @@
   --v-violet-line: rgba(160,124,255,.50);
   --v-silver: #d6dbe4;
   --v-bronze: #d9955f;
+  --v-ink-3: #8f88a3;      /* tertiary text: units, 11px and up */
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -4423,15 +4424,19 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
    solid gold, silver or bronze ring and a coloured place number, and nothing
    else on the board is gold — XP is data, so it reads in plain near-white.
    Your own row is the shared purple tint with a "You" chip. No gradients:
-   not on rows, rings or the tab underline. */
+   not on rows, rings or the tab underline.
+   Type: Orbitron only for the screen title. Everything else is the body
+   sans in sentence case at normal spacing, 11px or larger. No mono here:
+   the board has no codes or timestamps, only names and numbers, and the
+   numbers use tabular figures so columns line up without it. */
 .rank-screen .pack-head { margin-bottom: 13px; }
 .rank-screen .pack-name { max-width: none; margin-top: 3px; font-size: 21px; line-height: 1.18; }
 .rank-tabs { display: grid; grid-template-columns: .72fr 1.55fr repeat(3, 1fr); gap: 0;
   margin-bottom: 8px; overflow: hidden; border-bottom: 1px solid var(--border); }
 .rank-tab {
   min-width: 0; padding: 9px 4px 8px; border: 0; border-bottom: 2px solid transparent;
-  background: transparent; color: var(--muted); font-family: var(--mono); font-size: 10px;
-  font-weight: 700; letter-spacing: .25px; white-space: nowrap; cursor: pointer;
+  background: transparent; color: var(--v-ink-2); font-family: var(--body); font-size: 13px;
+  font-weight: 600; letter-spacing: 0; white-space: nowrap; cursor: pointer;
   transition: border-color 0.15s, color 0.15s;
 }
 .rank-tab:hover { color: var(--text); }
@@ -4445,10 +4450,10 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .rank-row.is-me { margin: 3px -5px; padding-inline: 8px 10px; border: 1px solid var(--v-violet-line);
   border-radius: var(--radius-md); background: var(--v-tint-violet); }
 .rank-place {
-  width: 27px; text-align: center; font-family: var(--mono); font-weight: 700;
-  font-size: 11px; color: var(--dim);
+  width: 27px; text-align: center; font-family: var(--body); font-weight: 600;
+  font-size: 13px; color: var(--v-ink-3); font-variant-numeric: tabular-nums;
 }
-.rank-row.is-top .rank-place { font-size: 16px; }
+.rank-row.is-top .rank-place { font-size: 16px; font-weight: 700; }
 .rank-row.is-p1 .rank-place { color: var(--v-gold); }
 .rank-row.is-p2 .rank-place { color: var(--v-silver); }
 .rank-row.is-p3 .rank-place { color: var(--v-bronze); }
@@ -4469,19 +4474,21 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
    either). Nothing else on this screen singles codenames out as a special
    "identity" moment the way the HUD's own .hud-code does, so the mismatch
    read as inconsistent rather than intentional. */
-.rank-name { min-width: 0; font-weight: 700; font-size: 14.5px; line-height: 1.2; color: var(--v-ink-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rank-name { min-width: 0; font-weight: 600; font-size: 15px; line-height: 1.2; color: var(--v-ink-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The chip sits beside the name when both fit and drops under it when they
    don't (320px, or a long codename), so neither the name nor "You" is cut. */
 .rank-name-row { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 8px; min-width: 0; }
 .rank-name-row .rank-name { flex: 0 1 auto; max-width: 100%; }
 .rank-you { flex: none; padding: 3px 7px; border-radius: 6px; background: var(--v-tint-violet);
   color: var(--v-violet-hi); font: 600 11px/1 var(--body); }
-.rank-sub { overflow: hidden; color: var(--v-ink-2); font-size: 11px; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+.rank-sub { overflow: hidden; color: var(--v-ink-2); font-size: 13px; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
 .rank-xp { min-width: 57px; display: flex; flex-direction: column; align-items: flex-end;
-  font-family: var(--mono); font-weight: 800; font-size: 13px; line-height: 1; color: var(--v-ink-1); white-space: nowrap; }
-.rank-xp-unit { display: block; margin-top: 4px; color: var(--dim); font-size: 7px; font-weight: 600;
-  letter-spacing: .55px; text-transform: uppercase; }
-.rank-hint { margin-top: 11px; padding-inline: 3px; font-size: 11.5px; line-height: 1.5; }
+  font-family: var(--body); font-weight: 700; font-size: 15px; line-height: 1.1; color: var(--v-ink-1);
+  font-variant-numeric: tabular-nums; letter-spacing: 0; white-space: nowrap; }
+/* "total XP" as written in screen-ranking.js: no caps, no tracking, 11px. */
+.rank-xp-unit { display: block; margin-top: 3px; color: var(--v-ink-3); font-size: 11px; font-weight: 500;
+  letter-spacing: 0; text-transform: none; }
+.rank-hint { margin-top: 12px; padding-inline: 3px; font-size: 13px; line-height: 1.5; }
 
 @media (max-width: 560px) {
   .rank-screen .pack-head { margin-bottom: 4px; padding-top: 4px; }
@@ -4508,7 +4515,7 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
   .rank-tab {
     position: relative; flex: 0 0 auto; min-width: max-content; min-height: 44px;
     padding: 12px 0 11px; border-bottom: 0; scroll-snap-align: start;
-    color: #a8a0b7; font-size: 14px; font-weight: 700;
+    color: var(--v-ink-2); font-size: 14px; font-weight: 600;
     line-height: 1; letter-spacing: 0;
   }
   .rank-tab.sel { border-bottom-color: transparent; color: var(--v-ink-1); }
@@ -4529,7 +4536,7 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
   }
   .rank-list { border-top-color: rgba(255,255,255,.09); }
   .rank-row.is-me { padding-inline: 7px 9px; }
-  .rank-place { width: 24px; font-size: 11px; }
+  .rank-place { width: 24px; font-size: 13px; }
   .rank-row.is-top .rank-place { font-size: 15px; }
   .rank-agent-icon,
   .rank-agent-icon.has-equipped-badge {
@@ -4548,15 +4555,15 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
   }
   .rank-main { gap: 3px; overflow: hidden; }
   .rank-name {
-    max-width: 100%; font-size: 14.5px; font-weight: 700;
+    max-width: 100%; font-size: 15px; font-weight: 600;
     line-height: 1.15; letter-spacing: 0;
   }
-  .rank-sub { max-width: 100%; font-size: 10.5px; line-height: 1.3; }
+  .rank-sub { max-width: 100%; font-size: 13px; line-height: 1.3; }
   .rank-xp {
-    min-width: 55px; color: var(--v-ink-1); font-size: 12.5px;
-    font-weight: 700; line-height: 1.05; letter-spacing: .05px;
+    min-width: 55px; color: var(--v-ink-1); font-size: 15px;
+    font-weight: 700; line-height: 1.1; letter-spacing: 0;
   }
-  .rank-xp-unit { margin-top: 4px; font-size: 7px; letter-spacing: .5px; }
+  .rank-xp-unit { margin-top: 3px; font-size: 11px; letter-spacing: 0; }
 }
 
 /* ── VMA Voting Mission ──────────────────────────────────────────────────
