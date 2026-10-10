@@ -96,7 +96,7 @@ export function renderWorld(container, state) {
 
   // Personal weekly Era Cards are the Bomb's emergency reserve. This is not
   // the community/all-time Era Timeline: every count here belongs to this
-  // agent, resets Monday, and a lit card waits in Pack until they spend it.
+  // agent, resets Monday, and a lit card waits here in City until they spend it.
   if (powerEraCards(state.agentCharge?.eraCards).length) wrap.appendChild(weeklyEraCards(state))
 
   container.appendChild(wrap)
@@ -207,6 +207,12 @@ function sideMissionSheet(mission, selectedId = null) {
   return sheet
 }
 
+const ERA_CARD_DISPLAY_NAMES = {
+  hyyh: 'HYYH',
+  ly: 'Love Yourself',
+  anthology: 'The Anthology',
+}
+
 function weeklyEraCards(state) {
   const charge = state.agentCharge || {}
   const newly = new Set(charge.newlyLitEraIds || [])
@@ -231,7 +237,7 @@ function weeklyEraCards(state) {
     chip.setAttribute('aria-label', `${e.name}. ${status}.`)
     chip.innerHTML = `
       <span class="era-sym">${eraSymbol(e.id)}</span>
-      <span class="era-name">${esc(e.name)}</span>
+      <span class="era-name">${esc(ERA_CARD_DISPLAY_NAMES[e.id] || e.name)}</span>
       <span class="era-count">${status}</span>
       ${newly.has(e.id) ? '<i>Activated</i>' : ''}
     `

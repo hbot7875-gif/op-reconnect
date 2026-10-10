@@ -2052,83 +2052,6 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 .pack-cell-progress span { color: var(--purple-lt); text-transform: uppercase; letter-spacing: 1px; }
 .pack-cell-progress b { color: var(--text); font-size: 12px; }
 .pack-cell-progress i { margin-left: auto; color: var(--muted); font-style: normal; text-align: right; }
-.era-pack-head { margin-top: 2px; }
-/* Scroll margins only — they add no layout space, so ordinary scrolling
-   still lets this section pass behind the translucent tab bar like every
-   other screen. They apply solely when the deck is deliberately opened and
-   the card is scrolled into view, which is the one moment a tall card can
-   end up parked half under the bar. Pack-only, and no global padding
-   involved. */
-.era-deck, .era-pack-rack, .era-pack-card, .era-deck-close {
-  scroll-margin-bottom: calc(110px + env(safe-area-inset-bottom));
-}
-.era-pack-rack { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 8px; margin: 10px 0 8px; }
-.era-pack-card { position: relative; min-width: 0; min-height: 116px; padding: 13px 7px 10px; display: flex;
-  flex-direction: column; align-items: center; justify-content: center; gap: 5px; border-radius: 12px;
-  border: 1px solid var(--border); background: linear-gradient(155deg, rgba(20,17,32,.9), rgba(8,7,14,.95));
-  color: var(--text); font: inherit; cursor: pointer; transition: transform .18s, border-color .18s; }
-.era-pack-card:hover { transform: translateY(-2px); border-color: var(--border-str); }
-.era-pack-card.era-lit { border-color: rgba(217,173,95,.64); box-shadow: inset 0 0 24px rgba(217,173,95,.1), 0 0 12px rgba(217,173,95,.08); }
-.era-pack-card.era-used { opacity: .4; filter: grayscale(.7); }
-.era-pack-card.era-keepsake { border-color: rgba(217,173,95,.72); background: linear-gradient(150deg, rgba(217,173,95,.13), rgba(139,92,246,.07)); }
-.era-pack-card.just-lit { animation: eraCardActivate 1.4s ease-out both; }
-.epc-icon { font-size: 23px; line-height: 1; }
-.era-lit .epc-icon { filter: drop-shadow(0 0 8px rgba(217,173,95,.7)); }
-.epc-name { max-width: 100%; font-family: var(--disp); font-size: 10px; font-weight: 800; text-align: center;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.epc-status { font-family: var(--mono); color: var(--dim); font-size: 8px; letter-spacing: .5px; }
-.era-pack-card.era-lit .epc-status { color: var(--gold); }
-.era-pack-card > i { position: absolute; right: 6px; top: 6px; padding: 2px 5px; border-radius: 8px;
-  background: var(--gold); color: #130d05; font-family: var(--mono); font-size: 7px; font-style: normal; font-weight: 900; }
-.era-pack-note { margin: 0 0 22px; color: var(--muted); font-size: 11px; line-height: 1.55; }
-@media (max-width: 440px) { .era-pack-rack { grid-template-columns: repeat(2, minmax(0,1fr)); } }
-
-/* ── Era Card deck — closed state reads as a physical stack, not a grid.
-   The front card is square, matching the real card tiles in the expanded
-   grid below (not a full-width banner). Two more real cards sit behind
-   it, stacked UPWARD — each pulled down under the layer below it, so only
-   its own top ~14px (icon + start of its name) stays exposed above —
-   a genuine readable sliver of a different card. The hint sits below the
-   whole assembly. Tap to expand into the same rack/grid used above. */
-.era-deck { position: relative; width: 100%; margin: 4px 0 10px;
-  padding: 0; border: none; background: none; cursor: pointer; text-align: left;
-  display: flex; flex-direction: column; align-items: center; }
-.era-deck-stack { position: relative; width: 136px; }
-.era-deck-face { position: relative; z-index: 6; width: 136px; height: 136px;
-  padding: 13px 7px 10px; display: flex;
-  flex-direction: column; align-items: center; justify-content: center; gap: 5px;
-  border-radius: 12px;
-  border: 1px solid var(--border-str); background: linear-gradient(155deg, rgba(24,20,38,.94), rgba(9,8,16,.97));
-  color: var(--text); font: inherit; cursor: pointer; transition: transform 0.15s ease;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 10px 20px rgba(0,0,0,0.5); }
-.era-deck:hover .era-deck-face { transform: translateY(-2px); }
-.era-deck-face.just-lit { animation: eraCardActivate 1.4s ease-out both; }
-.era-deck-strip { position: relative; width: 136px; height: 32px; margin: 0 0 -18px; z-index: 4;
-  border-radius: 0; border: 1px solid var(--border-str); border-bottom: none;
-  background: linear-gradient(155deg, rgba(19,16,30,.95), rgba(8,7,13,.98));
-  display: flex; align-items: flex-start; gap: 7px; padding: 5px 11px 0; overflow: hidden;
-  box-shadow: inset 0 -1px 0 rgba(255,255,255,0.06), 0 -6px 12px rgba(0,0,0,0.3); }
-.era-deck-strip.s2 { z-index: 5; }
-.era-deck-strip.s3 { z-index: 4; border-radius: 10px 10px 0 0;
-  background: linear-gradient(155deg, rgba(15,13,24,.96), rgba(6,5,10,.98)); }
-.era-deck-strip .strip-icon { font-size: 13px; line-height: 1; flex: none; opacity: 0.9; }
-.era-deck-strip .strip-name { font-family: var(--mono); font-size: 9px; letter-spacing: 0.4px;
-  color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.era-deck-strip.s3.has-more { margin-top: 7px; }
-.era-deck-strip.s3.has-more::before { content: ''; position: absolute; left: 6px; right: 6px; top: -4px;
-  height: 3px; border-radius: 6px 6px 0 0; border: 1px solid var(--border); border-bottom: none;
-  background: #0d0b14; opacity: 0.8; }
-.era-deck-face.era-lit { border-color: rgba(217,173,95,.5); }
-.era-deck-face .epc-status.era-lit,
-.era-deck-face.era-lit .epc-status { color: var(--gold); font-weight: 700; }
-.era-deck-face.era-used { opacity: 0.55; }
-.era-deck-face.era-keepsake { border-color: rgba(217,173,95,.7); background: linear-gradient(150deg, rgba(217,173,95,.14), rgba(139,92,246,.06)); }
-.era-deck-hint { display: block; text-align: center; margin: 10px 0 0;
-  font-family: var(--mono); font-size: 9px; letter-spacing: 0.6px; color: var(--dim); }
-.era-deck-close { display: block; margin: 4px auto 26px; padding: 8px 16px; border-radius: 999px;
-  border: 1px solid var(--border); background: var(--panel); color: var(--muted);
-  font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.5px; cursor: pointer; }
-.era-deck-close:hover { border-color: var(--border-str); color: var(--text); }
 .filter-tab:hover { border-color: var(--border-str); color: var(--text); }
 .filter-tab.sel { border-color: var(--purple); background: var(--purple-soft); color: var(--purple-lt); }
 
@@ -7044,12 +6967,12 @@ select.rc-multi-native {
 .world-screen .era-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px;
   overflow: visible; padding: 0; }
 .world-screen .era-chip { position: relative; min-width: 0; min-height: 66px; align-items: flex-start;
-  justify-content: flex-start; gap: 4px; padding: 10px; text-align: left; border-radius: 10px;
+  justify-content: flex-start; gap: 3px; padding: 8px 7px; text-align: left; border-radius: 10px;
   border: 1px solid var(--v-line-1); background: var(--v-surface-1); filter: none; }
 .world-screen .era-chip:hover { border-color: var(--v-line-2); }
-.world-screen .era-chip .era-name { align-self: stretch; text-align: left; font-family: var(--body); font-size: 13px; font-weight: 600; line-height: 1.25;
+.world-screen .era-chip .era-name { align-self: stretch; text-align: left; font-family: var(--body); font-size: 12px; font-weight: 600; line-height: 1.2;
   letter-spacing: 0; text-transform: none; color: var(--v-ink-1); }
-.world-screen .era-chip .era-count { align-self: stretch; text-align: left; font-family: var(--body); font-size: 12px; letter-spacing: 0; color: var(--v-ink-2);
+.world-screen .era-chip .era-count { align-self: stretch; text-align: left; font-family: var(--body); font-size: 11px; letter-spacing: 0; color: var(--v-ink-2);
   font-variant-numeric: tabular-nums; }
 .world-screen .era-chip.era-lit,
 .world-screen .era-chip.era-keepsake { background: var(--v-tint-gold); border-color: var(--v-gold-line); }
@@ -7069,9 +6992,9 @@ select.rc-multi-native {
 /* Era Card symbols (era-symbols.js): one container, one size, one position.
    The symbol is the era's identity; the colour is only ever its state. */
 .world-screen .era-chip { gap: 3px; }
-.world-screen .era-sym { width: 34px; height: 34px; margin-bottom: 5px; display: grid; place-items: center;
+.world-screen .era-sym { width: 28px; height: 28px; margin-bottom: 0; display: grid; place-items: center;
   border-radius: 9px; border: 1px solid var(--v-line-1); background: var(--v-surface-2); color: var(--v-ink-2); }
-.world-screen .era-sym svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.6;
+.world-screen .era-sym svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.6;
   stroke-linecap: round; stroke-linejoin: round; }
 .world-screen .era-sym .d { fill: currentColor; fill-opacity: .28; }
 .world-screen .era-chip.era-lit .era-sym,

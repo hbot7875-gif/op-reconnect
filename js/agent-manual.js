@@ -97,7 +97,7 @@ export function agentManualSheet() {
 
   const power = detailSection('Bomb power and emergency backup')
   power.body.appendChild(infoRow('⚡', 'Charge Cells', 'Every 20 counted Album Goal streams earns 1 Cell automatically. Goal progress stays counted, and each Cell adds 2 hours of Bomb power.'))
-  power.body.appendChild(infoRow('💿', 'Lit Era Cards', 'Stream every track in an era during the week to light its card. Use it from Pack for 10 emergency hours; cards reset Monday.'))
+  power.body.appendChild(infoRow('💿', 'Lit Era Cards', 'Stream every track in an era during the week to light its card. Use it from City for 10 emergency hours; cards reset Monday.'))
   power.body.appendChild(el('p', 'am-footnote', 'Auto Feed can spend banked Cells when the Bomb runs out, but it does not count as personally feeding the Bomb.'))
   content.appendChild(power.section)
 

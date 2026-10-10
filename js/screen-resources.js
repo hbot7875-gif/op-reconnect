@@ -3,12 +3,12 @@
 // Redesigned as a spy/field-kit: a compact Agent ID card, then a case
 // illustrated entirely in CSS (see reconnect.css's "Agent Pack — the case"
 // block) with fitted compartments for the four spendable resources and a
-// front pocket for Backup Pass/Tickets, then Lit Era Cards and collectibles
-// clearly outside the case. Iterated as a standalone preview (pack-preview.
+// front pocket for Backup Pass/Tickets, then collectibles clearly outside
+// the case. Iterated as a standalone preview (pack-preview.
 // html, kept in the repo for history) against real data shapes before this
 // file was rewritten to use the genuine getGameState() response and every
-// real action (moveItem/useTicket via items.js's itemSheet, agentChargeSheet,
-// magicShopSheet, badgeDrawerSheet, openBackupPassFlow) — nothing about what
+// real action (moveItem/useTicket via items.js's itemSheet, magicShopSheet,
+// badgeDrawerSheet, openBackupPassFlow) — nothing about what
 // any tap actually DOES changed, only how the screen looks.
 //
 // Every tool moved to the screen where it's actually used instead of sitting
@@ -33,10 +33,8 @@ import { getAgentNo } from './session.js'
 import { call } from './api.js'
 import { badgeDrawerSheet } from './badge-drawer.js'
 import { itemArt, itemSheet, RARITY } from './items.js'
-import { agentChargeSheet } from './agent-charge.js'
 import { openBackupPassFlow, openBackupHelpFlow, countOpenBackupRequests } from './backup-pass.js'
 import { recelebrateKeepsake } from './arirang-recelebrate.js'
-import { powerEraCards } from './era-card-display.js'
 
 /* ── Agent ID ─────────────────────────────────────────────────────────── */
 function agentIdCard(state) {
@@ -361,114 +359,6 @@ const FILTERS = [
 // survives the poll-driven re-render so the chosen filter doesn't reset
 // every 90s.
 let activeFilter = 'all'
-let deckOpen = false
-
-/** The card the closed deck shows its face as: the most relevant one to
- *  surface, not just the first in the list. A ready card is the most
- *  actionable thing on the whole screen, so it wins outright; short of
- *  that, whichever in-progress card is closest to activating is more
- *  useful to see at a glance than an arbitrary fixed first card. */
-function frontCardFor(cards) {
-  const special = cards.find((c) => c.isSpecial && c.status !== 'keepsake')
-  if (special) return special
-  const lit = cards.find((c) => c.status === 'lit')
-  if (lit) return lit
-  const inProgress = cards.filter((c) => c.status !== 'used')
-  if (!inProgress.length) return cards[0]
-  return inProgress.reduce((best, c) => (c.done / c.total > best.done / best.total ? c : best), inProgress[0])
-}
-
-function eraCardButton(card, newlyLit) {
-  const button = el('button', `era-pack-card era-${card.status}${newlyLit.has(card.id) ? ' just-lit' : ''}`)
-  button.type = 'button'
-  const status = card.status === 'lit' ? '+10H READY'
-    : card.status === 'used' ? 'USED'
-    : card.status === 'keepsake' ? 'COLLECTED · 09.01'
-    : `${card.done}/${card.total}`
-  button.setAttribute('aria-label', `${card.name}. ${status}.`)
-  button.innerHTML = `
-    <span class="epc-icon">${card.icon}</span>
-    <span class="epc-name">${esc(card.name)}</span>
-    <span class="epc-status">${status}</span>
-    ${card.status === 'lit' ? '<i>USE</i>' : ''}
-  `
-  button.onclick = () => showOverlay(agentChargeSheet(card.id))
-  return button
-}
-
-/** Closed-deck state: reads as a physical stack, not a grid. The front
- *  card is the real, tappable, currently-most-relevant card; two more
- *  real cards sit behind it, stacked upward with just enough of each
- *  exposed (icon + start of its name) to show this is a collection of
- *  different eras, not identical layers. Tap anywhere to expand into the
- *  same rack used when open. */
-function eraDeck(cards, ready, newlyLit, onOpen) {
-  const front = frontCardFor(cards)
-  const deck = el('button', 'era-deck')
-  deck.type = 'button'
-  deck.setAttribute('aria-label', `Lit Era Cards, ${cards.length} total, ${ready} ready. Tap to open.`)
-
-  const stack = el('div', 'era-deck-stack')
-
-  const rest = cards.filter((c) => c.id !== front.id)
-  const restLive = rest.filter((c) => c.status !== 'used')
-  const restOrdered = restLive.length >= 2 ? restLive : rest
-  const [strip2Card, strip3Card] = restOrdered
-  if (strip3Card) {
-    const s3 = el('div', 'era-deck-strip s3', `<span class="strip-icon">${strip3Card.icon}</span><span class="strip-name">${esc(strip3Card.name)}</span>`)
-    if (rest.length > 2) s3.classList.add('has-more')
-    stack.appendChild(s3)
-  }
-  if (strip2Card) {
-    const s2 = el('div', 'era-deck-strip s2', `<span class="strip-icon">${strip2Card.icon}</span><span class="strip-name">${esc(strip2Card.name)}</span>`)
-    stack.appendChild(s2)
-  }
-
-  const faceCls = `era-deck-face era-${front.status}${newlyLit.has(front.id) ? ' just-lit' : ''}`
-  const face = el('div', faceCls)
-  const statusText = front.status === 'lit' ? '+10H READY'
-    : front.status === 'used' ? 'USED'
-    : front.status === 'keepsake' ? 'COLLECTED · 09.01'
-    : `${front.done}/${front.total}`
-  face.innerHTML = `
-    <span class="epc-icon">${front.icon}</span>
-    <span class="epc-name">${esc(front.name)}</span>
-    <span class="epc-status">${statusText}</span>
-  `
-  stack.appendChild(face)
-
-  deck.appendChild(stack)
-  deck.appendChild(el('div', 'era-deck-hint', `${cards.length} cards · tap to open`))
-  deck.onclick = onOpen
-  return deck
-}
-
-/** Opening the deck is the one moment this section is deliberately brought
- *  into view, and it expands into a rack tall enough to finish under the
- *  fixed tab bar — the card then reads as cropped rather than as content
- *  the bar happens to be over. Scrolls the lit card (the one you opened the
- *  deck for) just far enough to clear the bar, using block:'nearest' so it
- *  does nothing at all when the rack is already comfortably visible. The
- *  clearance itself is scroll-margin-bottom in reconnect.css; nothing here
- *  changes layout or affects any other screen. */
-function revealEraDeck(container) {
-  const target = container.querySelector('.era-pack-card.just-lit')
-    || container.querySelector('.era-pack-card.era-lit')
-    || container.querySelector('.era-pack-rack')
-  if (!target) return
-  const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  const reveal = () => target.scrollIntoView({ block: 'nearest', behavior: still ? 'auto' : 'smooth' })
-  // A just-lit card enters on eraCardActivate, which starts it at
-  // translateY(8px) scale(.9). scrollIntoView measures the VISUAL box, so
-  // running it mid-animation compares a shrunken, shifted card and decides
-  // no scroll is needed — the card then settles under the bar and stays
-  // there. Wait for the entrance to finish so the box being measured is
-  // the one the player ends up looking at. Everything else scrolls on the
-  // next frame, as before.
-  const entrance = target.getAnimations ? target.getAnimations().find((a) => a.playState === 'running') : null
-  if (entrance) entrance.finished.then(reveal, reveal)
-  else requestAnimationFrame(reveal)
-}
 
 export function renderResources(container, state) {
   container.innerHTML = ''
@@ -481,39 +371,6 @@ export function renderResources(container, state) {
   wrap.appendChild(agentIdCard(state))
   wrap.appendChild(agentBag(state))
 
-  // Weekly emergency power is inventory, not a passive stat. Lit cards wait
-  // here until deliberately used; dark cards show the shortest route to the
-  // next activation, and spent cards stay visible until Monday's reset.
-  // Kept clearly OUTSIDE the case (pack-after-bag) rather than crammed into
-  // a compartment — these aren't things the case physically holds.
-  const eraCards = powerEraCards(state?.agentCharge?.eraCards)
-  if (eraCards.length) {
-    const ready = eraCards.filter((e) => e.status === 'lit').length
-    const newlyLit = new Set(state?.agentCharge?.newlyLitEraIds || [])
-    wrap.appendChild(el('div', 'pack-section era-pack-head pack-after-bag', `
-      <span class="ps-title">Era Cards</span>
-      <span class="ps-count">${ready ? `${ready} ready` : 'Your collection'}</span>
-    `))
-    if (deckOpen) {
-      const rack = el('div', 'era-pack-rack')
-      for (const card of eraCards) rack.appendChild(eraCardButton(card, newlyLit))
-      wrap.appendChild(rack)
-      const close = el('button', 'era-deck-close', '↑ Close deck')
-      close.type = 'button'
-      close.onclick = () => { deckOpen = false; renderResources(container, state) }
-      wrap.appendChild(close)
-      wrap.appendChild(el('p', 'era-pack-note', eraCards.some((card) => card.isSpecial)
-        ? 'Weekly cards reset Monday. Birthday keepsakes stay in your collection.'
-        : 'Complete every track in an era this week to activate its card. Use only when your ARMY Bomb needs emergency power.'))
-    } else {
-      wrap.appendChild(eraDeck(eraCards, ready, newlyLit, () => {
-        deckOpen = true
-        renderResources(container, state)
-        revealEraDeck(container)
-      }))
-    }
-  }
-
   // ── Merch — Backup Pass/Tickets now live in the case's front pocket
   // above, so they're excluded here to avoid showing the same item twice.
   const allItems = state.items || []
@@ -521,7 +378,7 @@ export function renderResources(container, state) {
   const inPack = items.filter((i) => !i.districtId).length
   const placed = items.length - inPack
 
-  wrap.appendChild(el('div', `pack-section${eraCards.length ? '' : ' pack-after-bag'}`, `
+  wrap.appendChild(el('div', 'pack-section pack-after-bag', `
     <span class="ps-title">Recovered Objects</span>
     <span class="ps-count">${inPack} in Pack &middot; ${placed} placed</span>
   `))

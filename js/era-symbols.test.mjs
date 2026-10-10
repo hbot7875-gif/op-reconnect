@@ -9,6 +9,9 @@ const read = (f) => readFileSync(f, 'utf8').replace(/\r\n/g, '\n')
 const timeline = read('supabase/functions/op-reconnect/lib/era-timeline.ts')
 const birthdays = read('supabase/functions/op-reconnect/lib/birthday-eras.ts')
 const world = read('js/screen-world.js')
+const resources = read('js/screen-resources.js')
+const main = read('js/main.js')
+const manual = read('js/agent-manual.js')
 
 test('every era defined on the backend has its own symbol', () => {
   const ids = [...timeline.matchAll(/id: '([a-z0-9-]+)', name: '/g)].map((m) => m[1])
@@ -36,4 +39,12 @@ test('the City Era Cards use the symbol, never the emoji icon', () => {
   assert.match(fn, /e\.status === 'lit' \? 'Ready · \+10h'/)
   assert.match(fn, /e\.status === 'used' \? 'Used this week'/)
   assert.match(fn, /e\.status === 'lit'\n\s*\? showOverlay\(agentChargeSheet\(e\.id\)\)/)
+})
+
+test('Era Cards live on City and are not rendered in Agent Pack', () => {
+  assert.match(world, /wrap\.appendChild\(weeklyEraCards\(state\)\)/)
+  assert.doesNotMatch(resources, /powerEraCards|agentChargeSheet|era-pack-|era-deck/)
+  assert.match(resources, /'pack-section pack-after-bag'/, 'Recovered Objects should follow the bag without an empty Era Card gap')
+  assert.doesNotMatch(main, /stored in Pack/)
+  assert.doesNotMatch(manual, /Use it from Pack/)
 })
