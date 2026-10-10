@@ -396,6 +396,99 @@ export function captureReuse(input: {
   return { reuse: true, reason: 'reuse' }
 }
 
+/**
+ * What can be said about an agent's stream CONNECTION, as distinct from
+ * their listening.
+ *
+ *   ok              the collector succeeded inside its own poll gate
+ *   failing         the collector is erroring
+ *   stale           the collector has not succeeded inside its poll gate
+ *   never_synced    polled, but no checkpoint exists at all
+ *   source_changed  the only checkpoint describes the previous provider
+ *   unobservable    pushed, so there is no poll whose health could be read
+ *
+ * These are reported separately from "how long since the newest play" on
+ * purpose, and the separation is the whole point of this type. An agent who
+ * simply did not listen this week has a perfectly healthy connection, and
+ * Moon Station used to describe that as a sync problem — inferring a broken
+ * pipe from an empty week. Those are different facts with different
+ * remedies, and nothing here may collapse them: a quiet week cannot move
+ * `connection` off `ok`, and a healthy poll cannot invent plays.
+ *
+ * 'unobservable' is not a hedge. A scrobbler PUSHES into rc_scrobbles, so a
+ * push that never happens leaves no trace of having been attempted. For
+ * those sources the newest row is genuinely the only evidence there is, and
+ * claiming to know the connection is fine — or broken — would be a guess.
+ */
+export type StreamConnectionState =
+  'ok' | 'failing' | 'stale' | 'never_synced' | 'source_changed' | 'unobservable'
+
+export interface StreamFreshnessReport {
+  connection: StreamConnectionState
+  /** ms since the collector last succeeded, or null when there is no
+   *  successful poll to measure from. */
+  sinceLastSuccessMs: number | null
+  /** The interval this source's collector is judged against, or null when it
+   *  is not polled. Reported so the UI can say what "recent" meant rather
+   *  than asserting it. */
+  pollGateMs: number | null
+  consecutiveFailures: number
+  /** On 'source_changed' only: the provider the stale checkpoint describes,
+   *  so the UI can name what it is looking at instead of implying the
+   *  current one has never run. */
+  previousSource?: string
+}
+
+/**
+ * Classify the connection from the capture checkpoint alone.
+ *
+ * Pure, and deliberately shares CAPTURE_FRESHNESS_MS with captureReuse: the
+ * gate that decides a checkpoint is too old to build rollups from is the same
+ * gate that decides it is too old to call the connection healthy. Two
+ * separate tables would be two definitions of "recent" drifting apart in
+ * front of the player.
+ *
+ * Those gates are not arbitrary, which is worth recording because the obvious
+ * reaction to a stale report is to widen them. Checked against the live
+ * schedule: rc-capture-statsfm runs every 5 minutes against a 12-minute gate,
+ * and rc-capture-musicat runs at 2,17,32,47 — every 15 minutes — against 35.
+ * Both are ~2.3 poll cycles, so a single missed run never reads as stale and
+ * two in a row always does. Widening them would only delay the report.
+ */
+export function streamFreshness(input: {
+  source: string
+  state: { source?: string | null; last_success_at?: string | null; consecutive_failures?: number | null } | null
+  nowMs?: number
+}): StreamFreshnessReport {
+  const nowMs = input.nowMs ?? Date.now()
+  const pollGateMs = CAPTURE_FRESHNESS_MS[input.source] ?? null
+  const none = { sinceLastSuccessMs: null, pollGateMs, consecutiveFailures: 0 }
+  if (pollGateMs === null) return { connection: 'unobservable', ...none }
+  const state = input.state
+  // No checkpoint at all: this connection has never been polled.
+  if (!state || !state.source) return { connection: 'never_synced', ...none }
+  // A checkpoint describing the provider they used BEFORE they switched.
+  // Reported apart from never_synced because the two look identical here and
+  // mean opposite things to the player: one has nothing arriving yet, the
+  // other has a whole history from the old provider sitting in front of
+  // them. Measured: 7 of 84 agents are in one of these two states and ALL
+  // SEVEN have streams in the window, so "nothing has come through yet" was
+  // wrong for every one of them.
+  if (state.source !== input.source) {
+    return { connection: 'source_changed', ...none, previousSource: state.source }
+  }
+  const failures = Number(state.consecutive_failures) || 0
+  const lastSuccessMs = state.last_success_at ? new Date(state.last_success_at).getTime() : 0
+  const sinceLastSuccessMs = lastSuccessMs > 0 ? nowMs - lastSuccessMs : null
+  const report = { sinceLastSuccessMs, pollGateMs, consecutiveFailures: failures }
+  // Errors first: a collector that is erroring right now is the actionable
+  // fact, even if its last success is still technically inside the gate.
+  if (failures > 0) return { connection: 'failing', ...report }
+  if (sinceLastSuccessMs === null) return { connection: 'never_synced', ...report }
+  if (sinceLastSuccessMs > pollGateMs) return { connection: 'stale', ...report }
+  return { connection: 'ok', ...report }
+}
+
 export async function fetchStreamRows(
   supabase: SupabaseDB,
   agent: AgentSourceRow,

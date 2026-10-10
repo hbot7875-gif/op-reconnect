@@ -5,7 +5,7 @@
 import { frozenDistrictDates } from './leave.ts'
 import type { SupabaseDB } from './config.ts'
 import { loadContent, limits, trackArtistOverrides } from './config.ts'
-import { fetchStreamRows } from './streams.ts'
+import { fetchStreamRows, streamFreshness } from './streams.ts'
 import type { StreamRow } from './streams.ts'
 import { normalizeKey, normKeyFull, countedArtistPlays } from './text.ts'
 import { todayKst, kstDateOf, kstDayBounds } from './kst.ts'
@@ -84,7 +84,14 @@ export async function getSignalLog(supabase: SupabaseDB, params: Record<string, 
   // rc_daily_activity, XP, goals, districts and the campaign totals are all
   // derived from the rollups below and from rc_scrobbles directly, not from
   // this list.
-  const canonical = canonicalStreamResult(rows)
+  // crossSource: false — this list is BOTZ's, and BOTZ counts "jams today"
+  // and its 24h totals off it. A play reported by two scrobblers really did
+  // reach the ledger twice, and setting the second copy aside here would
+  // quietly lower a number the player reads as their own activity. That
+  // collapse is review evidence; it belongs to Moon Station, not here. The
+  // Stats.fm precision pair still collapses, as it always has: one play
+  // written at two precisions is one row of history by any reading.
+  const canonical = canonicalStreamResult(rows, undefined, { crossSource: false })
   const ingestionDuplicates = rows.length - canonical.rows.length
   // Keyed on the ledger's own identity for a play: when it was heard, and
   // the track name as the source reported it.
@@ -244,10 +251,17 @@ export async function getMySelfCheck(supabase: SupabaseDB, params: Record<string
 
   const content = await loadContent(supabase)
   const lim = limits(content)
-  const [streamResult, possibleAlts, { data: player }] = await Promise.all([
+  const [streamResult, possibleAlts, { data: player }, { data: syncState }] = await Promise.all([
     fetchStreamRows(supabase, agent, fromTs, toTs, lim.lbMaxPages),
     findPossibleAlts(supabase, agent),
     supabase.from('rc_players').select('mode').eq('agent_no', agentNo).maybeSingle(),
+    // Connection health, which is a different question from listening
+    // activity. Only the polled sources have one: a pushed scrobble leaves
+    // no record of the push having been attempted, so for those the newest
+    // stream is the only evidence there is.
+    supabase.from('rc_stream_sync_state')
+      .select('source, last_success_at, consecutive_failures')
+      .eq('agent_no', agentNo).maybeSingle(),
   ])
   const { rows, source: streamSource, partialReason } = streamResult
   // A capped or failed provider response can omit intervening songs and make
@@ -257,6 +271,19 @@ export async function getMySelfCheck(supabase: SupabaseDB, params: Record<string
   const partialHistory = !streamResult.ok || !streamResult.complete
   const tracks = flagStreamRows(rows, { trustSequence: !partialHistory })
   const excessStreamDays = flagExcessStreamDays(rows, player?.mode || 'easy')
+
+  // Three facts about freshness, kept apart because conflating any two of
+  // them is how this surface told agents their account had a problem when
+  // they had simply not listened that week:
+  //
+  //   connection    is the collector working (polled sources only)
+  //   newest play   when a stream last arrived
+  //   coverage      whether the window is fully known
+  //
+  // An empty week leaves connection on 'ok'. A broken connection does not
+  // claim plays exist. And neither one is allowed to be read off the other.
+  const freshness = streamFreshness({ source: streamSource, state: syncState || null })
+  const newestStreamAt = rows.reduce((max, r) => Math.max(max, r.listened_at), 0)
 
   return {
     success: true,
@@ -269,6 +296,15 @@ export async function getMySelfCheck(supabase: SupabaseDB, params: Record<string
     streamSource,
     partialHistory,
     partialReason,
+    // Freshness, as three separable facts — see the note above.
+    connection: freshness.connection,
+    sinceLastSuccessSeconds: freshness.sinceLastSuccessMs === null
+      ? null : Math.max(0, Math.round(freshness.sinceLastSuccessMs / 1000)),
+    pollGateSeconds: freshness.pollGateMs === null ? null : Math.round(freshness.pollGateMs / 1000),
+    // When a stream last ARRIVED, which is a statement about listening and
+    // never about the connection. Null means nothing in the window, which on
+    // a healthy connection means a quiet week and nothing more.
+    newestStreamAt: newestStreamAt ? new Date(newestStreamAt * 1000).toISOString() : null,
     possibleAlts,
     mode: player?.mode || null,
     suggestedMode: excessStreamDays.length ? suggestedModeFor(player?.mode || 'easy') : null,

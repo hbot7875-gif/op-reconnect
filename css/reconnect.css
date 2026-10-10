@@ -6723,7 +6723,7 @@ select.rc-multi-native {
 .moon-streams .moon-check { margin: 0; padding: 0; }
 
 .moon-check-title { margin: 0 0 5px; padding: 0 0 5px; font-family: var(--mono);
-  font-size: 9.2px; letter-spacing: 3px; text-transform: uppercase; color: var(--dim); }
+  font-size: 9.8px; letter-spacing: 2.4px; text-transform: uppercase; color: var(--muted); }
 
 /* Verdict and window on one line. */
 .moon-verdict-row { display: flex; justify-content: space-between;
@@ -6731,10 +6731,10 @@ select.rc-multi-native {
 .moon-verdict { margin: 0 0 2px; font-family: var(--body); font-weight: 700;
   font-size: 13.6px; color: var(--text); line-height: 1.45; overflow-wrap: anywhere; }
 .moon-verdict.is-review { color: var(--crimson); }
-.moon-count { flex: 0 0 auto; font-family: var(--mono); font-size: 9.4px;
+.moon-count { flex: 0 0 auto; font-family: var(--mono); font-size: 9.8px;
   letter-spacing: 0.4px; color: var(--dim); white-space: nowrap; }
-.moon-check-what { margin: 0; font-family: var(--mono); font-size: 10.6px;
-  letter-spacing: 0.2px; color: var(--muted); line-height: 1.7; overflow-wrap: anywhere; }
+.moon-check-what { margin: 0; font-family: var(--mono); font-size: 11.2px;
+  letter-spacing: 0.2px; color: var(--muted); line-height: 1.75; overflow-wrap: anywhere; }
 
 /* Informational, never a warning: the source double-reported, or a sync is
    still catching up. Neither is something the player did. */
@@ -6765,10 +6765,10 @@ select.rc-multi-native {
 .moon-row-top { display: block; }
 .moon-track { display: block; font-family: var(--body); font-weight: 600; font-size: 14px;
   line-height: 1.3; color: var(--text); overflow-wrap: anywhere; }
-.moon-artist { display: block; margin-top: 1px; font-family: var(--body); font-size: 11.8px;
-  letter-spacing: 0; color: #b9b3c9; overflow-wrap: anywhere; }
-.moon-row-meta { margin-top: 2px; font-family: var(--mono); font-size: 9.8px;
-  letter-spacing: 0.2px; color: var(--muted); }
+.moon-artist { display: block; margin-top: 1px; font-family: var(--body); font-size: 12.4px;
+  letter-spacing: 0; line-height: 1.4; color: #c3bdd1; overflow-wrap: anywhere; }
+.moon-row-meta { margin-top: 3px; font-family: var(--mono); font-size: 10.4px;
+  letter-spacing: 0.3px; color: var(--muted); }
 .moon-gap { display: block; margin-top: 1px; font-family: var(--mono); font-size: 10px;
   letter-spacing: 0.2px; color: var(--text); }
 .moon-row-flags { margin-top: 5px; display: flex; flex-wrap: wrap; gap: 5px; }
@@ -6782,6 +6782,34 @@ select.rc-multi-native {
   background: var(--crimson-soft); padding: 8px 10px; margin: 5px 0; }
 .moon-row.is-review + .moon-row { border-top: none; }
 .moon-row.is-review .moon-row-meta { color: #b0aac2; }
+
+/* Per-row verdict mark. Right-hand edge, aligned with the title, so the
+   column reads as one vertical strip of outcomes while the seq number keeps
+   the left edge for position. Gold means the two timing rules found nothing
+   on that row -- nothing more, which is why the legend spells it out. */
+.moon-mark { flex: 0 0 auto; width: 16px; padding-top: 1px; text-align: center;
+  font-family: var(--mono); font-size: 11px; line-height: 1.3; }
+.moon-mark.is-clear { color: var(--gold); }
+.moon-mark.is-review { color: var(--crimson); }
+.moon-mark.is-unchecked { color: var(--dim); }
+.moon-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
+  margin: 8px 0 2px; font-family: var(--mono); font-size: 9.8px; letter-spacing: 0.3px;
+  color: var(--dim); text-transform: lowercase; }
+.moon-legend .moon-mark { width: auto; padding: 0 0 0 6px; }
+.moon-legend .moon-mark:first-child { padding-left: 0; }
+
+/* Everything that qualifies a finding rather than being one: what a flag is
+   not, how much was reviewed, when things last arrived. Smallest type on the
+   page, because a reader who wants it will look and a reader who does not
+   should not have it competing with the verdict. */
+.moon-fineprint { margin: 8px 0 0; font-family: var(--mono); font-size: 10.2px;
+  letter-spacing: 0.2px; line-height: 1.75; color: var(--muted); }
+
+/* A note about something actually wrong -- a connection that stopped
+   syncing. The default lavender note is for information; this one has to
+   read as "needs you". */
+.moon-note.is-review { border-left-color: var(--crimson); background: var(--crimson-soft); }
+.moon-note.is-review b { color: var(--crimson); }
 
 .moon-alt { padding: 10px 12px; border-radius: var(--r); background: rgba(229,56,79,0.05);
   border: 1px solid rgba(229,56,79,0.3); font-size: 12px; line-height: 1.65; }

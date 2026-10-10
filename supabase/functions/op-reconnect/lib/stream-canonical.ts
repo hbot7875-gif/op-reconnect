@@ -98,8 +98,24 @@ export function isStatsFmPrecisionPair(a: StreamRow, b: StreamRow, sourceOf: (r:
 export function canonicalStreamRows(
   rows: StreamRow[],
   sourceOf: (r: StreamRow) => string = (r) => (r as any).source || '',
+  options: CanonicalOptions = {},
 ): StreamRow[] {
-  return canonicalStreamResult(rows, sourceOf).rows
+  return canonicalStreamResult(rows, sourceOf, options).rows
+}
+
+export interface CanonicalOptions {
+  /**
+   * Whether to also collapse one play reported by two different sources.
+   *
+   * Default true, because every caller of this module is a review surface
+   * except one. The exception is getSignalLog, which feeds BOTZ — and BOTZ
+   * counts its "jams today" and 24h totals off the list it gets back, so
+   * collapsing there would move numbers a player reads as their own
+   * activity. The Stats.fm precision rule has always applied to BOTZ (one
+   * play written twice really is one row of history); the cross-source rule
+   * is review evidence and is kept out of it.
+   */
+  crossSource?: boolean
 }
 
 export interface CanonicalResult {
@@ -123,6 +139,7 @@ export interface CanonicalResult {
 export function canonicalStreamResult(
   rows: StreamRow[],
   sourceOf: (r: StreamRow) => string = (r) => (r as any).source || '',
+  options: CanonicalOptions = {},
 ): CanonicalResult {
   const twins = new Map<StreamRow, StreamRow[]>()
   if (rows.length < 2) return { rows: rows.slice(), twins }
@@ -153,10 +170,110 @@ export function canonicalStreamResult(
     twins.set(precise[0], [aligned[0]])
   }
 
+  if (options.crossSource !== false) collapseCrossSourceDoubleReports(rows, dropped, twins, sourceOf)
+
   return {
     rows: dropped.size ? rows.filter((r) => !dropped.has(r)) : rows.slice(),
     twins,
   }
+}
+
+/** The widest gap at which two reports of one song cannot be two listens.
+ *
+ *  Scrobblers only submit after a play threshold — 30 seconds, or half the
+ *  track, whichever a client uses — so two legitimate scrobbles of the same
+ *  song are separated by at least most of that song. Five seconds apart is a
+ *  double report, not a replay. */
+const CROSS_SOURCE_DOUBLE_REPORT_SECONDS = 5
+
+/**
+ * Collapse one play reported by two different sources.
+ *
+ * An agent can have a scrobbler pushing into rc_scrobbles AND a polled
+ * account the same play reaches by another route, so the ledger holds it
+ * twice. fetchStreamRows already drops rows sharing the exact same second;
+ * these are the ones a second or two apart.
+ *
+ * ── why the window is five seconds and not sixty ─────────────────────────
+ *
+ * Measured on production before this was written, because the obvious rule
+ * is wrong. Across the eleven agents currently running two sources, 18,099
+ * same-song cross-source pairs fall within ten minutes — but they peak at
+ * ONE TO TWO MINUTES, not at zero, which is what a looped playlist looks
+ * like rather than a double report. Collapsing on a sixty-second window
+ * would have erased thousands of genuinely separate plays.
+ *
+ * The real duplicate signature is a spike at 1-2s (186 pairs) decaying to 31
+ * by 5s, after which the counts climb again as the window starts swallowing
+ * real listening. Five seconds is where the two populations separate.
+ *
+ * Nearest-neighbour analysis on the heaviest two-source agent is the other
+ * half of the evidence: 990 of their 1,058 webhook rows have no same-song
+ * row from the other source within ten minutes at all, and the median
+ * nearest offset is 177 seconds. Their two scrobblers are covering different
+ * listening, not the same listening twice — and that agent has ZERO pairs
+ * inside this window, so none of their review flags come from here.
+ *
+ * Review evidence only. Nothing is deleted, and counted streams, XP, goals
+ * and campaign totals never see this function.
+ */
+function collapseCrossSourceDoubleReports(
+  rows: StreamRow[],
+  dropped: Set<StreamRow>,
+  twins: Map<StreamRow, StreamRow[]>,
+  sourceOf: (r: StreamRow) => string,
+): void {
+  const live = rows.filter((r) => !dropped.has(r))
+    .sort((a, b) => a.listened_at - b.listened_at)
+
+  // Every report is measured against the surviving row it would collapse
+  // into, not against the row physically before it. An agent can run three
+  // sources, and comparing neighbours pairwise left the third report
+  // stranded: the second had already been set aside, so the third had
+  // nothing to match and survived as a phantom second play.
+  //
+  // Measuring from the anchor is also what bounds this. The whole cluster
+  // has to fit inside one five-second window of the FIRST report, so no
+  // chain of near-misses can walk the rule across a real listen.
+  let anchor: StreamRow | null = null
+  for (const row of live) {
+    if (anchor && isCrossSourceDoubleReport(anchor, row, sourceOf)) {
+      // Keep the earlier report: it is closest to when the play actually
+      // happened, and keeping the first arrival means the outcome never
+      // depends on which source is listed first.
+      dropped.add(row)
+      twins.set(anchor, [...(twins.get(anchor) || []), row])
+      continue
+    }
+    anchor = row
+  }
+}
+
+/** Whether `row` is a second report of the play `anchor` already describes. */
+function isCrossSourceDoubleReport(
+  anchor: StreamRow,
+  row: StreamRow,
+  sourceOf: (r: StreamRow) => string,
+): boolean {
+  // Same source is a replay question, not a reporting question, and is
+  // exactly what the repeat rule exists to surface. Leave it alone.
+  if (sourceOf(anchor) === sourceOf(row)) return false
+  if (row.listened_at - anchor.listened_at > CROSS_SOURCE_DOUBLE_REPORT_SECONDS) return false
+  if (normTrack(anchor.track_name) !== normTrack(row.track_name)) return false
+  // Both artists must be known and agree. An absent artist cannot identify a
+  // recording, so it cannot prove two rows are the same one — the same
+  // reasoning songKey uses in police-check. Stricter than the precision rule
+  // on purpose: there, same-source-same-minute already pins the play down,
+  // and across two sources there is no such corroboration.
+  const left = primaryArtistOf(anchor)
+  const right = primaryArtistOf(row)
+  return !!left && !!right && left === right
+}
+
+/** First name in a credit, lower-cased. Mirrors police-check's primaryArtist:
+ *  "Agust D, RM" and "Agust D" are one performer. */
+function primaryArtistOf(row: StreamRow): string {
+  return String(row.artist_name || '').split(',')[0].trim().toLowerCase()
 }
 
 /**

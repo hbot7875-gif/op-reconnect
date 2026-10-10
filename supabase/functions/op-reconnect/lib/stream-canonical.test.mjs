@@ -78,9 +78,11 @@ test('non-Stats.fm rows are never collapsed, even in the identical shape', () =>
   }
 })
 
-test('a mixed-source pair is not collapsed', () => {
-  // Only the Stats.fm artifact was measured. A cross-source duplicate is a
-  // different defect with its own investigation.
+test('a mixed-source pair is not collapsed by the precision rule', () => {
+  // The precision rule is Stats.fm-only: both sides must be that source. A
+  // cross-source pair this far apart (37s) is two plays as far as this layer
+  // is concerned -- see the cross-source section below for the one narrow
+  // case that is not.
   const rows = [
     sfm('SWIM', BASE),
     { track_name: 'SWIM', artist_name: 'BTS', listened_at: BASE + 37, source: 'webhook' },
@@ -384,14 +386,176 @@ test('the collector declines rows, and never deletes or re-keys them', () => {
 test('the canonical layer has no bare "same song within N seconds" rule', () => {
   const code = readFileSync(new URL('./stream-canonical.ts', import.meta.url), 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
-  // The ONLY timestamp arithmetic allowed is the minute bucket and the
-  // on-the-minute test. A gap/window comparison would mean a heuristic crept
-  // in that could erase a real repeated listen.
-  assert.ok(!/listened_at\s*[-+]\s*\w+\s*[<>]/.test(code), 'no gap comparison may appear here')
-  assert.ok(!/\b(gap|within|SECONDS|WINDOW|THRESHOLD)\b/i.test(code), 'no window/threshold rule may appear here')
+  // This guard originally banned every gap comparison outright. It now
+  // permits exactly ONE -- the cross-source double-report window -- because
+  // that case was measured and is real (see collapseCrossSourceDoubleReports).
+  // What it still refuses is a BARE window rule: a gap test that does not
+  // first establish the two rows came from two different reporters. That is
+  // the version that erases genuine replays, which is the whole reason the
+  // ban was here.
+  const comparisons = code.match(/listened_at\s*-\s*\w+\.listened_at\s*[<>]/g) || []
+  assert.equal(comparisons.length, 1, 'exactly one gap comparison may exist in this layer')
+  assert.equal((code.match(/CROSS_SOURCE_DOUBLE_REPORT_SECONDS/g) || []).length, 2,
+    'the one allowed window must be the named cross-source constant, declared and used once')
+  assert.ok(/sourceOf\(\w+\)\s*===\s*sourceOf\(\w+\)\)\s*return false/.test(code),
+    'the gap comparison must be gated on the two rows coming from different sources')
+  assert.ok(!/\b(WINDOW|THRESHOLD)\b/.test(code), 'no second window/threshold rule may appear here')
   // What is allowed, and must stay:
   assert.ok(code.includes('% 60 === 0'), 'the on-the-minute shape test must remain')
   assert.ok(/Math\.floor\(\s*row\.listened_at\s*\/\s*60\s*\)/.test(code), 'the minute bucket must remain')
+})
+
+// ── one play, two reporters ───────────────────────────────────────────────
+//
+// Eleven agents run two scrobble sources at once, so a play can reach
+// rc_scrobbles twice by two routes. fetchStreamRows already drops rows
+// sharing the exact same second; these are the ones a second or two apart,
+// and before this they read as a same-song repeat inside 8 minutes.
+//
+// The window is five seconds, and these tests exist mainly to hold it there.
+// The naive sixty-second version would have been a disaster: measured across
+// those eleven agents, same-song cross-source pairs within ten minutes peak
+// at ONE TO TWO MINUTES, not at zero. That is a looped playlist heard by two
+// scrobblers, not one play reported twice, and collapsing it would have
+// deleted thousands of real listens from the evidence.
+
+const other = (track, listened_at, artist = 'BTS', source = 'webhook') =>
+  ({ track_name: track, artist_name: artist, listened_at, source })
+
+test('one play reported by two sources two seconds apart is one play', () => {
+  const rows = [sfm('SWIM', BASE + 11), other('SWIM', BASE + 13)]
+  const out = canonicalStreamResult(rows)
+  assert.equal(out.rows.length, 1)
+  // The earlier report survives: it is closest to when the play happened,
+  // and picking it means the outcome never depends on source ordering.
+  assert.equal(at(out.rows[0]), BASE + 11)
+  assert.deepEqual(out.twins.get(out.rows[0]), [rows[1]])
+})
+
+test('the collapse does not depend on which source is listed first', () => {
+  const a = canonicalStreamResult([sfm('SWIM', BASE + 11), other('SWIM', BASE + 13)])
+  const b = canonicalStreamResult([other('SWIM', BASE + 13), sfm('SWIM', BASE + 11)])
+  assert.equal(a.rows.length, 1)
+  assert.equal(b.rows.length, 1)
+  assert.equal(at(a.rows[0]), at(b.rows[0]))
+})
+
+test('a cross-source double report no longer reads as a repeat', () => {
+  const rows = [sfm('SWIM', BASE + 11), other('SWIM', BASE + 13)]
+  const flagged = flagStreamRows(rows)
+  assert.equal(flagged.length, 1)
+  assert.deepEqual(flagged[0].flags, [], 'one play must raise nothing')
+})
+
+test('the five-second boundary is exactly where it says it is', () => {
+  for (const gap of [1, 2, 3, 5]) {
+    assert.equal(canonicalStreamRows([sfm('SWIM', BASE + 10), other('SWIM', BASE + 10 + gap)]).length, 1,
+      `${gap}s apart is one double report`)
+  }
+  for (const gap of [6, 10, 30, 60, 177]) {
+    assert.equal(canonicalStreamRows([sfm('SWIM', BASE + 10), other('SWIM', BASE + 10 + gap)]).length, 2,
+      `${gap}s apart must stay two plays`)
+  }
+})
+
+test('the measured real-listening distribution survives untouched', () => {
+  // The actual shape of production: a looped playlist, two scrobblers, the
+  // same song coming back every minute or two. Every one of these is a
+  // genuine separate listen and all of them must still be here.
+  const rows = []
+  for (let i = 0; i < 10; i++) {
+    rows.push(sfm('SWIM', BASE + i * 200))
+    rows.push(other('SWIM', BASE + i * 200 + 97))
+  }
+  assert.equal(canonicalStreamRows(rows).length, 20, 'no real play may be collapsed away')
+})
+
+test('two reports of one song from the SAME source are left for the repeat rule', () => {
+  // This is the case the review tool exists to surface. If the window rule
+  // reached it, a genuine immediate replay would vanish instead of being
+  // shown -- so a two-second same-source gap must stay two rows.
+  for (const source of ['webhook', 'lb-like', 'listenbrainz', 'musicat']) {
+    const rows = [other('SWIM', BASE + 11, 'BTS', source), other('SWIM', BASE + 13, 'BTS', source)]
+    assert.equal(canonicalStreamRows(rows).length, 2, `${source} must be untouched`)
+    assert.ok(flagStreamRows(rows).some((t) => t.flags.includes('repeat')),
+      `${source} replay must still be flagged`)
+  }
+})
+
+test('a cross-source pair of two different songs is never collapsed', () => {
+  assert.equal(canonicalStreamRows([sfm('SWIM', BASE + 11), other('RUN', BASE + 13)]).length, 2)
+})
+
+test('two songs sharing a title are not one play, whatever the sources', () => {
+  // AGENT000's case, now in the cross-source path: same title, different
+  // primary artist, two seconds apart. Two different recordings.
+  const rows = [sfm('Life Goes On', BASE + 11, 'Agust D'), other('Life Goes On', BASE + 13, 'BTS')]
+  assert.equal(canonicalStreamRows(rows).length, 2)
+})
+
+test('an unknown artist can never prove two reports are one play', () => {
+  // Deliberately stricter than the Stats.fm precision rule, which tolerates
+  // an empty artist because same-source-same-minute already pins the play
+  // down. Across two sources there is no such corroboration, so an
+  // unidentifiable row cannot be collapsed into anything -- the same
+  // reasoning police-check's songKey uses.
+  for (const [left, right] of [['', 'BTS'], ['BTS', ''], ['', '']]) {
+    const rows = [sfm('SWIM', BASE + 11, left), other('SWIM', BASE + 13, right)]
+    assert.equal(canonicalStreamRows(rows).length, 2,
+      `artists ${JSON.stringify([left, right])} must not collapse`)
+  }
+})
+
+test('a featured credit is still the same performer across sources', () => {
+  const rows = [sfm('SWIM', BASE + 11, 'Agust D, RM'), other('SWIM', BASE + 13, 'Agust D')]
+  assert.equal(canonicalStreamRows(rows).length, 1)
+})
+
+test('three sources reporting one play collapse to one, not two', () => {
+  const rows = [
+    sfm('SWIM', BASE + 11),
+    other('SWIM', BASE + 12, 'BTS', 'webhook'),
+    other('SWIM', BASE + 14, 'BTS', 'lb-like'),
+  ]
+  const out = canonicalStreamResult(rows)
+  assert.equal(out.rows.length, 1)
+  assert.equal(at(out.rows[0]), BASE + 11)
+  assert.equal(out.twins.get(out.rows[0]).length, 2, 'both set-aside reports must be recoverable')
+})
+
+test('a long cross-source run collapses pairwise and keeps every play', () => {
+  // Four plays, each reported twice. Four plays out -- not one, and not
+  // eight. A chain rule that walked forwards without re-anchoring would
+  // swallow the lot.
+  const rows = []
+  for (let i = 0; i < 4; i++) {
+    rows.push(sfm('SWIM', BASE + i * 240))
+    rows.push(other('SWIM', BASE + i * 240 + 2))
+  }
+  const out = canonicalStreamResult(rows)
+  assert.equal(out.rows.length, 4)
+  assert.deepEqual(out.rows.map(at), [BASE, BASE + 240, BASE + 480, BASE + 720])
+})
+
+test('the Stats.fm precision pair still collapses when a third source is present', () => {
+  // Both rules run over the same set; neither may consume the other's rows.
+  const rows = [sfm('SWIM', BASE), sfm('SWIM', BASE + 37), other('RUN', BASE + 300)]
+  const out = canonicalStreamResult(rows)
+  assert.equal(out.rows.length, 2)
+  assert.deepEqual(out.rows.map(at), [BASE + 37, BASE + 300])
+})
+
+test('rows with no source at all are never cross-collapsed', () => {
+  // Pre-classification rows carry no source, so every row looks identical to
+  // every other and the same-source guard must catch all of them.
+  const rows = unclassified([sfm('SWIM', BASE + 11), sfm('SWIM', BASE + 13)])
+  assert.equal(canonicalStreamRows(rows).length, 2)
+})
+
+test('cross-source collapses are reported as duplicate reports to the reader', () => {
+  // So a collapsed row set never looks like missing data.
+  assert.equal(countIngestionDuplicates([sfm('SWIM', BASE + 11), other('SWIM', BASE + 13)]), 1)
+  assert.equal(countIngestionDuplicates([sfm('SWIM', BASE + 11), other('SWIM', BASE + 90)]), 0)
 })
 
 test('a cluster is still refused no matter how many rows it holds', () => {
@@ -459,7 +623,10 @@ test('canonicalStreamRows and canonicalStreamResult cannot drift', () => {
 
 test('getSignalLog judges the canonical list and keeps the battle badge', () => {
   const src = readFileSync(new URL('./signal-log.ts', import.meta.url), 'utf8')
-  assert.match(src, /const canonical = canonicalStreamResult\(rows\)/)
+  // crossSource: false — BOTZ counts "jams today" and its 24h totals off
+  // this list, so the cross-source collapse is kept out of it. The Stats.fm
+  // precision pair still collapses here, as it always has.
+  assert.match(src, /const canonical = canonicalStreamResult\(rows, undefined, \{ crossSource: false \}\)/)
   assert.match(src, /canonical\.rows\.map\(/, 'the displayed list must come from the canonical rows')
   assert.doesNotMatch(src, /const allStreams: any\[\] = rows\.map\(/, 'the raw list must not be rendered')
   // The badge has to check the twin too.
@@ -865,4 +1032,54 @@ test('partial history still suppresses every flag', () => {
   const out = flagStreamRows(rows, { trustSequence: false })
   assert.deepEqual(out.flatMap((f) => f.flags), [],
     'an incomplete window cannot support a sequence claim')
+})
+
+// ── the collapse stays out of BOTZ's totals ──
+//
+// Review evidence and a player's own activity feed are different things.
+// BOTZ counts "jams today" and its 24h totals off the list getSignalLog
+// returns, so a cross-source collapse there would lower a number the
+// player reads as theirs. Measured before this was scoped out: 54 rows in
+// one day across three agents.
+
+test('crossSource: false leaves a double report in place', () => {
+  const rows = [sfm('SWIM', BASE + 11), other('SWIM', BASE + 13)]
+  assert.equal(canonicalStreamRows(rows).length, 1, 'review collapses it')
+  assert.equal(canonicalStreamRows(rows, undefined, { crossSource: false }).length, 2,
+    "BOTZ's list keeps both")
+})
+
+test('the Stats.fm precision pair still collapses with crossSource off', () => {
+  // That one is not review evidence -- one play written at two precisions
+  // is one row of history by any reading, and BOTZ has always collapsed it.
+  const rows = [sfm('SWIM', BASE), sfm('SWIM', BASE + 37)]
+  assert.equal(canonicalStreamRows(rows, undefined, { crossSource: false }).length, 1)
+  assert.equal(at(canonicalStreamRows(rows, undefined, { crossSource: false })[0]), BASE + 37)
+})
+
+test('the option defaults to on, so a review surface cannot forget it', () => {
+  const rows = [sfm('SWIM', BASE + 11), other('SWIM', BASE + 13)]
+  for (const opts of [undefined, {}, { crossSource: true }]) {
+    assert.equal(canonicalStreamResult(rows, undefined, opts).rows.length, 1, JSON.stringify(opts))
+  }
+})
+
+test('both review surfaces still see the collapse through police-check', () => {
+  // flagStreamRows and flagExcessStreamDays are Moon Station's two checks;
+  // neither may quietly opt out.
+  const police = readFileSync(new URL('./police-check.ts', import.meta.url), 'utf8')
+  assert.doesNotMatch(police, /crossSource/,
+    'the review path must take the default, not disable the collapse')
+  const rows = [sfm('SWIM', BASE + 11), other('SWIM', BASE + 13)]
+  assert.equal(flagStreamRows(rows).length, 1)
+})
+
+test('an unidentifiable row is reported as such rather than as flag-free', () => {
+  const rows = [{ track_name: 'SWIM', artist_name: '', listened_at: BASE, source: 'webhook' },
+    sfm('SWIM', BASE + 600)]
+  const out = flagStreamRows(rows)
+  const noArtist = out.find((t) => !t.artist)
+  assert.equal(noArtist.identified, false)
+  assert.deepEqual(noArtist.flags, [], 'it still raises nothing')
+  assert.equal(out.find((t) => t.artist).identified, true)
 })

@@ -60,6 +60,14 @@ export interface FlaggedTrack {
    *  consecutive, and a reviewer should be able to see that without the
    *  tool implying the two are the same finding. */
   flags: string[]
+  /** Whether this row names a recording the timing rules could act on at
+   *  all — see songKey. False when the source gave no artist.
+   *
+   *  Reported because an empty `flags` means two different things and a
+   *  reader cannot tell them apart: "the rules ran and found nothing" or
+   *  "the rules could not run". Moon Station marks the first with a tick
+   *  and the second as unchecked, which it cannot do without this. */
+  identified: boolean
 }
 
 /** Timing-only flags, since a scrobble carries no play-duration or skip data
@@ -197,6 +205,10 @@ export function flagStreamRows(rows: StreamRow[], options: { trustSequence?: boo
       gapSeconds,
       sinceSameSong,
       flags,
+      // The same test songKey makes. A row with no artist identifies no
+      // recording, so neither rule can reach it, and its empty flags list
+      // is an absence of evidence rather than evidence of absence.
+      identified: songKey(r) !== null,
     }
   })
   return withFlags.slice().reverse()

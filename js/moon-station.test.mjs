@@ -12,14 +12,17 @@ const selfCheck = readFileSync('supabase/functions/op-reconnect/lib/signal-log.t
 const streams = readFileSync('supabase/functions/op-reconnect/lib/streams.ts', 'utf8')
 
 test('partial provider history is explained and never gets a mode verdict', () => {
-  assert.match(ui, /Sync catching up · \$\{esc\(sourceName\)\}/)
+  assert.match(ui, /Sync catching up · \$\{name\}/)
   assert.match(ui, /Some recent streams may be missing/)
-  assert.match(ui, /Review resumes when the full history is ready/)
+  assert.match(ui, /Review resumes when the full window is ready/)
   assert.doesNotMatch(ui, /latest 50 streams before the next pull/)
   // An incomplete window is reported as "not checked yet", never as a pass:
   // a half-synced week looks like a quiet week.
   assert.match(ui, /modeReview = !res\.partialHistory && excessStreamDays\.length > 0/)
-  assert.match(ui, /modeChecked = !res\.partialHistory && !!res\.mode/)
+  // An empty window is now its own case, so the mode check also refuses to
+  // pass on zero streams -- see "zero streams is neither a pass nor a sync
+  // problem" below.
+  assert.match(ui, /modeChecked = !res\.partialHistory && !nothingToCheck && !!res\.mode/)
   assert.match(ui, /Not checked yet/)
 })
 
@@ -81,7 +84,12 @@ test('a duplicate the source reported twice is explained, not silently dropped',
   // like a warning — the source double-reported, the player did nothing.
   assert.match(ui, /ingestionDuplicates/)
   assert.match(ui, /duplicate report\$\{dupes === 1 \? '' : 's'\} excluded/)
-  assert.match(ui, /Totals unchanged/)
+  assert.match(ui, /stream totals are unchanged/)
+  // Not attributed to Stats.fm any more: two different causes produce this
+  // count now -- one play served at two precisions, and one play reported by
+  // two scrobblers -- and naming only the first is wrong for exactly the
+  // agents who see the second.
+  assert.doesNotMatch(ui, /Stats\.fm reported the same play/)
   // Quiet and informational, never the crimson warning shape.
   assert.match(ui, /moon-note/)
   assert.doesNotMatch(ui, /moon-alt[^]{0,80}duplicate report/)
@@ -295,7 +303,10 @@ test('the tone stays procedural: neither customer support nor interrogation', ()
   const banned = [
     /don'?t worry/i, /nothing bad happened/i, /your streams are safe/i,
     /we'?re just checking/i, /your stream health/i, /suspicious activity/i,
-    /\bviolation\b/i, /cheating detected/i, /\bfailed\b/i,
+    // "violation" is banned as an ACCUSATION but required as a DENIAL: the
+    // transparency test below asserts the copy states a flag is not one. The
+    // lookbehind is what tells the two uses apart.
+    /(?<!not a )\bviolation\b/i, /cheating detected/i, /\bfailed\b/i,
   ]
   for (const re of banned) {
     assert.doesNotMatch(src, re, `Moon Station copy must not use ${re}`)
@@ -336,4 +347,210 @@ test('a stream row stacks title, artist and timestamp on the left', () => {
     const rule = css.slice(css.indexOf(sel + ' {'), css.indexOf('}', css.indexOf(sel + ' {')))
     assert.match(rule, /overflow-wrap: anywhere/, `${sel} must wrap`)
   }
+})
+
+// ── freshness: three facts, never one inferred from another ──
+//
+// The bug: an agent who had not listened all week was shown a sync warning,
+// because "no recent streams" was being read as "sync is broken". Those are
+// different facts with different remedies.
+
+test('a quiet week is reported as a quiet week, not as a broken connection', () => {
+  assert.match(ui, /No streams in this window/)
+  assert.match(ui, /is connected and syncing normally/)
+  assert.match(ui, /Nothing was played in the last \$\{res\.windowDays\} days/)
+  // The verdict may only come from the collector's own checkpoint. If the
+  // renderer ever derived it from the rows it would be guessing again.
+  const note = ui.slice(ui.indexOf('function freshnessNote'), ui.indexOf('function freshnessFooter'))
+  assert.doesNotMatch(note, /trackCount|flaggedCount|tracks\b/,
+    'the connection verdict must never be computed from how much was played')
+})
+
+test('only a failing or stale collector is reported as a problem', () => {
+  assert.match(ui, /res\.connection === 'failing' \|\| res\.connection === 'stale'/)
+  assert.match(ui, /is not syncing/)
+  assert.match(ui, /tone: 'is-review'/)
+  // A never-synced or quiet account is informational, not crimson.
+  const note = ui.slice(ui.indexOf('function freshnessNote'), ui.indexOf('function freshnessFooter'))
+  assert.equal((note.match(/tone: 'is-review'/g) || []).length, 1,
+    'exactly one freshness state may be shown as a problem')
+})
+
+test('a pushed source says what it cannot know instead of guessing', () => {
+  // A scrobbler that stops pushing leaves no record of having stopped.
+  assert.match(ui, /res\.connection === 'unobservable'/)
+  assert.match(ui, /check that your scrobbler is still connected/)
+  assert.match(streams, /'ok' \| 'failing' \| 'stale' \| 'never_synced' \| 'source_changed' \| 'unobservable'/)
+})
+
+test('the two timestamps are labelled for what each one measures', () => {
+  // One line reading "last sync" could not tell a player whether it meant
+  // when a play arrived or when the poll ran.
+  assert.match(ui, /Latest stream received/)
+  assert.match(ui, /last synced/)
+  assert.match(selfCheck, /newestStreamAt: newestStreamAt/)
+  assert.match(selfCheck, /sinceLastSuccessSeconds/)
+  assert.match(selfCheck, /pollGateSeconds/)
+  // A pushed source has no poll to report, so it gets no sync timestamp.
+  assert.match(ui, /res\.connection !== 'unobservable' && res\.sinceLastSuccessSeconds !== null/)
+})
+
+test('freshness is judged by the same gates the capture scheduler uses', () => {
+  // Two definitions of "recent" would drift, and the player would be told
+  // the sync was fine by one of them and stale by the other.
+  assert.match(streams, /const pollGateMs = CAPTURE_FRESHNESS_MS\[input\.source\]/)
+  assert.match(streams, /const freshness = CAPTURE_FRESHNESS_MS\[source\]/)
+  assert.equal((streams.match(/CAPTURE_FRESHNESS_MS: Record<string, number> = \{/g) || []).length, 1,
+    'there may be exactly one freshness table')
+})
+
+// ── the marks, and what gold is allowed to mean ───────────────────────────
+
+test('each row carries one of exactly three marks', () => {
+  assert.match(ui, /is-clear/)
+  assert.match(ui, /is-review/)
+  assert.match(ui, /is-unchecked/)
+  // Gold is reachable only when the window was complete AND the row was
+  // clean. An unchecked row must never be gold: no rule ran on it, so a
+  // tick there would be a pass nobody computed.
+  const mark = ui.slice(ui.indexOf('const mark = res.partialHistory'), ui.indexOf('list.appendChild'))
+  const unchecked = mark.indexOf('is-unchecked')
+  const clear = mark.indexOf('is-clear')
+  assert.ok(unchecked > -1 && clear > unchecked,
+    'partialHistory must be tested before a clean row can earn a tick')
+})
+
+test('the gold tick is defined narrowly and never claims legitimacy', () => {
+  assert.match(ui, /no timing pattern found/)
+  assert.match(ui, /label: 'No timing pattern found'/)
+  // Nothing may present a tick as proof the streaming was genuine. Checked
+  // against the COPY, with comments stripped: the reasoning above a line of
+  // code may use "a clean row" as shorthand, but nothing a player reads may
+  // describe a tick as a verification.
+  const copy = ui.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
+  for (const re of [/verified/i, /legitimate/i, /\bvalid\b/i, /\bapproved\b/i, /\bpassed\b/i, /\bclean\b/i]) {
+    assert.doesNotMatch(copy, re, `a mark must not be described with ${re}`)
+  }
+  // And the mark is announced to a screen reader as the same narrow claim.
+  assert.match(ui, /aria-label="\$\{esc\(mark\.label\)\}"/)
+})
+
+test('the legend explains the marks before the list that uses them', () => {
+  const legendAt = ui.indexOf("'moon-legend'")
+  const listAt = ui.indexOf("el('div', 'moon-list')")
+  assert.ok(legendAt > 0 && listAt > legendAt, 'the legend must precede the list')
+  const css = readFileSync('css/reconnect.css', 'utf8')
+  assert.match(css, /\.moon-mark\.is-clear \{ color: var\(--gold\); \}/)
+  assert.match(css, /\.moon-mark\.is-review \{ color: var\(--crimson\); \}/)
+  assert.match(css, /\.moon-mark\.is-unchecked \{ color: var\(--dim\); \}/)
+})
+
+// ── transparency ──────────────────────────────────────────────────────────
+
+test('a flag is stated to be a second look, not a verdict or a penalty', () => {
+  assert.match(ui, /not a violation, and not a decision/)
+  assert.match(ui, /Nothing is deducted and no action is taken automatically/)
+})
+
+test('the list says how much was reviewed, so 25 rows do not look like all of it', () => {
+  // The checks run on the whole window; the log shows the newest 25 of it.
+  assert.match(ui, /Newest \$\{SHOWN\} of \$\{res\.trackCount\} streams \$\{verb\}/)
+  assert.match(ui, /const SHOWN = 25/)
+  assert.match(ui, /res\.tracks\.slice\(0, SHOWN\)/)
+})
+
+test('the eight-minute rule is still named as the rule it is', () => {
+  assert.match(ui, /Same song replayed within 8 min/)
+  assert.match(ui, /Same song played twice in a row/)
+  assert.match(ui, /since this song last played/)
+})
+
+// ── what an empty window may not claim ──
+//
+// Found by rendering the ten scenarios rather than by reading the code: an
+// idle account with zero streams was being shown "✓ Clear" and "✓ Medium
+// fits". Both are passes, and neither check had anything to run on.
+
+test('zero streams is neither a pass nor a sync problem', () => {
+  assert.match(ui, /const nothingToCheck = !res\.trackCount/)
+  assert.equal((ui.match(/Nothing to check/g) || []).length, 2,
+    'both checks must be able to say there was nothing to run on')
+  // The empty branch has to be tested BEFORE the verdict branches, or a
+  // zero-stream window falls through to the clear/fits copy again.
+  const patternAt = ui.indexOf("'Streaming pattern'")
+  const emptyAt = ui.indexOf('nothingToCheck', patternAt)
+  const clearAt = ui.indexOf("'✓ Clear'", patternAt)
+  assert.ok(emptyAt > 0 && clearAt > emptyAt, 'the empty case must precede ✓ Clear')
+  // And mode may not pass on it either.
+  assert.match(ui, /modeChecked = !res\.partialHistory && !nothingToCheck && !!res\.mode/)
+})
+
+test('a verdict reached while the collector is down says what it covers', () => {
+  // "✓ Clear" under "Stats.fm is not syncing" reads as a full pass on a
+  // window that is missing however long the collector has been down.
+  assert.match(ui, /Covers the streams that have arrived so far/)
+  assert.match(ui, /Anything played since the last sync is not included/)
+})
+
+test("the log does not say \"reviewed\" when no review ran", () => {
+  // On an incomplete window every timing rule is suppressed, so the scope
+  // line claimed 25 streams were reviewed directly beneath two checks that
+  // both read "not checked yet".
+  assert.match(ui, /const verb = res\.partialHistory \? 'received' : 'reviewed'/)
+  assert.match(ui, /streams \$\{verb\}/)
+})
+
+// ── the two freshness messages that were wrong ──
+//
+// Both found by rendering the real states against live data rather than by
+// reading the code, and both were assertions the evidence did not support.
+
+test('a message about an empty history is never shown over a full one', () => {
+  // 7 of 84 live agents had no usable checkpoint AND streams in the window
+  // (median 2,014 rows). They were being shown "Nothing has come through
+  // yet" directly above twenty-five of their own plays.
+  const note = ui.slice(ui.indexOf('function freshnessNote'), ui.indexOf('function freshnessFooter'))
+  const empty = [...note.matchAll(/Nothing has come through yet/g)]
+  assert.equal(empty.length, 1, 'the empty-history line may exist in exactly one branch')
+  // ...and that branch must be guarded on there being no streams.
+  assert.match(note, /hasStreams\s*\n?\s*\?[^:]*already arrived/,
+    'the has-streams branch must come first and must not claim an empty history')
+  assert.match(note, /const hasStreams = !!res\.newestStreamAt/)
+})
+
+test('a provider switch says where the existing history came from', () => {
+  assert.match(ui, /res\.connection === 'source_changed'/)
+  assert.match(ui, /has not reported in yet/)
+  assert.match(ui, /arrived before you switched/)
+  assert.match(ui, /sourceName\(res\.previousSource\)/)
+  // And it must still read correctly for someone who switched with an
+  // empty window.
+  assert.match(ui, /has not sent anything yet/)
+})
+
+test("a failing collector with no sync on record drops the dangling \"since then\"", () => {
+  const note = ui.slice(ui.indexOf('function freshnessNote'), ui.indexOf('function freshnessFooter'))
+  assert.doesNotMatch(note, /no record of a successful sync[^`']*since then/,
+    '"since then" needs a "then"')
+  assert.match(note, /No successful sync has been recorded/)
+  // The branch that DOES have a timestamp may still use it.
+  assert.match(note, /Last successful sync \$\{formatAgo\(lastSync\)\}\. Anything played since then/)
+})
+
+test('a row the rules could not identify gets the neutral mark, not a tick', () => {
+  // Empty flags mean two different things -- "the rules ran and found
+  // nothing" and "the rules could not run" -- and only the first earns a
+  // tick. 3 rows in 172,344 measured, but it is a false pass by shape.
+  assert.match(ui, /res\.partialHistory \|\| t\.identified === false/)
+  // The legend must explain the neutral mark whenever one is on screen.
+  assert.match(ui, /const anyUnchecked = sequence\.some\(\(t\) => t\.identified === false\)/)
+  assert.match(ui, /no artist, so not checked/)
+})
+
+test('the backend reports whether each row could be identified at all', () => {
+  const police = readFileSync('supabase/functions/op-reconnect/lib/police-check.ts', 'utf8')
+  assert.match(police, /identified: boolean/)
+  // Derived from songKey, so it can never disagree with the rule itself
+  // about what counts as identifiable.
+  assert.match(police, /identified: songKey\(r\) !== null/)
 })
