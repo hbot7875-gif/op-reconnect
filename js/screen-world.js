@@ -45,6 +45,7 @@ import { redZonePercent, personalSignalCopy, redZoneHeadline, redZoneGoalCopy,
 import { bombHealthStatus, lastFedLabel } from './agent-charge-health.js'
 import { warmShareArtwork } from './share-scene-image.js'
 import { powerEraCards } from './era-card-display.js'
+import { eraSymbol } from './era-symbols.js'
 
 export function renderWorld(container, state) {
   container.innerHTML = ''
@@ -229,6 +230,7 @@ function weeklyEraCards(state) {
       : `${e.done}/${e.total} · ${e.remaining} left`
     chip.setAttribute('aria-label', `${e.name}. ${status}.`)
     chip.innerHTML = `
+      <span class="era-sym">${eraSymbol(e.id)}</span>
       <span class="era-name">${esc(e.name)}</span>
       <span class="era-count">${status}</span>
       ${newly.has(e.id) ? '<i>Activated</i>' : ''}

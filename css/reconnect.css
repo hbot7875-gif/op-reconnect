@@ -7065,3 +7065,17 @@ select.rc-multi-native {
 .world-screen .feed-eyebrow { font-family: var(--body); font-size: 13px; font-weight: 600; letter-spacing: 0;
   text-transform: none; color: var(--v-ink-1); }
 .world-screen .feed-text { color: var(--v-ink-2); }
+
+/* Era Card symbols (era-symbols.js): one container, one size, one position.
+   The symbol is the era's identity; the colour is only ever its state. */
+.world-screen .era-chip { gap: 3px; }
+.world-screen .era-sym { width: 34px; height: 34px; margin-bottom: 5px; display: grid; place-items: center;
+  border-radius: 9px; border: 1px solid var(--v-line-1); background: var(--v-surface-2); color: var(--v-ink-2); }
+.world-screen .era-sym svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.6;
+  stroke-linecap: round; stroke-linejoin: round; }
+.world-screen .era-sym .d { fill: currentColor; fill-opacity: .28; }
+.world-screen .era-chip.era-lit .era-sym,
+.world-screen .era-chip.era-keepsake .era-sym { color: var(--v-gold); background: var(--v-tint-gold); border-color: var(--v-gold-line); }
+.world-screen .era-chip.era-used .era-sym { color: var(--v-ink-3); }
+/* Activated (just lit this visit): the purple state chip, not a second gold. */
+.world-screen .era-chip > i { left: auto; right: 8px; background: var(--v-tint-violet); border: 1px solid var(--v-violet-line); color: var(--v-violet-hi); }
