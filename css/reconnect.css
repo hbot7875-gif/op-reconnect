@@ -6965,3 +6965,103 @@ select.rc-multi-native {
   .moon-panel, .moon-streams { padding: 14px; }
   .moon-panel { padding-bottom: 11px; }
 }
+
+/* ════════════════════════════════════════════════════════════════
+   CITY POLISH (prototype: phase 4B typography + density, on the 5A
+   surfaces). One scoped block so it can be reviewed and reverted as a
+   unit. Chrome only: the ARMY Bomb, map, district lighting, restored
+   effects, Bora meter, Home Base and tool markers are untouched.
+   Orbitron stays for game identity (codename, district names, hero
+   values). Everything else is the body sans, sentence case, untracked,
+   11px or larger, on surfaces that visibly lift off the ground.
+   ════════════════════════════════════════════════════════════════ */
+
+/* HUD (shared by every screen) */
+#hud .hud-code { color: var(--v-ink-1); }
+#hud .hud-meta { margin-top: 3px; font-family: var(--body); font-size: 13px; letter-spacing: 0;
+  text-transform: none; color: var(--v-ink-2); }
+#hud .hud-meta em { color: var(--v-ink-2); }
+#hud .hud-meta i { color: var(--v-ink-3); }
+#hud .hud-meta b { color: var(--v-ink-1); font-weight: 600; }
+#hud .hud-xp-note { font-family: var(--body); font-size: 12px; letter-spacing: 0; text-transform: none;
+  color: var(--v-ink-2); font-variant-numeric: tabular-nums; }
+
+/* City recovery: the scene keeps its art; its frame and copy get crisper */
+.world-screen .command-scene { border: 1px solid var(--v-line-1); }
+.world-screen .recovery-copy b { font-family: var(--body); font-size: 15px; font-weight: 600; letter-spacing: 0;
+  text-transform: none; color: var(--v-ink-1); }
+.world-screen .recovery-copy i { font-family: var(--body); font-size: 13px; letter-spacing: 0;
+  text-transform: none; color: var(--v-ink-2); }
+.world-screen .active-now { font-family: var(--body); font-size: 13px; letter-spacing: 0; color: var(--v-ink-2); }
+.world-screen .active-now-names { font-family: var(--body); font-size: 12px; color: var(--v-ink-3); }
+.world-screen .core-hint { font-family: var(--body); font-size: 13px; letter-spacing: 0; text-transform: none;
+  color: var(--v-ink-2); }
+
+/* Now restoring: one caps status label, sans everywhere else */
+.world-screen .op-eyebrow { font-family: var(--body); font-size: 11px; font-weight: 600; letter-spacing: .08em; }
+.world-screen .op-status { font-family: var(--body); font-size: 13px; letter-spacing: 0; color: var(--v-ink-2); }
+.world-screen .op-enter { font-family: var(--body); font-size: 14px; font-weight: 600; letter-spacing: 0;
+  text-transform: none; }
+
+/* Signal Sweep: a real card with one headline, one rule, four rows, a reward footer */
+.world-screen .side-missions { padding: 16px; border: 1px solid var(--v-line-1); border-radius: var(--r-lg);
+  background: var(--v-surface-1); }
+.world-screen .side-mission-head { align-items: center; gap: 12px; }
+.world-screen .side-mission-head h3 { margin: 0; font-family: var(--body); font-size: 19px; font-weight: 700;
+  letter-spacing: 0; color: var(--v-ink-1); }
+.world-screen .side-mission-today { flex: none; padding: 4px 10px; border-radius: 999px; font-family: var(--body);
+  font-size: 13px; font-weight: 600; letter-spacing: 0; text-transform: none; white-space: nowrap;
+  background: var(--v-tint-violet); border: 1px solid var(--v-violet-line); color: var(--v-violet-hi); }
+.world-screen .side-mission-today.is-done { background: var(--v-tint-gold); border-color: var(--v-gold-line); color: var(--v-gold); }
+.world-screen .side-mission-rule { margin: 6px 0 12px; font-size: 13px; color: var(--v-ink-2); }
+.world-screen .side-mission-rule b { color: var(--v-ink-1); }
+.world-screen .side-mission-tracks { border-top: 1px solid var(--v-line-1); }
+.world-screen .side-mission-track { min-height: 58px; padding: 10px 0 13px; border-bottom-color: var(--v-line-1); }
+.world-screen .side-track-copy { gap: 2px; }
+.world-screen .side-track-copy b { font-size: 15px; font-weight: 600; color: var(--v-ink-1); }
+.world-screen .side-track-copy i { font-family: var(--body); font-size: 13px; letter-spacing: 0; text-transform: none;
+  color: var(--v-ink-2); }
+.world-screen .side-track-week { font-family: var(--body); font-size: 14px; font-weight: 600; letter-spacing: 0;
+  color: var(--v-ink-1); font-variant-numeric: tabular-nums; }
+.world-screen .side-track-bar { left: 32px; right: 0; bottom: 5px; height: 3px; border-radius: 2px; background: var(--v-surface-3); }
+.world-screen .side-track-bar i { border-radius: 2px; }
+.world-screen .side-mission-rewards { margin-top: 12px; display: grid; gap: 6px; }
+.world-screen .side-reward-row { display: grid; grid-template-columns: 74px minmax(0, 1fr) auto; align-items: baseline;
+  gap: 8px; font-size: 13px; line-height: 1.35; }
+.world-screen .side-reward-row span { color: var(--v-ink-3); font-weight: 600; }
+.world-screen .side-reward-row i { min-width: 0; font-style: normal; color: var(--v-ink-2); }
+.world-screen .side-reward-row b { color: var(--v-gold); font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.world-screen .side-reward-row.is-done i { color: var(--v-gold); }
+.world-screen .side-mission-reset { margin: 10px 0 0; font-family: var(--body); font-size: 12px; letter-spacing: 0;
+  text-transform: none; color: var(--v-ink-3); }
+
+/* Era Cards: a wrapping grid, no horizontal scroll, one height per row */
+.world-screen .era-strip-head { align-items: center; margin-bottom: 10px; }
+.world-screen .era-strip-label { font-family: var(--body); font-size: 17px; font-weight: 600; letter-spacing: 0;
+  text-transform: none; color: var(--v-ink-1); }
+.world-screen .era-ready-count { padding: 3px 8px; border-radius: 6px; font-family: var(--body); font-size: 12px;
+  font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--v-gold); background: var(--v-tint-gold); }
+.world-screen .era-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px;
+  overflow: visible; padding: 0; }
+.world-screen .era-chip { position: relative; min-width: 0; min-height: 66px; align-items: flex-start;
+  justify-content: flex-start; gap: 4px; padding: 10px; text-align: left; border-radius: 10px;
+  border: 1px solid var(--v-line-1); background: var(--v-surface-1); filter: none; }
+.world-screen .era-chip:hover { border-color: var(--v-line-2); }
+.world-screen .era-chip .era-name { align-self: stretch; text-align: left; font-family: var(--body); font-size: 13px; font-weight: 600; line-height: 1.25;
+  letter-spacing: 0; text-transform: none; color: var(--v-ink-1); }
+.world-screen .era-chip .era-count { align-self: stretch; text-align: left; font-family: var(--body); font-size: 12px; letter-spacing: 0; color: var(--v-ink-2);
+  font-variant-numeric: tabular-nums; }
+.world-screen .era-chip.era-lit,
+.world-screen .era-chip.era-keepsake { background: var(--v-tint-gold); border-color: var(--v-gold-line); }
+.world-screen .era-chip.era-lit .era-name,
+.world-screen .era-chip.era-keepsake .era-name { color: var(--v-ink-1); }
+.world-screen .era-chip.era-lit .era-count,
+.world-screen .era-chip.era-keepsake .era-count { color: var(--v-gold); font-weight: 600; }
+.world-screen .era-chip.era-used { opacity: .5; filter: none; }
+.world-screen .era-chip > i { left: 10px; top: -8px; transform: none; padding: 2px 6px; border-radius: 6px;
+  font-family: var(--body); font-size: 11px; font-weight: 600; letter-spacing: 0; }
+
+/* City News: the reference treatment, with a sans label */
+.world-screen .feed-eyebrow { font-family: var(--body); font-size: 13px; font-weight: 600; letter-spacing: 0;
+  text-transform: none; color: var(--v-ink-1); }
+.world-screen .feed-text { color: var(--v-ink-2); }

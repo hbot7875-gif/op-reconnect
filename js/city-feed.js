@@ -105,7 +105,7 @@ export function cityFeedCard(state) {
   }
   if (!entries.length) return wrap
 
-  wrap.appendChild(el('div', 'feed-eyebrow', 'CITY NEWS'))
+  wrap.appendChild(el('div', 'feed-eyebrow', 'City News'))
   const ticker = el('div', 'feed-ticker')
   ticker._entries = entries
   ticker._index = 0

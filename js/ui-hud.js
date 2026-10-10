@@ -273,7 +273,7 @@ export function renderHud(container, state) {
               <span class="hud-code">${displayCode}</span>
               <button class="hud-eye" id="hudEyeBtn" type="button" title="${codenameHidden ? 'Show codename' : 'Hide codename'}" aria-label="${codenameHidden ? 'Show codename' : 'Hide codename'}">${codenameHidden ? '🙈' : '👁'}</button>
             </span>
-            <span class="hud-meta">${lvl.name ? `<em>${esc(lvl.name)}</em><i>·</i>` : ''}<b>LV ${lvl.level}</b></span>
+            <span class="hud-meta">${lvl.name ? `<em>${esc(lvl.name)}</em><i>·</i>` : ''}<b>Level ${lvl.level}</b></span>
           </span>
         </div>
         <div class="hud-streak${streakCold}" title="${p.streak.current} days in a row">${streakLabel}</div>
@@ -285,7 +285,7 @@ export function renderHud(container, state) {
       </div>
     </div>
     <div class="hud-xp">
-      <span class="hud-xp-note">${xpLeft} XP to LV ${lvl.level + 1}</span>
+      <span class="hud-xp-note">${xpLeft} XP to Level ${lvl.level + 1}</span>
       <div class="xp-bar" role="progressbar" aria-label="Level ${lvl.level} XP progress" aria-valuemin="0" aria-valuemax="${lvl.xpForNextLevel}" aria-valuenow="${lvl.xpIntoLevel}"><div class="xp-fill" style="width:${pct}%"></div></div>
       ${boost ? `<span class="hud-boost">${boost.multiplier}&times; BOOST &middot; ${boost.minsLeft}m</span>` : ''}
     </div>

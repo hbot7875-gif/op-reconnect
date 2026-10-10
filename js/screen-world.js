@@ -126,23 +126,25 @@ function sideMissionsPanel(mission) {
   const total = mission.tracks?.length || 4
   const weekGaps = (mission.tracks || []).filter((t) => !t.weeklyDone).length
   const section = el('section', 'side-missions' + (mission.todayDone ? ' is-cleared' : ''))
+  // One headline (title + today's count), one rule line, the four tracks, then
+  // a reward footer. The full reset schedule is still here, on the compact
+  // reset line's tooltip, rather than as a sentence read on every visit.
+  // The weekly target (N×) is already in the rule line, so the footer only
+  // says where this week stands.
+  const weekNote = mission.weekDone ? 'Secured'
+    : weekGaps ? `${weekGaps} of ${total} behind` : 'On track'
   section.innerHTML = `
     <div class="side-mission-head">
-      <div><span class="side-mission-kicker">Stabilize the BOTZ signal</span><h3>Signal Sweep</h3></div>
-      <div class="side-mission-status">
-        <span class="side-mission-today">${mission.todayDone ? 'SECURED' : `${done}/${total} TODAY`}</span>
-        <span class="side-mission-week-tag${mission.weekDone ? ' is-done' : ''}">${mission.weekDone ? 'WEEK CLEAR' : `${weekGaps} behind this week`}</span>
-      </div>
+      <h3>Signal Sweep</h3>
+      <span class="side-mission-today${mission.todayDone ? ' is-done' : ''}">${mission.todayDone ? 'Secured today' : `${done}/${total} today`}</span>
     </div>
-    <p class="side-mission-rule">Stream each track <b>1×</b> today <em>and</em> <b>${mission.weeklyRequired}×</b> total this week.</p>
-    <p class="side-mission-reset">Daily resets at midnight KST &middot; week resets Monday KST &middot; this week: ${weekRangeLabel(mission.weekDates)}</p>
+    <p class="side-mission-rule">Stream each track <b>1×</b> today &middot; <b>${mission.weeklyRequired}×</b> this week</p>
     <div class="side-mission-tracks"></div>
-    <div class="side-mission-reward">${mission.todayDone
-      ? `+${mission.xpOnComplete} XP secured today`
-      : `Complete all four today · +${mission.xpOnComplete} XP`}</div>
-    <div class="side-mission-week-reward${mission.weekDone ? ' is-done' : ''}">${mission.weekDone
-      ? `+${mission.weeklyXpOnComplete} XP secured this week`
-      : `Clear all four at ${mission.weeklyRequired}× this week · +${mission.weeklyXpOnComplete} XP`}</div>`
+    <div class="side-mission-rewards">
+      <div class="side-reward-row${mission.todayDone ? ' is-done' : ''}"><span>Today</span><i>${mission.todayDone ? 'Secured' : `Complete all ${total}`}</i><b>+${mission.xpOnComplete} XP</b></div>
+      <div class="side-reward-row${mission.weekDone ? ' is-done' : ''}"><span>This week</span><i>${weekNote}</i><b>+${mission.weeklyXpOnComplete} XP</b></div>
+    </div>
+    <p class="side-mission-reset" title="Daily resets at midnight KST · week resets Monday KST · this week: ${esc(weekRangeLabel(mission.weekDates))}">Resets at midnight KST &middot; week ends Monday</p>`
 
   const list = section.querySelector('.side-mission-tracks')
   for (const track of mission.tracks || []) {
@@ -215,20 +217,21 @@ function weeklyEraCards(state) {
       <span class="era-strip-label">Era Cards</span>
       <span class="era-ready-count">${ready} ready · +10h each</span>
     </div>`
+  // A wrapping grid, not a carousel: every card is visible at once. Each
+  // card carries only its name and its state.
   const row = el('div', 'era-row')
   for (const e of cards) {
     const chip = el('button', `era-chip era-${e.status}${newly.has(e.id) ? ' just-lit' : ''}`)
     chip.type = 'button'
-    const status = e.status === 'lit' ? 'READY · +10H'
-      : e.status === 'used' ? 'USED THIS WEEK'
-      : e.status === 'keepsake' ? 'COLLECTED · 09.01'
-      : `${e.done}/${e.total} · ${e.remaining} LEFT`
+    const status = e.status === 'lit' ? 'Ready · +10h'
+      : e.status === 'used' ? 'Used this week'
+      : e.status === 'keepsake' ? 'Collected · 09.01'
+      : `${e.done}/${e.total} · ${e.remaining} left`
     chip.setAttribute('aria-label', `${e.name}. ${status}.`)
     chip.innerHTML = `
-      <span class="era-icon">${e.icon}</span>
       <span class="era-name">${esc(e.name)}</span>
       <span class="era-count">${status}</span>
-      ${newly.has(e.id) ? '<i>CARD ACTIVATED</i>' : ''}
+      ${newly.has(e.id) ? '<i>Activated</i>' : ''}
     `
     chip.onclick = () => e.status === 'lit'
       ? showOverlay(agentChargeSheet(e.id))
