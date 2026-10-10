@@ -11,6 +11,7 @@ import { call } from './api.js'
 import { el, esc } from './state.js'
 import { getAgentNo } from './session.js'
 import { badgeById } from './badges.js'
+import { navIcon } from './nav-icons.js'
 
 const TABS = [
   { key: 'all', label: 'All' },
@@ -29,7 +30,7 @@ export function renderRanking(container, state) {
   const wrap = el('div', 'rank-screen')
 
   wrap.appendChild(el('div', 'pack-head', `
-    <span class="pack-eyebrow"><span class="rank-title-icon" aria-hidden="true">🏆</span> Rankings</span>
+    <span class="pack-eyebrow"><span class="rank-title-icon" aria-hidden="true">${navIcon('ranks')}</span> Rankings</span>
     <span class="pack-name">Who's leading the network</span>
   `))
 
@@ -78,14 +79,23 @@ function paintList(body, agents, state) {
     const collectionBadge = a.equippedBadgeArtwork || null
     const badgeArt = a.equippedBadgeArtwork?.artworkUrl || null
     const hasEquippedBadge = !!(badgeArt || collectionBadge || badge)
+    const isMe = a.codename === mine
+    // Places 1-3 keep their prestige through a solid gold, silver or bronze
+    // ring and a coloured number (reconnect.css, .is-p1/2/3) rather than
+    // emoji medals, which every phone draws differently.
     const row = el('div', 'rank-row'
-      + (a.codename === mine ? ' is-me' : '')
-      + (place <= 3 ? ' is-top' : ''))
+      + (isMe ? ' is-me' : '')
+      + (place <= 3 ? ` is-top is-p${place}` : ''))
+    // "You" is its own element so it stays visible when a long codename
+    // truncates, instead of being cut off as part of the name's text.
+    const name = isMe
+      ? `<span class="rank-name-row"><span class="rank-name">${esc(a.codename)}</span><span class="rank-you">You</span></span>`
+      : `<span class="rank-name">${esc(a.codename)}</span>`
     row.innerHTML = `
-      <span class="rank-place">${place <= 3 ? MEDAL[place] : place}</span>
+      <span class="rank-place" aria-label="Rank ${place}">${place}</span>
       <span class="rank-agent-icon${hasEquippedBadge ? ' has-equipped-badge' : ''}">${badgeArt ? `<img class="rank-agent-photo" src="${esc(badgeThumb(badgeArt))}" data-badge-full="${esc(badgeArt)}" alt="" loading="lazy" decoding="async" width="60" height="60">` : (collectionBadge ? '🎖️' : badge ? badge.icon : '⟭⟬')}</span>
       <span class="rank-main">
-        <span class="rank-name">${esc(a.codename)}</span>
+        ${name}
         <span class="rank-sub">Level ${a.level}${activeTab === 'all' ? ` · ${esc(MODE_LABEL[a.mode] || a.mode)}` : ''}</span>
       </span>
       <span class="rank-xp">${a.xp.toLocaleString()} <span class="rank-xp-unit">total XP</span></span>
@@ -111,5 +121,4 @@ function paintList(body, agents, state) {
   }
 }
 
-const MEDAL = { 1: '🥇', 2: '🥈', 3: '🥉' }
 const MODE_LABEL = { exam: 'School/Exam', easy: 'Easy', steady: 'Easy+', medium: 'Medium', hard: 'Hard' }
