@@ -340,9 +340,12 @@ test('the two checks share a panel and the log sits in a lighter one', () => {
   // The two cards are divided by their own borders now rather than by an
   // inset rule, which is the same separation by other means.
   assert.match(css, /\.moon-metrics \{[^}]*grid-template-columns: 1fr 1fr/)
-  assert.match(css, /\.moon-metric \{[^}]*border: 1px solid var\(--border\)/)
-  // The log still reads lighter than the checks it explains.
-  assert.match(css, /\.moon-streams \{[^}]*rgba\(255, 255, 255, 0\.012\)/)
+  assert.match(css, /\.moon-metric \{[^}]*border: 1px solid var\(--v-line-1\)/)
+  // Shared surface system (phase 5A): the log is its own lifted card on the
+  // same step as the checks panel. The checks still lead, because their
+  // metric cards sit one step higher (Surface 2) and carry the state tints.
+  assert.match(css, /\.moon-streams \{[^}]*background: var\(--v-surface-1\)/)
+  assert.match(css, /\.moon-metric \{[^}]*background: var\(--v-surface-2\)/)
 })
 
 test('a stream row stacks title, artist and timestamp on the left', () => {
@@ -453,9 +456,10 @@ test('the legend explains the marks before the list that uses them', () => {
   const listAt = ui.indexOf("el('div', 'moon-list')")
   assert.ok(legendAt > 0 && listAt > legendAt, 'the legend must precede the list')
   const css = readFileSync('css/reconnect.css', 'utf8')
-  assert.match(css, /\.moon-mark\.is-clear \{ color: var\(--gold\); \}/)
-  assert.match(css, /\.moon-mark\.is-review \{ color: var\(--crimson\); \}/)
-  assert.match(css, /\.moon-mark\.is-unchecked \{ color: var\(--dim\); \}/)
+  // Gold ✓ / crimson ⚠ / neutral · — the same three meanings, on the shared tokens.
+  assert.match(css, /\.moon-mark\.is-clear \{ color: var\(--v-gold\); \}/)
+  assert.match(css, /\.moon-mark\.is-review \{ color: var\(--v-red-hi\); \}/)
+  assert.match(css, /\.moon-mark\.is-unchecked \{ color: var\(--v-ink-3\); \}/)
 })
 
 // ── transparency ──────────────────────────────────────────────────────────
@@ -624,7 +628,7 @@ test('the segmented control is reachable and announces its state', () => {
   const css = readFileSync('css/reconnect.css', 'utf8')
   // Shares the .chip selection vocabulary so it reads as the same control
   // family as the rest of the app.
-  assert.match(css, /\.moon-filter\.sel \{[^}]*var\(--purple\)/)
+  assert.match(css, /\.moon-filter\.sel \{[^}]*var\(--v-tint-violet\)[^}]*var\(--v-violet-line\)/)
   // Tap targets stay usable at 320px, where the three segments are
   // narrowest.
   assert.match(css, /@media \(max-width: 359px\)[^}]*\}[\s\S]*?\.moon-filter \{[^}]*padding: 7px 2px/)

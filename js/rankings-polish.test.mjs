@@ -46,5 +46,6 @@ test('the leaderboard data path is unchanged', () => {
 
 test('"Now restoring" is flat purple with no glow', () => {
   assert.doesNotMatch(meter, /gradient\(|gold/)
-  assert.match(meter, /background: var\(--purple\); box-shadow: none;/)
+  // --v-violet is the same #8b5cf6 as --purple, on the shared token set (phase 5A).
+  assert.match(meter, /background: var\(--v-violet\); box-shadow: none;/)
 })
