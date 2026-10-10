@@ -23,6 +23,7 @@
 import { call } from './api.js'
 import { el, esc } from './state.js'
 import { getAgentNo } from './session.js'
+import { noteMoonCheck } from './moon-review-dot.js'
 
 // Names the rule, so a player can tell what to change. "repeated-play
 // pattern" described a suspicion; these describe the actual spacing rule.
@@ -209,6 +210,8 @@ export function renderMoonStation(container, state) {
   mountCompactHud()
 
   call('getMySelfCheck', { agentNo: getAgentNo(), days: 7 }).then((res) => {
+    // The tab's review dot follows this, the freshest answer there is.
+    noteMoonCheck(res)
     body.innerHTML = ''
     if (!res.success) {
       body.appendChild(el('p', 'muted', esc(res.error || "Couldn't run the check")))

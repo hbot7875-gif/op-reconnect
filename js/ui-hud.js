@@ -25,6 +25,8 @@ import { districtDisplayName } from './ward-tiles.js'
 import { redZonePercent } from './red-zone-ui.js'
 import { getReconnectChatSeen, reconnectChatUnreadCount,
   reconnectChatBadgeText } from './reconnect-chat-unread.js'
+import { navIcon } from './nav-icons.js'
+import { hasMoonReview } from './moon-review-dot.js'
 
 /** { multiplier, minsLeft } while state.player.boost is live, else null. */
 function activeBoost(boost) {
@@ -568,24 +570,24 @@ function invitesSheet(state) {
 // rather than a router push — it can never show as "selected" the way the
 // others do, same as any link out.
 const TABS = [
-  { key: 'network', icon: '🏙️', label: 'City', go: goWorld,
+  { key: 'network', icon: 'city', label: 'City', go: goWorld,
     sel: (here) => here !== 'resources' && here !== 'moon' && here !== 'settings' && here !== 'candystar' && here !== 'ranking' },
-  { key: 'resources', icon: '🎒', label: 'Pack', go: goResources,
+  { key: 'resources', icon: 'pack', label: 'Pack', go: goResources,
     sel: (here) => here === 'resources' },
-  { key: 'candystar', icon: '🍬', label: 'Candy', go: goCandyStar,
+  { key: 'candystar', icon: 'candy', label: 'Candy', go: goCandyStar,
     sel: (here) => here === 'candystar' },
-  { key: 'botz', icon: '📻', label: 'BOTZ',
+  { key: 'botz', icon: 'botz', label: 'BOTZ',
     href: () => 'botz.html' + (getAgentNo() ? `?agent=${encodeURIComponent(getAgentNo())}` : '') },
   // A real screen since 2026-10-09, so it routes and lights up like the
   // rest. It was a sheet, which is why this tab used to be an onClick with
   // no `sel` — there was no "here" for it to be. Being a screen is also what
   // lets botz.html's standalone tab bar link to it; while it was a sheet it
   // had no ?screen= target, which is exactly how MOON went missing there.
-  { key: 'moonstation', icon: '🚨', label: 'Moon', go: goMoon,
+  { key: 'moonstation', icon: 'moon', label: 'Moon', go: goMoon,
     sel: (here) => here === 'moon' },
-  { key: 'ranking', icon: '🏆', label: 'Ranks', go: goRanking,
+  { key: 'ranking', icon: 'ranks', label: 'Ranks', go: goRanking,
     sel: (here) => here === 'ranking' },
-  { key: 'settings', icon: '⚙️', label: 'Settings', go: goSettings,
+  { key: 'settings', icon: 'settings', label: 'Settings', go: goSettings,
     sel: (here) => here === 'settings' },
 ]
 
@@ -600,19 +602,24 @@ export function renderTabbar(container, state) {
   // last looked. Backup requests were invisible until you happened to open
   // the Pack, which is why 41 of them expired without a single helper.
   const backupDot = hasNewBackupRequests(state?.player?.backupHelp)
+  // Moon is still, like every other tab. It used to pulse red all the time,
+  // which said "alarm" whether or not anything was wrong. The crimson dot is
+  // the state now, and only this page load's own check can turn it on
+  // (moon-review-dot.js).
+  const moonDot = hasMoonReview()
   const tabsHtml = TABS.map((t) => {
     const isSel = t.sel ? t.sel(here) : false
     const tag = t.href ? 'a' : 'button'
     const attrs = t.href ? ` href="${esc(t.href())}"` : ' type="button"'
-    // The police beacon spins regardless of whether anything's actually
-    // flagged (see moonStationSheet's own comment) — it's what tells you
-    // this tab is different from the rest, not a live status readout.
-    const icoClass = t.key === 'moonstation' ? 'hud-tab-ico hud-tab-beacon' : 'hud-tab-ico'
-    const dot = t.key === 'resources' && backupDot
-    return `<${tag} class="hud-tab${isSel ? ' sel' : ''}${dot ? ' has-dot' : ''}" data-tab="${t.key}" title="${esc(dot ? 'An agent needs backup' : t.title || t.label)}"${attrs}>
-      <span class="${icoClass}" aria-hidden="true">${t.icon}</span>
+    const dot = (t.key === 'resources' && backupDot) ? 'backup'
+      : (t.key === 'moonstation' && moonDot) ? 'review' : null
+    const title = dot === 'backup' ? 'An agent needs backup'
+      : dot === 'review' ? 'Moon Station: streams to review' : t.title || t.label
+    return `<${tag} class="hud-tab${isSel ? ' sel' : ''}${dot ? ' has-dot' : ''}" data-tab="${t.key}" title="${esc(title)}"${attrs}>
+      <span class="hud-tab-ico" aria-hidden="true">${navIcon(t.icon)}</span>
       <span class="hud-tab-lbl">${esc(t.label)}</span>
-      ${dot ? '<span class="hud-tab-dot" aria-label="An agent needs backup"></span>' : ''}
+      ${dot === 'backup' ? '<span class="hud-tab-dot" aria-label="An agent needs backup"></span>' : ''}
+      ${dot === 'review' ? '<span class="hud-tab-dot is-review" aria-label="Streams to review"></span>' : ''}
     </${tag}>`
   }).join('')
   container.innerHTML = `<div class="hud-tabs">${tabsHtml}</div>`

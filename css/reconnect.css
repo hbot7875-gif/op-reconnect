@@ -84,6 +84,19 @@
   --r-lg: var(--radius-lg);
   --border: var(--line);
   --border-str: var(--line-strong);
+
+  /* Vivid tokens, additive (bottom-nav polish, phase 1). New names on
+     purpose, so nothing changes colour until it opts in. Ground and lifted
+     surface sit far enough apart to read as layers; text is near-white;
+     purple is cleaner; crimson is for review/warning state only. */
+  --v-surface-1: #181528;
+  --v-line-1: rgba(255,255,255,.10);
+  --v-ink-1: #f6f3fb;
+  --v-ink-2: #bcb5cc;
+  --v-violet-hi: #bba2ff;
+  --v-tint-violet: rgba(139,92,246,.16);
+  --v-gold: #f2c56c;
+  --v-red: #f0435a;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -346,52 +359,39 @@ body {
 .scene { scroll-padding-bottom: calc(110px + env(safe-area-inset-bottom)); }
 .hud-tabs {
   pointer-events: auto; width: 100%; max-width: 620px;
-  display: flex; gap: 1px; padding: 7px;
-  background: rgba(20, 18, 30, 0.94); backdrop-filter: blur(14px);
-  border: 1px solid var(--border); border-radius: 20px;
-  box-shadow: 0 12px 30px rgba(0,0,0,0.5);
-  /* Six tabs fit most phones without scrolling, but a couple more (or a
-     narrow device) shouldn't be able to squash a label unreadable — scroll
-     instead, same escape hatch a native app's tab bar would use. Scrollbar
-     hidden since the pill shape already signals "this is a bar", not a
-     content region that wants a visible scroll affordance. */
+  display: flex; gap: 2px; padding: 6px;
+  background: var(--v-surface-1); border: 1px solid var(--v-line-1); border-radius: 22px;
+  box-shadow: var(--shadow-float);
+  /* Seven labelled tabs fit from 320px up (see the 345px rule below); the
+     scroll stays as an escape hatch for anything narrower, hidden because
+     the pill already reads as a bar. */
   overflow-x: auto; scrollbar-width: none;
 }
 .hud-tabs::-webkit-scrollbar { display: none; }
+/* One outline icon set (nav-icons.js) in currentColor, sentence-case labels
+   in the body face. Labels never hide: the old icon-only fallback under
+   380px left emoji as the only way to tell tabs apart. */
 .hud-tab {
-  flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px;
-  background: none; border: none; cursor: pointer; padding: 8px 3px; border-radius: 14px;
-  font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.25px; text-transform: uppercase;
-  color: var(--muted); opacity: 0.8; text-decoration: none; white-space: nowrap; transition: color 0.2s, background 0.2s, opacity 0.2s;
+  flex: 1 1 0; min-width: 0; min-height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  background: none; border: none; cursor: pointer; padding: 7px 1px 6px; border-radius: 16px;
+  font-family: var(--body); font-size: 11px; font-weight: 500; line-height: 1.1; letter-spacing: 0; text-transform: none;
+  color: var(--v-ink-2); text-decoration: none; white-space: nowrap; transition: color 0.2s, background 0.2s;
 }
-.hud-tab-ico { font-size: 20px; line-height: 1; filter: grayscale(1); opacity: 0.7; transition: filter 0.2s, opacity 0.2s; }
+.hud-tab-ico { display: grid; place-items: center; width: 22px; height: 22px; }
+.hud-tab-ico svg { width: 22px; height: 22px; fill: none; stroke: currentColor;
+  stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
 .hud-tab-lbl { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
-.hud-tab:hover { color: var(--text); opacity: 1; }
-.hud-tab.sel { color: var(--text); opacity: 1; background: var(--purple-soft); cursor: default; }
-.hud-tab.sel .hud-tab-ico { filter: grayscale(0); opacity: 1; }
+.hud-tab:hover { color: var(--v-ink-1); }
+.hud-tab.sel { color: var(--v-violet-hi); background: var(--v-tint-violet); cursor: default; }
+.hud-tab.sel .hud-tab-lbl { font-weight: 600; }
 
-/* Moon Station's tab never carries .sel (it opens a sheet, not a screen —
-   see TABS' own comment in ui-hud.js), so without this it would sit
-   permanently dimmed like every other never-selected tab. The beacon is
-   the opposite of that on purpose: full color, always animating, so it
-   reads as "this one's different" rather than blending into the row. */
-.hud-tab-beacon { filter: none; opacity: 1; animation: hudBeaconPulse 1.8s ease-in-out infinite; }
-@keyframes hudBeaconPulse {
-  0%, 100% { text-shadow: 0 0 4px rgba(229,56,79,0.5); transform: scale(1); }
-  50% { text-shadow: 0 0 14px rgba(229,56,79,0.95), 0 0 22px rgba(229,56,79,0.5); transform: scale(1.08); }
-}
-
-/* Six labeled tabs (Settings' 8 characters especially) don't all fit
-   without truncating below ~380px — confirmed live at 375px, "Settings"
-   clipped to "Settin…" even after shortening every other label. Rather
-   than restructure navigation (moving a tab behind a "More" menu) for a
-   narrow-phone edge case, this drops to icon-only tabs there instead —
-   every icon here is already an established, unambiguous symbol, and the
-   title attribute on each tab still gives its name on long-press/hover. */
-@media (max-width: 380px) {
-  .hud-tab-lbl { display: none; }
-  .hud-tab { padding: 10px 4px; }
-  .hud-tab-ico { font-size: 22px; }
+/* 320px class: seven tabs leave ~41px each. Tighten the shell, and only at
+   this width let labels drop to 10px so "Settings" still fits whole. */
+@media (max-width: 345px) {
+  #tabbar { padding-inline: 8px; }
+  .hud-tabs { padding: 4px; gap: 0; }
+  .hud-tab { font-size: 10px; }
+  .hud-tab-ico, .hud-tab-ico svg { width: 21px; height: 21px; }
 }
 
 /* ════════════════════════════════════════════════════════════════
@@ -3643,8 +3643,10 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 
 /* Pack tab dot — an agent has opened a Backup Pass since you last looked */
 .hud-tab { position: relative; }
-.hud-tab-dot { position: absolute; top: 4px; right: calc(50% - 16px); width: 7px; height: 7px;
-  border-radius: 50%; background: #d9ad5f; box-shadow: 0 0 0 2px var(--bg, #08070d); }
+.hud-tab-dot { position: absolute; top: 6px; right: calc(50% - 15px); width: 8px; height: 8px;
+  border-radius: 50%; background: var(--v-gold); box-shadow: 0 0 0 2px var(--v-surface-1); }
+/* Moon: streams to review (moon-review-dot.js). Crimson, still, no glow. */
+.hud-tab-dot.is-review { background: var(--v-red); }
 /* Backup Pass — the helper list (js/backup-pass.js) */
 .pocket-slot.is-live .ps-status { color: #d9ad5f; }
 .backup-help-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
@@ -6128,29 +6130,6 @@ body {
 /* Persistent navigation: still a thumb dock, just less glassy and less
    detached from the rest of the product. */
 #tabbar { padding: 0 var(--space-3) calc(10px + env(safe-area-inset-bottom)); }
-.hud-tabs {
-  gap: 2px;
-  padding: 6px;
-  background: rgba(17,15,25,.975);
-  border-color: var(--line);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-float);
-  backdrop-filter: blur(8px);
-}
-.hud-tab {
-  min-height: 50px;
-  gap: 4px;
-  padding: 7px 3px;
-  border-radius: var(--radius-md);
-  font-size: 10.5px;
-  letter-spacing: .15px;
-  opacity: .82;
-}
-.hud-tab-ico { font-size: 19px; }
-.hud-tab.sel {
-  background: rgba(139,92,246,.15);
-  box-shadow: inset 0 0 0 1px rgba(167,139,250,.12);
-}
 
 /* City and district artwork remain untouched. Only their containing frame
    is normalized so the scene, not a glowing border, owns the attention. */
@@ -6319,7 +6298,6 @@ body {
   .hud-sync { grid-column: 2; grid-row: 1; }
   .hud-bell { grid-column: 3; grid-row: 1; }
   .hud-bell, .hud-sync { width: 32px; height: 32px; border-radius: 10px; }
-  .hud-tab { min-height: 48px; }
   .card { padding: var(--space-4); }
   .sheet { padding-inline: 14px; }
   .stage-overlay { padding: 13px; }
@@ -6448,22 +6426,6 @@ body {
 .gr-name { color: #f0edf5; }
 .gr-sub { margin-top: 3px; color: #aaa3ba; }
 
-.hud-tabs {
-  padding: 5px;
-  background: #121019;
-  border-color: rgba(255,255,255,.1);
-  border-radius: 20px;
-  box-shadow: 0 16px 38px rgba(0,0,0,.5);
-}
-.hud-tab { opacity: .68; }
-.hud-tab-ico { filter: saturate(.72); }
-.hud-tab.sel {
-  opacity: 1;
-  color: #f5f1fa;
-  background: #2a2041;
-  box-shadow: inset 0 0 0 1px rgba(167,139,250,.14);
-}
-.hud-tab.sel .hud-tab-ico { filter: none; transform: translateY(-1px); }
 
 @media (max-width: 640px) {
   .world-screen { gap: 18px; }

@@ -9,6 +9,7 @@ import { setState, getState, subscribe, toast } from './state.js'
 import { getScreen, onScreenChange } from './router.js'
 import { renderOnboarding } from './ui-onboarding.js'
 import { renderHud, renderTabbar } from './ui-hud.js'
+import { startMoonReviewCheck } from './moon-review-dot.js'
 import { renderWorld, renderGoldenCorner } from './screen-world.js'
 import { renderRecelebrateParty } from './screen-recelebrate.js'
 import { renderWard, teardownWard } from './screen-ward.js'
@@ -131,6 +132,12 @@ subscribe((state) => {
   renderHud($('hud'), state)
   renderTabbar($('tabbar'), state)
   renderScreen(state)
+  // After the first paint, never before it: the Moon dot's one background
+  // check (moon-review-dot.js). Repeat calls are no-ops for the same agent.
+  startMoonReviewCheck(() => {
+    const now = getState()
+    if (now?.joined) renderTabbar($('tabbar'), now)
+  })
   if (state.levelUp && state.levelUp.level !== celebratedLevel) {
     celebratedLevel = state.levelUp.level
     playLevelUp(state)
