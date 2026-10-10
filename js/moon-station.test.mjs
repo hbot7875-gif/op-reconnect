@@ -23,6 +23,10 @@ test('partial provider history is explained and never gets a mode verdict', () =
   // pass on zero streams -- see "zero streams is neither a pass nor a sync
   // problem" below.
   assert.match(ui, /modeChecked = !res\.partialHistory && !nothingToCheck && !!res\.mode/)
+  // The review card shows an em dash, not a zero, when nothing was checked:
+  // a zero there would read as "nothing found".
+  assert.match(ui, /const patternChecked = !res\.partialHistory && !nothingToCheck/)
+  assert.match(ui, /patternChecked \? String\(res\.flaggedCount\) : '—'/)
   assert.match(ui, /Not checked yet/)
 })
 
@@ -35,19 +39,24 @@ test('the two checks are presented as separate, independent questions', () => {
   // explaining it made a routine check sound like it needed defending.
   assert.doesNotMatch(ui, /runs two separate checks/)
   assert.doesNotMatch(ui, /One does not affect the other/)
-  assert.match(ui, /Streaming pattern/)
-  assert.match(ui, /Mode check/)
+  // They are two metric cards rather than two stacked sections, but they
+  // are still two separate answers with two separate verdicts.
+  assert.match(ui, /Patterns to review/)
+  assert.match(ui, /Streams checked/)
   assert.match(ui, /Spacing &amp; repeats/)
-  assert.match(ui, /Daily volume vs selected mode/)
+  assert.match(ui, /moon-metric-mode/)
   assert.match(ui, /moon-check-title/)
-  assert.match(ui, /moon-verdict/)
   // flaggedCount belongs to the pattern check alone. It must appear in the
   // pattern section and nowhere near the mode verdict.
-  const patternAt = ui.indexOf("'Streaming pattern'")
-  const modeAt = ui.indexOf("'Mode check'")
-  assert.ok(patternAt > 0 && modeAt > patternAt, 'pattern section precedes mode section')
-  assert.ok(ui.slice(patternAt, modeAt).includes('res.flaggedCount'),
-    'flaggedCount lives in the Streaming Pattern section')
+  const patternAt = ui.indexOf('Patterns to review')
+  const modeAt = ui.indexOf('Streams checked')
+  assert.ok(patternAt > 0 && modeAt > patternAt, 'the review card precedes the volume card')
+  // flaggedCount is computed for the review card and must not be read
+  // anywhere near the mode verdict.
+  const patternValue = ui.slice(ui.indexOf('const patternValue'), ui.indexOf('const patternSub'))
+  assert.ok(patternValue.includes('res.flaggedCount'), 'the review card carries flaggedCount')
+  const modeLine = ui.slice(ui.indexOf('const modeLine'), ui.indexOf('metrics.appendChild', ui.indexOf('const modeLine')))
+  assert.ok(!modeLine.includes('flaggedCount'), 'the mode verdict must never read flaggedCount')
   assert.ok(!ui.slice(modeAt).includes('res.flaggedCount'),
     'flaggedCount must never reach the Mode Check section')
   // Shared listening identity is neither check, so it sits below both.
@@ -58,14 +67,18 @@ test('the two checks are presented as separate, independent questions', () => {
 
 test('player copy uses familiar streaming language without an accusation', () => {
   assert.match(ui, /Stream review/)
-  assert.match(ui, /⚠ Review mode/)
-  assert.match(ui, /Current: \$\{esc\(modeLabel\)\}/)
-  assert.match(ui, /Recent pace: \$\{esc\(suggestion\)\}/)
+  // The verdict names the mode the player actually chose rather than the
+  // bare word "mode", so it reads as a specific finding and never as a
+  // generic warning. The value is always interpolated, never hardcoded.
+  assert.match(ui, /⚠ Review \$\{esc\(modeLabel\)\}/)
+  // The mode verdict lives on its own line inside the second card.
+  assert.match(ui, /\$\{esc\(modeLabel\)\} fits/)
+  assert.match(ui, /Recent pace: \$\{esc\(MODE_NAMES\[res\.suggestedMode\]/)
   // Names the rule instead of the person, so a player can tell what to
   // change. "played too close" read as a verdict, and "repeated-play
   // pattern" described a suspicion rather than the actual spacing rule.
-  assert.match(ui, /Same song replayed within 8 min/)
-  assert.match(ui, /Same song played twice in a row/)
+  assert.match(ui, /Replayed too soon/)
+  assert.match(ui, /Played twice in a row/)
   assert.doesNotMatch(ui, /played too close/)
   assert.doesNotMatch(ui, /Your own police check/)
   assert.doesNotMatch(ui, />\d* flagged</)
@@ -264,31 +277,29 @@ test('an unsynced window can never render a green Streaming Pattern', () => {
   // false green Mode Check already avoids; both checks must be able to say
   // they do not know yet. Asserted on source because the verdict is chosen
   // before any DOM exists.
-  const start = ui.indexOf('const pattern = el(')
-  // The section now ends where it is wrapped into the shared checks panel.
-  const end = ui.indexOf("const panel = el('div', 'moon-panel')")
-  assert.ok(start > 0 && end > start, 'pattern section not found')
-  const block = ui.slice(start, end)
-  // The partial branch comes first and owns the verdict in that state.
-  const partialAt = block.indexOf('if (res.partialHistory)')
-  const clearAt = block.indexOf("'✓ Clear'")
-  assert.ok(partialAt > -1, 'partialHistory must be handled before any verdict')
-  assert.ok(clearAt > partialAt, "'✓ Clear' must live in the else branch")
-  assert.ok(block.includes("'· Not checked yet'"), 'pattern needs a not-checked verdict')
-  assert.ok(block.includes("'Syncing recent streams'"))
-  // And the else branch is the only place a pass or a count can be produced.
-  const elseAt = block.indexOf('} else {')
-  assert.ok(elseAt > -1 && elseAt < clearAt, 'the pass must be inside else')
-  // Comments stripped: the branch explains itself by naming flaggedCount,
-  // which is prose, not a read.
-  const partialCode = block.slice(partialAt, elseAt).replace(/\/\/[^\n]*/g, '')
-  assert.ok(!partialCode.includes('flaggedCount'),
-    'flaggedCount must not be read in the partial-history branch')
+  // The guard is now one expression rather than a branch, which is easier
+  // to hold: flaggedCount is unreachable unless the window was complete.
+  const value = ui.slice(ui.indexOf('const patternChecked'), ui.indexOf('const patternSub'))
+  assert.match(value, /const patternChecked = !res\.partialHistory && !nothingToCheck/)
+  assert.match(value, /patternChecked \? String\(res\.flaggedCount\) : '—'/,
+    'the count must be unreachable on an incomplete or empty window')
+  // The card's APPEARANCE is gated on the same predicate, so an unchecked
+  // window can never borrow the settled card's gold and read as a pass.
+  assert.match(value, /!patternChecked \? '' : res\.flaggedCount \? ' is-review' : ' is-settled'/)
+  const sub2 = ui.slice(ui.indexOf('const patternSub'), ui.indexOf("metrics.appendChild"))
+  assert.ok(sub2.indexOf('res.partialHistory') < sub2.indexOf('Spacing'),
+    'partialHistory must be tested before the rule name is claimed')
+  assert.match(ui, /'Not checked yet'/, 'the review card needs a not-checked state')
+  // And the mode verdict has the same guard.
+  assert.match(ui, /modeChecked = !res\.partialHistory/)
 })
 
 test('the high-volume day list is labelled, and stays flat', () => {
   assert.match(ui, /Recent high-volume days/)
-  assert.match(ui, /moon-days-title/)
+  // Now labelled by the note it sits in rather than a separate heading
+  // element, but still labelled and still a flat list.
+  assert.match(ui, /Recent high-volume days/)
+  assert.match(ui, /moon-days/)
   // Not wrapped in another card or bordered panel.
   const css = readFileSync('css/reconnect.css', 'utf8')
   const rule = css.slice(css.indexOf('.moon-days-title'), css.indexOf('.moon-days {'))
@@ -321,16 +332,17 @@ test('the two checks share a panel and the log sits in a lighter one', () => {
   // read as a consequence of a timing flag.
   assert.match(ui, /el\('div', 'moon-panel'\)/)
   assert.match(ui, /el\('div', 'moon-streams'\)/)
-  assert.match(ui, /panel\.appendChild\(pattern\)/)
-  assert.match(ui, /panel\.appendChild\(mode\)/)
+  assert.match(ui, /panel\.appendChild\(metrics\)/)
+  assert.match(ui, /metrics\.appendChild/)
   assert.match(ui, /streams\.appendChild\(seq\)/)
 
   const css = readFileSync('css/reconnect.css', 'utf8')
-  const panel = css.slice(css.indexOf('.moon-panel {'), css.indexOf('.moon-check-title {'))
-  assert.match(panel, /\.moon-panel \.moon-check \+ \.moon-check \{[^}]*border-top/,
-    'the divider between the checks must be inset, not full-bleed')
-  // The log reads lighter than the checks it explains.
-  assert.match(css, /\.moon-streams \{[^}]*rgba\(255,255,255,0\.045\)/)
+  // The two cards are divided by their own borders now rather than by an
+  // inset rule, which is the same separation by other means.
+  assert.match(css, /\.moon-metrics \{[^}]*grid-template-columns: 1fr 1fr/)
+  assert.match(css, /\.moon-metric \{[^}]*border: 1px solid var\(--border\)/)
+  // The log still reads lighter than the checks it explains.
+  assert.match(css, /\.moon-streams \{[^}]*rgba\(255, 255, 255, 0\.012\)/)
 })
 
 test('a stream row stacks title, artist and timestamp on the left', () => {
@@ -339,11 +351,12 @@ test('a stream row stacks title, artist and timestamp on the left', () => {
   // Long / FAST X Soundtrack)" broke across four lines with the artist
   // stacking beside it. Each wraps on its own now.
   const css = readFileSync('css/reconnect.css', 'utf8')
-  assert.match(css, /\.moon-row-top \{ display: block; \}/)
-  assert.match(css, /\.moon-artist \{ display: block;[^}]*letter-spacing: 0;/)
-  assert.ok(!/\.moon-artist \{[^}]*text-align: right/.test(css))
+  // Artist and timestamp share one secondary line now, which is what made
+  // the row 24px shorter; both still wrap on their own.
+  assert.match(css, /\.moon-row-meta \{ display: block;[^}]*letter-spacing: 0;/)
+  assert.ok(!/\.moon-row-meta \{[^}]*text-align: right/.test(css))
   // Long values must wrap rather than widen the viewport.
-  for (const sel of ['.moon-track', '.moon-artist']) {
+  for (const sel of ['.moon-track', '.moon-row-meta']) {
     const rule = css.slice(css.indexOf(sel + ' {'), css.indexOf('}', css.indexOf(sel + ' {')))
     assert.match(rule, /overflow-wrap: anywhere/, `${sel} must wrap`)
   }
@@ -413,11 +426,11 @@ test('each row carries one of exactly three marks', () => {
   // Gold is reachable only when the window was complete AND the row was
   // clean. An unchecked row must never be gold: no rule ran on it, so a
   // tick there would be a pass nobody computed.
-  const mark = ui.slice(ui.indexOf('const mark = res.partialHistory'), ui.indexOf('list.appendChild'))
+  const mark = ui.slice(ui.indexOf('const mark = !wasChecked'), ui.indexOf('// The repeat rule measures'))
   const unchecked = mark.indexOf('is-unchecked')
   const clear = mark.indexOf('is-clear')
   assert.ok(unchecked > -1 && clear > unchecked,
-    'partialHistory must be tested before a clean row can earn a tick')
+    'the unchecked case must be tested before a clean row can earn a tick')
 })
 
 test('the gold tick is defined narrowly and never claims legitimacy', () => {
@@ -448,21 +461,28 @@ test('the legend explains the marks before the list that uses them', () => {
 // ── transparency ──────────────────────────────────────────────────────────
 
 test('a flag is stated to be a second look, not a verdict or a penalty', () => {
-  assert.match(ui, /not a violation, and not a decision/)
-  assert.match(ui, /Nothing is deducted and no action is taken automatically/)
+  assert.match(ui, /Flags indicate patterns worth reviewing, not violations/)
+  assert.match(ui, /No automatic deductions/)
 })
 
 test('the list says how much was reviewed, so 25 rows do not look like all of it', () => {
   // The checks run on the whole window; the log shows the newest 25 of it.
-  assert.match(ui, /Newest \$\{SHOWN\} of \$\{res\.trackCount\} streams \$\{verb\}/)
+  // Counts now run over every reviewed stream, and the scope line says how
+  // many of them are on screen. A visible subset is still never called the
+  // total.
+  assert.match(ui, /Newest \$\{SHOWN\} of \$\{rows\.length\} \$\{noun\}/)
   assert.match(ui, /const SHOWN = 25/)
-  assert.match(ui, /res\.tracks\.slice\(0, SHOWN\)/)
+  assert.match(ui, /rows\.slice\(0, SHOWN\)/)
 })
 
 test('the eight-minute rule is still named as the rule it is', () => {
-  assert.match(ui, /Same song replayed within 8 min/)
-  assert.match(ui, /Same song played twice in a row/)
-  assert.match(ui, /since this song last played/)
+  // Named as the rule plus the threshold it used, on two lines instead of
+  // one sentence. back_to_back deliberately has no threshold entry.
+  assert.match(ui, /Replayed too soon/)
+  assert.match(ui, /Played twice in a row/)
+  assert.match(ui, /Review threshold: 8 minutes/)
+  assert.match(ui, /SELF_CHECK_FLAG_THRESHOLD = \{\s*\n\s*repeat:/,
+    'only the repeat rule may carry a threshold')
 })
 
 // ── what an empty window may not claim ──
@@ -473,14 +493,11 @@ test('the eight-minute rule is still named as the rule it is', () => {
 
 test('zero streams is neither a pass nor a sync problem', () => {
   assert.match(ui, /const nothingToCheck = !res\.trackCount/)
-  assert.equal((ui.match(/Nothing to check/g) || []).length, 2,
-    'both checks must be able to say there was nothing to run on')
-  // The empty branch has to be tested BEFORE the verdict branches, or a
-  // zero-stream window falls through to the clear/fits copy again.
-  const patternAt = ui.indexOf("'Streaming pattern'")
-  const emptyAt = ui.indexOf('nothingToCheck', patternAt)
-  const clearAt = ui.indexOf("'✓ Clear'", patternAt)
-  assert.ok(emptyAt > 0 && clearAt > emptyAt, 'the empty case must precede ✓ Clear')
+  // Both cards must be able to say there was nothing to run on: the review
+  // card shows an em dash rather than a zero, and the mode line refuses to
+  // say the mode fits.
+  assert.match(ui, /nothingToCheck\s*\n?\s*\? `No streams in \$\{res\.windowDays\} days`/)
+  assert.match(ui, /!nothingToCheck && !!res\.mode/)
   // And mode may not pass on it either.
   assert.match(ui, /modeChecked = !res\.partialHistory && !nothingToCheck && !!res\.mode/)
 })
@@ -497,7 +514,8 @@ test("the log does not say \"reviewed\" when no review ran", () => {
   // line claimed 25 streams were reviewed directly beneath two checks that
   // both read "not checked yet".
   assert.match(ui, /const verb = res\.partialHistory \? 'received' : 'reviewed'/)
-  assert.match(ui, /streams \$\{verb\}/)
+  assert.match(ui, /\$\{noun\} · oldest first/)
+  assert.match(ui, /const noun = active === 'all' \? `\$\{verb\}`/)
 })
 
 // ── the two freshness messages that were wrong ──
@@ -541,9 +559,13 @@ test('a row the rules could not identify gets the neutral mark, not a tick', () 
   // Empty flags mean two different things -- "the rules ran and found
   // nothing" and "the rules could not run" -- and only the first earns a
   // tick. 3 rows in 172,344 measured, but it is a false pass by shape.
-  assert.match(ui, /res\.partialHistory \|\| t\.identified === false/)
+  // Both conditions now live in one predicate, used by the mark and by the
+  // Clear filter so the two can never disagree about what "checked" means.
+  assert.match(ui, /const wasChecked = \(res, t\) => !res\.partialHistory && t\.identified !== false/)
+  assert.match(ui, /const mark = !wasChecked\(res, t\)/)
+  assert.match(ui, /!isFlagged\(t\) && wasChecked\(res, t\)/)
   // The legend must explain the neutral mark whenever one is on screen.
-  assert.match(ui, /const anyUnchecked = sequence\.some\(\(t\) => t\.identified === false\)/)
+  assert.match(ui, /const anyUnchecked = shown\.some\(\(t\) => !wasChecked\(res, t\)\)/)
   assert.match(ui, /no artist, so not checked/)
 })
 
@@ -553,4 +575,152 @@ test('the backend reports whether each row could be identified at all', () => {
   // Derived from songKey, so it can never disagree with the rule itself
   // about what counts as identifiable.
   assert.match(police, /identified: songKey\(r\) !== null/)
+})
+
+// ── the filters, and what their counts are counting ──
+//
+// getMySelfCheck already returns the WHOLE window, so the counts beside the
+// segments are true totals rather than a description of the 25 rows on
+// screen. That distinction is the whole reason this is safe to add: a
+// "Flagged 2" that silently meant "2 of the 25 visible" would be the same
+// class of overclaim the scope line exists to prevent.
+
+test('filter counts are over every reviewed stream, not the visible slice', () => {
+  assert.match(ui, /const flaggedAll = all\.filter\(isFlagged\)/)
+  assert.match(ui, /const clearAll = all\.filter\(\(t\) => !isFlagged\(t\) && wasChecked\(res, t\)\)/)
+  assert.match(ui, /\{ id: 'all', label: 'All', rows: all \}/)
+  // The cap is applied to the FILTERED rows, after the counts are taken.
+  const paint = ui.slice(ui.indexOf('function paint()'), ui.indexOf('paint()\n'))
+  assert.ok(paint.indexOf('f.rows.length') < paint.indexOf('rows.slice(0, SHOWN)'),
+    'counts must be read before the display cap is applied')
+})
+
+test('filtering never reorders and never re-runs the review', () => {
+  // The rows are the same objects the backend returned, filtered and
+  // reversed for display exactly as the unfiltered list already was.
+  const paint = ui.slice(ui.indexOf('function paint()'), ui.indexOf('paint()\n'))
+  assert.match(paint, /rows\.slice\(0, SHOWN\)\.slice\(\)\.reverse\(\)/)
+  assert.doesNotMatch(paint, /\.sort\(/, 'the log must keep the order it was given')
+  assert.doesNotMatch(paint, /flags\.push|REPEAT_MIN_GAP|sinceSameSong <|call\(/,
+    'a filter may not compute or re-fetch a verdict')
+})
+
+test('an incomplete window gets no filters rather than three empty ones', () => {
+  // Filtering by outcome is meaningless when no rule ran.
+  assert.match(ui, /const filterable = !res\.partialHistory/)
+  assert.match(ui, /if \(filterable\) seq\.appendChild\(bar\)/)
+})
+
+test('every filter has an empty state that names the window', () => {
+  assert.match(ui, /moon-empty/)
+  assert.match(ui, /No flagged streams in the last \$\{res\.windowDays\} days/)
+  assert.match(ui, /No clear streams in the last \$\{res\.windowDays\} days/)
+})
+
+test('the segmented control is reachable and announces its state', () => {
+  assert.match(ui, /role="tab"/)
+  assert.match(ui, /aria-selected="\$\{f\.id === active\}"/)
+  assert.match(ui, /setAttribute\('role', 'tablist'\)/)
+  const css = readFileSync('css/reconnect.css', 'utf8')
+  // Shares the .chip selection vocabulary so it reads as the same control
+  // family as the rest of the app.
+  assert.match(css, /\.moon-filter\.sel \{[^}]*var\(--purple\)/)
+  // Tap targets stay usable at 320px, where the three segments are
+  // narrowest.
+  assert.match(css, /@media \(max-width: 359px\)[^}]*\}[\s\S]*?\.moon-filter \{[^}]*padding: 7px 2px/)
+})
+
+// ── the condensed header, and the blast radius it must not have ──────────
+
+test('the condensed header is scoped to Moon Station and nothing else', () => {
+  const css = readFileSync('css/reconnect.css', 'utf8')
+  // #hud is global and repainted for every screen. Every rule that touches
+  // it here must be under the Moon-only class, or City, Pack, Candy, BOTZ,
+  // Rankings and Settings inherit a header they did not ask for.
+  const hudRules = css.split('\n').filter((l) => /#hud/.test(l) && /is-condensed|hud-xp|hud-crest|hud-inner/.test(l))
+  const moonHudRules = hudRules.filter((l) => l.includes('.moon-hud-compact'))
+  const strays = hudRules.filter((l) => !l.includes('.moon-hud-compact') && l.includes('is-condensed'))
+  assert.ok(moonHudRules.length > 0, 'the condensed rules must exist')
+  assert.deepEqual(strays, [], 'no is-condensed rule may apply outside Moon Station')
+})
+
+test('the header listener is torn down when the screen is left', () => {
+  // Otherwise it outlives the screen that asked for it and condenses the
+  // header on City.
+  assert.match(ui, /export function teardownMoonStation/)
+  assert.match(ui, /removeEventListener\('scroll', hudScrollHandler\)/)
+  assert.match(ui, /document\.body\.classList\.remove\('moon-hud-compact'\)/)
+  const main = readFileSync('js/main.js', 'utf8')
+  assert.match(main, /if \(scr\.name !== 'moon'\) teardownMoonStation\(\)/)
+})
+
+test('collapsing the header never removes an action', () => {
+  // "Collapsed" must not mean "fewer things you can do". What condenses is
+  // the XP block, which is a progress bar; every button stays mounted.
+  const css = readFileSync('css/reconnect.css', 'utf8')
+  const condensed = css.slice(css.indexOf('.moon-hud-compact #hud.is-condensed'),
+    css.indexOf('@media (prefers-reduced-motion: reduce) {', css.indexOf('.moon-hud-compact')))
+  for (const action of ['hud-sync', 'hud-bell', 'hud-identity', 'hud-eye', 'hud-reconnect-status', 'hud-row']) {
+    assert.ok(!condensed.includes(action), `${action} must survive the collapse untouched`)
+  }
+  assert.match(condensed, /\.hud-xp \{[\s\S]*?max-height: 0/)
+})
+
+test('the scroll threshold has hysteresis so it cannot flicker', () => {
+  assert.match(ui, /const HUD_CONDENSE_AT = 140/)
+  assert.match(ui, /const HUD_RESTORE_AT = 70/)
+  assert.ok(/HUD_RESTORE_AT\s*$|HUD_RESTORE_AT[^0-9]/.test(ui))
+  // And the handler is rAF-coalesced rather than running per scroll event.
+  assert.match(ui, /requestAnimationFrame\(apply\)/)
+  assert.match(ui, /\{ passive: true \}/)
+})
+
+// ── identity and type ────────────────────────────────────────────────────
+
+test('the station is named as a place, not as a report', () => {
+  // MOON STATION is a destination in the game, so it is the headline. It
+  // used to be a small eyebrow above "Stream review", which read as a
+  // section label on an analytics page rather than the name of a place.
+  assert.match(ui, /<span class="moon-title">Moon Station<\/span>/)
+  assert.match(ui, /<span class="moon-subtitle">Stream Check<\/span>/)
+  // Checked against the COPY: the comment above the header names the old
+  // wording to explain why it went, which is reasoning, not a string a
+  // player can see.
+  const copy = ui.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
+  assert.doesNotMatch(copy, /Stream review|Streaming signal analysis|moon-eyebrow/)
+  assert.match(ui, /class="moon-sigil" role="img" aria-label="Moon Station">👮/)
+
+  const css = readFileSync('css/reconnect.css', 'utf8')
+  const moon = css.slice(css.indexOf('/* ── Moon Station screen'))
+  const rule = (sel) => moon.slice(moon.indexOf(sel + ' {'), moon.indexOf('}', moon.indexOf(sel + ' {')))
+  // The name outweighs what sits under it, in the app's display face.
+  assert.match(rule('.moon-title'), /var\(--disp\)[\s\S]*font-size: 23px/)
+  assert.match(rule('.moon-subtitle'), /font-size: 12\.5px/)
+  // The radar SVG and its animation are gone, not merely hidden — no dead
+  // rules, no keyframes nothing references.
+  assert.doesNotMatch(moon, /moon-sweep|moonSweep|\.moon-sigil svg|\.moon-sigil circle/)
+  assert.doesNotMatch(css, /@keyframes moonSweep/)
+  assert.doesNotMatch(moon, /box-shadow|linear-gradient|radial-gradient/,
+    'the identity may not use glow or gradients')
+})
+
+test('each font carries the one job it is good at', () => {
+  const css = readFileSync('css/reconnect.css', 'utf8')
+  const moon = css.slice(css.indexOf('/* ── Moon Station screen'))
+  const rule = (sel) => moon.slice(moon.indexOf(sel + ' {'), moon.indexOf('}', moon.indexOf(sel + ' {')))
+  // Display for the station name and section headings.
+  for (const sel of ['.moon-title', '.moon-check-title', '.moon-metric-value']) {
+    assert.match(rule(sel), /var\(--disp\)/, `${sel} should be the display face`)
+  }
+  // Body for anything that is a sentence or a name.
+  for (const sel of ['.moon-track', '.moon-row-meta', '.moon-subtitle', '.moon-fineprint', '.moon-reason']) {
+    assert.match(rule(sel), /var\(--body\)/, `${sel} should be body text`)
+  }
+  // Mono only for numbers and short technical labels.
+  for (const sel of ['.moon-seq', '.moon-scope', '.moon-metric-label', '.moon-filter-n']) {
+    assert.match(rule(sel), /var\(--mono\)/, `${sel} should be mono`)
+  }
+  // The sentences that keep a flag from being misread are no longer set in
+  // tracked-out mono, which is what made them hard to read.
+  assert.match(rule('.moon-fineprint'), /letter-spacing: 0/)
 })

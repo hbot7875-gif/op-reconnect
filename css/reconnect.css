@@ -6691,128 +6691,284 @@ select.rc-multi-native {
 }
 
 /* ── Moon Station screen ────────────────────────────────────────────────
-   Typed to BOTZ, and grouped like the sheet this replaced. The full-screen
-   conversion dropped two levels of containment at once -- the bounded card
-   and the bounded row -- leaving only whitespace to hold the page together,
-   across a 620px measure. Both come back here, without the modal.
+   Mission control, read on a phone. Everything here is the existing
+   ReConnect palette and the existing three fonts; nothing is introduced.
 
-   The content heading matches BOTZ's own content heading (botz.html:1020,
-   .botz-recent-heading .botz-section-label): display 700 / .92rem / .2px /
-   sentence case. Section labels match .botz-section-label. ── */
-.moon-screen { max-width: 440px; margin-inline: auto; padding: 0 0 12px; }
-.moon-beacon { animation: hudBeaconPulse 1.8s ease-in-out infinite; display: inline-block; }
+   The type hierarchy is fixed and deliberate, because the page mixes three
+   kinds of information and used to set all three in mono:
 
-.moon-screen .pack-head { margin-bottom: 10px; }
-.moon-screen .pack-name { font-family: var(--disp); font-weight: 700; font-size: 14.7px;
-  letter-spacing: 0.2px; text-transform: none; color: var(--text); margin-top: 3px; }
+     --disp   the station name and every section heading
+     --body   song titles, artists, descriptions, status sentences
+     --mono   stream numbers, timestamps, counts and technical labels
 
-/* The two checks share one panel, divided by an INSET rule. They remain two
-   separate questions -- a mode warning must never read as a consequence of a
-   timing flag -- but they stop floating as unrelated bands. */
+   Mono carries numbers and labels, never a sentence: a paragraph set in
+   Share Tech Mono at 10px with 2px of tracking is the single least readable
+   thing this app can produce, and the page was full of them.
+
+   Density came from the containers, not the content. Two full-width check
+   sections, each with a heading, a verdict line and a description, spent
+   about 180px saying two numbers. They are two metric cards now. ── */
+.moon-screen { max-width: 440px; margin-inline: auto; padding: 0 0 14px; }
+
+/* ── page identity ──
+   MOON STATION is a place in the game, so it is the headline. It used to
+   sit above "Stream review" as a small eyebrow, which read as a section
+   label on an analytics page rather than the name of a destination.
+
+   Aligned to the first baseline rather than centred on the block: the
+   emoji belongs beside the station name, not floating between two lines of
+   different sizes. */
+.moon-head { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 14px; }
+.moon-sigil { flex: 0 0 auto; font-size: 23px; line-height: 1.15; }
+.moon-head-text { min-width: 0; display: flex; flex-direction: column; }
+/* Set in caps, as the station is written everywhere else in the game.
+   Orbitron is a display face and carries caps well; the tracking stays
+   near zero because at 23px the letterforms already have the air they
+   need, and opening them further turns a name into a label. */
+.moon-title { font-family: var(--disp); font-weight: 700; font-size: 23px;
+  letter-spacing: .6px; text-transform: uppercase; color: var(--text);
+  line-height: 1.15; overflow-wrap: anywhere; }
+.moon-subtitle { font-family: var(--body); font-size: 12.5px; letter-spacing: .1px;
+  color: var(--purple-lt); opacity: .85; margin-top: 3px; }
+
+/* ── the two checks, as two cards ──
+   Side by side at every width this app is used at, including 320px. They
+   are separate questions and must never read as one score, so each keeps
+   its own border, its own label and its own verdict colour. */
 .moon-panel { background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--r-lg); padding: 12px 14px; margin: 10px 0; }
-.moon-panel .moon-check { margin: 0; padding: 0; }
-.moon-panel .moon-check + .moon-check { margin-top: 9px; padding-top: 9px;
-  border-top: 1px solid var(--line); }
+  border-radius: var(--r-lg); padding: 12px 12px 9px; }
+.moon-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.moon-metric { min-width: 0; display: flex; flex-direction: column; gap: 1px;
+  padding: 10px; border: 1px solid var(--border); border-radius: var(--r);
+  background: var(--surface-2); }
+/* The left card's description stays with the number it describes. An
+   earlier version pushed it to the bottom edge to line up with the mode
+   verdict opposite, which filled the card but separated the figure from
+   the words explaining it -- the gap read as a missing row rather than as
+   alignment. The right card simply holds more, and a little quiet space
+   under the left one is the honest way to say so. */
+/* Two lines reserved whether or not the label needs both: "Patterns to
+   review" wraps at phone width and "Streams checked" does not, and without
+   the reservation the two big numbers sat at different heights and the
+   pair stopped reading as one dashboard.
 
-/* Lighter than the checks panel: half the border opacity and a barely-there
-   fill, so the checks read as the finding and the log as its evidence. */
-.moon-streams { background: rgba(255,255,255,0.012);
-  border: 1px solid rgba(255,255,255,0.045); border-radius: var(--r-lg);
-  padding: 12px 14px 16px; }
-.moon-streams .moon-check { margin: 0; padding: 0; }
+   Bigger and less tracked than it was. A 9.4px mono label opened to .9px is
+   legible as a shape and not as a phrase; these are the words that say what
+   each number counts, so they have to be read, not recognised. */
+.moon-metric-label { display: flex; align-items: flex-start; gap: 5px;
+  min-height: 2.7em; font-family: var(--mono); font-size: 10.2px; letter-spacing: .4px;
+  line-height: 1.35; text-transform: uppercase; color: #b6b0c8; }
+/* The mid-card heading for the second, independent check. Same voice as the
+   card label, without the two-line reservation that aligns the numbers. */
+.moon-metric-sublabel { display: block; font-family: var(--mono); font-size: 10.2px;
+  letter-spacing: .4px; line-height: 1.35; text-transform: uppercase; color: #b6b0c8; }
+.moon-metric-icon { flex: 0 0 auto; font-size: 9px; line-height: 1.5; opacity: .75; }
+.moon-metric-value { font-family: var(--disp); font-weight: 700; font-size: 28px;
+  line-height: 1.05; letter-spacing: -.5px; color: var(--text); margin: 1px 0 2px; }
+.moon-metric-sub { font-family: var(--body); font-size: 11.2px; letter-spacing: 0;
+  line-height: 1.4; color: var(--muted); }
+/* The inset rule between the stream count and the mode verdict. They are
+   independent checks that happen to describe the same window, and sitting
+   them in one card without a break made the verdict look like a caption on
+   the number. */
+.moon-metric-split { display: block; height: 1px; margin: 8px 0 7px;
+  background: var(--border); }
+.moon-metric-note { display: block; margin-top: 1px; font-family: var(--body);
+  font-size: 10.8px; line-height: 1.35; color: var(--dim); overflow-wrap: anywhere; }
+/* Colour carries the verdict, and only the verdict. A zero count stays
+   neutral -- nothing to review is not an achievement to colour in. */
+/* The review card has three appearances, because "nothing found" and
+   "nothing ran" are different results and must not look alike.
 
-.moon-check-title { margin: 0 0 5px; padding: 0 0 5px; font-family: var(--mono);
-  font-size: 9.8px; letter-spacing: 2.4px; text-transform: uppercase; color: var(--muted); }
+   is-review   flags exist     crimson number on a faint crimson card
+   is-settled  checked, none   gold number on a faint gold edge
+   neither     nothing ran     em dash, neutral -- never reads as a pass
 
-/* Verdict and window on one line. */
-.moon-verdict-row { display: flex; justify-content: space-between;
-  align-items: baseline; gap: 10px; }
-.moon-verdict { margin: 0 0 2px; font-family: var(--body); font-weight: 700;
-  font-size: 13.6px; color: var(--text); line-height: 1.45; overflow-wrap: anywhere; }
-.moon-verdict.is-review { color: var(--crimson); }
-.moon-count { flex: 0 0 auto; font-family: var(--mono); font-size: 9.8px;
-  letter-spacing: 0.4px; color: var(--dim); white-space: nowrap; }
-.moon-check-what { margin: 0; font-family: var(--mono); font-size: 11.2px;
-  letter-spacing: 0.2px; color: var(--muted); line-height: 1.75; overflow-wrap: anywhere; }
+   A zero on a tinted crimson card is an alert about nothing, which is why
+   the tint is conditional rather than the card's fixed colour. */
+.moon-metric.is-flags.is-review { border-color: rgba(229, 56, 79, .28);
+  background: var(--crimson-soft); }
+.moon-metric.is-flags.is-review .moon-metric-value { color: var(--crimson); }
+.moon-metric.is-flags.is-review .moon-metric-icon { opacity: 1; }
+.moon-metric.is-flags.is-settled { border-color: rgba(217, 173, 95, .22);
+  background: var(--gold-soft); }
+.moon-metric.is-flags.is-settled .moon-metric-value { color: var(--gold); }
+/* The count card is informational, never a verdict: gold number, plain
+   surface, no tint in any state. */
+.moon-metric.is-count .moon-metric-value { color: var(--gold); }
+/* The mode verdict carries its own colour, independent of anything the
+   left card says. */
+.moon-metric-mode { display: block; margin-top: 2px; font-family: var(--body);
+  font-size: 12px; line-height: 1.35; color: var(--muted); overflow-wrap: anywhere; }
+.moon-metric-mode.is-clear { color: var(--gold); }
+.moon-metric-mode.is-review { color: var(--crimson); }
 
-/* Informational, never a warning: the source double-reported, or a sync is
-   still catching up. Neither is something the player did. */
-.moon-note { margin: 9px 0 2px; padding: 9px 11px; border-left: 2px solid var(--lavender);
-  background: rgba(139,92,246,0.05); border-radius: 0 var(--r) var(--r) 0; }
-.moon-note b { display: block; font-family: var(--mono); font-size: 10px;
-  letter-spacing: 0.4px; color: var(--lavender); font-weight: 700; }
-.moon-note p { margin: 3px 0 0; font-size: 11.5px; color: var(--muted); line-height: 1.6; }
+/* Everything that qualifies a finding rather than being one: what a flag is
+   not, and when things last arrived. Set in body text, not mono -- these
+   are sentences, and they are the sentences that keep a flag from being
+   misread, so they are the last thing that should be hard to read. */
+.moon-fineprint { margin: 10px 0 0; font-family: var(--body); font-size: 11.4px;
+  letter-spacing: 0; line-height: 1.5; color: var(--dim); }
 
-.moon-days-title { margin: 10px 0 2px; font-family: var(--mono); font-size: 8.8px;
-  letter-spacing: 2.2px; text-transform: uppercase; color: var(--dim); }
-.moon-days { margin-top: 2px; }
+/* ── notes ──
+   Informational by default: a sync catching up, or a source that
+   double-reported. Neither is something the player did. */
+.moon-note { margin: 11px 0 0; padding: 9px 11px; border-left: 2px solid var(--purple);
+  background: var(--purple-soft); border-radius: 0 var(--r) var(--r) 0; }
+.moon-note b { display: block; font-family: var(--disp); font-weight: 700; font-size: 11px;
+  letter-spacing: .3px; color: var(--purple-lt); }
+.moon-note p { margin: 4px 0 0; font-family: var(--body); font-size: 11.8px;
+  line-height: 1.55; color: var(--muted); }
+/* A note about something actually wrong -- a connection that stopped
+   syncing. The default is for information; this one has to read as
+   "needs you", without reading as an accusation. */
+.moon-note.is-review { border-left-color: var(--crimson); background: var(--crimson-soft); }
+.moon-note.is-review b { color: var(--crimson); }
+/* The days behind a mode warning are supporting evidence, not a second
+   warning. In the default purple note they competed with the verdict that
+   sent the reader here, so this one sits on the plain panel surface with a
+   neutral edge: same information, one tier quieter. */
+.moon-note.is-quiet { border-left-color: var(--border-str); background: var(--panel); }
+.moon-note.is-quiet b { color: var(--muted); font-weight: 400; }
+.moon-days { margin-top: 5px; }
 .moon-day { display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
-  padding: 6px 0; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 10.6px; }
+  font-family: var(--mono); font-size: 11px; padding: 2px 0; }
 .moon-day b { color: var(--text); font-weight: 400; }
 .moon-day span { color: var(--dim); text-align: right; }
 
-/* Title / artist / timestamp, stacked and left-aligned. A right-aligned
-   artist column fought every long title for the same horizontal space and
-   broke both across four lines; stacking lets each wrap on its own. */
+/* ── the log ──
+   Lighter than the panel above it: the checks are the finding, the log is
+   the evidence behind them. */
+.moon-streams { margin-top: 12px; background: rgba(255, 255, 255, 0.012);
+  border: 1px solid var(--border); border-radius: var(--r-lg); padding: 12px; }
+.moon-check { margin: 0; padding: 0; }
+.moon-check + .moon-check { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.moon-check-title { margin: 0 0 7px; font-family: var(--disp); font-weight: 700;
+  font-size: 12.5px; letter-spacing: .4px; color: var(--text); }
+.moon-check-what { margin: 0; font-family: var(--body); font-size: 11.8px;
+  letter-spacing: 0; color: var(--muted); line-height: 1.55; overflow-wrap: anywhere; }
+
+/* Segmented control. Shares the .chip vocabulary (panel fill, purple
+   selection) so it reads as the same control family as the rest of the
+   app, drawn as one connected group rather than three loose pills. */
+.moon-filters { display: flex; gap: 4px; padding: 3px; margin: 0 0 9px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 999px; }
+.moon-filter { flex: 1 1 0; min-width: 0; display: flex; align-items: center;
+  justify-content: center; gap: 5px; padding: 7px 4px; border: 1px solid transparent;
+  border-radius: 999px; background: none; color: var(--muted); cursor: pointer;
+  font-family: var(--body); font-size: 11.8px; line-height: 1; white-space: nowrap; }
+.moon-filter:hover { color: var(--text); }
+.moon-filter.sel { background: var(--purple-soft); border-color: var(--purple); color: var(--text); }
+.moon-filter-n { font-family: var(--mono); font-size: 10.5px; color: var(--dim); }
+.moon-filter.sel .moon-filter-n { color: var(--purple-lt); }
+
+/* What was reviewed versus what is on screen: different numbers, so they
+   are never written as one. */
+.moon-scope { margin: 0 0 6px; font-family: var(--mono); font-size: 10px;
+  letter-spacing: .3px; color: var(--dim); line-height: 1.5; }
+.moon-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
+  margin: 0 0 4px; font-family: var(--body); font-size: 10.8px; letter-spacing: 0;
+  color: var(--dim); }
+.moon-legend .moon-mark { width: auto; padding: 0 0 0 7px; }
+.moon-legend .moon-mark:first-child { padding-left: 0; }
+
+/* ── a row ──
+   Number, title, one secondary line, mark. Title and artist in body text so
+   they read as names; number and timestamp in mono so they line up as
+   data. One secondary line rather than two saves 16px per row, which is
+   400px across a full log. */
 .moon-list { margin-top: 2px; }
-.moon-row { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0;
-  border-top: 1px solid var(--line); }
+.moon-row { display: flex; align-items: flex-start; gap: 9px; padding: 7px 0;
+  border-top: 1px solid var(--border); }
 .moon-row:first-child { border-top: none; }
-.moon-seq { flex: 0 0 auto; width: 18px; font-family: var(--mono); font-size: 10px;
-  color: var(--dim); padding-top: 2px; }
+.moon-seq { flex: 0 0 auto; width: 17px; padding-top: 2px; font-family: var(--mono);
+  font-size: 10px; color: var(--dim); }
 .moon-row-body { min-width: 0; flex: 1 1 auto; }
-.moon-row-top { display: block; }
-.moon-track { display: block; font-family: var(--body); font-weight: 600; font-size: 14px;
+.moon-track { display: block; font-family: var(--body); font-weight: 500; font-size: 13.6px;
   line-height: 1.3; color: var(--text); overflow-wrap: anywhere; }
-.moon-artist { display: block; margin-top: 1px; font-family: var(--body); font-size: 12.4px;
-  letter-spacing: 0; line-height: 1.4; color: #c3bdd1; overflow-wrap: anywhere; }
-.moon-row-meta { margin-top: 3px; font-family: var(--mono); font-size: 10.4px;
-  letter-spacing: 0.3px; color: var(--muted); }
-.moon-gap { display: block; margin-top: 1px; font-family: var(--mono); font-size: 10px;
-  letter-spacing: 0.2px; color: var(--text); }
-.moon-row-flags { margin-top: 5px; display: flex; flex-wrap: wrap; gap: 5px; }
-.moon-flag { font-family: var(--mono); font-size: 9.2px; letter-spacing: 0.2px;
-  color: var(--crimson); background: rgba(229,56,79,0.1);
-  border: 1px solid rgba(229,56,79,0.22); border-radius: 999px; padding: 3px 9px;
-  overflow-wrap: anywhere; }
+.moon-row-meta { display: block; margin-top: 2px; font-family: var(--body); font-size: 11.4px;
+  letter-spacing: 0; line-height: 1.4; color: var(--muted); overflow-wrap: anywhere; }
+.moon-row-meta i { font-style: normal; color: var(--dim); padding: 0 2px; }
 
-/* The one row a reviewer has to read becomes a contained object again. */
-.moon-row.is-review { border: 1px solid rgba(229,56,79,0.3); border-radius: var(--r);
-  background: var(--crimson-soft); padding: 8px 10px; margin: 5px 0; }
-.moon-row.is-review + .moon-row { border-top: none; }
-.moon-row.is-review .moon-row-meta { color: #b0aac2; }
-
-/* Per-row verdict mark. Right-hand edge, aligned with the title, so the
-   column reads as one vertical strip of outcomes while the seq number keeps
-   the left edge for position. Gold means the two timing rules found nothing
-   on that row -- nothing more, which is why the legend spells it out. */
-.moon-mark { flex: 0 0 auto; width: 16px; padding-top: 1px; text-align: center;
+/* Per-row verdict. Gold means the two timing rules found nothing on that
+   row -- nothing more, which is why the legend spells it out. */
+.moon-mark { flex: 0 0 auto; width: 15px; padding-top: 2px; text-align: center;
   font-family: var(--mono); font-size: 11px; line-height: 1.3; }
 .moon-mark.is-clear { color: var(--gold); }
 .moon-mark.is-review { color: var(--crimson); }
 .moon-mark.is-unchecked { color: var(--dim); }
-.moon-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
-  margin: 8px 0 2px; font-family: var(--mono); font-size: 9.8px; letter-spacing: 0.3px;
-  color: var(--dim); text-transform: lowercase; }
-.moon-legend .moon-mark { width: auto; padding: 0 0 0 6px; }
-.moon-legend .moon-mark:first-child { padding-left: 0; }
 
-/* Everything that qualifies a finding rather than being one: what a flag is
-   not, how much was reviewed, when things last arrived. Smallest type on the
-   page, because a reader who wants it will look and a reader who does not
-   should not have it competing with the verdict. */
-.moon-fineprint { margin: 8px 0 0; font-family: var(--mono); font-size: 10.2px;
-  letter-spacing: 0.2px; line-height: 1.75; color: var(--muted); }
+/* A flagged row: contained, tinted, and deliberately quiet. No glow, no
+   bright red, nothing that reads as a confirmed verdict -- the finding is
+   "look at this", not "you did this". */
+.moon-row.is-review { border: 1px solid rgba(229, 56, 79, .30); border-radius: var(--r);
+  background: var(--crimson-soft); padding: 9px 10px; margin: 5px 0; }
+.moon-row.is-review + .moon-row { border-top: none; }
+.moon-row-flags { margin-top: 5px; display: flex; flex-direction: column; gap: 3px; }
+.moon-reason { font-family: var(--body); font-size: 11.4px; line-height: 1.35;
+  color: #e9a2ad; overflow-wrap: anywhere; }
+/* The threshold the rule actually used, under the reason it belongs to.
+   Only the repeat rule has one; back_to_back is about adjacency. */
+.moon-reason em { display: block; font-family: var(--mono); font-style: normal;
+  font-size: 10px; letter-spacing: .3px; color: var(--dim); margin-top: 1px; }
 
-/* A note about something actually wrong -- a connection that stopped
-   syncing. The default lavender note is for information; this one has to
-   read as "needs you". */
-.moon-note.is-review { border-left-color: var(--crimson); background: var(--crimson-soft); }
-.moon-note.is-review b { color: var(--crimson); }
+.moon-empty { margin: 14px 0; padding: 0; text-align: center; font-family: var(--body);
+  font-size: 12px; line-height: 1.5; color: var(--dim); }
 
-.moon-alt { padding: 10px 12px; border-radius: var(--r); background: rgba(229,56,79,0.05);
-  border: 1px solid rgba(229,56,79,0.3); font-size: 12px; line-height: 1.65; }
-.moon-alt b { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.4px;
-  color: var(--crimson); }
-.moon-alt p { margin: 4px 0 0; color: var(--muted); }
+.moon-alt { padding: 10px 12px; border-radius: var(--r); background: var(--crimson-soft);
+  border: 1px solid rgba(229, 56, 79, .30); font-family: var(--body); font-size: 12px;
+  line-height: 1.6; }
+.moon-alt b { display: block; font-family: var(--disp); font-weight: 700; font-size: 11px;
+  letter-spacing: .3px; color: var(--crimson); }
+.moon-alt p { margin: 5px 0 0; color: var(--muted); }
+
+/* ── the condensed header, Moon Station only ──
+   #hud is global, already sticky, and repainted for every screen, so none
+   of this may apply anywhere else: every rule is under .moon-hud-compact,
+   which screen-moon.js adds on mount and removes on teardown.
+
+   What condenses is the XP block -- a progress bar, not an action. Every
+   button in the header stays mounted and tappable at both sizes, so
+   "collapsed" never means "fewer things you can do". The height change is
+   transitioned so the content below settles rather than jumping, and
+   screen-moon.js uses a hysteresis band so it cannot flicker. */
+.moon-hud-compact #hud .hud-xp,
+.moon-hud-compact #hud .hud-crest,
+.moon-hud-compact #hud .hud-inner { transition: all .18s ease; }
+.moon-hud-compact #hud.is-condensed .hud-inner { padding-top: 5px; }
+.moon-hud-compact #hud.is-condensed .hud-crest { --hud-crest-size: 32px; }
+.moon-hud-compact #hud.is-condensed .hud-xp {
+  max-height: 0; padding-top: 0; padding-bottom: 0; opacity: 0;
+  overflow: hidden; pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .moon-hud-compact #hud .hud-xp,
+  .moon-hud-compact #hud .hud-crest,
+  .moon-hud-compact #hud .hud-inner { transition: none; }
+}
+
+/* 320px: the metric cards stay side by side -- two numbers are the point of
+   the dashboard and stacking them rebuilds the tall column this replaced --
+   but everything inside them gives up a little room. */
+@media (max-width: 359px) {
+  .moon-panel, .moon-streams { padding: 10px; }
+  .moon-panel { padding-bottom: 8px; }
+  .moon-metrics { gap: 7px; }
+  .moon-metric { padding: 9px 8px; }
+  .moon-metric-value { font-size: 25px; }
+  .moon-metric-label, .moon-metric-sublabel { font-size: 9.6px; letter-spacing: .2px; }
+  .moon-metric-sub, .moon-metric-mode { font-size: 10.8px; }
+  .moon-metric-note { font-size: 10.2px; }
+  .moon-filter { font-size: 11px; padding: 7px 2px; gap: 3px; }
+  .moon-title { font-size: 20px; }
+  .moon-sigil { font-size: 20px; }
+}
+
+/* Tablet and up: the column stays 440px and centred, matching every other
+   screen in the app -- a stream log stretched to 900px is harder to read,
+   not easier. The page simply gets more air around it. */
+@media (min-width: 700px) {
+  .moon-screen { padding-bottom: 20px; }
+  .moon-panel, .moon-streams { padding: 14px; }
+  .moon-panel { padding-bottom: 11px; }
+}

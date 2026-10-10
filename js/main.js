@@ -17,7 +17,7 @@ import { renderResources } from './screen-resources.js'
 import { renderSettings } from './screen-settings.js'
 import { renderCandyStar } from './screen-candystar.js'
 import { renderRanking } from './screen-ranking.js'
-import { renderMoonStation } from './screen-moon.js'
+import { renderMoonStation, teardownMoonStation } from './screen-moon.js'
 import { playLevelUp } from './celebrate.js'
 import { checkForBadgeUnlocks } from './badge-reveal.js'
 import { checkForExamModeAnnounce } from './exam-mode-announce.js'
@@ -64,6 +64,9 @@ function renderScreen(state) {
 
   if (scr.name !== 'ward') teardownWard()
   if (scr.name !== 'district') teardownDistrictScreen()
+  // Moon Station condenses the shared header while it is open; this
+  // puts it back for every other screen.
+  if (scr.name !== 'moon') teardownMoonStation()
 
   // Only animate on an actual navigation (screen changed) — a plain data
   // refresh on the same screen (90s poll, tab-focus refresh) repaints in
