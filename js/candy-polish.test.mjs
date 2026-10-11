@@ -39,9 +39,17 @@ test('Quick: goal songs are wrapped pills, the alpaca has its orbit, the CTA kee
   // one plain label per pill: no checkbox, no icon, no artist inside
   assert.match(candy, /onclick="candyQuickToggle\(this\)" title="\$\{sanitize\(\(s\.artists \|\| \[\]\)\.join\(', '\)\)\}">\$\{sanitize\(s\.name\)\}<\/button>`/)
   assert.doesNotMatch(candy, /cs-pick-box|cs-pick-artist/)
-  assert.match(block, /\.cs-screen \.cs-quick-chips \{ display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-start;/)
+  assert.match(block, /\.cs-screen \.cs-quick-chips \{ display: flex; flex-wrap: wrap; gap: 9px 8px; justify-content: flex-start;/)
+  // organic but composed: small vertical offsets only, never rotation; tap target kept
+  const offsets = [...block.matchAll(/\.cs-goal-chip:nth-child\([^)]*\) \{ --cs-y: (-?\d+)px; \}/g)].map((m) => Math.abs(+m[1]))
+  assert.ok(offsets.length >= 2 && offsets.every((y) => y <= 3), `offsets ${offsets}`)
+  assert.doesNotMatch(block.slice(block.indexOf('a small playlist ritual')), /rotate\(/)
+  assert.match(block, /\.cs-screen \.cs-goal-chip \{[^}]*min-height: 40px/)
   assert.match(block, /\.cs-screen \.cs-goal-chip \{[^}]*border-radius: 999px/)
-  assert.match(block, /\.cs-screen \.cs-goal-pick\.is-picked \{[^}]*background: rgba\(139,92,246,\.32\)/)
+  // picked = a soft lavender tint with a brighter edge, not a solid purple fill
+  assert.match(block, /\.cs-screen \.cs-goal-pick\.is-picked \{[^}]*border-color: #b9a6ff; background: rgba\(167,139,250,\.16\)/)
+  // the CTA keeps the strongest purple on the card
+  assert.match(block, /\.cs-screen \.cs-quick-card #cs-quick-btn:not\(:disabled\) \{ background: var\(--v-violet\); \}/)
   assert.match(candy, /<svg class="cs-orbit" viewBox="0 0 80 80"/)
   assert.match(candy, /<b>One tap, one alpaca<\/b>/)
   assert.match(candy, /onclick="candyGenerate\('quick'\)">\$\{csIcon\('alpaca'\)\}Make me an alpaca<\/button>/)

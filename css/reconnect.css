@@ -7098,39 +7098,59 @@ select.rc-multi-native {
 .vault-sheet .cs-vault-empty > span .cs-i { width: 26px; height: 26px; }
 .vault-sheet .cs-vault-more { border-color: var(--v-line-1); background: transparent; color: var(--v-ink-1); font: 600 13px var(--body); }
 
-/* ── Quick: the one playful surface ──
-   Same card system as the rest of Candy, with one controlled bit of magic: a
-   faint orbit behind the alpaca, a star on its tile, and goal songs as wrapped
-   pills that light up violet when picked. No glow, no gradient. */
-.cs-screen .cs-quick-card { position: relative; overflow: hidden; border-color: rgba(139,92,246,.30); }
+/* ── Quick: a small playlist ritual ──
+   Colour hierarchy, not decoration: a dark, cool card; lilac and silver for the
+   alpaca, its orbit and the feature icons; picked songs in a soft lavender tint
+   with a brighter edge; and one strong purple, the CTA. Whimsy comes from shape
+   and motion: pills that wrap by title length and sit a few pixels off a
+   straight line, like ingredients floating into place. No glow, no gradient. */
+.cs-screen .cs-quick-card { --cs-lilac: #cdc1f2; --cs-lilac-soft: rgba(205,193,242,.12); --cs-lilac-line: rgba(205,193,242,.26);
+  --cs-silver: #dcd9e6; position: relative; overflow: hidden; background: #191726; border-color: rgba(205,193,242,.14); }
 .cs-screen .cs-orbit { position: absolute; left: 50%; top: 50%; width: 76px; height: 76px; margin: -38px 0 0 -38px; pointer-events: none;
-  overflow: visible; fill: none; stroke: rgba(187,162,255,.30); stroke-width: 1; }
-.cs-screen .cs-orbit .cs-orbit-dot { fill: #c9b6ff; stroke: none; }
+  overflow: visible; fill: none; stroke: rgba(220,217,230,.24); stroke-width: 1; }
+.cs-screen .cs-orbit .cs-orbit-dot { fill: var(--cs-silver); stroke: none; }
 .cs-screen .cs-quick-card .cs-card-head { position: relative; gap: 16px; margin-bottom: 16px; padding-left: 4px; }
 .cs-screen .cs-quick-card .cs-hero-icon { position: relative; width: 46px; height: 46px; border-radius: 14px;
-  background: var(--v-tint-violet); border: 1px solid var(--v-violet-line); color: var(--v-violet-hi); }
+  background: var(--cs-lilac-soft); border: 1px solid var(--cs-lilac-line); color: var(--cs-lilac); }
 .cs-screen .cs-quick-card .cs-hero-icon > .cs-i { width: 25px; height: 25px; }
 .cs-screen .cs-hero-spark { position: absolute; top: -7px; right: -8px; width: 20px; height: 20px; display: grid; place-items: center;
-  border-radius: 50%; background: var(--v-surface-1); color: #d6c7ff; }
+  border-radius: 50%; background: #191726; color: var(--cs-silver); }
 .cs-screen .cs-hero-spark .cs-i { width: 15px; height: 15px; }
 .cs-screen .cs-quick-card .cs-card-head-copy b { font-size: 17px; font-weight: 700; letter-spacing: .005em; }
 .cs-screen .cs-quick-card .cs-card-head-copy small { font-size: 13px; }
+.cs-screen .cs-quick-card .cs-quick-count { background: rgba(255,255,255,.06); color: var(--v-ink-2); }
+.cs-screen .cs-quick-card .cs-quick-count.is-full { background: var(--cs-lilac-soft); color: var(--cs-lilac); }
 
-/* Goal songs: pills that wrap by title length, left-aligned, one gap */
-.cs-screen .cs-quick-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-start; margin: 0 0 14px; }
-.cs-screen .cs-goal-chip { display: inline-flex; align-items: center; justify-content: center; width: auto; max-width: 100%;
-  padding: 9px 15px; border: 1px solid rgba(255,255,255,.14); border-radius: 999px; background: var(--v-surface-2);
-  color: var(--v-ink-1); font: 600 14px/1.2 var(--body); text-align: center; white-space: normal; }
-.cs-screen .cs-goal-pick:hover:not(:disabled) { border-color: rgba(187,162,255,.55); }
-.cs-screen .cs-goal-pick.is-picked { border-color: #a78bfa; background: rgba(139,92,246,.32); color: #fff; font-weight: 700; }
+/* Goal songs: pills sized by their titles, wrapping into uneven rows. A few
+   sit 2–3px off the line (never enough to change the 8px gap meaningfully,
+   never rotated); a picked song lifts slightly. */
+.cs-screen .cs-quick-chips { display: flex; flex-wrap: wrap; gap: 9px 8px; justify-content: flex-start; align-items: center;
+  margin: 0 0 16px; padding: 3px 0; }
+.cs-screen .cs-goal-chip { --cs-y: 0px; display: inline-flex; align-items: center; justify-content: center; width: auto; max-width: 100%;
+  min-height: 40px; padding: 9px 15px; border: 1px solid rgba(255,255,255,.10); border-radius: 999px; background: #24212f;
+  color: #e7e3f1; font: 600 14px/1.2 var(--body); text-align: center; white-space: normal;
+  transform: translateY(var(--cs-y)); transition: transform .22s ease, background-color .18s ease, border-color .18s ease; }
+.cs-screen .cs-goal-chip:nth-child(3n+2) { --cs-y: 2px; }
+.cs-screen .cs-goal-chip:nth-child(4n+3) { --cs-y: -2px; }
+.cs-screen .cs-goal-chip:nth-child(5n) { --cs-y: 3px; }
+.cs-screen .cs-goal-pick:hover:not(:disabled) { border-color: var(--cs-lilac-line); }
+.cs-screen .cs-goal-pick.is-picked { --cs-y: -2px; border-color: #b9a6ff; background: rgba(167,139,250,.16); color: #fff; font-weight: 700; }
 .cs-screen .cs-goal-pick:disabled { opacity: .5; }
 .cs-screen .cs-goal-chip.is-empty { color: var(--v-ink-3); font-weight: 500; }
+@media (prefers-reduced-motion: reduce) { .cs-screen .cs-goal-chip { transition: none; } }
 
-/* The album option: one compact secondary row under the pills */
-.cs-screen .cs-quick-album { margin: 0 0 14px; padding: 9px 12px; border-radius: 12px; }
+/* The album option: a neutral secondary row; its tick is the one small violet accent */
+.cs-screen .cs-quick-album { margin: 0 0 14px; padding: 9px 12px; border-radius: 12px; background: #1f1d2a; border-color: rgba(255,255,255,.09); }
+.cs-screen .cs-quick-album:has(input:checked) { background: #211e30; border-color: rgba(185,166,255,.32); }
 .cs-screen .cs-quick-album-copy b { font-size: 14px; }
-.cs-screen .cs-quick-album-art { background: transparent; color: var(--v-ink-2); }
+.cs-screen .cs-quick-album-art { background: transparent; color: var(--cs-lilac); }
 .cs-screen .cs-quick-album-art .cs-i { width: 18px; height: 18px; }
+.cs-screen .cs-quick-album-hint { color: #9d97ad; }
+
+/* One strong purple: the CTA */
+.cs-screen .cs-quick-card #cs-quick-btn:not(:disabled) { background: var(--v-violet); }
+.cs-screen .cs-quick-card .cs-cost-note { color: #9d97ad; }
+.cs-screen .cs-quick-card .cs-cost-note .cs-i { color: var(--cs-silver); opacity: .8; }
 
 /* Narrow phones: the guide pickers stack, the bar and rows tighten */
 @media (max-width: 359px) {
