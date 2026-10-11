@@ -12,6 +12,7 @@ import { fmtLeft } from './countdown.js'
 import { call } from './api.js'
 import { goRecelebrate } from './router.js'
 import { ARIRANG_TRACKS } from '../supabase/functions/op-reconnect/lib/recelebrate-tracks.js'
+import { packIcon } from './pack-icons.js'
 
 export const ARIRANG_RECELEBRATE = {
   id: 'arirang-recelebrate',
@@ -440,14 +441,14 @@ export function recelebrateKeepsake() {
       <span class="ps-count">1</span>
     `))
     const card = el('button', 'arc-keepsake', `
-      <span class="arc-keepsake-eyebrow">EVENT KEEPSAKE</span>
+      <span class="arc-keepsake-eyebrow">Event keepsake</span>
       <span class="arc-keepsake-name">ARIRANG RE:CELEBRATE</span>
-      <span class="arc-keepsake-song">♡ ${esc(pass.loveSong)}</span>
+      <span class="arc-keepsake-song">${packIcon('heart')}${esc(pass.loveSong)}</span>
       <span class="arc-keepsake-foot">
-        <span class="arc-keepsake-date">SEPT 20, 2026</span>
-        ${pass.team ? `<span class="arc-side-tag is-${pass.team}">${TEAMS[pass.team].icon} ${TEAMS[pass.team].name}</span>` : ''}
+        <span class="arc-keepsake-date">Sept 20, 2026</span>
+        ${pass.team ? `<span class="arc-side-tag is-${pass.team}">${TEAMS[pass.team].name}</span>` : ''}
       </span>
-      <span class="arc-keepsake-go" aria-hidden="true">›</span>
+      <span class="arc-keepsake-go" aria-hidden="true">${packIcon('chevron')}</span>
     `)
     card.type = 'button'
     card.onclick = () => showOverlay(passSheet(readCache(), false))

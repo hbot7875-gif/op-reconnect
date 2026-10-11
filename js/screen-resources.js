@@ -35,6 +35,7 @@ import { badgeDrawerSheet } from './badge-drawer.js'
 import { itemArt, itemSheet, RARITY } from './items.js'
 import { openBackupPassFlow, openBackupHelpFlow, countOpenBackupRequests } from './backup-pass.js'
 import { recelebrateKeepsake } from './arirang-recelebrate.js'
+import { packIcon } from './pack-icons.js'
 
 /* ── Agent ID ─────────────────────────────────────────────────────────── */
 function agentIdCard(state) {
@@ -56,7 +57,7 @@ function agentIdCard(state) {
     adjust.onclick = (e) => { e.stopPropagation(); showOverlay(avatarAdjustSheet(artworkUrl, crop)) }
     photo.appendChild(adjust)
   } else {
-    photo.innerHTML = '🛰️'
+    photo.innerHTML = `<span class="aid-photo-fallback">${packIcon('agent')}</span>`
   }
   const info = el('div', 'aid-info')
   info.appendChild(el('div', 'aid-codename', esc(p.codename || '')))
@@ -70,16 +71,17 @@ function agentIdCard(state) {
   // keep the line short, but nothing else on the card or in the Agent Dossier
   // actually prints a rank title (the Dossier's own comment claims it does; the
   // code does not), so dropping it here would make rank invisible everywhere.
-  info.appendChild(el('div', 'aid-meta', `${esc(getAgentNo() || '')} · ${esc(p.level?.name || '')} · LV ${p.level?.level ?? '—'} · ${esc(p.rank?.title || '')}`))
-  const active = el('div', 'aid-active', '<i></i>ACTIVE')
+  // The agent number is not repeated here: it is the ID in the strip below.
+  info.appendChild(el('div', 'aid-meta', `${esc(p.level?.name || '')} · LV ${p.level?.level ?? '—'} · ${esc(p.rank?.title || '')}`))
+  const active = el('div', 'aid-active', '<i></i>Active')
   top.append(photo, info, active)
   card.appendChild(top)
 
   const strip = el('div', 'aid-strip')
   strip.innerHTML = `
-    <span><b>District</b> ${esc(state?.activeDistrict?.name || '—')}</span>
-    <span><b>Streak</b> ${p.streak?.current ?? 0}d</span>
-    <span class="aid-id-no">ID·${esc(getAgentNo() || '')}·${String(p.level?.level ?? 0).padStart(3, '0')}</span>
+    <span><b>District</b><em>${esc(state?.activeDistrict?.name || '—')}</em></span>
+    <span><b>Streak</b><em>${p.streak?.current ?? 0} days</em></span>
+    <span class="aid-id-no"><b>Agent ID</b><em>${esc(getAgentNo() || '')}·${String(p.level?.level ?? 0).padStart(3, '0')}</em></span>
   `
   card.appendChild(strip)
 
@@ -190,12 +192,6 @@ const SLOT_DEFS = [
   { key: 'deadlineExtensionCharges', cls: 'slot-ext', icon: '⏳', label: 'Extension',
     desc: 'Adds extra days to a district\'s restoration deadline.' },
 ]
-const SLOT_ACCENTS = {
-  'slot-cell': () => `<span class="slot-accent slot-accent-cell"></span>`,
-  'slot-wing': () => `<span class="slot-accent slot-accent-wing l"></span><span class="slot-accent slot-accent-wing r"></span>`,
-  'slot-freeze': () => `<span class="slot-accent slot-accent-freeze"></span>`,
-  'slot-ext': () => `<span class="slot-accent slot-accent-ext"></span>`,
-}
 
 function slotDetailSheet(def, value, cellProgress) {
   const progressLine = cellProgress
@@ -222,7 +218,7 @@ function compartments(state) {
   const grid = el('div', 'bag-compartments')
   for (const def of SLOT_DEFS) {
     const value = p[def.key] || 0
-    const slot = el('button', `slot ${def.cls}`)
+    const slot = el('button', `slot ${def.cls}${value ? '' : ' is-empty'}`)
     slot.type = 'button'
     // Real progress data exists only for Charge Cells — every other
     // resource has no "toward next" number anywhere in the app, so no fill
@@ -231,9 +227,7 @@ function compartments(state) {
       ? `<span class="slot-fill"><span class="slot-fill-bar" style="width:${Math.min(100, Math.round(cellProgress.streams / cellProgress.required * 100))}%"></span></span>`
       : ''
     slot.innerHTML = `
-      <span class="slot-buckle"></span>
-      ${SLOT_ACCENTS[def.cls]?.() || ''}
-      <span class="slot-icon">${def.icon}</span>
+      <span class="slot-icon">${packIcon(def.key)}</span>
       <span class="slot-val">${value}</span>
       <span class="slot-label">${esc(def.label)}</span>
       ${fillHtml}
@@ -247,7 +241,7 @@ function compartments(state) {
 function frontPocket(state) {
   const items = state.items || []
   const wrap = el('div', 'bag-pocket')
-  wrap.appendChild(el('span', 'pocket-seam-label', 'FRONT POCKET'))
+  wrap.appendChild(el('span', 'pocket-seam-label', 'Front pocket'))
   const grid = el('div', 'pocket-items')
 
   const backupAll = items.filter((i) => i.itemId === 'backup-pass' && !i.usedAt)
@@ -255,10 +249,12 @@ function frontPocket(state) {
   const backupSlot = el('button', 'pocket-slot' + (backup ? '' : ' is-locked'))
   backupSlot.type = 'button'
   backupSlot.innerHTML = `
-    <span class="ps-icon">🤝</span>
-    <span><span class="ps-name">Backup Pass</span><span class="ps-status">${backupAll.length
-      ? `${backupAll.length} ready — tap to open`
-      : '0 — earn one from a Supply Chest'}</span></span>
+    <span class="ps-icon">${packIcon('backupPass')}</span>
+    <span class="ps-text"><span class="ps-name">Backup Pass</span><span class="ps-status">${backupAll.length
+      ? 'Tap to open'
+      : 'Earn one from a Supply Chest'}</span></span>
+    <span class="ps-qty${backupAll.length ? ' is-ready' : ''}">${backupAll.length}</span>
+    ${backup ? `<span class="ps-go">${packIcon('chevron')}</span>` : ''}
   `
   if (backup) backupSlot.onclick = () => openBackupPassFlow(backup)
   else backupSlot.disabled = true
@@ -271,8 +267,9 @@ function frontPocket(state) {
   const helpSlot = el('button', 'pocket-slot')
   helpSlot.type = 'button'
   helpSlot.innerHTML = `
-    <span class="ps-icon">🫱</span>
-    <span><span class="ps-name">Help an agent</span><span class="ps-status">See who needs backup</span></span>
+    <span class="ps-icon">${packIcon('helpAgent')}</span>
+    <span class="ps-text"><span class="ps-name">Help an agent</span><span class="ps-status">See who needs backup</span></span>
+    <span class="ps-go">${packIcon('chevron')}</span>
   `
   helpSlot.onclick = () => openBackupHelpFlow()
   grid.appendChild(helpSlot)
@@ -291,8 +288,9 @@ function frontPocket(state) {
   const ticketSlot = el('button', 'pocket-slot' + (tickets.length ? '' : ' is-locked'))
   ticketSlot.type = 'button'
   ticketSlot.innerHTML = `
-    <span class="ps-icon">🎟️</span>
-    <span><span class="ps-name">Tickets</span><span class="ps-status">${unusedTickets.length ? `${unusedTickets.length} ready` : tickets.length ? 'All used' : 'None yet'}</span></span>
+    <span class="ps-icon">${packIcon('tickets')}</span>
+    <span class="ps-text"><span class="ps-name">Tickets</span><span class="ps-status">${unusedTickets.length ? `${unusedTickets.length} ready` : tickets.length ? 'All used' : 'None yet'}</span></span>
+    ${tickets.length ? `<span class="ps-go">${packIcon('chevron')}</span>` : ''}
   `
   if (tickets.length) {
     // The real "Use the ticket" action lives in itemSheet — reused
@@ -319,7 +317,7 @@ function agentBag(state) {
   for (let i = 0; i < 7; i++) emblem.appendChild(el('span'))
   body.appendChild(emblem)
   const header = el('div', 'bag-header')
-  header.innerHTML = `<span class="bag-title">AGENT PACK</span>`
+  header.innerHTML = `<span class="bag-title">Field kit</span>`
   const zip = el('div', 'bag-zip')
   for (let i = 0; i < 8; i++) zip.appendChild(el('i'))
   zip.appendChild(el('div', 'bag-zip-pull'))
@@ -342,7 +340,7 @@ function collectionObject(item) {
   button.innerHTML = `
     <span class="co-art">${itemArt(item)}</span>
     <span class="co-name">${esc(item.name)}</span>
-    <span class="co-meta"><i></i>${esc(rarity.label)}</span>
+    <span class="co-meta"><span class="co-rarity">${esc(rarity.label)}</span></span>
     <span class="co-place">${esc(location)}</span>
   `
   button.onclick = () => showOverlay(itemSheet(item))
@@ -365,7 +363,7 @@ export function renderResources(container, state) {
   const wrap = el('div', 'res-screen')
 
   wrap.appendChild(el('div', 'pack-head', `
-    <span class="pack-eyebrow">🎒 Agent Pack</span>
+    <h1 class="pack-title"><span class="pack-title-icon">${packIcon('backpack')}</span>Agent Pack</h1>
   `))
 
   wrap.appendChild(agentIdCard(state))
@@ -418,7 +416,7 @@ export function renderResources(container, state) {
   // ── Quick access — the one thing that doesn't live anywhere else ──
   const quick = el('div', 'quick-links')
   const badges = el('button', 'quick-link')
-  badges.innerHTML = '<span class="ql-icon">🎖️</span><span class="ql-name">Badge Drawer</span><span class="ql-go">›</span>'
+  badges.innerHTML = `<span class="ql-icon">${packIcon('badges')}</span><span class="ql-name">Badge Drawer</span><span class="ql-go">${packIcon('chevron')}</span>`
   badges.onclick = () => showOverlay(badgeDrawerSheet(state))
   quick.append(badges)
   wrap.appendChild(quick)

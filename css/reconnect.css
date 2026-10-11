@@ -2092,6 +2092,178 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 .ql-name { font-family: var(--disp); font-weight: 700; font-size: 14px; transition: color 0.15s; }
 .ql-go { font-family: var(--mono); font-size: 20px; color: var(--dim); transition: color 0.15s; }
 
+/* ════════════════════════════════════════════════════════════════
+   AGENT PACK POLISH (prototype). The released City block is the
+   reference: system sans for UI copy, Orbitron only for identity
+   (page title, codename, the event name), mono only for the real
+   agent ID, one tile/row recipe, purple = active/progress, gold =
+   ready/reward. The handle, suitcase shell, seam and stitching stay:
+   they are what makes this screen a pack rather than a list.
+   ════════════════════════════════════════════════════════════════ */
+.res-screen .pack-title-icon svg, .res-screen .aid-photo-fallback svg, .res-screen .slot-icon svg,
+.res-screen .ps-icon svg, .res-screen .ps-go svg, .res-screen .ql-icon svg, .res-screen .ql-go svg,
+.res-screen .arc-keepsake-song svg, .res-screen .arc-keepsake-go svg {
+  display: block; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Page head: one title, the bag no longer repeats it */
+.res-screen .pack-head { margin-bottom: 14px; }
+.res-screen .pack-title { display: flex; align-items: center; gap: 9px; margin: 0;
+  font-family: var(--disp); font-weight: 800; font-size: 22px; letter-spacing: .02em; color: var(--v-ink-1); }
+.res-screen .pack-title-icon { color: var(--v-violet-hi); }
+.res-screen .pack-title-icon svg { width: 22px; height: 22px; }
+
+/* Agent identity card: Surface 1, name strongest, sans metadata */
+.res-screen .aid-card { background: var(--v-surface-1); border: 1px solid var(--v-line-1); border-radius: 16px;
+  padding: 14px; box-shadow: none; }
+.res-screen .aid-scanline { display: none; }
+.res-screen .aid-photo { width: 52px; height: 52px; border-radius: 12px; background: var(--v-surface-2);
+  border: 1px solid var(--v-line-1); box-shadow: none; }
+.res-screen .aid-photo-fallback { display: grid; place-items: center; width: 100%; height: 100%; color: var(--v-ink-3); }
+.res-screen .aid-photo-fallback svg { width: 24px; height: 24px; }
+.res-screen .aid-codename { font-size: 17px; letter-spacing: .02em; color: var(--v-ink-1); }
+.res-screen .aid-meta { margin-top: 3px; font-family: var(--body); font-size: 13px; letter-spacing: 0;
+  line-height: 1.35; white-space: normal; overflow: visible; color: var(--v-ink-2); }
+.res-screen .aid-active { align-self: flex-start; gap: 6px; padding: 3px 9px; border-radius: 999px;
+  font-family: var(--body); font-size: 11px; font-weight: 600; letter-spacing: 0; text-transform: none;
+  color: var(--v-violet-hi); background: var(--v-tint-violet); border: 1px solid var(--v-violet-line); }
+.res-screen .aid-active i { box-shadow: none; background: var(--v-violet-hi); }
+.res-screen .aid-strip { display: grid; grid-template-columns: minmax(0,1.4fr) minmax(0,1fr) auto; gap: 12px;
+  margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--v-line-1);
+  font-family: var(--body); font-size: 13px; letter-spacing: 0; color: var(--v-ink-1); }
+.res-screen .aid-strip > span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.res-screen .aid-strip b { font-size: 11px; font-weight: 500; color: var(--v-ink-3); }
+.res-screen .aid-strip em { font-style: normal; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.res-screen .aid-id-no { margin-left: 0; text-align: right; align-items: flex-end; font-family: var(--body);
+  font-size: 13px; letter-spacing: 0; color: var(--v-ink-1); }
+.res-screen .aid-id-no em { font-family: var(--mono); font-weight: 400; font-size: 13px; letter-spacing: .04em; color: var(--v-ink-2); }
+
+/* The case: same handle and shell, flat surface, no glow */
+.res-screen .bag-body { background: var(--v-surface-1); border-color: var(--v-line-1);
+  box-shadow: none; padding: 18px 14px 22px; }
+.res-screen .bag-seam { border-color: rgba(255,255,255,.07); }
+.res-screen .bag-header { margin-bottom: 12px; }
+.res-screen .bag-title { font-family: var(--body); font-size: 11px; font-weight: 600; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--v-ink-3); }
+
+/* Compartments: one stat-slot recipe for all four resources */
+/* 2×2 at every width: one stat-slot recipe, labels never squeezed into a 4-up row */
+.res-screen .bag-compartments { grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; }
+.res-screen .slot { display: grid; grid-template-columns: 32px minmax(0,1fr); grid-template-rows: auto auto;
+  column-gap: 10px; row-gap: 1px; align-items: center; justify-items: start; text-align: left;
+  min-height: 64px; padding: 11px 12px; background: var(--v-surface-2); border: 1px solid var(--v-line-1);
+  border-radius: 12px; box-shadow: none; }
+.res-screen .slot:hover, .res-screen .slot:focus-visible { border-color: var(--v-line-2); }
+.res-screen .slot::before { content: none; }
+.res-screen .slot:not(.is-new)::after { content: none; }
+.res-screen .slot-icon { grid-row: 1 / span 2; display: grid; place-items: center; width: 32px; height: 32px;
+  border-radius: 9px; background: var(--v-surface-3); color: var(--v-violet-hi); }
+.res-screen .slot-icon svg { width: 17px; height: 17px; }
+.res-screen .slot-val { font-family: var(--body); font-weight: 700; font-size: 20px; line-height: 1.1;
+  font-variant-numeric: tabular-nums; color: var(--v-ink-1); }
+.res-screen .slot-label { font-family: var(--body); font-size: 12px; letter-spacing: 0; text-transform: none;
+  line-height: 1.2; text-align: left; color: var(--v-ink-2); }
+.res-screen .slot.is-empty .slot-icon { color: var(--v-ink-3); }
+.res-screen .slot.is-empty .slot-val { color: var(--v-ink-3); }
+.res-screen .slot-cell { padding-bottom: 15px; }
+.res-screen .slot-fill { left: 12px; right: 12px; bottom: 7px; height: 3px; background: var(--v-surface-3); }
+.res-screen .slot-fill-bar { background: var(--v-violet); box-shadow: none; }
+
+/* Front pocket: City's compact action row, one family */
+.res-screen .bag-pocket { margin-top: 14px; padding-top: 14px; }
+.res-screen .pocket-seam-label { font-family: var(--body); font-size: 11px; font-weight: 600; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--v-ink-3); margin-bottom: 8px; }
+.res-screen .pocket-items { grid-template-columns: 1fr; gap: 6px; }
+.res-screen .pocket-slot { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 9px 10px;
+  background: var(--v-surface-2); border: 1px solid var(--v-line-1); border-radius: 12px; box-shadow: none;
+  text-align: left; color: var(--v-ink-1); font-family: var(--body); }
+.res-screen .pocket-slot:hover { border-color: var(--v-line-2); }
+.res-screen .pocket-slot .ps-icon { display: grid; place-items: center; width: 28px; height: 28px; flex: none;
+  border-radius: 9px; background: var(--v-surface-3); color: var(--v-violet-hi); }
+.res-screen .pocket-slot .ps-icon svg { width: 16px; height: 16px; }
+.res-screen .pocket-slot .ps-text { flex: 1; min-width: 0; }
+.res-screen .pocket-slot .ps-name { display: block; font-weight: 600; font-size: 14px; color: var(--v-ink-1); }
+.res-screen .pocket-slot .ps-status { font-family: var(--body); font-size: 12px; letter-spacing: 0; color: var(--v-ink-2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.res-screen .pocket-slot.is-live .ps-status { color: var(--v-gold); }
+.res-screen .ps-qty { flex: none; min-width: 22px; text-align: right; font-weight: 700; font-size: 15px;
+  font-variant-numeric: tabular-nums; color: var(--v-ink-3); }
+.res-screen .ps-qty.is-ready { color: var(--v-gold); }
+.res-screen .ps-go { flex: none; color: var(--v-ink-3); }
+.res-screen .ps-go svg { width: 16px; height: 16px; }
+.res-screen .pocket-slot.is-locked { opacity: .5; }
+.res-screen .pocket-slot.is-locked .ps-icon { color: var(--v-ink-3); }
+.res-screen .pocket-slot.is-locked .ps-status { color: var(--v-ink-3); }
+
+/* Section headings: sans title, quiet count */
+.res-screen .pack-section { margin: 26px 0 10px; }
+.res-screen .pack-after-bag { margin-top: 28px !important; }
+.res-screen .ps-title { font-family: var(--body); font-weight: 600; font-size: 17px; color: var(--v-ink-1); }
+.res-screen .ps-count { font-family: var(--body); font-size: 12px; letter-spacing: 0; text-transform: none; color: var(--v-ink-3); }
+.res-screen .pack-hint { font-family: var(--body); font-size: 13px; letter-spacing: 0; color: var(--v-ink-3); }
+.res-screen .filter-tab { font-family: var(--body); font-size: 13px; font-weight: 500; letter-spacing: 0;
+  text-transform: none; background: var(--v-surface-2); border-color: var(--v-line-1); color: var(--v-ink-2); }
+.res-screen .filter-tab.sel { background: var(--v-tint-violet); border-color: var(--v-violet-line); color: var(--v-violet-hi); }
+
+/* Recovered Objects: inventory tiles, rarity on the art frame */
+.res-screen .collection-shelf { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); grid-auto-rows: auto; gap: 14px 10px; }
+.res-screen .collection-object { align-items: stretch; padding: 0; border: 0; text-align: left; }
+.res-screen .collection-object:hover { transform: none; }
+.res-screen .co-art { width: 100%; height: auto; aspect-ratio: 1; padding: 12%; box-sizing: border-box;
+  background: var(--v-surface-2); border: 1px solid var(--v-line-1); border-radius: 12px; transition: border-color .15s; }
+.res-screen .collection-object.r-rare .co-art { border-color: var(--v-violet-line); }
+.res-screen .collection-object.r-legendary .co-art { border-color: var(--v-gold-line); }
+.res-screen .collection-object:hover .co-art { border-color: var(--v-line-2); }
+.res-screen .co-name { margin-top: 7px; font-family: var(--body); font-size: 13px; font-weight: 600; letter-spacing: 0;
+  text-transform: none; text-align: left; line-height: 1.25; color: var(--v-ink-1);
+  white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.res-screen .co-meta { justify-content: flex-start; margin-top: 4px; }
+.res-screen .co-rarity { padding: 1px 7px; border-radius: 999px; font-family: var(--body); font-size: 11px; font-weight: 600;
+  letter-spacing: 0; text-transform: none; color: var(--v-ink-2); background: rgba(255,255,255,.06); }
+.res-screen .r-rare .co-rarity { color: var(--v-violet-hi); background: var(--v-tint-violet); }
+.res-screen .r-legendary .co-rarity { color: var(--v-gold); background: var(--v-tint-gold); }
+.res-screen .co-place { margin-top: 3px; font-family: var(--body); font-size: 12px; letter-spacing: 0;
+  text-transform: none; text-align: left; color: var(--v-ink-3); }
+
+/* Event keepsake: the one featured card, its event colour kept but calmer */
+.res-screen .arc-keepsake { gap: 4px; padding: 14px 40px 14px 18px; border-radius: 14px;
+  background: #282039; /* Surface 1 with 5% of the event pink, flat */
+  border: 1px solid rgba(243,156,200,.30); }
+.res-screen .arc-keepsake::before { width: 3px; border-radius: 14px 0 0 14px; background: #f39cc8; }
+.res-screen .arc-keepsake-eyebrow { font-family: var(--body); font-size: 11px; font-weight: 600; letter-spacing: .08em;
+  text-transform: uppercase; color: #f39cc8; }
+.res-screen .arc-keepsake-name { font-size: 16px; letter-spacing: .02em; color: var(--v-ink-1); }
+.res-screen .arc-keepsake-song { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--v-ink-1); }
+.res-screen .arc-keepsake-song svg { width: 14px; height: 14px; color: #f39cc8; }
+.res-screen .arc-keepsake-date { font-family: var(--body); font-size: 12px; letter-spacing: 0; color: var(--v-ink-3); }
+.res-screen .arc-keepsake .arc-side-tag { font-family: var(--body); font-size: 11px; font-weight: 600; letter-spacing: .04em; }
+.res-screen .arc-keepsake-go { right: 14px; color: var(--v-ink-3); }
+.res-screen .arc-keepsake-go svg { width: 18px; height: 18px; }
+
+/* Badge Drawer: a disclosure row in the same family */
+.res-screen .quick-links { margin-top: 24px; border-top: 0; }
+.res-screen .quick-link { grid-template-columns: 28px minmax(0,1fr) auto; gap: 10px; min-height: 48px; padding: 9px 10px;
+  background: var(--v-surface-1); border: 1px solid var(--v-line-1); border-radius: 12px; }
+.res-screen .quick-link:hover { border-color: var(--v-line-2); }
+.res-screen .ql-icon { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 9px;
+  background: var(--v-surface-2); color: var(--v-violet-hi); }
+.res-screen .ql-icon svg { width: 16px; height: 16px; }
+.res-screen .ql-name { font-family: var(--body); font-weight: 600; font-size: 14px; color: var(--v-ink-1); }
+.res-screen .ql-go { color: var(--v-ink-3); }
+.res-screen .ql-go svg { width: 16px; height: 16px; }
+.res-screen .quick-link:hover .ql-name { color: var(--v-ink-1); }
+.res-screen .quick-link:hover .ql-go { color: var(--v-ink-2); }
+
+/* Narrow phones: the Active chip drops under the name so the codename keeps its width */
+@media (max-width: 359px) {
+  .res-screen .aid-top { display: grid; grid-template-columns: 52px minmax(0,1fr); column-gap: 12px; row-gap: 6px; align-items: start; }
+  .res-screen .aid-photo { grid-row: 1 / span 2; }
+  .res-screen .aid-active { grid-column: 2; justify-self: start; }
+  .res-screen .aid-codename { font-size: 16px; }
+  .res-screen .collection-shelf { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); }
+  .res-screen .aid-strip { grid-template-columns: minmax(0,1fr) auto; }
+  .res-screen .aid-id-no { grid-column: 1 / -1; flex-direction: row; justify-content: space-between; align-items: baseline; text-align: left; }
+}
+
 /* ── today's queue ──
    The single strongest action on the screen — "what do I actually do right
    now" — so it gets a solid fill and real weight instead of the soft-tint
