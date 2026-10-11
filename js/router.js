@@ -13,7 +13,7 @@
 // which was tapped. A ?screen= query param read once at boot is what lets
 // those links actually mean what their labels say; goWorld/goResources/etc.
 // still work exactly as before for every in-app navigation after that.
-const DEEP_LINKABLE = new Set(['world', 'resources', 'moon', 'settings', 'candystar', 'ranking'])
+const DEEP_LINKABLE = new Set(['world', 'resources', 'moon', 'diary', 'settings', 'candystar', 'ranking'])
 function initialScreen() {
   const requested = new URLSearchParams(location.search).get('screen')
   return { name: DEEP_LINKABLE.has(requested) ? requested : 'world', wardId: null, districtId: null, origin: null }
@@ -41,6 +41,10 @@ export function goWorld(origin = null) {
 
 export function goResources(origin = null) {
   set({ name: 'resources', wardId: null, districtId: null, origin })
+}
+
+export function goDiary(origin = null) {
+  set({ name: 'diary', wardId: null, districtId: null, origin })
 }
 
 export function goSettings(origin = null) {

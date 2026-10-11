@@ -15,6 +15,7 @@ import { renderRecelebrateParty } from './screen-recelebrate.js'
 import { renderWard, teardownWard } from './screen-ward.js'
 import { renderDistrictScreen, teardownDistrictScreen } from './screen-district.js'
 import { renderResources } from './screen-resources.js'
+import { renderDearDiary } from './screen-diary.js'
 import { renderSettings } from './screen-settings.js'
 import { renderCandyStar } from './screen-candystar.js'
 import { renderRanking } from './screen-ranking.js'
@@ -79,6 +80,7 @@ function renderScreen(state) {
     if (scr.name === 'ward') renderWard(scene, state, scr.wardId)
     else if (scr.name === 'district') renderDistrictScreen(scene, state, scr.wardId, scr.districtId)
     else if (scr.name === 'resources') renderResources(scene, state)
+    else if (scr.name === 'diary') renderDearDiary(scene, state)
     else if (scr.name === 'settings') renderSettings(scene, state)
     else if (scr.name === 'candystar') renderCandyStar(scene, state)
     else if (scr.name === 'ranking') renderRanking(scene, state)

@@ -36,6 +36,8 @@ import { itemArt, itemSheet, RARITY } from './items.js'
 import { openBackupPassFlow, openBackupHelpFlow, countOpenBackupRequests } from './backup-pass.js'
 import { recelebrateKeepsake } from './arirang-recelebrate.js'
 import { packIcon } from './pack-icons.js'
+import { goDiary } from './router.js'
+import { cachedDiaryTheme, closedDiaryObject, rememberDiaryTheme } from './screen-diary.js'
 
 /* ── Agent ID ─────────────────────────────────────────────────────────── */
 function agentIdCard(state) {
@@ -434,6 +436,28 @@ export function renderResources(container, state) {
       wrap.appendChild(el('div', 'dim pack-hint', 'Nothing in this filter yet.'))
     }
   }
+
+  // ── Personal items — private tools belong here, not in Recovered Objects.
+  // Dear Diary is rendered as the physical book it opens into rather than a
+  // generic action row or collectible card.
+  wrap.appendChild(el('div', 'pack-section pack-personal-head', `
+    <span class="ps-title">Personal items</span>
+    <span class="ps-count">Private</span>
+  `))
+  const savedDiaryTheme = cachedDiaryTheme(null)
+  const diaryObject = closedDiaryObject({ theme: savedDiaryTheme || 'modern', onOpen: () => {
+    const rect = diaryObject.getBoundingClientRect()
+    goDiary({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 })
+  } })
+  wrap.appendChild(el('div', 'pack-personal-items'))
+  wrap.lastElementChild.appendChild(diaryObject)
+  if (!savedDiaryTheme) queueMicrotask(async () => {
+    const preference = await call('getDearDiaryPreference', { agentNo: getAgentNo() })
+    if (!preference?.success || !preference.theme || !diaryObject.isConnected) return
+    for (const theme of ['oldworld','school90s','y2k','modern','future']) diaryObject.classList.remove(`dd-theme-${theme}`)
+    diaryObject.classList.add(`dd-theme-${preference.theme}`)
+    rememberDiaryTheme(preference.theme)
+  })
 
   // ── Event keepsakes — renders nothing unless the server has a pass ──
   wrap.appendChild(recelebrateKeepsake())

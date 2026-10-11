@@ -6773,6 +6773,257 @@ select.rc-select-native {
    the native control's own footprint — a bordered, scrolling box directly
    under its filter input — so the screens that pair the two still show both
    at once. */
+/* ============================================================
+   DEAR DIARY — private daily agent log
+   Warm paper lives inside the dark ReConnect shell. Handwriting is reserved
+   for diary prose and the editable note; facts and controls keep game type.
+   ============================================================ */
+.dd-screen { --dd-paper:#f3ebdc; --dd-paper-deep:#e4d7c1; --dd-ink:#332b34; --dd-cover:#39202f; --dd-title:#f7e9f2;
+  --dd-muted:#7e6d78; --dd-accent:#8b4263; --dd-accent-bright:#c6678e; --dd-line:rgba(68,78,112,.1);
+  --dd-margin:rgba(198,103,142,.18); --dd-tape:rgba(239,196,146,.62); --dd-card:#fffdf8; --dd-note:rgba(255,255,255,.38); --dd-button-text:#fff;
+  --dd-sheet-h:clamp(500px,calc(100svh - 255px),550px); width:min(calc(100% - 8px),370px); max-width:calc(100vw - 32px); box-sizing:border-box; margin:0 auto; padding:7px 0 12px; overflow-x:visible; outline:none; }
+.dd-theme-oldworld { --dd-paper:#dfcfad; --dd-paper-deep:#bfa77d; --dd-ink:#39291f; --dd-cover:#412a20; --dd-title:#f1ddba; --dd-muted:#755e48; --dd-accent:#6e302b; --dd-accent-bright:#9a5043; --dd-line:rgba(79,55,37,.13); --dd-margin:rgba(116,47,42,.2); --dd-tape:rgba(160,125,75,.62); --dd-card:#eee0c3; --dd-note:rgba(255,246,219,.34); }
+.dd-theme-school90s { --dd-paper:#f2f0df; --dd-paper-deep:#d6d1b6; --dd-ink:#243d69; --dd-cover:#203a62; --dd-title:#f2eee1; --dd-muted:#586a82; --dd-accent:#b7464c; --dd-accent-bright:#d75a63; --dd-line:rgba(50,92,147,.14); --dd-margin:rgba(202,64,70,.22); --dd-tape:rgba(244,214,111,.66); --dd-card:#fffdf0; --dd-note:rgba(255,255,255,.34); }
+.dd-theme-y2k { --dd-paper:#f1e9f3; --dd-paper-deep:#d9c6df; --dd-ink:#4f2f61; --dd-cover:#73518a; --dd-title:#fff0ff; --dd-muted:#80678b; --dd-accent:#bd3f91; --dd-accent-bright:#e06ab4; --dd-line:rgba(123,77,148,.11); --dd-margin:rgba(220,83,165,.2); --dd-tape:rgba(184,223,231,.72); --dd-card:#fff8ff; --dd-note:rgba(255,255,255,.38); }
+.dd-theme-modern { --dd-paper:#f3ebdc; --dd-paper-deep:#e4d7c1; --dd-ink:#332b34; --dd-cover:#39202f; --dd-title:#f7e9f2; --dd-muted:#7e6d78; --dd-accent:#8b4263; --dd-accent-bright:#c6678e; --dd-line:rgba(68,78,112,.1); --dd-margin:rgba(198,103,142,.18); --dd-tape:rgba(239,196,146,.62); --dd-card:#fffdf8; --dd-note:rgba(255,255,255,.38); }
+.dd-theme-future { --dd-paper:#252833; --dd-paper-deep:#171a23; --dd-ink:#e9edf2; --dd-cover:#0c111b; --dd-title:#d9f5f2; --dd-muted:#aeb9c3; --dd-accent:#81d9cf; --dd-accent-bright:#bd8bea; --dd-line:rgba(153,218,214,.09); --dd-margin:rgba(189,139,234,.2); --dd-tape:rgba(86,169,172,.5); --dd-card:#313642; --dd-note:rgba(255,255,255,.055); --dd-button-text:#171a23; }
+.dd-head { display:grid; grid-template-columns:32px minmax(0,1fr) auto; align-items:center; gap:8px; margin:0 0 8px; }
+.dd-mini-title { color:var(--dd-title); font:700 24px/.9 'Caveat',cursive; white-space:nowrap; }
+.dd-back { color:#f4d6e5; }
+.dd-head-tools { align-self:start; display:flex; align-items:center; gap:5px; }
+.dd-style { width:27px; height:27px; padding:0; border:1px solid color-mix(in srgb,var(--dd-accent-bright) 38%,transparent); border-radius:50%; background:transparent; color:var(--dd-title); cursor:pointer; font:13px/1 var(--disp); }
+.dd-private { color:var(--dd-title); font:15px/1 'Patrick Hand',cursive; white-space:nowrap; opacity:.78; }
+.dd-book { position:relative; width:100%; min-width:0; touch-action:pan-y; }
+.dd-book::before { content:''; position:absolute; z-index:-1; inset:-5px 0 -5px -4px; border-radius:10px 18px 18px 10px; background:var(--dd-cover); box-shadow:0 14px 35px rgba(0,0,0,.3),inset -4px 0 0 color-mix(in srgb,var(--dd-cover) 72%,#fff); }
+.dd-book.is-busy .dd-page-corner { pointer-events:none; }
+.dd-page-stage { display:grid; width:100%; height:var(--dd-sheet-h); perspective:1300px; transform-style:preserve-3d; }
+.dd-page-sheet { grid-area:1/1; min-width:0; height:100%; transform-origin:left center; backface-visibility:hidden; }
+.dd-page-sheet.is-current { position:relative; z-index:2; }
+.dd-page-sheet.is-incoming.is-older { position:relative; z-index:1; }
+.dd-page-sheet.is-incoming.is-newer { position:relative; z-index:3; opacity:.15; transform:translateX(-7%) rotateY(-7deg); }
+.dd-page-sheet.is-incoming.is-newer.is-revealed { animation:dd-page-newer .46s cubic-bezier(.2,.72,.25,1) forwards; }
+.dd-page-sheet.is-turning-older { z-index:4; animation:dd-page-older .46s cubic-bezier(.46,.02,.25,1) forwards; }
+.dd-page-sheet.is-turning-newer { z-index:1; animation:dd-page-under .46s ease forwards; }
+@keyframes dd-page-older { 0%{transform:translateX(0) rotateY(0);filter:none;opacity:1} 52%{transform:translateX(-6%) rotateY(-7deg);filter:drop-shadow(15px 6px 13px rgba(20,10,18,.35));opacity:.9} 100%{transform:translateX(-17%) rotateY(-13deg);filter:drop-shadow(24px 8px 18px rgba(20,10,18,.4));opacity:0} }
+@keyframes dd-page-newer { 0%{opacity:.18;transform:translateX(-13%) rotateY(-10deg);filter:drop-shadow(18px 7px 15px rgba(20,10,18,.36))} 60%{opacity:.92;transform:translateX(-2%) rotateY(-2deg)} 100%{opacity:1;transform:none;filter:none} }
+@keyframes dd-page-under { from{opacity:1} to{opacity:.45} }
+.dd-paper { position:relative; isolation:isolate; overflow:hidden; width:100%; max-width:100%; min-width:0; height:100%; box-sizing:border-box; padding:21px 16px 27px 29px; border-radius:7px 15px 15px 7px;
+  color:var(--dd-ink); background:
+    linear-gradient(90deg,transparent 0 18px,var(--dd-margin) 18px 19px,transparent 19px),
+    repeating-linear-gradient(180deg,transparent 0 31px,var(--dd-line) 31px 32px),var(--dd-paper);
+  box-shadow:0 18px 45px rgba(0,0,0,.42),inset 0 0 0 1px rgba(255,255,255,.58),inset 12px 0 18px rgba(79,57,50,.08); }
+.dd-paper::before { content:''; position:absolute; inset:0; z-index:-1; pointer-events:none; opacity:.38;
+  background:radial-gradient(circle at 9% 14%,rgba(198,103,142,.13),transparent 17%),radial-gradient(circle at 92% 78%,rgba(126,93,166,.11),transparent 23%),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='70' height='70'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.06'/%3E%3C/svg%3E"); }
+.dd-paper::after { position:absolute; z-index:-1; right:17px; bottom:28px; color:var(--dd-accent); font:24px 'Caveat',cursive; opacity:.16; transform:rotate(-8deg); }
+.dd-theme-oldworld .dd-paper::after { content:'❧'; font-size:36px; }
+.dd-theme-school90s .dd-paper::after { content:'BTS ♡'; }
+.dd-theme-y2k .dd-paper::after { content:'☆ 2000 ☆'; text-shadow:1px 1px rgba(99,211,221,.7); }
+.dd-theme-modern .dd-paper::after { content:'pressed flowers + playlists'; font-size:16px; }
+.dd-theme-future .dd-paper::after { content:'signal archived ◌'; font-size:16px; letter-spacing:1px; }
+.dd-spine { position:absolute; z-index:1; inset:0 auto 0 0; width:22px; pointer-events:none; background:linear-gradient(90deg,rgba(54,38,44,.2),rgba(54,38,44,.06) 45%,transparent); }
+.dd-sheet-content { width:100%; min-width:0; min-height:0; overflow-wrap:anywhere; }
+.dd-paper-ring { position:absolute; left:5px; top:35px; bottom:30px; display:flex; flex-direction:column; justify-content:space-around; }
+.dd-paper-ring i { width:12px; height:5px; border-radius:5px; background:color-mix(in srgb,var(--dd-ink) 72%,transparent); box-shadow:inset 0 1px 1px rgba(255,255,255,.35),0 1px 2px rgba(0,0,0,.25); }
+.dd-date { display:flex; min-width:0; justify-content:space-between; align-items:center; gap:12px; margin:0 0 10px; color:var(--dd-muted); font:16px/1 'Patrick Hand',cursive; }
+.dd-date>span { min-width:0; overflow-wrap:anywhere; }
+.dd-date em { color:var(--dd-accent); font-style:normal; font-size:14px; }
+.dd-summary { padding:0 2px 11px; border-bottom:1px solid color-mix(in srgb,var(--dd-ink) 16%,transparent); }
+.dd-summary>span,.dd-section-title h2 { color:var(--dd-accent); font:17px/1 'Patrick Hand',cursive; }
+.dd-summary p { min-width:0; margin:6px 0 5px; overflow-wrap:anywhere; font:700 clamp(21px,6.2vw,26px)/1.12 'Caveat',cursive; color:var(--dd-ink); }
+.dd-regenerate { padding:4px 0; border:0; background:transparent; color:var(--dd-accent); cursor:pointer; font:15px 'Patrick Hand',cursive; }
+.dd-regenerate:hover { color:var(--dd-accent-bright); }
+.dd-section { margin-top:12px; }
+.dd-section-title { display:flex; align-items:center; gap:6px; margin-bottom:7px; }
+.dd-section-title span { color:var(--dd-accent-bright); font-size:15px; }
+.dd-section-title h2 { margin:0; }
+.dd-stickers { display:grid; width:100%; min-width:0; box-sizing:border-box; grid-template-columns:repeat(3,minmax(0,88px)); justify-content:start; gap:7px; padding:3px; }
+.dd-sticker { position:relative; min-width:0; transform:rotate(var(--tilt)); padding:5px 5px 6px; border:1px solid color-mix(in srgb,var(--dd-ink) 16%,transparent); border-radius:4px;
+  background:var(--dd-card); box-shadow:0 5px 10px rgba(57,42,48,.16); text-align:center; }
+.dd-sticker::before { content:''; position:absolute; width:32px; height:9px; margin:-9px 0 0 -16px; left:50%; background:var(--dd-tape); transform:rotate(-2deg); }
+.dd-sticker-art { aspect-ratio:1; overflow:hidden; border-radius:3px; background:linear-gradient(145deg,#e6d6df,#cfc2d6); }
+.dd-sticker-art img { width:100%; height:100%; object-fit:cover; display:block; }
+.dd-badge-fallback { display:grid; width:100%; height:100%; place-items:center; color:#fff; font-size:34px; }
+.dd-sticker b { display:block; min-width:0; margin-top:4px; overflow-wrap:anywhere; color:var(--dd-ink); font:15px/1 'Patrick Hand',cursive; }
+.dd-sticker p { min-width:0; margin:2px 1px 0; color:var(--dd-muted); font:12px/1.05 'Patrick Hand',cursive; display:-webkit-box; overflow:hidden; overflow-wrap:anywhere; -webkit-box-orient:vertical; -webkit-line-clamp:2; }
+.dd-sticker.is-rare { box-shadow:0 5px 13px rgba(123,83,151,.25),0 0 0 2px rgba(148,112,178,.17); }
+.dd-theme-oldworld .dd-sticker { border-color:rgba(86,52,31,.28); box-shadow:2px 4px 8px rgba(70,42,24,.18); }
+.dd-theme-school90s .dd-sticker { border-color:rgba(35,66,111,.2); box-shadow:1px 4px 8px rgba(38,59,91,.14); }
+.dd-theme-y2k .dd-sticker { border-color:rgba(202,67,154,.3); box-shadow:2px 4px 9px rgba(170,69,153,.16),0 0 0 1px rgba(100,207,217,.18); }
+.dd-theme-modern .dd-sticker { box-shadow:0 5px 10px rgba(57,42,48,.16); }
+.dd-theme-future .dd-sticker { border-color:rgba(129,217,207,.34); box-shadow:0 5px 11px rgba(0,0,0,.24),inset 0 0 0 1px rgba(189,139,234,.12); }
+.dd-moments ul { list-style:none; display:flex; flex-direction:column; gap:3px; margin:0; padding:0; }
+.dd-moments li { position:relative; padding:4px 3px 5px 20px; border-bottom:1px solid color-mix(in srgb,var(--dd-ink) 13%,transparent); color:var(--dd-ink); font:16px/1.15 'Patrick Hand',cursive; }
+.dd-moments li::before { content:'♡'; position:absolute; left:2px; color:var(--dd-accent); }
+.dd-note-read[hidden],.dd-note-editor[hidden] { display:none; }
+.dd-note-read p { max-height:128px; margin:0; overflow:hidden; color:var(--dd-ink); font:19px/1.25 'Patrick Hand',cursive; white-space:pre-wrap; }
+.dd-note-read.is-collapsed { position:relative; }
+.dd-note-read.is-collapsed p { max-height:94px; }
+.dd-note-read.is-collapsed::after { content:''; position:absolute; left:0; right:0; top:60px; height:38px; pointer-events:none; background:linear-gradient(transparent,var(--dd-paper)); }
+.dd-note-read.is-expanded p { max-height:190px; overflow-y:auto; overscroll-behavior:contain; }
+.dd-note-actions { position:relative; z-index:1; display:flex; align-items:center; gap:13px; }
+.dd-note-expand,.dd-note-edit { padding:4px 0; border:0; background:transparent; color:var(--dd-accent); cursor:pointer; font:15px 'Patrick Hand',cursive; }
+.dd-note-expand { text-decoration:underline; text-decoration-style:dotted; text-underline-offset:3px; }
+.dd-note-read p.is-empty { color:var(--dd-muted); opacity:.68; }
+.dd-note textarea { display:block; width:100%; height:120px; resize:none; overflow-y:auto; padding:9px 10px; border:1px solid color-mix(in srgb,var(--dd-ink) 22%,transparent); border-radius:7px;
+  outline:none; background:var(--dd-note); color:var(--dd-ink); font:19px/1.38 'Patrick Hand',cursive; }
+.dd-note textarea:focus { border-color:var(--dd-accent); box-shadow:0 0 0 3px color-mix(in srgb,var(--dd-accent-bright) 16%,transparent); }
+.dd-note textarea::placeholder { color:var(--dd-muted); }
+.dd-note-foot { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top:8px; }
+.dd-note-foot>span { color:var(--dd-muted); font:13px 'Patrick Hand',cursive; }
+.dd-save { min-height:32px; padding:0 13px; border:0; border-radius:7px; background:var(--dd-accent); color:var(--dd-button-text); cursor:pointer; font:16px 'Patrick Hand',cursive; }
+.dd-save:disabled { opacity:.55; cursor:wait; }
+.dd-quiet { margin:20px 0 0; text-align:center; color:var(--dd-muted); font:17px 'Patrick Hand',cursive; }
+.dd-page-number { position:absolute; right:16px; bottom:11px; color:var(--dd-muted); font:13px 'Patrick Hand',cursive; }
+.dd-page-corner { position:absolute; z-index:8; bottom:7px; width:46px; height:46px; padding:0; border:0; border-radius:50%; background:transparent; color:var(--dd-accent); font:30px/1 var(--disp); cursor:pointer; opacity:.62; }
+.dd-page-corner:hover,.dd-page-corner:focus-visible { opacity:1; background:rgba(255,255,255,.24); }
+.dd-page-corner:disabled { opacity:.26; cursor:not-allowed; pointer-events:none; filter:grayscale(1); }
+.dd-page-newer { left:22px; }
+.dd-page-older { right:7px; }
+.dd-page-position { margin-top:8px; color:var(--dd-title); text-align:center; font:15px 'Patrick Hand',cursive; }
+.dd-turn-hint { margin:2px 0 0; color:var(--muted); text-align:center; font:13px 'Patrick Hand',cursive; }
+.dd-theme-picker { position:fixed; z-index:1200; inset:0; display:grid; place-items:center; padding:20px; background:rgba(8,6,13,.76); backdrop-filter:blur(5px); }
+.dd-theme-dialog { position:relative; width:min(100%,390px); padding:22px 18px 18px; border:1px solid rgba(220,178,206,.24); border-radius:18px; background:#17121d; box-shadow:0 22px 65px rgba(0,0,0,.55); text-align:center; }
+.dd-theme-kicker { color:#d89cbb; font:15px 'Patrick Hand',cursive; }
+.dd-theme-dialog h2 { margin:4px 0 2px; color:#f7e9f2; font:700 34px/1 'Caveat',cursive; }
+.dd-theme-dialog>p { margin:0 0 15px; color:#aaa0ad; font:15px 'Patrick Hand',cursive; }
+.dd-theme-close { position:absolute; right:10px; top:8px; width:32px; height:32px; border:0; background:transparent; color:#d9c9d4; cursor:pointer; font-size:22px; }
+.dd-theme-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.dd-theme-card { min-width:0; padding:9px; border:1px solid rgba(235,215,228,.14); border-radius:12px; background:#211923; color:#f4eaf0; cursor:pointer; text-align:left; }
+.dd-theme-card:hover,.dd-theme-card:focus-visible,.dd-theme-card.is-selected { border-color:#d185ad; box-shadow:0 0 0 2px rgba(209,133,173,.12); }
+.dd-theme-card i { display:block; position:relative; height:58px; margin-bottom:8px; overflow:hidden; border-radius:7px; background:var(--swatch-cover); }
+.dd-theme-card i span { position:absolute; inset:7px 7px 5px 14px; border-radius:3px 6px 6px 3px; background:repeating-linear-gradient(180deg,var(--swatch-paper) 0 13px,var(--swatch-line) 13px 14px); box-shadow:inset 5px 0 7px rgba(0,0,0,.1); }
+.dd-theme-card i span::after { content:''; position:absolute; width:28px; height:7px; left:50%; top:-2px; transform:translateX(-50%) rotate(-2deg); background:var(--swatch-tape); }
+.dd-theme-card b { display:block; overflow:hidden; text-overflow:ellipsis; color:#f6edf2; font:16px/1 'Patrick Hand',cursive; white-space:nowrap; }
+.dd-theme-card small { display:block; margin-top:3px; overflow:hidden; color:#9d929f; font:13px 'Patrick Hand',cursive; text-overflow:ellipsis; white-space:nowrap; }
+.dd-theme-swatch-oldworld { --swatch-cover:#412a20; --swatch-paper:#dfcfad; --swatch-line:#bfaa83; --swatch-tape:#a07d4b; }
+.dd-theme-swatch-school90s { --swatch-cover:#203a62; --swatch-paper:#f2f0df; --swatch-line:#b7c5d6; --swatch-tape:#f4d66f; }
+.dd-theme-swatch-y2k { --swatch-cover:#73518a; --swatch-paper:#f1e9f3; --swatch-line:#d9cbe0; --swatch-tape:#b8dfe7; }
+.dd-theme-swatch-modern { --swatch-cover:#39202f; --swatch-paper:#f3ebdc; --swatch-line:#ddd2c4; --swatch-tape:#efc492; }
+.dd-theme-swatch-future { --swatch-cover:#0c111b; --swatch-paper:#252833; --swatch-line:#394451; --swatch-tape:#56a9ac; }
+.dd-theme-picker.is-saving { pointer-events:none; opacity:.72; }
+.dd-loading,.dd-error { min-height:52vh; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; }
+.dd-loading span { color:#f4d8e7; font:700 48px 'Caveat',cursive; }
+.dd-loading p,.dd-error p { color:var(--muted); font-size:12px; }
+.dd-error b { color:#fff; }
+
+/* Theme construction, not only recolouring. The sheet geometry stays shared
+   while its paper stock, ruling and pasted-object language change by era. */
+.dd-theme-oldworld .dd-paper { border-radius:3px 12px 10px 4px; border:1px solid rgba(91,58,33,.24); background:
+  linear-gradient(90deg,rgba(86,55,32,.13),transparent 25px),
+  repeating-linear-gradient(177deg,transparent 0 37px,rgba(91,58,33,.065) 37px 38px),
+  radial-gradient(ellipse at 48% 30%,#eadcbc 0,var(--dd-paper) 66%,#cab48d 100%); }
+.dd-theme-oldworld .dd-paper::before { opacity:.55; background:radial-gradient(circle at 8% 9%,rgba(83,49,28,.15),transparent 23%),radial-gradient(circle at 92% 87%,rgba(83,49,28,.12),transparent 27%),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='55' height='55'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='.55' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.09'/%3E%3C/svg%3E"); }
+.dd-theme-oldworld .dd-paper-ring i { width:10px; height:3px; background:#6b4b35; }
+.dd-theme-oldworld .dd-sticker::before { width:37px; height:11px; background:linear-gradient(90deg,rgba(132,98,57,.45),rgba(181,146,91,.75),rgba(132,98,57,.45)); }
+
+.dd-theme-school90s .dd-paper { border:1px solid rgba(41,71,113,.22); border-left-width:3px; background:
+  linear-gradient(90deg,transparent 0 22px,var(--dd-margin) 22px 24px,transparent 24px),
+  repeating-linear-gradient(180deg,transparent 0 30px,rgba(56,105,164,.18) 30px 31px),#f4f2df; }
+.dd-theme-school90s .dd-paper::before { opacity:.2; background:linear-gradient(90deg,transparent 0 94%,rgba(36,61,105,.08) 94% 95%,transparent 95%); }
+.dd-theme-school90s .dd-sticker { border-radius:1px; padding-bottom:8px; transform:rotate(calc(var(--tilt) * .55)); }
+.dd-theme-school90s .dd-sticker::before { left:16px; width:23px; transform:rotate(-8deg); }
+
+.dd-theme-y2k .dd-paper { border:1px solid rgba(199,67,155,.26); border-radius:9px 18px 18px 8px; background:
+  linear-gradient(90deg,transparent 0 18px,var(--dd-margin) 18px 19px,transparent 19px),
+  repeating-linear-gradient(180deg,transparent 0 31px,rgba(123,77,148,.12) 31px 32px),
+  linear-gradient(135deg,rgba(119,220,226,.1),transparent 36%,rgba(238,117,190,.1)),var(--dd-paper); }
+.dd-theme-y2k .dd-paper::before { opacity:.48; background:radial-gradient(circle,rgba(255,255,255,.75) 0 1px,transparent 1.5px) 0 0/23px 23px,radial-gradient(circle at 88% 18%,rgba(114,215,225,.22),transparent 20%); }
+.dd-theme-y2k .dd-sticker:nth-child(even) { transform:translateY(3px) rotate(var(--tilt)); }
+.dd-theme-y2k .dd-sticker::before { border-radius:5px; background:linear-gradient(90deg,rgba(111,216,223,.62),rgba(244,157,211,.7)); }
+
+.dd-theme-modern .dd-paper { border:1px solid rgba(101,75,89,.13); background:
+  linear-gradient(90deg,transparent 0 18px,var(--dd-margin) 18px 19px,transparent 19px),
+  repeating-linear-gradient(180deg,transparent 0 31px,var(--dd-line) 31px 32px),
+  linear-gradient(115deg,rgba(255,255,255,.28),transparent 42%),var(--dd-paper); }
+.dd-theme-modern .dd-sticker:nth-child(2) { transform:translateY(2px) rotate(1deg); }
+.dd-theme-modern .dd-sticker::before { width:30px; opacity:.82; }
+
+.dd-theme-future .dd-paper { border:1px solid rgba(129,217,207,.24); border-radius:3px 11px 11px 3px; background:
+  linear-gradient(90deg,transparent 0 20px,var(--dd-margin) 20px 21px,transparent 21px),
+  linear-gradient(rgba(129,217,207,.075) 1px,transparent 1px),linear-gradient(90deg,rgba(129,217,207,.045) 1px,transparent 1px),var(--dd-paper); background-size:auto,31px 31px,31px 31px,auto; }
+.dd-theme-future .dd-paper::before { opacity:.55; background:linear-gradient(110deg,transparent 0 55%,rgba(129,217,207,.04) 55% 56%,transparent 56%),radial-gradient(circle at 85% 15%,rgba(189,139,234,.13),transparent 20%); }
+.dd-theme-future .dd-sticker { border-radius:2px; clip-path:polygon(0 0,91% 0,100% 10%,100% 100%,9% 100%,0 90%); }
+.dd-theme-future .dd-sticker::before { height:3px; margin-top:-6px; box-shadow:0 0 6px var(--dd-accent); }
+
+.dd-art-unavailable { display:grid; width:100%; height:100%; place-content:center; gap:5px; color:var(--dd-muted); background:repeating-linear-gradient(135deg,transparent 0 7px,color-mix(in srgb,var(--dd-ink) 6%,transparent) 7px 8px); text-align:center; }
+.dd-art-unavailable i { width:25px; height:30px; margin:auto; border:1px solid currentColor; border-radius:12px 12px 8px 8px; opacity:.65; }
+.dd-art-unavailable small { font:10px/1.05 var(--mono); letter-spacing:.04em; text-transform:uppercase; }
+.dd-sticker.is-art-missing { border-style:dashed; }
+
+.dd-no-recorded { display:grid; min-height:330px; place-content:center; text-align:center; color:var(--dd-muted); }
+.dd-no-recorded>span { font:32px/1 'Caveat',cursive; opacity:.45; }
+.dd-no-recorded p { max-width:210px; margin:8px auto; font:20px/1.25 'Patrick Hand',cursive; }
+.dd-paper.is-no-recorded .dd-page-number { opacity:.7; }
+
+.dd-paper.is-opening-page .dd-date { padding-bottom:8px; border-bottom:double 3px color-mix(in srgb,var(--dd-accent) 28%,transparent); }
+.dd-paper.is-opening-page .dd-summary { margin-top:34px; padding:18px 9px 20px; border:1px solid color-mix(in srgb,var(--dd-accent) 24%,transparent); border-radius:5px; text-align:center; }
+.dd-paper.is-opening-page .dd-summary>span { font-size:12px; letter-spacing:.18em; text-transform:uppercase; }
+.dd-paper.is-opening-page .dd-summary p { max-width:270px; margin:12px auto 7px; }
+.dd-theme-oldworld .dd-paper.is-opening-page .dd-summary { border-style:double; border-width:3px; }
+.dd-theme-school90s .dd-paper.is-opening-page .dd-summary { border-style:dashed; }
+.dd-theme-y2k .dd-paper.is-opening-page .dd-summary { box-shadow:4px 4px 0 rgba(102,207,218,.16); }
+.dd-theme-future .dd-paper.is-opening-page .dd-summary { clip-path:polygon(0 0,96% 0,100% 12%,100% 100%,4% 100%,0 88%); }
+
+/* Closed personal diary in Agent Pack. No emoji or album art: the book is
+   assembled from light CSS surfaces and inherits the saved diary material. */
+.pack-personal-head { margin-top:30px; }
+.pack-personal-items { display:flex; justify-content:flex-start; padding:4px 2px 15px; }
+.closed-diary-object { --dd-cover:#39202f; --dd-title:#f7e9f2; --dd-accent:#c6678e; display:grid; grid-template-columns:104px minmax(0,1fr); align-items:center; gap:17px; width:100%; min-height:145px; padding:14px 16px; border:1px solid rgba(255,255,255,.075); border-radius:14px; background:linear-gradient(135deg,rgba(255,255,255,.035),rgba(255,255,255,.012)); color:var(--text); cursor:pointer; text-align:left; }
+.closed-diary-object:hover,.closed-diary-object:focus-visible { border-color:color-mix(in srgb,var(--dd-accent) 45%,rgba(255,255,255,.1)); background:linear-gradient(135deg,rgba(255,255,255,.055),rgba(255,255,255,.018)); }
+.closed-diary-book { position:relative; display:block; width:90px; height:118px; transform:rotate(-3deg); transform-origin:left center; filter:drop-shadow(0 12px 10px rgba(0,0,0,.38)); }
+.closed-diary-cover { position:absolute; z-index:3; inset:0 5px 4px 0; display:flex; flex-direction:column; align-items:center; justify-content:center; border:1px solid color-mix(in srgb,var(--dd-title) 20%,transparent); border-radius:5px 11px 11px 5px; background:linear-gradient(120deg,color-mix(in srgb,var(--dd-cover) 78%,#000),var(--dd-cover) 42%,color-mix(in srgb,var(--dd-cover) 82%,#fff)); box-shadow:inset 8px 0 12px rgba(0,0,0,.2),inset 0 0 0 2px rgba(255,255,255,.035); color:var(--dd-title); }
+.closed-diary-cover::before { content:''; position:absolute; inset:8px; border:1px solid color-mix(in srgb,var(--dd-accent) 52%,transparent); border-radius:3px 8px 8px 3px; }
+.closed-diary-cover small,.closed-diary-cover em { position:relative; font:7px/1.2 var(--mono); letter-spacing:.14em; opacity:.72; }
+.closed-diary-cover b { position:relative; margin:7px 0; font:700 19px/1 'Caveat',cursive; }
+.closed-diary-cover em { font-style:normal; }
+.closed-diary-pages { position:absolute; z-index:1; inset:5px 0 0 7px; border-radius:4px 12px 12px 4px; background:repeating-linear-gradient(180deg,#e8dfce 0 3px,#c8bdac 3px 4px); transform:translate(5px,3px); }
+.closed-diary-spine { position:absolute; z-index:4; left:3px; top:4px; bottom:8px; width:8px; border-radius:5px 0 0 5px; background:linear-gradient(90deg,rgba(0,0,0,.45),color-mix(in srgb,var(--dd-cover) 80%,#fff)); }
+.closed-diary-band { position:absolute; z-index:5; right:17px; top:0; bottom:4px; width:7px; background:color-mix(in srgb,var(--dd-accent) 62%,#111); opacity:.8; }
+.closed-diary-copy { min-width:0; display:flex; flex-direction:column; gap:5px; }
+.closed-diary-copy>b { font:700 24px/1 'Caveat',cursive; color:#f2e8ef; }
+.closed-diary-copy small { color:var(--muted); font:10px/1.45 var(--mono); letter-spacing:.06em; text-transform:uppercase; }
+.closed-diary-copy i { align-self:flex-start; margin-top:4px; padding:3px 7px; border-radius:9px; background:color-mix(in srgb,var(--dd-accent) 15%,transparent); color:color-mix(in srgb,var(--dd-accent) 75%,#fff); font:9px var(--mono); font-style:normal; }
+.closed-diary-object.dd-theme-oldworld { --dd-cover:#412a20; --dd-title:#f1ddba; --dd-accent:#9a5043; }
+.closed-diary-object.dd-theme-school90s { --dd-cover:#203a62; --dd-title:#f2eee1; --dd-accent:#d75a63; }
+.closed-diary-object.dd-theme-y2k { --dd-cover:#73518a; --dd-title:#fff0ff; --dd-accent:#e06ab4; }
+.closed-diary-object.dd-theme-modern { --dd-cover:#39202f; --dd-title:#f7e9f2; --dd-accent:#c6678e; }
+.closed-diary-object.dd-theme-future { --dd-cover:#0c111b; --dd-title:#d9f5f2; --dd-accent:#81d9cf; }
+.closed-diary-object.dd-theme-school90s .closed-diary-cover { background:repeating-linear-gradient(180deg,#f3f0df 0 18px,#b9c9df 18px 19px); color:#203a62; }
+.closed-diary-object.dd-theme-y2k .closed-diary-cover { background:linear-gradient(135deg,#6e4a86,#a96ea6 48%,#6fc9cf 130%); }
+.closed-diary-object.dd-theme-future .closed-diary-cover { background:linear-gradient(135deg,#0a101a,#172231); box-shadow:inset 8px 0 12px #05070b,0 0 10px rgba(129,217,207,.12); }
+.closed-diary-object.is-opening .closed-diary-book { animation:dd-cover-open .2s cubic-bezier(.2,.7,.25,1) forwards; }
+.dd-screen { animation:dd-book-arrive .24s cubic-bezier(.2,.75,.25,1) both; }
+.dd-screen.is-closing-book { animation:dd-book-close .18s ease-in both; pointer-events:none; }
+@keyframes dd-cover-open { to{transform:translateX(15px) scale(1.06) rotateY(-16deg);opacity:.25} }
+@keyframes dd-book-arrive { from{opacity:.2;transform:scale(.94) rotateY(5deg)} to{opacity:1;transform:none} }
+@keyframes dd-book-close { to{opacity:0;transform:scale(.94) rotateY(5deg)} }
+@media(max-width:350px){
+  .closed-diary-object{grid-template-columns:86px minmax(0,1fr);gap:12px;padding:12px}
+  .closed-diary-book{width:76px;height:103px}
+  .dd-screen{width:min(calc(100% - 8px),370px);max-width:calc(100vw - 32px)}
+  .dd-paper{padding-right:12px;padding-left:27px}
+  .dd-stickers{grid-template-columns:repeat(2,minmax(0,92px))}
+}
+@media(min-width:620px){
+  .dd-screen { --dd-sheet-h:550px; width:370px; padding-top:18px; }
+}
+@media(max-height:700px) and (max-width:619px){
+  .dd-screen{--dd-sheet-h:500px}
+  .dd-summary p{font-size:21px}
+}
+@media(prefers-reduced-motion:reduce){
+  .dd-sticker{transform:none}
+  .dd-page-sheet.is-turning-older,.dd-page-sheet.is-turning-newer,.dd-page-sheet.is-incoming.is-newer.is-revealed{animation-duration:.16s;transform:none;filter:none}
+  .closed-diary-object.is-opening .closed-diary-book,.dd-screen,.dd-screen.is-closing-book{animation:none;transform:none;opacity:1}
+}
+html[data-reduced-motion="true"] .dd-sticker{transform:none}
+html[data-reduced-motion="true"] .dd-page-sheet.is-turning-older,
+html[data-reduced-motion="true"] .dd-page-sheet.is-turning-newer,
+html[data-reduced-motion="true"] .dd-page-sheet.is-incoming.is-newer.is-revealed,
+html[data-reduced-motion="true"] .closed-diary-object.is-opening .closed-diary-book,
+html[data-reduced-motion="true"] .dd-screen,
+html[data-reduced-motion="true"] .dd-screen.is-closing-book{animation:none;transform:none;filter:none;opacity:1}
+
 select.rc-multi-native {
   position: absolute; width: 1px; height: 1px; min-height: 0; padding: 0; margin: -1px;
   border: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
