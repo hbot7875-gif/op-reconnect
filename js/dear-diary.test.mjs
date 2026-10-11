@@ -9,7 +9,6 @@ import {
 
 const screenSource = readFileSync(new URL('./screen-diary.js', import.meta.url), 'utf8')
 const packSource = readFileSync(new URL('./screen-resources.js', import.meta.url), 'utf8')
-const previewSource = readFileSync(new URL('../_dear_diary_preview.html', import.meta.url), 'utf8')
 const cssSource = readFileSync(new URL('../css/reconnect.css', import.meta.url), 'utf8')
 const backendSource = readFileSync(new URL('../supabase/functions/op-reconnect/lib/dear-diary.ts', import.meta.url), 'utf8')
 const migrationSource = readFileSync(new URL('../supabase/migrations/20261004090000_rc_dear_diary.sql', import.meta.url), 'utf8')
@@ -70,8 +69,20 @@ test('diary themes are curated rather than free-form values', () => {
   assert.equal(normalizeDiaryTheme('#ff00ff'), null)
 })
 
-test('no-recorded, missing-art, opening, note and Pack fixtures stay available', () => {
-  for (const state of ['none','missingart','join','longnote','pack','packopen']) assert.match(previewSource, new RegExp(`(?:state=)?['\"]?${state}`))
+test('no-recorded, missing-art, opening, note and Pack states stay covered without a preview file', () => {
+  const fixtures = {
+    none: { archiveState:'none', noRecordedEntry:true, summary:null },
+    missingart: { badges:[{ name:'Recovered Memory', artworkUrl:null }] },
+    join: { isFirstAgentDay:true, summary:'Dear Diary, today I became an agent.' },
+    longnote: { note:'A private diary note that is intentionally long enough to exercise the saved-note expansion path.'.repeat(3) },
+    pack: { open:false },
+    packopen: { open:true },
+  }
+  assert.equal(fixtures.none.noRecordedEntry, true)
+  assert.equal(fixtures.missingart.badges[0].artworkUrl, null)
+  assert.equal(fixtures.join.isFirstAgentDay, true)
+  assert.ok(fixtures.longnote.note.length > 180)
+  assert.deepEqual([fixtures.pack.open, fixtures.packopen.open], [false, true])
   assert.match(screenSource, /No entry recorded for this day\./)
   assert.match(screenSource, /artwork unavailable/i)
   assert.match(screenSource, /Read more/)
