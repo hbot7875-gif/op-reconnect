@@ -20,12 +20,35 @@ const nextBanner = css.indexOf('/* ════', start + 20)
 const moonAt = css.indexOf('/* ── Moon Station screen', start)
 const block = css.slice(start, nextBanner > 0 && nextBanner < moonAt ? nextBanner : moonAt)
 
-test('Candy icons are one outline family drawn in currentColor', () => {
+test('Candy icons: Lucide for utilities, Solar Line Duotone for Candy features, the alpaca for identity', () => {
+  const SOLAR_KEYS = ['stars', 'map', 'music', 'disc', 'library']
   for (const [key, svg] of Object.entries(CANDY_ICON_PATHS)) {
-    assert.doesNotMatch(svg, /fill="|stroke="|style=|#[0-9a-f]{3,6}/i, `${key} carries its own colour`)
+    // every icon draws in currentColor; none carries a colour of its own
+    assert.doesNotMatch(svg, /#[0-9a-f]{3,6}|style=|fill="(?!none)|stroke="(?!currentColor)/i, `${key} carries its own colour`)
+    if (SOLAR_KEYS.includes(key)) assert.match(svg, /^<g fill="none" stroke="currentColor"/, `${key} should be a Solar body`)
+    else assert.doesNotMatch(svg, /stroke="/, `${key} should be a plain Lucide/custom path`)
   }
+  for (const key of SOLAR_KEYS) assert.match(read('js/candy-icons.js'), new RegExp(`  ${key}: '<g[^\\n]*// solar:[a-z0-9-]+-line-duotone`))
   assert.match(csIcon('alpaca'), /^<svg class="cs-i" viewBox="0 0 24 24"/)
   assert.match(block, /stroke: currentColor;\s+stroke-width: 1\.8/)
+  // CC BY 4.0: Solar is credited
+  assert.match(read('credits.html'), /Solar Icon Set<\/strong> by 480 Design[^<]*\(<a href="https:\/\/creativecommons\.org\/licenses\/by\/4\.0\/"/)
+})
+
+test('Quick: goal songs are wrapped pills, the alpaca has its orbit, the CTA keeps the name', () => {
+  // one plain label per pill: no checkbox, no icon, no artist inside
+  assert.match(candy, /onclick="candyQuickToggle\(this\)" title="\$\{sanitize\(\(s\.artists \|\| \[\]\)\.join\(', '\)\)\}">\$\{sanitize\(s\.name\)\}<\/button>`/)
+  assert.doesNotMatch(candy, /cs-pick-box|cs-pick-artist/)
+  assert.match(block, /\.cs-screen \.cs-quick-chips \{ display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-start;/)
+  assert.match(block, /\.cs-screen \.cs-goal-chip \{[^}]*border-radius: 999px/)
+  assert.match(block, /\.cs-screen \.cs-goal-pick\.is-picked \{[^}]*background: rgba\(139,92,246,\.32\)/)
+  assert.match(candy, /<svg class="cs-orbit" viewBox="0 0 80 80"/)
+  assert.match(candy, /<b>One tap, one alpaca<\/b>/)
+  assert.match(candy, /onclick="candyGenerate\('quick'\)">\$\{csIcon\('alpaca'\)\}Make me an alpaca<\/button>/)
+  // the quick rules themselves did not move
+  assert.match(candy, /function candyQuickCap\(\) \{ return window\._candyStar\?\.quickAlbum \? 2 : 3; \}/)
+  assert.match(candy, /b\.disabled = !on && picked >= cap;/)
+  assert.match(candy, /count\.textContent = `\$\{picked\} of \$\{cap\}`;/)
 })
 
 test('the title is the current type system, not the tracked mono eyebrow', () => {

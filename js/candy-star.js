@@ -883,7 +883,7 @@ export async function renderCandyStar() {
   // Picking beats listing: all six goals in one playlist dilutes every one of
   // them, so Quick offers the same songs as choices with a hard cap.
   const goalChips = goalSongs.length
-    ? goalSongs.map(s => `<button type="button" class="cs-goal-chip cs-goal-pick" data-key="${sanitize(s.key)}" aria-pressed="false" onclick="candyQuickToggle(this)"><span class="cs-pick-box">${csIcon('check')}</span><span class="cs-pick-name">${sanitize(s.name)}</span><span class="cs-pick-artist">${sanitize((s.artists || []).join(', '))}</span></button>`).join('')
+    ? goalSongs.map(s => `<button type="button" class="cs-goal-chip cs-goal-pick" data-key="${sanitize(s.key)}" aria-pressed="false" onclick="candyQuickToggle(this)" title="${sanitize((s.artists || []).join(', '))}">${sanitize(s.name)}</button>`).join('')
     : currentGoalNames.length
       // The goal names exist, they just aren't in the (possibly still-empty)
       // catalog yet — show them anyway so "current goals" isn't a lie, just
@@ -907,12 +907,16 @@ export async function renderCandyStar() {
     <div class="cs-panel is-active" id="cs-panel-quick" role="tabpanel">
       <div class="archive-card cs-quick-card">
         <div class="cs-card-head">
-          <span class="cs-hero-icon" aria-hidden="true">${csIcon('alpaca')}</span>
+          <span class="cs-hero-icon" aria-hidden="true">
+            <!-- The page's one bit of magic: a faint orbit and its moon around the alpaca. Decorative only. -->
+            <svg class="cs-orbit" viewBox="0 0 80 80" focusable="false"><ellipse cx="40" cy="40" rx="37" ry="13" transform="rotate(-24 40 40)"/><circle class="cs-orbit-dot" cx="7" cy="53" r="2.4"/></svg>
+            ${csIcon('alpaca')}<span class="cs-hero-spark">${csIcon('stars')}</span>
+          </span>
           <span class="cs-card-head-copy">
-            <b>Quick alpaca</b>
+            <b>One tap, one alpaca</b>
             <small>${goalSongs.length
-              ? 'Pick up to 3 goal songs. Fewer per playlist keeps each one strong.'
-              : 'A playlist built around the current goals, woven with other songs.'}</small>
+              ? 'Pick the goal songs to keep on repeat. Fewer means each one hits harder.'
+              : "An alpaca built around this week's goals, woven with other songs."}</small>
           </span>
         </div>
         ${goalSongs.length ? `<div class="cs-section-label"><span>Goal songs</span><span class="cs-quick-count" id="cs-quick-count"></span></div>` : ''}
@@ -921,12 +925,12 @@ export async function renderCandyStar() {
         <label class="cs-quick-album">
           <input type="checkbox" id="cs-quick-album" onchange="candyQuickAlbumToggle()">
           <span class="cs-quick-album-box">${csIcon('check')}</span>
-          <span class="cs-quick-album-copy"><b>Weave in ${sanitize(window._candyStar.arirangAlbum.name)}</b>
-            <span class="cs-quick-album-hint">${window._candyStar.arirangAlbum.count} tracks · limits you to 2 songs</span>
-          </span>
           <span class="cs-quick-album-art" aria-hidden="true">${csIcon('disc')}</span>
+          <span class="cs-quick-album-copy"><b>Weave in ${sanitize(window._candyStar.arirangAlbum.name)}</b>
+            <span class="cs-quick-album-hint">${window._candyStar.arirangAlbum.count} tracks · then up to 2 songs</span>
+          </span>
         </label>` : ''}
-        <button type="button" class="btn-red" id="cs-quick-btn" onclick="candyGenerate('quick')">${csIcon('alpaca')}Make an alpaca</button>
+        <button type="button" class="btn-red" id="cs-quick-btn" onclick="candyGenerate('quick')">${csIcon('alpaca')}Make me an alpaca</button>
         <div class="cs-cost-note">${csIcon('feather')}1 Wing · up to 5 alpacas a day</div>
       </div>
     </div>

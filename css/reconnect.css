@@ -6918,25 +6918,13 @@ select.rc-multi-native {
   font-variant-numeric: tabular-nums; color: var(--v-ink-2); }
 .cs-screen .cs-quick-count.is-full { background: var(--v-tint-violet); color: var(--v-violet-hi); }
 
-/* ── Selection rows (Quick goal songs, the album option, album list) ── */
-.cs-screen .cs-quick-chips { display: grid; gap: 6px; justify-content: stretch; margin: 0 0 8px; }
-.cs-screen .cs-goal-chip { display: grid; grid-template-columns: 20px minmax(0,1fr) auto; align-items: center; gap: 10px;
-  width: 100%; margin: 0; padding: 10px 12px; border: 1px solid var(--v-line-1); border-radius: 10px; background: var(--v-surface-2);
-  color: var(--v-ink-1); font-family: var(--body); font-size: 14px; font-weight: 600; text-align: left; }
-.cs-screen .cs-goal-chip.is-empty { grid-template-columns: 1fr; color: var(--v-ink-3); font-weight: 500; }
-.cs-screen .cs-goal-pick:hover:not(:disabled) { border-color: var(--v-line-2); color: var(--v-ink-1); }
-.cs-screen .cs-pick-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cs-screen .cs-pick-artist { overflow: hidden; max-width: 9em; font-size: 12px; font-weight: 400; color: var(--v-ink-3);
-  text-overflow: ellipsis; white-space: nowrap; }
-.cs-screen .cs-pick-box, .cs-screen .cs-quick-album-box, .cs-screen .cs-album-card-check {
+/* ── Selection controls (the album option, the album list; Quick's pills are below) ── */
+.cs-screen .cs-quick-album-box, .cs-screen .cs-album-card-check {
   width: 20px; height: 20px; margin: 0; display: grid; place-items: center; border-radius: 6px;
   border: 1.5px solid rgba(255,255,255,.24); background: transparent; color: transparent; font-size: 0; }
-.cs-screen .cs-pick-box .cs-i, .cs-screen .cs-quick-album-box .cs-i, .cs-screen .cs-album-card-check .cs-i { width: 14px; height: 14px; stroke-width: 2.4; }
-.cs-screen .cs-goal-pick.is-picked { border-color: var(--v-violet-line); background: var(--v-tint-violet); color: var(--v-ink-1); box-shadow: none; }
-.cs-screen .cs-goal-pick.is-picked .cs-pick-box { border-color: var(--v-violet); background: var(--v-violet); color: #fff; }
-.cs-screen .cs-goal-pick:disabled { opacity: .45; }
+.cs-screen .cs-quick-album-box .cs-i, .cs-screen .cs-album-card-check .cs-i { width: 14px; height: 14px; stroke-width: 2.4; }
 
-.cs-screen .cs-quick-album { display: grid; grid-template-columns: 20px minmax(0,1fr) 28px; align-items: center; gap: 10px;
+.cs-screen .cs-quick-album { display: grid; grid-template-columns: 20px 28px minmax(0,1fr); align-items: center; gap: 10px;
   max-width: none; margin: 0 0 14px; padding: 10px 12px; border: 1px solid var(--v-line-1); border-radius: 10px;
   background: transparent; color: var(--v-ink-1); font-family: var(--body); font-size: 14px; }
 .cs-screen .cs-quick-album-copy b { display: block; font-weight: 600; color: var(--v-ink-1); }
@@ -7110,13 +7098,45 @@ select.rc-multi-native {
 .vault-sheet .cs-vault-empty > span .cs-i { width: 26px; height: 26px; }
 .vault-sheet .cs-vault-more { border-color: var(--v-line-1); background: transparent; color: var(--v-ink-1); font: 600 13px var(--body); }
 
-/* Narrow phones: the guide pickers stack, the artist hint gives way */
+/* ── Quick: the one playful surface ──
+   Same card system as the rest of Candy, with one controlled bit of magic: a
+   faint orbit behind the alpaca, a star on its tile, and goal songs as wrapped
+   pills that light up violet when picked. No glow, no gradient. */
+.cs-screen .cs-quick-card { position: relative; overflow: hidden; border-color: rgba(139,92,246,.30); }
+.cs-screen .cs-orbit { position: absolute; left: 50%; top: 50%; width: 76px; height: 76px; margin: -38px 0 0 -38px; pointer-events: none;
+  overflow: visible; fill: none; stroke: rgba(187,162,255,.30); stroke-width: 1; }
+.cs-screen .cs-orbit .cs-orbit-dot { fill: #c9b6ff; stroke: none; }
+.cs-screen .cs-quick-card .cs-card-head { position: relative; gap: 16px; margin-bottom: 16px; padding-left: 4px; }
+.cs-screen .cs-quick-card .cs-hero-icon { position: relative; width: 46px; height: 46px; border-radius: 14px;
+  background: var(--v-tint-violet); border: 1px solid var(--v-violet-line); color: var(--v-violet-hi); }
+.cs-screen .cs-quick-card .cs-hero-icon > .cs-i { width: 25px; height: 25px; }
+.cs-screen .cs-hero-spark { position: absolute; top: -7px; right: -8px; width: 20px; height: 20px; display: grid; place-items: center;
+  border-radius: 50%; background: var(--v-surface-1); color: #d6c7ff; }
+.cs-screen .cs-hero-spark .cs-i { width: 15px; height: 15px; }
+.cs-screen .cs-quick-card .cs-card-head-copy b { font-size: 17px; font-weight: 700; letter-spacing: .005em; }
+.cs-screen .cs-quick-card .cs-card-head-copy small { font-size: 13px; }
+
+/* Goal songs: pills that wrap by title length, left-aligned, one gap */
+.cs-screen .cs-quick-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-start; margin: 0 0 14px; }
+.cs-screen .cs-goal-chip { display: inline-flex; align-items: center; justify-content: center; width: auto; max-width: 100%;
+  padding: 9px 15px; border: 1px solid rgba(255,255,255,.14); border-radius: 999px; background: var(--v-surface-2);
+  color: var(--v-ink-1); font: 600 14px/1.2 var(--body); text-align: center; white-space: normal; }
+.cs-screen .cs-goal-pick:hover:not(:disabled) { border-color: rgba(187,162,255,.55); }
+.cs-screen .cs-goal-pick.is-picked { border-color: #a78bfa; background: rgba(139,92,246,.32); color: #fff; font-weight: 700; }
+.cs-screen .cs-goal-pick:disabled { opacity: .5; }
+.cs-screen .cs-goal-chip.is-empty { color: var(--v-ink-3); font-weight: 500; }
+
+/* The album option: one compact secondary row under the pills */
+.cs-screen .cs-quick-album { margin: 0 0 14px; padding: 9px 12px; border-radius: 12px; }
+.cs-screen .cs-quick-album-copy b { font-size: 14px; }
+.cs-screen .cs-quick-album-art { background: transparent; color: var(--v-ink-2); }
+.cs-screen .cs-quick-album-art .cs-i { width: 18px; height: 18px; }
+
+/* Narrow phones: the guide pickers stack, the bar and rows tighten */
 @media (max-width: 359px) {
   .vault-sheet .cs-vault-action span { display: none; }
   .vault-sheet .cs-vault-action:has(.cs-i) { width: 32px; padding: 0; }
   .cs-screen .cs-goal-guide-controls { grid-template-columns: 1fr; }
-  .cs-screen .cs-pick-artist { display: none; }
-  .cs-screen .cs-goal-chip { grid-template-columns: 20px minmax(0,1fr); }
   .cs-screen .cs-col-headers, .cs-screen .cs-focus-row { grid-template-columns: minmax(0,1fr) 60px 36px; }
   .cs-screen .cs-actionbar { gap: 10px; padding-left: 12px; }
   .cs-screen .cs-actionbar .btn-red { padding: 0 12px; font-size: 14px; white-space: nowrap; }
