@@ -61,3 +61,27 @@ test('counts, gates and actions are unchanged', () => {
   assert.match(pack, /button\.onclick = \(\) => showOverlay\(itemSheet\(item\)\)/)
   assert.match(keepsake, /card\.onclick = \(\) => showOverlay\(passSheet\(readCache\(\), false\)\)/)
 })
+
+test('the identity card keeps its dossier header and the mono agent ID', () => {
+  assert.match(pack, /el\('div', 'aid-head', '<span class="aid-file">Agent dossier<\/span>'\)/)
+  assert.match(pack, /head\.appendChild\(el\('div', 'aid-active', '<i><\/i>Active'\)\)/)
+  assert.match(block, /\.res-screen \.aid-id-no em \{ font-family: var\(--mono\)/)
+  assert.match(block, /\.res-screen \.aid-head \{[^}]*border-bottom: 1px dashed/)
+})
+
+test('Recovered Objects: two columns at 320, three from 360 up', () => {
+  assert.match(block, /\.res-screen \.collection-shelf \{ grid-template-columns: repeat\(3, minmax\(0,1fr\)\)/)
+  const narrow = block.slice(block.indexOf('@media (max-width: 359px)'))
+  assert.match(narrow, /\.res-screen \.collection-shelf \{ grid-template-columns: repeat\(2, minmax\(0,1fr\)\); \}/)
+})
+
+test('the event keepsake stays special without glow or gradient', () => {
+  const rules = block.split('\n').filter((l) => l.includes('.arc-keepsake')).join('\n')
+  assert.match(rules, /#f39cc8/, 'keeps its event colour')
+  assert.doesNotMatch(rules, /gradient\(|box-shadow|text-shadow|filter:/)
+})
+
+test('resource detail sheets are left for a later pass', () => {
+  for (const icon of ['⚡', '🪽', '🧊', '⏳']) assert.ok(pack.includes(`icon: '${icon}'`), `${icon} detail-sheet icon should be untouched`)
+  assert.match(pack, /<div style="font-size:38px; text-align:center; margin:10px 0;">\$\{def\.icon\}<\/div>/)
+})

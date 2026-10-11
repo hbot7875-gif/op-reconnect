@@ -73,8 +73,13 @@ function agentIdCard(state) {
   // code does not), so dropping it here would make rank invisible everywhere.
   // The agent number is not repeated here: it is the ID in the strip below.
   info.appendChild(el('div', 'aid-meta', `${esc(p.level?.name || '')} · LV ${p.level?.level ?? '—'} · ${esc(p.rank?.title || '')}`))
-  const active = el('div', 'aid-active', '<i></i>Active')
-  top.append(photo, info, active)
+  // A dossier header keeps the card an agent file rather than a profile:
+  // the file label on the left, the agent's status on the right, which also
+  // gives the codename the full width of its own row.
+  const head = el('div', 'aid-head', '<span class="aid-file">Agent dossier</span>')
+  head.appendChild(el('div', 'aid-active', '<i></i>Active'))
+  card.appendChild(head)
+  top.append(photo, info)
   card.appendChild(top)
 
   const strip = el('div', 'aid-strip')
