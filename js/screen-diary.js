@@ -6,11 +6,13 @@ import { badgeThumb } from './badge-art.js'
 import { getAgentNo } from './session.js'
 import { el, esc, toast } from './state.js'
 import { goResources } from './router.js'
+import { packIcon } from './pack-icons.js'
 import {
-  DIARY_DECORATION_FAMILIES, DIARY_DECORATION_LIMIT, DIARY_THEMES,
-  diaryDecorationSlots, diarySheetPlan, diarySwipeDirection,
-  normalizeDiaryDecorations, normalizeDiaryTheme,
+  DIARY_DECORATION_FAMILIES, DIARY_DECORATION_LIMIT, DIARY_KEY_DIRECTION, DIARY_THEMES,
+  diaryCalendarMonth, diaryCornerState, diaryDecorationSlots, diarySheetPlan, diarySwipeDirection,
+  diaryTurnTarget, normalizeDiaryDecorations, normalizeDiaryTheme,
 } from './dear-diary-rules.js'
+import { createDiaryArchive, createDiaryCalendar } from './dear-diary-archive.js'
 
 const diaryThemeKey = () => `rc:dear-diary:theme:${getAgentNo() || 'preview'}`
 const prefersReducedMotion = () => globalThis.__ddReduceMotion === true || matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -84,6 +86,11 @@ function prettyDate(date) {
 function shortDate(date) {
   try { return new Date(`${date}T12:00:00+09:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) }
   catch { return date || '' }
+}
+
+function monthLabel(month) {
+  try { return new Date(`${month}-15T12:00:00Z`).toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' }) }
+  catch { return month }
 }
 
 function applyDiaryTheme(root, value) {
@@ -227,10 +234,10 @@ function makeBook(root, state, actions) {
   root.tabIndex = -1
   let activeTheme = applyDiaryTheme(root, actions.initialTheme)
   root.innerHTML = `<header class="dd-head"><button type="button" class="back dd-back" aria-label="Back to Agent Pack">←</button>
-    <span class="dd-mini-title">Dear Diary</span><div class="dd-head-tools"><button type="button" class="dd-style" aria-label="Diary Style" title="Diary Style">◐</button><span class="dd-private">🔒 private</span></div></header>
+    <span class="dd-mini-title">Dear Diary</span><div class="dd-head-tools">${actions.archive ? `<button type="button" class="dd-tool dd-calendar-open" aria-label="Diary archive calendar" title="Archive" aria-haspopup="dialog">${packIcon('calendar')}</button>` : ''}<button type="button" class="dd-tool dd-style" aria-label="Diary Style" title="Diary Style">◐</button><span class="dd-private">🔒 private</span></div></header>
   <div class="dd-book" aria-live="polite"><div class="dd-page-stage"></div>
-    <button type="button" class="dd-page-corner dd-page-newer" aria-label="Turn to newer diary page">‹</button>
-    <button type="button" class="dd-page-corner dd-page-older" aria-label="Turn to older diary page">›</button></div>
+    <button type="button" class="dd-page-corner dd-page-older" aria-label="Turn to older diary page">‹</button>
+    <button type="button" class="dd-page-corner dd-page-newer" aria-label="Turn to newer diary page">›</button></div>
   <div class="dd-page-position"></div><p class="dd-turn-hint">Swipe or use the page corners</p>`
   root.querySelector('.dd-back').onclick = () => {
     root.classList.add('is-closing-book')
@@ -337,23 +344,24 @@ function makeBook(root, state, actions) {
     for (const decoration of sheet.querySelectorAll('.dd-decoration')) decoration.onclick = () => openDecorationTray(decoration.dataset.decorationSlot)
   }
 
+  function setCorner(button, enabled) {
+    button.disabled = !enabled
+    button.setAttribute('aria-disabled', String(!enabled))
+  }
+
   async function updateChrome(data, index, total) {
     const token = ++availabilityToken
     marker.textContent = `${shortDate(data.date)} · ${index + 1}/${total}${data.isToday === false ? '' : ' • Today'}`
-    const atFront = data.isToday !== false && index === 0
-    newer.disabled = atFront
-    newer.setAttribute('aria-hidden', String(atFront))
-    if (index < total - 1) {
-      older.disabled = false
-      older.setAttribute('aria-disabled', 'false')
-      return
-    }
-    older.disabled = true
-    older.setAttribute('aria-disabled', 'true')
-    const nextDate = await actions.adjacent?.(data.date, 'older')
+    const isToday = data.isToday !== false
+    const known = diaryCornerState({ index, total, isToday, hasOlderDate: false })
+    setCorner(newer, known.newer)
+    if (known.older) { setCorner(older, true); return }
+    // First sheet: the older corner depends on whether an earlier recorded
+    // date exists, which may need another archive window to answer.
+    setCorner(older, false)
+    const olderDate = await actions.adjacent?.(data.date, 'older')
     if (token !== availabilityToken) return
-    older.disabled = !nextDate
-    older.setAttribute('aria-disabled', String(!nextDate))
+    setCorner(older, diaryCornerState({ index, total, isToday, hasOlderDate: !!olderDate }).older)
   }
 
   async function show(data, sheetIndex = 0, direction = null) {
@@ -366,13 +374,16 @@ function makeBook(root, state, actions) {
       current = { data, index, total }; bindSheet(stage.firstElementChild, data); await updateChrome(data, index, total)
       return
     }
+    // Newer turns the page forward (it lifts away to the left over the next
+    // page); older brings the previous page back over from the left.
+    const motion = direction === 'newer' ? 'forward' : 'back'
     const oldSheet = stage.querySelector('.is-current')
     const incoming = document.createElement('div')
-    incoming.className = `dd-page-sheet is-incoming is-${direction}`
+    incoming.className = `dd-page-sheet is-incoming is-${motion}`
     incoming.innerHTML = markup
-    if (direction === 'older') stage.prepend(incoming); else stage.append(incoming)
+    if (motion === 'forward') stage.prepend(incoming); else stage.append(incoming)
     bindSheet(incoming, data)
-    requestAnimationFrame(() => { oldSheet.classList.add(`is-turning-${direction}`); incoming.classList.add('is-revealed') })
+    requestAnimationFrame(() => { oldSheet.classList.add(`is-turning-${motion}`); incoming.classList.add('is-revealed') })
     const reduced = prefersReducedMotion()
     await new Promise((resolve) => setTimeout(resolve, reduced ? 170 : 470))
     stage.innerHTML = ''; incoming.className = 'dd-page-sheet is-current'; stage.appendChild(incoming)
@@ -386,31 +397,111 @@ function makeBook(root, state, actions) {
 
   async function turn(direction) {
     if (document.activeElement?.closest?.('textarea,input,[contenteditable="true"]') || stage.querySelector('.dd-note-editor:not([hidden])')) return
-    if (busy || !current || (direction === 'older' && older.disabled) || (direction === 'newer' && current.data.isToday !== false && current.index === 0)) return
+    const corner = direction === 'older' ? older : newer
+    if (busy || !current || corner.disabled) return
     busy = true; book.classList.add('is-busy')
     try {
       await saveDirtyNote()
-      if (direction === 'older' && current.index < current.total - 1) {
-        await show(current.data, current.index + 1, direction)
-      } else if (direction === 'newer' && current.index > 0) {
-        await show(current.data, current.index - 1, direction)
+      const target = diaryTurnTarget({ index: current.index, total: current.total, direction })
+      if (!target) return
+      if ('sheet' in target) {
+        await show(current.data, target.sheet, direction)
       } else {
         const date = await actions.adjacent?.(current.data.date, direction)
         if (!date) return
         const data = await actions.load(date)
-        if (data) {
-          const target = direction === 'newer' ? diaryView(state, data).sheets.length - 1 : 0
-          await show(data, target, direction)
-        }
+        if (data) await show(data, target.land === 'last' ? diaryView(state, data).sheets.length - 1 : 0, direction)
       }
     } finally { busy = false; book.classList.remove('is-busy') }
   }
 
+  /** Open one date directly (archive calendar). Lands on its first sheet. */
+  async function jumpTo(date) {
+    if (busy || !current || !date) return
+    if (date === current.data.date) { if (current.index) await show(current.data, 0, 'older'); return }
+    busy = true; book.classList.add('is-busy')
+    try {
+      await saveDirtyNote()
+      const data = await actions.load(date)
+      if (data) await show(data, 0, date < current.data.date ? 'older' : 'newer')
+    } finally { busy = false; book.classList.remove('is-busy') }
+  }
+
+  function closeCalendar(sheet, calendar) {
+    calendar.close()
+    sheet.remove()
+    root.querySelector('.dd-calendar-open')?.setAttribute('aria-expanded', 'false')
+    root.querySelector('.dd-calendar-open')?.focus({ preventScroll: true })
+  }
+
+  async function openCalendar() {
+    const archive = actions.archive
+    if (!archive || !current || root.querySelector('.dd-calendar-sheet')) return
+    const calendar = createDiaryCalendar({ archive, jump: jumpTo })
+    const sheet = document.createElement('div')
+    sheet.className = 'dd-calendar-sheet'
+    sheet.innerHTML = `<div class="dd-calendar-panel" role="dialog" aria-modal="true" aria-labelledby="dd-calendar-title">
+      <div class="dd-calendar-head">
+        <button type="button" class="dd-calendar-step" data-step="-1" aria-label="Previous month">${packIcon('chevronLeft')}</button>
+        <div><span>ARCHIVE</span><h2 id="dd-calendar-title"></h2></div>
+        <button type="button" class="dd-calendar-step" data-step="1" aria-label="Next month">${packIcon('chevron')}</button>
+        <button type="button" class="dd-calendar-close" aria-label="Close archive">×</button>
+      </div>
+      <div class="dd-calendar-week" aria-hidden="true">${['S','M','T','W','T','F','S'].map((d) => `<span>${d}</span>`).join('')}</div>
+      <div class="dd-calendar-grid" role="grid"></div>
+      <div class="dd-calendar-legend" aria-hidden="true"><span><i class="is-real"></i>entry</span><span><i class="is-light"></i>light day</span><span><i class="is-join"></i>first day</span></div>
+      <div class="dd-calendar-actions"><button type="button" class="dd-calendar-first">First day</button><button type="button" class="dd-calendar-today">Today</button></div>
+    </div>`
+    root.appendChild(sheet)
+    root.querySelector('.dd-calendar-open')?.setAttribute('aria-expanded', 'true')
+    let drawToken = 0
+    const draw = () => {
+      const token = ++drawToken
+      const view = diaryCalendarMonth({ month: calendar.month, today: archive.today, joinedDate: archive.joinedDate, stateOf: archive.stateOf, selected: current?.data.date })
+      const ready = archive.monthReady(calendar.month)
+      sheet.querySelector('#dd-calendar-title').textContent = monthLabel(calendar.month)
+      sheet.querySelector('[data-step="-1"]').disabled = !view.canPrev
+      sheet.querySelector('[data-step="1"]').disabled = !view.canNext
+      const grid = sheet.querySelector('.dd-calendar-grid')
+      grid.classList.toggle('is-loading', !ready)
+      grid.innerHTML = `${'<span class="dd-calendar-pad"></span>'.repeat(view.leading)}${view.days.map((day) => {
+        const cls = ['dd-calendar-day', day.state ? `is-${day.state}` : '', day.isToday ? 'is-today' : '', day.isSelected ? 'is-selected' : '', day.isJoin ? 'is-join' : ''].filter(Boolean).join(' ')
+        const label = `${prettyDate(day.date)}${day.isToday ? ', today' : ''}${day.isJoin ? ', first agent day' : ''}${day.state === 'real' ? ', diary entry' : day.state === 'light' ? ', light day' : ''}`
+        return `<button type="button" class="${cls}" data-date="${day.date}" aria-label="${esc(label)}"${day.isSelected ? ' aria-current="date"' : ''}${day.selectable && ready ? '' : ' disabled'}>${day.day}</button>`
+      }).join('')}`
+      if (!ready) archive.ensureMonth(calendar.month).then(() => { if (token === drawToken && calendar.open) draw() })
+    }
+    const done = (promise) => promise.then((jumped) => {
+      if (jumped !== false) closeCalendar(sheet, calendar); else sheet.classList.remove('is-leaving')
+    })
+    sheet.addEventListener('click', (event) => {
+      if (event.target === sheet || event.target.closest('.dd-calendar-close')) { closeCalendar(sheet, calendar); return }
+      const step = event.target.closest('.dd-calendar-step')
+      if (step && !step.disabled) { calendar.showMonth(Number(step.dataset.step)).then(draw); draw(); return }
+      const day = event.target.closest('.dd-calendar-day')
+      if (day && !day.disabled) { sheet.classList.add('is-leaving'); done(calendar.choose(day.dataset.date)); return }
+      if (event.target.closest('.dd-calendar-first')) { sheet.classList.add('is-leaving'); done(calendar.firstDay()); return }
+      if (event.target.closest('.dd-calendar-today')) { sheet.classList.add('is-leaving'); done(calendar.today()) }
+    })
+    sheet.addEventListener('keydown', (event) => {
+      event.stopPropagation()
+      if (event.key === 'Escape') { event.preventDefault(); closeCalendar(sheet, calendar) }
+    })
+    // openAt picks the month synchronously; draw() shows it at once and
+    // redraws when that month's archive range has arrived.
+    calendar.openAt(current.data.date).catch(() => {})
+    draw()
+    const focusTarget = ['.dd-calendar-day.is-selected:not(:disabled)', '.dd-calendar-day.is-today', '.dd-calendar-close']
+      .map((selector) => sheet.querySelector(selector)).find(Boolean)
+    focusTarget?.focus({ preventScroll: true })
+  }
+
+  root.querySelector('.dd-calendar-open')?.addEventListener('click', () => openCalendar())
   older.onclick = () => turn('older'); newer.onclick = () => turn('newer')
   root.addEventListener('keydown', (event) => {
     if (event.target.closest('textarea,input,[contenteditable="true"]')) return
-    if (event.key === 'ArrowLeft') { event.preventDefault(); turn('older') }
-    if (event.key === 'ArrowRight') { event.preventDefault(); turn('newer') }
+    const direction = DIARY_KEY_DIRECTION[event.key]
+    if (direction) { event.preventDefault(); turn(direction) }
   })
   let start = null
   book.addEventListener('pointerdown', (event) => {
@@ -432,7 +523,7 @@ function makeBook(root, state, actions) {
     }
     return saved
   }, true))
-  return { show, turn, current: () => current }
+  return { show, turn, jumpTo, openCalendar, current: () => current }
 }
 
 export function renderDiaryContent(root, state, data, actions = {}) {
@@ -441,21 +532,26 @@ export function renderDiaryContent(root, state, data, actions = {}) {
   return book
 }
 
-export function renderDearDiary(container, state, { previewData = null, previewDate = null, previewSheet = 0, previewTheme = 'modern', previewBack = null } = {}) {
+export function renderDearDiary(container, state, { previewData = null, previewDate = null, previewSheet = 0, previewTheme = 'modern', previewBack = null, previewJoinedDate = null } = {}) {
   container.innerHTML = ''
   const root = el('div', 'dd-screen'); container.appendChild(root)
   if (previewData) {
     const pages = Array.isArray(previewData) ? previewData : [previewData]
     const byDate = new Map(pages.map((page, index) => [page.date, { ...page, isToday: page.isToday ?? index === 0 }]))
-    const dates = [...byDate.keys()].sort().reverse()
+    const dates = [...byDate.keys()].sort()
+    const today = [...byDate.values()].find((page) => page.isToday !== false)?.date || dates.at(-1)
     const first = byDate.get(previewDate) || byDate.values().next().value
+    // Preview pages stand in for the archive range endpoint, so the book and
+    // calendar run the same date-index code as the live diary.
+    const archive = createDiaryArchive({ today, fetchRange: async () => ({
+      success: true, joinedDate: previewJoinedDate || dates[0], nextBefore: null,
+      dates: dates.map((date) => ({ date, state: byDate.get(date).archiveState === 'light' ? 'light' : 'real' })),
+    }) })
+    archive.start()
     const book = makeBook(root, state, {
-      initialTheme: previewTheme,
+      initialTheme: previewTheme, archive,
       back: previewBack || (() => {}), load: async (date) => byDate.get(date) || null,
-      adjacent: async (date, direction) => {
-        const index = dates.indexOf(date)
-        return dates[index + (direction === 'older' ? 1 : -1)] || null
-      },
+      adjacent: (date, direction) => archive.adjacent(date, direction),
       save: async () => toast('Preview only · note not sent'),
       saveDecorations: async () => true,
       regenerate: () => toast('Preview only · wording stays put'), setTheme: async () => true,
@@ -465,41 +561,24 @@ export function renderDearDiary(container, state, { previewData = null, previewD
 
   root.innerHTML = '<div class="dd-loading"><span>Dear Diary…</span><p>finding today’s little receipts</p></div>'
   let book = null
-  let archiveDates = []
-  let archiveNext = null
+  const today = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10)
+  const archive = createDiaryArchive({ today, fetchRange: (range) => call('getDearDiaryArchive', { agentNo: getAgentNo(), ...range }) })
   const fetchPage = async (date, regenerate = false) => {
     const res = await call('getDearDiary', { agentNo: getAgentNo(), date, regenerate })
     if (!res?.success) { toast(res?.error || 'That page would not open'); return null }
     return res
   }
   const start = async () => {
-    const archive = await call('getDearDiaryArchive', { agentNo: getAgentNo(), days: 60 })
-    if (archive?.success) {
-      archiveDates = archive.dates.map((item) => item.date)
-      archiveNext = archive.nextBefore
-    }
-    const today = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10)
-    if (!archiveDates.includes(today)) archiveDates.unshift(today)
-    const res = await fetchPage(today)
+    const [res] = await Promise.all([fetchPage(today), archive.start()])
     if (!res) {
       root.innerHTML = '<div class="dd-error"><b>The diary won’t open right now.</b><p>Try again in a moment.</p><button type="button" class="btn btn-ghost">BACK TO PACK</button></div>'
       root.querySelector('button').onclick = () => goResources(); return
     }
     if (res.theme) rememberDiaryTheme(res.theme)
     book = makeBook(root, state, {
-      initialTheme: res.theme,
+      initialTheme: res.theme, archive,
       load: (date) => fetchPage(date),
-      adjacent: async (date, direction) => {
-        let index = archiveDates.indexOf(date)
-        if (direction === 'older' && index === archiveDates.length - 1 && archiveNext) {
-          const more = await call('getDearDiaryArchive', { agentNo: getAgentNo(), before: archiveNext, days: 60 })
-          if (more?.success) {
-            for (const item of more.dates) if (!archiveDates.includes(item.date)) archiveDates.push(item.date)
-            archiveDates.sort().reverse(); archiveNext = more.nextBefore; index = archiveDates.indexOf(date)
-          }
-        }
-        return archiveDates[index + (direction === 'older' ? 1 : -1)] || null
-      },
+      adjacent: (date, direction) => archive.adjacent(date, direction),
       save: async (date, value) => {
         const saved = await call('saveDearDiaryNote', { agentNo: getAgentNo(), date, note: value })
         toast(saved?.success ? 'Diary note saved ✦' : (saved?.error || 'Couldn’t save your note'))

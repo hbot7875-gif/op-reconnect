@@ -26,8 +26,8 @@ test('diary dates move across month boundaries without local timezone drift', ()
 })
 
 test('diary swipe requires a deliberate horizontal gesture', () => {
-  assert.equal(diarySwipeDirection(-90, 12), 'older')
-  assert.equal(diarySwipeDirection(90, 12), 'newer')
+  assert.equal(diarySwipeDirection(-90, 12), 'newer')
+  assert.equal(diarySwipeDirection(90, 12), 'older')
   assert.equal(diarySwipeDirection(32, 2), null)
   assert.equal(diarySwipeDirection(-80, 100), null)
 })

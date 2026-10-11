@@ -6791,7 +6791,9 @@ select.rc-select-native {
 .dd-mini-title { color:var(--dd-title); font:700 24px/.9 'Caveat',cursive; white-space:nowrap; }
 .dd-back { color:#f4d6e5; }
 .dd-head-tools { align-self:start; display:flex; align-items:center; gap:5px; }
-.dd-style { width:27px; height:27px; padding:0; border:1px solid color-mix(in srgb,var(--dd-accent-bright) 38%,transparent); border-radius:50%; background:transparent; color:var(--dd-title); cursor:pointer; font:13px/1 var(--disp); }
+.dd-tool { display:inline-grid; place-items:center; width:27px; height:27px; padding:0; border:1px solid color-mix(in srgb,var(--dd-accent-bright) 38%,transparent); border-radius:50%; background:transparent; color:var(--dd-title); cursor:pointer; font:13px/1 var(--disp); }
+.dd-tool svg { width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.dd-tool:hover,.dd-tool:focus-visible,.dd-tool[aria-expanded="true"] { border-color:var(--dd-accent-bright); background:color-mix(in srgb,var(--dd-accent) 22%,transparent); }
 .dd-private { color:var(--dd-title); font:15px/1 'Patrick Hand',cursive; white-space:nowrap; opacity:.78; }
 .dd-book { position:relative; width:100%; min-width:0; touch-action:pan-y; }
 .dd-book::before { content:''; position:absolute; z-index:-1; inset:-5px 0 -5px -4px; border-radius:10px 18px 18px 10px; background:var(--dd-cover); box-shadow:0 14px 35px rgba(0,0,0,.3),inset -4px 0 0 color-mix(in srgb,var(--dd-cover) 72%,#fff); }
@@ -6799,13 +6801,13 @@ select.rc-select-native {
 .dd-page-stage { display:grid; width:100%; height:var(--dd-sheet-h); perspective:1300px; transform-style:preserve-3d; }
 .dd-page-sheet { grid-area:1/1; min-width:0; height:100%; transform-origin:left center; backface-visibility:hidden; }
 .dd-page-sheet.is-current { position:relative; z-index:2; }
-.dd-page-sheet.is-incoming.is-older { position:relative; z-index:1; }
-.dd-page-sheet.is-incoming.is-newer { position:relative; z-index:3; opacity:.15; transform:translateX(-7%) rotateY(-7deg); }
-.dd-page-sheet.is-incoming.is-newer.is-revealed { animation:dd-page-newer .46s cubic-bezier(.2,.72,.25,1) forwards; }
-.dd-page-sheet.is-turning-older { z-index:4; animation:dd-page-older .46s cubic-bezier(.46,.02,.25,1) forwards; }
-.dd-page-sheet.is-turning-newer { z-index:1; animation:dd-page-under .46s ease forwards; }
-@keyframes dd-page-older { 0%{transform:translateX(0) rotateY(0);filter:none;opacity:1} 52%{transform:translateX(-6%) rotateY(-7deg);filter:drop-shadow(15px 6px 13px rgba(20,10,18,.35));opacity:.9} 100%{transform:translateX(-17%) rotateY(-13deg);filter:drop-shadow(24px 8px 18px rgba(20,10,18,.4));opacity:0} }
-@keyframes dd-page-newer { 0%{opacity:.18;transform:translateX(-13%) rotateY(-10deg);filter:drop-shadow(18px 7px 15px rgba(20,10,18,.36))} 60%{opacity:.92;transform:translateX(-2%) rotateY(-2deg)} 100%{opacity:1;transform:none;filter:none} }
+.dd-page-sheet.is-incoming.is-forward { position:relative; z-index:1; }
+.dd-page-sheet.is-incoming.is-back { position:relative; z-index:3; opacity:.15; transform:translateX(-7%) rotateY(-7deg); }
+.dd-page-sheet.is-incoming.is-back.is-revealed { animation:dd-page-back .46s cubic-bezier(.2,.72,.25,1) forwards; }
+.dd-page-sheet.is-turning-forward { z-index:4; animation:dd-page-forward .46s cubic-bezier(.46,.02,.25,1) forwards; }
+.dd-page-sheet.is-turning-back { z-index:1; animation:dd-page-under .46s ease forwards; }
+@keyframes dd-page-forward { 0%{transform:translateX(0) rotateY(0);filter:none;opacity:1} 52%{transform:translateX(-6%) rotateY(-7deg);filter:drop-shadow(15px 6px 13px rgba(20,10,18,.35));opacity:.9} 100%{transform:translateX(-17%) rotateY(-13deg);filter:drop-shadow(24px 8px 18px rgba(20,10,18,.4));opacity:0} }
+@keyframes dd-page-back { 0%{opacity:.18;transform:translateX(-13%) rotateY(-10deg);filter:drop-shadow(18px 7px 15px rgba(20,10,18,.36))} 60%{opacity:.92;transform:translateX(-2%) rotateY(-2deg)} 100%{opacity:1;transform:none;filter:none} }
 @keyframes dd-page-under { from{opacity:1} to{opacity:.45} }
 .dd-paper { position:relative; isolation:isolate; overflow:hidden; width:100%; max-width:100%; min-width:0; height:100%; box-sizing:border-box; padding:21px 16px 27px 29px; border-radius:7px 15px 15px 7px;
   color:var(--dd-ink); background:
@@ -6880,12 +6882,12 @@ select.rc-select-native {
 .dd-save { min-height:32px; padding:0 13px; border:0; border-radius:7px; background:var(--dd-accent); color:var(--dd-button-text); cursor:pointer; font:16px 'Patrick Hand',cursive; }
 .dd-save:disabled { opacity:.55; cursor:wait; }
 .dd-quiet { margin:20px 0 0; text-align:center; color:var(--dd-muted); font:17px 'Patrick Hand',cursive; }
-.dd-page-number { position:absolute; right:16px; bottom:11px; color:var(--dd-muted); font:13px 'Patrick Hand',cursive; }
+.dd-page-number { position:absolute; right:54px; bottom:11px; color:var(--dd-muted); font:13px 'Patrick Hand',cursive; }
 .dd-page-corner { position:absolute; z-index:8; bottom:7px; width:46px; height:46px; padding:0; border:0; border-radius:50%; background:transparent; color:var(--dd-accent); font:30px/1 var(--disp); cursor:pointer; opacity:.62; }
 .dd-page-corner:hover,.dd-page-corner:focus-visible { opacity:1; background:rgba(255,255,255,.24); }
 .dd-page-corner:disabled { opacity:.26; cursor:not-allowed; pointer-events:none; filter:grayscale(1); }
-.dd-page-newer { left:22px; }
-.dd-page-older { right:7px; }
+.dd-page-older { left:22px; }
+.dd-page-newer { right:7px; }
 .dd-page-position { margin-top:8px; color:var(--dd-title); text-align:center; font:15px 'Patrick Hand',cursive; }
 .dd-turn-hint { margin:2px 0 0; color:var(--muted); text-align:center; font:13px 'Patrick Hand',cursive; }
 .dd-theme-picker { position:fixed; z-index:1200; inset:0; display:grid; place-items:center; padding:20px; background:rgba(8,6,13,.76); backdrop-filter:blur(5px); }
@@ -6986,6 +6988,43 @@ select.rc-select-native {
 .dd-decoration.is-new { animation:dd-decoration-settle .22s cubic-bezier(.2,.8,.25,1); }
 @keyframes dd-decoration-settle { from{opacity:.15;transform:scale(.72) rotate(-5deg)} to{opacity:.82;transform:scale(1) rotate(0)} }
 
+/* Archive calendar: a torn-out page of the same diary, not a system picker.
+   It uses the open book's paper/ink/accent tokens so every era restyles it. */
+.dd-calendar-sheet { position:fixed; z-index:1250; inset:0; display:flex; align-items:flex-end; justify-content:center; padding:12px; background:rgba(8,6,13,.46); backdrop-filter:blur(3px); transition:opacity .16s ease; }
+.dd-calendar-sheet.is-leaving { opacity:.6; pointer-events:none; }
+.dd-calendar-panel { position:relative; width:min(100%,360px); box-sizing:border-box; padding:13px 13px calc(13px + env(safe-area-inset-bottom)); border-radius:14px 14px 9px 9px; color:var(--dd-ink);
+  background:linear-gradient(90deg,transparent 0 21px,var(--dd-margin) 21px 22px,transparent 22px),repeating-linear-gradient(180deg,transparent 0 27px,var(--dd-line) 27px 28px),var(--dd-paper);
+  box-shadow:0 -14px 42px rgba(0,0,0,.5),inset 0 0 0 1px color-mix(in srgb,var(--dd-ink) 10%,transparent); }
+.dd-calendar-panel::before { content:''; position:absolute; top:-7px; left:50%; width:64px; height:15px; transform:translateX(-50%) rotate(-2deg); background:var(--dd-tape); opacity:.85; }
+.dd-calendar-head { display:grid; grid-template-columns:34px minmax(0,1fr) 34px 34px; align-items:center; gap:2px; margin-bottom:6px; text-align:center; }
+.dd-calendar-head span { display:block; color:var(--dd-accent); font:9px/1.3 var(--mono); letter-spacing:.14em; }
+.dd-calendar-head h2 { margin:1px 0 0; overflow:hidden; color:var(--dd-ink); font:700 25px/1 'Caveat',cursive; white-space:nowrap; text-overflow:ellipsis; }
+.dd-calendar-step,.dd-calendar-close { display:grid; place-items:center; width:34px; height:34px; padding:0; border:0; border-radius:50%; background:transparent; color:var(--dd-accent); cursor:pointer; }
+.dd-calendar-step svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+.dd-calendar-step:disabled { opacity:.25; cursor:default; }
+.dd-calendar-step:not(:disabled):hover,.dd-calendar-close:hover,.dd-calendar-step:focus-visible,.dd-calendar-close:focus-visible { background:color-mix(in srgb,var(--dd-accent) 13%,transparent); }
+.dd-calendar-close { color:var(--dd-muted); font:24px/1 var(--body); }
+.dd-calendar-week,.dd-calendar-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:2px; }
+.dd-calendar-week span { color:var(--dd-muted); font:10px/1.8 var(--mono); text-align:center; }
+.dd-calendar-grid { min-height:228px; align-content:start; transition:opacity .15s ease; }
+.dd-calendar-grid.is-loading { opacity:.55; }
+.dd-calendar-day { position:relative; height:36px; min-width:0; padding:0 0 4px; border:0; border-radius:50%; background:transparent; color:var(--dd-ink); cursor:pointer; font:17px/1 'Patrick Hand',cursive; }
+.dd-calendar-day:disabled { color:color-mix(in srgb,var(--dd-ink) 32%,transparent); cursor:default; }
+.dd-calendar-day.is-real::after,.dd-calendar-day.is-light::after { content:''; position:absolute; left:50%; bottom:4px; width:5px; height:5px; border-radius:50%; transform:translateX(-50%); background:var(--dd-accent); }
+.dd-calendar-day.is-light::after { width:4px; height:4px; background:color-mix(in srgb,var(--dd-accent) 42%,transparent); }
+.dd-calendar-day:not(:disabled):hover,.dd-calendar-day:focus-visible { background:color-mix(in srgb,var(--dd-accent) 12%,transparent); outline:none; }
+.dd-calendar-day.is-selected { background:color-mix(in srgb,var(--dd-accent) 18%,transparent); }
+.dd-calendar-day.is-today { color:var(--dd-accent); font-weight:700; box-shadow:inset 0 0 0 1.5px var(--dd-accent); }
+.dd-calendar-day.is-join { box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--dd-accent-bright) 80%,transparent); border-radius:9px 50% 50% 50%; }
+.dd-calendar-legend { display:flex; justify-content:center; gap:14px; margin:6px 0 9px; color:var(--dd-muted); font:13px/1 'Patrick Hand',cursive; }
+.dd-calendar-legend span { display:inline-flex; align-items:center; gap:5px; }
+.dd-calendar-legend i { width:5px; height:5px; border-radius:50%; background:var(--dd-accent); }
+.dd-calendar-legend i.is-light { width:4px; height:4px; background:color-mix(in srgb,var(--dd-accent) 42%,transparent); }
+.dd-calendar-legend i.is-join { width:9px; height:9px; border-radius:3px 50% 50% 50%; background:transparent; box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--dd-accent-bright) 80%,transparent); }
+.dd-calendar-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.dd-calendar-actions button { min-height:40px; padding:0 10px; border:1px solid color-mix(in srgb,var(--dd-ink) 20%,transparent); border-radius:9px; background:var(--dd-card); color:var(--dd-ink); cursor:pointer; font:17px/1 'Patrick Hand',cursive; }
+.dd-calendar-actions button:hover,.dd-calendar-actions button:focus-visible { border-color:var(--dd-accent); }
+.dd-calendar-today { background:var(--dd-accent) !important; border-color:var(--dd-accent) !important; color:var(--dd-button-text) !important; }
 .dd-decoration-tray { position:fixed; z-index:1250; inset:0; display:flex; align-items:flex-end; justify-content:center; padding:12px; background:rgba(8,6,13,.46); backdrop-filter:blur(3px); }
 .dd-decoration-panel { width:min(100%,430px); max-height:min(72svh,520px); overflow-y:auto; padding:15px 15px calc(15px + env(safe-area-inset-bottom)); border:1px solid color-mix(in srgb,var(--dd-accent-bright) 68%,transparent); border-radius:18px 18px 11px 11px; background:color-mix(in srgb,#141219 94%,var(--dd-accent) 6%); box-shadow:0 -14px 42px rgba(0,0,0,.52); color:#f1ebf0; }
 .dd-decoration-tray-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
@@ -7059,15 +7098,15 @@ select.rc-select-native {
 @media(prefers-reduced-motion:reduce){
   .dd-sticker{transform:none}
   .dd-decoration,.dd-decoration.is-new{animation:none;transition:none}
-  .dd-page-sheet.is-turning-older,.dd-page-sheet.is-turning-newer,.dd-page-sheet.is-incoming.is-newer.is-revealed{animation-duration:.16s;transform:none;filter:none}
+  .dd-page-sheet.is-turning-forward,.dd-page-sheet.is-turning-back,.dd-page-sheet.is-incoming.is-back.is-revealed{animation-duration:.16s;transform:none;filter:none}
   .closed-diary-object.is-opening .closed-diary-book,.dd-screen,.dd-screen.is-closing-book{animation:none;transform:none;opacity:1}
 }
 html[data-reduced-motion="true"] .dd-sticker{transform:none}
 html[data-reduced-motion="true"] .dd-decoration,
 html[data-reduced-motion="true"] .dd-decoration.is-new{animation:none;transition:none}
-html[data-reduced-motion="true"] .dd-page-sheet.is-turning-older,
-html[data-reduced-motion="true"] .dd-page-sheet.is-turning-newer,
-html[data-reduced-motion="true"] .dd-page-sheet.is-incoming.is-newer.is-revealed,
+html[data-reduced-motion="true"] .dd-page-sheet.is-turning-forward,
+html[data-reduced-motion="true"] .dd-page-sheet.is-turning-back,
+html[data-reduced-motion="true"] .dd-page-sheet.is-incoming.is-back.is-revealed,
 html[data-reduced-motion="true"] .closed-diary-object.is-opening .closed-diary-book,
 html[data-reduced-motion="true"] .dd-screen,
 html[data-reduced-motion="true"] .dd-screen.is-closing-book{animation:none;transform:none;filter:none;opacity:1}

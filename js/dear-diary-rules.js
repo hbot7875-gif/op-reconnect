@@ -17,10 +17,88 @@ export function shiftDiaryDate(date, days) {
   return value.toISOString().slice(0, 10)
 }
 
-/** Horizontal page turns must be deliberate, not a vertical scroll wobble. */
+/**
+ * The diary reads like a physical book in time order: older pages sit to the
+ * left, newer pages to the right. Corners, arrow keys and swipes all share
+ * this one mapping so they can never disagree.
+ */
+export const DIARY_CORNER_DIRECTION = Object.freeze({ left: 'older', right: 'newer' })
+export const DIARY_KEY_DIRECTION = Object.freeze({ ArrowLeft: 'older', ArrowRight: 'newer' })
+
+/** Horizontal page turns must be deliberate, not a vertical scroll wobble.
+ * Swiping left pulls the next (newer) page in, like turning a book forward. */
 export function diarySwipeDirection(deltaX, deltaY, threshold = 58) {
   if (Math.abs(deltaX) < threshold || Math.abs(deltaX) < Math.abs(deltaY) * 1.25) return null
-  return deltaX < 0 ? 'older' : 'newer'
+  return deltaX < 0 ? 'newer' : 'older'
+}
+
+/**
+ * Where one turn lands. A date's sheets are read in order (sheet 1 → 2 is
+ * "forward", i.e. newer), so a date is always finished before the book moves
+ * to another date: going newer from a date's last sheet opens the next date
+ * on its first sheet; going older from a first sheet opens the previous date
+ * on its last sheet.
+ */
+export function diaryTurnTarget({ index = 0, total = 1, direction }) {
+  if (direction === 'newer') return index < total - 1 ? { sheet: index + 1 } : { date: 'newer', land: 'first' }
+  if (direction === 'older') return index > 0 ? { sheet: index - 1 } : { date: 'older', land: 'last' }
+  return null
+}
+
+/** Which corners can turn. Today's last sheet is the front of the book;
+ * the earliest recorded date's first sheet is the back. */
+export function diaryCornerState({ index = 0, total = 1, isToday = false, hasOlderDate = false }) {
+  return {
+    older: index > 0 || !!hasOlderDate,
+    newer: index < total - 1 || !isToday,
+  }
+}
+
+/** 'YYYY-MM' month arithmetic without local timezone drift. */
+export function shiftDiaryMonth(month, delta) {
+  const match = /^(\d{4})-(\d{2})$/.exec(String(month || ''))
+  if (!match) return null
+  return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1 + delta, 1)).toISOString().slice(0, 7)
+}
+
+/**
+ * One month of the archive calendar. `stateOf(date)` reports the archive's
+ * 'real' / 'light' mark (or nothing for an unsupported day). Only today and
+ * marked days between the join date and today can be opened.
+ */
+export function diaryCalendarMonth({ month, today, joinedDate, stateOf = () => null, selected = null }) {
+  const [year, monthNo] = month.split('-').map(Number)
+  const first = new Date(Date.UTC(year, monthNo - 1, 1))
+  const daysInMonth = new Date(Date.UTC(year, monthNo, 0)).getUTCDate()
+  const joinMonth = joinedDate ? joinedDate.slice(0, 7) : null
+  const days = []
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = `${month}-${String(day).padStart(2, '0')}`
+    const isFuture = date > today
+    const beforeJoin = !!joinedDate && date < joinedDate
+    const state = isFuture || beforeJoin ? null : (stateOf(date) || null)
+    days.push({
+      date, day, state, isFuture, beforeJoin,
+      isToday: date === today, isJoin: date === joinedDate, isSelected: date === selected,
+      selectable: !isFuture && !beforeJoin && (!!state || date === today),
+    })
+  }
+  return {
+    month, year, monthNo,
+    leading: first.getUTCDay(), // Sunday-first grid
+    days,
+    canPrev: !joinMonth || month > joinMonth,
+    canNext: month < today.slice(0, 7),
+  }
+}
+
+/** Clamp a requested calendar month into [join month, current month]. */
+export function clampDiaryMonth(month, today, joinedDate) {
+  const max = today.slice(0, 7)
+  const min = joinedDate ? joinedDate.slice(0, 7) : null
+  if (month > max) return max
+  if (min && month < min) return min
+  return month
 }
 
 /**
