@@ -6818,7 +6818,7 @@ select.rc-multi-native {
    sections, selection rows, one sticky action bar. No glow, no gradient.
    Scoped to .cs-screen and .vault-sheet; nothing else moves.
    ════════════════════════════════════════════════════════════════ */
-.cs-screen .cs-i, .vault-sheet .cs-i, .cs-screen .rc-row-i {
+.cs-screen .cs-i, .vault-sheet .cs-i {
   display: block; flex: none; width: 16px; height: 16px; fill: none; stroke: currentColor;
   stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 
@@ -6830,22 +6830,17 @@ select.rc-multi-native {
 .cs-screen .cs-title-icon .cs-i { width: 22px; height: 22px; }
 .cs-screen .cs-screen-sub { margin: 6px 0 0; font-family: var(--body); font-size: 13px; line-height: 1.45; color: var(--v-ink-2); }
 
-/* ── ReConnect: the City / Pack compact action row ── */
-.cs-screen .rc-reconnect-row,
-.cs-screen .rc-reconnect-row.is-urgent {
-  width: 100%; margin: 0 0 14px; padding: 7px 10px; display: grid;
-  grid-template-columns: 28px minmax(0,1fr) auto auto; align-items: center; gap: 9px;
-  border: 1px solid rgba(255,255,255,.10); border-left: 2px solid rgba(139,92,246,.32); border-radius: 12px;
-  background: rgba(29,26,49,.72); color: var(--v-ink-1); font-family: var(--body); text-align: left; }
-.cs-screen .rc-reconnect-row .rc-row-icon,
-.cs-screen .rc-reconnect-row.is-urgent .rc-row-icon {
-  width: 28px; height: 28px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.10);
-  border-radius: 9px; color: var(--v-violet-hi); font-size: 0; letter-spacing: 0; text-transform: none; }
-.cs-screen .rc-reconnect-row b { overflow: hidden; color: var(--v-ink-1); font-size: 13px; font-weight: 600;
-  text-overflow: ellipsis; white-space: nowrap; }
-.cs-screen .rc-reconnect-row .hud-reconnect-chat-badge { min-width: 0; padding: 1px 6px; border: 1px solid rgba(255,255,255,.10);
-  background: transparent; color: var(--v-ink-2); font: 600 11px var(--body); }
-.cs-screen .rc-row-go { display: grid; color: var(--v-ink-3); }
+/* ── No ReConnect on Candy ──
+   Candy goes straight from the HUD into the builder. The HUD still renders
+   its ReConnect button (renderHud decides that, for every screen); on this
+   screen alone it is not shown. City and Pack keep their compact rows. */
+#hud:has(~ #scene .cs-screen) #hudReconnectStatus { display: none; }
+
+/* ── Back action: Lucide arrow, system sans ── */
+.cs-screen > .screen-head .cs-back { display: inline-flex; align-items: center; gap: 6px; padding: 0 2px;
+  font-family: var(--body); font-size: 13px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--v-ink-2); }
+.cs-screen > .screen-head .cs-back::before { content: none; }
+.cs-screen > .screen-head .cs-back:hover { color: var(--v-ink-1); }
 
 /* ── Quick / Custom segmented control + My playlists secondary button ── */
 .cs-screen .cs-tabs-row { gap: 8px; margin-bottom: 14px; }
@@ -7052,6 +7047,13 @@ select.rc-multi-native {
 .cs-screen .cs-status-card { border-radius: 12px; border-color: var(--v-line-1); background: var(--v-surface-1); font-family: var(--body); font-size: 13px; }
 .cs-screen .cs-status-card.cs-status-success { border-color: var(--v-gold-line); }
 .cs-screen .cs-status-card.cs-status-error { border-color: var(--v-red-line); }
+.cs-screen .cs-status-card > .cs-i { width: 18px; height: 18px; margin-top: 1px; }
+.cs-screen .cs-status-success > .cs-i { color: var(--v-gold); }
+.cs-screen .cs-status-error > .cs-i { color: var(--v-red-hi); }
+.cs-screen .cs-status-sub { display: block; margin-top: 3px; font-size: 12px; color: var(--v-ink-3); }
+.cs-screen .cs-status-open { display: inline-flex; align-items: center; gap: 4px; color: #1db954; font-weight: 700; }
+.cs-screen .cs-status-open .cs-i { width: 13px; height: 13px; }
+.cs-screen .cs-preview-icon .cs-i { width: 12px; height: 12px; color: var(--v-violet-hi); }
 
 /* ── My playlists sheet: segmented tabs, search field, one playlist row ── */
 .vault-sheet .vault-sheet-head .eyebrow { font-family: var(--body); font-size: 11px; font-weight: 600; letter-spacing: .08em; color: var(--v-ink-3); }

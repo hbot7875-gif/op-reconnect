@@ -11,7 +11,8 @@ const read = (f) => readFileSync(f, 'utf8').replace(/\r\n/g, '\n')
 const candy = read('js/candy-star.js')
 const host = read('js/screen-candystar.js')
 const vault = read('js/playlist-vault-sheet.js')
-const row = read('js/reconnect-row.js')
+const world = read('js/screen-world.js')
+const resources = read('js/screen-resources.js')
 const css = read('css/reconnect.css')
 const start = css.indexOf('CANDY STAR POLISH')
 const block = css.slice(start, css.indexOf('/* ── Moon Station screen', start))
@@ -30,16 +31,32 @@ test('the title is the current type system, not the tracked mono eyebrow', () =>
   assert.doesNotMatch(code, /Candy Star Generator|pack-eyebrow|🍬|🦙/)
 })
 
-test('ReConnect on Candy is the compact row, moved from the HUD and re-synced on every refresh', () => {
-  assert.match(row, /document\.getElementById\('hudReconnectStatus'\)/)
-  assert.match(row, /button\.removeAttribute\('id'\)/)
-  assert.doesNotMatch(row, /onclick|addEventListener/)
-  // the early-return refresh path still swaps in the HUD's fresh button
-  assert.match(host, /if \(mountedIn === container && existing\) \{ syncReconnectRow\(existing\); return \}/)
-  assert.match(host, /if \(old && fresh\) old\.replaceWith\(fresh\)\n\s*else if \(old\) old\.remove\(\)/)
-  const rc = block.slice(block.indexOf('.cs-screen .rc-reconnect-row,'), block.indexOf('.cs-screen .rc-reconnect-row .rc-row-icon'))
-  assert.match(rc, /\.rc-reconnect-row\.is-urgent \{/)
-  assert.doesNotMatch(rc, /red|crimson|229,56,79/)
+test('Candy shows no ReConnect notice; City and Pack keep theirs', () => {
+  const code = host.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
+  assert.doesNotMatch(code, /hudReconnectStatus|reconnect-row|ReConnect/)
+  // hidden on this screen only, by a rule that needs the Candy screen mounted
+  assert.match(block, /#hud:has\(~ #scene \.cs-screen\) #hudReconnectStatus \{ display: none; \}/)
+  assert.equal((css.match(/#hudReconnectStatus \{ display: none/g) || []).length, 1)
+  assert.match(world, /classList\.add\('city-reconnect-notice'\)/)
+  assert.match(resources, /button\.classList\.add\('pack-reconnect-notice'\)/)
+})
+
+test('the back action is a Lucide arrow in system sans, not the tracked-mono arrow glyph', () => {
+  assert.match(host, /el\('button', 'back-btn cs-back', `\$\{csIcon\('arrowLeft'\)\}<span>Agent Pack<\/span>`\)/)
+  assert.match(host, /back\.onclick = \(e\) => goResources\(\{ x: e\.clientX, y: e\.clientY \}\)/)
+  assert.match(block, /\.cs-screen > \.screen-head \.cs-back::before \{ content: none; \}/)
+  assert.match(block, /\.cs-back \{[^}]*font-family: var\(--body\)/)
+})
+
+test('status messages use the shared icons; the alpaca stays identity, not a status symbol', () => {
+  const statuses = [...candy.matchAll(/candySetStatus\('(\w+)', ([\s\S]*?)\);\n/g)]
+  assert.ok(statuses.length >= 7)
+  for (const [, kind, html] of statuses) {
+    assert.doesNotMatch(html, /\p{Extended_Pictographic}/u, `${kind} status still has an emoji`)
+    if (kind === 'error') assert.match(html, /csIcon\('alert'\)/)
+    if (kind === 'success') assert.match(html, /csIcon\('checkCircle'\)/)
+  }
+  assert.match(block, /\.cs-screen \.cs-status-open \{[^}]*color: #1db954/, 'the Spotify link in the status stays Spotify green')
 })
 
 test('every element the generator logic reads is still rendered', () => {
@@ -76,13 +93,23 @@ test('albums are an accordion of compact selectable rows, with no hue gradient a
   assert.match(candy, /checkbox\.closest\('details'\)\?\.setAttribute\('open', ''\);/)
 })
 
-test('the sticky action bar rides above the bottom nav', () => {
+test('the sticky action bar rides above the bottom nav with its estimate and Wing cost', () => {
   assert.match(block, /\.cs-screen \.cs-actionbar \{ bottom: calc\(100px \+ env\(safe-area-inset-bottom\)\)/)
+  assert.match(candy, /<span id="cs-estimate-val">0 tracks<\/span>\n\s*<span class="cs-actionbar-cost">\$\{csIcon\('feather'\)\}1 Wing<\/span>/)
+})
+
+test('My playlists actions wrap and compact at 320 instead of overflowing', () => {
+  assert.match(block, /\.vault-sheet \.cs-vault-actions \{[^}]*flex-wrap: wrap/)
+  assert.match(block, /\.vault-sheet \.cs-vault-card \.cs-vault-delete \{ position: absolute;/)
+  const narrow = block.slice(block.indexOf('@media (max-width: 359px)'))
+  assert.match(narrow, /\.vault-sheet \.cs-vault-action span \{ display: none; \}/)
 })
 
 test('Spotify green only on the Spotify action; crimson only for delete, invalid and an old-generator warning', () => {
   const greens = block.split('\n').filter((l) => /#1db954|#24c55f/i.test(l))
-  assert.ok(greens.length && greens.every((l) => l.includes('.cs-vault-open')), 'green outside Open in Spotify')
+  assert.ok(greens.length && greens.every((l) => /\.cs-vault-open|\.cs-status-open/.test(l)), 'green outside Open in Spotify')
+  // Generate stays the game's own purple primary
+  assert.match(block, /\.cs-screen \.btn-red \{[^}]*background: var\(--v-violet\)/)
   const reds = block.split('\n').filter((l) => /--v-red|--v-tint-red/.test(l))
   assert.ok(reds.every((l) => /cs-vault-delete|cs-invalid|cs-row-remove|is-older|cs-status-error/.test(l)), reds.join('\n'))
   assert.doesNotMatch(block, /gradient\(/)

@@ -642,7 +642,7 @@ async function candyRunPreview() {
   }
 
   const rows = res.preview.map(t => {
-    const icon = t.isFocus ? '⭐' : (t.isBTS ? candyIcon('disc', 12) : candyIcon('sparkles', 12));
+    const icon = t.isFocus ? csIcon('star') : (t.isBTS ? candyIcon('disc', 12) : candyIcon('sparkles', 12));
     return `<div class="cs-preview-row${t.isFocus ? ' is-focus' : ''}"><span class="cs-preview-icon">${icon}</span><span class="cs-preview-name">${sanitize(t.name)}</span></div>`;
   }).join('');
   const more = res.moreCount > 0 ? `<div class="cs-preview-more">+${res.moreCount} more</div>` : '';
@@ -658,7 +658,7 @@ async function candyRunPreview() {
     : 'Exact counts from a live preview build.');
 }
 // Inline Lucide-style icons (no CDN/dependency) for the decorative UI chrome —
-// mascot emoji (🦙) stay as-is, this only replaces generic disc/wand/music/sparkle glyphs.
+// the page chrome itself uses csIcon() from candy-icons.js, alpaca mark included.
 function candyIcon(name, size = 14) {
   const paths = {
     wand: `<path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72Z"/><path d="m14 7 3 3"/><path d="M5 6v4"/><path d="M19 14v4"/><path d="M10 2v2"/><path d="M7 8H3"/><path d="M21 16h-4"/><path d="M11 3H9"/>`,
@@ -1069,7 +1069,7 @@ export async function candyGenerate(mode) {
   if (mode === 'quick' && (window._candyStar?.goalSongs || []).length) {
     const cs = window._candyStar;
     if (!cs.quickPicks.length) {
-      candySetStatus('error', '⚠️ Pick at least one song first.');
+      candySetStatus('error', `${csIcon('alert')}<span>Pick at least one song first.</span>`);
       return;
     }
     payload.mode = 'custom';
@@ -1081,15 +1081,15 @@ export async function candyGenerate(mode) {
   if (mode === 'custom') {
     const { focus, album, albumIds, unmatched } = candyCollectCustom({ flagInvalid: true });
     if (unmatched.length) {
-      candySetStatus('error', `⚠️ Couldn't match <b>${sanitize(unmatched.slice(0, 3).join(', '))}</b> to a song — start typing and pick from the dropdown that appears, or check the spelling.`);
+      candySetStatus('error', `${csIcon('alert')}<span>Couldn't match <b>${sanitize(unmatched.slice(0, 3).join(', '))}</b> to a song — start typing and pick from the dropdown that appears, or check the spelling.</span>`);
       return;
     }
     if (!focus.length) {
-      candySetStatus('error', '⚠️ Add at least one song with a count.');
+      candySetStatus('error', `${csIcon('alert')}<span>Add at least one song with a count.</span>`);
       return;
     }
     if (candyHasHeavyFocusConflict(focus)) {
-      candySetStatus('error', `⚠️ ${sanitize(CS_HEAVY_FOCUS_ERROR)}`);
+      candySetStatus('error', `${csIcon('alert')}<span>${sanitize(CS_HEAVY_FOCUS_ERROR)}</span>`);
       return;
     }
     payload.focus = focus;
@@ -1098,12 +1098,12 @@ export async function candyGenerate(mode) {
     payload.name = $('cs-name')?.value?.trim() || '';
   }
 
-  candySetStatus('loading', `<span class="cs-spinner"></span><span>Building your alpaca… 🦙<br><span style="color:var(--text-ghost); font-size:10.5px;">this can take ~20s</span></span>`);
+  candySetStatus('loading', `<span class="cs-spinner"></span><span>Building your alpaca…<span class="cs-status-sub">This can take about 20 seconds.</span></span>`);
   const res = await Api.call('generateAlpaca', payload, { dedupe: false, cache: false, timeout: 180000 });
 
   if (res && res.success) {
-    candySetStatus('success', `<span style="font-size:16px;">✅</span><span><b>${sanitize(res.name)}</b> is ready — <a href="${sanitize(res.url)}" target="_blank" rel="noopener noreferrer" style="color:#1DB954; font-weight:800;">open in Spotify ↗</a>
-      <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">${res.trackCount} tracks${res.savedToVault === false ? ' · Vault save is retrying later' : ' · saved to the Community Vault'}</div></span>`);
+    candySetStatus('success', `${csIcon('checkCircle')}<span><b>${sanitize(res.name)}</b> is ready — <a class="cs-status-open" href="${sanitize(res.url)}" target="_blank" rel="noopener noreferrer">Open in Spotify${csIcon('external')}</a>
+      <span class="cs-status-sub">${res.trackCount} tracks${res.savedToVault === false ? ' · Vault save is retrying later' : ' · saved to the Community Vault'}</span></span>`);
     showToast('Alpaca created 🦙', 'success');
   } else {
     // The backend's real message is a rule-by-rule breakdown meant for
@@ -1114,6 +1114,6 @@ export async function candyGenerate(mode) {
     const simple = /^Spotify copy (failed live validation|could not be verified)/.test(res?.error || '')
       ? "The generated playlist doesn't follow all playlist guidelines — please try again. No Wing was spent."
       : (res?.error || 'Generation failed.');
-    candySetStatus('error', `<span style="font-size:16px;">⚠️</span><span>${sanitize(simple)}</span>`);
+    candySetStatus('error', `${csIcon('alert')}<span>${sanitize(simple)}</span>`);
   }
 }

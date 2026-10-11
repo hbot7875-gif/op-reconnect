@@ -7,7 +7,6 @@
 import { el, esc } from './state.js'
 import { goResources } from './router.js'
 import { csIcon } from './candy-icons.js'
-import { adoptHudReconnectRow } from './reconnect-row.js'
 
 let mounted = false
 // `container` (the shared #scene node) survives untouched across a poll or
@@ -18,27 +17,14 @@ let mounted = false
 // it down and re-fetching getAlpacaOptions out from under the player.
 let mountedIn = null
 
-/** ReConnect sits under the Candy title as the compact action row. Run on
- *  every call, including the background refreshes that otherwise leave the
- *  screen alone: renderHud() has just rebuilt the HUD button, so the row is
- *  swapped for the fresh one (or removed, when the HUD no longer shows it). */
-function syncReconnectRow(wrap) {
-  const fresh = adoptHudReconnectRow()
-  const old = wrap.querySelector(':scope > .rc-reconnect-row')
-  if (old && fresh) old.replaceWith(fresh)
-  else if (old) old.remove()
-  else if (fresh) wrap.querySelector(':scope > .cs-head')?.after(fresh)
-}
-
 export async function renderCandyStar(container, state) {
-  const existing = container.querySelector('.cs-screen')
-  if (mountedIn === container && existing) { syncReconnectRow(existing); return }
+  if (mountedIn === container && container.querySelector('.cs-screen')) return
   mountedIn = container
   container.innerHTML = ''
   const wrap = el('div', 'cs-screen')
 
   const head = el('div', 'screen-head')
-  const back = el('button', 'back-btn', 'Agent Pack')
+  const back = el('button', 'back-btn cs-back', `${csIcon('arrowLeft')}<span>Agent Pack</span>`)
   back.onclick = (e) => goResources({ x: e.clientX, y: e.clientY })
   head.appendChild(back)
   wrap.appendChild(head)
@@ -47,7 +33,6 @@ export async function renderCandyStar(container, state) {
     <h1 class="cs-title"><span class="cs-title-icon">${csIcon('candy')}</span>Candy Star</h1>
     <p class="cs-screen-sub">Build a real Spotify playlist around your district goals, with enough variety to play naturally.</p>
   `))
-  syncReconnectRow(wrap)
 
   const mount = el('div')
   mount.id = 'candystarContent'
