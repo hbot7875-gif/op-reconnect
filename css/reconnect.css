@@ -6103,7 +6103,7 @@ body {
   background: rgba(15,13,23,.94);
   backdrop-filter: blur(6px);
   border-radius: 0 var(--radius-md) var(--radius-md) 0;
-  box-shadow: 0 10px 26px rgba(0,0,0,.28);
+  box-shadow: none;
 }
 .stage {
   border-color: rgba(255,255,255,.085);
@@ -7002,3 +7002,107 @@ select.rc-multi-native {
 .world-screen .era-chip.era-used .era-sym { color: var(--v-ink-3); }
 /* Activated (just lit this visit): the purple state chip, not a second gold. */
 .world-screen .era-chip > i { left: auto; right: 8px; background: var(--v-tint-violet); border: 1px solid var(--v-violet-line); color: var(--v-violet-hi); }
+
+/* City surface unification prototype. The command scene stays the darkest
+   layer; these are translucencies of the existing neutral purple surface,
+   not new palette colours. They step the page from the in-world mission
+   beacon through City News to Signal Sweep, then quiet back down for the
+   compact Era Cards. Markup, spacing inside each component and artwork are
+   intentionally unchanged. */
+.world-screen {
+  --city-surface-bridge: rgba(29,26,49,.70);
+  --city-surface-medium: rgba(29,26,49,.84);
+  --city-surface-quiet: rgba(29,26,49,.72);
+  --city-line-bridge: rgba(139,92,246,.32);
+  --city-line-quiet: rgba(255,255,255,.10);
+}
+
+/* Now Restoring is still part of the cinematic scene, but a complete quiet
+   edge and a lifted neutral fill let it introduce the card language below.
+   The inset outline avoids changing the beacon's measured box. */
+.world-screen .mission-beacon {
+  background: var(--city-surface-bridge);
+  border-left-color: var(--city-line-bridge);
+  outline: 1px solid var(--city-line-quiet);
+  outline-offset: -1px;
+  border-radius: 0 14px 14px 0;
+}
+
+/* City News is the middle surface: calmer than the mission checklist, more
+   present than the in-world beacon. Pulling it four pixels toward the scene
+   makes the transition read as one sequence instead of two stacked zones. */
+.world-screen .command-scene + .feed-card { margin-top: -4px; }
+.world-screen .feed-card {
+  background: var(--city-surface-medium);
+  border-color: var(--v-line-1);
+  border-radius: 16px;
+}
+.world-screen .feed-card + .side-missions,
+.world-screen .city-reconnect-notice + .side-missions { margin-top: -2px; }
+
+/* The shared ReConnect status button is moved here intact on City. It keeps
+   the same live label, unread badge and action, but reads as a secondary
+   contextual row rather than another header banner. Even urgent states keep
+   the neutral City surface; their sentence remains the alert. */
+.world-screen .city-reconnect-notice,
+.world-screen .city-reconnect-notice.is-urgent {
+  width: 100%;
+  margin: -8px 0 -4px;
+  padding: 7px 10px;
+  grid-template-columns: 28px minmax(0,1fr) auto auto;
+  gap: 9px;
+  border: 1px solid var(--city-line-quiet);
+  border-left: 2px solid var(--city-line-bridge);
+  border-radius: 12px;
+  background: var(--city-surface-quiet);
+}
+.world-screen .city-reconnect-icon,
+.world-screen .city-reconnect-notice.is-urgent .city-reconnect-icon {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--city-line-quiet);
+  border-radius: 9px;
+  color: var(--v-violet-hi);
+}
+.world-screen .city-reconnect-icon svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.world-screen .city-reconnect-notice b {
+  color: var(--v-ink-1);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.world-screen .city-reconnect-notice .hud-reconnect-chat-badge {
+  min-width: 0;
+  padding: 1px 5px;
+  border: 1px solid var(--city-line-quiet);
+  background: transparent;
+  color: var(--v-ink-2);
+  font: 600 10px var(--body);
+}
+.world-screen .city-reconnect-notice > i {
+  color: var(--v-ink-3);
+  font-size: 18px;
+}
+
+/* Signal Sweep remains the strongest functional surface. Era Cards keep
+   their approved dimensions and state colours, with a quieter neutral shell
+   so the section supports rather than competes with the checklist. */
+.world-screen .side-missions {
+  background: var(--v-surface-1);
+  border-color: var(--v-line-1);
+}
+.world-screen .era-chip {
+  background: var(--city-surface-quiet);
+  border-color: var(--city-line-quiet);
+}

@@ -92,6 +92,31 @@ export function renderWorld(container, state) {
   // See city-feed.js's header comment.
   wrap.appendChild(cityFeedCard(state))
 
+  // On City, ReConnect belongs with the functional flow rather than between
+  // the shared HUD and the game world. Move the already-rendered HUD button
+  // itself so its visibility decision, live label/badge and click destination
+  // remain exactly the ones wired by renderHud(). Other screens keep the HUD
+  // placement. Dropping the id after the move prevents a duplicate during the
+  // next HUD-first repaint while the old City scene is still mounted.
+  const reconnectNotice = document.getElementById('hudReconnectStatus')
+  if (reconnectNotice) {
+    const statusText = reconnectNotice.querySelector('b')?.textContent?.trim() || 'Open ReConnect'
+    const icon = reconnectNotice.querySelector('span')
+    if (icon) {
+      icon.className = 'city-reconnect-icon'
+      icon.setAttribute('aria-hidden', 'true')
+      icon.innerHTML = '<svg viewBox="0 0 24 24" focusable="false"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>'
+    }
+    const unread = reconnectNotice.querySelector('.hud-reconnect-chat-badge')
+    if (unread) unread.textContent = unread.textContent.replace('💬', '').trim()
+    if (!reconnectNotice.hasAttribute('aria-label')) {
+      reconnectNotice.setAttribute('aria-label', `ReConnect. ${statusText}`)
+    }
+    reconnectNotice.removeAttribute('id')
+    reconnectNotice.classList.add('city-reconnect-notice')
+    wrap.appendChild(reconnectNotice)
+  }
+
   if (state.sideMissions) wrap.appendChild(sideMissionsPanel(state.sideMissions))
 
   // Personal weekly Era Cards are the Bomb's emergency reserve. This is not

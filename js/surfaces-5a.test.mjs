@@ -9,6 +9,7 @@ import { readFileSync } from 'node:fs'
 // shipped colours, and the absence of gradients and coloured shadows.
 
 const css = readFileSync('css/reconnect.css', 'utf8').replace(/\r\n/g, '\n').replace(/\/\*[\s\S]*?\*\//g, '')
+const world = readFileSync('js/screen-world.js', 'utf8').replace(/\r\n/g, '\n')
 const root = css.match(/:root \{[^}]*--v-surface-1[^}]*\}/)[0]
 const token = (name) => (root.match(new RegExp(`--${name}:\\s*([^;]+);`)) || [])[1]?.trim()
 const rulesFor = (sel) => [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
@@ -57,4 +58,27 @@ test('no gradients and no coloured shadows on migrated components', () => {
 test('"Now restoring" is flat violet on a Surface 3 track', () => {
   assert.match(rulesFor('.op-meter-fill'), /background: var\(--v-violet\); box-shadow: none;/)
   assert.match(rulesFor('.op-meter'), /background: var\(--v-surface-3\)/)
+  assert.match(rulesFor('.mission-beacon'), /box-shadow: none/)
+})
+
+test('City moves the existing ReConnect notice below City News', () => {
+  const news = world.indexOf('wrap.appendChild(cityFeedCard(state))')
+  const notice = world.indexOf("document.getElementById('hudReconnectStatus')")
+  const sweep = world.indexOf('wrap.appendChild(sideMissionsPanel(state.sideMissions))')
+  assert.ok(news >= 0 && news < notice && notice < sweep)
+  assert.match(world.slice(notice, sweep), /removeAttribute\('id'\)/)
+  assert.match(world.slice(notice, sweep), /classList\.add\('city-reconnect-notice'\)/)
+  assert.match(world.slice(notice, sweep), /wrap\.appendChild\(reconnectNotice\)/)
+})
+
+test('City ReConnect is compact, sentence case and neutral even when urgent', () => {
+  const notice = rulesFor('.world-screen .city-reconnect-notice')
+  assert.match(notice, /padding: 7px 10px/)
+  assert.match(notice, /grid-template-columns: 28px minmax\(0,1fr\) auto auto/)
+  assert.match(notice, /background: var\(--city-surface-quiet\)/)
+  assert.doesNotMatch(notice, /v-tint-red|v-red-line|crimson/)
+  assert.match(world, /className = 'city-reconnect-icon'/)
+  assert.match(world, /<svg viewBox="0 0 24 24"/)
+  const cityIcon = world.slice(world.indexOf("icon.innerHTML = '<svg"), world.indexOf('const unread'))
+  assert.doesNotMatch(cityIcon, /🤝/)
 })
