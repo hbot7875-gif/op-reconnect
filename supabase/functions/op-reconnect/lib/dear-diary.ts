@@ -389,13 +389,21 @@ export async function getDearDiary(sb: SupabaseDB, content: GameContent, params:
   const agentNo = String(params.agentNo || '').trim().toUpperCase()
   const date = normalizeDate(params.date)
   if (!date) return { success: false, error: 'That diary page is not available.' }
-  const [entryRes, preferenceRes] = await Promise.all([
+  const [entryRes, preferenceRes, playerRes] = await Promise.all([
     sb.from('rc_dear_diary_entries').select('*').eq('agent_no', agentNo).eq('kst_date', date).maybeSingle(),
     sb.from('rc_dear_diary_preferences').select('theme').eq('agent_no', agentNo).maybeSingle(),
+    sb.from('rc_players').select('joined_at').eq('agent_no', agentNo).maybeSingle(),
   ])
   const { data: existing, error } = entryRes
   if (error) return { success: false, error: error.message }
-  const frozen = existing?.summary_snapshot?._frozen === true
+  const joinedAt = playerRes.data?.joined_at
+  const isJoinDay = !!joinedAt && kstDateOf(Date.parse(joinedAt) / 1000) === date
+  // A join day frozen before agent-numbered provenance ids were accepted lost
+  // its agent-joined candidate. Rebuild that one page from the ledgers once;
+  // the rebuilt snapshot is frozen again on save.
+  const staleJoin = isJoinDay && existing?.summary_snapshot?._frozen === true
+    && !(existing.summary_snapshot._candidates || []).some((item: DiaryCandidate) => item.type === 'agent-joined')
+  const frozen = existing?.summary_snapshot?._frozen === true && !staleJoin
   const live = frozen ? null : await realDay(sb, content, agentNo, date)
   const stored = existing?.summary_snapshot as DiarySnapshot | undefined
   const facts: DiaryFacts = frozen && stored ? factsFromFrozenSnapshot(stored) : live!.facts
@@ -416,7 +424,9 @@ export async function getDearDiary(sb: SupabaseDB, content: GameContent, params:
   const { data: recent } = await sb.from('rc_dear_diary_entries').select('summary_snapshot')
     .eq('agent_no', agentNo).neq('kst_date', date).order('kst_date', { ascending: false }).limit(14)
   const recentlyUsed = (recent || []).map((row: any) => row.summary_snapshot?._copyKey).filter(Boolean)
-  const join = candidates.find((item) => item.type === 'agent-joined')
+  // The join date always opens as the first-agent page, even when a busy day
+  // has more special moments than the memory selection keeps.
+  const join = isJoinDay || candidates.some((item) => item.type === 'agent-joined')
   const choice = join ? { key: 'agent-joined', text: 'Dear Diary, today I became an agent.' } : diarySummaryChoice(facts, seed, recentlyUsed)
   const digest = candidateDigest(candidates)
   const changed = !frozen && stored?._candidateDigest !== digest

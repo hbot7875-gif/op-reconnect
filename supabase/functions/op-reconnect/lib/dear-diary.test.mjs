@@ -110,3 +110,14 @@ test('decorations stay separate from frozen facts and provenance', () => {
   validateDiaryDecorations({ version:1, items:[{ sheet:0, decoration_id:'star', slot:'entry-leading', size:'s' }] })
   assert.equal(JSON.stringify(snapshot), before)
 })
+
+test('join day opens as the first-agent page and self-heals a stale frozen snapshot', async () => {
+  const { readFileSync } = await import('node:fs')
+  const source = readFileSync(new URL('./dear-diary.ts', import.meta.url), 'utf8')
+  const getter = source.slice(source.indexOf('export async function getDearDiary'), source.indexOf('export async function getDearDiaryArchive'))
+  assert.match(getter, /sb\.from\('rc_players'\)\.select\('joined_at'\)/)
+  assert.match(getter, /const staleJoin = isJoinDay && existing\?\.summary_snapshot\?\._frozen === true/)
+  assert.match(getter, /const frozen = existing\?\.summary_snapshot\?\._frozen === true && !staleJoin/)
+  assert.match(getter, /const join = isJoinDay \|\| candidates\.some/)
+  assert.match(getter, /'Dear Diary, today I became an agent\.'/)
+})

@@ -61,3 +61,31 @@ test('Backup Pass memories require a proven complete or positive banked outcome'
   assert.deepEqual(output.map((x) => x.source.id), ['done', 'banked'])
   assert.ok(output.every((x) => !x.safeTitle.includes('AGENT')))
 })
+
+test('real agent-numbered provenance ids are accepted; agent numbers in visible text are not', () => {
+  // These are the exact id shapes realDay() builds for the owner's own rows.
+  const joined = normalizeDiaryCandidate(base({ type: 'agent-joined', safeTitle: 'Became a ReConnect agent.', occurredAt: '2026-08-07T04:20:46.974698+00:00', source: { table: 'rc_players', id: 'AGENT000', eventType: 'joined_at' } }))
+  assert.equal(joined?.type, 'agent-joined')
+  assert.equal(joined?.kstDate, '2026-08-07')
+  assert.equal(joined?.source.id, 'AGENT000')
+  for (const id of ['AGENT000:2026-08-07', 'AGENT000:moon', 'mission-1:AGENT000:joined', 'evt:AGENT000:pass']) {
+    assert.ok(normalizeDiaryCandidate(base({ source: { table: 'rc_daily_activity', id } })), id)
+  }
+  assert.equal(normalizeDiaryCandidate(base({ safeTitle: 'AGENT000 became an agent.', source: { table: 'rc_players', id: 'AGENT000' } })), null)
+  assert.equal(normalizeDiaryCandidate(base({ counterpartyCodename: 'AGENT001' })), null)
+  assert.deepEqual(normalizeDiaryCandidate(base({ facts: { note: 'Helped AGENT004' } }))?.facts, {})
+})
+
+test('the join day keeps becoming-an-agent as its anchor even with earlier special moments', () => {
+  const special = (type, at, id) => normalizeDiaryCandidate(base({ type, occurredAt: at, safeTitle: `${type}.`, source: { table: 't', id } }))
+  const input = [
+    special('playlist-created', '2026-08-07T00:10:00Z', 'p1'),
+    special('district-restored', '2026-08-07T01:00:00Z', 'AGENT000:moon'),
+    special('mission-completed', '2026-08-07T02:00:00Z', 'm1'),
+    special('agent-joined', '2026-08-07T04:20:46Z', 'AGENT000'),
+  ]
+  const selected = selectDailyMemories(input)
+  assert.equal(selected.anchor?.type, 'agent-joined')
+  assert.ok(selected.selected.some((c) => c.type === 'agent-joined'))
+  assert.equal(selected.state, 'real')
+})

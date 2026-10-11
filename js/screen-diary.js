@@ -533,8 +533,15 @@ export function renderDiaryContent(root, state, data, actions = {}) {
 }
 
 export function renderDearDiary(container, state, { previewData = null, previewDate = null, previewSheet = 0, previewTheme = 'modern', previewBack = null, previewJoinedDate = null } = {}) {
+  // main.js repaints the current screen on every state refresh (the 90s poll,
+  // tab focus, any setState). The diary reads none of that state; it owns its
+  // pages, archive and open sheets, so an open book is kept as-is rather than
+  // reloaded back to Today. Navigating away replaces the scene, so the next
+  // visit still opens fresh.
+  if (!previewData && container.querySelector(':scope > .dd-screen[data-live="true"]')) return null
   container.innerHTML = ''
   const root = el('div', 'dd-screen'); container.appendChild(root)
+  if (!previewData) root.dataset.live = 'true'
   if (previewData) {
     const pages = Array.isArray(previewData) ? previewData : [previewData]
     const byDate = new Map(pages.map((page, index) => [page.date, { ...page, isToday: page.isToday ?? index === 0 }]))

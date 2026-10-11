@@ -25,6 +25,14 @@ function safeString(value: unknown, max = 160): string {
   return AGENT_NUMBER.test(text) ? '' : text
 }
 
+/** Provenance keys (source table/id/event) are internal dedupe and digest
+ * keys, never rendered. They legitimately embed the owner's agent number
+ * (rc_players → "AGENT000", rc_daily_activity → "AGENT000:2026-08-07"), so
+ * the visible-text agent-number scrub must not blank them. */
+function sourceKey(value: unknown, max = 160): string {
+  return String(value || '').trim().slice(0, max)
+}
+
 function safeFacts(value: unknown): Record<string, string | number | boolean> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
   const out: Record<string, string | number | boolean> = {}
@@ -50,8 +58,8 @@ export function normalizeDiaryCandidate(raw: Partial<DiaryCandidate>): DiaryCand
   const time = Date.parse(occurredAt)
   const type = safeString(raw.type, 64)
   const title = safeString(raw.safeTitle, 180)
-  const table = safeString(raw.source?.table, 80)
-  const id = safeString(raw.source?.id, 160)
+  const table = sourceKey(raw.source?.table, 80)
+  const id = sourceKey(raw.source?.id, 160)
   if (!Number.isFinite(time) || !type || !title || !table || !id) return null
   const kstDate = kstDateOf(Math.floor(time / 1000))
   if (raw.kstDate && raw.kstDate !== kstDate) return null
@@ -60,7 +68,7 @@ export function normalizeDiaryCandidate(raw: Partial<DiaryCandidate>): DiaryCand
   return {
     type, occurredAt: new Date(time).toISOString(), kstDate,
     importance: raw.importance, reliability: raw.reliability, safeTitle: title,
-    source: { table, id, ...(raw.source?.eventType ? { eventType: safeString(raw.source.eventType, 64) } : {}) },
+    source: { table, id, ...(raw.source?.eventType ? { eventType: sourceKey(raw.source.eventType, 64) } : {}) },
     ...(Number.isInteger(raw.artworkId) ? { artworkId: Number(raw.artworkId) } : {}),
     ...(codename ? { counterpartyCodename: codename } : {}),
     ...(raw.retroactive != null ? { retroactive: !!raw.retroactive } : {}),
@@ -123,7 +131,8 @@ export function selectDailyMemories(input: DiaryCandidate[], hasNote = false): D
   const narrative = all.filter((c) => c.type !== 'badge-awarded')
   const listeningTypes = new Set(['top-track', 'listening-variety', 'high-stream-day'])
   const meaningful = narrative.filter((c) => c.importance !== 'ordinary' && !listeningTypes.has(c.type))
-  const anchor = meaningful[0] || null
+  // Becoming an agent is the defining moment of the join day, however busy.
+  const anchor = meaningful.find((c) => c.type === 'agent-joined') || meaningful[0] || null
   const additional = meaningful.filter((c) => c !== anchor).slice(0, 2)
   const listening = narrative.find((c) => listeningTypes.has(c.type)) || null
   const chosenListening = listening && listening !== anchor && !additional.includes(listening) ? listening : null

@@ -220,3 +220,11 @@ test('header carries the archive calendar icon from the Lucide set, not an emoji
   assert.match(screenSource, /class="dd-calendar-first">First day</)
   assert.match(screenSource, /class="dd-calendar-today">Today</)
 })
+
+test('a data refresh keeps the open diary instead of reloading it to Today', () => {
+  const render = screenSource.slice(screenSource.indexOf('export function renderDearDiary'))
+  assert.match(render, /if \(!previewData && container\.querySelector\(':scope > \.dd-screen\[data-live="true"\]'\)\) return null/)
+  assert.ok(render.indexOf('return null') < render.indexOf("container.innerHTML = ''"), 'guard runs before the scene is cleared')
+  assert.match(render, /root\.dataset\.live = 'true'/)
+  assert.doesNotMatch(screenSource, /setInterval\(/)
+})
