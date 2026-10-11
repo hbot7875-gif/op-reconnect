@@ -300,10 +300,15 @@ function recoverySignal(state) {
   const n = state.onlineNow?.count || 0
   if (n > 0) {
     const codenames = state.onlineNow.codenames || (state.onlineNow.agents || []).map((a) => a.codename)
-    const shown = codenames.slice(0, 3).map((name) => esc(name)).join(' · ')
-    const more = n > 3 ? ` +${n - 3}` : ''
-    const line = el('div', 'active-now', `<i class="active-now-dot"></i>${n} agent${n === 1 ? '' : 's'} active now`
-      + (shown ? `<span class="active-now-names">${shown}${more}</span>` : ''))
+    const shownCount = Math.min(2, codenames.length, n)
+    const shown = codenames.slice(0, shownCount).map((name) => esc(name)).join(' · ')
+    const more = n > shownCount ? n - shownCount : 0
+    const line = el('div', 'active-now', `
+      <i class="active-now-dot" aria-hidden="true"></i>
+      <span class="active-now-status">${n} agent${n === 1 ? '' : 's'} active now</span>
+      ${shown ? `<span class="active-now-names">${shown}</span>` : ''}
+      ${more ? `<span class="active-now-more">· +${more}</span>` : ''}
+    `)
     wrap.appendChild(line)
   }
   return wrap

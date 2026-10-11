@@ -438,12 +438,15 @@ body {
 /* Real agent presence — deliberately a different color/shape from the
    district "online" copy just above it, so the two "online"-adjacent words
    sitting this close together don't read as the same stat. */
-.active-now { display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
+.active-now { display: grid; grid-template-columns: auto auto minmax(0, auto) auto; align-items: center;
+  column-gap: 5px; width: max-content; max-width: calc(100vw - 48px); overflow: hidden; white-space: nowrap;
   font-family: var(--mono); font-size: 11px; letter-spacing: .2px; color: var(--muted); }
 .active-now-dot { width: 6px; height: 6px; border-radius: 50%; background: #34d17c;
-  box-shadow: 0 0 6px #34d17c; flex-shrink: 0; animation: activeNowPulse 2.2s ease-in-out infinite; }
+  box-shadow: none; flex-shrink: 0; animation: activeNowPulse 2.2s ease-in-out infinite; }
 @keyframes activeNowPulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
-.active-now-names { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.active-now-status { margin-right: 7px; color: var(--muted); }
+.active-now-names { min-width: 0; overflow: hidden; color: var(--muted); text-overflow: ellipsis; }
+.active-now-more { color: var(--muted); }
 .recovery-orbit { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%;
   background: conic-gradient(var(--gold) var(--recovery), rgba(255,255,255,.08) 0); box-shadow: 0 0 14px rgba(217,173,95,.12); }
 .recovery-orbit::before { content: ''; position: absolute; width: 36px; height: 36px; border-radius: 50%; background: #0a0812; }
@@ -6911,12 +6914,15 @@ select.rc-multi-native {
 
 /* City recovery: the scene keeps its art; its frame and copy get crisper */
 .world-screen .command-scene { border: 1px solid var(--v-line-1); }
+.world-screen .recovery-signal { max-width: calc(100% - 48px); }
 .world-screen .recovery-copy b { font-family: var(--body); font-size: 15px; font-weight: 600; letter-spacing: 0;
   text-transform: none; color: var(--v-ink-1); }
 .world-screen .recovery-copy i { font-family: var(--body); font-size: 13px; letter-spacing: 0;
   text-transform: none; color: var(--v-ink-2); }
 .world-screen .active-now { font-family: var(--body); font-size: 13px; letter-spacing: 0; color: var(--v-ink-2); }
-.world-screen .active-now-names { font-family: var(--body); font-size: 12px; color: var(--v-ink-3); }
+.world-screen .active-now-status { color: var(--v-ink-2); }
+.world-screen .active-now-names,
+.world-screen .active-now-more { font-family: var(--body); font-size: 12px; color: var(--v-ink-3); }
 .world-screen .core-hint { font-family: var(--body); font-size: 13px; letter-spacing: 0; text-transform: none;
   color: var(--v-ink-2); }
 
