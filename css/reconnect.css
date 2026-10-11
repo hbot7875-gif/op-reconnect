@@ -2228,11 +2228,12 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 .res-screen .co-place { margin-top: 3px; font-family: var(--body); font-size: 12px; letter-spacing: 0;
   text-transform: none; text-align: left; color: var(--v-ink-3); }
 
-/* Event keepsake: the one featured card, its event colour kept but calmer */
+/* Event keepsake: a scoped event exception, not a Pack colour rule. ARIRANG
+   RE:CELEBRATE keeps its red album identity -- crimson edge and side bar,
+   a red-tinted surface, pink eyebrow -- drawn flat: no glow, gradient or shadow. */
 .res-screen .arc-keepsake { gap: 4px; padding: 14px 40px 14px 18px; border-radius: 14px;
-  background: #282039; /* Surface 1 with 5% of the event pink, flat */
-  border: 1px solid rgba(243,156,200,.30); }
-.res-screen .arc-keepsake::before { width: 3px; border-radius: 14px 0 0 14px; background: #f39cc8; }
+  background: #1f1018; border: 1px solid rgba(200,52,63,.45); }
+.res-screen .arc-keepsake::before { width: 3px; border-radius: 14px 0 0 14px; background: #c8343f; }
 .res-screen .arc-keepsake-eyebrow { font-family: var(--body); font-size: 11px; font-weight: 600; letter-spacing: .08em;
   text-transform: uppercase; color: #f39cc8; }
 .res-screen .arc-keepsake-name { font-size: 16px; letter-spacing: .02em; color: var(--v-ink-1); }

@@ -44,10 +44,13 @@ test('one recipe: every slot and pocket row uses the same icon tile', () => {
   assert.match(block, /\.res-screen \.pocket-items \{ grid-template-columns: 1fr;/)
 })
 
-test('purple for progress, gold for ready, no crimson in the Pack', () => {
+test('purple for progress, gold for ready, no crimson in the Pack outside the event keepsake', () => {
   assert.match(block, /\.res-screen \.slot-fill-bar \{ background: var\(--v-violet\)/)
   assert.match(block, /\.res-screen \.ps-qty\.is-ready \{ color: var\(--v-gold\)/)
-  assert.doesNotMatch(block, /--v-red|--v-tint-red|crimson|#c8343f/)
+  // The keepsake's red is its event identity, scoped to that one card.
+  const rest = block.replace(/\/\*[\s\S]*?\*\//g, '').split('\n')
+    .filter((l) => !l.includes('.arc-keepsake') && !/^\s+background: #1f1018/.test(l)).join('\n')
+  assert.doesNotMatch(rest, /--v-red|--v-tint-red|#c8343f|rgba\(200,52,63/)
   assert.doesNotMatch(block, /gradient\(/)
 })
 
@@ -77,8 +80,12 @@ test('Recovered Objects: two columns at 320, three from 360 up', () => {
 
 test('the event keepsake stays special without glow or gradient', () => {
   const rules = block.split('\n').filter((l) => l.includes('.arc-keepsake')).join('\n')
-  assert.match(rules, /#f39cc8/, 'keeps its event colour')
-  assert.doesNotMatch(rules, /gradient\(|box-shadow|text-shadow|filter:/)
+  const card = block.slice(block.indexOf('.res-screen .arc-keepsake {'), block.indexOf('.res-screen .arc-keepsake-eyebrow'))
+  assert.match(card, /background: #1f1018; border: 1px solid rgba\(200,52,63,\.45\)/, 'red-tinted surface, crimson edge')
+  assert.match(card, /::before \{[^}]*background: #c8343f/, 'crimson side accent')
+  assert.match(block, /\.res-screen \.arc-keepsake-eyebrow \{[^}]*color: #f39cc8/, 'pink event eyebrow')
+  assert.doesNotMatch(card, /var\(--v-surface|var\(--v-violet/, 'not the normal purple Pack surface')
+  for (const css of [rules, card]) assert.doesNotMatch(css, /gradient\(|box-shadow|text-shadow|filter:/)
 })
 
 test('resource detail sheets are left for a later pass', () => {
