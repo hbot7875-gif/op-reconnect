@@ -70,3 +70,50 @@ export const DIARY_THEMES = [
 export function normalizeDiaryTheme(value) {
   return DIARY_THEMES.some((theme) => theme.id === value) ? value : null
 }
+
+export const DIARY_DECORATION_FAMILIES = [
+  { id: 'organic', label: 'Nature' },
+  { id: 'keepsake', label: 'Keepsake' },
+  { id: 'star', label: 'Star' },
+  { id: 'mark', label: 'Little mark' },
+  { id: 'fastener', label: 'Paper detail' },
+  { id: 'accent', label: 'Accent' },
+]
+
+export const DIARY_DECORATION_SLOTS = [
+  'entry-leading', 'entry-trailing', 'badges-heading',
+  'moments-heading', 'note-heading', 'footer-center',
+]
+
+export const DIARY_DECORATION_LIMIT = 4
+
+/** Slots are tied to whole rendered blocks, never pixel coordinates. */
+export function diaryDecorationSlots(blocks = []) {
+  const kinds = new Set(blocks.map((block) => block?.kind))
+  if (kinds.has('no-recorded')) return []
+  const slots = []
+  if (kinds.has('entry')) slots.push('entry-leading', 'entry-trailing')
+  if (kinds.has('badges')) slots.push('badges-heading')
+  if (kinds.has('moments')) slots.push('moments-heading')
+  if (kinds.has('note')) slots.push('note-heading')
+  slots.push('footer-center')
+  return slots
+}
+
+export function normalizeDiaryDecorations(value) {
+  const source = value && typeof value === 'object' && Array.isArray(value.items) ? value.items : []
+  const validFamilies = new Set(DIARY_DECORATION_FAMILIES.map((item) => item.id))
+  const seen = new Set(), perSheet = new Map(), items = []
+  for (const raw of source) {
+    const sheet = Number(raw?.sheet)
+    const decorationId = String(raw?.decoration_id || '')
+    const slot = String(raw?.slot || '')
+    const size = raw?.size === 'm' ? 'm' : raw?.size === 's' ? 's' : null
+    const key = `${sheet}:${slot}`
+    const count = perSheet.get(sheet) || 0
+    if (!Number.isInteger(sheet) || sheet < 0 || sheet > 19 || !validFamilies.has(decorationId) || !DIARY_DECORATION_SLOTS.includes(slot) || !size || seen.has(key) || count >= DIARY_DECORATION_LIMIT) continue
+    seen.add(key); perSheet.set(sheet, count + 1)
+    items.push({ sheet, decoration_id: decorationId, slot, size })
+  }
+  return { version: 1, items }
+}

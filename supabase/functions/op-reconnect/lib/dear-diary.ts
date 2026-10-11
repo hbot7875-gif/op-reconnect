@@ -13,6 +13,41 @@ import {
 
 const NOTE_MAX = 1200
 const DIARY_THEMES = new Set(['oldworld', 'school90s', 'y2k', 'modern', 'future'])
+const DIARY_DECORATION_IDS = new Set(['organic', 'keepsake', 'star', 'mark', 'fastener', 'accent'])
+const DIARY_DECORATION_SLOTS = new Set(['entry-leading', 'entry-trailing', 'badges-heading', 'moments-heading', 'note-heading', 'footer-center'])
+const DIARY_DECORATION_LIMIT = 4
+
+export type DiaryDecorations = {
+  version: 1
+  items: Array<{ sheet: number; decoration_id: string; slot: string; size: 's' | 'm' }>
+}
+
+const EMPTY_DECORATIONS: DiaryDecorations = { version: 1, items: [] }
+
+export function validateDiaryDecorations(value: unknown): { success: true; decorations: DiaryDecorations } | { success: false; error: string } {
+  if (!value || typeof value !== 'object' || (value as any).version !== 1 || !Array.isArray((value as any).items)) return { success: false, error: 'Those page decorations are not valid.' }
+  const items = (value as any).items
+  if (items.length > 80) return { success: false, error: 'That diary has too many page decorations.' }
+  const seen = new Set<string>(), perSheet = new Map<number, number>(), normalized: DiaryDecorations['items'] = []
+  for (const item of items) {
+    const sheet = Number(item?.sheet), decorationId = String(item?.decoration_id || ''), slot = String(item?.slot || ''), size = String(item?.size || '')
+    if (!Number.isInteger(sheet) || sheet < 0 || sheet > 19) return { success: false, error: 'That decoration sheet is not valid.' }
+    if (!DIARY_DECORATION_IDS.has(decorationId)) return { success: false, error: 'That decoration is not available.' }
+    if (!DIARY_DECORATION_SLOTS.has(slot)) return { success: false, error: 'That decoration slot is not available.' }
+    if (size !== 's' && size !== 'm') return { success: false, error: 'That decoration size is not available.' }
+    const key = `${sheet}:${slot}`, count = perSheet.get(sheet) || 0
+    if (seen.has(key)) return { success: false, error: 'Two decorations cannot share one diary spot.' }
+    if (count >= DIARY_DECORATION_LIMIT) return { success: false, error: 'Each diary sheet can hold up to four decorations.' }
+    seen.add(key); perSheet.set(sheet, count + 1)
+    normalized.push({ sheet, decoration_id: decorationId, slot, size: size as 's' | 'm' })
+  }
+  return { success: true, decorations: { version: 1, items: normalized } }
+}
+
+function storedDiaryDecorations(value: unknown): DiaryDecorations {
+  const checked = validateDiaryDecorations(value)
+  return checked.success ? checked.decorations : EMPTY_DECORATIONS
+}
 
 function artUrl(path: string | null): string | null {
   if (!path) return null
@@ -371,7 +406,7 @@ export async function getDearDiary(sb: SupabaseDB, content: GameContent, params:
     return {
       success: true, date, isToday: false, theme, summary: null, note: '',
       archiveState: 'none', noRecordedEntry: true, isFirstAgentDay: false,
-      xp: 0, streams: 0, badges: [], completedDistricts: [], moments: [],
+      xp: 0, streams: 0, badges: [], completedDistricts: [], moments: [], decorations: EMPTY_DECORATIONS,
     }
   }
   const version = existing?.summary_version || 0
@@ -394,7 +429,7 @@ export async function getDearDiary(sb: SupabaseDB, content: GameContent, params:
     }, { onConflict: 'agent_no,kst_date' })
     if (saveError) return { success: false, error: saveError.message }
   }
-  return { success: true, date, isToday: date === todayKst(), theme, summary, note: existing?.note || '', archiveState: state, isFirstAgentDay: !!join, ...facts }
+  return { success: true, date, isToday: date === todayKst(), theme, summary, note: existing?.note || '', decorations: storedDiaryDecorations(existing?.decorations), archiveState: state, isFirstAgentDay: !!join, ...facts }
 }
 
 /** Range-index endpoint: only dates with a reliable materialized/source row
@@ -480,6 +515,20 @@ export async function saveDearDiaryTheme(sb: SupabaseDB, params: Record<string, 
     agent_no: agentNo, theme, updated_at: new Date().toISOString(),
   }, { onConflict: 'agent_no' })
   return error ? { success: false, error: error.message } : { success: true, theme }
+}
+
+export async function saveDearDiaryDecorations(sb: SupabaseDB, params: Record<string, unknown>) {
+  const agentNo = String(params.agentNo || '').trim().toUpperCase()
+  const date = normalizeDate(params.date)
+  if (!date) return { success: false, error: 'That diary page is not available.' }
+  const checked = validateDiaryDecorations(params.decorations)
+  if (!checked.success) return checked
+  const { data, error } = await sb.from('rc_dear_diary_entries')
+    .update({ decorations: checked.decorations, updated_at: new Date().toISOString() })
+    .eq('agent_no', agentNo).eq('kst_date', date).select('agent_no').maybeSingle()
+  if (error) return { success: false, error: error.message }
+  if (!data) return { success: false, error: 'That diary page is not available.' }
+  return { success: true, decorations: checked.decorations }
 }
 
 /** Small read-only preference lookup for the closed Pack object. This avoids

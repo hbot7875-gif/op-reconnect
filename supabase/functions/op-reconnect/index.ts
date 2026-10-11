@@ -60,7 +60,7 @@ import { getRecelebrateState, issuePartyPass, startTeamChoice, chooseTeam } from
 import { getRecelebrateBattle, claimRecelebrateAfterParty } from './lib/recelebrate-battle.ts'
 import { pingRecelebratePresence } from './lib/recelebrate-presence.ts'
 import { getRecelebrateMessages, sendRecelebrateMessage } from './lib/recelebrate-chat.ts'
-import { getDearDiary, getDearDiaryArchive, getDearDiaryPreference, saveDearDiaryNote, saveDearDiaryTheme } from './lib/dear-diary.ts'
+import { getDearDiary, getDearDiaryArchive, getDearDiaryPreference, saveDearDiaryDecorations, saveDearDiaryNote, saveDearDiaryTheme } from './lib/dear-diary.ts'
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -111,6 +111,7 @@ const ROUTES: Record<string, Route> = {
   getDearDiary: { auth: 'agent', handler: async (sb, p) => getDearDiary(sb, await loadContent(sb), p) },
   getDearDiaryArchive: { auth: 'agent', handler: async (sb, p) => getDearDiaryArchive(sb, await loadContent(sb), p) },
   getDearDiaryPreference: { auth: 'agent', handler: (sb, p) => getDearDiaryPreference(sb, p) },
+  saveDearDiaryDecorations: { auth: 'agent', handler: (sb, p) => saveDearDiaryDecorations(sb, p) },
   saveDearDiaryNote: { auth: 'agent', handler: (sb, p) => saveDearDiaryNote(sb, p) },
   saveDearDiaryTheme: { auth: 'agent', handler: (sb, p) => saveDearDiaryTheme(sb, p) },
   createShareSnapshot: { auth: 'agent', handler: (sb, p) => createShareSnapshot(sb, p) },

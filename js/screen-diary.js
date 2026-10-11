@@ -6,10 +6,69 @@ import { badgeThumb } from './badge-art.js'
 import { getAgentNo } from './session.js'
 import { el, esc, toast } from './state.js'
 import { goResources } from './router.js'
-import { DIARY_THEMES, diarySheetPlan, diarySwipeDirection, normalizeDiaryTheme } from './dear-diary-rules.js'
+import {
+  DIARY_DECORATION_FAMILIES, DIARY_DECORATION_LIMIT, DIARY_THEMES,
+  diaryDecorationSlots, diarySheetPlan, diarySwipeDirection,
+  normalizeDiaryDecorations, normalizeDiaryTheme,
+} from './dear-diary-rules.js'
 
 const diaryThemeKey = () => `rc:dear-diary:theme:${getAgentNo() || 'preview'}`
 const prefersReducedMotion = () => globalThis.__ddReduceMotion === true || matchMedia('(prefers-reduced-motion: reduce)').matches
+const DECORATION_NAMES = {
+  oldworld: ['Pressed flower','Ribbon','Small star','Ink flourish','Wax seal','Tiny leaf'],
+  school90s: ['Tiny flower','Doodle heart','Notebook star','Pencil','Paper clip','Tape strip'],
+  y2k: ['Butterfly','Mini heart','Starburst','Sparkle','Glossy sticker','Tiny CD'],
+  modern: ['Minimal leaf','Tiny heart','Simple star','Coffee mark','Paperclip','Muted tape'],
+  future: ['Constellation','Orbit','Signal star','Waveform','Archive glyph','Signal cluster'],
+}
+const DECORATION_ART = {
+  oldworld: [
+    '<path d="M16 28c-1-8 1-14 4-21M17 18c-6 0-8-3-8-6 5-1 8 1 9 4M19 13c1-5 4-7 8-7 0 5-2 8-7 9"/><circle cx="13" cy="9" r="3"/>',
+    '<path d="M16 13c-5-7-11-3-8 3 2 4 8 3 8-1 0 4 6 5 8 1 3-6-3-10-8-3Zm0 3-5 11m5-11 5 11"/>',
+    '<path d="m16 5 2.6 7.4 7.8.2-6.2 4.8 2.2 7.5-6.4-4.4-6.4 4.4 2.2-7.5-6.2-4.8 7.8-.2Z"/>',
+    '<path d="M5 21c6-10 17-12 22-4-6-4-12 6-19 2 4 0 7 2 9 6"/>',
+    '<circle cx="16" cy="17" r="9"/><path d="m12 17 3 3 6-7M10 7c4 2 8 2 12 0"/>',
+    '<path d="M7 25c8-2 13-8 18-18M12 20c-5 0-7-3-7-6 5-1 8 1 9 4m4-5c0-5 3-7 7-8 1 5-1 8-6 10"/>',
+  ],
+  school90s: [
+    '<circle cx="16" cy="15" r="3"/><path d="M16 12c-2-6 4-7 4-2m-7 3c-5-4-8 1-3 4m6 1c2 6-4 7-4 2m7-3c5 4 8-1 3-4"/>',
+    '<path d="M16 26S5 20 5 12c0-7 9-8 11-2 2-6 11-5 11 2 0 8-11 14-11 14Z"/>',
+    '<path d="m16 5 3 7 8 .7-6 5 2 8-7-4-7 4 2-8-6-5 8-.7Z"/>',
+    '<path d="M8 24 22 7l4 4-14 17-6 1Zm12-15 4 4M8 24l4 4"/>',
+    '<path d="M21 8 10 20c-5 6 3 11 8 5l9-11c4-5-3-9-7-5L9 20c-2 3 2 5 4 3l9-10"/>',
+    '<path d="M5 11h22v11H5zM8 11v11m4-11v11m4-11v11m4-11v11m4-11v11"/>',
+  ],
+  y2k: [
+    '<path d="M16 16C8 2 3 8 8 16c-5 8 0 14 8 1 8 13 13 7 8-1 5-8 0-14-8 0Z"/><circle cx="16" cy="16" r="2"/>',
+    '<path d="M16 26S6 20 6 12c0-6 8-7 10-1 2-6 10-5 10 1 0 8-10 14-10 14Z"/>',
+    '<path d="m16 3 2 9 8-5-5 8 9 1-9 2 5 8-8-5-2 9-2-9-8 5 5-8-9-2 9-1-5-8 8 5Z"/>',
+    '<path d="M16 3v9m0 8v9M3 16h9m8 0h9M7 7l6 6m6 6 6 6m0-18-6 6m-6 6-6 6"/>',
+    '<path d="m7 9 13-4 5 18-13 4Z"/><path d="m10 11 8-2m-7 6 8-2"/>',
+    '<circle cx="16" cy="16" r="11"/><circle cx="16" cy="16" r="3"/><path d="M19 7c4 1 6 4 7 7"/>',
+  ],
+  modern: [
+    '<path d="M7 26C9 13 16 7 27 6c-1 12-7 19-20 20Zm4-4c5-5 9-8 14-12"/>',
+    '<path d="M16 26S6 20 6 12c0-6 8-7 10-1 2-6 10-5 10 1 0 8-10 14-10 14Z"/>',
+    '<path d="m16 6 2.7 7.2 7.3 2.8-7.3 2.8L16 26l-2.7-7.2L6 16l7.3-2.8Z"/>',
+    '<circle cx="16" cy="16" r="9"/><circle cx="16" cy="16" r="5"/><path d="M6 9c3-3 6-4 10-3"/>',
+    '<path d="M21 8 10 20c-5 6 3 11 8 5l9-11c4-5-3-9-7-5L9 20c-2 3 2 5 4 3l9-10"/>',
+    '<path d="M5 11h22v11H5zM8 11v11m5-11v11m6-11v11m5-11v11"/>',
+  ],
+  future: [
+    '<circle cx="7" cy="20" r="1.5"/><circle cx="14" cy="9" r="1.5"/><circle cx="24" cy="14" r="1.5"/><circle cx="20" cy="25" r="1.5"/><path d="m8 19 5-9 10 4-3 10-12-5Z"/>',
+    '<circle cx="16" cy="16" r="5"/><ellipse cx="16" cy="16" rx="13" ry="6" transform="rotate(-22 16 16)"/><circle cx="26" cy="11" r="1.5"/>',
+    '<path d="m16 4 2.5 8.5L27 15l-8.5 2.5L16 26l-2.5-8.5L5 15l8.5-2.5Z"/><circle cx="16" cy="15" r="2"/>',
+    '<path d="M3 17h5l3-7 5 14 4-10 3 5h6"/>',
+    '<path d="m8 7 12-2 6 10-6 12-12-2-3-9Z"/><path d="m12 11 8 10m0-10-8 10"/>',
+    '<circle cx="7" cy="16" r="2"/><circle cx="13" cy="12" r="1"/><circle cx="18" cy="18" r="2"/><circle cx="25" cy="10" r="1.5"/><circle cx="26" cy="23" r="1"/><path d="m8 15 4-3 6 6 7-8"/>',
+  ],
+}
+
+function decorationSvg(theme, family) {
+  const familyIndex = DIARY_DECORATION_FAMILIES.findIndex((item) => item.id === family)
+  const body = DECORATION_ART[theme]?.[familyIndex] || DECORATION_ART.modern[familyIndex] || ''
+  return `<svg viewBox="0 0 32 32" aria-hidden="true" focusable="false">${body}</svg>`
+}
 export function cachedDiaryTheme(fallback = 'modern') {
   try { return normalizeDiaryTheme(localStorage.getItem(diaryThemeKey())) || fallback } catch { return fallback }
 }
@@ -88,26 +147,37 @@ function diaryView(state, data) {
   return { badges, moments, shownProgress, quiet, noRecorded: false, sheets }
 }
 
-function blockMarkup(block, data, view) {
+function decorateAction() {
+  return `<button type="button" class="dd-decorate"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7Zm6 12 .8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8Z"/></svg><span>Decorate page</span></button>`
+}
+
+function decorationSlot(slot, items, theme) {
+  const item = items.find((entry) => entry.slot === slot)
+  if (!item) return ''
+  const family = DIARY_DECORATION_FAMILIES.find((entry) => entry.id === item.decoration_id)
+  return `<button type="button" class="dd-decoration dd-decoration-${esc(item.size)} dd-slot-${esc(slot)}" data-decoration-slot="${esc(slot)}" aria-label="Edit ${esc(family?.label || 'page')} decoration">${decorationSvg(theme, item.decoration_id)}</button>`
+}
+
+function blockMarkup(block, data, view, context) {
   if (block.kind === 'no-recorded') return `<section class="dd-no-recorded" role="status">
       <span aria-hidden="true">—</span><p>No entry recorded for this day.</p>
     </section>`
   if (block.kind === 'entry') return `<section class="dd-summary" aria-labelledby="dd-summary-title-${esc(data.date)}">
-      <span id="dd-summary-title-${esc(data.date)}">ENTRY</span><p>${esc(data.summary)}</p>
-      <button type="button" class="dd-regenerate">↻ rewrite</button>
+      <div class="dd-entry-label-row">${decorationSlot('entry-leading', context.items, context.theme)}<span id="dd-summary-title-${esc(data.date)}">ENTRY</span>${decorationSlot('entry-trailing', context.items, context.theme)}</div><p>${esc(data.summary)}</p>
+      <div class="dd-summary-actions"><button type="button" class="dd-regenerate">↻ rewrite</button>${context.first ? decorateAction() : ''}</div>
     </section>`
   if (block.kind === 'badges') {
     const badges = view.badges.slice(block.start, block.end)
-    return `<section class="dd-section dd-achievements"><div class="dd-section-title"><span>✦</span><h2>Badges I got${block.start ? ' · continued' : ''}</h2></div><div class="dd-stickers">${badges.map((badge, i) => sticker(badge, block.start + i)).join('')}</div></section>`
+    return `<section class="dd-section dd-achievements"><div class="dd-section-title"><span>✦</span><h2>Badges I got${block.start ? ' · continued' : ''}</h2>${decorationSlot('badges-heading', context.items, context.theme)}${context.first ? decorateAction() : ''}</div><div class="dd-stickers">${badges.map((badge, i) => sticker(badge, block.start + i)).join('')}</div></section>`
   }
   if (block.kind === 'moments') {
     const moments = view.moments.slice(block.start, block.end)
-    return `<section class="dd-section dd-moments"><div class="dd-section-title"><span>♡</span><h2>Little moments${block.start ? ' · continued' : ''}</h2></div><ul>${moments.map((m) => `<li class="is-${esc(m.kind)}">${esc(m.text)}</li>`).join('')}</ul></section>`
+    return `<section class="dd-section dd-moments"><div class="dd-section-title"><span>♡</span><h2>Little moments${block.start ? ' · continued' : ''}</h2>${decorationSlot('moments-heading', context.items, context.theme)}${context.first ? decorateAction() : ''}</div><ul>${moments.map((m) => `<li class="is-${esc(m.kind)}">${esc(m.text)}</li>`).join('')}</ul></section>`
   }
   if (block.kind === 'note') {
     const note = data.note || ''
     const long = note.length > 180
-    return `<section class="dd-section dd-note"><div class="dd-section-title"><span>✎</span><h2>Anything else?</h2></div>
+    return `<section class="dd-section dd-note"><div class="dd-section-title"><span>✎</span><h2>Anything else?</h2>${decorationSlot('note-heading', context.items, context.theme)}${context.first ? decorateAction() : ''}</div>
       <div class="dd-note-read${long ? ' is-collapsed' : ''}"><p${note ? '' : ' class="is-empty"'}>${esc(note || 'Nothing written here yet.')}</p>
       <div class="dd-note-actions">${long ? '<button type="button" class="dd-note-expand" aria-expanded="false">Read more</button>' : ''}<button type="button" class="dd-note-edit">✎ ${note ? 'edit' : 'add note'}</button></div></div>
       <div class="dd-note-editor" hidden><textarea maxlength="1200" rows="5" placeholder="Write something only you need to remember…">${esc(note)}</textarea>
@@ -117,16 +187,19 @@ function blockMarkup(block, data, view) {
   return ''
 }
 
-function pageMarkup(state, data, sheetIndex = 0) {
+function pageMarkup(state, data, sheetIndex = 0, theme = 'modern') {
   const view = diaryView(state, data)
   const index = Math.min(Math.max(0, sheetIndex), view.sheets.length - 1)
   const total = view.sheets.length
   const sheet = view.sheets[index]
+  const availableSlots = diaryDecorationSlots(sheet)
+  const items = normalizeDiaryDecorations(data.decorations).items.filter((item) => item.sheet === index && availableSlots.includes(item.slot))
   const status = index ? 'CONTINUED' : (data.isToday === false ? '' : 'TODAY')
   return `<main class="dd-paper${index ? ' is-continuation' : ''}${view.quiet ? ' is-quiet' : ''}${data.isFirstAgentDay ? ' is-opening-page' : ''}${view.noRecorded ? ' is-no-recorded' : ''}" data-date="${esc(data.date)}" data-sheet="${index + 1}">
     <div class="dd-spine" aria-hidden="true"></div><div class="dd-paper-ring" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
     <div class="dd-date"><span>${esc(prettyDate(data.date))}</span><em>${status}</em></div>
-    <div class="dd-sheet-content">${sheet.map((block) => blockMarkup(block, data, view)).join('')}</div>
+    <div class="dd-sheet-content">${sheet.map((block, blockIndex) => blockMarkup(block, data, view, { items, theme, first: blockIndex === 0 })).join('')}</div>
+    ${decorationSlot('footer-center', items, theme)}
     <span class="dd-page-number" aria-hidden="true">${esc(shortDate(data.date))} · ${index + 1}/${total}</span>
   </main>`
 }
@@ -166,7 +239,10 @@ function makeBook(root, state, actions) {
   }
   root.querySelector('.dd-style').onclick = () => openThemePicker(root, activeTheme, async (theme) => {
     const saved = await actions.setTheme?.(theme)
-    if (saved !== false) { activeTheme = theme; rememberDiaryTheme(theme) }
+    if (saved !== false) {
+      activeTheme = theme; rememberDiaryTheme(theme)
+      if (current) await show(current.data, current.index)
+    }
     return saved
   })
 
@@ -178,6 +254,57 @@ function makeBook(root, state, actions) {
   let current = null
   let busy = false
   let availabilityToken = 0
+
+  async function persistDecorations(data, next) {
+    const saved = await actions.saveDecorations?.(data.date, next)
+    if (saved === false) return false
+    data.decorations = next
+    root.querySelector('.dd-decoration-tray')?.remove()
+    await show(data, current?.index || 0)
+    return true
+  }
+
+  function openDecorationTray(selectedSlot = null) {
+    if (!current) return
+    root.querySelector('.dd-decoration-tray')?.remove()
+    const data = current.data, index = current.index
+    const view = diaryView(state, data), blocks = view.sheets[index] || []
+    if (view.noRecorded) return
+    const slots = diaryDecorationSlots(blocks)
+    const decorations = normalizeDiaryDecorations(data.decorations)
+    const sheetItems = decorations.items.filter((item) => item.sheet === index)
+    const selected = sheetItems.find((item) => item.slot === selectedSlot) || null
+    const freeSlots = slots.filter((slot) => !sheetItems.some((item) => item.slot === slot) || slot === selectedSlot)
+    const names = DECORATION_NAMES[activeTheme] || DECORATION_NAMES.modern
+    const tray = document.createElement('div')
+    tray.className = 'dd-decoration-tray'
+    tray.innerHTML = `<div class="dd-decoration-panel" role="dialog" aria-modal="true" aria-labelledby="dd-decoration-title">
+      <div class="dd-decoration-tray-head"><div><span>RARE DETAILS</span><h2 id="dd-decoration-title">${selected ? 'Adjust decoration' : 'Decorate page'}</h2></div><button type="button" class="dd-decoration-close" aria-label="Close decorations">×</button></div>
+      ${selected ? `<div class="dd-decoration-selected">${decorationSvg(activeTheme, selected.decoration_id)}<b>${esc(names[DIARY_DECORATION_FAMILIES.findIndex((item) => item.id === selected.decoration_id)] || 'Decoration')}</b></div>
+        <span class="dd-decoration-label">Move to</span><div class="dd-slot-options">${freeSlots.map((slot) => `<button type="button" data-move-slot="${esc(slot)}" class="${slot === selected.slot ? 'is-selected' : ''}">${esc(slot.replaceAll('-', ' '))}</button>`).join('')}</div>
+        <div class="dd-decoration-edit-row"><span class="dd-decoration-label">Size</span><button type="button" data-size="s" class="${selected.size === 's' ? 'is-selected' : ''}">S</button><button type="button" data-size="m" class="${selected.size === 'm' ? 'is-selected' : ''}">M</button><button type="button" class="dd-decoration-remove">Remove</button></div>`
+        : `<p>Small details that follow your diary style.</p><div class="dd-decoration-grid">${DIARY_DECORATION_FAMILIES.map((family, familyIndex) => `<button type="button" class="dd-decoration-choice" data-family="${family.id}" ${sheetItems.length >= DIARY_DECORATION_LIMIT || !freeSlots.length ? 'disabled' : ''}>${decorationSvg(activeTheme, family.id)}<span>${esc(names[familyIndex])}</span></button>`).join('')}</div><small>${sheetItems.length} of ${DIARY_DECORATION_LIMIT} on this sheet</small>`}
+    </div>`
+    root.appendChild(tray)
+    tray.querySelector('.dd-decoration-close').onclick = () => tray.remove()
+    tray.addEventListener('pointerdown', (event) => { if (event.target === tray) tray.remove() })
+    for (const choice of tray.querySelectorAll('.dd-decoration-choice')) choice.onclick = () => {
+      const slot = freeSlots[0]
+      if (!slot || sheetItems.length >= DIARY_DECORATION_LIMIT) return
+      persistDecorations(data, { version: 1, items: [...decorations.items, { sheet: index, decoration_id: choice.dataset.family, slot, size: 's' }] })
+    }
+    for (const move of tray.querySelectorAll('[data-move-slot]')) move.onclick = () => {
+      if (!selected || move.dataset.moveSlot === selected.slot) return
+      persistDecorations(data, { version: 1, items: decorations.items.map((item) => item === selected ? { ...item, slot: move.dataset.moveSlot } : item) })
+    }
+    for (const size of tray.querySelectorAll('[data-size]')) size.onclick = () => {
+      if (!selected || size.dataset.size === selected.size) return
+      persistDecorations(data, { version: 1, items: decorations.items.map((item) => item === selected ? { ...item, size: size.dataset.size } : item) })
+    }
+    tray.querySelector('.dd-decoration-remove')?.addEventListener('click', () => {
+      persistDecorations(data, { version: 1, items: decorations.items.filter((item) => item !== selected) })
+    })
+  }
 
   function bindSheet(sheet, data) {
     const note = sheet.querySelector('.dd-note textarea')
@@ -206,6 +333,8 @@ function makeBook(root, state, actions) {
     }
     const regenerate = sheet.querySelector('.dd-regenerate')
     if (regenerate) regenerate.onclick = () => actions.regenerate?.(data.date)
+    sheet.querySelector('.dd-decorate')?.addEventListener('click', () => openDecorationTray())
+    for (const decoration of sheet.querySelectorAll('.dd-decoration')) decoration.onclick = () => openDecorationTray(decoration.dataset.decorationSlot)
   }
 
   async function updateChrome(data, index, total) {
@@ -228,9 +357,10 @@ function makeBook(root, state, actions) {
   }
 
   async function show(data, sheetIndex = 0, direction = null) {
+    root.querySelector('.dd-decoration-tray')?.remove()
     const total = diaryView(state, data).sheets.length
     const index = Math.min(Math.max(0, sheetIndex), total - 1)
-    const markup = pageMarkup(state, data, index)
+    const markup = pageMarkup(state, data, index, activeTheme)
     if (!current || !direction) {
       stage.innerHTML = `<div class="dd-page-sheet is-current">${markup}</div>`
       current = { data, index, total }; bindSheet(stage.firstElementChild, data); await updateChrome(data, index, total)
@@ -296,7 +426,10 @@ function makeBook(root, state, actions) {
   book.addEventListener('pointercancel', () => { start = null })
   if (!normalizeDiaryTheme(actions.initialTheme)) queueMicrotask(() => openThemePicker(root, activeTheme, async (theme) => {
     const saved = await actions.setTheme?.(theme)
-    if (saved !== false) activeTheme = theme
+    if (saved !== false) {
+      activeTheme = theme
+      if (current) await show(current.data, current.index)
+    }
     return saved
   }, true))
   return { show, turn, current: () => current }
@@ -323,7 +456,9 @@ export function renderDearDiary(container, state, { previewData = null, previewD
         const index = dates.indexOf(date)
         return dates[index + (direction === 'older' ? 1 : -1)] || null
       },
-      save: async () => toast('Preview only · note not sent'), regenerate: () => toast('Preview only · wording stays put'), setTheme: async () => true,
+      save: async () => toast('Preview only · note not sent'),
+      saveDecorations: async () => true,
+      regenerate: () => toast('Preview only · wording stays put'), setTheme: async () => true,
     })
     book.show(first, previewSheet); root.focus({ preventScroll: true }); return book
   }
@@ -368,6 +503,11 @@ export function renderDearDiary(container, state, { previewData = null, previewD
       save: async (date, value) => {
         const saved = await call('saveDearDiaryNote', { agentNo: getAgentNo(), date, note: value })
         toast(saved?.success ? 'Diary note saved ✦' : (saved?.error || 'Couldn’t save your note'))
+      },
+      saveDecorations: async (date, decorations) => {
+        const saved = await call('saveDearDiaryDecorations', { agentNo: getAgentNo(), date, decorations })
+        toast(saved?.success ? 'Page detail saved ✦' : (saved?.error || 'Couldn’t save that decoration'))
+        return saved?.success === true
       },
       regenerate: async (date) => { const refreshed = await fetchPage(date, true); if (refreshed) await book.show(refreshed) },
       setTheme: async (theme) => {

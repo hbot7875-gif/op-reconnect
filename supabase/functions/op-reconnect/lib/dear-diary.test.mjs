@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   countedDiaryTracks, diaryBadgeFact, diarySummary, diarySummaryChoice,
   factsFromFrozenSnapshot, isCountedDiaryScrobble, isNoRecordedHistoricalDay,
+  validateDiaryDecorations,
 } from './dear-diary.ts'
 
 const empty = { xp:0, streams:0, badges:[], completedDistricts:[], moments:[] }
@@ -83,4 +84,29 @@ test('non-counted tracks cannot create listening diary facts', () => {
   assert.deepEqual(countedDiaryTracks(bucket, ['bts']), [{ key:'swim', count:3 }])
   assert.equal(isCountedDiaryScrobble({ track_name:'SWIM', artist_name:'BTS' }, ['bts']), true)
   assert.equal(isCountedDiaryScrobble({ track_name:'Unrelated', artist_name:'Other Artist' }, ['bts']), false)
+})
+
+test('decoration persistence accepts semantic metadata only', () => {
+  const checked = validateDiaryDecorations({ version:1, items:[
+    { sheet:0, decoration_id:'star', slot:'entry-leading', size:'s' },
+    { sheet:1, decoration_id:'organic', slot:'moments-heading', size:'m' },
+  ] })
+  assert.equal(checked.success, true)
+  assert.deepEqual(checked.success && checked.decorations.items[1], { sheet:1, decoration_id:'organic', slot:'moments-heading', size:'m' })
+})
+
+test('invalid decoration ids, slots, sizes and per-sheet overflow fail closed', () => {
+  const base = { sheet:0, decoration_id:'star', slot:'entry-leading', size:'s' }
+  assert.equal(validateDiaryDecorations({ version:1, items:[{ ...base, decoration_id:'emoji-heart' }] }).success, false)
+  assert.equal(validateDiaryDecorations({ version:1, items:[{ ...base, slot:'x:12,y:40' }] }).success, false)
+  assert.equal(validateDiaryDecorations({ version:1, items:[{ ...base, size:'xl' }] }).success, false)
+  assert.equal(validateDiaryDecorations({ version:1, items:['entry-leading','entry-trailing','badges-heading','moments-heading','note-heading'].map((slot) => ({ ...base, slot })) }).success, false)
+})
+
+test('decorations stay separate from frozen facts and provenance', () => {
+  const snapshot = { xp:10, streams:2, badges:[], completedDistricts:[], moments:[], _candidates:[{ source:{ table:'rc_feed_events', id:'1' } }] }
+  const before = JSON.stringify(snapshot)
+  factsFromFrozenSnapshot(snapshot)
+  validateDiaryDecorations({ version:1, items:[{ sheet:0, decoration_id:'star', slot:'entry-leading', size:'s' }] })
+  assert.equal(JSON.stringify(snapshot), before)
 })

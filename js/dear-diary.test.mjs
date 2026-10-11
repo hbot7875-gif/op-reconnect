@@ -1,12 +1,18 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { DIARY_THEMES, diaryProgress, diarySheetPlan, diarySwipeDirection, normalizeDiaryTheme, shiftDiaryDate } from './dear-diary-rules.js'
+import {
+  DIARY_DECORATION_FAMILIES, DIARY_DECORATION_LIMIT, DIARY_THEMES,
+  diaryDecorationSlots, diaryProgress, diarySheetPlan, diarySwipeDirection,
+  normalizeDiaryDecorations, normalizeDiaryTheme, shiftDiaryDate,
+} from './dear-diary-rules.js'
 
 const screenSource = readFileSync(new URL('./screen-diary.js', import.meta.url), 'utf8')
 const packSource = readFileSync(new URL('./screen-resources.js', import.meta.url), 'utf8')
 const previewSource = readFileSync(new URL('../_dear_diary_preview.html', import.meta.url), 'utf8')
 const cssSource = readFileSync(new URL('../css/reconnect.css', import.meta.url), 'utf8')
+const backendSource = readFileSync(new URL('../supabase/functions/op-reconnect/lib/dear-diary.ts', import.meta.url), 'utf8')
+const migrationSource = readFileSync(new URL('../supabase/migrations/20261004090000_rc_dear_diary.sql', import.meta.url), 'utf8')
 
 test('diary progress gives each district goal equal weight', () => {
   const p = diaryProgress({ name:'Moon Station', trackGoals:[{progress:10,target:20},{progress:20,target:20}], albums:[{passesDone:1,target:2}], reconnect:{done:true} })
@@ -93,4 +99,51 @@ test('mobile diary geometry reserves the book edge and wraps badges without shri
   assert.match(cssSource, /@media\(max-width:350px\)[\s\S]*?\.dd-stickers\{grid-template-columns:repeat\(2,minmax\(0,92px\)\)\}/)
   assert.match(cssSource, /\.dd-summary p[^}]*clamp\(21px,6\.2vw,26px\)/s)
   assert.doesNotMatch(cssSource, /\.dd-stickers[^}]*overflow-x\s*:\s*(auto|scroll)/s)
+})
+
+test('decorations are capped at four per physical sheet and survive on other sheets', () => {
+  const item = (sheet, slot, decoration_id = 'star') => ({ sheet, slot, decoration_id, size:'s' })
+  const normalized = normalizeDiaryDecorations({ version:1, items:[
+    item(0,'entry-leading'), item(0,'entry-trailing'), item(0,'badges-heading'), item(0,'footer-center'),
+    item(0,'note-heading'), item(1,'moments-heading','organic'),
+  ] })
+  assert.equal(DIARY_DECORATION_LIMIT, 4)
+  assert.equal(normalized.items.filter((entry) => entry.sheet === 0).length, 4)
+  assert.deepEqual(normalized.items.filter((entry) => entry.sheet === 1), [item(1,'moments-heading','organic')])
+})
+
+test('invalid decoration ids, slots and duplicate placements are discarded', () => {
+  const normalized = normalizeDiaryDecorations({ version:1, items:[
+    { sheet:0, decoration_id:'not-real', slot:'entry-leading', size:'s' },
+    { sheet:0, decoration_id:'star', slot:'raw-x-y', size:'s' },
+    { sheet:0, decoration_id:'star', slot:'entry-leading', size:'m' },
+    { sheet:0, decoration_id:'accent', slot:'entry-leading', size:'s' },
+  ] })
+  assert.deepEqual(normalized.items, [{ sheet:0, decoration_id:'star', slot:'entry-leading', size:'m' }])
+})
+
+test('safe slots are section-aware and no-entry sheets never accept decorations', () => {
+  assert.deepEqual(diaryDecorationSlots([{ kind:'no-recorded' }]), [])
+  assert.deepEqual(diaryDecorationSlots([{ kind:'entry' }, { kind:'badges' }]), ['entry-leading','entry-trailing','badges-heading','footer-center'])
+  assert.ok(diaryDecorationSlots([{ kind:'moments' }, { kind:'note' }]).every((slot) => !/date|page-number|x|y/.test(slot)))
+})
+
+test('all five themes author the same stable decoration families', () => {
+  assert.deepEqual(DIARY_DECORATION_FAMILIES.map((item) => item.id), ['organic','keepsake','star','mark','fastener','accent'])
+  for (const theme of DIARY_THEMES) assert.match(screenSource, new RegExp(`${theme.id}: \\[`))
+})
+
+test('decoration controls preserve content systems and reduced motion', () => {
+  assert.match(screenSource, /saveDearDiaryDecorations/)
+  assert.match(screenSource, /data-decoration-slot/)
+  assert.doesNotMatch(screenSource, /decoration[^\n]*(clientX|clientY|translate\([^)]*px)/i)
+  assert.match(cssSource, /prefers-reduced-motion:reduce[\s\S]*?\.dd-decoration/)
+})
+
+test('Rewrite leaves decoration presentation metadata and provenance separate', () => {
+  assert.match(migrationSource, /summary_snapshot jsonb[^\n]*\n\s*decorations jsonb/)
+  assert.match(backendSource, /return \{ success: true, date,[^\n]*decorations: storedDiaryDecorations\(existing\?\.decorations\)/)
+  const saver = backendSource.slice(backendSource.indexOf('export async function saveDearDiaryDecorations'), backendSource.indexOf('export async function getDearDiaryPreference'))
+  assert.match(saver, /\.update\(\{ decorations: checked\.decorations, updated_at:/)
+  assert.doesNotMatch(saver, /summary_snapshot|summary_text|_candidates|provenance/)
 })

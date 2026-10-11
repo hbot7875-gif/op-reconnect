@@ -6,6 +6,8 @@ create table if not exists public.rc_dear_diary_entries (
   summary_text text,
   summary_version integer not null default 0,
   summary_snapshot jsonb not null default '{}'::jsonb,
+  decorations jsonb not null default '{"version":1,"items":[]}'::jsonb
+    check (jsonb_typeof(decorations) = 'object' and jsonb_typeof(decorations->'items') = 'array'),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   primary key (agent_no, kst_date)
