@@ -15,7 +15,10 @@ const world = read('js/screen-world.js')
 const resources = read('js/screen-resources.js')
 const css = read('css/reconnect.css')
 const start = css.indexOf('CANDY STAR POLISH')
-const block = css.slice(start, css.indexOf('/* ── Moon Station screen', start))
+// the Candy block ends where the next polish banner (or the Moon section) begins
+const nextBanner = css.indexOf('/* ════', start + 20)
+const moonAt = css.indexOf('/* ── Moon Station screen', start)
+const block = css.slice(start, nextBanner > 0 && nextBanner < moonAt ? nextBanner : moonAt)
 
 test('Candy icons are one outline family drawn in currentColor', () => {
   for (const [key, svg] of Object.entries(CANDY_ICON_PATHS)) {
@@ -36,7 +39,9 @@ test('Candy shows no ReConnect notice; City and Pack keep theirs', () => {
   assert.doesNotMatch(code, /hudReconnectStatus|reconnect-row|ReConnect/)
   // hidden on this screen only, by a rule that needs the Candy screen mounted
   assert.match(block, /#hud:has\(~ #scene \.cs-screen\) #hudReconnectStatus \{ display: none; \}/)
-  assert.equal((css.match(/#hudReconnectStatus \{ display: none/g) || []).length, 1)
+  // one scoped rule per screen that drops it (Candy, Settings), never a global one
+  const hides = [...css.matchAll(/([^{}\n]*)#hudReconnectStatus \{ display: none/g)].map((m) => m[1].trim())
+  assert.deepEqual(hides, ['#hud:has(~ #scene .cs-screen)', '#hud:has(~ #scene .set-screen)'])
   assert.match(world, /classList\.add\('city-reconnect-notice'\)/)
   assert.match(resources, /button\.classList\.add\('pack-reconnect-notice'\)/)
 })

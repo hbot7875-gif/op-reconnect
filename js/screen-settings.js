@@ -1,11 +1,13 @@
 // Settings — the tab every game has and this one didn't.
 //
-// Four sections, ordered by how badly a player needs them:
-//   Uplink    where streams come from. Broken here means the whole game is
-//             broken, so it sits at the top and shouts when it's misconfigured.
-//   Agent     number, handle, recovery email.
-//   Security  password, sign out.
-//   Game      difficulty.
+// Groups, ordered by how badly a player needs them:
+//   Connections   where streams come from. Broken here means the whole game
+//                 is broken, so it sits at the top and warns when misconfigured.
+//   Agent         number, handle, codename, recovery email.
+//   Security      password, Moon Station, sign out, retirement.
+//   Game          streaming mode, leave.
+//   then Privacy, Help & legal, Community, and HT Access for those who have it.
+// Every row is the same recipe (see section()); ReConnect is not shown here.
 //
 // Rows open sheets rather than expanding inline: the overlay pattern is
 // already how this game asks for anything (mode, items, districts), and a
@@ -17,6 +19,7 @@ import { getAgentNo, getSession, setSession, setToken, clearSession } from './se
 import { openStreamSource, openPin, openSignalLog, openMoonStation, sourceName, uplinkBroken } from './settings-streams.js'
 import { openModeSheet } from './ui-hud.js'
 import { agentManualSheet } from './agent-manual.js'
+import { setIcon } from './settings-icons.js'
 
 let account = null
 
@@ -29,8 +32,9 @@ export function renderSettings(container, state) {
   container.innerHTML = ''
   const wrap = el('div', 'set-screen')
 
-  wrap.appendChild(el('div', 'pack-head', `
-    <span class="pack-eyebrow">⚙ Settings</span>
+  wrap.appendChild(el('div', 'set-top', `
+    <h1 class="set-title"><span class="set-title-icon">${setIcon('settings')}</span>Settings</h1>
+    <p class="set-sub">Connections, your agent file and how you play.</p>
   `))
 
   const body = el('div', 'set-body')
@@ -69,105 +73,113 @@ function paintSections(body, state) {
   body.innerHTML = ''
   const refresh = () => reload(body, state)
 
-  // ── The one warning worth interrupting for ──────────────────────
+  // ── The two warnings worth interrupting for ─────────────────────
+  // A broken uplink is the one real warning on this page (nothing is being
+  // counted), so it alone takes the warning colour; a missing email is advice.
   if (uplinkBroken(account)) {
     const warn = el('button', 'set-alarm', `
-      <span class="sa-icon">⚠</span>
+      <span class="sa-icon">${setIcon('alert')}</span>
       <span class="sa-main">
         <span class="sa-title">Your stream source isn't set up</span>
         <span class="sa-body">Nothing you stream is being counted. Tap to fix it — it takes a minute.</span>
       </span>
+      <span class="sa-go">${setIcon('chevron')}</span>
     `)
     warn.onclick = () => openStreamSource(account, refresh)
     body.appendChild(warn)
   }
   if (!account.email) {
     const warn = el('button', 'set-alarm soft', `
-      <span class="sa-icon">✉</span>
+      <span class="sa-icon">${setIcon('mail')}</span>
       <span class="sa-main">
         <span class="sa-title">No recovery email on file</span>
-        <span class="sa-body">Your agent number is the only way back into this account. Add an email so a lost password isn't the end of it.</span>
+        <span class="sa-body">Your agent number is the only way back in. Add an email so a lost password isn't the end of it.</span>
       </span>
+      <span class="sa-go">${setIcon('chevron')}</span>
     `)
     warn.onclick = () => showOverlay(emailSheet(account, refresh))
     body.appendChild(warn)
   }
 
-  // ── Stream source ─────────────────────────────────────────────
-  body.appendChild(section('Stream source', 'How your streams reach the network', [
+  // ── Connections ───────────────────────────────────────────────
+  body.appendChild(section('Connections', [
     {
       // Naming the source while it's missing its username reads as "this is
       // handled" when nothing is being counted — say what's actually true.
-      icon: '📡', name: 'Stream source',
+      icon: 'radioTower', name: 'Stream source',
       value: uplinkBroken(account) ? 'Needs setup' : sourceName(account.streamSource),
+      chip: uplinkBroken(account) ? 'warn' : 'ok',
       body: 'ListenBrainz, a scrobbler app, stats.fm or musicat.fm.',
       onClick: () => openStreamSource(account, refresh),
     },
     {
-      icon: '🔑', name: 'Scrobbler PIN', value: account.hasPin ? 'Ready' : 'Not set',
-      body: 'The private key and URLs for Web Scrobbler or Pano Scrobbler.',
+      icon: 'key', name: 'Scrobbler PIN', value: account.hasPin ? 'Ready' : 'Not set',
+      chip: account.hasPin ? 'ready' : 'neutral',
+      body: 'The key and URLs for Web Scrobbler or Pano Scrobbler.',
       onClick: () => openPin(account, refresh),
     },
     {
-      icon: '📻', name: 'Check your streams', value: '',
-      body: "See what the network heard from you in the last 24 hours, and what counted.",
+      icon: 'activity', name: 'Check your streams', value: '',
+      body: 'What the network heard from you in the last 24 hours.',
       onClick: () => openSignalLog(),
     },
   ]))
 
-  // ── Agent file ──────────────────────────────────────────────────
-  body.appendChild(section('Agent file', 'Who HT thinks you are', [
+  // ── Agent ───────────────────────────────────────────────────────
+  body.appendChild(section('Agent', [
     {
-      icon: '🪪', name: 'Agent number', value: account.agentNo,
-      body: 'You sign in with this. Tap to copy it somewhere safe.',
+      icon: 'idCard', name: 'Agent number', value: account.agentNo, mono: true, copy: true,
+      body: 'Used to sign in. Tap to copy.',
       onClick: async () => {
         try { await navigator.clipboard.writeText(account.agentNo); toast('Agent number copied') }
         catch { toast(account.agentNo) }
       },
     },
-    { icon: '@', name: 'Handle', value: account.handle, body: 'Public — this is your district on the map.', muted: true },
+    { icon: 'atSign', name: 'Handle', value: account.handle, body: 'Public — your district on the map.', muted: true },
     {
-      icon: '🏷', name: 'Codename', value: state?.player?.codename || '',
-      body: "What other agents see. Can't be your agent number or Instagram handle.",
+      icon: 'tag', name: 'Codename', value: state?.player?.codename || '',
+      body: 'What other agents see.',
       onClick: () => showOverlay(codenameSheet(state, refresh)),
     },
     {
-      icon: '✉', name: 'Recovery email', value: account.email || 'Not set',
-      body: 'The only way back in if you lose your number or password.',
+      icon: 'mail', name: 'Recovery email', value: account.email || 'Not set',
+      body: 'The way back in if you lose your number or password.',
       onClick: () => showOverlay(emailSheet(account, refresh)),
     },
   ]))
 
-  // ── Security ────────────────────────────────────────────────────
-  body.appendChild(section('Security', 'Keep the file yours', [
+  // ── Security — ordinary actions, then the session, then the one
+  // permanent action. Only that last row is drawn as destructive.
+  body.appendChild(section('Security', [
     {
-      icon: '🔒', name: 'Change password', value: '',
+      icon: 'lock', name: 'Change password', value: '',
       body: 'Signs out every other device.',
       onClick: () => showOverlay(passwordSheet()),
     },
     {
-      icon: '🚨', name: 'Moon Station', value: '',
-      body: 'The same repeat check HT runs, and whether your linked identity shows up on another agent file. Also on the tab bar.',
+      icon: 'siren', name: 'Moon Station', value: '',
+      body: 'Your repeat check and linked-identity check.',
       onClick: () => openMoonStation(),
     },
     {
-      icon: '⏻', name: 'Sign out', value: '',
-      body: 'Ends this session everywhere. Your progress stays exactly where it is.',
+      icon: 'logOut', name: 'Sign out', value: '', tone: 'session',
+      body: 'Ends this session everywhere. Progress stays.',
       onClick: () => showOverlay(signOutSheet()),
     },
     {
-      icon: '🪦', name: 'Retirement Protocol', value: '',
-      body: 'Permanently delete your agent file and everything in it. This cannot be undone.',
+      icon: 'userX', name: 'Retirement Protocol', value: '', tone: 'danger',
+      body: 'Permanently delete your agent file. Cannot be undone.',
       onClick: () => showOverlay(retireSheet()),
     },
   ]))
 
   // ── Game ────────────────────────────────────────────────────────
   const leave = state?.player?.leave || null
-  body.appendChild(section('Game', 'How hard you want this', [
+  const mode = state?.player?.mode || 'easy'
+  body.appendChild(section('Game', [
     {
-      icon: '🎚', name: 'Streaming mode', value: state?.player?.mode || 'easy',
-      body: 'Your mode sets the targets and XP pace for your next district. Your current district stays unchanged.',
+      icon: 'sliders', name: 'Streaming mode', value: mode.charAt(0).toUpperCase() + mode.slice(1),
+      body: 'Sets targets and XP pace for your next district.',
       onClick: () => openModeSheet(getState() || state),
     },
     // Leave / pause — exams, travel, a break. Pauses the clocks that would
@@ -175,84 +187,81 @@ function paintSections(body, state) {
     // inactivity), never the shared ReConnect ones. Server rules in
     // lib/leave.ts + the rc_player_leave migration.
     {
-      icon: leave ? '⏸' : '🌙',
+      icon: leave ? 'pause' : 'moon',
       name: leave ? 'On leave' : 'Take a leave',
-      value: leave ? `until ${fmtDate(leave.endsAt)}` : '',
+      value: leave ? `Until ${fmtDate(leave.endsAt)}` : '',
+      chip: leave ? 'active' : '',
       body: leave
-        ? `Your district, ARMY Bomb and streak are frozen until ${fmtDate(leave.endsAt)}. Streams still count for XP and everything else.`
-        : 'Going away for a few days? Freeze your district, ARMY Bomb and streak for 3–14 days.',
+        ? 'District, ARMY Bomb and streak are frozen. Streams still count.'
+        : 'Freeze your district, ARMY Bomb and streak for 3–14 days.',
       onClick: () => showOverlay(leaveSheet(getState() || state)),
-    },
-  ]))
-
-  // ── Help — reference material, not inventory, so it lives here rather
-  // than the Pack (which used to carry it as one of six generic cards).
-  body.appendChild(section('Help', 'Reference, not inventory', [
-    {
-      icon: '📖', name: 'How to Play', value: '',
-      body: 'The game loop, every way to earn XP, and how to protect your progress.',
-      onClick: () => showOverlay(agentManualSheet()),
-    },
-    // The trust pages. They open in a new tab rather than a sheet because
-    // they are documents a player may want to keep open, send to someone, or
-    // read while the game keeps running behind them — and because a person
-    // looking for the privacy policy should not have to lose their place in
-    // Settings to find it. Privacy is listed before Terms deliberately: it
-    // is the one people actually come here looking for.
-    {
-      icon: '🔒', name: 'Privacy Policy', value: '',
-      body: 'What we store, who can see it, and how long it is kept.',
-      href: 'privacy.html',
-    },
-    {
-      icon: '📄', name: 'Terms of Service', value: '',
-      body: 'The rules for playing, and what happens to an inactive agent file.',
-      href: 'terms.html',
-    },
-    {
-      icon: '💜', name: 'About', value: '',
-      body: 'What this is, and who made it. An unofficial fan project.',
-      href: 'about.html',
-    },
-    {
-      icon: '🎨', name: 'Credits', value: '',
-      body: 'Who made what, and the third-party work this game is built on.',
-      href: 'credits.html',
-    },
-    {
-      icon: '✉️', name: 'Contact', value: '',
-      body: 'How to reach us — including about your data or an image.',
-      href: 'contact.html',
     },
   ]))
 
   // Presence privacy hides only the player-facing green dot/count. The
   // account keeps syncing and playing normally, and support diagnostics keep
   // their real last-seen time so hiding never weakens account safety.
-  body.appendChild(section('Privacy', 'Choose when others can see you', [
+  body.appendChild(section('Privacy', [
     {
-      icon: account.appearOffline ? '◯' : '●',
+      icon: account.appearOffline ? 'eyeOff' : 'eye',
       name: 'Online status', value: account.appearOffline ? 'Hidden' : 'Visible',
+      chip: 'neutral',
       body: account.appearOffline
-        ? "You're playing normally, but other agents won't see you or your current district."
-        : "Other agents can see your codename and which district you're restoring while you're active.",
+        ? "Other agents won't see you or your district."
+        : 'Others see your codename and district while you play.',
       onClick: () => showOverlay(presenceSheet(account, refresh)),
     },
   ]))
+
+  // ── Help & legal — reference, not settings. The trust pages open in a new
+  // tab: documents a player may keep open or send on, without losing their
+  // place here. Privacy before Terms: it is the one people come looking for.
+  body.appendChild(section('Help & legal', [
+    {
+      icon: 'bookOpen', name: 'How to Play', value: '',
+      body: 'The game loop, XP, and protecting your progress.',
+      onClick: () => showOverlay(agentManualSheet()),
+    },
+    {
+      icon: 'shield', name: 'Privacy Policy', value: '',
+      body: 'What we store and who can see it.',
+      href: 'privacy.html',
+    },
+    {
+      icon: 'fileText', name: 'Terms of Service', value: '',
+      body: 'The rules for playing and inactive files.',
+      href: 'terms.html',
+    },
+    {
+      icon: 'info', name: 'About', value: '',
+      body: 'An unofficial fan project, and who made it.',
+      href: 'about.html',
+    },
+    {
+      icon: 'sparkles', name: 'Credits', value: '',
+      body: 'Who made what, and the work it builds on.',
+      href: 'credits.html',
+    },
+    {
+      icon: 'send', name: 'Contact', value: '',
+      body: 'Reach us, including about your data or an image.',
+      href: 'contact.html',
+    },
+  ], { quiet: true }))
 
   // ── Community — the same purpose split used by the Arirang mission:
   // one chat stays readable for official updates, while doubts and player
   // conversation have a separate home. Real links are anchors so mobile
   // browsers can hand ig.me URLs to Instagram without a popup blocker.
-  body.appendChild(section('Group chats', 'Updates, questions, and other agents', [
+  body.appendChild(section('Community', [
     {
-      icon: '📣', name: 'Main GC', value: 'Join',
-      body: 'Mission updates and important announcements.',
+      icon: 'megaphone', name: 'Main GC', value: 'Join', join: true,
+      body: 'Mission updates and announcements.',
       href: COMMUNITY_LINKS.updates,
     },
     {
-      icon: '💬', name: 'ReConnect Discussion GC', value: 'Join',
-      body: 'Ask questions, clear doubts, and talk with other agents.',
+      icon: 'messages', name: 'ReConnect Discussion GC', value: 'Join', join: true,
+      body: 'Questions and talk with other agents.',
       href: COMMUNITY_LINKS.discussion,
     },
   ]))
@@ -261,66 +270,82 @@ function paintSections(body, state) {
   // is still gated by its own SYNC_ADMIN_KEY), just keeps the entry point
   // out of every other agent's settings screen.
   if ((account.agentNo || '').toUpperCase() === 'AGENT000') {
-    body.appendChild(section('HT Access', 'Command panel', [
+    body.appendChild(section('HT Access', [
       {
-        icon: '🛰️', name: 'Admin Panel', value: '',
-        body: 'Red Zone events, broadcasts, district goals, agent lookup.',
+        icon: 'panelTop', name: 'Admin Panel', value: '',
+        body: 'Red Zone, broadcasts, district goals, agent lookup.',
         onClick: () => { window.location.href = 'admin.html' },
       },
       {
-        icon: '🎖️', name: 'Badge Vault', value: '',
-        body: 'Upload and crop badge art. Open to agent000 plus anyone listed in badge_editors.',
+        icon: 'award', name: 'Badge Vault', value: '',
+        body: 'Badge art for agent000 and badge_editors.',
         onClick: () => { window.location.href = 'badge-admin.html' },
       },
       {
-        icon: '🎧', name: 'Playlist Makers', value: '',
-        body: 'Add a playlist to a district Vault. Open to agent000, anyone listed in playlist_makers, and every badge maker.',
+        icon: 'listMusic', name: 'Playlist Makers', value: '',
+        body: 'District Vault playlists: playlist_makers and every badge maker.',
         onClick: () => { window.location.href = 'playlist-maker.html' },
       },
-    ]))
+    ], { admin: true }))
   } else if (state?.player?.isBadgeVaultEditor) {
     // Not agent000, but the server already confirmed they're on
     // badge_editors — same row without the rest of HT Access.
-    body.appendChild(section('Badge Vault', 'Upload badge art', [
+    body.appendChild(section('Badge Vault', [
       {
-        icon: '🎖️', name: 'Badge Vault', value: '',
-        body: 'Upload and crop badge art for the badges you have access to.',
+        icon: 'award', name: 'Badge Vault', value: '',
+        body: 'Upload and crop badge art you have access to.',
         onClick: () => { window.location.href = 'badge-admin.html' },
       },
-    ]))
+    ], { admin: true }))
   }
 
   body.appendChild(el('div', 'set-foot',
     `Agent since ${fmtDate(account.createdAt)} · OP: ReConnect`))
 }
 
-function section(title, sub, rows) {
-  const box = el('div', 'set-section')
+/** One settings group: a label, then one surface of rows that all share the
+ *  same recipe — icon tile, title, one helper line, and a trailing slot that
+ *  is a value, a status chip, a copy hint, an external-link mark or a chevron.
+ *  `quiet` is the lighter reference list (Help & legal); `admin` marks the
+ *  privileged HT group. A row's `tone` is 'session' (sign out) or 'danger'
+ *  (the one permanent action). */
+function section(title, rows, opts = {}) {
+  const box = el('section', 'set-section' + (opts.quiet ? ' is-quiet' : '') + (opts.admin ? ' is-admin' : ''))
   box.appendChild(el('div', 'set-head', `
     <span class="sh-title">${esc(title)}</span>
-    <span class="sh-sub">${esc(sub)}</span>
+    ${opts.admin ? `<span class="sh-badge">${setIcon('shieldCheck')}Restricted</span>` : ''}
   `))
+  const list = el('div', 'set-list')
   for (const r of rows) {
-    const row = el(r.href ? 'a' : r.onClick ? 'button' : 'div', 'set-row' + (r.muted ? ' is-static' : ''))
+    const row = el(r.href ? 'a' : r.onClick ? 'button' : 'div', 'set-row'
+      + (r.muted ? ' is-static' : '') + (r.tone ? ` is-${r.tone}` : ''))
     if (r.href) {
       row.href = r.href
       row.target = '_blank'
       row.rel = 'noopener noreferrer'
     }
+    if (r.onClick && !r.href) row.type = 'button'
+    const value = !r.value ? ''
+      : r.join ? `<span class="sr-join">${esc(r.value)}</span>`
+      : r.chip ? `<span class="sr-chip is-${r.chip}">${esc(r.value)}</span>`
+      : `<span class="sr-value${r.mono ? ' is-mono' : ''}">${esc(r.value)}</span>`
+    const go = r.copy ? setIcon('copy') : r.href ? setIcon('external') : r.onClick ? setIcon('chevron') : ''
     row.innerHTML = `
-      <span class="sr-icon">${r.icon}</span>
+      <span class="sr-icon">${setIcon(r.icon)}</span>
       <span class="sr-main">
         <span class="sr-name">${esc(r.name)}</span>
         <span class="sr-body">${esc(r.body)}</span>
       </span>
       <span class="sr-tail">
-        ${r.value ? `<span class="sr-value">${esc(r.value)}</span>` : ''}
-        ${r.onClick || r.href ? '<span class="sr-go">›</span>' : ''}
+        ${value}
+        ${go ? `<span class="sr-go">${go}</span>` : ''}
       </span>
     `
+    if (r.href) row.setAttribute('aria-label', `${r.name} (opens in a new tab)`)
     if (r.onClick) row.onclick = r.onClick
-    box.appendChild(row)
+    list.appendChild(row)
   }
+  box.appendChild(list)
   return box
 }
 

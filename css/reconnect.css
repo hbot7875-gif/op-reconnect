@@ -7123,6 +7123,108 @@ select.rc-multi-native {
   .cs-screen .cs-actionbar .btn-red .cs-i { display: none; }
 }
 
+/* ════════════════════════════════════════════════════════════════
+   SETTINGS POLISH (prototype). The same system as City, Pack and Candy:
+   Orbitron for the page title only, system sans for everything else,
+   mono for the agent number alone, one Lucide family, one row recipe
+   (icon tile · title · helper · value/chip/chevron) inside one Surface 1
+   list per group. Purple = active/connected, gold = ready, crimson =
+   the broken uplink and the one permanent action. HT Access reads as
+   restricted through a quieter dashed surface, not a colour.
+   ════════════════════════════════════════════════════════════════ */
+/* No ReConnect on Settings: the HUD still renders it; hidden on this screen only */
+#hud:has(~ #scene .set-screen) #hudReconnectStatus { display: none; }
+
+.set-screen .set-i { display: block; flex: none; width: 17px; height: 17px; fill: none; stroke: currentColor;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.set-screen .set-top { margin: 0 0 18px; }
+.set-screen .set-title { display: flex; align-items: center; gap: 9px; margin: 0;
+  font-family: var(--disp); font-weight: 800; font-size: 22px; letter-spacing: .02em; color: var(--v-ink-1); }
+.set-screen .set-title-icon { color: var(--v-violet-hi); }
+.set-screen .set-title-icon .set-i { width: 22px; height: 22px; }
+.set-screen .set-sub { margin: 6px 0 0; font-size: 13px; line-height: 1.45; color: var(--v-ink-2); }
+.set-screen .set-body { margin-top: 0; }
+
+/* Group: one label, one surface */
+.set-screen .set-section { margin-bottom: 18px; }
+.set-screen .set-head { flex-direction: row; align-items: center; gap: 8px; margin: 0 0 8px; padding: 0 4px; }
+.set-screen .sh-title { font-family: var(--body); font-size: 11px; font-weight: 600; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--v-ink-3); }
+.set-screen .sh-badge { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border: 1px solid var(--v-line-1);
+  border-radius: 999px; font-size: 11px; font-weight: 600; color: var(--v-ink-2); }
+.set-screen .sh-badge .set-i { width: 12px; height: 12px; }
+.set-screen .set-list { overflow: hidden; background: var(--v-surface-1); border: 1px solid var(--v-line-1); border-radius: 14px; }
+
+/* Row: icon tile · title + helper · trailing value */
+.set-screen .set-row, .set-screen .set-section .set-row:first-of-type, .set-screen .set-section .set-row:last-of-type,
+.set-screen .set-section .set-row:only-of-type {
+  position: relative; display: grid; grid-template-columns: 32px minmax(0,1fr) fit-content(44%); align-items: center; gap: 12px;
+  min-height: 58px; padding: 11px 12px; border: 0; border-radius: 0; background: transparent; color: var(--v-ink-1);
+  font-family: var(--body); }
+.set-screen .set-row + .set-row::before { content: ''; position: absolute; top: 0; left: 56px; right: 0; height: 1px; background: rgba(255,255,255,.07); }
+.set-screen .set-row:not(.is-static):hover { background: rgba(255,255,255,.03); border-color: transparent; }
+.set-screen .sr-icon { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 9px;
+  background: var(--v-surface-2); color: var(--v-violet-hi); font-size: 0; opacity: 1; }
+.set-screen .sr-main { gap: 2px; }
+.set-screen .sr-name { font-size: 15px; font-weight: 600; color: var(--v-ink-1); }
+.set-screen .sr-body { font-size: 12.5px; line-height: 1.4; color: var(--v-ink-3);
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.set-screen .sr-tail { gap: 6px; max-width: none; min-width: 0; justify-content: flex-end; }
+.set-screen .sr-tail > :first-child:not(.sr-go) { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.set-screen .sr-value { font-family: var(--body); font-size: 13px; color: var(--v-ink-2); }
+.set-screen .sr-value.is-mono { font-family: var(--mono); font-size: 13px; letter-spacing: .04em; color: var(--v-ink-1); }
+.set-screen .sr-go { display: grid; color: var(--v-ink-3); font-size: 0; }
+.set-screen .sr-go .set-i { width: 16px; height: 16px; }
+.set-screen .set-row:hover .sr-go { color: var(--v-ink-2); }
+
+/* Status chips and the one inline action */
+.set-screen .sr-chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px;
+  font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.set-screen .sr-chip.is-ok { background: var(--v-tint-violet); color: var(--v-violet-hi); }
+.set-screen .sr-chip.is-ok::before, .set-screen .sr-chip.is-ready::before { content: ''; width: 6px; height: 6px; flex: none; border-radius: 50%; background: currentColor; }
+.set-screen .sr-chip.is-ready { background: var(--v-tint-gold); color: var(--v-gold); }
+.set-screen .sr-chip.is-warn { background: var(--v-tint-red); color: var(--v-red-hi); }
+.set-screen .sr-chip.is-neutral { background: var(--v-surface-2); color: var(--v-ink-2); }
+.set-screen .sr-chip.is-active { background: var(--v-tint-violet); color: var(--v-violet-hi); }
+.set-screen .sr-join { font-size: 13px; font-weight: 600; color: var(--v-violet-hi); }
+
+/* Security: the session action is secondary, the permanent one destructive */
+.set-screen .set-row.is-session .sr-icon { background: transparent; border: 1px solid var(--v-line-1); color: var(--v-ink-2); }
+.set-screen .set-row.is-danger .sr-icon { background: var(--v-tint-red); color: var(--v-red-hi); }
+.set-screen .set-row.is-danger .sr-name { color: var(--v-red-hi); }
+.set-screen .set-row.is-danger .sr-go { color: var(--v-red-hi); opacity: .7; }
+
+/* Help & legal: a quieter reference list */
+.set-screen .set-section.is-quiet .set-row { min-height: 52px; padding-block: 9px; }
+.set-screen .set-section.is-quiet .sr-icon { background: transparent; color: var(--v-ink-2); }
+.set-screen .set-section.is-quiet .sr-name { font-size: 14px; font-weight: 500; }
+
+/* HT Access: restricted, set apart by surface rather than colour */
+.set-screen .set-section.is-admin .set-list { background: rgba(255,255,255,.015); border: 1px dashed rgba(255,255,255,.18); }
+.set-screen .set-section.is-admin .sr-icon { background: transparent; border: 1px solid var(--v-line-1); color: var(--v-ink-2); }
+
+/* The two interrupting notices */
+.set-screen .set-alarm { display: grid; grid-template-columns: 32px minmax(0,1fr) 16px; align-items: center; gap: 12px;
+  margin: 0 0 14px; padding: 11px 12px; border: 1px solid var(--v-red-line); border-radius: 14px; background: var(--v-tint-red); font-family: var(--body); }
+.set-screen .set-alarm:hover { filter: none; }
+.set-screen .set-alarm.soft { border-color: var(--v-violet-line); background: var(--v-surface-1); }
+.set-screen .sa-icon { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 9px; background: rgba(240,67,90,.16);
+  color: var(--v-red-hi); font-size: 0; }
+.set-screen .set-alarm.soft .sa-icon { background: var(--v-tint-violet); color: var(--v-violet-hi); }
+.set-screen .sa-title { font-size: 14px; font-weight: 600; color: var(--v-ink-1); }
+.set-screen .sa-body { font-size: 12.5px; line-height: 1.4; color: var(--v-ink-2); }
+.set-screen .sa-go { display: grid; color: var(--v-ink-3); }
+
+.set-screen .set-foot { padding: 4px 0 10px; font-family: var(--body); font-size: 12px; letter-spacing: 0; text-transform: none; color: var(--v-ink-3); }
+
+@media (max-width: 359px) {
+  .set-screen .set-row { gap: 10px; padding-inline: 10px; }
+  .set-screen .set-row + .set-row::before { left: 52px; }
+  .set-screen .set-row { grid-template-columns: 32px minmax(0,1fr) fit-content(38%); }
+  .set-screen .sr-name { font-size: 14px; }
+  .set-screen .sr-chip { padding-inline: 7px; font-size: 11.5px; }
+}
+
 /* ── Moon Station screen ────────────────────────────────────────────────
    Mission control, read on a phone. Everything here is the existing
    ReConnect palette and the existing three fonts; nothing is introduced.
