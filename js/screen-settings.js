@@ -80,8 +80,8 @@ function paintSections(body, state) {
     const warn = el('button', 'set-alarm', `
       <span class="sa-icon">${setIcon('alert')}</span>
       <span class="sa-main">
-        <span class="sa-title">Your stream source isn't set up</span>
-        <span class="sa-body">Nothing you stream is being counted. Tap to fix it — it takes a minute.</span>
+        <span class="sa-title">Stream source isn't set up</span>
+        <span class="sa-body">Nothing you stream is being counted. Tap to fix.</span>
       </span>
       <span class="sa-go">${setIcon('chevron')}</span>
     `)
@@ -93,7 +93,7 @@ function paintSections(body, state) {
       <span class="sa-icon">${setIcon('mail')}</span>
       <span class="sa-main">
         <span class="sa-title">No recovery email on file</span>
-        <span class="sa-body">Your agent number is the only way back in. Add an email so a lost password isn't the end of it.</span>
+        <span class="sa-body">Add one so a lost password isn't the end.</span>
       </span>
       <span class="sa-go">${setIcon('chevron')}</span>
     `)

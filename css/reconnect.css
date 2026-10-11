@@ -7148,7 +7148,7 @@ select.rc-multi-native {
 /* Group: one label, one surface */
 .set-screen .set-section { margin-bottom: 18px; }
 .set-screen .set-head { flex-direction: row; align-items: center; gap: 8px; margin: 0 0 8px; padding: 0 4px; }
-.set-screen .sh-title { font-family: var(--body); font-size: 11px; font-weight: 600; letter-spacing: .08em;
+.set-screen .sh-title { font-family: var(--body); font-size: 11px; font-weight: 600; letter-spacing: .06em;
   text-transform: uppercase; color: var(--v-ink-3); }
 .set-screen .sh-badge { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border: 1px solid var(--v-line-1);
   border-radius: 999px; font-size: 11px; font-weight: 600; color: var(--v-ink-2); }
@@ -7204,13 +7204,19 @@ select.rc-multi-native {
 .set-screen .set-section.is-admin .sr-icon { background: transparent; border: 1px solid var(--v-line-1); color: var(--v-ink-2); }
 
 /* The two interrupting notices */
+/* Compact notices in the row recipe. The broken uplink is a real problem, so
+   it carries a restrained crimson edge and icon on the normal surface; the
+   missing email is advice, so it stays neutral with a violet icon. */
 .set-screen .set-alarm { display: grid; grid-template-columns: 32px minmax(0,1fr) 16px; align-items: center; gap: 12px;
-  margin: 0 0 14px; padding: 11px 12px; border: 1px solid var(--v-red-line); border-radius: 14px; background: var(--v-tint-red); font-family: var(--body); }
+  margin: 0 0 8px; padding: 9px 12px; border: 1px solid rgba(240,67,90,.38); border-left: 2px solid var(--v-red); border-radius: 14px;
+  background: var(--v-surface-1); font-family: var(--body); }
+.set-screen .set-alarm:has(+ .set-section) { margin-bottom: 16px; }
 .set-screen .set-alarm:hover { filter: none; }
-.set-screen .set-alarm.soft { border-color: var(--v-violet-line); background: var(--v-surface-1); }
+.set-screen .set-alarm.soft { border: 1px solid var(--v-line-1); background: var(--v-surface-1); }
 .set-screen .sa-icon { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 9px; background: rgba(240,67,90,.16);
   color: var(--v-red-hi); font-size: 0; }
 .set-screen .set-alarm.soft .sa-icon { background: var(--v-tint-violet); color: var(--v-violet-hi); }
+.set-screen .sa-main { gap: 1px; min-width: 0; }
 .set-screen .sa-title { font-size: 14px; font-weight: 600; color: var(--v-ink-1); }
 .set-screen .sa-body { font-size: 12.5px; line-height: 1.4; color: var(--v-ink-2); }
 .set-screen .sa-go { display: grid; color: var(--v-ink-3); }
