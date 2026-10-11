@@ -92,3 +92,28 @@ test('resource detail sheets are left for a later pass', () => {
   for (const icon of ['⚡', '🪽', '🧊', '⏳']) assert.ok(pack.includes(`icon: '${icon}'`), `${icon} detail-sheet icon should be untouched`)
   assert.match(pack, /<div style="font-size:38px; text-align:center; margin:10px 0;">\$\{def\.icon\}<\/div>/)
 })
+
+test('the dossier meta line is the level name and level only; the ID is the real agent number', () => {
+  assert.match(pack, /el\('div', 'aid-meta', `\$\{p\.level\?\.name \? `\$\{esc\(p\.level\.name\)\} · ` : ''\}Level \$\{p\.level\?\.level \?\? '—'\}`\)/)
+  const card = pack.slice(pack.indexOf('function agentIdCard'), pack.indexOf('function avatarAdjustSheet'))
+  assert.doesNotMatch(card.replace(/\/\/[^\n]*/g, ''), /rank\?\.title|padStart/)
+  assert.match(card, /<span class="aid-id-no"><b>Agent ID<\/b><em>\$\{esc\(getAgentNo\(\) \|\| '—'\)\}<\/em><\/span>/)
+})
+
+test('Pack ReConnect reuses the HUD button as a compact action row', () => {
+  const fn = pack.slice(pack.indexOf('function packReconnectRow'), pack.indexOf('const FILTERS'))
+  // the exact element renderHud() built and wired: same visibility, label, badge and tap
+  assert.match(fn, /document\.getElementById\('hudReconnectStatus'\)/)
+  assert.match(fn, /if \(!button\) return null/)
+  assert.match(fn, /button\.removeAttribute\('id'\)/)
+  assert.doesNotMatch(fn, /onclick|addEventListener|textContent = statusText/)
+  assert.match(fn, /icon\.innerHTML = packIcon\('users'\)/)
+  // directly under the title, above the dossier
+  const render = pack.slice(pack.indexOf('export function renderResources'))
+  assert.ok(render.indexOf("'pack-head'") < render.indexOf('packReconnectRow()') && render.indexOf('packReconnectRow()') < render.indexOf('agentIdCard(state)'))
+  const row = block.slice(block.indexOf('.res-screen .pack-reconnect-notice,'), block.indexOf('.res-screen .pack-reconnect-notice:hover'))
+  assert.match(row, /\.pack-reconnect-notice\.is-urgent \{/, 'urgent keeps the quiet surface')
+  assert.match(row, /padding: 7px 10px; display: grid;\s+grid-template-columns: 28px minmax\(0,1fr\) auto auto/)
+  assert.match(row, /background: rgba\(29,26,49,\.72\)/)
+  assert.doesNotMatch(row, /red|crimson|229,56,79|200,52,63/)
+})

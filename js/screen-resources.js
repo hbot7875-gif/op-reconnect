@@ -61,18 +61,10 @@ function agentIdCard(state) {
   }
   const info = el('div', 'aid-info')
   info.appendChild(el('div', 'aid-codename', esc(p.codename || '')))
-  // Carries the level NAME, the same one the HUD strip shows (ui-hud.js
-  // renders level.name · LV n). Without it this line read "LV 15 · Reconnect
-  // One" while the top of the same screen read "armybots · LV 15" -- the level
-  // ladder and the rank ladder are two different systems, and showing one in
-  // each place made it look like a bug.
-  //
-  // The rank title stays. It is tempting to swap it out for the level name and
-  // keep the line short, but nothing else on the card or in the Agent Dossier
-  // actually prints a rank title (the Dossier's own comment claims it does; the
-  // code does not), so dropping it here would make rank invisible everywhere.
-  // The agent number is not repeated here: it is the ID in the strip below.
-  info.appendChild(el('div', 'aid-meta', `${esc(p.level?.name || '')} · LV ${p.level?.level ?? '—'} · ${esc(p.rank?.title || '')}`))
+  // The level name and level, worded as the HUD strip words them
+  // (ui-hud.js: level.name · Level n). The rank title was dropped from this
+  // line at the player's request; the agent number lives in the strip below.
+  info.appendChild(el('div', 'aid-meta', `${p.level?.name ? `${esc(p.level.name)} · ` : ''}Level ${p.level?.level ?? '—'}`))
   // A dossier header keeps the card an agent file rather than a profile:
   // the file label on the left, the agent's status on the right, which also
   // gives the codename the full width of its own row.
@@ -86,7 +78,7 @@ function agentIdCard(state) {
   strip.innerHTML = `
     <span><b>District</b><em>${esc(state?.activeDistrict?.name || '—')}</em></span>
     <span><b>Streak</b><em>${p.streak?.current ?? 0} days</em></span>
-    <span class="aid-id-no"><b>Agent ID</b><em>${esc(getAgentNo() || '')}·${String(p.level?.level ?? 0).padStart(3, '0')}</em></span>
+    <span class="aid-id-no"><b>Agent ID</b><em>${esc(getAgentNo() || '—')}</em></span>
   `
   card.appendChild(strip)
 
@@ -352,6 +344,32 @@ function collectionObject(item) {
   return button
 }
 
+/** The shared HUD ReConnect button, moved under the Pack title the way City
+ *  moves it into its flow (screen-world.js). The element renderHud() built is
+ *  reused as is, so its visibility, live label, unread badge and tap target
+ *  (the active district) are exactly the HUD's; only its look changes, to the
+ *  compact action row. Dropping the id stops the next HUD-first repaint from
+ *  finding this copy while the old Pack scene is still mounted. */
+function packReconnectRow() {
+  const button = document.getElementById('hudReconnectStatus')
+  if (!button) return null
+  const statusText = button.querySelector('b')?.textContent?.trim() || 'Open ReConnect'
+  const icon = button.querySelector('span')
+  if (icon) {
+    icon.className = 'pack-reconnect-icon'
+    icon.setAttribute('aria-hidden', 'true')
+    icon.innerHTML = packIcon('users')
+  }
+  const unread = button.querySelector('.hud-reconnect-chat-badge')
+  if (unread) unread.textContent = unread.textContent.replace('\u{1F4AC}', '').trim()
+  const go = button.querySelector(':scope > i')
+  if (go) { go.className = 'pack-reconnect-go'; go.setAttribute('aria-hidden', 'true'); go.innerHTML = packIcon('chevron') }
+  if (!button.hasAttribute('aria-label')) button.setAttribute('aria-label', `ReConnect. ${statusText}`)
+  button.removeAttribute('id')
+  button.classList.add('pack-reconnect-notice')
+  return button
+}
+
 const FILTERS = [
   { key: 'all', label: 'All', test: () => true },
   { key: 'pack', label: 'In Pack', test: (i) => !i.districtId },
@@ -371,6 +389,8 @@ export function renderResources(container, state) {
     <h1 class="pack-title"><span class="pack-title-icon">${packIcon('backpack')}</span>Agent Pack</h1>
   `))
 
+  const reconnectRow = packReconnectRow()
+  if (reconnectRow) wrap.appendChild(reconnectRow)
   wrap.appendChild(agentIdCard(state))
   wrap.appendChild(agentBag(state))
 

@@ -2102,7 +2102,8 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
    ════════════════════════════════════════════════════════════════ */
 .res-screen .pack-title-icon svg, .res-screen .aid-photo-fallback svg, .res-screen .slot-icon svg,
 .res-screen .ps-icon svg, .res-screen .ps-go svg, .res-screen .ql-icon svg, .res-screen .ql-go svg,
-.res-screen .arc-keepsake-song svg, .res-screen .arc-keepsake-go svg {
+.res-screen .arc-keepsake-song svg, .res-screen .arc-keepsake-go svg,
+.res-screen .pack-reconnect-icon svg, .res-screen .pack-reconnect-go svg {
   display: block; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 
 /* Page head: one title, the bag no longer repeats it */
@@ -2257,6 +2258,29 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 .res-screen .ql-go svg { width: 16px; height: 16px; }
 .res-screen .quick-link:hover .ql-name { color: var(--v-ink-1); }
 .res-screen .quick-link:hover .ql-go { color: var(--v-ink-2); }
+
+/* ReConnect under the Pack title: City's compact action row. The shared HUD
+   button is moved here intact (screen-resources.js packReconnectRow), so its
+   label, unread badge and tap are the HUD's. Urgent states keep the quiet
+   surface; the sentence carries the urgency, not a crimson block. */
+.res-screen .pack-reconnect-notice,
+.res-screen .pack-reconnect-notice.is-urgent {
+  width: 100%; margin: 0 0 12px; padding: 7px 10px; display: grid;
+  grid-template-columns: 28px minmax(0,1fr) auto auto; align-items: center; gap: 9px;
+  border: 1px solid rgba(255,255,255,.10); border-left: 2px solid rgba(139,92,246,.32); border-radius: 12px;
+  background: rgba(29,26,49,.72); color: var(--v-ink-1); font-family: var(--body); text-align: left; }
+.res-screen .pack-reconnect-notice:hover { border-color: var(--v-line-2); border-left-color: rgba(139,92,246,.32); }
+.res-screen .pack-reconnect-notice .pack-reconnect-icon,
+.res-screen .pack-reconnect-notice.is-urgent .pack-reconnect-icon {
+  width: 28px; height: 28px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.10);
+  border-radius: 9px; color: var(--v-violet-hi); font-size: 0; letter-spacing: 0; text-transform: none; }
+.res-screen .pack-reconnect-icon svg { width: 16px; height: 16px; }
+.res-screen .pack-reconnect-notice b { overflow: hidden; color: var(--v-ink-1); font-size: 13px; font-weight: 600;
+  text-overflow: ellipsis; white-space: nowrap; }
+.res-screen .pack-reconnect-notice .hud-reconnect-chat-badge { min-width: 0; padding: 1px 6px; border: 1px solid rgba(255,255,255,.10);
+  background: transparent; color: var(--v-ink-2); font: 600 11px var(--body); }
+.res-screen .pack-reconnect-go { display: grid; color: var(--v-ink-3); }
+.res-screen .pack-reconnect-go svg { width: 16px; height: 16px; }
 
 /* Narrow phones (320): smaller codename, the agent ID on its own row, and two
    object columns -- three made long names wrap and cut every location short */

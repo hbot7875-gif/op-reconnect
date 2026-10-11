@@ -224,7 +224,15 @@ test('the Pack card shows the level name, like the HUD does', () => {
   // The HUD is the reference: it renders level.name next to LV n.
   assert.match(hud, /lvl\.name \? `<em>\$\{esc\(lvl\.name\)\}<\/em>/)
 
-  for (const [name, src] of [['screen-resources.js', pack], ['pack-preview.js', preview]]) {
+  // The live Pack card words it the HUD's way, "purple troops · Level 17";
+  // the rank title was removed from it at the player's request.
+  const live = pack.split('\n').find((l) => l.includes("'aid-meta'"))
+  assert.ok(live, 'screen-resources.js has no aid-meta line')
+  assert.ok(/level(\?)?\.name/.test(live), 'screen-resources.js must print the level name')
+  assert.ok(/Level \$\{p\.level\?\.level/.test(live), 'screen-resources.js must print Level n')
+  assert.ok(!/rank(\?)?\.title/.test(live), 'the rank title is no longer on the Pack card')
+
+  for (const [name, src] of [['pack-preview.js', preview]]) {
     const meta = src.split('\n').find((l) => l.includes("'aid-meta'"))
     assert.ok(meta, `${name} has no aid-meta line`)
     assert.ok(/level(\?)?\.name/.test(meta), `${name} must print the level name`)
