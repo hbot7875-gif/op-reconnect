@@ -19,6 +19,7 @@ import { el, esc, showOverlay, hideOverlay, toast } from './state.js'
 import { call } from './api.js'
 import { getAgentNo } from './session.js'
 import { goCandyStar } from './router.js'
+import { csIcon } from './candy-icons.js'
 
 const DISTRICT_VIEWS = [
   { id: 'relevant', label: 'Relevant' },
@@ -75,8 +76,8 @@ const CURRENT_GENERATOR_VERSION = 2
 function vaultRuleBadge(item) {
   if (item.source === 'shared') return ''
   return Number(item.generatorVersion) >= CURRENT_GENERATOR_VERSION
-    ? '<p class="cs-vault-rules is-current">✓ Current rules passed</p>'
-    : '<p class="cs-vault-rules is-older">Older generator — check before use</p>'
+    ? '<span class="cs-vault-rules is-current">Current rules</span>'
+    : '<span class="cs-vault-rules is-older">Older generator · check first</span>'
 }
 
 function vaultCard(item, opts) {
@@ -85,7 +86,7 @@ function vaultCard(item, opts) {
   const art = el('div', 'cs-vault-art')
   art.innerHTML = thumbOk
     ? `<img src="${esc(item.config.thumbnailUrl)}" alt="" loading="lazy">`
-    : `<span aria-hidden="true">${item.source === 'shared' ? '♫' : '🦙'}</span>`
+    : `<span aria-hidden="true">${csIcon(item.source === 'shared' ? 'music' : 'alpaca')}</span>`
   card.appendChild(art)
 
   const body = el('div', 'cs-vault-body')
@@ -94,16 +95,20 @@ function vaultCard(item, opts) {
     vaultRuntime(item.config),
     item.saveCount ? `${item.saveCount} saved` : '',
   ].filter(Boolean)
+  // One playlist-row recipe: title, recipe, one metadata line, then status
+  // chips (district match, generator rules) only when they say something.
+  const chips = [
+    item.matchCount > 0 ? `<span class="cs-vault-match">Matches ${item.matchCount} goal${item.matchCount === 1 ? '' : 's'}</span>` : '',
+    vaultRuleBadge(item),
+  ].filter(Boolean).join('')
   body.innerHTML = `
-    <div class="cs-vault-kicker"><span>${item.source === 'shared' ? 'Shared playlist' : 'Candy Star mix'}</span><span>${esc(vaultDate(item.createdAt))}</span></div>
     <h3>${esc(item.name)}</h3>
     <p class="cs-vault-recipe">${esc(vaultRecipe(item))}</p>
-    ${item.matchCount > 0 ? `<p class="cs-vault-match">Matches ${item.matchCount} district goal${item.matchCount === 1 ? '' : 's'}</p>` : ''}
-    ${vaultRuleBadge(item)}
-    <div class="cs-vault-by">By ${esc(item.creator)}${meta.length ? ` · ${esc(meta.join(' · '))}` : ''}</div>
+    <div class="cs-vault-by">${esc(item.source === 'shared' ? 'Shared' : 'Candy Star')} · ${esc(item.creator)} · ${esc(vaultDate(item.createdAt))}${meta.length ? ` · ${esc(meta.join(' · '))}` : ''}</div>
+    ${chips ? `<div class="cs-vault-chips">${chips}</div>` : ''}
   `
   const actions = el('div', 'cs-vault-actions')
-  const openLink = el('a', 'cs-vault-open', 'Open in Spotify ↗')
+  const openLink = el('a', 'cs-vault-open', `Open in Spotify${csIcon('external')}`)
   openLink.href = item.url
   openLink.target = '_blank'
   openLink.rel = 'noopener noreferrer'
@@ -116,14 +121,16 @@ function vaultCard(item, opts) {
     actions.appendChild(use)
   }
 
-  const save = el('button', `cs-vault-action${item.saved ? ' is-saved' : ''}`, item.saved ? 'Saved ✓' : 'Save')
+  const save = el('button', `cs-vault-action${item.saved ? ' is-saved' : ''}`, `${csIcon('bookmark')}<span>${item.saved ? 'Saved' : 'Save'}</span>`)
+  save.setAttribute('aria-label', item.saved ? 'Saved' : 'Save')
   save.type = 'button'
   save.setAttribute('aria-pressed', item.saved ? 'true' : 'false')
   save.onclick = () => opts.onToggleSave(item, card)
   actions.appendChild(save)
 
   if (item.isMine) {
-    const del = el('button', 'cs-vault-delete', 'Delete')
+    const del = el('button', 'cs-vault-delete', `${csIcon('trash')}<span>Delete</span>`)
+    del.setAttribute('aria-label', `Delete ${item.name}`)
     del.type = 'button'
     del.onclick = () => opts.onDelete(item, card)
     actions.appendChild(del)
@@ -173,7 +180,7 @@ export function openPlaylistVault({ districtId = null, districtName = null } = {
   const head = el('div', 'vault-sheet-head')
   head.innerHTML = `
     <div>
-      <div class="eyebrow">${districtId ? 'PLAYLIST VAULT' : 'MY PLAYLISTS'}</div>
+      <div class="eyebrow">${districtId ? 'Playlist Vault' : 'My playlists'}</div>
       <h3>${esc(districtId ? `Playlists for ${districtName || 'this district'}` : 'Your playlist library')}</h3>
     </div>`
   // Adding to the Vault is a playlist-maker action now: a shared playlist
@@ -282,7 +289,7 @@ export function openPlaylistVault({ districtId = null, districtName = null } = {
   }
 
   const searchWrap = el('label', 'cs-vault-search')
-  searchWrap.innerHTML = '<span aria-hidden="true">⌕</span>'
+  searchWrap.innerHTML = `<span aria-hidden="true">${csIcon('search')}</span>`
   const searchInput = el('input')
   searchInput.type = 'search'
   searchInput.placeholder = 'Search song or album'
@@ -351,7 +358,7 @@ export function openPlaylistVault({ districtId = null, districtName = null } = {
       const sub = st.view === 'relevant' ? 'Try Community, or build one from Candy Star.'
         : st.view === 'community' ? 'Generate one from Candy Star, or share a Spotify link.'
         : 'Browse Community to find one.'
-      list.innerHTML = `<div class="cs-vault-empty"><span>♫</span><b>${esc(label)}</b><small>${esc(sub)}</small></div>`
+      list.innerHTML = `<div class="cs-vault-empty"><span>${csIcon('music')}</span><b>${esc(label)}</b><small>${esc(sub)}</small></div>`
     } else {
       for (const item of visible) {
         list.appendChild(vaultCard(item, { onToggleSave: toggleSave, onReport: reportItem, onDelete: deleteItem, onRemix: remixHandoff }))

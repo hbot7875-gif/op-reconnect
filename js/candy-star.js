@@ -29,6 +29,7 @@ import { enhanceSelect } from './rc-select.js'
 import { getAgentNo } from './session.js'
 import { call as apiCall } from './api.js'
 import { normKeyFull, resolveGoalSong } from './song-key-rules.js'
+import { csIcon } from './candy-icons.js'
 
 // ── compatibility shims for the globals this section grew up with ──
 const $ = (id) => document.getElementById(id)
@@ -86,12 +87,12 @@ function candyGoalGuideMarkup() {
   return `
     <section class="cs-goal-guide" aria-labelledby="cs-goal-guide-title">
       <button type="button" class="cs-goal-guide-toggle" id="cs-goal-guide-title" aria-expanded="false" aria-controls="cs-goal-guide-panel" onclick="candyToggleGoalGuide()">
-        <span class="cs-goal-guide-symbol" aria-hidden="true">◎</span>
+        <span class="cs-goal-guide-symbol" aria-hidden="true">${csIcon('map')}</span>
         <span class="cs-goal-guide-toggle-copy">
           <b>District playlist guide</b>
           <small>See what each district needs before you build.</small>
         </span>
-        <span class="cs-goal-guide-open">View goals <span aria-hidden="true">▾</span></span>
+        <span class="cs-goal-guide-open"><span class="cs-sr">View goals</span>${csIcon('chevronDown')}</span>
       </button>
       <div class="cs-goal-guide-panel" id="cs-goal-guide-panel" hidden>
         <div class="cs-goal-guide-controls">
@@ -102,7 +103,7 @@ function candyGoalGuideMarkup() {
             </select>
           </div>
           <div class="cs-guide-field">
-            <span>Goal size for</span>
+            <span>Goal size</span>
             <select id="cs-guide-mode" onchange="candySelectGuideMode(this.value)">
               ${modes.map(mode => `<option value="${sanitize(mode.id)}"${mode.id === cs.guideMode ? ' selected' : ''}>${sanitize(candyGuideShortMode(mode.label, mode.id))}</option>`).join('')}
             </select>
@@ -134,17 +135,21 @@ function candyGoalGuideRow(kind, goal) {
   const canUse = isTrack ? !!goal.catalogKey : !!goal.catalogAlbumId;
   const detail = isTrack
     ? (goal.artist || 'BTS')
-    : `${goal.trackCount || 0} tracks · every track needs ${target} play${Number(target) === 1 ? '' : 's'}`;
-  const targetUnit = isTrack ? 'streams' : 'full rounds';
+    : `${goal.trackCount || 0} tracks · each track ${target}×`;
+  const targetUnit = isTrack ? 'streams' : 'rounds';
   const dataAttr = isTrack
     ? `data-key="${sanitize(goal.catalogKey || '')}"`
     : `data-album-id="${sanitize(goal.catalogAlbumId || '')}"`;
   const handler = isTrack ? 'candyGuideUseTrack(this)' : 'candyGuideUseAlbum(this)';
+  // One list row per goal: what it is, the target, and a trailing add control
+  // (the same candyGuideUse* handlers the old full-width "Use" button ran).
   return `<div class="cs-guide-goal-row">
-    <span class="cs-guide-goal-icon" aria-hidden="true">${isTrack ? candyIcon('music', 15) : candyIcon('disc', 15)}</span>
+    <span class="cs-guide-goal-icon" aria-hidden="true">${isTrack ? csIcon('music') : csIcon('disc')}</span>
     <span class="cs-guide-goal-copy"><b>${sanitize(goal.label)}</b><small>${sanitize(detail)}</small></span>
     <span class="cs-guide-goal-target"><b>${sanitize(target)}</b><small>${targetUnit}</small></span>
-    <button type="button" class="cs-guide-use" ${dataAttr} onclick="${handler}"${canUse ? '' : ' disabled title="Not available in the Candy Star catalog yet"'}>${canUse ? 'Use' : 'Unavailable'}</button>
+    <button type="button" class="cs-guide-use${canUse ? '' : ' is-unavailable'}" ${dataAttr} onclick="${handler}"${canUse
+      ? ` aria-label="Add ${sanitize(goal.label)} to Custom" title="Add to Custom"`
+      : ' disabled title="Not available in the Candy Star catalog yet"'}>${canUse ? csIcon('plus') : 'N/A'}</button>
   </div>`;
 }
 
@@ -158,7 +163,7 @@ function candyRenderGoalGuide() {
   const trackRows = (district.tracks || []).map(goal => candyGoalGuideRow('track', goal)).join('');
   const albumRows = (district.albums || []).map(goal => candyGoalGuideRow('album', goal)).join('');
   const reconnectRows = (district.reconnect || []).map(goal => `<div class="cs-guide-reconnect-row">
-    <span class="cs-guide-goal-icon" aria-hidden="true">⌁</span>
+    <span class="cs-guide-goal-icon" aria-hidden="true">${csIcon('users')}</span>
     <span class="cs-guide-goal-copy"><b>${sanitize(goal.label)}</b><small>${sanitize(candyReconnectGuideText(goal))}</small></span>
   </div>`).join('');
   const counts = [
@@ -175,11 +180,11 @@ function candyRenderGoalGuide() {
       </div>
       ${district.isCurrent ? '<span class="cs-guide-current"><i></i>Your current district</span>' : ''}
     </div>
-    <div class="cs-guide-explainer">These are the <b>whole district targets</b>. Album rounds mean every listed track needs that many plays.</div>
-    ${trackRows ? `<div class="cs-guide-group"><div class="cs-guide-group-title"><span>Focus songs</span><small>${district.tracks.length}</small></div>${trackRows}</div>` : ''}
+    <div class="cs-guide-explainer">Whole-district targets. An album round is one play of every track on it.</div>
+    ${trackRows ? `<div class="cs-guide-group"><div class="cs-guide-group-title"><span>Songs</span><small>${district.tracks.length}</small></div>${trackRows}</div>` : ''}
     ${albumRows ? `<div class="cs-guide-group"><div class="cs-guide-group-title"><span>Albums</span><small>${district.albums.length}</small></div>${albumRows}</div>` : ''}
     ${reconnectRows ? `<div class="cs-guide-group"><div class="cs-guide-group-title"><span>ReConnect</span><small>${district.reconnect.length > 1 ? 'one is assigned at activation' : 'team goal'}</small></div>${reconnectRows}</div>` : ''}
-    <div class="cs-guide-tip"><b>Playlist tip:</b> use 1–2 focus songs with 1–2 albums. For a large district, make several focused playlists instead of squeezing every goal into one.</div>`;
+    <div class="cs-guide-tip">${csIcon('info')}<span>Use 1–2 focus songs with 1–2 albums. For a big district, make several focused playlists rather than one that holds every goal.</span></div>`;
 }
 
 /** The guide's two pickers open as ReConnect sheets instead of the phone's
@@ -264,6 +269,7 @@ export function candyGuideUseAlbum(button) {
     candyAlbumCheckChanged(checkbox);
   }
   if (!checkbox.checked) return;
+  checkbox.closest('details')?.setAttribute('open', '');
   candyGuideOpenBuilder(checkbox.closest('.cs-album-card'));
   showToast('Album added to your setup.');
 }
@@ -407,12 +413,13 @@ export function candyRowBlur(e) {
 function candyFocusRow(mult) {
   return `<div class="cs-focus-row">
     <div class="cs-song-search">
+      <span class="cs-search-i">${csIcon('search')}</span>
       <input class="cs-focus-sel" type="text" placeholder="Search songs…" autocomplete="off" aria-label="Song"
         oninput="candySongInput(this)" onfocus="candySongFocus(this)" onblur="candyRowBlur(event)" onkeydown="candyRowKeydown(event)">
       <div class="cs-song-dropdown" role="listbox"></div>
     </div>
     <span class="cs-mult-wrap"><span class="cs-mult-x">×</span><input class="cs-focus-mult" type="number" min="1" value="${mult}" title="Times to stream" aria-label="Times to stream" oninput="candyUpdateEstimate()" onblur="candyValidateRow(this)" onkeydown="candyRowKeydown(event)"></span>
-    <button type="button" class="cs-row-remove" title="Remove song" onclick="candyRemoveRow(this)">×</button>
+    <button type="button" class="cs-row-remove" title="Remove song" aria-label="Remove song" onclick="candyRemoveRow(this)">${csIcon('x')}</button>
   </div>`;
 }
 // Song field: arrow keys move the dropdown highlight, Enter picks the
@@ -739,9 +746,9 @@ function candyQuickRefresh() {
 
   const count = $('cs-quick-count');
   if (count) {
-    count.textContent = picked
-      ? `${picked} of ${cap} songs picked${cs.quickAlbum ? ' · album on' : ''}`
-      : `Pick up to ${cap} song${cap === 1 ? '' : 's'}${cs.quickAlbum ? ' · album on' : ''}`;
+    // A compact counter; the album row above already shows whether it is on.
+    count.textContent = `${picked} of ${cap}`;
+    count.classList.toggle('is-full', picked >= cap);
   }
   const btn = $('cs-quick-btn');
   if (btn) btn.disabled = !picked;
@@ -788,6 +795,7 @@ export function candyApplyRemix(item) {
     }
     box.checked = checked && selected++ < CS_MAX_ALBUMS;
   });
+  if (selected) document.querySelector('details.cs-albums')?.setAttribute('open', '');
   const name = $('cs-name');
   if (name) name.value = `${item.name} remix`;
   candySyncRowControls();
@@ -875,7 +883,7 @@ export async function renderCandyStar() {
   // Picking beats listing: all six goals in one playlist dilutes every one of
   // them, so Quick offers the same songs as choices with a hard cap.
   const goalChips = goalSongs.length
-    ? goalSongs.map(s => `<button type="button" class="cs-goal-chip cs-goal-pick" data-key="${sanitize(s.key)}" aria-pressed="false" onclick="candyQuickToggle(this)">${sanitize(s.name)}</button>`).join('')
+    ? goalSongs.map(s => `<button type="button" class="cs-goal-chip cs-goal-pick" data-key="${sanitize(s.key)}" aria-pressed="false" onclick="candyQuickToggle(this)"><span class="cs-pick-box">${csIcon('check')}</span><span class="cs-pick-name">${sanitize(s.name)}</span><span class="cs-pick-artist">${sanitize((s.artists || []).join(', '))}</span></button>`).join('')
     : currentGoalNames.length
       // The goal names exist, they just aren't in the (possibly still-empty)
       // catalog yet — show them anyway so "current goals" isn't a lie, just
@@ -886,37 +894,40 @@ export async function renderCandyStar() {
   container.innerHTML = `
   <div class="cs-wrap">
     <div class="cs-tabs-row">
-      <div class="cs-tabs" role="tablist">
-        <button type="button" class="cs-tab is-active" data-tab="quick" role="tab" aria-selected="true" onclick="candySwitchTab('quick')">${candyIcon('wand')} Quick</button>
-        <button type="button" class="cs-tab" data-tab="custom" role="tab" aria-selected="false" onclick="candySwitchTab('custom')">${candyIcon('music')} Custom</button>
+      <div class="cs-tabs" role="tablist" aria-label="Builder">
+        <button type="button" class="cs-tab is-active" data-tab="quick" role="tab" aria-selected="true" onclick="candySwitchTab('quick')">Quick</button>
+        <button type="button" class="cs-tab" data-tab="custom" role="tab" aria-selected="false" onclick="candySwitchTab('custom')">Custom</button>
       </div>
-      <button type="button" class="cs-my-playlists" id="cs-my-playlists">My Playlists →</button>
+      <button type="button" class="cs-my-playlists" id="cs-my-playlists">${csIcon('library')}<span>My playlists</span></button>
     </div>
 
     ${candyGoalGuideMarkup()}
 
     <!-- QUICK -->
     <div class="cs-panel is-active" id="cs-panel-quick" role="tabpanel">
-      <div class="archive-card" style="text-align:center;">
-        <div class="cs-hero-icon">🦙</div>
-        <div style="font-size:14px; font-weight:900; color:#fff; margin-bottom:8px;">One tap, one alpaca</div>
-        <div style="font-size:11.5px; color:var(--text-muted); line-height:1.6; margin-bottom:12px; max-width:420px; margin-left:auto; margin-right:auto;">
-          ${goalSongs.length
-            ? `Pick the goal songs you want on repeat — <b>up to 3</b>. All of them in one playlist and each one gets diluted, so it's better to make more than one alpaca.`
-            : `We build a playlist around the current streaming goals, woven with other songs so it plays naturally.`}
+      <div class="archive-card cs-quick-card">
+        <div class="cs-card-head">
+          <span class="cs-hero-icon" aria-hidden="true">${csIcon('alpaca')}</span>
+          <span class="cs-card-head-copy">
+            <b>Quick alpaca</b>
+            <small>${goalSongs.length
+              ? 'Pick up to 3 goal songs. Fewer per playlist keeps each one strong.'
+              : 'A playlist built around the current goals, woven with other songs.'}</small>
+          </span>
         </div>
+        ${goalSongs.length ? `<div class="cs-section-label"><span>Goal songs</span><span class="cs-quick-count" id="cs-quick-count"></span></div>` : ''}
         <div class="cs-quick-chips">${goalChips}</div>
         ${goalSongs.length && window._candyStar.arirangAlbum ? `
         <label class="cs-quick-album">
           <input type="checkbox" id="cs-quick-album" onchange="candyQuickAlbumToggle()">
-          <span class="cs-quick-album-box">✓</span>
-          <span>Weave in the <b>${sanitize(window._candyStar.arirangAlbum.name)}</b> album · ${window._candyStar.arirangAlbum.count} tracks
-            <span class="cs-quick-album-hint">with the album on, pick at most 2 songs</span>
+          <span class="cs-quick-album-box">${csIcon('check')}</span>
+          <span class="cs-quick-album-copy"><b>Weave in ${sanitize(window._candyStar.arirangAlbum.name)}</b>
+            <span class="cs-quick-album-hint">${window._candyStar.arirangAlbum.count} tracks · limits you to 2 songs</span>
           </span>
+          <span class="cs-quick-album-art" aria-hidden="true">${csIcon('disc')}</span>
         </label>` : ''}
-        ${goalSongs.length ? `<div class="cs-quick-count" id="cs-quick-count"></div>` : ''}
-        <button type="button" class="btn-red" id="cs-quick-btn" onclick="candyGenerate('quick')">🦙 Make me an alpaca</button>
-        <div class="cs-cost-note">🪽 Costs 1 Wing · up to 5 Alpacas a day</div>
+        <button type="button" class="btn-red" id="cs-quick-btn" onclick="candyGenerate('quick')">${csIcon('alpaca')}Make an alpaca</button>
+        <div class="cs-cost-note">${csIcon('feather')}1 Wing · up to 5 alpacas a day</div>
       </div>
     </div>
 
@@ -924,41 +935,45 @@ export async function renderCandyStar() {
     <div class="cs-panel" id="cs-panel-custom" role="tabpanel">
       <div class="cs-builder-grid">
         <div class="cs-builder-main">
-          <div class="archive-card">
-            <div style="font-size:13px; font-weight:900; color:var(--red-core); letter-spacing:0.04em; margin-bottom:6px; text-transform:uppercase;">${candyIcon('disc')} What do you want on repeat?</div>
-            <div style="font-size:11px; color:var(--text-muted); margin-bottom:14px; line-height:1.5;">
-              Pick a song and how many times you want to hear it (e.g. 12× Swim · 6× Come Over) — we'll weave in enough extra tracks so it still plays like a real playlist.
-              You can make a playlist with <b>2 focus songs only</b>, or add albums: <b>2 songs + 1 album</b>, <b>1 song + 2 albums</b>, or <b>1 song + 1 album</b>.
-            </div>
-
-            <div class="cs-col-headers"><span>Song</span><span>Times</span><span></span></div>
-            <div id="cs-focus-rows">${candyFocusRow(10)}${candyFocusRow(5)}</div>
-            <button type="button" class="cs-add-row" onclick="candyAddFocusRow()">+ Add another song</button>
+          <div class="archive-card cs-form">
+            <section class="cs-form-section">
+              <div class="cs-form-head">
+                <b>Focus songs</b>
+                <small>Up to 2 songs, each with how many times it repeats. With albums: 2 songs + 1 album, or 1 song + up to 2.</small>
+              </div>
+              <div class="cs-col-headers"><span>Song</span><span>Plays</span><span></span></div>
+              <div id="cs-focus-rows">${candyFocusRow(10)}${candyFocusRow(5)}</div>
+              <button type="button" class="cs-add-row" onclick="candyAddFocusRow()">${csIcon('plus')}Add song</button>
+            </section>
 
             ${(opt.albums || []).length ? `
-            <div class="cs-album-label-row">
-              <label class="cs-field-label">Want a full album woven in too? · ${opt.albums.length} available, ${CS_MAX_ALBUMS} max</label>
-              <div class="cs-album-actions">
-                <span class="cs-album-selected-count" id="cs-album-selected-count"></span>
-              </div>
-            </div>
-            <div id="cs-album-checks" class="cs-album-grid">
-              ${opt.albums.map((a, i) => `<label class="cs-album-card" title="${sanitize(a.name)}" style="--art-hue:${candyAlbumHue(a.name)}deg;">
-                <input type="checkbox" class="cs-album-check" id="cs-album-${i}" data-album-id="${sanitize(a.id)}" value="${sanitize(JSON.stringify(a.trackKeys))}" onchange="candyAlbumCheckChanged(this)">
-                <span class="cs-album-card-art">${candyIcon('disc', 16)}</span>
-                <span class="cs-album-meta">
-                  <span class="cs-album-name">${sanitize(a.name)}</span>
-                  <span class="cs-album-count">${a.count} tracks</span>
+            <details class="cs-form-section cs-albums">
+              <summary class="cs-albums-summary">
+                <span class="cs-form-head">
+                  <b>Albums <span class="cs-optional">optional</span></b>
+                  <small>${opt.albums.length} available · up to ${CS_MAX_ALBUMS}</small>
                 </span>
-                <span class="cs-album-card-check">✓</span>
-              </label>`).join('')}
-            </div>` : ''}
+                <span class="cs-album-actions"><span class="cs-album-selected-count" id="cs-album-selected-count"></span></span>
+                <span class="cs-albums-chevron" aria-hidden="true">${csIcon('chevronDown')}</span>
+              </summary>
+              <div id="cs-album-checks" class="cs-album-grid">
+                ${opt.albums.map((a, i) => `<label class="cs-album-card" title="${sanitize(a.name)}">
+                  <input type="checkbox" class="cs-album-check" id="cs-album-${i}" data-album-id="${sanitize(a.id)}" value="${sanitize(JSON.stringify(a.trackKeys))}" onchange="candyAlbumCheckChanged(this)">
+                  <span class="cs-album-card-art">${csIcon('disc')}</span>
+                  <span class="cs-album-meta">
+                    <span class="cs-album-name">${sanitize(a.name)}</span>
+                    <span class="cs-album-count">${a.count} tracks</span>
+                  </span>
+                  <span class="cs-album-card-check">${csIcon('check')}</span>
+                </label>`).join('')}
+              </div>
+            </details>` : ''}
 
             <!-- Mobile-only — desktop gets this same live data in the sticky sidebar. -->
             <div class="cs-mobile-details">
               <button type="button" class="cs-mobile-details-toggle" onclick="candyToggleMobileDetails()" aria-expanded="false" aria-controls="cs-mobile-details-body">
-                <span>Track details</span>
-                <span class="cs-mobile-details-arrow">▾</span>
+                <span class="cs-form-head"><b>Track details</b><small>Counts, runtime and track order</small></span>
+                <span class="cs-mobile-details-arrow">${csIcon('chevronDown')}</span>
               </button>
               <div class="cs-mobile-details-body" id="cs-mobile-details-body">
                 <div class="cs-summary-lines">
@@ -975,8 +990,10 @@ export async function renderCandyStar() {
               </div>
             </div>
 
-            <label class="cs-field-label" for="cs-name" style="margin-top:16px;">Playlist name</label>
-            <input id="cs-name" class="input-field" placeholder="Leave blank for a random name">
+            <section class="cs-form-section cs-name-section">
+              <label class="cs-field-label" for="cs-name">Playlist name <span class="cs-optional">optional</span></label>
+              <input id="cs-name" class="input-field" placeholder="Leave blank for a random name">
+            </section>
           </div>
         </div>
 
@@ -1003,8 +1020,8 @@ export async function renderCandyStar() {
               </div>
             </div>
 
-            <button type="button" class="btn-red" onclick="candyGenerate('custom')">${candyIcon('music')} Generate in Spotify</button>
-            <div class="cs-cost-note">🪽 Costs 1 Wing · up to 5 Alpacas a day</div>
+            <button type="button" class="btn-red" onclick="candyGenerate('custom')">${csIcon('music')}Generate in Spotify</button>
+            <div class="cs-cost-note">${csIcon('feather')}1 Wing · up to 5 alpacas a day</div>
           </div>
         </aside>
       </div>
@@ -1013,8 +1030,9 @@ export async function renderCandyStar() {
         <div class="cs-actionbar-total">
           <span>Estimated</span>
           <span id="cs-estimate-val">0 tracks</span>
+          <span class="cs-actionbar-cost">${csIcon('feather')}1 Wing</span>
         </div>
-        <button type="button" class="btn-red" onclick="candyGenerate('custom')">${candyIcon('music')} Generate in Spotify</button>
+        <button type="button" class="btn-red" onclick="candyGenerate('custom')">${csIcon('music')}Generate in Spotify</button>
       </div>
     </div>
 
