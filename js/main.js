@@ -21,6 +21,7 @@ import { renderSettings } from './screen-settings.js'
 import { renderCandyStar } from './screen-candystar.js'
 import { renderRanking } from './screen-ranking.js'
 import { renderMoonStation, teardownMoonStation } from './screen-moon.js'
+import { renderVoting } from './voting.js'
 import { playLevelUp } from './celebrate.js'
 import { checkForBadgeUnlocks } from './badge-reveal.js'
 import { checkForExamModeAnnounce } from './exam-mode-announce.js'
@@ -89,6 +90,7 @@ function renderScreen(state) {
     else if (scr.name === 'serendipity-room') renderSerendipityRoom(scene, state)
     else if (scr.name === 'recelebrate') renderRecelebrateParty(scene, state)
     else if (scr.name === 'moon') renderMoonStation(scene, state)
+    else if (scr.name === 'voting') renderVoting(scene, state)
     else renderWorld(scene, state)
     if (isNav) {
       scene.classList.remove('scene-out')

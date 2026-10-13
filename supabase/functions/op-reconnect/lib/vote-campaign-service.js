@@ -1,0 +1,630 @@
+// Voting campaigns — server side (MAMA 2026 first). See migration
+// 20261013150000 for the tables and the atomic functions this calls.
+//
+// Plain JS with every outside dependency passed in (database client, X
+// verifier, clock), so Node can test the exact flows the Edge Function runs.
+// vote-campaign.ts is the thin Deno wrapper the router calls.
+//
+// Trust boundaries, in one place:
+//   * agentNo is only ever the session-verified caller (index.ts checks the
+//     session before any 'agent' route runs).
+//   * Browser OCR arrives as `clientChecks`, is reduced to three booleans and
+//     stored as a hint. It never reaches a status decision.
+//   * An Mnet proof is stored as 'verifying'. Only a trusted reviewer OCR run
+//     or an admin decision (admin key) moves it on.
+//   * An X proof is decided from what THIS server fetched from X, plus the
+//     post id's own timestamp. Anything short of a confident pass is review.
+//   * Rewards are never computed here — the database reads the event's own
+//     config and applies them only when a proof becomes verified.
+import {
+  kstDayOf, addDays, campaignPhase, missionById, parseXPostUrl, snowflakeTime, normalizeHandle,
+  parseOembed, decideXProof, cityPhase, sanitizeMnetChecks, sanitizeClientCertChecks, decideMnetChecks,
+  normalizeCertificateNumber, participationMinuteKey, votingStreak, missionStates, missionProgress, giftState, pulseView,
+} from './vote-campaign-rules.js'
+
+export const PROOF_BUCKET = 'campaign-proofs'
+const SIGNED_URL_TTL_SECONDS = 10 * 60
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024
+const MIMES = { 'image/jpeg': 'jpg', 'image/png': 'png' }
+const HEX64 = /^[0-9a-f]{64}$/
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+const fail = (error, extra = {}) => ({ success: false, error, ...extra })
+const agentOf = (params) => String(params.agentNo || '').trim().toUpperCase()
+
+export async function sha256Hex(bytes) {
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes)
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+/** HMAC-SHA256(key, campaign|kind|value) as hex. The key lives only in the
+ *  Edge Function's environment, so a stored fingerprint can't be reversed
+ *  or tested against a guessed number from database contents alone. */
+export async function certFingerprint(key, campaignId, kind, value) {
+  const enc = new TextEncoder()
+  const k = await globalThis.crypto.subtle.importKey('raw', enc.encode(key), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+  const sig = await globalThis.crypto.subtle.sign('HMAC', k, enc.encode(`${campaignId}|${kind}|${value}`))
+  return Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+function decodeBase64(b64) {
+  try { return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)) } catch { return null }
+}
+
+async function loadCampaign(db, id) {
+  if (!/^[a-z0-9_]{3,40}$/.test(String(id || ''))) return null
+  const { data } = await db.from('rc_vote_campaigns').select('*').eq('id', id).eq('active', true).maybeSingle()
+  return data || null
+}
+
+/** The campaign the player page should show: the open one, else the one that
+ *  closed most recently (so a ready Voting Gift is still reachable). */
+async function currentCampaign(db, now) {
+  const { data } = await db.from('rc_vote_campaigns').select('*').eq('active', true)
+    .order('closes_at', { ascending: false }).limit(5)
+  const rows = data || []
+  return rows.find((c) => campaignPhase(c, now) === 'open') || rows.find((c) => campaignPhase(c, now) === 'closed') || null
+}
+
+// ── X verification (swappable) ─────────────────────────────────────────
+
+/**
+ * The verifier abstraction: anything with verify({ postId }) that returns
+ * { ok: true, authorHandle, hashtags } or { ok: false, reason }. The first
+ * implementation is X's public oEmbed endpoint (no key). If X changes it,
+ * swap this object; the decision logic does not move.
+ */
+export function oembedXVerifier(fetchImpl = globalThis.fetch, timeoutMs = 6000) {
+  return {
+    method: 'x_oembed',
+    async verify({ postId }) {
+      const ctl = new AbortController()
+      const timer = setTimeout(() => ctl.abort(), timeoutMs)
+      try {
+        // Looked up by id alone: oEmbed answers with the post's real author
+        // whatever handle a pasted link claims.
+        const target = encodeURIComponent(`https://x.com/i/status/${postId}`)
+        const res = await fetchImpl(`https://publish.x.com/oembed?omit_script=1&dnt=true&url=${target}`,
+          { signal: ctl.signal, headers: { accept: 'application/json' } })
+        if (res.status === 404) return { ok: false, reason: 'not_found' }
+        if (res.status === 403) return { ok: false, reason: 'forbidden' } // protected account
+        if (!res.ok) return { ok: false, reason: 'unavailable' }
+        const json = await res.json()
+        if (!String(json?.url || '').endsWith(`/status/${postId}`)) return { ok: false, reason: 'unavailable' }
+        const parsed = parseOembed(json)
+        if (!parsed) return { ok: false, reason: 'unavailable' }
+        return { ok: true, authorHandle: parsed.authorHandle, hashtags: parsed.hashtags }
+      } catch {
+        return { ok: false, reason: 'unavailable' }
+      } finally {
+        clearTimeout(timer)
+      }
+    },
+  }
+}
+
+// ── World-screen summary (rides getGameState) ──────────────────────────
+
+/**
+ * The City screen's summary (map marker + banner), riding getGameState.
+ * Kept cheap on purpose — it runs on every City poll:
+ *   one small campaign read, today's own proofs (indexed), the agent's own
+ *   team (primary key), and the team scores from a SHARED cache row
+ *   (60s, via the injected `cache`), so the score aggregate runs about once
+ *   a minute for everyone rather than once per agent per poll.
+ * Team totals are never computed in the browser.
+ */
+export async function getVotingBanner(db, agentNo, now = new Date(), { cache } = {}) {
+  const { data } = await db.from('rc_vote_campaigns')
+    .select('id, title, round_label, opens_at, closes_at, missions, battle').eq('active', true)
+    .order('closes_at', { ascending: false }).limit(5)
+  const c = (data || []).find((row) => cityPhase(row, now))
+  if (!c) return null
+  const phase = cityPhase(c, now)
+  const today = kstDayOf(now)
+  const battleOn = !!c.battle?.enabled
+  const scores = async () => {
+    const { data: b } = await db.rpc('rc_campaign_battle_state', { p_campaign_id: c.id, p_agent_no: '' })
+    return { teams: b?.teams || {}, total: Number(b?.total) || 0, frozen: !!b?.frozen, winners: b?.winners || null }
+  }
+  const [proofsRes, teamRes, battle] = await Promise.all([
+    phase === 'open'
+      ? db.from('rc_campaign_proofs').select('mission_id, vote_day, status').eq('campaign_id', c.id).eq('agent_no', agentNo).eq('vote_day', today)
+      : Promise.resolve({ data: [] }),
+    battleOn ? db.from('rc_campaign_teams').select('team').eq('campaign_id', c.id).eq('agent_no', agentNo).maybeSingle() : Promise.resolve({ data: null }),
+    battleOn ? (cache ? cache(`vote_battle:${c.id}`, 60_000, scores) : scores()) : Promise.resolve(null),
+  ])
+  const states = missionStates(c, proofsRes.data || [], today)
+  const progress = missionProgress(c, proofsRes.data || [], today)
+  return {
+    campaignId: c.id, title: c.title, roundLabel: c.round_label, phase,
+    closesAt: c.closes_at, freezeAt: c.battle?.freeze_at || c.closes_at,
+    done: Object.values(progress).reduce((n, p) => n + p.verified, 0),
+    total: Object.values(progress).reduce((n, p) => n + p.max, 0),
+    battle: battleOn ? {
+      myTeam: teamRes.data?.team || null,
+      teams: (c.battle.teams || []).map((t) => ({ id: t.id, label: t.label, points: Number(battle?.teams?.[t.id]) || 0 })),
+      total: battle?.total || 0,
+      milestones: (Array.isArray(c.battle.milestones) ? c.battle.milestones : []).map((target) => ({
+        target: Number(target), reached: (battle?.total || 0) >= Number(target),
+      })),
+      // Only after the freeze, and only once the cached score knows it.
+      winners: phase === 'final' && battle?.frozen ? battle.winners : null,
+    } : null,
+  }
+}
+
+// ── Player page ────────────────────────────────────────────────────────
+
+const GIFT_KINDS = ['charge_cell', 'xp', 'streak_freeze', 'extension', 'wings', 'backup_pass']
+
+/** What a pool can hold, for display — kinds and amounts, never weights. */
+function poolKinds(pool) {
+  return (Array.isArray(pool) ? pool : [])
+    .filter((x) => GIFT_KINDS.includes(x?.kind) && Number(x.weight) > 0)
+    .map((x) => ({ kind: x.kind, amount: Number(x.amount) || 1 }))
+}
+
+/** Battle numbers for one agent, all counted by the database.
+ *  verifiedCount: any verified MAMA mission qualifies for Battle Gifts;
+ *  the winner reward needs a point actually scored for the winning team. */
+function battleView(c, b, team, claims, winnerClaim, verifiedCount) {
+  const cfg = c.battle || {}
+  const teams = (cfg.teams || []).map((t) => ({
+    id: t.id, label: t.label, points: Number(b?.teams?.[t.id]) || 0, size: Number(b?.teamSizes?.[t.id]) || 0,
+  }))
+  const total = Number(b?.total) || 0
+  const mine = Number(b?.mine) || 0
+  const claimed = new Set((claims || []).map((r) => Number(r.milestone_index)))
+  const targets = Array.isArray(cfg.milestones) ? cfg.milestones.map(Number).filter((x) => x > 0) : null
+  const giftReady = !!targets && poolKinds(cfg.gift?.pool).length > 0
+  const contributor = verifiedCount > 0
+  const frozen = !!b?.frozen
+  const winners = Array.isArray(b?.winners) ? b.winners : []
+  const reward = Array.isArray(cfg.winner_reward) ? cfg.winner_reward.filter((x) => GIFT_KINDS.includes(x?.kind)) : []
+  let winnerState = 'pending'
+  if (winnerClaim) winnerState = 'claimed'
+  else if (frozen && mine === 0) winnerState = 'not_contributor'
+  else if (frozen && !winners.includes(team?.team)) winnerState = 'not_winner'
+  else if (frozen) winnerState = 'claimable'
+  return {
+    teams,
+    myTeam: team?.team || null,
+    assignedVia: team?.via || null,
+    myPoints: mine,
+    total,
+    closesAt: c.closes_at,
+    freezeAt: b?.freezeAt || cfg.freeze_at || c.closes_at,
+    frozen,
+    winners: frozen ? winners : null,
+    milestones: giftReady
+      ? targets.map((target, index) => ({
+        index, target, reached: total >= target, claimed: claimed.has(index),
+        claimable: total >= target && contributor && !claimed.has(index),
+      }))
+      : null,
+    giftPool: giftReady ? poolKinds(cfg.gift.pool) : [],
+    contributor,
+    winnerReward: reward.length ? {
+      rewards: reward.map((x) => ({ kind: x.kind, amount: Number(x.amount) || 1 })),
+      state: winnerState,
+    } : null,
+  }
+}
+
+export async function getVotingStatus(db, params, now = new Date()) {
+  const agentNo = agentOf(params)
+  const c = params.campaignId ? await loadCampaign(db, String(params.campaignId)) : await currentCampaign(db, now)
+  if (!c) return fail('no_campaign')
+  const today = kstDayOf(now)
+  const badgeTemplate = c.rewards?.badge_template_id || null
+  const battleOn = !!c.battle?.enabled
+
+  const [proofsRes, verifiedRes, handleRes, progressRes, opensRes, fillsRes, pulseRes, badgeRes, teamRes, battleRes, claimsRes, winnerRes] = await Promise.all([
+    // Own rows only. Bounded: a short campaign, at most six proofs per day.
+    db.from('rc_campaign_proofs')
+      .select('id, mission_id, vote_day, status, checks, verify_note, submitted_at, verified_at')
+      .eq('campaign_id', c.id).eq('agent_no', agentNo).order('submitted_at', { ascending: false }).limit(60),
+    db.from('rc_campaign_proofs').select('vote_day')
+      .eq('campaign_id', c.id).eq('agent_no', agentNo).eq('status', 'verified').limit(400),
+    db.from('rc_agent_x_handles').select('x_handle').eq('campaign_id', c.id).eq('agent_no', agentNo).order('created_at', { ascending: true }).limit(3),
+    db.from('rc_vote_gift_progress').select('fill').eq('campaign_id', c.id).eq('agent_no', agentNo).maybeSingle(),
+    db.from('rc_vote_gift_opens').select('id', { count: 'exact', head: true })
+      .eq('campaign_id', c.id).eq('agent_no', agentNo).eq('kst_day', today),
+    db.from('rc_vote_gift_fills').select('mission_id, vote_day, amount, created_at')
+      .eq('campaign_id', c.id).eq('agent_no', agentNo).order('created_at', { ascending: false }).limit(5),
+    // The shared Pulse snapshot: one cached row, written only by the
+    // scheduled collector. Aggregates only.
+    db.from('rc_vote_pulse').select('total_count, previous_count, last_success_at, last_status')
+      .eq('campaign_id', c.id).maybeSingle(),
+    badgeTemplate
+      ? db.from('rc_badges').select('badge_id').eq('agent_no', agentNo).eq('badge_id', badgeTemplate).maybeSingle()
+      : Promise.resolve({ data: null }),
+    // Resolving here is what makes a timed-out chooser stick even if the
+    // player closed the app mid-countdown: the next read assigns them.
+    battleOn ? db.rpc('rc_campaign_team_resolve', { p_campaign_id: c.id, p_agent_no: agentNo }) : Promise.resolve({ data: null }),
+    battleOn ? db.rpc('rc_campaign_battle_state', { p_campaign_id: c.id, p_agent_no: agentNo }) : Promise.resolve({ data: null }),
+    battleOn ? db.from('rc_battle_gift_claims').select('milestone_index').eq('campaign_id', c.id).eq('agent_no', agentNo)
+      : Promise.resolve({ data: [] }),
+    battleOn ? db.from('rc_battle_winner_claims').select('team').eq('campaign_id', c.id).eq('agent_no', agentNo).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ])
+
+  const proofs = proofsRes.data || []
+  const verifiedDays = [...new Set((verifiedRes.data || []).map((r) => r.vote_day))]
+  const fill = Number(progressRes.data?.fill) || 0
+  const opensToday = Number(opensRes.count) || 0
+  const gift = c.gift || {}
+  const rewards = c.rewards || {}
+  const xMission = (c.missions || []).find((m) => m.kind === 'x_post')
+
+  return {
+    success: true,
+    campaign: {
+      id: c.id, title: c.title, roundLabel: c.round_label, opensAt: c.opens_at, closesAt: c.closes_at,
+      phase: campaignPhase(c, now),
+      // Mission config the page needs to render; nothing reward-related.
+      missions: (c.missions || []).map((m) => ({
+        id: m.id, kind: m.kind, label: m.label, voteUrl: m.vote_url || null,
+        maxDaily: Math.max(1, Number(m.max_daily) || 1), maxHandles: Math.max(1, Number(m.max_handles) || 1),
+        hashtags: m.hashtags || [], requireHandleMatch: !!m.require_handle_match,
+        // For the browser's friendly pre-check only.
+        ...(m.kind === 'mnet_certificate' ? { certificate: m.certificate || {} } : {}),
+      })),
+    },
+    today,
+    states: missionStates(c, proofs, today),
+    todayProgress: missionProgress(c, proofs, today),
+    todayProofs: proofs.filter((p) => p.vote_day === today && p.status !== 'rejected')
+      .map((p) => ({ missionId: p.mission_id, status: p.status, checks: p.checks || {}, note: p.verify_note || null })),
+    stats: {
+      verifiedVotes: (verifiedRes.data || []).length,
+      votingDays: verifiedDays.length,
+      streak: votingStreak(verifiedDays, today),
+    },
+    activity: proofs.slice(0, 8).map((p) => ({
+      missionId: p.mission_id, voteDay: p.vote_day, status: p.status, at: p.verified_at || p.submitted_at,
+    })),
+    xHandleLinked: (handleRes.data || []).length > 0,
+    // Their own handles, shown only back to them on their own page.
+    xHandles: (handleRes.data || []).map((r) => r.x_handle),
+    xHandle: handleRes.data?.[0]?.x_handle || null,
+    gift: {
+      name: gift.name || 'Voting Gift',
+      fill,
+      threshold: Number(gift.threshold) || null,
+      dailyCap: Number(gift.daily_open_cap) || null,
+      opensToday,
+      state: giftState(gift, fill, opensToday),
+      pool: poolKinds(gift.pool),
+      contributions: (fillsRes.data || []).map((f) => ({ missionId: f.mission_id, voteDay: f.vote_day, amount: f.amount })),
+    },
+    badge: badgeTemplate ? {
+      templateId: badgeTemplate,
+      verifiedDays: Number(rewards.badge_verified_days) || null,
+      daysDone: verifiedDays.length,
+      earned: !!badgeRes.data,
+    } : null,
+    battle: battleOn ? battleView(c, battleRes.data, teamRes.data, claimsRes.data, winnerRes.data, (verifiedRes.data || []).length) : null,
+    pulse: c.pulse?.enabled ? pulseView(pulseRes.data, xMission?.hashtags || [], now) : null,
+  }
+}
+
+// ── Team battle ────────────────────────────────────────────────────────
+
+function teamOut(c, state, now = new Date()) {
+  const deadline = state?.deadline ? new Date(state.deadline) : null
+  return {
+    success: true,
+    team: state?.team || null,
+    via: state?.via || null,
+    // Seconds left on the SERVER's clock, so a phone with a wrong clock
+    // still sees the real countdown.
+    secondsLeft: deadline && !state?.team ? Math.max(0, Math.ceil((deadline - now) / 1000)) : 0,
+    teams: (c.battle?.teams || []).map((t) => ({ id: t.id, label: t.label })),
+  }
+}
+
+/** Opens (or continues) the 7-second choice. After the window it returns
+ *  the server's own assignment instead. */
+export async function startVotingTeamChoice(db, params, now = new Date()) {
+  const c = await loadCampaign(db, String(params.campaignId || ''))
+  if (!c?.battle?.enabled) return fail('battle_off')
+  if (campaignPhase(c, now) === 'upcoming') return fail('voting_not_open')
+  const { data, error } = await db.rpc('rc_campaign_team_start', { p_campaign_id: c.id, p_agent_no: agentOf(params) })
+  if (error || data?.error) return fail(data?.error || 'db_error')
+  return teamOut(c, data, now)
+}
+
+export async function chooseVotingTeam(db, params, now = new Date()) {
+  const c = await loadCampaign(db, String(params.campaignId || ''))
+  if (!c?.battle?.enabled) return fail('battle_off')
+  const team = String(params.team || '')
+  if (!(c.battle.teams || []).some((t) => t.id === team)) return fail('team_invalid')
+  const { data, error } = await db.rpc('rc_campaign_team_choose', { p_campaign_id: c.id, p_agent_no: agentOf(params), p_team: team })
+  if (error || data?.error) return fail(data?.error || 'db_error')
+  return teamOut(c, data, now)
+}
+
+/** After the Oct 23 12:00 KST freeze: the winning team's contributors
+ *  (both teams on a tie) claim the winner reward once. */
+export async function claimBattleWinner(db, params) {
+  const requestId = String(params.requestId || '')
+  if (!UUID.test(requestId)) return fail('bad_request')
+  const c = await loadCampaign(db, String(params.campaignId || ''))
+  if (!c?.battle?.enabled) return fail('battle_off')
+  const { data: r, error } = await db.rpc('rc_battle_winner_claim', {
+    p_campaign_id: c.id, p_agent_no: agentOf(params), p_request_id: requestId,
+  })
+  if (error || !r?.success) return fail(r?.error || 'db_error')
+  return { success: true, rewards: r.rewards || [], replay: !!r.replay }
+}
+
+export async function claimBattleGift(db, params) {
+  const requestId = String(params.requestId || '')
+  const index = Number(params.milestoneIndex)
+  if (!UUID.test(requestId) || !Number.isInteger(index) || index < 0) return fail('bad_request')
+  const c = await loadCampaign(db, String(params.campaignId || ''))
+  if (!c?.battle?.enabled) return fail('battle_off')
+  const { data: r, error } = await db.rpc('rc_battle_gift_claim', {
+    p_campaign_id: c.id, p_agent_no: agentOf(params), p_milestone_index: index, p_request_id: requestId,
+  })
+  if (error || !r?.success) return fail(r?.error || 'db_error')
+  return { success: true, rewards: r.rewards || [], replay: !!r.replay }
+}
+
+// ── Mnet ───────────────────────────────────────────────────────────────
+
+export async function submitMnetProof(db, params, now = new Date()) {
+  const agentNo = agentOf(params)
+  const c = await loadCampaign(db, String(params.campaignId || ''))
+  if (!c) return fail('no_campaign')
+  const phase = campaignPhase(c, now)
+  if (phase !== 'open') return fail(phase === 'upcoming' ? 'voting_not_open' : 'voting_closed')
+  const mission = missionById(c, String(params.missionId || 'mnet'))
+  if (!mission || mission.kind !== 'mnet_certificate') return fail('bad_mission')
+
+  const mime = String(params.imageMime || '').toLowerCase()
+  if (!MIMES[mime]) return fail('bad_image_type')
+  const bytes = decodeBase64(String(params.imageBase64 || ''))
+  if (!bytes || !bytes.length) return fail('proof_required')
+  if (bytes.length > MAX_IMAGE_BYTES) return fail('image_too_large')
+  const originalHash = String(params.originalHash || '').toLowerCase()
+  if (originalHash && !HEX64.test(originalHash)) return fail('bad_original_hash')
+
+  const voteDay = kstDayOf(now)
+  const imageHash = await sha256Hex(bytes)
+  const path = `${c.id}/${agentNo}/${voteDay}-${mission.id}-${imageHash.slice(0, 16)}.${MIMES[mime]}`
+
+  const { error: upErr } = await db.storage.from(PROOF_BUCKET).upload(path, bytes, { contentType: mime, upsert: false })
+  // The path is derived from the content, so "already exists" means this
+  // exact upload already landed (a retry) — carry on to the idempotent RPC.
+  const existed = !!upErr && /exist|duplicate|409/i.test(`${upErr.message} ${upErr.statusCode || ''}`)
+  if (upErr && !existed) return fail('upload_failed')
+
+  // A timed-out 7-second choice is settled before the proof goes in, so the
+  // database's team_required rule only stops agents who truly have no side.
+  if (c.battle?.enabled) await db.rpc('rc_campaign_team_resolve', { p_campaign_id: c.id, p_agent_no: agentNo })
+  const { data: r, error } = await db.rpc('rc_campaign_submit_proof', {
+    p_campaign_id: c.id, p_mission_id: mission.id, p_agent_no: agentNo, p_vote_day: voteDay,
+    p_status: 'verifying', p_checks: {}, p_client_checks: sanitizeClientCertChecks(params.clientChecks),
+    p_method: null, p_note: 'awaiting_trusted_check',
+    p_proof_path: path, p_image_hash: imageHash, p_original_hash: originalHash || null,
+    p_post_id: null, p_post_url: null, p_post_author: null,
+  })
+  if (error || !r?.success) {
+    // Don't leave a file nothing points at.
+    if (!existed) await db.storage.from(PROOF_BUCKET).remove([path])
+    return fail(r?.error || 'db_error', r?.status ? { status: r.status } : {})
+  }
+  return { success: true, proofId: r.id, status: r.status, voteDay }
+}
+
+// ── X ──────────────────────────────────────────────────────────────────
+
+export async function setXHandle(db, params) {
+  const agentNo = agentOf(params)
+  const campaignId = String(params.campaignId || '')
+  const raw = String(params.xHandle ?? '').trim()
+  if (!raw) return fail('bad_handle')
+  const handle = normalizeHandle(raw)
+  if (!handle) return fail('bad_handle')
+  const { data: r, error } = await db.rpc('rc_campaign_register_x_handle', {
+    p_campaign_id: campaignId, p_agent_no: agentNo, p_x_handle: handle,
+  })
+  if (error || !r?.success) return fail(r?.error || 'db_error')
+  return { success: true, xHandle: handle, replay: !!r.replay }
+}
+
+export async function submitXProof(db, params, { verifier, now = new Date() } = {}) {
+  const agentNo = agentOf(params)
+  const c = await loadCampaign(db, String(params.campaignId || ''))
+  if (!c) return fail('no_campaign')
+  const phase = campaignPhase(c, now)
+  if (phase !== 'open') return fail(phase === 'upcoming' ? 'voting_not_open' : 'voting_closed')
+  const mission = missionById(c, String(params.missionId || 'x'))
+  if (!mission || mission.kind !== 'x_post') return fail('bad_mission')
+
+  const parsed = parseXPostUrl(params.postUrl)
+  if (!parsed) return fail('bad_url')
+  const postedAt = snowflakeTime(parsed.postId)
+  if (!postedAt) return fail('bad_url')
+  // The window opens part-way through a KST day (19:00 on Oct 12): a post
+  // from earlier that day is on a valid day but is not a vote.
+  if (postedAt < new Date(c.opens_at)) return fail('post_before_open')
+  if (postedAt > new Date(c.closes_at)) return fail('post_after_close')
+
+  const { data: registeredRows } = await db.from('rc_agent_x_handles').select('x_handle')
+    .eq('campaign_id', c.id).eq('agent_no', agentNo).limit(Math.max(1, Number(mission.max_handles) || 1))
+  const registered = new Set((registeredRows || []).map((r) => r.x_handle))
+  if (mission.require_handle_match && !registered.size) return fail('x_handle_required')
+
+  // The post's own timestamp decides its day. Today counts; so does
+  // yesterday, for a post made just before 00:00 KST and pasted after it.
+  const voteDay = kstDayOf(postedAt)
+  const today = kstDayOf(now)
+  if (voteDay !== today && voteDay !== addDays(today, -1)) return fail('post_wrong_day', { postDay: voteDay })
+
+  const fetched = await (verifier || oembedXVerifier()).verify({ postId: parsed.postId })
+  const fetchedAuthor = fetched?.ok ? normalizeHandle(fetched.authorHandle) : null
+  const expectedHandle = fetchedAuthor && registered.has(fetchedAuthor)
+    ? fetchedAuthor
+    : parsed.urlHandle && registered.has(parsed.urlHandle) ? parsed.urlHandle : null
+  const decision = decideXProof({
+    fetched, requiredHashtags: mission.hashtags || [], expectedHandle,
+    requireHandleMatch: !!mission.require_handle_match, dateOk: true,
+  })
+  const author = fetchedAuthor
+
+  // A timed-out 7-second choice is settled before the proof goes in, so the
+  // database's team_required rule only stops agents who truly have no side.
+  if (c.battle?.enabled) await db.rpc('rc_campaign_team_resolve', { p_campaign_id: c.id, p_agent_no: agentNo })
+  const { data: r, error } = await db.rpc('rc_campaign_submit_proof', {
+    p_campaign_id: c.id, p_mission_id: mission.id, p_agent_no: agentNo, p_vote_day: voteDay,
+    p_status: decision.status, p_checks: decision.checks, p_client_checks: {},
+    p_method: verifier?.method || 'x_oembed', p_note: decision.note,
+    p_proof_path: null, p_image_hash: null, p_original_hash: null,
+    p_post_id: parsed.postId, p_post_url: `https://x.com/${author || 'i'}/status/${parsed.postId}`, p_post_author: author,
+  })
+  if (error || !r?.success) return fail(r?.error || 'db_error', r?.status ? { status: r.status } : {})
+  return { success: true, proofId: r.id, status: r.status, checks: decision.checks, voteDay }
+}
+
+// ── Voting Gift ────────────────────────────────────────────────────────
+
+export async function openVotingGift(db, params) {
+  const agentNo = agentOf(params)
+  const requestId = String(params.requestId || '')
+  if (!UUID.test(requestId)) return fail('bad_request')
+  const c = await loadCampaign(db, String(params.campaignId || ''))
+  if (!c) return fail('no_campaign')
+  const { data: r, error } = await db.rpc('rc_vote_gift_open', {
+    p_campaign_id: c.id, p_agent_no: agentNo, p_request_id: requestId,
+  })
+  if (error || !r?.success) return fail(r?.error || 'db_error')
+  return { success: true, rewards: r.rewards || [], fillRemaining: r.fillRemaining ?? null, replay: !!r.replay }
+}
+
+// ── Admin review ───────────────────────────────────────────────────────
+
+const X_CHECK_KEYS = ['date', 'found', 'publicPost', 'hashtags', 'author']
+function sanitizeChecksFor(kind, raw) {
+  if (kind === 'mnet_certificate') return sanitizeMnetChecks(raw)
+  const out = {}
+  for (const k of X_CHECK_KEYS) if (raw && typeof raw[k] === 'boolean') out[k] = raw[k]
+  return out
+}
+
+const QUEUE_STATUSES = new Set(['verifying', 'review', 'verified', 'rejected'])
+
+export async function adminListCampaignProofs(db, params) {
+  const c = params.campaignId ? await loadCampaign(db, String(params.campaignId)) : await currentCampaign(db, new Date())
+  if (!c) return fail('no_campaign')
+  const status = QUEUE_STATUSES.has(String(params.status)) ? String(params.status) : 'review'
+  const limit = Math.min(50, Math.max(1, Number(params.limit) || 20))
+  const offset = Math.max(0, Number(params.offset) || 0)
+
+  const [{ count }, { data, error }, counts] = await Promise.all([
+    db.from('rc_campaign_proofs').select('id', { count: 'exact', head: true }).eq('campaign_id', c.id).eq('status', status),
+    db.from('rc_campaign_proofs')
+      .select('id, mission_id, agent_no, vote_day, status, checks, client_checks, verify_method, verify_note, proof_path, post_url, post_author, submitted_at, reviewed_by, reviewed_at, review_note, duplicate_of, duplicate_kind')
+      .eq('campaign_id', c.id).eq('status', status).order('submitted_at', { ascending: true }).range(offset, offset + limit - 1),
+    Promise.all(['verifying', 'review'].map((s) => db.from('rc_campaign_proofs')
+      .select('id', { count: 'exact', head: true }).eq('campaign_id', c.id).eq('status', s))),
+  ])
+  if (error) return fail('db_error')
+  const rows = data || []
+
+  const xAgents = [...new Set(rows.filter((r) => missionById(c, r.mission_id)?.kind === 'x_post').map((r) => r.agent_no))]
+  const handles = new Map()
+  if (xAgents.length) {
+    const { data: hs } = await db.from('rc_agent_x_handles').select('agent_no, x_handle').in('agent_no', xAgents)
+    for (const h of hs || []) handles.set(h.agent_no, h.x_handle)
+  }
+
+  const proofs = await Promise.all(rows.map(async (r) => {
+    const { proof_path, ...rest } = r
+    let proofUrl = null
+    if (proof_path) {
+      const { data: s } = await db.storage.from(PROOF_BUCKET).createSignedUrl(proof_path, SIGNED_URL_TTL_SECONDS)
+      proofUrl = s?.signedUrl || null
+    }
+    const mission = missionById(c, r.mission_id)
+    return {
+      ...rest, kind: mission?.kind || null, missionLabel: mission?.label || r.mission_id,
+      expectedHandle: handles.get(r.agent_no) || null, proofUrl,
+      // What a trusted OCR run needs to know about this mission, nothing more.
+      // What the trusted check needs for this mission, nothing more.
+      certificate: mission?.kind === 'mnet_certificate' ? (mission.certificate || {}) : null,
+      window: { opensAt: c.opens_at, closesAt: c.closes_at },
+    }
+  }))
+
+  return {
+    success: true, campaign: { id: c.id, title: c.title }, status, proofs, total: count || 0, limit, offset,
+    queue: { verifying: counts[0].count || 0, review: counts[1].count || 0 },
+  }
+}
+
+async function loadProofWithMission(db, proofId) {
+  const { data: p } = await db.from('rc_campaign_proofs').select('id, campaign_id, mission_id, status').eq('id', proofId).maybeSingle()
+  if (!p) return { error: 'not_found' }
+  const c = await loadCampaign(db, p.campaign_id)
+  const mission = c ? missionById(c, p.mission_id) : null
+  if (!mission) return { error: 'not_found' }
+  return { proof: p, mission }
+}
+
+/** A trusted OCR run (in the admin panel, on the server-stored image)
+ *  reports three booleans; the server makes the decision. */
+export async function adminRecordCampaignChecks(db, params, { fingerprintKey = '' } = {}) {
+  const proofId = Number(params.proofId)
+  if (!Number.isInteger(proofId) || proofId <= 0) return fail('bad_params')
+  const { proof, mission, error } = await loadProofWithMission(db, proofId)
+  if (error) return fail(error)
+  if (mission.kind !== 'mnet_certificate') return fail('bad_mission')
+  const decision = decideMnetChecks(params.checks)
+
+  // Duplicate-certificate fingerprints. The raw number and time exist only
+  // in this request: normalised, HMAC'd, and dropped — never stored,
+  // logged or returned. No key configured → no fingerprints, and the
+  // existing image-hash + certificate checks stand alone.
+  let certFp = null
+  let timeFp = null
+  if (fingerprintKey) {
+    const len = Number(mission.certificate?.number_length) || 16
+    const num = normalizeCertificateNumber(params.certificateNumber)
+    if (num.length === len && /^[0-9A-Z]+$/.test(num)) certFp = await certFingerprint(fingerprintKey, proof.campaign_id, 'number', num)
+    const minute = params.participationAt ? participationMinuteKey(params.participationAt) : null
+    if (minute) timeFp = await certFingerprint(fingerprintKey, proof.campaign_id, 'minute', minute)
+  }
+
+  const { data: r, error: rpcErr } = await db.rpc('rc_campaign_record_trusted_checks', {
+    p_proof_id: proof.id, p_status: decision.status, p_checks: decision.checks, p_note: decision.note,
+    p_actor: String(params.admin || 'admin'), p_cert_fp: certFp, p_time_fp: timeFp,
+  })
+  if (rpcErr || !r?.success) return fail(r?.error || 'db_error', r?.status ? { status: r.status } : {})
+  return { success: true, status: r.status, checks: decision.checks, fingerprinted: { number: !!certFp, time: !!timeFp } }
+}
+
+const DECISIONS = {
+  verify: { to: 'verified', from: ['verifying', 'review', 'rejected'] },
+  reject: { to: 'rejected', from: ['verifying', 'review'] },
+  keep: { to: 'review', from: ['verifying', 'review'] },
+}
+
+export async function adminReviewCampaignProof(db, params) {
+  const proofId = Number(params.proofId)
+  const d = DECISIONS[String(params.decision)]
+  if (!Number.isInteger(proofId) || proofId <= 0 || !d) return fail('bad_params')
+  const { proof, mission, error } = await loadProofWithMission(db, proofId)
+  if (error) return fail(error)
+  const checks = params.checks && typeof params.checks === 'object' ? sanitizeChecksFor(mission.kind, params.checks) : null
+  const note = params.note ? String(params.note).slice(0, 300) : null
+  const { data: r, error: rpcErr } = await db.rpc('rc_campaign_transition', {
+    p_proof_id: proof.id, p_from: d.from, p_to: d.to, p_checks: checks,
+    p_method: 'admin', p_actor: String(params.admin || 'admin').slice(0, 40), p_note: note,
+  })
+  if (rpcErr || !r?.success) return fail(r?.error || 'db_error', r?.status ? { status: r.status } : {})
+  return { success: true, status: r.status }
+}

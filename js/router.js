@@ -13,7 +13,7 @@
 // which was tapped. A ?screen= query param read once at boot is what lets
 // those links actually mean what their labels say; goWorld/goResources/etc.
 // still work exactly as before for every in-app navigation after that.
-const DEEP_LINKABLE = new Set(['world', 'resources', 'moon', 'diary', 'settings', 'candystar', 'ranking'])
+const DEEP_LINKABLE = new Set(['world', 'resources', 'moon', 'diary', 'settings', 'candystar', 'ranking', 'voting'])
 function initialScreen() {
   const requested = new URLSearchParams(location.search).get('screen')
   return { name: DEEP_LINKABLE.has(requested) ? requested : 'world', wardId: null, districtId: null, origin: null }
@@ -66,6 +66,12 @@ export function goSerendipityRoom(origin = null) {
 // ARIRANG RE:CELEBRATE live Party page (screen-recelebrate.js).
 export function goRecelebrate(origin = null) {
   set({ name: 'recelebrate', wardId: null, districtId: null, origin })
+}
+
+/** Voting (MAMA 2026 first) — voting.js. Deep-linkable so an announcement
+ *  can link straight to it with game.html?screen=voting. */
+export function goVoting(origin = null) {
+  set({ name: 'voting', wardId: null, districtId: null, origin })
 }
 
 export function goRanking(origin = null) {

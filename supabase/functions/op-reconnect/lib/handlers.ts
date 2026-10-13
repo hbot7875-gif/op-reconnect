@@ -22,6 +22,7 @@ import { awardBadge, resolveEquippedBadges } from './badge-profile.ts'
 import { districtBadgeProgress } from './badge-rules.js'
 import { getBackupOverlay, districtBackupPassChance } from './backup-pass.ts'
 import { getVmaBanner } from './vma-voting.ts'
+import { getVotingBanner } from './vote-campaign.ts'
 import { isBadgeEditor } from './badge-admin.ts'
 import { getDistrictMessageSummary } from './district-presence.ts'
 import { getModeVolumeReview } from './mode-guard.ts'
@@ -515,7 +516,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
   const [
     modeReview, { data: badgeRows }, { data: itemRows }, broadcasts, cityFeed,
     waitingAgents, onlineNow, districtMessages, equippedMap, isBadgeVaultEditor, leaveInfo, vma,
-    { data: backupOpenRows }, { data: backupMineRow }, { data: backupHelpingRow },
+    { data: backupOpenRows }, { data: backupMineRow }, { data: backupHelpingRow }, voting,
   ] = await Promise.all([
     // A review hint only — see the note above getModeVolumeReview's caller.
     player.agent_no === 'AGENT120' ? Promise.resolve(null) : timed('modeReview', getModeVolumeReview(supabase, player.agent_no, player.mode)),
@@ -564,6 +565,9 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     // binding after it, which silently handed `vma` the backup rows once.
     timed('backupHelping', supabase.from('rc_backup_requests')
       .select('id').eq('helper_agent_no', player.agent_no).eq('status', 'joined').maybeSingle()),
+    // Voting campaign summary for the World-screen card (MAMA 2026 first).
+    // Null outside a voting window. Last, for the same reason as above.
+    timed('voting', getVotingBanner(supabase, player.agent_no)),
   ])
   const equippedBadgeArtwork = equippedMap.get(player.agent_no) || null
   // One extra read only when someone is actually helping — the codename is
@@ -665,6 +669,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     // the player-facing state. See lib/broadcasts.ts.
     legalNotice: legalInfoNoticeDue(player.joined_at) ? LEGAL_INFO_NOTICE_ID : null,
     vma,
+    voting,
     ...(timing ? { timing } : {}),
     cityFeed,
     waitingAgents,

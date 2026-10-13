@@ -338,6 +338,22 @@ function toolMarker(angle, icon, label, onClick, extraClass, splitAfter = 0) {
   return g
 }
 
+/** MAMA 2026's live-event marker: the standard event marker (same halo,
+ *  tether and label as VMA / Golden Corner), with a small crossed-swords
+ *  glyph drawn in SVG instead of an emoji — a battle, not a location pin.
+ *  `live` adds a slow pulse while voting is open; during verification and
+ *  the final-result window it sits still. */
+function votingMarker(angle, v) {
+  const g = toolMarker(angle, '', v.label || 'MAMA 2026', v.onOpen, `vt-map-mama${v.live ? ' is-live' : ''}`)
+  const [mx, my] = pt(angle, 49)
+  const glyph = n('g', { class: 'vt-map-mama-glyph', transform: `translate(${(mx - 2.3).toFixed(2)} ${(my - 2.3).toFixed(2)}) scale(0.19)` })
+  for (const d of ['M14.5 17.5 3 6V3h3l11.5 11.5', 'm13 19 6-6', 'm16 16 4 4', 'm19 21 2-2', 'M14.5 6.5 18 3h3v3l-3.5 3.5', 'm5 14 4 4', 'm7 17-3 3', 'm3 19 2 2']) {
+    glyph.appendChild(n('path', { d }))
+  }
+  g.appendChild(glyph)
+  return g
+}
+
 /** ARIRANG RE:CELEBRATE's map object — a tiny Gwanghwamun-inspired gate
  *  landmark at its own seam (see the placement comment where this is
  *  called), not a tool marker or a generic festival stage. Deliberately NOT
@@ -790,6 +806,13 @@ export function renderCityMap(wards, districts, onSelect, homeFraction, onCandyS
   // temporary event marker sharing a side with a permanent utility would
   // read as equally routine, so VMA/Golden Corner get this side entirely.
   if (onVma) svg.appendChild(toolMarker(opts.birthdayAtTop ? Math.PI / 2 + 0.20 : Math.PI / 2 - (onGoldenCorner ? 0.20 : 0), '⚡', 'VMA', onVma, vmaPulse ? 'is-vma-pulse' : ''))
+  // MAMA adapts around the established City placements instead of moving
+  // them. The east seam is otherwise unused during this event and the
+  // standard two-line tool label was designed to stay inside the viewBox at
+  // a horizontal extreme. If a party temporarily owns that seam through
+  // Magic Shop, MAMA falls back to the bottom seam for that mutually
+  // exclusive legacy state.
+  if (opts.voting) svg.appendChild(votingMarker(onParty ? Math.PI / 2 : 0, opts.voting))
   if (onGoldenCorner) {
     const marker = toolMarker(opts.birthdayAtTop ? -Math.PI / 2 - 0.20 : Math.PI / 2 + (onVma ? 0.20 : 0), opts.birthdayIcon || '🐰', opts.birthdayLabel || 'Golden Corner', onGoldenCorner,
       goldenProgress >= 1 ? 'is-golden-complete' : goldenProgress > 0 ? 'is-golden-live' : 'is-golden-dark',

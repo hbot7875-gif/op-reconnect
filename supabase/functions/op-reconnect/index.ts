@@ -60,6 +60,11 @@ import { getRecelebrateState, issuePartyPass, startTeamChoice, chooseTeam } from
 import { getRecelebrateBattle, claimRecelebrateAfterParty } from './lib/recelebrate-battle.ts'
 import { pingRecelebratePresence } from './lib/recelebrate-presence.ts'
 import { getRecelebrateMessages, sendRecelebrateMessage } from './lib/recelebrate-chat.ts'
+import {
+  getVotingStatus, submitMnetProof, submitXProof, setXHandle, openVotingGift,
+  startVotingTeamChoice, chooseVotingTeam, claimBattleGift, claimBattleWinner,
+  adminListCampaignProofs, adminRecordCampaignChecks, adminReviewCampaignProof, cronVotePulse,
+} from './lib/vote-campaign.ts'
 import { getDearDiary, getDearDiaryArchive, getDearDiaryPreference, saveDearDiaryDecorations, saveDearDiaryNote, saveDearDiaryTheme } from './lib/dear-diary.ts'
 
 const CORS_HEADERS: Record<string, string> = {
@@ -194,6 +199,27 @@ const ROUTES: Record<string, Route> = {
   // (7) Admin review queue for anything OCR couldn't auto-clear.
   adminListVmaPending: { auth: 'admin', handler: async (sb, p) => adminListVmaPending(sb, await loadContent(sb), p) },
   adminReviewVmaVote: { auth: 'admin', handler: async (sb, p) => adminReviewVmaVote(sb, await loadContent(sb), p) },
+
+  // Voting campaigns (MAMA 2026 first) — lib/vote-campaign.ts and migration
+  // 20261013150000. Agent routes act only on the session-verified caller;
+  // review routes are admin-key gated like every other admin.html action.
+  getVotingStatus: { auth: 'agent', handler: (sb, p) => getVotingStatus(sb, p) },
+  submitMnetProof: { auth: 'agent', handler: (sb, p) => submitMnetProof(sb, p) },
+  submitXProof: { auth: 'agent', handler: (sb, p) => submitXProof(sb, p) },
+  setXHandle: { auth: 'agent', handler: (sb, p) => setXHandle(sb, p) },
+  openVotingGift: { auth: 'agent', handler: (sb, p) => openVotingGift(sb, p) },
+  // MAMA Battle (HOOLIGANS vs ALIENS). Named apart from RE:CELEBRATE's
+  // startTeamChoice/chooseTeam, which keep their own tables and rules.
+  startVotingTeamChoice: { auth: 'agent', handler: (sb, p) => startVotingTeamChoice(sb, p) },
+  chooseVotingTeam: { auth: 'agent', handler: (sb, p) => chooseVotingTeam(sb, p) },
+  claimBattleGift: { auth: 'agent', handler: (sb, p) => claimBattleGift(sb, p) },
+  claimBattleWinner: { auth: 'agent', handler: (sb, p) => claimBattleWinner(sb, p) },
+  adminListCampaignProofs: { auth: 'admin', handler: (sb, p) => adminListCampaignProofs(sb, p) },
+  adminRecordCampaignChecks: { auth: 'admin', handler: (sb, p) => adminRecordCampaignChecks(sb, p) },
+  adminReviewCampaignProof: { auth: 'admin', handler: (sb, p) => adminReviewCampaignProof(sb, p) },
+  // BTS X Vote Pulse refresh — Supabase Cron, about 4 times a day during
+  // voting (migration 20261013150500). Takes no params, like cronStorageSweep.
+  cronVotePulse: { auth: 'cron', handler: (sb) => cronVotePulse(sb) },
 
   // ── Backup Pass — see lib/backup-pass.ts and migration 20260819110000 ──
   getBackupStatus: { auth: 'agent', handler: async (sb, p) => getBackupStatus(sb, await loadContent(sb), p) },

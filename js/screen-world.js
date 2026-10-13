@@ -22,7 +22,7 @@
 
 import { el, esc, showOverlay, hideOverlay, unlockAfter, toast, getState, setState } from './state.js'
 import { call } from './api.js'
-import { goWorld, goWard, goDistrict, goCandyStar, goGoldenCorner, goSerendipityRoom } from './router.js'
+import { goWorld, goWard, goDistrict, goCandyStar, goGoldenCorner, goSerendipityRoom, goVoting } from './router.js'
 import { districtFraction } from './ui-district.js'
 import { districtGoalsLeft, districtPercent } from './district-progress.js'
 import { renderWardTiles, glanceStrip, wardDisplayName, districtDisplayName, HOME_BASE_WARD } from './ward-tiles.js'
@@ -39,6 +39,7 @@ import { openSuggestions } from './suggestions.js'
 import { openMagicShop } from './magic-shop.js'
 import { openHelpingZone } from './helping-zone.js'
 import { vmaEventCard, openVmaMission } from './vma.js'
+import { votingEventCard } from './voting-view.js'
 import { redZoneSheet, defuseResultSheet, defenderCommsSheet, getCommsSeen } from './bomb-sheet.js'
 import { tickCountdowns } from './countdown.js'
 import { redZonePercent, personalSignalCopy, redZoneHeadline, redZoneGoalCopy,
@@ -67,6 +68,14 @@ export function renderWorld(container, state) {
   // progress. See maybeShowDefuseResult for the one-shot success/failure
   // acknowledgement, which also used to be this card's job.
   if (state.vma) wrap.appendChild(vmaEventCard(state))
+  // Voting (MAMA 2026 first): one compact row while voting is open. The
+  // page itself is its own screen, not a sheet over the City.
+  if (state.voting) {
+    const holder = el('div', '', votingEventCard(state.voting))
+    const entry = holder.firstElementChild
+    entry.onclick = (e) => goVoting({ x: e.clientX, y: e.clientY })
+    wrap.appendChild(entry)
+  }
   const goldenBanner = goldenCornerBanner(state)
   if (goldenBanner) wrap.appendChild(goldenBanner)
   maybeShowDefuseResult(state.bomb?.resolvedDefuse)
@@ -449,7 +458,10 @@ function cityPlan(state) {
       arirangPartyIsComplete(),
       arirangPartyIsCounting(),
     ] : [null, false, null, false, false]),
-    { ...backupMapOpts(state), ...(jiminRoom ? { birthdayIcon: '🌙', birthdayLabel: 'Jimin Day Party', birthdayAtTop: true } : {}) }))
+    { ...backupMapOpts(state), ...(jiminRoom ? { birthdayIcon: '🌙', birthdayLabel: 'Jimin Day Party', birthdayAtTop: true } : {}),
+      // MAMA 2026: on the map exactly while the server sends its summary
+      // (voting → verification → 48h of final result), then gone by itself.
+      ...(state.voting ? { voting: { label: 'MAMA 2026', live: state.voting.phase === 'open', onOpen: (origin) => goVoting(origin) } } : {}) }))
   return box
 }
 

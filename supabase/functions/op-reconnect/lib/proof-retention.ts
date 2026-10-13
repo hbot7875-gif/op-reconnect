@@ -91,6 +91,13 @@ export async function sweepStorageDeletions(
       if (error) out.errors.push(`queue ${eventId}: ${error.message}`)
       else out.queued += Number(data) || 0
     }
+    // Voting-campaign proofs (MAMA 2026 onward) live in their own table and
+    // bucket; one call queues every campaign that closed `days` ago.
+    if (!opts.reason) {
+      const { data, error } = await supabase.rpc('rc_queue_expired_campaign_proofs', { p_days: days })
+      if (error) out.errors.push(`queue campaigns: ${error.message}`)
+      else out.queued += Number(data) || 0
+    }
 
     // ── 2. Claim under a lease, then delete.
     //

@@ -9,6 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/reconnect.css">
+<link rel="stylesheet" href="css/voting.css">
 <style>
   body { max-width: 1120px; margin: 0 auto; padding: 24px var(--gut) 60px; line-height: 1.5; }
   .adm-nav { font-size: 14px; font-weight: 500; margin-bottom: 22px; display: flex; gap: 10px; flex-wrap: wrap; }
@@ -488,6 +489,7 @@
   <button class="adm-tab" data-tab="lookup" type="button">🔎 Agent Lookup</button>
   <button class="adm-tab" data-tab="roster" type="button">👥 Agent Log</button>
   <button class="adm-tab" data-tab="vma" type="button">🎫 VMA Review</button>
+  <button class="adm-tab" data-tab="voting" type="button">🗳️ Voting Review</button>
   <button class="adm-tab" data-tab="reconnect" type="button">🔗 Reconnect</button>
 </div>
 
@@ -760,6 +762,9 @@
 </div>
 
 <!-- ── Reconnect ── -->
+<!-- ── Voting Review (MAMA 2026 onward; js/voting-admin.js) ── -->
+<div class="adm-panel" id="panel-voting" data-panel="voting" hidden></div>
+
 <div class="adm-panel" id="panel-reconnect" data-panel="reconnect" hidden>
   <section class="adm-card">
     <div class="adm-card-head">
@@ -807,6 +812,7 @@ import { call as rawCall, API_URL } from './js/api.js'
 import { enhanceSelect } from './js/rc-select.js'
 import { enhanceMultiSelect } from './js/rc-multiselect.js'
 import { scanVoteProofImage } from './js/vma.js'
+import { mountVotingReview } from './js/voting-admin.js'
 import { evaluateVoteProof } from './supabase/functions/op-reconnect/lib/vma-ocr.js'
 import {
   reconnectAdminAction, reconnectAdminBucket, reconnectBucketCounts,
@@ -2125,6 +2131,13 @@ $('btnRecheckAllVma').onclick = () => recheckAllVmaPending()
 $('btnVmaPrev').onclick = () => { vmaOffset = Math.max(0, vmaOffset - VMA_PAGE_SIZE); loadVmaPage() }
 $('btnVmaNext').onclick = () => { vmaOffset += VMA_PAGE_SIZE; loadVmaPage() }
 document.querySelector('[data-tab="vma"]').addEventListener('click', () => loadVmaPage())
+
+/* ── Voting Review — generic queue for voting campaigns (js/voting-admin.js) ── */
+let votingReview = null
+document.querySelector('[data-tab="voting"]').addEventListener('click', () => {
+  votingReview = votingReview || mountVotingReview($('panel-voting'), call)
+  votingReview.load()
+})
 
 /* ── Reconnect ── */
 let reconnectCases = []
