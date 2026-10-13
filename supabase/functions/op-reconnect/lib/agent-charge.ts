@@ -339,10 +339,9 @@ const GOLDEN_DEFENDER_BADGE_ID = 'event_jk_golden_defender_2026'
 // number the site owner picked, not derived from the new counting math.
 const GOLDEN_CORNER_TARGET = 1000
 // A fixed target, like Golden Corner: joining the event must only move the
-// shared percentage forward. The Jimin card has eight unique tracks rather
-// than thirteen, so 500 leaves room for a similar crowd without making each
-// agent's maximum eighteen lights feel negligible.
-const SERENDIPITY_ROOM_TARGET = 500
+// shared percentage forward. 1013 for 10/13, Jimin's birthday (site owner's
+// call, 2026-10-13, raised from 500 before any completion was recorded).
+const SERENDIPITY_ROOM_TARGET = 1013
 // How many counted plays per track "streaming it again" needs for the
 // Encore badge (see event.encoreBadgeTemplateId above).
 

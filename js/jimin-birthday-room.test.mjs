@@ -20,8 +20,8 @@ test('Jimin Birthday Room is routed as an event screen with a City return', () =
   assert.match(world, /back\.onclick = \(event\) => goWorld/)
 })
 
-test('the room uses the shared birthday-card activity and a fixed 500 target', () => {
-  assert.match(charge, /const SERENDIPITY_ROOM_TARGET = 500/)
+test('the room uses the shared birthday-card activity and a fixed 1013 target', () => {
+  assert.match(charge, /const SERENDIPITY_ROOM_TARGET = 1013/)
   assert.match(charge, /JIMIN_BIRTHDAY_EVENT_ID, 'Jimin Birthday Room', SERENDIPITY_ROOM_TARGET, true,/)
   assert.match(charge, /serendipityRoom: SerendipityRoomView \| null/)
 })

@@ -731,7 +731,7 @@ export function serendipityRoomContent(state) {
   const room = state.agentCharge?.serendipityRoom
   const card = (state.agentCharge?.eraCards || []).find((entry) => entry.id === room?.eventId)
   const community = Math.max(0, Number(room?.communityLights) || 0)
-  const target = Math.max(1, Number(room?.target) || 500)
+  const target = Math.max(1, Number(room?.target) || 1013)
   // A recorded completion never reads below 100%.
   const progress = room?.complete ? 1 : Math.min(1, community / target)
   const personalDone = Math.min(Number(card?.done) || 0, Number(card?.total) || 9)

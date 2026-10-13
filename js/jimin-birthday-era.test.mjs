@@ -95,7 +95,7 @@ test('room counts each agent across both days with one 2-per-track cap', () => {
   // Days are merged per agent before allocation, so 2 is per track per event.
   assert.match(charge, /const perAgentCounted = new Map<string, Map<string, number>>\(\)/)
   assert.match(charge, /allocateTrackHits\(entries, totals, BIRTHDAY_LIGHTS_PER_TRACK\)/)
-  assert.match(charge, /const SERENDIPITY_ROOM_TARGET = 500/)
+  assert.match(charge, /const SERENDIPITY_ROOM_TARGET = 1013/)
 })
 
 test('gift claim period is the event plus 7 days; earning stays in the event window', () => {
@@ -175,17 +175,17 @@ const fullDay = (agent, date, plays = 2) => ({
 test('the gift claim sends the server-computed contribution, and records completion once', async () => {
   mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-10-14T03:00:00Z') })
   try {
-    // 28 agents × 18 lights = 504 ≥ 500, split across both event days; a
+    // 57 agents × 18 lights = 1026 ≥ 1013, split across both event days; a
     // stray Oct 15 row must not count.
     const activity = []
-    for (let i = 0; i < 28; i++) activity.push(fullDay(`A${i}`, i % 2 ? '2026-10-13' : '2026-10-14'))
+    for (let i = 0; i < 57; i++) activity.push(fullDay(`A${i}`, i % 2 ? '2026-10-13' : '2026-10-14'))
     activity.push(fullDay('A0', '2026-10-15', 50))
     const tables = { rc_daily_activity: activity, rc_birthday_room_completions: [], rc_birthday_gift_claims: [] }
     const db = fakeDb(tables, () => ({ state: 'claimed', badgeIds: ['event_jimin_day_lightkeeper_2026'], wings: 1, chargeCells: 1, cardComplete: false }))
     const res = await claimBirthdayGift(db, content, 'A3')
     assert.equal(res.success, true)
     assert.equal(tables.rc_birthday_room_completions.length, 1)
-    assert.equal(tables.rc_birthday_room_completions[0].community_lights, 504)
+    assert.equal(tables.rc_birthday_room_completions[0].community_lights, 1026)
     const call = db.calls.find((c) => c.name === 'rc_claim_birthday_room_gift')
     assert.equal(call.args.p_lights, 18, 'own lights, capped at 2 per track, computed on the server')
     assert.equal(call.args.p_event_date_end, '2026-10-14')
@@ -197,12 +197,25 @@ test('the gift claim sends the server-computed contribution, and records complet
   } finally { mock.timers.reset() }
 })
 
+test('1008 lights (56 full agents) is not enough: no completion is recorded below 1013', async () => {
+  mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-10-14T03:00:00Z') })
+  try {
+    const activity = []
+    for (let i = 0; i < 56; i++) activity.push(fullDay(`A${i}`, '2026-10-13'))
+    const tables = { rc_daily_activity: activity, rc_birthday_room_completions: [], rc_birthday_gift_claims: [] }
+    const db = fakeDb(tables, () => ({ state: 'locked' }))
+    const res = await claimBirthdayGift(db, content, 'A1')
+    assert.equal(res.error, 'gift_locked')
+    assert.equal(tables.rc_birthday_room_completions.length, 0)
+  } finally { mock.timers.reset() }
+})
+
 test('a recorded completion never falls back, and claimed gifts are not re-claimed', async () => {
   mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-10-14T03:00:00Z') })
   try {
     const tables = {
       rc_daily_activity: [fullDay('A1', '2026-10-13', 1)],
-      rc_birthday_room_completions: [{ event_id: jimin.id, community_lights: 503, target: 500 }],
+      rc_birthday_room_completions: [{ event_id: jimin.id, community_lights: 1020, target: 1013 }],
       rc_birthday_gift_claims: [{ event_id: jimin.id, agent_no: 'A1', badge_ids: ['event_jimin_day_lightkeeper_2026'], wings: 1, charge_cells: 1, card_complete: false }],
     }
     const db = fakeDb(tables, () => { throw new Error('must not call the RPC for an existing claim') })
@@ -224,7 +237,7 @@ test('before completion and after the claim period the gift cannot be claimed', 
   } finally { mock.timers.reset() }
   mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-10-22T03:00:00Z') })
   try {
-    const tables = { rc_daily_activity: [fullDay('A1', '2026-10-13')], rc_birthday_room_completions: [{ event_id: jimin.id, community_lights: 600, target: 500 }], rc_birthday_gift_claims: [] }
+    const tables = { rc_daily_activity: [fullDay('A1', '2026-10-13')], rc_birthday_room_completions: [{ event_id: jimin.id, community_lights: 1100, target: 1013 }], rc_birthday_gift_claims: [] }
     const db = fakeDb(tables, () => ({ state: 'claimed' }))
     const res = await claimBirthdayGift(db, content, 'A1')
     assert.equal(res.success, false)
