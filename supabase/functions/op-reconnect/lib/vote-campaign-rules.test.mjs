@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   kstDayOf, nextKstMidnight, campaignPhase, daysLeft, parseXPostUrl, snowflakeTime, normalizeHandle,
-  parseOembed, decideXProof, xComposeUrl, evaluateCertificateText, participationTime, sanitizeMnetChecks, sanitizeClientCertChecks,
+  parseOembed, decideXProof, xComposeUrl, evaluateCertificateText, participationTime, validUtcOffset, sanitizeMnetChecks, sanitizeClientCertChecks,
   decideMnetChecks, votingStreak, missionStates, giftState, pulseView, pulseQuery, snowflakeAt,
   normalizeCertificateNumber, certificateNumberFromText, certificateNumberConsensus, participationMinuteKey, cityPhase,
 } from './vote-campaign-rules.js'
@@ -134,6 +134,86 @@ test('certificate text: wrong category, missing structure, wrong day, outside th
   assert.equal(evaluateCertificateText(CERT_TEXT.replace('2026.10.13 16:39', '2026.10.12 19:05'), mnet, '2026-10-12', WINDOW).date, true)
   assert.equal(evaluateCertificateText(CERT_TEXT.replace('2026.10.13 16:39', '2026.10.23 00:01'), mnet, '2026-10-23', WINDOW).date, false)
   assert.equal(evaluateCertificateText(CERT_TEXT.replace('Participation Date 2026.10.13 16:39', 'Participation Date'), mnet, '2026-10-13', WINDOW).date, false)
+})
+
+// ── Phone-local certificate times ────────────────────────────────────
+// Mnet prints the participation time on the voting phone's clock. The real
+// failing case: an agent in India voted at 01:11 KST on Oct 14; the
+// certificate says 2026.10.13 21:41; the upload landed 01:13:37 KST.
+const at = (printed) => CERT_TEXT.replace('2026.10.13 16:39', printed)
+const date = (printed, voteDay, extra = {}) => evaluateCertificateText(at(printed), MAMA.missions[0], voteDay, { ...WINDOW, ...extra }).date
+const IST = 330
+
+test('phone-local time: the real IST certificate is a valid Oct 14 KST vote', () => {
+  const real = { utcOffsetMinutes: IST, submittedAt: '2026-10-13T16:13:37.066Z' }
+  assert.deepEqual(evaluateCertificateText(at('2026.10.13 21:41'), MAMA.missions[0], '2026-10-14', { ...WINDOW, ...real }),
+    { certificate: true, category: true, date: true })
+  assert.equal(date('2026.10.13 21:41', '2026-10-14'), false, 'without the offset it is still read as KST (Oct 13)')
+})
+
+test('phone-local time: IST around KST midnight (20:30 IST = 00:00 KST)', () => {
+  const o = { utcOffsetMinutes: IST }
+  assert.equal(date('2026.10.14 20:00', '2026-10-14', o), true, 'before KST midnight: same KST day')
+  assert.equal(date('2026.10.14 20:29', '2026-10-14', o), true)
+  assert.equal(date('2026.10.14 20:30', '2026-10-15', o), true, 'exactly 00:00 KST belongs to the next KST day')
+  assert.equal(date('2026.10.14 20:30', '2026-10-14', o), false)
+  assert.equal(date('2026.10.14 20:31', '2026-10-15', o), true, 'after 20:30 IST: next KST day')
+  assert.equal(date('2026.10.14 20:31', '2026-10-14', o), false)
+})
+
+test('phone-local time: other offsets convert to the right KST day', () => {
+  const cases = [
+    [0, '2026.10.14 14:59', '2026-10-14'], [0, '2026.10.14 15:00', '2026-10-15'], // UTC
+    [-300, '2026.10.14 09:59', '2026-10-14'], [-300, '2026.10.14 10:00', '2026-10-15'], // UTC−5
+    [-720, '2026.10.13 02:59', '2026-10-13'], [-720, '2026.10.13 03:00', '2026-10-14'], // UTC−12: printed a day "earlier"
+    [840, '2026.10.15 04:59', '2026-10-14'], [840, '2026.10.15 05:00', '2026-10-15'], // UTC+14: printed a day "later"
+    [345, '2026.10.14 20:44', '2026-10-14'], [345, '2026.10.14 20:45', '2026-10-15'], // Nepal +05:45
+    [570, '2026.10.15 00:29', '2026-10-14'], [570, '2026.10.15 00:30', '2026-10-15'], // +09:30
+    [540, '2026.10.14 23:59', '2026-10-14'], [540, '2026.10.15 00:00', '2026-10-15'], // KST itself
+  ]
+  for (const [off, printed, day] of cases) assert.equal(date(printed, day, { utcOffsetMinutes: off }), true, `${off} ${printed} → ${day}`)
+})
+
+test('phone-local time: the window opens Oct 12 19:00 KST and closes Oct 22 23:59 KST', () => {
+  const o = { utcOffsetMinutes: IST }
+  assert.equal(date('2026.10.12 15:29', '2026-10-12', o), false, '18:59 KST — before opening')
+  assert.equal(date('2026.10.12 15:30', '2026-10-12', o), true, '19:00 KST — open')
+  assert.equal(date('2026.10.22 20:29', '2026-10-22', o), true, '23:59 KST — still open')
+  assert.equal(date('2026.10.22 20:30', '2026-10-23', o), false, '00:00 KST Oct 23 — closed')
+  assert.equal(date('2026.10.12 04:59', '2026-10-12', { utcOffsetMinutes: -300 }), false, 'UTC−5 04:59 = 18:59 KST — before opening')
+  assert.equal(date('2026.10.12 05:00', '2026-10-12', { utcOffsetMinutes: -300 }), true, 'UTC−5 05:00 = 19:00 KST — open')
+  assert.equal(date('2026.10.22 10:00', '2026-10-23', { utcOffsetMinutes: -300 }), false, 'UTC−5 10:00 Oct 22 = 00:00 KST Oct 23 — closed')
+})
+
+test('phone-local time: no offset makes an old certificate valid', () => {
+  // Voted Oct 12 21:41 IST (Oct 13 01:11 KST); uploaded Oct 14. Every real
+  // offset leaves it on Oct 12 or Oct 13 KST — never the credited Oct 14.
+  for (let off = -720; off <= 840; off += 15) {
+    if (date('2026.10.12 21:41', '2026-10-14', { utcOffsetMinutes: off, submittedAt: '2026-10-14T03:00:00Z' })) {
+      // Only offsets that would put it after the upload could reach Oct 14 — and those are refused too.
+      assert.fail(`offset ${off} made a two-day-old certificate valid`)
+    }
+  }
+})
+
+test('phone-local time: a certificate printed after the upload is refused; small clock skew is fine', () => {
+  const sentKst0105 = '2026-10-13T16:05:00Z' // 01:05 KST Oct 14
+  assert.equal(date('2026.10.13 21:41', '2026-10-14', { utcOffsetMinutes: IST, submittedAt: sentKst0105 }), false, '01:11 KST is after a 01:05 upload')
+  assert.equal(date('2026.10.13 21:39', '2026-10-14', { utcOffsetMinutes: IST, submittedAt: sentKst0105 }), true, 'four minutes of clock skew')
+  // A false far-east offset can't drag yesterday into today either: it lands after the upload.
+  assert.equal(date('2026.10.14 12:00', '2026-10-14', { utcOffsetMinutes: -720, submittedAt: '2026-10-14T00:00:00Z' }), false)
+})
+
+test('phone-local time: only real offsets are used; anything else reads as KST', () => {
+  assert.equal(validUtcOffset(330), 330)
+  assert.equal(validUtcOffset('330'), 330)
+  assert.equal(validUtcOffset(-720), -720)
+  assert.equal(validUtcOffset(840), 840)
+  for (const bad of [331, 845, -735, 900, 'IST', '330abc', NaN, null, undefined, 1.5, '']) assert.equal(validUtcOffset(bad), null, String(bad))
+  assert.equal(date('2026.10.13 21:41', '2026-10-14', { utcOffsetMinutes: 331 }), false, 'an invalid offset is ignored (KST)')
+  assert.equal(participationTime('Participation Date 2026.10.13 21:41', IST).toISOString(), '2026-10-13T16:11:00.000Z')
+  assert.equal(participationTime('Participation Date 2026.10.13 21:41', -300).toISOString(), '2026-10-14T02:41:00.000Z')
+  assert.equal(participationTime('2026.02.31 10:00', IST), null, 'not a real date')
 })
 
 test('participation time is read as KST', () => {

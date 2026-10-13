@@ -164,16 +164,35 @@ export function xComposeUrl(hashtags) {
 
 // ── Mnet certificates ─────────────────────────────────────────────────
 
-/** The certificate's own "Participation Date 2026.10.13 16:39" (KST), as an
- *  instant — or null if OCR couldn't read a full date and time. */
-export function participationTime(text) {
+/** A UTC offset in minutes, east positive (IST = 330, KST = 540) — only a
+ *  real one: whole quarter hours from UTC−12:00 to UTC+14:00. Else null. */
+export function validUtcOffset(v) {
+  const n = typeof v === 'string' && v.trim() !== '' ? Number(v) : v
+  return Number.isInteger(n) && n >= -720 && n <= 840 && n % 15 === 0 ? n : null
+}
+
+const KST_OFFSET_MIN = 540
+// Phone clocks and our server clock disagree a little; a certificate may be
+// printed up to this far "after" the upload landed and still count.
+const CLOCK_SKEW_MS = 5 * 60_000
+
+/** The certificate's own "Participation Date 2026.10.13 21:41", as an
+ *  instant — or null if OCR couldn't read a full date and time.
+ *
+ *  Mnet prints the time on the VOTING PHONE's local clock, not KST (an
+ *  Indian phone voting at 01:11 KST prints 2026.10.13 21:41). Pass that
+ *  clock's UTC offset; without one the printed time is read as KST, which
+ *  is also the stable key used for duplicate-time fingerprints. */
+export function participationTime(text, utcOffsetMinutes = KST_OFFSET_MIN) {
   const t = String(text || '').replace(/\s+/g, ' ')
   const m = t.match(/(20\d\d)\s?[.\-/]\s?(\d{1,2})\s?[.\-/]\s?(\d{1,2})\.?\s+(\d{1,2})\s?[:.]\s?(\d{2})/)
   if (!m) return null
-  const [, y, mo, d, hh, mm] = m
-  const iso = `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}T${hh.padStart(2, '0')}:${mm}:00+09:00`
-  const at = new Date(iso)
-  return Number.isNaN(at.getTime()) ? null : at
+  const off = validUtcOffset(utcOffsetMinutes) ?? KST_OFFSET_MIN
+  const [y, mo, d, hh, mm] = m.slice(1).map(Number)
+  // A wall-clock reading that really exists (no Feb 31, no 24:00).
+  const wall = new Date(Date.UTC(y, mo - 1, d, hh, mm))
+  if (hh > 23 || mm > 59 || wall.getUTCFullYear() !== y || wall.getUTCMonth() !== mo - 1 || wall.getUTCDate() !== d) return null
+  return new Date(wall.getTime() - off * 60_000)
 }
 
 /**
@@ -182,10 +201,16 @@ export function participationTime(text) {
  * which bts-tile-match.js checks — so the text checks are only:
  *   certificate  "VOTING CERTIFICATE" + "Participation Date" + Mnet Plus wording
  *   category     "FANS' CHOICE Category 1st VOTE"
- *   date         the participation time is inside the voting window and on
- *                the KST day the proof is credited to
- * Plain booleans out. The text, the certificate number and anything else on
- * the certificate are never returned, kept or sent.
+ *   date         the participation time — the printed local time converted
+ *                with the uploading phone's UTC offset — is inside the voting
+ *                window, on the KST day the proof is credited to, and not
+ *                after the upload itself
+ * `window` = { opensAt, closesAt, utcOffsetMinutes?, submittedAt? }. No
+ * offset → the printed time is read as KST (the strict, original rule). The
+ * offset only converts; it never widens the day: an old certificate stays
+ * on its own KST day whatever offset is claimed, and must also predate the
+ * upload. Plain booleans out. The text, the certificate number and anything
+ * else on the certificate are never returned, kept or sent.
  */
 export function evaluateCertificateText(text, mission, voteDay, window = {}) {
   const cfg = mission?.certificate || {}
@@ -195,9 +220,11 @@ export function evaluateCertificateText(text, mission, voteDay, window = {}) {
   const certificate = all(cfg.title_keywords || ['voting certificate']) && all(cfg.structure_keywords || ['participation date'])
     && any(cfg.issuer_keywords || ['mnet plus', 'mnetplus'])
   const category = any(cfg.category_keywords || ["fans' choice category 1st vote"])
-  const at = participationTime(text)
+  const at = participationTime(text, window.utcOffsetMinutes ?? KST_OFFSET_MIN)
   const inWindow = !!at && (!window.opensAt || at >= new Date(window.opensAt)) && (!window.closesAt || at <= new Date(window.closesAt))
-  const date = inWindow && kstDayOf(at) === voteDay
+  const sent = window.submittedAt ? new Date(window.submittedAt).getTime() : NaN
+  const beforeUpload = !!at && (Number.isNaN(sent) || at.getTime() <= sent + CLOCK_SKEW_MS)
+  const date = inWindow && beforeUpload && kstDayOf(at) === voteDay
   return { certificate, category, date }
 }
 

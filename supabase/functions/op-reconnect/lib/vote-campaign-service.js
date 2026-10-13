@@ -19,7 +19,7 @@
 import {
   kstDayOf, addDays, campaignPhase, missionById, parseXPostUrl, snowflakeTime, normalizeHandle,
   parseOembed, decideXProof, cityPhase, sanitizeMnetChecks, sanitizeClientCertChecks, decideMnetChecks,
-  normalizeCertificateNumber, participationMinuteKey, votingStreak, missionStates, missionProgress, giftState, pulseView,
+  normalizeCertificateNumber, participationMinuteKey, validUtcOffset, votingStreak, missionStates, missionProgress, giftState, pulseView,
 } from './vote-campaign-rules.js'
 
 export const PROOF_BUCKET = 'campaign-proofs'
@@ -417,6 +417,11 @@ export async function submitMnetProof(db, params, now = new Date()) {
     if (!existed) await db.storage.from(PROOF_BUCKET).remove([path])
     return fail(r?.error || 'db_error', r?.status ? { status: r.status } : {})
   }
+  // The uploading phone's UTC offset: Mnet prints the participation time on
+  // that phone's clock. Only a real offset is kept; it converts the printed
+  // time for the trusted date check and never decides anything by itself.
+  const offset = validUtcOffset(params.utcOffsetMinutes)
+  if (offset !== null) await db.from('rc_campaign_proofs').update({ cert_utc_offset_min: offset }).eq('id', r.id)
   return { success: true, proofId: r.id, status: r.status, voteDay }
 }
 
@@ -527,7 +532,7 @@ export async function adminListCampaignProofs(db, params) {
   const [{ count }, { data, error }, counts] = await Promise.all([
     db.from('rc_campaign_proofs').select('id', { count: 'exact', head: true }).eq('campaign_id', c.id).eq('status', status),
     db.from('rc_campaign_proofs')
-      .select('id, mission_id, agent_no, vote_day, status, checks, client_checks, verify_method, verify_note, proof_path, post_url, post_author, submitted_at, reviewed_by, reviewed_at, review_note, duplicate_of, duplicate_kind')
+      .select('id, mission_id, agent_no, vote_day, status, checks, client_checks, verify_method, verify_note, proof_path, post_url, post_author, submitted_at, reviewed_by, reviewed_at, review_note, duplicate_of, duplicate_kind, cert_utc_offset_min')
       .eq('campaign_id', c.id).eq('status', status).order('submitted_at', { ascending: true }).range(offset, offset + limit - 1),
     Promise.all(['verifying', 'review'].map((s) => db.from('rc_campaign_proofs')
       .select('id', { count: 'exact', head: true }).eq('campaign_id', c.id).eq('status', s))),
@@ -542,8 +547,24 @@ export async function adminListCampaignProofs(db, params) {
     for (const h of hs || []) handles.set(h.agent_no, h.x_handle)
   }
 
+  // An agent's phone offset should not move between uploads. If it has, none
+  // of their offsets is trusted for the automatic date check: those proofs
+  // read the printed time as KST, which sends a mismatch to a reviewer.
+  const mnetAgents = [...new Set(rows.filter((r) => missionById(c, r.mission_id)?.kind === 'mnet_certificate').map((r) => r.agent_no))]
+  const offsets = new Map()
+  if (mnetAgents.length) {
+    const { data: os } = await db.from('rc_campaign_proofs').select('agent_no, cert_utc_offset_min')
+      .eq('campaign_id', c.id).in('agent_no', mnetAgents)
+    for (const o of os || []) {
+      if (o.cert_utc_offset_min === null || o.cert_utc_offset_min === undefined) continue
+      if (!offsets.has(o.agent_no)) offsets.set(o.agent_no, new Set())
+      offsets.get(o.agent_no).add(o.cert_utc_offset_min)
+    }
+  }
+  const trustedOffset = (r) => (validUtcOffset(r.cert_utc_offset_min) !== null && offsets.get(r.agent_no)?.size === 1 ? r.cert_utc_offset_min : null)
+
   const proofs = await Promise.all(rows.map(async (r) => {
-    const { proof_path, ...rest } = r
+    const { proof_path, cert_utc_offset_min, ...rest } = r
     let proofUrl = null
     if (proof_path) {
       const { data: s } = await db.storage.from(PROOF_BUCKET).createSignedUrl(proof_path, SIGNED_URL_TTL_SECONDS)
@@ -556,7 +577,8 @@ export async function adminListCampaignProofs(db, params) {
       // What a trusted OCR run needs to know about this mission, nothing more.
       // What the trusted check needs for this mission, nothing more.
       certificate: mission?.kind === 'mnet_certificate' ? (mission.certificate || {}) : null,
-      window: { opensAt: c.opens_at, closesAt: c.closes_at },
+      window: { opensAt: c.opens_at, closesAt: c.closes_at, submittedAt: r.submitted_at, utcOffsetMinutes: trustedOffset(r) },
+      utcOffsetMinutes: cert_utc_offset_min ?? null,
     }
   }))
 

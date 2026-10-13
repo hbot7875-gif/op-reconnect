@@ -45,6 +45,7 @@ function fakeDb({ tables = {}, rpc = {}, uploadError = null } = {}) {
       in(k, v) { q.filters[k] = v; return api },
       order() { return api }, limit() { return api }, range() { return api },
       delete() { q.op = 'delete'; calls.writes.push(q); return api },
+      update(row) { q.op = 'update'; q.row = row; calls.writes.push(q); return api },
       upsert(row) { q.op = 'upsert'; q.row = row; calls.writes.push(q); return Promise.resolve(tables[`${table}:upsert`]?.(row) || { error: null }) },
       maybeSingle() { q.single = true; return Promise.resolve(resolve()) },
       then(ok, err) { return Promise.resolve(resolve()).then(ok, err) },
@@ -233,6 +234,43 @@ test('admin queue: private proof links only, short-lived, no storage paths', asy
   assert.deepEqual(db.calls.signed.map((s) => [s.bucket, s.ttl]), [[PROOF_BUCKET, 600]])
   assert.equal(r.proofs[1].expectedHandle, 'a')
   assert.equal(r.proofs[1].proofUrl, null)
+})
+
+test('Mnet: the uploading phone\'s UTC offset is kept only when it is a real offset', async () => {
+  const base = { agentNo: 'AGENT001', campaignId: 'mama_2026', imageBase64: png, imageMime: 'image/jpeg' }
+  const db = fakeDb({ tables: { rc_vote_campaigns: campaignTable } })
+  assert.equal((await submitMnetProof(db, { ...base, utcOffsetMinutes: 330 }, NOW)).success, true)
+  const w = db.calls.writes.find((q) => q.op === 'update')
+  assert.deepEqual([w.table, w.row, w.filters], ['rc_campaign_proofs', { cert_utc_offset_min: 330 }, { id: 7 }])
+  for (const bad of [331, 9999, 'Asia/Kolkata', null, undefined]) {
+    const d = fakeDb({ tables: { rc_vote_campaigns: campaignTable } })
+    assert.equal((await submitMnetProof(d, { ...base, utcOffsetMinutes: bad }, NOW)).success, true, 'a bad offset never blocks the upload')
+    assert.equal(d.calls.writes.some((q) => q.op === 'update'), false, String(bad))
+  }
+  const failed = fakeDb({ tables: { rc_vote_campaigns: campaignTable }, rpc: { rc_campaign_submit_proof: () => ({ data: { success: false, error: 'daily_limit' } }) } })
+  await submitMnetProof(failed, { ...base, utcOffsetMinutes: 330 }, NOW)
+  assert.equal(failed.calls.writes.some((q) => q.op === 'update'), false, 'nothing stored for a refused upload')
+})
+
+test('admin queue: the trusted check gets the upload time and a consistent phone offset only', async () => {
+  const row = (id, agent, off) => ({ id, mission_id: 'mnet', agent_no: agent, vote_day: '2026-10-14', status: 'verifying', checks: {}, client_checks: {},
+    proof_path: `p/${id}.jpg`, submitted_at: '2026-10-13T16:13:37Z', cert_utc_offset_min: off })
+  const rows = [row(1, 'AGENT001', 330), row(2, 'AGENT002', 330), row(3, 'AGENT003', null)]
+  // AGENT002 has uploaded from two different offsets this event.
+  const history = [{ agent_no: 'AGENT001', cert_utc_offset_min: 330 }, { agent_no: 'AGENT002', cert_utc_offset_min: 330 },
+    { agent_no: 'AGENT002', cert_utc_offset_min: -300 }, { agent_no: 'AGENT003', cert_utc_offset_min: null }]
+  const db = fakeDb({ tables: {
+    rc_vote_campaigns: campaignTable,
+    rc_campaign_proofs: (q) => (q.head ? { count: 3 } : q.cols === 'agent_no, cert_utc_offset_min' ? { data: history } : { data: rows }),
+  } })
+  const r = await adminListCampaignProofs(db, { campaignId: 'mama_2026', status: 'verifying' })
+  const w = Object.fromEntries(r.proofs.map((p) => [p.agent_no, p.window]))
+  assert.equal(w.AGENT001.utcOffsetMinutes, 330)
+  assert.equal(w.AGENT001.submittedAt, '2026-10-13T16:13:37Z')
+  assert.equal(w.AGENT002.utcOffsetMinutes, null, 'a changed offset is not trusted — read as KST, so a mismatch goes to review')
+  assert.equal(w.AGENT003.utcOffsetMinutes, null, 'older uploads without an offset keep the KST reading')
+  assert.equal(r.proofs[1].utcOffsetMinutes, 330, 'reviewers still see what was sent')
+  assert.equal(r.proofs[0].cert_utc_offset_min, undefined)
 })
 
 test('player status never carries paths, hashes or other agents', async () => {

@@ -1,0 +1,53 @@
+name: Mnet auto-verify
+
+# Automatic trusted check for uploaded Mnet vote certificates
+# (scripts/mnet-verify-worker.mjs). Runs the same OCR + BTS image match the
+# admin panel used to run by hand, then reports to op-reconnect, where the
+# database decides verified / In review and applies credit exactly once.
+#
+# Triggers:
+#   * workflow_dispatch — started by the Edge Function right after a
+#     certificate is stored (needs the GITHUB_DISPATCH_TOKEN Edge Function
+#     secret, Actions: write only; without it only the schedule runs), or by
+#     hand, optionally as a dry run that records nothing;
+#   * every 5 minutes, as the safety net (GitHub may delay scheduled runs).
+#
+# One run at a time; a burst of uploads collapses into one queued run, and
+# each run processes everything still waiting.
+#
+# Requires the existing SYNC_ADMIN_KEY repo secret (same as Hourly stream sync).
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Check only — record nothing'
+        type: boolean
+        default: false
+
+concurrency:
+  group: mnet-auto-verify
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Verify waiting certificates
+        env:
+          ADMIN_KEY: ${{ secrets.SYNC_ADMIN_KEY }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+        run: node scripts/mnet-verify-worker.mjs

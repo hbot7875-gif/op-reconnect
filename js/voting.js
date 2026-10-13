@@ -6,7 +6,7 @@ import { call } from './api.js'
 import { getAgentNo } from './session.js'
 import { goWorld } from './router.js'
 import { setState, toast } from './state.js'
-import { votingScreen, errorText, countdown } from './voting-view.js'
+import { votingScreen, errorText, countdown, MNET_FAST_MS } from './voting-view.js'
 import { nextKstMidnight } from '../supabase/functions/op-reconnect/lib/vote-campaign-rules.js'
 import { sha256OfBlob, reencodeImage, blobToBase64, ocrCertificate } from './voting-proof.js'
 
@@ -22,6 +22,7 @@ let lastFocus = null
 let ticker = null
 
 let chooserTimer = null
+let proofPoll = null
 
 function freshLocal() {
   return {
@@ -66,6 +67,39 @@ async function load() {
   // First visit once the battle is on and this agent has no side yet: the
   // 7-second choice. The server holds the clock and makes the timeout pick.
   if (status.battle && !status.battle.myTeam && status.campaign.phase === 'open' && !local.chooser) startChooser()
+  scheduleProofPoll()
+}
+
+// While a proof is being verified (automatically, in the background), keep
+// this screen's status current: every 10 s in the first minutes after an
+// upload, then once a minute. Repaints only when something changed, so a
+// half-typed X link survives the quiet polls.
+const POLL_FAST_MS = 10_000
+const POLL_SLOW_MS = 60_000
+const isFresh = () => !!local.mnet.sentAt && Date.now() - local.mnet.sentAt < MNET_FAST_MS
+
+function scheduleProofPoll() {
+  clearTimeout(proofPoll)
+  if (!root?.isConnected || !status) return
+  if (!Object.values(status.states || {}).includes('verifying')) return
+  proofPoll = setTimeout(pollProofs, isFresh() ? POLL_FAST_MS : POLL_SLOW_MS)
+}
+
+async function pollProofs() {
+  if (!root?.isConnected) return
+  const wasFresh = isFresh()
+  const r = await call('getVotingStatus', { agentNo: getAgentNo() })
+  if (!root?.isConnected) return
+  if (r?.success) {
+    const key = (s) => JSON.stringify([s.states, s.todayProgress])
+    const changed = key(r) !== key(status)
+    const credited = (r.stats?.verifiedVotes || 0) > (status.stats?.verifiedVotes || 0)
+    status = r
+    // Repaint on a real change, or once when "Verifying…" becomes "running".
+    if (changed || (wasFresh && !isFresh())) paint()
+    if (credited) refreshGameState() // XP, Charge Cells and the HUD
+  }
+  scheduleProofPoll()
 }
 
 async function refreshGameState() {
@@ -248,21 +282,25 @@ async function sendCertificate(file) {
     const originalHash = await sha256OfBlob(file) // before anything changes the bytes
     const clean = await reencodeImage(file) // EXIF and location are gone from here on
     if (clean.size > MAX_UPLOAD_BYTES) throw Object.assign(new Error('too_large'), { code: 'image_too_large' })
+    // Mnet prints the participation time on this phone's clock, so the
+    // offset goes with the proof (the server keeps only a valid offset).
+    const utcOffsetMinutes = -new Date().getTimezoneOffset()
     // Friendly pre-check only. A slow or failed read never blocks sending.
     let clientChecks = {}
     try {
       clientChecks = await withTimeout(ocrCertificate(clean, mission, status.today,
-        { opensAt: status.campaign.opensAt, closesAt: status.campaign.closesAt }), PRECHECK_TIMEOUT_MS)
+        { opensAt: status.campaign.opensAt, closesAt: status.campaign.closesAt, utcOffsetMinutes, submittedAt: new Date().toISOString() }), PRECHECK_TIMEOUT_MS)
       local.mnet.precheck = clientChecks
     } catch { /* the server decides regardless */ }
     const r = await call('submitMnetProof', {
       agentNo: getAgentNo(), campaignId: status.campaign.id, missionId: mission.id,
-      imageBase64: await blobToBase64(clean), imageMime: 'image/jpeg', originalHash, clientChecks,
+      imageBase64: await blobToBase64(clean), imageMime: 'image/jpeg', originalHash, clientChecks, utcOffsetMinutes,
     })
     local.mnet.uploading = false
     if (r?.error === 'team_required') { local.error = { mission: mission.id, text: errorText(r.error) }; paint(); startChooser(); return }
     if (!r?.success) { local.error = { mission: mission.id, text: errorText(r?.error) }; paint(); return }
     toast('Certificate received')
+    local.mnet.sentAt = Date.now()
     await load()
     refreshGameState()
   } catch (err) {

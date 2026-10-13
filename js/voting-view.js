@@ -10,6 +10,11 @@ export function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
 }
 
+/** How long after an upload the Mnet card shows "Verifying certificate…"
+ *  before settling into "verification is running". The automatic check
+ *  usually lands well inside this; the screen keeps polling either way. */
+export const MNET_FAST_MS = 3 * 60_000
+
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 /** 'YYYY-MM-DD' → 'Oct 14'. */
 export function dayLabel(day) {
@@ -81,6 +86,8 @@ function checkChips(items) {
   return `<div class="vt-checks">${items.map(([label, state]) => {
     if (state === true) return `<span class="vt-check">${ic('check')}${esc(label)}</span>`
     if (state === 'wait') return `<span class="vt-check is-wait">${ic('loader', 'vt-spin')}${esc(label)}</span>`
+    // Stored and queued, but nothing is running yet: no animation.
+    if (state === 'queued') return `<span class="vt-check is-wait">${ic('clock')}${esc(label)}</span>`
     return `<span class="vt-check is-unclear">${ic('hourglass')}${esc(label)}</span>`
   }).join('')}</div>`
 }
@@ -189,10 +196,22 @@ function mnetCard(vm, m) {
         <a class="vt-btn vt-btn-ghost" href="${esc(m.voteUrl || '#')}" target="_blank" rel="noopener noreferrer">Vote again</a>
       </div>`
   } else if (ui === 'verifying') {
-    status = `<span class="vt-status">${ic('loader', 'vt-spin')}${local.uploading ? 'Uploading certificate…' : 'Checking certificate…'}</span>`
+    // Uploading, then a short "Verifying…" while the automatic check usually
+    // lands; past that, a calm "running" state — never an endless spinner.
+    const fresh = !local.uploading && !!local.sentAt && vm.now - local.sentAt < MNET_FAST_MS
+    const chip = local.uploading || fresh ? 'wait' : 'queued'
+    status = local.uploading
+      ? `<span class="vt-status">${ic('loader', 'vt-spin')}Uploading certificate…</span>`
+      : fresh
+        ? `<span class="vt-status">${ic('loader', 'vt-spin')}Verifying certificate…</span>`
+        : `<span class="vt-status">${ic('clock')}Received — verification is running</span>`
+    const another = count.remaining ? ' You can add another distinct certificate.' : ''
     body = `${stepper(STEPS, 2)}
-      ${checkChips([['Certificate', 'wait'], ["Fans' Choice 1st Vote", 'wait'], [date, 'wait'], ['BTS selected', 'wait']])}
-      ${local.uploading ? '' : `<p class="vt-rule">Received. It counts once it's checked.${count.remaining ? ' You can add another distinct certificate.' : ''}</p>`}
+      ${checkChips([['Certificate', chip], ["Fans' Choice 1st Vote", chip], [date, chip], ['BTS selected', chip]])}
+      ${local.uploading ? '' : fresh
+        ? `<p class="vt-rule">Checked automatically — no need to upload it again.${another}</p>`
+        : `${note('', 'info', 'You can leave this page. No need to upload again.')}
+      ${another ? `<p class="vt-rule">${another.trim()}</p>` : ''}`}
       ${count.remaining && !local.uploading ? `<label class="vt-btn vt-btn-outline">${ic('upload')}Upload another<input type="file" accept="image/png,image/jpeg" class="vt-file" data-vt-act="mnet-file"></label>` : ''}`
   } else if (ui === 'review') {
     const c = proof?.checks || {}

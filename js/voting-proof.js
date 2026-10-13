@@ -8,11 +8,9 @@
 //      pre-check. The text itself never leaves this module, and the server
 //      never uses the booleans to decide anything.
 //
-// The admin panel reuses ocrCertificate() for its trusted check run, on the
-// server-stored image rather than anything a player sent.
-import {
-  evaluateCertificateText, certificateNumberFromText, certificateNumberConsensus, participationTime,
-} from '../supabase/functions/op-reconnect/lib/vote-campaign-rules.js'
+// The trusted check itself (automatic worker, and the admin panel's retry)
+// lives in mnet-trusted-check.js; this file supplies the browser primitives.
+import { ocrPassesWith, trustedCheckWith } from './mnet-trusted-check.js'
 
 export async function sha256OfBlob(blob) {
   const digest = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer())
@@ -75,22 +73,24 @@ async function contrastCopy(blob) {
   return canvas
 }
 
-/** OCR passes over one image: the three text checks, plus every pass's
- *  text kept in memory only for the trusted check's number/time reads. */
-async function ocrPasses(source, mission, voteDay, window) {
-  const worker = await ocrWorker()
-  const texts = [(await worker.recognize(source)).data.text]
-  const first = evaluateCertificateText(texts[0], mission, voteDay, window)
-  if (first.certificate && first.category && first.date) return { checks: first, texts }
-  texts.push((await worker.recognize(await contrastCopy(source))).data.text)
-  const second = evaluateCertificateText(texts[1], mission, voteDay, window)
-  return { checks: { certificate: first.certificate || second.certificate, category: first.category || second.category, date: first.date || second.date }, texts }
+// The browser's primitives for the shared trusted check (mnet-trusted-check.js).
+const browserIo = {
+  ocr: async (source) => (await (await ocrWorker()).recognize(source)).data.text,
+  contrast: (source) => contrastCopy(source),
+  pixels: (blob) => imagePixels(blob),
+  crop: ({ canvas }, region) => {
+    const card = document.createElement('canvas')
+    card.width = region.width
+    card.height = region.height
+    card.getContext('2d').drawImage(canvas, region.x, region.y, region.width, region.height, 0, 0, region.width, region.height)
+    return card
+  },
 }
 
 /** Three booleans for a certificate image (certificate, category, date).
  *  Never returns or keeps the text. This is the player's pre-check. */
 export async function ocrCertificate(source, mission, voteDay, window) {
-  return (await ocrPasses(source, mission, voteDay, window)).checks
+  return (await ocrPassesWith(browserIo, source, mission, voteDay, window)).checks
 }
 
 /** Pixels for the image matcher, capped so a huge screenshot stays quick. */
@@ -107,33 +107,11 @@ async function imagePixels(blob, maxWidth = 1400) {
 }
 
 /**
- * The trusted Mnet check (admin "Run checks", on the server-stored image):
- * the BTS artist-tile match, then OCR of the whole image and of the
- * certificate card the match located. Returns booleans, the image result,
- * and — for duplicate detection only — the certificate number (when at
- * least two passes read exactly the same value; otherwise null, never a
- * guess) and the participation time. Those two go straight to the server,
- * which fingerprints them and keeps neither.
+ * The trusted Mnet check on the server-stored image (admin "Retry checks";
+ * the automatic worker runs the same steps in Node). See
+ * mnet-trusted-check.js. The certificate number and participation time go
+ * straight to the server, which fingerprints them and keeps neither.
  */
 export async function trustedCertificateCheck(blob, mission, voteDay, window) {
-  const { matchBtsTile, certificateRegion } = await import('./bts-tile-match.js')
-  const { canvas, img } = await imagePixels(blob)
-  const tile = matchBtsTile(img)
-  const pass = await ocrPasses(blob, mission, voteDay, window)
-  let text = pass.checks
-  const texts = [...pass.texts]
-  const region = certificateRegion(tile.box, canvas.width, canvas.height)
-  if (region) {
-    const card = document.createElement('canvas')
-    card.width = region.width
-    card.height = region.height
-    card.getContext('2d').drawImage(canvas, region.x, region.y, region.width, region.height, 0, 0, region.width, region.height)
-    const p2 = await ocrPasses(card, mission, voteDay, window)
-    texts.push(...p2.texts)
-    text = { certificate: text.certificate || p2.checks.certificate, category: text.category || p2.checks.category, date: text.date || p2.checks.date }
-  }
-  const len = Number(mission?.certificate?.number_length) || 16
-  const certificateNumber = certificateNumberConsensus(texts.map((t) => certificateNumberFromText(t, len)), len)
-  const at = texts.map(participationTime).find(Boolean) || null
-  return { checks: { ...text, bts: tile.result, btsScore: tile.score }, certificateNumber, participationAt: at ? at.toISOString() : null }
+  return trustedCheckWith(browserIo, blob, mission, voteDay, window)
 }

@@ -19,6 +19,7 @@ import { pathToFileURL } from 'node:url'
 const ROOT = new URL('../../../', import.meta.url)
 const migration = (name) => readFileSync(new URL(`migrations/${name}`, ROOT), 'utf8')
 const MIGRATION = migration('20261013150000_rc_vote_campaigns.sql')
+const OFFSET_MIGRATION = migration('20261014090000_rc_campaign_cert_utc_offset.sql')
 
 const modulePath = process.env.PGLITE_MODULE
 const skip = modulePath ? false : 'set PGLITE_MODULE to run the SQL suite'
@@ -72,6 +73,8 @@ async function fresh(t) {
     engine = new PGlite()
     await engine.exec(stubs())
     await engine.exec(MIGRATION)
+    await engine.exec(OFFSET_MIGRATION)
+    await engine.exec(OFFSET_MIGRATION) // re-runnable
   }
   await engine.exec('begin')
   t.after(() => engine.exec('rollback'))
@@ -723,4 +726,18 @@ test('only fingerprints are stored; nothing in the database holds a raw number o
   const cols = (await db.query(`select column_name from information_schema.columns where table_name in ('rc_campaign_proofs','rc_campaign_cert_claims')`)).rows.map((r) => r.column_name)
   for (const bad of ['certificate_number', 'cert_number', 'participation_at', 'ocr_text', 'raw_text']) assert.equal(cols.includes(bad), false, bad)
   await assert.rejects(db.query(`update rc_campaign_proofs set cert_fingerprint = 'No. 7A0B3E8U3K4UIKQZ'`), 'the column accepts only a 64-hex fingerprint')
+})
+
+test('phone UTC offset column: real offsets only, null allowed', { skip }, async (t) => {
+  const db = await fresh(t)
+  await verifiedX(db)
+  const id = await n(db, `select max(id) from rc_campaign_proofs`)
+  for (const ok of [330, -720, 840, 345, 0, null]) {
+    await db.query(`update rc_campaign_proofs set cert_utc_offset_min = $1 where id = $2`, [ok, id])
+  }
+  for (const bad of [331, 900, -735]) {
+    await db.exec('savepoint s')
+    await assert.rejects(db.query(`update rc_campaign_proofs set cert_utc_offset_min = $1 where id = $2`, [bad, id]), /check/i, String(bad))
+    await db.exec('rollback to savepoint s')
+  }
 })

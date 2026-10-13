@@ -20,7 +20,34 @@ type P = Record<string, unknown>
 export const getVotingBanner = (sb: SupabaseDB, agentNo: string) =>
   banner(sb, agentNo, new Date(), { cache: (key: string, ttl: number, f: () => Promise<unknown>) => cachedJson(sb, key, ttl, f) })
 export const getVotingStatus = (sb: SupabaseDB, p: P) => status(sb, p)
-export const submitMnetProof = (sb: SupabaseDB, p: P) => mnet(sb, p)
+// A stored certificate wakes the automatic checker (GitHub Actions,
+// .github/workflows/mnet-auto-verify.yml) so it doesn't wait for the 5-minute
+// schedule. Optional: GITHUB_DISPATCH_TOKEN is an Edge Function secret — a
+// fine-grained token for this repo only, with just "Actions: Read and write"
+// (it can start a workflow; it cannot read or change code). Fire-and-forget —
+// the upload's response never waits on GitHub, and a failure only means the
+// schedule picks the proof up instead.
+function wakeChecker() {
+  const token = Deno.env.get('GITHUB_DISPATCH_TOKEN') ?? ''
+  if (!token) return
+  const repo = Deno.env.get('GITHUB_DISPATCH_REPO') ?? 'hbot7875-gif/op-reconnect'
+  const sent = fetch(`https://api.github.com/repos/${repo}/actions/workflows/mnet-auto-verify.yml/dispatches`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'op-reconnect',
+    },
+    body: JSON.stringify({ ref: 'master' }),
+    signal: AbortSignal.timeout(5000),
+  }).catch(() => undefined)
+  // deno-lint-ignore no-explicit-any
+  ;(globalThis as any).EdgeRuntime?.waitUntil?.(sent)
+}
+export const submitMnetProof = async (sb: SupabaseDB, p: P) => {
+  const r = await mnet(sb, p)
+  if ((r as { success?: boolean })?.success) wakeChecker()
+  return r
+}
 export const submitXProof = (sb: SupabaseDB, p: P) => x(sb, p, { verifier: oembedXVerifier() })
 export const setXHandle = (sb: SupabaseDB, p: P) => handle(sb, p)
 export const openVotingGift = (sb: SupabaseDB, p: P) => gift(sb, p)

@@ -4,10 +4,13 @@
 // proof (a 10-minute signed link, never a storage path), the structured
 // checks and the status. No OCR text exists to show.
 //
-// "Run checks" is the trusted Mnet check, run here in an admin session on
-// the image the SERVER stored: the BTS artist-tile image match plus OCR of
-// the certificate's own wording and date. Only three booleans and the
-// image result (match / unclear / no_match) go back; the server decides.
+// Mnet certificates are checked automatically (scripts/mnet-verify-worker.mjs,
+// GitHub Actions): the BTS artist-tile image match plus OCR of the
+// certificate's own wording and date, on the image the SERVER stored. This
+// queue is the fallback — unclear proofs, failed automatic checks, duplicate
+// disputes and manual overrides. "Retry checks" runs the same trusted check
+// here in an admin session for anything still waiting; only booleans and the
+// image result (match / unclear / no_match) go back, and the server decides.
 import { vIcon as ic } from './voting-icons.js'
 import { esc, dayLabel, kstStamp } from './voting-view.js'
 import { trustedCertificateCheck } from './voting-proof.js'
@@ -24,7 +27,8 @@ const STATUS = {
 }
 
 const NOTES = {
-  awaiting_trusted_check: 'Waiting for Run checks',
+  awaiting_trusted_check: 'Waiting for the automatic check',
+  auto_check_failed: 'Automatic check could not read the image',
   all_checks_passed: 'All checks passed',
   missing_hashtags: 'Hashtags missing',
   author_mismatch: 'Posted from a different account',
@@ -102,10 +106,10 @@ export function mountVotingReview(panel, call) {
         ${Object.entries(STATUS).map(([s, [, , label]]) => `<button type="button" class="vta-filter" role="tab" data-vta-filter="${s}" aria-selected="${s === status}">${label}</button>`).join('')}
       </div>
       <div class="vta-tools">
-        <button type="button" class="vt-btn vt-btn-primary vt-btn-sm" data-vta-run>${ic('shield')}Run checks</button>
+        <button type="button" class="vt-btn vt-btn-primary vt-btn-sm" data-vta-run>${ic('shield')}Retry checks</button>
         <button type="button" class="vt-btn vt-btn-ghost vt-btn-sm" data-vta-load>Reload</button>
       </div>
-      <p class="vta-hint">Run checks reads each waiting Mnet certificate here — its wording, date, and whether the BTS artist image matches. The server verifies it only when everything passes; anything unclear goes to In review for you to confirm.</p>
+      <p class="vta-hint">Mnet certificates are checked automatically after upload — wording, date, and whether the BTS artist image matches. The server verifies only when everything passes; anything unclear lands in In review for you. Retry checks runs the same check here for anything still waiting.</p>
       <p class="vta-run" data-vta-run-status role="status" aria-live="polite" hidden></p>
     </div>
     <div data-vta-list></div>
@@ -177,7 +181,7 @@ export function mountVotingReview(panel, call) {
       done++
     }
     running = false
-    btn.innerHTML = `${ic('shield')}Run checks`
+    btn.innerHTML = `${ic('shield')}Retry checks`
     line.textContent = `${done} checked · ${verified} verified · ${done - verified} sent to review`
     load()
   }
