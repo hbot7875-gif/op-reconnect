@@ -10,7 +10,8 @@ import { getScreen, onScreenChange } from './router.js'
 import { renderOnboarding } from './ui-onboarding.js'
 import { renderHud, renderTabbar } from './ui-hud.js'
 import { startMoonReviewCheck } from './moon-review-dot.js'
-import { renderWorld, renderGoldenCorner } from './screen-world.js'
+import { renderWorld, renderGoldenCorner, renderSerendipityRoom, checkForBirthdayEraPopup } from './screen-world.js'
+import { birthdayCompleteMessage } from './birthday-era-popup.js'
 import { renderRecelebrateParty } from './screen-recelebrate.js'
 import { renderWard, teardownWard } from './screen-ward.js'
 import { renderDistrictScreen, teardownDistrictScreen } from './screen-district.js'
@@ -85,6 +86,7 @@ function renderScreen(state) {
     else if (scr.name === 'candystar') renderCandyStar(scene, state)
     else if (scr.name === 'ranking') renderRanking(scene, state)
     else if (scr.name === 'golden-corner') renderGoldenCorner(scene, state)
+    else if (scr.name === 'serendipity-room') renderSerendipityRoom(scene, state)
     else if (scr.name === 'recelebrate') renderRecelebrateParty(scene, state)
     else if (scr.name === 'moon') renderMoonStation(scene, state)
     else renderWorld(scene, state)
@@ -153,13 +155,14 @@ subscribe((state) => {
   }
   checkForBadgeUnlocks(state)
   checkForExamModeAnnounce(state)
+  checkForBirthdayEraPopup(state)
   for (const eraId of state.agentCharge?.newlyLitEraIds || []) {
     if (celebratedEraCards.has(eraId)) continue
     celebratedEraCards.add(eraId)
     const era = (state.agentCharge?.eraCards || []).find((e) => e.id === eraId)
     toast(era?.isSpecial
-      ? `${era.icon || '🐰'} ${era.name} recovered — birthday badge +10h charge`
-      : `${era?.icon || '✨'} ${era?.name || 'Era'} Card activated — ready in City`, 4800)
+      ? birthdayCompleteMessage(era)
+      : `${era?.icon || '✨'} ${era?.name || 'Era'} Card activated — ready in City`, era?.isSpecial ? 6000 : 4800)
   }
   // Inherently one-shot, unlike levelUp — the backend deletes the lapsed
   // rc_player_districts row in the same request that reports it, so it

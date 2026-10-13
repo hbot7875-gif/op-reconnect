@@ -23,4 +23,10 @@ assert.equal(equippedBadge({
   player: { ...state.player, equippedBadgeId: 'level:20' },
 }), null)
 
-console.log('5 badge UI state regression tests passed')
+const jiminBirthdayState = {
+  player: { badges: ['event_jimin_birthday_2026'], equippedBadgeId: null },
+}
+assert.deepEqual(collectionBadgeIds(jiminBirthdayState), ['event_jimin_birthday_2026'])
+assert.equal(earnedBadgeCount(jiminBirthdayState), 1)
+
+console.log('7 badge UI state regression tests passed')

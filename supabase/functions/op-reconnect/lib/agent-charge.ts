@@ -18,7 +18,7 @@ import { countedArtistPlays } from './text.ts'
 import { ERA_CATALOG, allocateEraMatches, eraCatalogTrackDone, eraTrackTitle } from './era-timeline.ts'
 import { allocateTrackHits } from './era-match.js'
 import { logFeedEvent } from './feed.ts'
-import { BIRTHDAY_ERA_EVENTS, BIRTHDAY_LIGHTS_PER_TRACK, activeWeeklyBirthdayEras, birthdayTrackEntries, isWeeklyBirthdayEraId, isBirthdayEventDate } from './birthday-eras.ts'
+import { BIRTHDAY_ERA_EVENTS, BIRTHDAY_LIGHTS_PER_TRACK, activeWeeklyBirthdayEras, birthdayTrackEntries, isWeeklyBirthdayEraId, isBirthdayEventDate, isBirthdayGiftClaimDate } from './birthday-eras.ts'
 
 export const HOURS_PER_CHARGE_CELL = 2
 export const HOURS_PER_LIT_ERA = 10
@@ -91,6 +91,12 @@ export interface EraCardView {
   status: 'dark' | 'lit' | 'used' | 'keepsake'
   tracks: { title: string; done: boolean }[]
   isSpecial?: boolean
+  // Birthday cards only: whose birthday it is, so the client can name them
+  // in the popup and completion copy without hard-coding a member.
+  member?: string
+  // Birthday cards on the roomGift path: completion pays charge only; the
+  // badges come from the room's Jimin Day Gift.
+  roomGift?: boolean
   reward?: string
   // Personal progress toward event.encoreBadgeTemplateId (every track
   // counted ENCORE_THRESHOLD times) — null when this event has no encore
@@ -121,6 +127,28 @@ export interface GoldenCornerView {
   // contribution uses. So this agent can see their own number next to the
   // shared total, not just the total itself.
   yourLightUnits: number
+}
+
+export interface BirthdayGiftView {
+  // locked: room not at target yet | ready: claimable now | claimed: opened
+  // ineligible: room complete but this agent added no light
+  state: 'locked' | 'ready' | 'claimed' | 'ineligible'
+  roomBadgeId: string
+  cardBadgeId: string
+  wings: number
+  chargeCells: number
+  badgeIds?: string[]
+  cardComplete?: boolean
+}
+
+export type SerendipityRoomView = GoldenCornerView & {
+  // live: inside the event window. After it, the view is only sent to an
+  // agent whose gift is still waiting (the 7-day claim period).
+  live: boolean
+  // complete: the room's 100% is recorded in rc_birthday_room_completions
+  // and can never fall back.
+  complete: boolean
+  gift: BirthdayGiftView
 }
 
 /** Personal weekly progress, separate from era-timeline.ts's community,
@@ -228,7 +256,19 @@ async function computeWeeklyEraCards(
       done: claimed || (birthdayMatches.get(`${event.id}:${index}`) || 0) >= 1,
     }))
     const birthdayDone = birthdayTracks.filter((track) => track.done).length
-    if (birthdayActive && !claimed && birthdayDone === birthdayTracks.length) {
+    if (birthdayActive && !claimed && birthdayDone === birthdayTracks.length && event.roomGift) {
+      // roomGift events: the card pays its hours only (see birthday-eras.ts).
+      const { data, error } = await supabase.rpc('rc_claim_birthday_charge', {
+        p_agent_no: agentNo,
+        p_event_id: event.id,
+        p_event_date: event.date,
+        p_era_name: event.cardName,
+        p_reward_hours: event.rewardHours,
+        p_event_date_end: event.dateEnd || event.date,
+      })
+      claimed = !error && data === true
+      if (claimed) newlyLitEraIds.push(event.id)
+    } else if (birthdayActive && !claimed && birthdayDone === birthdayTracks.length) {
       const { data, error } = await supabase.rpc('rc_claim_birthday_era', {
         p_agent_no: agentNo,
         p_event_id: event.id,
@@ -271,7 +311,11 @@ async function computeWeeklyEraCards(
       status: claimed ? 'keepsake' : 'dark',
       tracks: claimed ? birthdayTracks.map((track) => ({ ...track, done: true })) : birthdayTracks,
       isSpecial: true,
-      reward: `${event.member} Birthday Badge · +${event.rewardHours}h ARMY Bomb charge`,
+      member: event.member,
+      ...(event.roomGift ? { roomGift: true } : {}),
+      reward: event.roomGift
+        ? `+${event.rewardHours}h ARMY Bomb charge`
+        : `${event.member} Birthday Badge · +${event.rewardHours}h ARMY Bomb charge`,
       encoreProgress,
     })
   }
@@ -294,14 +338,24 @@ const GOLDEN_DEFENDER_BADGE_ID = 'event_jk_golden_defender_2026'
 // to ENCORE_THRESHOLD lights instead of a flat 1) — a deliberate round
 // number the site owner picked, not derived from the new counting math.
 const GOLDEN_CORNER_TARGET = 1000
+// A fixed target, like Golden Corner: joining the event must only move the
+// shared percentage forward. The Jimin card has eight unique tracks rather
+// than thirteen, so 500 leaves room for a similar crowd without making each
+// agent's maximum eighteen lights feel negligible.
+const SERENDIPITY_ROOM_TARGET = 500
 // How many counted plays per track "streaming it again" needs for the
 // Encore badge (see event.encoreBadgeTemplateId above).
 
-async function computeGoldenCorner(
+async function computeBirthdayRoom(
   supabase: SupabaseDB, content: GameContent, agentNo: string,
-): Promise<GoldenCornerView | null> {
+  eventId: string, name: string, target: number, includeGiftClaimPeriod = false,
+): Promise<{ view: GoldenCornerView; yourLit: number; live: boolean } | null> {
   const today = todayKst()
-  const event = BIRTHDAY_ERA_EVENTS.find((entry) => isBirthdayEventDate(entry, today))
+  // Golden Corner calls without includeGiftClaimPeriod: exactly the event
+  // window, as before. Either way the activity read below is the event
+  // window's own rows, so nothing after the event can add to it.
+  const event = BIRTHDAY_ERA_EVENTS.find((entry) => entry.id === eventId &&
+    (isBirthdayEventDate(entry, today) || (includeGiftClaimPeriod && isBirthdayGiftClaimDate(entry, today))))
   if (!event) return null
 
   const { data: rows } = await supabase.from('rc_daily_activity')
@@ -345,31 +399,125 @@ async function computeGoldenCorner(
     if (countedAgentNo === agentNo) { yourLit = lit; yourLightUnits = lightUnits }
   }
 
+  return {
+    view: {
+      eventId: event.id,
+      name,
+      date: event.date,
+      communityLights,
+      target,
+      agents,
+      completed,
+      yourLightUnits,
+    },
+    yourLit,
+    live: isBirthdayEventDate(event, today),
+  }
+}
+
+async function computeGoldenCorner(
+  supabase: SupabaseDB, content: GameContent, agentNo: string,
+): Promise<GoldenCornerView | null> {
+  const result = await computeBirthdayRoom(
+    supabase, content, agentNo, 'jk-golden-birthday-2026', 'Golden Corner', GOLDEN_CORNER_TARGET,
+  )
+  if (!result) return null
+
   // The city-wide surprise: any Defender still gets a badge for having
   // helped, once the room the whole City was working on actually finishes.
-  if (communityLights >= GOLDEN_CORNER_TARGET && yourLit > 0) {
+  if (result.view.communityLights >= GOLDEN_CORNER_TARGET && result.yourLit > 0) {
     await supabase.rpc('rc_award_badge', {
       p_agent_no: agentNo, p_template_id: GOLDEN_DEFENDER_BADGE_ID, p_scope_id: null,
     })
   }
 
+  return result.view
+}
+
+const JIMIN_BIRTHDAY_EVENT_ID = 'jimin-muse-birthday-2026'
+
+/** Jimin Birthday Room: the same shared room computation as Golden Corner,
+ * plus the roomGift path. The first time the community total reaches the
+ * target, that is recorded once in rc_birthday_room_completions; from then
+ * on the room reads complete no matter what the activity rows later say. */
+async function computeSerendipityRoom(
+  supabase: SupabaseDB, content: GameContent, agentNo: string,
+): Promise<SerendipityRoomView | null> {
+  const event = BIRTHDAY_ERA_EVENTS.find((entry) => entry.id === JIMIN_BIRTHDAY_EVENT_ID)
+  if (!event?.roomGift) return null
+  const result = await computeBirthdayRoom(
+    supabase, content, agentNo, JIMIN_BIRTHDAY_EVENT_ID, 'Jimin Birthday Room', SERENDIPITY_ROOM_TARGET, true,
+  )
+  if (!result) return null
+
+  let { data: completion } = await supabase.from('rc_birthday_room_completions')
+    .select('community_lights').eq('event_id', event.id).maybeSingle()
+  if (!completion && result.view.communityLights >= SERENDIPITY_ROOM_TARGET) {
+    await supabase.from('rc_birthday_room_completions').upsert({
+      event_id: event.id, community_lights: result.view.communityLights, target: SERENDIPITY_ROOM_TARGET,
+    }, { onConflict: 'event_id', ignoreDuplicates: true })
+    const reread = await supabase.from('rc_birthday_room_completions')
+      .select('community_lights').eq('event_id', event.id).maybeSingle()
+    completion = reread.data
+  }
+  const complete = !!completion
+
+  const { data: claim } = await supabase.from('rc_birthday_gift_claims')
+    .select('badge_ids, wings, charge_cells, card_complete').eq('event_id', event.id).eq('agent_no', agentNo).maybeSingle()
+  const base = {
+    roomBadgeId: event.roomGift.roomBadgeTemplateId, cardBadgeId: event.badgeTemplateId,
+    wings: event.roomGift.wings, chargeCells: event.roomGift.chargeCells,
+  }
+  const gift: BirthdayGiftView = claim
+    ? { ...base, state: 'claimed', badgeIds: claim.badge_ids || [], wings: claim.wings, chargeCells: claim.charge_cells, cardComplete: !!claim.card_complete }
+    : !complete ? { ...base, state: 'locked' }
+    : result.view.yourLightUnits > 0 ? { ...base, state: 'ready' }
+    : { ...base, state: 'ineligible' }
+
+  // After the event only an agent with an unopened gift still sees the room.
+  if (!result.live && gift.state !== 'ready') return null
+
   return {
-    eventId: event.id,
-    name: 'Golden Corner',
-    date: event.date,
-    communityLights,
-    // Raised 2026-09-01 ~mid-event: the original 260 (20 ARMY × 13 tracks)
-    // was sized for a much smaller turnout and was about to cap at 248/260
-    // with 63 ARMY already in the room and hours of the day left. 910 is
-    // 13 × 70 — a little above today's live headcount, leaving room to keep
-    // climbing instead of finishing early. A fixed number, deliberately not
-    // live-computed from today's agent count: scaling the goal with each
-    // newcomer would make the percentage every ARMY is watching go DOWN as
-    // more people arrive, which is the wrong feeling for a birthday target.
-    target: GOLDEN_CORNER_TARGET,
-    agents,
-    completed,
-    yourLightUnits,
+    ...result.view,
+    communityLights: complete
+      ? Math.max(result.view.communityLights, Number(completion?.community_lights) || 0, SERENDIPITY_ROOM_TARGET)
+      : result.view.communityLights,
+    live: result.live,
+    complete,
+    gift,
+  }
+}
+
+/** Opens the agent's Jimin Day Gift. The client sends only its agent number;
+ * the contribution passed to the RPC is this server's own computation from
+ * the event window's activity, and the RPC itself checks the recorded room
+ * completion, the claim period, the agent's own Era Card claim row, and any
+ * existing claim (returned unchanged on a repeat). */
+export async function claimBirthdayGift(supabase: SupabaseDB, content: GameContent, agentNo: string) {
+  const event = BIRTHDAY_ERA_EVENTS.find((entry) => entry.id === JIMIN_BIRTHDAY_EVENT_ID)
+  if (!event?.roomGift) return { success: false, error: 'no_gift' }
+  const room = await computeSerendipityRoom(supabase, content, agentNo)
+  if (!room) return { success: false, error: 'gift_unavailable' }
+  if (room.gift.state === 'claimed') return { success: true, gift: room.gift }
+  const { data, error } = await supabase.rpc('rc_claim_birthday_room_gift', {
+    p_agent_no: agentNo,
+    p_event_id: event.id,
+    p_event_date: event.date,
+    p_event_date_end: event.dateEnd || event.date,
+    p_lights: room.yourLightUnits,
+    p_room_badge_id: event.roomGift.roomBadgeTemplateId,
+    p_card_badge_id: event.badgeTemplateId,
+    p_wings: event.roomGift.wings,
+    p_charge_cells: event.roomGift.chargeCells,
+  })
+  if (error) return { success: false, error: error.message }
+  if (data?.state !== 'claimed') return { success: false, error: `gift_${data?.state || 'unavailable'}` }
+  return {
+    success: true,
+    gift: {
+      ...room.gift, state: 'claimed', badgeIds: data.badgeIds || [],
+      wings: data.wings, chargeCells: data.chargeCells, cardComplete: !!data.cardComplete,
+    },
   }
 }
 
@@ -416,6 +564,7 @@ export interface AgentChargeView {
   // an agent on day seven.
   feedHealth: { daysSinceFeed: number; daysLeft: number; lastFedAt: string } | null
   goldenCorner: GoldenCornerView | null
+  serendipityRoom: SerendipityRoomView | null
 }
 
 /** Same authoritative rc_agent_charge.last_fed_at rule used by
@@ -530,6 +679,7 @@ export async function getAgentChargeView(supabase: SupabaseDB, content: GameCont
     lifetimeChargeCellsEarned(supabase, agentNo),
     bombFeedHealth(supabase, agentNo),
     computeGoldenCorner(supabase, content, agentNo),
+    computeSerendipityRoom(supabase, content, agentNo),
   ])
 
   const isDark = chargedUntilMs === null ? false : chargedUntilMs <= now
@@ -571,7 +721,7 @@ export async function getAgentChargeView(supabase: SupabaseDB, content: GameCont
     await supabase.from('rc_agent_charge').update({ blackout_started_at: null, soft_reset_at: null, full_reset_at: null }).eq('agent_no', agentNo)
   }
 
-  const [weekly, earned, feedHealth, goldenCorner] = await laterReads
+  const [weekly, earned, feedHealth, goldenCorner, serendipityRoom] = await laterReads
   const deletionWarning = feedHealth && feedHealth.daysSinceFeed >= 7 && feedHealth.daysLeft > 0
     ? { daysInactive: feedHealth.daysSinceFeed, daysLeft: feedHealth.daysLeft }
     : null
@@ -590,6 +740,7 @@ export async function getAgentChargeView(supabase: SupabaseDB, content: GameCont
     deletionWarning,
     feedHealth,
     goldenCorner,
+    serendipityRoom,
   }
 }
 

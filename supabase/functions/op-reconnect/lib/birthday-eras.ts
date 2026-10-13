@@ -23,6 +23,15 @@ export interface BirthdayEraEvent {
   // primary badgeTemplateId. Awarded directly via rc_award_badge, no
   // separate claim RPC (see agent-charge.ts's ENCORE_THRESHOLD).
   encoreBadgeTemplateId?: string
+  // Opt-in second reward path (Jimin Day 2026 onward). When set, completing
+  // the Era Card gives only rewardHours (rc_claim_birthday_charge), and the
+  // badges move into a gift that contributors claim once the shared birthday
+  // room reaches its target (rc_claim_birthday_room_gift): roomBadgeTemplateId
+  // for anyone who added light, badgeTemplateId as well for card completers.
+  // claimDays is how long after the event the gift stays claimable - it only
+  // extends claiming; contribution and card completion stay frozen to the
+  // event window. Events without it (GOLDEN) keep rc_claim_birthday_era.
+  roomGift?: { roomBadgeTemplateId: string; claimDays: number; wings: number; chargeCells: number }
   weeklyEra: EraDef & { startsOn: string }
 }
 
@@ -86,6 +95,43 @@ export const BIRTHDAY_ERA_EVENTS: BirthdayEraEvent[] = [
       startsOn: '2026-09-07',
     },
   },
+  {
+    id: 'jimin-muse-birthday-2026',
+    date: '2026-10-13',
+    // Extended one KST day (site owner's call, 2026-10-13): the event was
+    // released late in the day; Oct 13 plays still count from the start.
+    dateEnd: '2026-10-14',
+    member: 'Jimin',
+    cardName: 'MUSE Birthday',
+    icon: '🌙',
+    description: 'Jimin · October 13, 2026 birthday keepsake.',
+    albums: ['MUSE'],
+    tracks: [
+      'Rebirth (Intro)', 'Interlude : Showtime',
+      'Smeraldo Garden Marching Band (feat. Loco)',
+      'Slow Dance (feat. Sofia Carson)', 'Be Mine', 'Who',
+      'Closer Than This', 'SWIM with Jimin (Slow Jam R&B Remix)',
+      'Serendipity (Full Length Edition)',
+    ],
+    badgeTemplateId: 'event_jimin_birthday_2026',
+    rewardHours: 10,
+    roomGift: { roomBadgeTemplateId: 'event_jimin_day_lightkeeper_2026', claimDays: 7, wings: 1, chargeCells: 1 },
+    weeklyEra: {
+      id: 'muse',
+      name: 'MUSE',
+      icon: '🌙',
+      description: 'Jimin’s MUSE era.',
+      albums: ['MUSE'],
+      tracks: [
+        'Rebirth (Intro)', 'Interlude : Showtime',
+        'Smeraldo Garden Marching Band (feat. Loco)',
+        'Slow Dance (feat. Sofia Carson)', 'Be Mine', 'Who',
+        'Closer Than This', 'SWIM with Jimin (Slow Jam R&B Remix)',
+        'Serendipity (Full Length Edition)',
+      ],
+      startsOn: '2026-10-19',
+    },
+  },
 ]
 
 /** Is this KST calendar date within the event's active window? Plain
@@ -95,6 +141,14 @@ export const BIRTHDAY_ERA_EVENTS: BirthdayEraEvent[] = [
  *  future multi-day extension never needs touching more than one line. */
 export function isBirthdayEventDate(event: BirthdayEraEvent, kstDate: string): boolean {
   return kstDate >= event.date && kstDate <= (event.dateEnd || event.date)
+}
+
+/** The roomGift claim period: the event itself plus claimDays after it. */
+export function isBirthdayGiftClaimDate(event: BirthdayEraEvent, kstDate: string): boolean {
+  if (!event.roomGift) return false
+  const last = new Date(`${event.dateEnd || event.date}T00:00:00Z`)
+  last.setUTCDate(last.getUTCDate() + event.roomGift.claimDays)
+  return kstDate >= event.date && kstDate <= last.toISOString().slice(0, 10)
 }
 
 export function activeWeeklyBirthdayEras(kstDate: string): EraDef[] {

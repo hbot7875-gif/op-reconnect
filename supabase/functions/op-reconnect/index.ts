@@ -44,7 +44,7 @@ import {
   deleteBadgeArt, undoBadgeArtUpload,
 } from './lib/badge-admin.ts'
 import { getMagicShop, buyWings, claimTicket } from './lib/magic-shop.ts'
-import { feedCharge, setAutoFeed, getAgentCharge, useLitEra } from './lib/agent-charge.ts'
+import { feedCharge, setAutoFeed, getAgentCharge, useLitEra, claimBirthdayGift } from './lib/agent-charge.ts'
 import { submitSuggestion } from './lib/suggestions.ts'
 import { loadContent } from './lib/config.ts'
 import { trackEngagement, adminGetEngagementReport } from './lib/engagement.ts'
@@ -169,6 +169,7 @@ const ROUTES: Record<string, Route> = {
   setAutoFeed: { auth: 'agent', handler: (sb, p) => setAutoFeed(sb, String(p.agentNo || '').trim().toUpperCase(), !!p.on) },
   getAgentCharge: { auth: 'agent', handler: async (sb, p) => getAgentCharge(sb, await loadContent(sb), String(p.agentNo || '').trim().toUpperCase()) },
   useLitEra: { auth: 'agent', handler: async (sb, p) => useLitEra(sb, await loadContent(sb), String(p.agentNo || '').trim().toUpperCase(), String(p.eraId || '')) },
+  claimBirthdayGift: { auth: 'agent', handler: async (sb, p) => claimBirthdayGift(sb, await loadContent(sb), String(p.agentNo || '').trim().toUpperCase()) },
   // Reconnect goal (connect/invite co-op variants) — gates restoration now,
   // not a post-restoration bonus. All agent-scoped since eligibility is
   // always checked against the caller's own active district+frozen goal

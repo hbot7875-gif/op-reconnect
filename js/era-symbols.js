@@ -24,11 +24,17 @@ export const ERA_SYMBOLS = {
   arirang: '<path class="d" d="M3.5 15.8c3.2-5.8 6.2-7.1 9.2-4.8 2.8 2.1 5 1.2 7.8-3.2-1.7 6.1-4.9 8.6-8.2 6.2-2.7-2-5.2-.8-8.8 2.8Z"/><path d="M4 16c3.2-5.5 6.1-6.8 9-4.6 2.8 2.1 5 1.1 7-2.1M5.5 19c2.7-2.1 4.8-2.4 7.1-1 2 1.2 3.8.9 5.9-.8"/>',
   // faceted gem
   golden: '<path class="d" d="M7 4h10l4 5.5L12 20 3 9.5Z"/><path d="M3 9.5h18"/><path d="M12 20 8.5 9.5 10 4M12 20l3.5-10.5L14 4"/>',
+  // paired crescents: an understated muse / reflected-self mark
+  muse: '<path class="d" d="M14.8 3.8A8.3 8.3 0 1 0 20.2 17a7 7 0 0 1-5.4-13.2Z"/><path d="M14.8 3.8A8.3 8.3 0 1 0 20.2 17a7 7 0 0 1-5.4-13.2Z"/><path d="M15.7 8.2c-1.8 1.2-2.6 3-2.3 5.3.2 1.6 1 2.9 2.3 3.8"/>',
 }
 
 // Unknown or future eras get a neutral disc rather than nothing.
 const FALLBACK = '<circle class="d" cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2"/>'
 
 export function eraSymbol(id) {
-  return `<svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">${ERA_SYMBOLS[id] || FALLBACK}</svg>`
+  const aliases = {
+    'jk-golden-birthday-2026': 'golden',
+    'jimin-muse-birthday-2026': 'muse',
+  }
+  return `<svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">${ERA_SYMBOLS[aliases[id] || id] || FALLBACK}</svg>`
 }

@@ -12,6 +12,8 @@ const COLLECTION_TEMPLATES = new Set([
   // allow-list — meaning completing the GOLDEN card never triggered the
   // usual unlock reveal or counted toward the Drawer/Pack badge count.
   'event_jk_birthday_2026',
+  'event_jimin_birthday_2026',
+  'event_jimin_day_lightkeeper_2026',
   // The rarer badge's city-wide companion — any Defender (1+ GOLDEN play),
   // awarded once the whole City finishes the room, not personal completion.
   'event_jk_golden_defender_2026',

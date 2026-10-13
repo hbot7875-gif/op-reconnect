@@ -20,8 +20,9 @@
 // ward-tiles.js's header comment — since it's already this mission card and
 // the map's own centre landmark; a third copy was pure repetition.
 
-import { el, esc, showOverlay, hideOverlay, unlockAfter } from './state.js'
-import { goWorld, goWard, goDistrict, goCandyStar, goGoldenCorner } from './router.js'
+import { el, esc, showOverlay, hideOverlay, unlockAfter, toast, getState, setState } from './state.js'
+import { call } from './api.js'
+import { goWorld, goWard, goDistrict, goCandyStar, goGoldenCorner, goSerendipityRoom } from './router.js'
 import { districtFraction } from './ui-district.js'
 import { districtGoalsLeft, districtPercent } from './district-progress.js'
 import { renderWardTiles, glanceStrip, wardDisplayName, districtDisplayName, HOME_BASE_WARD } from './ward-tiles.js'
@@ -46,6 +47,9 @@ import { bombHealthStatus, lastFedLabel } from './agent-charge-health.js'
 import { warmShareArtwork } from './share-scene-image.js'
 import { powerEraCards } from './era-card-display.js'
 import { eraSymbol } from './era-symbols.js'
+import { serendipityRoomArt } from './serendipity-room-scene.js'
+import { birthdayPopupCard, birthdayPopupCopy, birthdayPopupSeen, markBirthdayPopupSeen, birthdayGiftContents } from './birthday-era-popup.js'
+import { getAgentNo } from './session.js'
 
 export function renderWorld(container, state) {
   container.innerHTML = ''
@@ -410,14 +414,22 @@ function cityPlan(state) {
     ? districtFraction(activeD)
     : wards.find((w) => w.id === HOME_BASE_WARD)?.status === 'restored' ? 1 : 0
   const golden = state.agentCharge?.goldenCorner
-  const goldenProgress = golden ? Math.min(1, golden.communityLights / Math.max(1, golden.target)) : 0
+  // The same single birthday-event marker GOLDEN's room used, with the same
+  // lifecycle: the server only sends a room view during its event window.
+  // While no Golden Corner is live, Jimin's room takes the slot, at the top
+  // seam Candy Star normally holds (city-map.js's birthdayAtTop).
+  const jiminRoom = golden ? null : state.agentCharge?.serendipityRoom
+  const birthdayRoom = golden || jiminRoom
+  const goldenProgress = birthdayRoom
+    ? Math.min(1, (Number(birthdayRoom.communityLights) || 0) / Math.max(1, Number(birthdayRoom.target) || 1)) : 0
   box.appendChild(renderCityMap(wards, state.map?.districts || [],
     (w, origin) => goWard(w.id, origin), homeFraction,
     (origin) => goCandyStar(origin),
     () => openMagicShop(),
     state.vma ? () => openVmaMission() : null,
     !!(state.vma?.isPowerHour || state.vma?.isDoubleDay),
-    golden ? (origin) => goGoldenCorner(origin) : null,
+    golden ? (origin) => goGoldenCorner(origin)
+      : jiminRoom ? (origin) => goSerendipityRoom(origin) : null,
     goldenProgress,
     // ARIRANG RE:CELEBRATE's venue has left the map — the event is over,
     // so the top seam goes back to Candy Star + Magic Shop. Nothing about
@@ -437,7 +449,7 @@ function cityPlan(state) {
       arirangPartyIsComplete(),
       arirangPartyIsCounting(),
     ] : [null, false, null, false, false]),
-    backupMapOpts(state)))
+    { ...backupMapOpts(state), ...(jiminRoom ? { birthdayIcon: '🌙', birthdayLabel: 'Jimin Day Party', birthdayAtTop: true } : {}) }))
   return box
 }
 
@@ -605,6 +617,180 @@ export function renderGoldenCorner(container, state) {
   back.onclick = (event) => goWorld({ x: event.clientX, y: event.clientY })
   head.appendChild(back)
   screen.append(head, goldenCornerContent(state))
+  container.appendChild(screen)
+}
+
+// Exported for local responsive review. The scene is original DOM/CSS art:
+// it borrows the song's chance-meeting and tender first-love atmosphere,
+// not the official video frames, album cover, or likeness.
+export function serendipityRoomScene(progress, personalComplete = false) {
+  // Match district restoration's contract: one clamped, continuous fraction
+  // drives both the exact meter and the scene's growing light. Thresholds only
+  // decide which physical decorations have actually been restored into the
+  // room; there is no parallel visual-progress value to drift out of sync.
+  const restored = Math.max(0, Math.min(1, Number(progress) || 0))
+  const pct = Math.round(restored * 100)
+  const band = pct >= 100 ? 100 : pct >= 75 ? 75 : pct >= 50 ? 50 : pct >= 25 ? 25 : 0
+  const stateLabel = band >= 100 ? 'HAPPY BIRTHDAY' : band >= 75 ? 'ALMOST READY' : band >= 50 ? 'GETTING READY' : band >= 25 ? 'FIRST LIGHT' : 'QUIET'
+  const room = el('div', `stage sr-room sr-p${band}${personalComplete ? ' is-personal-complete' : ''}`)
+  room.style.setProperty('--sr-light', String(restored))
+  room.setAttribute('role', 'img')
+  room.setAttribute('aria-label', `Jimin Birthday Room is ${pct}% ready`)
+  room.innerHTML = `
+    <div class="sr-props" aria-hidden="true">${serendipityRoomArt(band)}</div>
+    <div class="stage-overlay sr-stage-overlay">
+      <div class="stage-top"><div class="stage-eyebrow">${stateLabel}</div><div class="stage-name">Jimin Birthday Room</div></div>
+      <div class="sr-alignment"><span>${pct}% ready</span><i><b style="width:${pct}%"></b></i></div>
+    </div>`
+  return room
+}
+
+const GIFT_BADGE_NAMES = {
+  event_jimin_day_lightkeeper_2026: 'Birthday Lightkeeper',
+  event_jimin_birthday_2026: 'Jimin Birthday Badge',
+}
+
+// The two separate rewards, said plainly on the room itself: your own card
+// pays charge; the shared room pays the gift.
+function birthdayRewardPaths(personalComplete, room) {
+  const paths = el('div', 'sr-paths')
+  paths.innerHTML = `
+    <div class="sr-path${personalComplete ? ' is-done' : ''}"><i>YOUR ERA CARD</i><b>${personalComplete ? 'Complete' : 'Stream all 9 tracks'}</b><span>+10H ARMY Bomb charge</span></div>
+    <div class="sr-path${room?.complete ? ' is-done' : ''}"><i>SHARED ROOM 100%</i><b>${room?.complete ? 'Restored' : 'Everyone streams together'}</b><span>Jimin Day Gift for everyone who helped</span></div>`
+  return paths
+}
+
+function giftContentsList(gift, cardComplete) {
+  const list = el('ul', 'sr-gift-items')
+  for (const item of birthdayGiftContents(gift, cardComplete, GIFT_BADGE_NAMES)) {
+    const row = el('li', `sr-gift-item is-${item.kind}`)
+    row.innerHTML = `<i aria-hidden="true"></i><span>${esc(item.label)}</span>`
+    list.appendChild(row)
+  }
+  return list
+}
+
+function birthdayGiftSheet(gift) {
+  const sheet = el('div', 'sheet sr-gift-sheet')
+  sheet.append(
+    el('div', 'eyebrow', 'JIMIN DAY GIFT'),
+    el('h3', '', 'Your birthday gift'),
+    el('p', 'muted', 'The room is complete. Thank you for helping restore it.'),
+    giftContentsList(gift, !!gift.cardComplete),
+  )
+  const close = el('button', 'btn btn-ghost', 'Close')
+  close.onclick = hideOverlay
+  sheet.appendChild(close)
+  return sheet
+}
+
+function birthdayGiftCard(room, cardComplete) {
+  const gift = room?.gift
+  if (!gift) return null
+  const box = el('section', `sr-gift is-${gift.state}`)
+  if (gift.state === 'locked') {
+    box.innerHTML = '<b>Jimin Day Gift</b><p>Unlocks for everyone who helped when the room reaches 100%.</p>'
+    box.appendChild(giftContentsList(gift, cardComplete))
+    return box
+  }
+  if (gift.state === 'ineligible') {
+    box.innerHTML = '<b>Jimin Day Gift</b><p>The room is complete. Gifts went to everyone who added light.</p>'
+    return box
+  }
+  if (gift.state === 'claimed') {
+    box.innerHTML = '<b>Jimin Day Gift · opened</b>'
+    box.appendChild(giftContentsList(gift, !!gift.cardComplete))
+    return box
+  }
+  box.innerHTML = '<b>Jimin Day Gift</b><p>The room is complete. Your birthday gift is ready.</p>'
+  box.appendChild(giftContentsList(gift, cardComplete))
+  const open = el('button', 'btn btn-primary', 'Open gift')
+  open.onclick = async () => {
+    open.disabled = true
+    const res = await call('claimBirthdayGift', { agentNo: getAgentNo() })
+    if (!res.success) {
+      toast(res.error === 'gift_locked' ? 'The room is not complete yet' : "Couldn't open the gift — try again")
+      open.disabled = false
+      return
+    }
+    showOverlay(birthdayGiftSheet(res.gift))
+    // Pull fresh state so the badges reveal and the wallet updates.
+    const next = await call('getGameState', { agentNo: getAgentNo() })
+    if (next?.success && next.joined) setState(next)
+    else {
+      const now = getState()
+      const ac = now?.agentCharge
+      if (ac?.serendipityRoom) setState({ ...now, agentCharge: { ...ac, serendipityRoom: { ...ac.serendipityRoom, gift: res.gift } } })
+    }
+  }
+  box.appendChild(open)
+  return box
+}
+
+export function serendipityRoomContent(state) {
+  const room = state.agentCharge?.serendipityRoom
+  const card = (state.agentCharge?.eraCards || []).find((entry) => entry.id === room?.eventId)
+  const community = Math.max(0, Number(room?.communityLights) || 0)
+  const target = Math.max(1, Number(room?.target) || 500)
+  // A recorded completion never reads below 100%.
+  const progress = room?.complete ? 1 : Math.min(1, community / target)
+  const personalDone = Math.min(Number(card?.done) || 0, Number(card?.total) || 9)
+  const personalTotal = Number(card?.total) || 9
+  const personalComplete = personalDone >= personalTotal || card?.status === 'keepsake'
+  const communityComplete = progress >= 1
+
+  const sheet = el('div', 'serendipity-room-content')
+  sheet.appendChild(serendipityRoomScene(progress, personalComplete))
+  const copy = el('div', 'sr-copy')
+  const roomMessage = communityComplete ? 'Happy birthday, Jimin.' : progress >= .75 ? 'Almost ready for Jimin.' : progress >= .5 ? 'Halfway there.' : 'The room is getting ready.'
+  copy.innerHTML = `<h3>${roomMessage}</h3><p>Everyone's qualifying Jimin Birthday Era Card streams restore this room together.</p>`
+  sheet.appendChild(copy)
+  sheet.appendChild(birthdayRewardPaths(personalComplete, room))
+
+  const agents = Math.max(0, Number(room?.agents) || 0)
+  const completed = Math.max(0, Number(room?.completed) || 0)
+  const yourLightUnits = Math.max(0, Number(room?.yourLightUnits) || 0)
+  const progressRow = el('div', 'sr-progress')
+  progressRow.innerHTML = `
+    <span><i>OUR LIGHTS</i><b>${community} / ${target}</b></span>
+    <span><i>YOUR LIGHTS</i><b>${yourLightUnits}</b></span>
+    <span><i>ARMY HERE</i><b>${agents}</b></span>
+    <span><i>YOUR CARD</i><b>${personalDone} / ${personalTotal}</b></span>`
+  sheet.appendChild(progressRow)
+  const people = agents === 0 ? 'Be the first to bring light into the room.'
+    : `${agents} ${agents === 1 ? 'ARMY has' : 'ARMY have'} helped · ${completed} completed ${completed === 1 ? 'their card' : 'their cards'}.`
+  sheet.appendChild(el('p', 'sr-agents-note', people))
+
+  const giftCard = birthdayGiftCard(room, personalComplete)
+  if (giftCard) sheet.appendChild(giftCard)
+  if (!personalComplete && card && room?.live) {
+    const continueButton = el('button', 'btn btn-primary', 'Continue Era Card')
+    continueButton.onclick = () => showOverlay(eraTracksSheet(card, true))
+    sheet.appendChild(continueButton)
+  }
+  // Listening Moment: a celebration only, opened by the shared room reaching
+  // 100% and nothing else. It reads no reward state and grants nothing — the
+  // Era Card, +10H, the gift, both badges, Wing and Charge Cell are all
+  // decided elsewhere. Sits after the gift so it stays secondary.
+  if (communityComplete) {
+    const music = el('section', 'sr-music')
+    music.innerHTML = `
+      <div><p><b>THE CITY FOUND IT TOGETHER</b><span>Serendipity (Full Length Edition)</span></p></div>
+      <iframe title="Serendipity (Full Length Edition) by BTS on Spotify" src="https://open.spotify.com/embed/track/5cQB9fbuQCz4muQUFkv3rR?utm_source=generator&theme=0" width="100%" height="152" frameborder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe>`
+    sheet.appendChild(music)
+  }
+  return sheet
+}
+
+export function renderSerendipityRoom(container, state) {
+  if (!state.agentCharge?.serendipityRoom) { goWorld(); return }
+  container.innerHTML = ''
+  const screen = el('div', 'serendipity-room-screen')
+  const head = el('div', 'screen-head')
+  const back = el('button', 'back-btn', 'City')
+  back.onclick = (event) => goWorld({ x: event.clientX, y: event.clientY })
+  head.appendChild(back)
+  screen.append(head, serendipityRoomContent(state))
   container.appendChild(screen)
 }
 
@@ -988,7 +1174,11 @@ function eraTracksSheet(e, personal = false) {
     <div class="pbar" style="flex:1" role="progressbar" aria-label="${esc(e.name)} tracks streamed" aria-valuemin="0" aria-valuemax="${e.total}" aria-valuenow="${Math.min(e.done, e.total)}"><div class="pfill${e.done >= e.total && e.total > 0 ? ' done' : ''}" style="width:${e.total ? Math.round((e.done / e.total) * 100) : 0}%"></div></div>
     <span class="count">${e.done} / ${e.total} streamed</span>`))
   sheet.appendChild(el('div', 'dim', personal
-    ? (e.isSpecial
+    ? (e.isSpecial && e.roomGift
+      ? (e.status === 'keepsake'
+        ? 'Birthday card complete — your +10H charge is secured. Your streams also helped restore the shared room.'
+        : 'Stream every track once during Jimin Day to complete your birthday card and add +10H charge. Your streams also restore the shared Jimin Birthday Room.')
+      : e.isSpecial
       ? (e.status === 'keepsake'
         ? 'Birthday card complete — your badge and +10H charge are secured.'
         : 'Stream every track once today to complete your birthday card, earn the badge, and add +10H charge.')
@@ -1009,6 +1199,38 @@ function eraTracksSheet(e, personal = false) {
   close.onclick = hideOverlay
   sheet.appendChild(close)
   return sheet
+}
+
+/** Once per agent per birthday: a compact invitation to the dated Era Card,
+ *  opening the same personal track sheet the City card itself opens. Waits
+ *  for a free overlay (next poll) rather than replacing a badge reveal or
+ *  any other sheet, same as exam-mode-announce.js. */
+export function checkForBirthdayEraPopup(state) {
+  const agentNo = getAgentNo()
+  if (!agentNo || !state?.joined) return
+  const card = birthdayPopupCard(state)
+  if (!card) return
+  let storage
+  try { storage = localStorage } catch (_) { return }
+  if (birthdayPopupSeen(storage, agentNo, card.id)) return
+  const overlay = document.getElementById('overlay')
+  if (overlay && !overlay.hidden) return
+  markBirthdayPopupSeen(storage, agentNo, card.id)
+
+  const copy = birthdayPopupCopy(card)
+  const sheet = el('div', 'sheet')
+  sheet.append(
+    el('div', 'eyebrow', `${esc(card.icon)} ${esc(card.name)}`),
+    el('h3', '', esc(copy.title)),
+    el('p', 'muted', esc(copy.body)),
+  )
+  if (copy.note) sheet.appendChild(el('p', 'dim birthday-popup-note', esc(copy.note)))
+  const start = el('button', 'btn btn-primary', esc(copy.action))
+  start.onclick = () => showOverlay(eraTracksSheet(card, true))
+  const later = el('button', 'btn btn-ghost', 'Not now')
+  later.onclick = hideOverlay
+  sheet.append(start, later)
+  showOverlay(sheet)
 }
 
 

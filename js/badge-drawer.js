@@ -142,6 +142,8 @@ export function badgeStory(e, state) {
   if (e.templateId === 'event_vma_double_day') return 'Voted for BTS on a VMA Double Day.'
   if (e.templateId === 'event_vma_supply_chest') return 'Found this rare badge inside a Supply Chest.'
   if (e.templateId === 'event_jk_birthday_2026') return "Lit every track on Jung Kook's GOLDEN Birthday Era Card."
+  if (e.templateId === 'event_jimin_birthday_2026') return "Completed the Jimin Birthday Era Card and helped restore the Jimin Birthday Room on Jimin Day 2026."
+  if (e.templateId === 'event_jimin_day_lightkeeper_2026') return 'Helped restore the Jimin Birthday Room on Jimin Day 2026.'
   if (e.templateId === 'event_jk_golden_defender_2026') return 'Helped light Golden Corner before the whole City reached 100%.'
   if (e.templateId === 'event_jk_golden_encore_2026') return 'Streamed every track on the GOLDEN Birthday Era Card twice over.'
   if (e.templateId === 'event_rc26_after_party') return 'Was there when the lights went down — streamed or watched at ARIRANG RE:CELEBRATE, Sept 20, 2026.'

@@ -430,7 +430,7 @@ body {
 .command-scene::after { content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 1;
   background: linear-gradient(90deg, rgba(6,5,13,.82) 0%, transparent 28%, transparent 76%, rgba(6,5,13,.26) 100%),
               linear-gradient(0deg, rgba(6,5,13,.78), transparent 30%); }
-.command-scene > .city-plan { position: absolute; inset: 8px 8px 8px 310px; z-index: 0; border: 0; border-radius: 0;
+.command-scene > .city-plan { position: absolute; inset: 8px 8px 8px 310px; z-index: 0; border: 0; border-radius: 0; overflow: visible;
   background: transparent; display: flex; align-items: center; justify-content: center; }
 .command-scene > .city-plan > * { width: auto; height: min(100%, 594px); max-width: 100%; }
 .recovery-signal { position: absolute; z-index: 3; top: 22px; left: 24px; display: flex; flex-direction: column; gap: 6px; max-width: min(220px, 60vw); }
@@ -706,7 +706,7 @@ body {
    hotspots and lighting overlays on top of it. Nothing else has to move. */
 .map-field { position: relative; border-radius: var(--r-lg); overflow: hidden;
   background: #06050d; border: 1px solid var(--border); }
-.city-map { display: block; width: 100%; height: auto; }
+.city-map { display: block; width: 100%; height: auto; overflow: visible; } /* the bottom-seam event label's descenders sit just past the viewBox edge */
 /* The world plan's frame on the World screen. Opaque and bordered like the
    other cards so it reads as an instrument panel, not a loose drawing. */
 .city-plan {
@@ -5090,6 +5090,35 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 @keyframes recordSpin{to{transform:rotate(360deg)}}
 @media(max-width:340px){.gc-room{height:auto;aspect-ratio:1/.52}}
 @media(prefers-reduced-motion:reduce){.gc-p100 .gc-cake span,.gc-fairy i,.gc-turntable i,.gc-p100 .gc-bunny{animation:none!important}}
+
+/* ── Jimin Birthday Room — Jimin Day 2026 ────────────────────────
+   The room itself is one composed SVG (serendipity-room-scene.js) on a fixed
+   400x264 canvas, so props keep their grounding at every width. Thresholds
+   add objects; the continuous --sr-light restoration fraction only tunes the
+   lamp pool, the warm wash and how far the dark corners recede. */
+.serendipity-room-screen{max-width:430px;margin:0 auto;padding-bottom:48px}.serendipity-room-content>.btn-primary{display:block;width:100%;margin-top:12px}
+.sr-room{--sr-light:0;height:auto;aspect-ratio:400/318;margin:14px 0 17px;border-color:rgba(160,176,198,.22);background:#11161f;box-shadow:0 18px 40px rgba(0,3,10,.45)}
+.sr-props{position:absolute;inset:0;overflow:hidden}.sr-art{display:block;width:100%;height:100%}
+.sr-warm-pool{opacity:calc(.5 + var(--sr-light) * .32);transition:opacity 1s ease}
+.sr-warm-wash{mix-blend-mode:soft-light;opacity:calc(var(--sr-light) * .16);transition:opacity 1s ease}
+.sr-vignette{opacity:calc(1 - var(--sr-light) * .42);transition:opacity 1s ease}
+.sr-moonbeam{opacity:calc(.9 - var(--sr-light) * .3)}
+.sr-p100 .sr-flame{animation:srFlame 2.6s ease-in-out infinite;transform-box:fill-box;transform-origin:50% 100%}.sr-p100 .sr-flame.is-slow{animation-duration:3.4s}
+.sr-bulb{animation:srBulb 5s ease-in-out infinite}.sr-bulb.is-slow{animation-duration:7s;animation-delay:-2s}
+@keyframes srFlame{0%,100%{transform:scaleY(1)}50%{transform:scaleY(.82)}}
+@keyframes srBulb{0%,100%{opacity:1}50%{opacity:.72}}
+.sr-stage-overlay{z-index:15;color:#eef3f7;text-shadow:0 2px 6px rgba(0,3,9,.78)}
+.sr-stage-overlay .stage-top{background:linear-gradient(180deg,rgba(6,9,15,.5),transparent)}
+.sr-room .stage-name{font-size:17px}.sr-stage-overlay .stage-eyebrow{color:#c6d4e0}.sr-stage-overlay .stage-name{color:#f4eee5;text-shadow:0 2px 6px rgba(0,3,9,.8)}
+.sr-alignment{position:absolute;left:16px;right:16px;bottom:11px;display:flex;align-items:center;gap:8px;color:#c9d3dc;font:8px var(--mono);letter-spacing:.65px;text-transform:uppercase;text-shadow:0 1px 3px rgba(0,0,0,.8)}.sr-alignment>i{display:block;flex:1;height:2px;overflow:hidden;border-radius:2px;background:rgba(210,220,230,.18)}.sr-alignment b{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#86a9c6,#c99599 65%,#d4b77c);transition:width 1s ease}
+.sr-copy h3{margin:0 0 5px;font-size:17px}.sr-copy p{margin:0;color:var(--muted);font-size:13px;line-height:1.45}.sr-progress{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:14px 0}.sr-progress span{padding:9px 10px;border:1px solid rgba(173,190,211,.14);border-radius:11px;background:rgba(189,207,226,.035)}.sr-progress i,.sr-progress b{display:block}.sr-progress i{font:8px var(--mono);letter-spacing:1.1px;color:var(--dim)}.sr-progress b{margin-top:4px;color:#b9cae0;font-size:13px}.sr-agents-note{margin:-4px 0 14px;color:var(--dim);font-size:12px;line-height:1.5}
+@media(max-width:340px){.sr-room .stage-name{font-size:15px}.sr-paths{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){.sr-flame,.sr-bulb{animation:none!important}.sr-warm-pool,.sr-warm-wash,.sr-vignette,.sr-alignment b{transition:none}}
+.sr-paths{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0 4px}.sr-path{padding:9px 10px;border:1px solid rgba(173,190,211,.14);border-radius:11px;background:rgba(189,207,226,.03)}.sr-path i,.sr-path b,.sr-path span{display:block}.sr-path i{font:8px var(--mono);letter-spacing:1px;color:var(--dim);font-style:normal}.sr-path b{margin-top:4px;color:var(--text);font-size:12.5px;font-weight:650}.sr-path span{margin-top:3px;color:var(--muted);font-size:11px;line-height:1.35}.sr-path.is-done{border-color:rgba(212,183,124,.32)}.sr-path.is-done b{color:#e6cf9d}
+.sr-gift{margin:4px 0 12px;padding:12px;border:1px solid rgba(212,183,124,.2);border-radius:12px;background:linear-gradient(160deg,rgba(201,149,153,.07),rgba(212,183,124,.05))}.sr-gift>b{display:block;color:#ead5a9;font-size:13px}.sr-gift>p{margin:4px 0 8px;color:var(--muted);font-size:12px;line-height:1.45}.sr-gift .btn{display:block;width:100%;margin-top:10px}.sr-gift.is-locked{border-color:rgba(173,190,211,.14);background:rgba(189,207,226,.025)}.sr-gift.is-locked>b{color:var(--text)}.sr-gift.is-ineligible>p{margin-bottom:0}
+.sr-gift-items{display:flex;flex-wrap:wrap;gap:6px;margin:0;padding:0;list-style:none}.sr-gift-item{display:flex;align-items:center;gap:6px;padding:5px 9px 5px 6px;border:1px solid rgba(173,190,211,.16);border-radius:999px;background:rgba(10,12,18,.35);color:var(--text);font-size:11.5px}.sr-gift-item i{width:12px;height:12px;border-radius:50%;background:#c99599}.sr-gift-item.is-wings i{border-radius:2px 8px 2px 8px;background:#b9cddd}.sr-gift-item.is-cells i{border-radius:3px;background:#d4b77c}.sr-gift.is-locked .sr-gift-item{opacity:.6}
+.sr-music{position:relative;margin:18px 0 12px;padding-top:13px;border-top:1px solid rgba(190,205,225,.18)}.sr-music>div{display:flex;align-items:center;gap:10px;margin-bottom:9px}.sr-music p{margin:0}.sr-music p b,.sr-music p span{display:block}.sr-music p b{font:8px var(--mono);letter-spacing:1px;color:#b9cae0}.sr-music p span{margin-top:4px;font-size:14px}.sr-music iframe{display:block;border:0;border-radius:12px;background:#121016}
+.sr-gift-sheet .sr-gift-items{margin:10px 0 14px}.birthday-popup-note{margin:-2px 0 12px;font-size:12px;line-height:1.45}
 
 /* ARIRANG RE:CELEBRATE — pre-event teaser scene. Same .stage shell every
    rendered district/Golden Corner already uses, a much shorter prop list

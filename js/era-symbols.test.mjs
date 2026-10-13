@@ -16,7 +16,7 @@ const manual = read('js/agent-manual.js')
 test('every era defined on the backend has its own symbol', () => {
   const ids = [...timeline.matchAll(/id: '([a-z0-9-]+)', name: '/g)].map((m) => m[1])
   assert.ok(ids.length >= 8, 'expected the era timeline to define its eras')
-  if (/id: 'golden'/.test(birthdays)) ids.push('golden')
+  for (const match of birthdays.matchAll(/weeklyEra:\s*\{\s*id: '([a-z0-9-]+)'/g)) ids.push(match[1])
   for (const id of ids) assert.ok(ERA_SYMBOLS[id], `no symbol for era "${id}"`)
   assert.equal(new Set(Object.values(ERA_SYMBOLS)).size, Object.keys(ERA_SYMBOLS).length, 'two eras share a symbol')
 })
@@ -28,6 +28,8 @@ test('symbols are one family: stroke-only geometry with a single duotone layer, 
     assert.doesNotMatch(svg, /\p{Extended_Pictographic}/u, `${id} contains an emoji`)
   }
   assert.match(eraSymbol('school'), /^<svg viewBox="0 0 24 24"/)
+  assert.equal(eraSymbol('jimin-muse-birthday-2026'), eraSymbol('muse'),
+    'the dated Jimin card and reusable MUSE card should share one collectible mark')
   assert.match(eraSymbol('not-an-era'), /<circle/, 'unknown eras get the neutral fallback')
 })
 

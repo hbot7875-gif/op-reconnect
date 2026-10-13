@@ -291,7 +291,7 @@ export function renderArtOverlay(wards, onSelect) {
  *  be mistaken for one — tethered back to the core with a dashed line, same
  *  idea as Home Base's own break from the wedge pattern (it's the reactor,
  *  not a restoration goal, so it isn't drawn as one either). */
-function toolMarker(angle, icon, label, onClick, extraClass) {
+function toolMarker(angle, icon, label, onClick, extraClass, splitAfter = 0) {
   // r=49: clears the coastline (max ~46.7) with room to spare, and stays
   // inside the viewBox edge (55 units from centre in any direction, since
   // the canvas is square and PAD is uniform) once the halo's own radius is
@@ -319,11 +319,15 @@ function toolMarker(angle, icon, label, onClick, extraClass) {
   // name (measured: "Magic Shop" landed flush on top of "D-Day"). Splitting
   // a two-word label onto two centred lines keeps each line's own footprint
   // small enough to clear both problems at once without moving off-centre.
+  // splitAfter forces the same two-line layout for a long label sharing the
+  // top seam (Jimin Day Party sits beside Magic Shop): first N words, then
+  // the rest.
   const nx = Math.cos(angle)
   const words = label.split(' ')
-  if (Math.abs(nx) > 0.55 && words.length > 1) {
-    g.appendChild(n('text', { x: mx.toFixed(2), y: (my + 5.7).toFixed(2), class: 'cm-tool-label' }, words[0]))
-    g.appendChild(n('text', { x: mx.toFixed(2), y: (my + 8.1).toFixed(2), class: 'cm-tool-label' }, words.slice(1).join(' ')))
+  const cut = splitAfter > 0 && words.length > splitAfter ? splitAfter : Math.abs(nx) > 0.55 && words.length > 1 ? 1 : 0
+  if (cut) {
+    g.appendChild(n('text', { x: mx.toFixed(2), y: (my + 5.7).toFixed(2), class: 'cm-tool-label' }, words.slice(0, cut).join(' ')))
+    g.appendChild(n('text', { x: mx.toFixed(2), y: (my + 8.1).toFixed(2), class: 'cm-tool-label' }, words.slice(cut).join(' ')))
   } else {
     g.appendChild(n('text', { x: mx.toFixed(2), y: (my + 6.4).toFixed(2), class: 'cm-tool-label' }, label))
   }
@@ -570,8 +574,12 @@ function partyVenue(angle, onClick, live, deadlineIso, complete = false, countin
  *                     its own placement comment below.
  * @param vmaPulse     whether to pulse the VMA marker gold (Power Hour /
  *                     Double Day) rather than its plain resting purple.
- * @param onGoldenCorner ({x,y}) => void — optional birthday-room location.
- * @param goldenProgress 0..1 — gently lights its map marker with the room.
+ * @param onGoldenCorner ({x,y}) => void — optional. The one temporary
+ *                     birthday-event marker (GOLDEN's room, or a later
+ *                     member's Day); opts.birthdayIcon/birthdayLabel name it,
+ *                     and opts.birthdayAtTop gives it Candy Star's top-seam
+ *                     spot for the day (Candy Star steps to the bottom right).
+ * @param goldenProgress 0..1 — gently lights its map marker with the event.
  * @param onParty      ({x,y}) => void — optional. The ARIRANG RE:CELEBRATE
  *                     pre-event venue (see partyVenue above and
  *                     arirang-recelebrate.js), holding the ring's top seam —
@@ -773,7 +781,7 @@ export function renderCityMap(wards, districts, onSelect, homeFraction, onCandyS
   // was never a place, just a feedback form — see suggestions.js.
   // toolMarker's label grows away from whichever edge it's nearest (see its
   // own comment) specifically so the flanking spots don't clip the viewBox.
-  const candyAngle = onParty ? Math.PI : -Math.PI / 2 - 0.20
+  const candyAngle = onParty ? Math.PI : opts.birthdayAtTop ? Math.PI / 2 - 0.20 : -Math.PI / 2 - 0.20
   const shopAngle = onParty ? 0 : -Math.PI / 2 + 0.20
   if (onCandyStar) svg.appendChild(toolMarker(candyAngle, '🍬', 'Candy Star', onCandyStar))
   if (onMagicShop) svg.appendChild(toolMarker(shopAngle, '🏪', 'Magic Shop', onMagicShop))
@@ -781,10 +789,11 @@ export function renderCityMap(wards, districts, onSelect, homeFraction, onCandyS
   // The bottom seam, symmetric with the top one RE:CELEBRATE now holds — a
   // temporary event marker sharing a side with a permanent utility would
   // read as equally routine, so VMA/Golden Corner get this side entirely.
-  if (onVma) svg.appendChild(toolMarker(Math.PI / 2 - (onGoldenCorner ? 0.20 : 0), '⚡', 'VMA', onVma, vmaPulse ? 'is-vma-pulse' : ''))
+  if (onVma) svg.appendChild(toolMarker(opts.birthdayAtTop ? Math.PI / 2 + 0.20 : Math.PI / 2 - (onGoldenCorner ? 0.20 : 0), '⚡', 'VMA', onVma, vmaPulse ? 'is-vma-pulse' : ''))
   if (onGoldenCorner) {
-    const marker = toolMarker(Math.PI / 2 + (onVma ? 0.20 : 0), '🐰', 'Golden Corner', onGoldenCorner,
-      goldenProgress >= 1 ? 'is-golden-complete' : goldenProgress > 0 ? 'is-golden-live' : 'is-golden-dark')
+    const marker = toolMarker(opts.birthdayAtTop ? -Math.PI / 2 - 0.20 : Math.PI / 2 + (onVma ? 0.20 : 0), opts.birthdayIcon || '🐰', opts.birthdayLabel || 'Golden Corner', onGoldenCorner,
+      goldenProgress >= 1 ? 'is-golden-complete' : goldenProgress > 0 ? 'is-golden-live' : 'is-golden-dark',
+      opts.birthdayAtTop ? 2 : 0)
     marker.style.setProperty('--golden-progress', String(Math.max(0, Math.min(1, goldenProgress))))
     svg.appendChild(marker)
   }
