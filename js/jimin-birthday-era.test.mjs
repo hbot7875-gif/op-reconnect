@@ -31,6 +31,7 @@ test('the Jimin card is the approved nine tracks, live Oct 13-14 KST', () => {
   assert.ok(jimin)
   assert.deepEqual(jimin.tracks, APPROVED_TRACKS)
   assert.equal(jimin.member, 'Jimin')
+  assert.equal(jimin.cardName, 'MUSE')
   assert.equal(isBirthdayEventDate(jimin, '2026-10-12'), false)
   assert.equal(isBirthdayEventDate(jimin, '2026-10-13'), true)
   assert.equal(isBirthdayEventDate(jimin, '2026-10-14'), true)
@@ -233,7 +234,7 @@ test('before completion and after the claim period the gift cannot be claimed', 
 
 // ── Popup, copy and gift contents ───────────────────────────────────────────
 
-const darkCard = { id: jimin.id, isSpecial: true, roomGift: true, status: 'dark', member: 'Jimin', name: 'MUSE Birthday', icon: '🌙' }
+const darkCard = { id: jimin.id, isSpecial: true, roomGift: true, status: 'dark', member: 'Jimin', name: 'MUSE', icon: '🌙' }
 
 test('popup appears only for a live, unfinished birthday card', () => {
   assert.equal(birthdayPopupCard({ agentCharge: { eraCards: [{ id: 'ly', status: 'dark' }, darkCard] } }), darkCard)

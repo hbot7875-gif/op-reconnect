@@ -102,7 +102,7 @@ export const BIRTHDAY_ERA_EVENTS: BirthdayEraEvent[] = [
     // released late in the day; Oct 13 plays still count from the start.
     dateEnd: '2026-10-14',
     member: 'Jimin',
-    cardName: 'MUSE Birthday',
+    cardName: 'MUSE',
     icon: '🌙',
     description: 'Jimin · October 13, 2026 birthday keepsake.',
     albums: ['MUSE'],
