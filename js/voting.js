@@ -12,6 +12,7 @@ import { sha256OfBlob, reencodeImage, blobToBase64, ocrCertificate } from './vot
 import { battleView, pickStyle, nextStyle, shareText, STYLES, STYLE_NAMES, BATTLE_URL } from './battle-share-rules.js'
 import { posterFile, canShareFiles, sharePoster, shareLink, copyText, savePoster } from './battle-share-flow.js'
 import { checkLyric, LYRIC_MAX, LYRIC_ERRORS } from './battle-lyric-filter.js'
+import { trackEngagement } from './engagement.js'
 
 const MAX_ORIGINAL_BYTES = 20 * 1024 * 1024
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024
@@ -204,6 +205,11 @@ let lineTimer = null
 
 const posterKey = (style, lines) => `${style}|${lines.hooligans}|${lines.aliens}`
 
+// Private usage counts (rc_engagement_events, 'battle_share'): which action
+// ran, the style, and how it ended. Fixed words only — never the team lines.
+const trackShare = (action, extra = {}) =>
+  trackEngagement('battle_share', { screen: 'voting', metadata: { action, style: local.share?.style, ...extra } })
+
 function releaseShare() {
   clearTimeout(lineTimer)
   for (const p of shareSnap?.posters.values() || []) URL.revokeObjectURL(p.url)
@@ -224,7 +230,9 @@ async function openShare() {
     view, text: shareText(view), posters: new Map(),
     lines: { hooligans: '', aliens: '' }, drafts: { hooligans: '', aliens: '' }, errors: {},
   }
-  showStyle(pickStyle(view))
+  const first = pickStyle(view)
+  trackEngagement('battle_share', { screen: 'voting', metadata: { action: 'opened', style: first } })
+  showStyle(first)
 }
 
 /** The poster for a style + the current team lines (drawn once, then cached). */
@@ -307,18 +315,22 @@ async function shareGo() {
   if (!p) return
   if (local.share.canFiles) {
     const r = await sharePoster(posterFile(p.blob), shareSnap.text)
+    trackShare('share_poster', { outcome: r })
     if (r === 'shared') toast('Text copied')
     if (r !== 'failed') return
   }
   // No image sharing here (or it just failed): the link still goes.
   const r = await shareLink(shareSnap.text)
+  trackShare('share_link', { outcome: r })
   if (r === 'copied') toast('Link copied')
 }
 
 function shareSave() {
   const p = currentPoster()
   if (!p) return
-  if (savePoster(p.url) === 'hold') { local.share.hold = true; paint() }
+  const r = savePoster(p.url)
+  trackShare('save', { outcome: r })
+  if (r === 'hold') { local.share.hold = true; paint() }
 }
 
 // ── Sheets (Radix Dialog behaviour: modal, focus in, Escape, focus back) ──
@@ -392,12 +404,12 @@ function onClick(e) {
   else if (act === 'battle-claim') claimBattle(Number(t.dataset.vtIndex))
   else if (act === 'winner-claim') claimWinner()
   else if (act === 'battle-share') openShare()
-  else if (act === 'share-style' && local.share?.style) showStyle(nextStyle(local.share.style), true)
+  else if (act === 'share-style' && local.share?.style) { const next = nextStyle(local.share.style); trackShare('try_style', { style: next }); showStyle(next, true) }
   else if (act === 'share-go') shareGo()
   else if (act === 'share-save') shareSave()
-  else if (act === 'share-link') copyText(BATTLE_URL).then((ok) => toast(ok ? 'Link copied' : BATTLE_URL))
+  else if (act === 'share-link') copyText(BATTLE_URL).then((ok) => { trackShare('copy_link', { outcome: ok ? 'copied' : 'failed' }); toast(ok ? 'Link copied' : BATTLE_URL) })
   else if (act === 'share-lines-reset') resetLines()
-  else if (act === 'share-text' && shareSnap) copyText(shareSnap.text).then((ok) => ok && toast('Text copied'))
+  else if (act === 'share-text' && shareSnap) copyText(shareSnap.text).then((ok) => { trackShare('copy_text', { outcome: ok ? 'copied' : 'failed' }); if (ok) toast('Text copied') })
 }
 
 function onChange(e) {

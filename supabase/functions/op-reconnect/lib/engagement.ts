@@ -3,13 +3,16 @@
 // questions without leaking browsing behavior into the public City feed.
 
 import type { SupabaseDB } from './config.ts'
+import { battleShareMetadata, BATTLE_SHARE_ACTIONS } from './battle-share-events.js'
 
 export type EngagementEventType =
   | 'app_opened' | 'screen_viewed' | 'district_opened' | 'reconnect_opened'
   | 'invite_sent' | 'invite_accepted' | 'queue_built' | 'stream_detected'
+  | 'battle_share'
 
 const CLIENT_EVENTS = new Set<EngagementEventType>([
   'app_opened', 'screen_viewed', 'district_opened', 'reconnect_opened', 'queue_built',
+  'battle_share',
 ])
 
 export async function logEngagementEvent(
@@ -50,7 +53,13 @@ export async function trackEngagement(supabase: SupabaseDB, params: Record<strin
   const sessionId = String(params.sessionId || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80) || null
   const eventId = String(params.eventId || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80) || crypto.randomUUID()
   const rawMetadata = params.metadata && typeof params.metadata === 'object' ? params.metadata as Record<string, unknown> : {}
-  const metadata = JSON.stringify(rawMetadata).length <= 2000 ? rawMetadata : {}
+  let metadata = JSON.stringify(rawMetadata).length <= 2000 ? rawMetadata : {}
+  // MAMA Battle share: only the fixed action / style / outcome words.
+  if (eventType === 'battle_share') {
+    const m = battleShareMetadata(rawMetadata)
+    if (!m) return { success: false, error: 'invalid_engagement_event' }
+    metadata = m
+  }
 
   await logEngagementEvent(supabase, {
     agentNo, eventType, screen, districtId, sessionId, metadata,
@@ -67,7 +76,7 @@ export async function adminGetEngagementReport(supabase: SupabaseDB, params: Rec
   const [{ data: activeAgentRows }, { data: playerRows }, { data: events }, { data: activity }, { data: homeBase }] = await Promise.all([
     supabase.from('rc_agents').select('agent_no').is('retired_at', null),
     supabase.from('rc_players').select('agent_no'),
-    supabase.from('rc_engagement_events').select('agent_no, event_type, screen, district_id, created_at').gte('created_at', since),
+    supabase.from('rc_engagement_events').select('agent_no, event_type, screen, district_id, metadata, created_at').gte('created_at', since),
     supabase.from('rc_daily_activity').select('agent_no, raw_streams, counted_streams, kst_date').gte('kst_date', sinceDate),
     supabase.from('rc_districts').select('id').eq('is_tutorial', true).limit(1).maybeSingle(),
   ])
@@ -99,6 +108,16 @@ export async function adminGetEngagementReport(supabase: SupabaseDB, params: Rec
     reconnectDestinations.set(e.district_id, agents)
   }
 
+  // MAMA Battle share: how often each share-sheet action ran, and by how many agents.
+  const battleShare = new Map<string, { events: number; agents: Set<string> }>()
+  for (const e of activeEvents.filter((row: any) => row.event_type === 'battle_share')) {
+    const action = e.metadata?.action || 'unknown'
+    const entry = battleShare.get(action) || { events: 0, agents: new Set<string>() }
+    entry.events++
+    entry.agents.add(e.agent_no)
+    battleShare.set(action, entry)
+  }
+
   let activeOnHomeBase = 0
   if (homeBase?.id) {
     const { count } = await supabase.from('rc_player_districts')
@@ -125,5 +144,8 @@ export async function adminGetEngagementReport(supabase: SupabaseDB, params: Rec
       .sort((a, b) => b.agents - a.agents || b.views - a.views),
     reconnectDestinations: [...reconnectDestinations.entries()].map(([districtId, agents]) => ({ districtId, agents: agents.size }))
       .sort((a, b) => b.agents - a.agents),
+    battleShare: BATTLE_SHARE_ACTIONS.map((action) => ({
+      action, events: battleShare.get(action)?.events || 0, agents: battleShare.get(action)?.agents.size || 0,
+    })),
   }
 }
