@@ -132,6 +132,9 @@ export default defineConfig({
         copyright: resolve(__dirname, 'copyright.html'),
         credits: resolve(__dirname, 'credits.html'),
         contact: resolve(__dirname, 'contact.html'),
+        // Public MAMA Battle page — the link every share poster carries.
+        // Served at /battle (static assets resolve /battle → battle.html).
+        battle: resolve(__dirname, 'battle.html'),
       },
     },
   },

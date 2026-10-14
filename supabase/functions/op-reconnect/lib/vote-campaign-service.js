@@ -105,6 +105,17 @@ export function oembedXVerifier(fetchImpl = globalThis.fetch, timeoutMs = 6000) 
 
 // ── World-screen summary (rides getGameState) ──────────────────────────
 
+/** Team scores from the SHARED 60s cache row (vote_battle:{id}) — the one
+ *  aggregate the City banner and the public battle page both read, so it
+ *  runs about once a minute however many people are looking. */
+function cachedBattleScores(db, c, cache) {
+  const scores = async () => {
+    const { data: b } = await db.rpc('rc_campaign_battle_state', { p_campaign_id: c.id, p_agent_no: '' })
+    return { teams: b?.teams || {}, total: Number(b?.total) || 0, frozen: !!b?.frozen, winners: b?.winners || null, at: new Date().toISOString() }
+  }
+  return cache ? cache(`vote_battle:${c.id}`, 60_000, scores) : scores()
+}
+
 /**
  * The City screen's summary (map marker + banner), riding getGameState.
  * Kept cheap on purpose — it runs on every City poll:
@@ -123,16 +134,12 @@ export async function getVotingBanner(db, agentNo, now = new Date(), { cache } =
   const phase = cityPhase(c, now)
   const today = kstDayOf(now)
   const battleOn = !!c.battle?.enabled
-  const scores = async () => {
-    const { data: b } = await db.rpc('rc_campaign_battle_state', { p_campaign_id: c.id, p_agent_no: '' })
-    return { teams: b?.teams || {}, total: Number(b?.total) || 0, frozen: !!b?.frozen, winners: b?.winners || null }
-  }
   const [proofsRes, teamRes, battle] = await Promise.all([
     phase === 'open'
       ? db.from('rc_campaign_proofs').select('mission_id, vote_day, status').eq('campaign_id', c.id).eq('agent_no', agentNo).eq('vote_day', today)
       : Promise.resolve({ data: [] }),
     battleOn ? db.from('rc_campaign_teams').select('team').eq('campaign_id', c.id).eq('agent_no', agentNo).maybeSingle() : Promise.resolve({ data: null }),
-    battleOn ? (cache ? cache(`vote_battle:${c.id}`, 60_000, scores) : scores()) : Promise.resolve(null),
+    battleOn ? cachedBattleScores(db, c, cache) : Promise.resolve(null),
   ])
   const states = missionStates(c, proofsRes.data || [], today)
   const progress = missionProgress(c, proofsRes.data || [], today)
@@ -151,6 +158,40 @@ export async function getVotingBanner(db, agentNo, now = new Date(), { cache } =
       // Only after the freeze, and only once the cached score knows it.
       winners: phase === 'final' && battle?.frozen ? battle.winners : null,
     } : null,
+  }
+}
+
+// ── Public battle summary (no sign-in) ─────────────────────────────────
+
+/**
+ * The public MAMA Battle page and the share poster. Team totals, the
+ * community total, milestones, phase and timing — read from the same shared
+ * cache row as the City banner, never recomputed per visitor. Nothing about
+ * any agent: no names, numbers, handles, proofs, team sizes or contributions.
+ */
+export async function getPublicBattle(db, now = new Date(), { cache } = {}) {
+  const { data } = await db.from('rc_vote_campaigns')
+    .select('id, title, round_label, opens_at, closes_at, battle').eq('active', true)
+    .order('closes_at', { ascending: false }).limit(5)
+  const c = (data || []).find((row) => row.battle?.enabled && cityPhase(row, now))
+  if (!c) return fail('no_battle')
+  const phase = cityPhase(c, now)
+  const b = await cachedBattleScores(db, c, cache)
+  const total = Number(b?.total) || 0
+  const milestones = (Array.isArray(c.battle.milestones) ? c.battle.milestones : []).map((t) => ({ target: Number(t), reached: total >= Number(t) }))
+  const next = milestones.find((m) => !m.reached)
+  return {
+    success: true,
+    campaign: { id: c.id, title: c.title, roundLabel: c.round_label },
+    phase,
+    closesAt: c.closes_at,
+    freezeAt: c.battle.freeze_at || c.closes_at,
+    teams: (c.battle.teams || []).map((t) => ({ id: t.id, label: t.label, points: Number(b?.teams?.[t.id]) || 0 })),
+    total,
+    milestones,
+    next: next ? { target: next.target, remaining: next.target - total } : null,
+    winners: phase === 'final' && b?.frozen ? b.winners || null : null,
+    updatedAt: b?.at || now.toISOString(),
   }
 }
 

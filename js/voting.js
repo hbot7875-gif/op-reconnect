@@ -9,6 +9,9 @@ import { setState, toast } from './state.js'
 import { votingScreen, errorText, countdown, MNET_FAST_MS } from './voting-view.js'
 import { nextKstMidnight } from '../supabase/functions/op-reconnect/lib/vote-campaign-rules.js'
 import { sha256OfBlob, reencodeImage, blobToBase64, ocrCertificate } from './voting-proof.js'
+import { battleView, pickStyle, nextStyle, shareText, STYLES, STYLE_NAMES, BATTLE_URL } from './battle-share-rules.js'
+import { posterFile, canShareFiles, sharePoster, shareLink, copyText, savePoster } from './battle-share-flow.js'
+import { checkLyric, LYRIC_MAX, LYRIC_ERRORS } from './battle-lyric-filter.js'
 
 const MAX_ORIGINAL_BYTES = 20 * 1024 * 1024
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024
@@ -31,6 +34,7 @@ function freshLocal() {
     battleBusy: false, battleReveal: null, battleRequests: {},
     winnerReveal: null, winnerRequest: null,
     chooser: null,
+    share: null,
   }
 }
 
@@ -48,6 +52,7 @@ export function renderVoting(container) {
   root.addEventListener('change', onChange)
   root.addEventListener('submit', onSubmit)
   root.addEventListener('keydown', onKeydown)
+  root.addEventListener('input', (e) => { if (e.target.matches?.('[data-vt-lyric]')) onLineInput(e.target) })
   local = freshLocal()
   openSheet = null
   load()
@@ -186,6 +191,136 @@ function startTicker() {
   }, 1000)
 }
 
+// ── Share battle ──────────────────────────────────────────────────────
+// One snapshot of the public battle summary per opening of the sheet; the
+// poster styles and the two team lines only redraw that snapshot. Nothing
+// here writes battle data, the team lines never leave this sheet, and the
+// only link shared is the public /battle page.
+
+const LINE_REDRAW_MS = 120
+// { view, text, lines, drafts, errors, posters: Map(key → { blob, url }) }
+let shareSnap = null
+let lineTimer = null
+
+const posterKey = (style, lines) => `${style}|${lines.hooligans}|${lines.aliens}`
+
+function releaseShare() {
+  clearTimeout(lineTimer)
+  for (const p of shareSnap?.posters.values() || []) URL.revokeObjectURL(p.url)
+  shareSnap = null
+  local.share = null
+}
+
+async function openShare() {
+  releaseShare()
+  local.share = { loading: true }
+  paint()
+  showSheet('share')
+  const r = await call('getPublicBattle')
+  if (!root?.isConnected || openSheet !== 'share') return
+  if (!r?.success) { local.share = { error: true }; paint(); return }
+  const view = battleView(r, new Date())
+  shareSnap = {
+    view, text: shareText(view), posters: new Map(),
+    lines: { hooligans: '', aliens: '' }, drafts: { hooligans: '', aliens: '' }, errors: {},
+  }
+  showStyle(pickStyle(view))
+}
+
+/** The poster for a style + the current team lines (drawn once, then cached). */
+async function posterFor(snap, style) {
+  const key = posterKey(style, snap.lines)
+  let p = snap.posters.get(key)
+  if (!p) {
+    const { renderPoster } = await import('./battle-poster-render.js')
+    const blob = await renderPoster(style, snap.view, snap.lines)
+    p = { blob, url: URL.createObjectURL(blob) }
+    snap.posters.set(key, p)
+  }
+  return p
+}
+
+async function showStyle(style, focusStyle = false) {
+  const snap = shareSnap
+  if (!snap) return
+  let p
+  try { p = await posterFor(snap, style) } catch {
+    if (snap === shareSnap) { local.share = { error: true }; paint() }
+    return
+  }
+  if (snap !== shareSnap || openSheet !== 'share') return
+  const v = snap.view
+  local.share = {
+    style, styleName: STYLE_NAMES[style], styleIndex: STYLES.indexOf(style) + 1, clock: v.clock, url: p.url, key: posterKey(style, snap.lines),
+    alt: `MAMA Battle poster: ${v.h.label} ${v.h.points}, ${v.a.label} ${v.a.points}. ${v.gapLine}.`,
+    canFiles: canShareFiles(posterFile(p.blob)), hold: false, drafts: snap.drafts, errors: snap.errors,
+  }
+  paint()
+  if (focusStyle) root.querySelector('[data-vt-act="share-style"]')?.focus()
+}
+
+/** Typing in a team line: counter and error update in place (no repaint, so
+ *  the caret stays put); a valid line redraws just the preview image. */
+function onLineInput(input) {
+  const snap = shareSnap
+  const id = input.dataset.vtLyric
+  if (!snap || !local.share?.style || !(id in snap.lines)) return
+  snap.drafts[id] = input.value
+  const r = checkLyric(input.value)
+  snap.errors[id] = r.ok ? null : r.reason
+  const count = root.querySelector(`[data-vt-count="${id}"]`)
+  if (count) count.textContent = `${[...input.value].length}/${LYRIC_MAX}`
+  const err = root.querySelector(`[data-vt-lyric-err="${id}"]`)
+  if (err) err.textContent = r.ok ? '' : LYRIC_ERRORS[r.reason]
+  input.closest('.vt-share-field')?.classList.toggle('is-err', !r.ok)
+  if (!r.ok || snap.lines[id] === r.value) return
+  snap.lines[id] = r.value // '' → the default line
+  clearTimeout(lineTimer)
+  lineTimer = setTimeout(() => redrawPreview(snap), LINE_REDRAW_MS)
+}
+
+async function redrawPreview(snap) {
+  const style = local.share?.style
+  if (!style) return
+  let p
+  try { p = await posterFor(snap, style) } catch { return }
+  if (snap !== shareSnap || openSheet !== 'share' || local.share?.style !== style) return
+  local.share.url = p.url
+  local.share.key = posterKey(style, snap.lines)
+  local.share.canFiles = canShareFiles(posterFile(p.blob))
+  const img = root.querySelector('.vt-share-img')
+  if (img) img.src = p.url
+}
+
+function resetLines() {
+  if (!shareSnap) return
+  shareSnap.lines = { hooligans: '', aliens: '' }
+  shareSnap.drafts = { hooligans: '', aliens: '' }
+  shareSnap.errors = {}
+  if (local.share?.style) showStyle(local.share.style)
+}
+
+const currentPoster = () => shareSnap?.posters.get(local.share?.key)
+
+async function shareGo() {
+  const p = currentPoster()
+  if (!p) return
+  if (local.share.canFiles) {
+    const r = await sharePoster(posterFile(p.blob), shareSnap.text)
+    if (r === 'shared') toast('Text copied')
+    if (r !== 'failed') return
+  }
+  // No image sharing here (or it just failed): the link still goes.
+  const r = await shareLink(shareSnap.text)
+  if (r === 'copied') toast('Link copied')
+}
+
+function shareSave() {
+  const p = currentPoster()
+  if (!p) return
+  if (savePoster(p.url) === 'hold') { local.share.hold = true; paint() }
+}
+
 // ── Sheets (Radix Dialog behaviour: modal, focus in, Escape, focus back) ──
 
 function showSheet(name, moveFocus = true) {
@@ -204,6 +339,7 @@ function showSheet(name, moveFocus = true) {
 function closeSheet() {
   if (!openSheet) return
   const sheet = root.querySelector(`[data-vt-sheet="${openSheet}"]`)
+  if (openSheet === 'share') releaseShare()
   openSheet = null
   local.editHandle = false
   if (local.error?.mission === 'x-sheet') local.error = null
@@ -218,6 +354,7 @@ function closeSheet() {
 function onKeydown(e) {
   if (!openSheet) return
   if (e.key === 'Escape') { e.preventDefault(); closeSheet(); return }
+  if (e.key === 'Enter' && e.target.matches?.('[data-vt-lyric]')) { e.preventDefault(); e.target.blur(); return }
   if (e.key !== 'Tab') return
   const sheet = root.querySelector(`[data-vt-sheet="${openSheet}"]`)
   const items = [...sheet.querySelectorAll('button, summary, input, a[href]')].filter((n) => !n.disabled)
@@ -254,6 +391,13 @@ function onClick(e) {
   else if (act === 'chooser-done') { local.chooser = null; load() }
   else if (act === 'battle-claim') claimBattle(Number(t.dataset.vtIndex))
   else if (act === 'winner-claim') claimWinner()
+  else if (act === 'battle-share') openShare()
+  else if (act === 'share-style' && local.share?.style) showStyle(nextStyle(local.share.style), true)
+  else if (act === 'share-go') shareGo()
+  else if (act === 'share-save') shareSave()
+  else if (act === 'share-link') copyText(BATTLE_URL).then((ok) => toast(ok ? 'Link copied' : BATTLE_URL))
+  else if (act === 'share-lines-reset') resetLines()
+  else if (act === 'share-text' && shareSnap) copyText(shareSnap.text).then((ok) => ok && toast('Text copied'))
 }
 
 function onChange(e) {

@@ -5,7 +5,7 @@
 import type { SupabaseDB } from './config.ts'
 import { cachedJson } from './cache.ts'
 import {
-  getVotingBanner as banner, getVotingStatus as status, submitMnetProof as mnet, submitXProof as x,
+  getVotingBanner as banner, getPublicBattle as publicBattle, getVotingStatus as status, submitMnetProof as mnet, submitXProof as x,
   setXHandle as handle, openVotingGift as gift, adminListCampaignProofs as list,
   adminRecordCampaignChecks as record, adminReviewCampaignProof as review, oembedXVerifier,
   startVotingTeamChoice as teamStart, chooseVotingTeam as teamChoose, claimBattleGift as battleGift,
@@ -20,6 +20,9 @@ type P = Record<string, unknown>
 export const getVotingBanner = (sb: SupabaseDB, agentNo: string) =>
   banner(sb, agentNo, new Date(), { cache: (key: string, ttl: number, f: () => Promise<unknown>) => cachedJson(sb, key, ttl, f) })
 export const getVotingStatus = (sb: SupabaseDB, p: P) => status(sb, p)
+// Public: the battle page and share poster. Same shared 60s cache row.
+export const getPublicBattle = (sb: SupabaseDB) =>
+  publicBattle(sb, new Date(), { cache: (key: string, ttl: number, f: () => Promise<unknown>) => cachedJson(sb, key, ttl, f) })
 // A stored certificate wakes the automatic checker (GitHub Actions,
 // .github/workflows/mnet-auto-verify.yml) so it doesn't wait for the 5-minute
 // schedule. Optional: GITHUB_DISPATCH_TOKEN is an Edge Function secret — a

@@ -61,7 +61,7 @@ import { getRecelebrateBattle, claimRecelebrateAfterParty } from './lib/recelebr
 import { pingRecelebratePresence } from './lib/recelebrate-presence.ts'
 import { getRecelebrateMessages, sendRecelebrateMessage } from './lib/recelebrate-chat.ts'
 import {
-  getVotingStatus, submitMnetProof, submitXProof, setXHandle, openVotingGift,
+  getVotingStatus, getPublicBattle, submitMnetProof, submitXProof, setXHandle, openVotingGift,
   startVotingTeamChoice, chooseVotingTeam, claimBattleGift, claimBattleWinner,
   adminListCampaignProofs, adminRecordCampaignChecks, adminReviewCampaignProof, cronVotePulse,
 } from './lib/vote-campaign.ts'
@@ -96,6 +96,8 @@ const ROUTES: Record<string, Route> = {
   // Landing page. Aggregate counts only — never anything per-player.
   getPublicStats: { auth: 'public', handler: (sb, p) => getPublicStats(sb, p) },
   getPublicShareSnapshot: { auth: 'public', handler: (sb, p) => getPublicShareSnapshot(sb, p) },
+  // MAMA Battle page + share poster: team totals only, from the shared cache.
+  getPublicBattle: { auth: 'public', handler: (sb) => getPublicBattle(sb) },
   // Run before a session exists — issue or verify one, they don't need one yet.
   // Every one of these is rate-limited inside its own handler, since being
   // reachable without a token is exactly what makes them worth hammering.

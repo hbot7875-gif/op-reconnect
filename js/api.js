@@ -22,6 +22,7 @@ export const API_URL = API
 // of, so it can't require one — the code sent to their email is the proof.
 const PUBLIC_ACTIONS = new Set([
   'registerAgent', 'loginAgent', 'checkHandle', 'requestPasswordReset', 'resetPassword',
+  'getPublicBattle',
 ])
 
 // Where the Postgres instance lives (supabase/.temp/pooler-url: aws-1-ap-northeast-2).

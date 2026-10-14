@@ -237,6 +237,8 @@
 .vt-input-wrap:focus-within { border-color: var(--vt-accent); }
 .vt-input-pre { padding-left: 12px; color: var(--vt-text-3); }
 .vt-input { width: 100%; min-width: 0; height: 44px; padding: 0 12px; border: 1px solid var(--vt-line-2); border-radius: var(--vt-r-md); background: var(--vt-bg); font-size: 16px; color: var(--vt-text); }
+/* Explicit, so `.vt-screen input { font: inherit }` (14px) can't win: under 16px iOS zooms the page on focus. */
+.vt-screen .vt-input { font-size: 16px; }
 .vt-input-wrap .vt-input { border: 0; padding-left: 4px; background: transparent; }
 .vt-input:focus { outline: none; border-color: var(--vt-accent); }
 .vt-link { border: 0; background: none; padding: 0; color: var(--vt-accent); cursor: pointer; font-size: inherit; }
@@ -393,3 +395,36 @@
 .vt-map-mama.is-live .cm-tool-halo { animation: vtMamaPulse 2.4s ease-in-out infinite; }
 @keyframes vtMamaPulse { 0%, 100% { fill: rgba(76, 157, 255, .12); } 50% { fill: rgba(76, 157, 255, .28); } }
 @media (prefers-reduced-motion: reduce) { .vt-map-mama.is-live .cm-tool-halo { animation: none; } }
+
+/* Share battle — button in the battle card, and its sheet (approved 375px mock) */
+.vt-battle-share { width: 100%; margin-top: 12px; }
+.vt-share .vt-sheet-desc { margin-bottom: 8px !important; }
+.vt-share-note { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; font-size: 12px; color: var(--vt-text-3); }
+.vt-share-note .vt-i { width: 13px; height: 13px; }
+.vt-share-prev { display: flex; justify-content: center; }
+.vt-share-img, .vt-share-ph { width: 252px; aspect-ratio: 4 / 5; border-radius: 8px; box-shadow: 0 0 0 1px var(--vt-line-2); background: #17151a; }
+.vt-share-img { display: block; height: auto; }
+.vt-share-ph { display: grid; place-items: center; color: var(--vt-text-3); padding: 12px; }
+.vt-share-ph .vt-note { width: 100%; }
+.vt-share-style { margin: 8px 0 10px; text-align: center; line-height: 1.25; }
+.vt-share-style b { display: block; font-size: 14px; color: var(--vt-text); }
+.vt-share-style span { font-size: 11.5px; color: var(--vt-text-3); }
+.vt-share-acts { display: grid; gap: 8px; }
+.vt-share-acts .vt-btn { height: 46px; font-size: 15px; }
+.vt-share .vt-btn-primary { background: #f7f2ea; color: #17151a; }
+.vt-share .vt-btn-primary:hover { background: #fff; }
+.vt-share .vt-btn:disabled { opacity: .45; cursor: default; }
+.vt-share-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.vt-share-row .vt-btn { height: 58px; flex-direction: column; gap: 3px; font-size: 12px; padding: 0 6px; }
+.vt-share-hold { display: grid; justify-items: center; gap: 6px; }
+.vt-share-hold .vt-share-img { width: min(100%, 320px); -webkit-touch-callout: default; user-select: auto; }
+/* Share battle — the two editable team lines */
+.vt-share-lines { display: grid; gap: 8px; margin: 0 0 12px; }
+.vt-share-field { display: grid; gap: 4px; }
+.vt-share-field-l { display: flex; justify-content: space-between; font-size: 11.5px; font-weight: 600; letter-spacing: .04em; color: var(--vt-text-2); }
+.vt-share-count { font-variant-numeric: tabular-nums; color: var(--vt-text-3); font-weight: 500; letter-spacing: 0; }
+.vt-share-field .vt-input { height: 40px; font-size: 16px; } /* 16px: no iOS zoom on focus */
+.vt-share-field.is-err .vt-input { border-color: var(--vt-err); }
+.vt-share-err { min-height: 0; font-size: 12px; color: #f19aa6; }
+.vt-share-err:empty { display: none; }
+.vt-share-reset { justify-self: start; font-size: 12.5px; }

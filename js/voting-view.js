@@ -4,6 +4,8 @@
 // events. Player-facing words: "Voting", never "Campaign"; "Voting Gift",
 // never "Supply Chest".
 import { vIcon as ic } from './voting-icons.js'
+import { LYRICS } from './battle-share-rules.js'
+import { LYRIC_MAX, LYRIC_ERRORS } from './battle-lyric-filter.js'
 import { daysLeft, nextKstMidnight, xComposeUrl } from '../supabase/functions/op-reconnect/lib/vote-campaign-rules.js'
 
 export function esc(s) {
@@ -402,6 +404,7 @@ function battle(vm) {
         <span class="vt-battle-next-t">${ic('flag')}${community}</span>
       </div>
       <p class="vt-battle-note">Friendly ReConnect battle — every verified vote still supports BTS.${b.frozen ? '' : ' Final score at 12:00 KST on Oct 23.'}</p>
+      <button class="vt-btn vt-btn-outline vt-battle-share" type="button" data-vt-act="battle-share" aria-haspopup="dialog">${ic('share')}Share battle</button>
     </div>
   </section>`
 }
@@ -663,6 +666,57 @@ export function linkSheet(vm) {
   </div>`
 }
 
+/**
+ * Share battle (Radix-style sheet, shared with guide/link). `vm.local.share`:
+ *   { loading, error, style, styleName, styleIndex, clock, url, alt,
+ *     canFiles, hold, drafts: {hooligans, aliens}, errors: {hooligans, aliens} }
+ * The preview is the generated poster itself, so what you see is what goes.
+ * The two team lines are editable for this share only (never sent anywhere).
+ */
+function lineField(s, id, label) {
+  const draft = s.drafts?.[id] ?? ''
+  const err = s.errors?.[id]
+  return `<label class="vt-share-field${err ? ' is-err' : ''}">
+      <span class="vt-share-field-l"><span>${label}</span><span class="vt-share-count" data-vt-count="${id}" aria-live="polite">${[...draft].length}/${LYRIC_MAX}</span></span>
+      <input class="vt-input" type="text" data-vt-lyric="${id}" maxlength="${LYRIC_MAX}" value="${esc(draft)}" placeholder="${esc(LYRICS[id])}" autocomplete="off" enterkeyhint="done" aria-describedby="vt-lyric-err-${id}">
+      <span class="vt-share-err" id="vt-lyric-err-${id}" data-vt-lyric-err="${id}">${err ? esc(LYRIC_ERRORS[err] || '') : ''}</span>
+    </label>`
+}
+
+export function shareSheet(vm) {
+  const s = vm.local.share || {}
+  const ready = !s.loading && !s.error && s.url
+  const preview = s.error
+    ? `<div class="vt-share-ph">${note('is-err', 'xCircle', "Couldn't load the battle score. Try again.")}</div>`
+    : ready ? `<img class="vt-share-img" src="${esc(s.url)}" alt="${esc(s.alt || 'MAMA Battle poster')}">`
+      : `<div class="vt-share-ph" role="status">${ic('loader', 'vt-spin')}</div>`
+  const off = ready ? '' : ' disabled'
+  return `<div class="vt-sheet vt-share" role="dialog" aria-modal="true" aria-labelledby="vt-s-title" data-vt-sheet="share" hidden>
+    <div class="vt-grabber" aria-hidden="true"></div>
+    <div class="vt-sheet-h"><h2 id="vt-s-title">Share battle</h2><button class="vt-icon-btn" type="button" aria-label="Close" data-vt-act="sheet-close">${ic('x')}</button></div>
+    <p class="vt-sheet-desc">A snapshot of the score${s.clock ? ` at ${esc(s.clock)} KST` : ''}. The link always shows the live score.</p>
+    ${ready && !s.canFiles ? `<p class="vt-share-note">${ic('info')}Image sharing isn’t available in this browser.</p>` : ''}
+    ${s.hold && ready
+      ? `<div class="vt-share-hold"><img class="vt-share-img" src="${esc(s.url)}" alt="${esc(s.alt || 'MAMA Battle poster')}"><p class="vt-share-note">Press and hold the poster to save it.</p></div>`
+      : `<div class="vt-share-prev">${preview}</div>`}
+    ${ready ? `<p class="vt-share-style"><b>${esc(s.styleName)}</b><span>Style ${s.styleIndex} of 3</span></p>
+    <div class="vt-share-lines">
+      ${lineField(s, 'hooligans', 'HOOLIGANS line')}
+      ${lineField(s, 'aliens', 'ALIENS line')}
+      <button class="vt-link vt-share-reset" type="button" data-vt-act="share-lines-reset">Reset to default</button>
+    </div>` : ''}
+    <div class="vt-share-acts">
+      <button class="vt-btn vt-btn-primary" type="button" data-vt-act="share-go"${off}>${ic('share')}${s.canFiles ? 'Share poster' : 'Share link'}</button>
+      <button class="vt-btn vt-btn-outline" type="button" data-vt-act="share-style"${off}>${ic('shuffle')}Try another style</button>
+      <div class="vt-share-row">
+        <button class="vt-btn vt-btn-outline" type="button" data-vt-act="share-save"${off}>${ic('download')}Save poster</button>
+        <button class="vt-btn vt-btn-outline" type="button" data-vt-act="share-link">${ic('link')}Copy link</button>
+        <button class="vt-btn vt-btn-outline" type="button" data-vt-act="share-text"${s.error ? ' disabled' : off}>${ic('copy')}Copy text</button>
+      </div>
+    </div>
+  </div>`
+}
+
 // ── Whole screen ─────────────────────────────────────────────────────
 
 export function votingScreen(vm) {
@@ -691,6 +745,7 @@ export function votingScreen(vm) {
     <div class="vt-scrim" data-vt-act="sheet-close" hidden></div>
     ${guideSheet(vm)}
     ${linkSheet(vm)}
+    ${vm.status.battle ? shareSheet(vm) : ''}
     ${teamChooser(vm)}`
 }
 
