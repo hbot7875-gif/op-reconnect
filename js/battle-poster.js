@@ -1,8 +1,8 @@
 // MAMA Battle share poster — 1080×1350, drawn onto any 2D canvas context.
 //
 // One campaign-graphic structure, three colourways (approved):
-//   MAMA BATTLE / HOOLIGANS {score} / ALIENS {score} / {gap} VOTES APART /
-//   the two team lines / PICK A SIDE. VOTE FOR BTS. / link + LIVE time
+//   MAMA BATTLE / HOOLIGANS {score} {line} / ALIENS {score} {line} /
+//   {gap} VOTES APART / PICK A SIDE. VOTE FOR BTS. / link + LIVE time
 // Exactly one handmade touch per colourway:
 //   V1 black  — a doodled star by the leading score (dropped when tied)
 //   V2 cream  — a scribbled underline under the gap line
@@ -114,21 +114,22 @@ function liveSticker(ctx, p) {
 
 // ── the shared structure ────────────────────────────────────────────
 
-/** The two team lines: on one line when they fit, else one line each.
- *  Each line shrinks to fit rather than wrapping — never more than two. */
-function teamLines(ctx, lines, p) {
-  const a = `“${lines.hooligans}”`
-  const b = `“${lines.aliens}”`
-  const one = `${a}  ·  ${b}`
-  ctx.font = sans(700, 34)
-  if (ctx.measureText(one).width <= MAX_W) {
-    text(ctx, one, CX, 1036, sans(700, 34), p.soft)
-    return
-  }
-  for (const [s, y] of [[a, 1032], [b, 1072]]) {
-    const size = fitSize(ctx, s, 32, MAX_W, (px) => sans(700, px))
-    text(ctx, s, CX, y, sans(700, size), p.soft)
-  }
+/** One team's line, under that team's score: soft text, with the quote marks
+ *  in the team colour so it reads as that team speaking. Shrinks to fit;
+ *  never wraps. */
+function teamLine(ctx, line, y, color, p) {
+  const size = fitSize(ctx, `“${line}”`, 34, MAX_W, (px) => sans(700, px), 22)
+  const font = sans(700, size)
+  ctx.font = font
+  const q1 = ctx.measureText('“').width
+  const q2 = ctx.measureText('”').width
+  const bw = ctx.measureText(line).width
+  let x = CX - (q1 + bw + q2) / 2
+  text(ctx, '“', x, y, font, color, { align: 'left' })
+  x += q1
+  text(ctx, line, x, y, font, p.soft, { align: 'left' })
+  x += bw
+  text(ctx, '”', x, y, font, color, { align: 'left' })
 }
 
 /** Draw one colourway. `v` is battleView(); `lines` are the team lines. */
@@ -145,26 +146,37 @@ export function drawPoster(ctx, style, v, lines) {
     fitSize(ctx, fmt(v.h.points), 270, MAX_W, disp, 120),
     fitSize(ctx, fmt(v.a.points), 270, MAX_W, disp, 120),
   )
-  const rows = [[v.h, 'hoo', 255, 479], [v.a, 'ali', 589, 813]]
+  // A thousands comma hangs below the baseline; keep each line clear of it.
+  const comma = fmt(v.h.points).includes(',') || fmt(v.a.points).includes(',') ? Math.round(scoreSize * 0.12) : 0
+  // TEAM / score / that team's line — HOOLIGANS speaks, then ALIENS replies.
+  // With commas the stack runs taller, so it tightens a little to keep the
+  // gap line clear of the call to action.
   const ends = {}
-  for (const [team, color, nameY, scoreY] of rows) {
+  let nameY = comma ? 224 : 236
+  let lineY = 0
+  for (const [team, color, line] of [[v.h, 'hoo', lines.hooligans], [v.a, 'ali', lines.aliens]]) {
     text(ctx, team.label, CX, nameY, disp(54), p[color], { spacing: 3 })
+    const scoreY = nameY + 219
     const w = text(ctx, fmt(team.points), CX, scoreY, disp(scoreSize), p.fg, { spacing: -scoreSize * 0.06 })
     ends[team.id] = { right: CX + w / 2, top: scoreY - scoreSize * 0.72 }
+    lineY = scoreY + 53 + comma
+    teamLine(ctx, line, lineY, p[color], p)
+    nameY = lineY + (comma ? 60 : 68)
   }
 
   // The gap — almost as loud as the scores.
+  const gapTop = lineY + (comma ? 32 : 38)
   const gapSize = fitSize(ctx, v.gapLine, 92, MAX_W - 68, disp, 40)
   ctx.font = disp(gapSize)
   const gw = ctx.measureText(v.gapLine).width
   if (p.gapBg) {
-    roundRect(ctx, CX - gw / 2 - 34, 862, gw + 68, 128, 6)
+    roundRect(ctx, CX - gw / 2 - 34, gapTop, gw + 68, 124, 6)
     ctx.fillStyle = p.gapBg
     ctx.fill()
   }
-  text(ctx, v.gapLine, CX, 958, disp(gapSize), p.gapFg, { spacing: -2 })
+  const gapY = gapTop + 95
+  text(ctx, v.gapLine, CX, gapY, disp(gapSize), p.gapFg, { spacing: -2 })
 
-  teamLines(ctx, lines, p)
   text(ctx, v.posterCta[0], CX, 1156, disp(78), p.fg, { spacing: -2 })
   text(ctx, v.posterCta[1], CX, 1236, disp(78), p.fg, { spacing: -2 })
   text(ctx, 'hopetrackers.org/battle', CX, 1288, sans(700, 30), p.soft)
@@ -175,6 +187,6 @@ export function drawPoster(ctx, style, v, lines) {
     const e = ends[v.leader]
     star(ctx, Math.min(W - 70, e.right + 44), e.top + 18, 88, v.leader === 'hooligans' ? p.hoo : p.ali)
   }
-  if (key === 'V2') scribble(ctx, CX, 984, Math.min(MAX_W, gw + 60), p.hoo)
+  if (key === 'V2') scribble(ctx, CX, gapY + 26, Math.min(MAX_W, gw + 60), p.hoo)
   if (key === 'V3') liveSticker(ctx, p)
 }

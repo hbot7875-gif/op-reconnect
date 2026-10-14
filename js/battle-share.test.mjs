@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs'
 import {
   battleView, styleWeights, pickStyle, nextStyle, shareText, kstClock, STYLES, STYLE_NAMES, LYRICS, BATTLE_URL,
 } from './battle-share-rules.js'
-import { drawPoster } from './battle-poster.js'
+import { drawPoster, PALETTES } from './battle-poster.js'
 import { shareSheet, votingScreen } from './voting-view.js'
 import { votingStatus, votingLocal, FIXTURE_NOW } from './voting-fixtures.js'
 import { battlePageHtml, battleUnavailableHtml, JOIN_URL } from './battle-page-view.js'
@@ -101,7 +101,7 @@ function fakeCtx() {
     words, marks, letterSpacing: '0px', fillStyle: '', strokeStyle: '', lineWidth: 1, lineCap: '', textAlign: '', textBaseline: '',
     set font(f) { font = f }, get font() { return font },
     measureText: (s) => ({ width: String(s).length * Number(/(\d+)px/.exec(font)?.[1] || 10) * 0.6 }),
-    fillText(s, x, y) { words.push({ s, x, y, font }) },
+    fillText(s, x, y) { words.push({ s, x, y, font, color: this.fillStyle }) },
     fillRect() {}, beginPath() {}, moveTo() {}, arcTo() {}, closePath() {}, fill() {}, save() {}, restore() {}, translate() {}, rotate() {},
     stroke() { marks.stroke++ }, arc() { marks.arc++ }, bezierCurveTo() { marks.bezier++ },
   }
@@ -115,7 +115,7 @@ test('every colourway carries exactly the approved structure — and no Battle G
       const v = battleView(sum, NOW)
       const all = ctx.words.map((w) => w.s).join(' | ')
       for (const need of ['MAMA BATTLE', 'HOOLIGANS', 'ALIENS', v.gapLine, 'PICK A SIDE.', 'VOTE FOR BTS.', 'hopetrackers.org/battle', 'LIVE · 21:40 KST',
-        `“${LYRICS.hooligans}”`, `“${LYRICS.aliens}”`]) assert.ok(all.includes(need), `${s}: ${need}`)
+        LYRICS.hooligans, LYRICS.aliens]) assert.ok(all.includes(need), `${s}: ${need}`)
       assert.ok(all.includes(v.h.points.toLocaleString('en-US')) && all.includes(v.a.points.toLocaleString('en-US')), `${s}: scores`)
       assert.doesNotMatch(all, /Battle Gift|Next|Unofficial|agent|AGENT\d/i, `${s}: nothing extra on the poster`)
       for (const w of ctx.words) assert.ok(w.x >= 0 && w.y > 0 && w.y < 1350, `${s}: '${w.s}' inside the canvas`)
@@ -135,13 +135,46 @@ test('one handmade touch per colourway; the leader star disappears when tied', (
   assert.equal(v3.marks.bezier + v3.marks.stroke, 0, 'V3: nothing else hand-drawn')
 })
 
-test('custom team lines: drawn as typed, one line or two, never more', () => {
+const at = (ctx, s) => ctx.words.find((w) => w.s === s)
+
+test('each team line sits under its own score: HOOLIGANS speaks, ALIENS replies', () => {
+  for (const st of STYLES) {
+    for (const sum of [summary(652, 611), summary(1104, 1071)]) {
+      const lines = { hooligans: 'Watch this battle goin’ Hooligan', aliens: 'Do I look too funny?' }
+      const ctx = draw(st, sum, lines)
+      const v = battleView(sum, NOW)
+      const y = (s) => at(ctx, s).y
+      const hScore = y(v.h.points.toLocaleString('en-US'))
+      const aScore = ctx.words.filter((w) => w.s === v.a.points.toLocaleString('en-US')).pop().y
+      assert.ok(y('HOOLIGANS') < hScore && hScore < y(lines.hooligans) && y(lines.hooligans) < y('ALIENS'), `${st}: HOOLIGANS / score / its line, before ALIENS`)
+      assert.ok(y('ALIENS') < aScore && aScore < y(lines.aliens) && y(lines.aliens) < y(v.gapLine), `${st}: ALIENS / score / its line, before the gap`)
+      assert.ok(y(lines.hooligans) - hScore >= 50 && y(lines.aliens) - aScore >= 50, `${st}: lines clear the score (and its comma)`)
+      assert.ok(y(v.gapLine) < y('PICK A SIDE.'), `${st}: the gap line comes after both teams`)
+      // The quote marks carry the team colour; the words stay quiet.
+      const marks = ctx.words.filter((w) => w.s === '“' || w.s === '”')
+      assert.equal(marks.length, 4)
+      const pal = PALETTES[st]
+      assert.deepEqual(marks.map((m) => m.color), [pal.hoo, pal.hoo, pal.ali, pal.ali])
+      assert.equal(at(ctx, lines.hooligans).color, pal.soft)
+      assert.equal(at(ctx, lines.aliens).color, pal.soft)
+    }
+  }
+})
+
+test('custom team lines: drawn as typed, one line each, long ones fit without overlap', () => {
   const short = draw('V1', summary(652, 611), { hooligans: 'Lets go!', aliens: 'We landed.' })
-  assert.ok(short.words.some((w) => w.s === '“Lets go!”  ·  “We landed.”'), 'short lines share one line')
-  const long = draw('V2', summary(652, 611), { hooligans: 'x'.repeat(40), aliens: 'y'.repeat(40) })
-  const lineWords = long.words.filter((w) => w.s.startsWith('“'))
-  assert.equal(lineWords.length, 2, 'two long lines: one line each')
-  assert.ok(lineWords.every((w) => w.y > 980 && w.y < 1100), 'and they stay between the gap and the call to action')
+  assert.ok(at(short, 'Lets go!') && at(short, 'We landed.'))
+  for (const st of STYLES) {
+    const long = draw(st, summary(1104, 1071), { hooligans: 'W'.repeat(40), aliens: 'M'.repeat(40) })
+    const lw = [at(long, 'W'.repeat(40)), at(long, 'M'.repeat(40))]
+    for (const w of lw) {
+      const size = Number(/(\d+)px/.exec(w.font)[1])
+      assert.ok(w.x >= 70 && w.x + 40 * size * 0.6 <= 1080 - 70 + 1, `${st}: a 40-character line stays inside the margins`)
+    }
+    const order = ['HOOLIGANS', 'W'.repeat(40), 'ALIENS', 'M'.repeat(40), '33 VOTES APART', 'PICK A SIDE.'].map((s) => at(long, s).y)
+    assert.deepEqual([...order].sort((a, b) => a - b), order, `${st}: nothing reorders or overlaps vertically`)
+    assert.ok(order[5] - order[4] >= 100, `${st}: the gap line still clears the call to action`)
+  }
 })
 
 // ── share sheet markup ────────────────────────────────────────────
