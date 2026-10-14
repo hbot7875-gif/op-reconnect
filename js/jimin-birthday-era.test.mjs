@@ -47,7 +47,7 @@ test('no two slots share a match key, so one play can never fill two slots', () 
   ])
 })
 
-test('nine counted plays complete the card; eight or a look-alike do not', () => {
+test('nine counted plays complete the card, including the approved Intro: Serendipity alias', () => {
   const entries = birthdayTrackEntries(jimin)
   const done = (totals) => entries.filter((e) => (allocateTrackHits(entries, totals, 1).get(e.id) || 0) >= 1).length
   const all = new Map(jimin.tracks.map((title) => [normKeyFull(title), 1]))
@@ -55,8 +55,11 @@ test('nine counted plays complete the card; eight or a look-alike do not', () =>
   const missingSerendipity = new Map(all)
   missingSerendipity.delete('serendipity')
   assert.equal(done(missingSerendipity), 8)
-  // Love Yourself's "Intro : Serendipity" is a different song and key.
+  // Spotify may report the shorter album version under this title.
   missingSerendipity.set('intro serendipity', 3)
+  assert.equal(done(missingSerendipity), 9)
+  missingSerendipity.delete('intro serendipity')
+  missingSerendipity.set('serendipity instrumental', 3)
   assert.equal(done(missingSerendipity), 8)
 })
 

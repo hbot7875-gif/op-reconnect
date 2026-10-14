@@ -15,6 +15,8 @@ export interface BirthdayEraEvent {
   description: string
   albums: string[]
   tracks: string[]
+  /** Additional provider titles accepted for a canonical birthday-card slot. */
+  trackAliases?: Record<string, string[]>
   badgeTemplateId: string
   rewardHours: number
   // Optional second, rarer badge for anyone who streams every track on the
@@ -38,11 +40,15 @@ export interface BirthdayEraEvent {
 /** Shared with Agent Charge and BOTZ so a birthday track can never be
  * matched through two subtly different title/slot definitions. */
 export function birthdayTrackEntries(event: BirthdayEraEvent) {
-  return event.tracks.map((title, index) => ({
-    id: `${event.id}:${index}`,
-    canonicalKey: normKeyFull(title),
-    keys: [normKeyFull(title)],
-  }))
+  return event.tracks.map((title, index) => {
+    const canonicalKey = normKeyFull(title)
+    const aliases = event.trackAliases?.[canonicalKey] || []
+    return {
+      id: `${event.id}:${index}`,
+      canonicalKey,
+      keys: [...new Set([canonicalKey, ...aliases.map(normKeyFull)])],
+    }
+  })
 }
 
 export const BIRTHDAY_LIGHTS_PER_TRACK = 2
@@ -113,6 +119,9 @@ export const BIRTHDAY_ERA_EVENTS: BirthdayEraEvent[] = [
       'Closer Than This', 'SWIM with Jimin (Slow Jam R&B Remix)',
       'Serendipity (Full Length Edition)',
     ],
+    trackAliases: {
+      serendipity: ['Intro: Serendipity'],
+    },
     badgeTemplateId: 'event_jimin_birthday_2026',
     rewardHours: 10,
     roomGift: { roomBadgeTemplateId: 'event_jimin_day_lightkeeper_2026', claimDays: 7, wings: 1, chargeCells: 1 },
