@@ -114,7 +114,7 @@ test('every colourway carries exactly the approved structure — and no Battle G
       const ctx = draw(s, sum)
       const v = battleView(sum, NOW)
       const all = ctx.words.map((w) => w.s).join(' | ')
-      for (const need of ['MAMA BATTLE', 'HOOLIGANS', 'ALIENS', v.gapLine, 'PICK A SIDE.', 'VOTE FOR BTS.', 'hopetrackers.org/battle', 'LIVE · 21:40 KST',
+      for (const need of ['MAMA VOTING BATTLE', 'HOOLIGANS', 'ALIENS', v.gapLine, 'PICK A SIDE.', 'VOTE FOR BTS.', 'hopetrackers.org/battle', 'LIVE · 21:40 KST',
         LYRICS.hooligans, LYRICS.aliens]) assert.ok(all.includes(need), `${s}: ${need}`)
       assert.ok(all.includes(v.h.points.toLocaleString('en-US')) && all.includes(v.a.points.toLocaleString('en-US')), `${s}: scores`)
       assert.doesNotMatch(all, /Battle Gift|Next|Unofficial|agent|AGENT\d/i, `${s}: nothing extra on the poster`)
@@ -335,4 +335,15 @@ test('voting inputs (X post link, handle, team lines) are 16px so iOS never zoom
   const css = read('../css/voting.css')
   assert.match(css, /\.vt-screen \.vt-input \{ font-size: 16px; \}/)
   assert.ok(css.indexOf('.vt-screen .vt-input { font-size: 16px; }') > css.indexOf('.vt-screen button, .vt-screen input { font: inherit;'), 'declared after the inherit rule')
+})
+
+test('poster title is MAMA VOTING BATTLE, fitted inside the margins', () => {
+  for (const st of STYLES) {
+    const ctx = draw(st, summary(1104, 1071))
+    const t = ctx.words.find((w) => w.s === 'MAMA VOTING BATTLE')
+    assert.ok(t, `${st}: title drawn`)
+    const size = Number(/(\d+)px/.exec(t.font)[1])
+    assert.ok(size <= 92 && 'MAMA VOTING BATTLE'.length * size * 0.6 <= 1080 - 140, `${st}: fits the margins`)
+    assert.ok(!ctx.words.some((w) => w.s === 'MAMA BATTLE'), `${st}: old title gone`)
+  }
 })

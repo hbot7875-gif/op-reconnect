@@ -1,7 +1,7 @@
 // MAMA Battle share poster — 1080×1350, drawn onto any 2D canvas context.
 //
 // One campaign-graphic structure, three colourways (approved):
-//   MAMA BATTLE / HOOLIGANS {score} {line} / ALIENS {score} {line} /
+//   MAMA VOTING BATTLE / HOOLIGANS {score} {line} / ALIENS {score} {line} /
 //   {gap} VOTES APART / PICK A SIDE. VOTE FOR BTS. / link + LIVE time
 // Exactly one handmade touch per colourway:
 //   V1 black  — a doodled star by the leading score (dropped when tied)
@@ -139,7 +139,9 @@ export function drawPoster(ctx, style, v, lines) {
   ctx.fillStyle = p.bg
   ctx.fillRect(0, 0, W, H)
 
-  text(ctx, 'MAMA BATTLE', CX, 146, disp(92), p.fg, { spacing: -3 })
+  // The title shrinks to fit the poster's margins rather than overflow.
+  const title = 'MAMA VOTING BATTLE'
+  text(ctx, title, CX, 146, disp(fitSize(ctx, title, 92, MAX_W, disp, 60)), p.fg, { spacing: -3 })
 
   // Both scores share one size so neither team looks stronger.
   const scoreSize = Math.min(
