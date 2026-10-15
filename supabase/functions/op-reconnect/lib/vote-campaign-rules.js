@@ -333,6 +333,29 @@ export function missionStates(campaign, proofs, today) {
   return out
 }
 
+/**
+ * What the player is told about duplicate certificates today, per Mnet
+ * mission: only about their LATEST certificate, and only one of two words —
+ *   'duplicate'           the trusted check matched a certificate already
+ *                         submitted (won't be counted again)
+ *   'possible_duplicate'  it may match one — sent to a reviewer
+ * Nothing else crosses: no numbers, hashes, fingerprints, other agents, or
+ * how the match was made. A reviewer's later "verified" clears it.
+ */
+export function duplicateNotices(campaign, proofs, today) {
+  const out = {}
+  for (const m of campaign?.missions || []) {
+    if (m.kind !== 'mnet_certificate') continue
+    const latest = (proofs || [])
+      .filter((p) => p.mission_id === m.id && p.vote_day === today)
+      .sort((a, b) => String(b.submitted_at).localeCompare(String(a.submitted_at)))[0]
+    if (!latest || latest.status === 'verified') continue
+    if (latest.duplicate_kind === 'certificate') out[m.id] = 'duplicate'
+    else if (latest.duplicate_kind === 'possible') out[m.id] = 'possible_duplicate'
+  }
+  return out
+}
+
 /** Per-channel KST-day counters. Rejected proofs never consume a slot. */
 export function missionProgress(campaign, proofs, today) {
   const out = {}

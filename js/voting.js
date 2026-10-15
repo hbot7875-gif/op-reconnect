@@ -97,7 +97,7 @@ async function pollProofs() {
   const r = await call('getVotingStatus', { agentNo: getAgentNo() })
   if (!root?.isConnected) return
   if (r?.success) {
-    const key = (s) => JSON.stringify([s.states, s.todayProgress])
+    const key = (s) => JSON.stringify([s.states, s.todayProgress, s.notices])
     const changed = key(r) !== key(status)
     const credited = (r.stats?.verifiedVotes || 0) > (status.stats?.verifiedVotes || 0)
     status = r
@@ -454,7 +454,8 @@ async function sendCertificate(file) {
     })
     local.mnet.uploading = false
     if (r?.error === 'team_required') { local.error = { mission: mission.id, text: errorText(r.error) }; paint(); startChooser(); return }
-    if (!r?.success) { local.error = { mission: mission.id, text: errorText(r?.error) }; paint(); return }
+    // The same screenshot again is a confirmed duplicate: say so in plain words.
+    if (!r?.success) { local.error = { mission: mission.id, text: errorText(r?.error === 'duplicate_proof' ? 'duplicate_certificate' : r?.error) }; paint(); return }
     toast('Certificate received')
     local.mnet.sentAt = Date.now()
     await load()

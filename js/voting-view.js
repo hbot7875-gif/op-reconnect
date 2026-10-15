@@ -37,6 +37,7 @@ export function countdown(ms) {
 const ERRORS = {
   already_submitted: "You've already sent today's proof for this mission.",
   duplicate_proof: 'This proof has already been used.',
+  duplicate_certificate: 'This certificate was already submitted and won’t be counted again.',
   voting_closed: 'Voting is closed.',
   voting_not_open: 'Voting opens Oct 12 at 19:00 KST.',
   post_before_open: 'That post was made before voting opened. Post a new one.',
@@ -158,8 +159,15 @@ export function mnetUiState(serverState, local) {
   return 'todo'
 }
 
+// Duplicate outcomes, in the player's words. Never who, never how.
+export const DUPLICATE_TEXT = {
+  duplicate: 'This certificate was already submitted and won’t be counted again.',
+  possible_duplicate: 'This certificate may have already been submitted. It’s been sent for review.',
+}
+
 function mnetCard(vm, m) {
   const local = vm.local.mnet || {}
+  const dup = vm.status.notices?.[m.id] || null
   const count = vm.status.todayProgress?.[m.id] || { verified: 0, pending: 0, used: 0, remaining: m.maxDaily || 1, max: m.maxDaily || 1 }
   const ui = mnetUiState(vm.status.states[m.id], local)
   const proof = (vm.status.todayProofs || []).find((p) => p.missionId === m.id)
@@ -183,7 +191,7 @@ function mnetCard(vm, m) {
     status = `<span class="vt-status is-accent">${ic('upload')}Voted — certificate needed</span>`
     const pre = local.precheck
     body = `${stepper(STEPS, 1)}
-      ${rejected ? note('is-err', 'xCircle', "Today's earlier proof wasn't accepted. Upload a clear certificate.") : ''}
+      ${rejected ? note('is-err', 'xCircle', dup === 'duplicate' ? DUPLICATE_TEXT.duplicate : "Today's earlier proof wasn't accepted. Upload a clear certificate.") : ''}
       <label class="vt-drop" data-vt-drop>
         <input type="file" accept="image/png,image/jpeg" class="vt-file" data-vt-act="mnet-file">
         <span class="vt-drop-ico">${ic('upload')}</span>
@@ -215,12 +223,17 @@ function mnetCard(vm, m) {
         : `${note('', 'info', 'You can leave this page. No need to upload again.')}
       ${another ? `<p class="vt-rule">${another.trim()}</p>` : ''}`}
       ${count.remaining && !local.uploading ? `<label class="vt-btn vt-btn-outline">${ic('upload')}Upload another<input type="file" accept="image/png,image/jpeg" class="vt-file" data-vt-act="mnet-file"></label>` : ''}`
+  } else if (ui === 'review' && dup === 'duplicate') {
+    // Already counted once: say so plainly; nothing to wait for.
+    status = badge('is-err', 'xCircle', 'Not counted')
+    body = `${note('is-err', 'xCircle', DUPLICATE_TEXT.duplicate)}
+      ${count.remaining ? `<label class="vt-btn vt-btn-outline">${ic('upload')}Upload another certificate<input type="file" accept="image/png,image/jpeg" class="vt-file" data-vt-act="mnet-file"></label>` : ''}`
   } else if (ui === 'review') {
     const c = proof?.checks || {}
     status = badge('is-warn', 'hourglass', 'In review')
     body = `${stepper(STEPS, 2, true)}
       ${checkChips([['Certificate', c.certificate === true || 'unclear'], ["Fans' Choice 1st Vote", c.category === true || 'unclear'], [date, c.date === true || 'unclear'], ['BTS selected', c.bts === 'match' || 'unclear']])}
-      ${note('is-warn', 'info', 'This certificate needs review — do not upload it again.')}
+      ${note('is-warn', 'info', dup === 'possible_duplicate' ? DUPLICATE_TEXT.possible_duplicate : 'This certificate needs review — do not upload it again.')}
       ${count.remaining ? `<label class="vt-btn vt-btn-outline">${ic('upload')}Upload another certificate<input type="file" accept="image/png,image/jpeg" class="vt-file" data-vt-act="mnet-file"></label>` : ''}`
   } else {
     status = badge('is-ok', 'check', 'Verified')

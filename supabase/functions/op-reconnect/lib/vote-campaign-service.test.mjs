@@ -603,3 +603,22 @@ test('City summary: team scores come from the shared cache; phases follow the ev
   assert.deepEqual([fin.phase, fin.battle.winners], ['final', ['aliens']])
   assert.equal(await getVotingBanner(finalDb, 'AGENT001', new Date('2026-10-26T00:00:00Z')), null, 'gone after the 48h final window')
 })
+
+test('player status: a duplicate verdict is one plain word — no notes, numbers, hashes, fingerprints or other agents', async () => {
+  const rows = [{ id: 9, mission_id: 'mnet', vote_day: '2026-10-14', status: 'review', checks: { certificate: true }, verify_note: 'duplicate_certificate',
+    submitted_at: '2026-10-14T01:00:00Z', duplicate_kind: 'certificate', duplicate_of: 3, cert_fingerprint: 'a'.repeat(64), image_hash: 'b'.repeat(64) }]
+  const db = fakeDb({ rpc: {
+    rc_campaign_team_resolve: () => ({ data: { team: 'aliens', via: 'timeout' } }),
+    rc_campaign_battle_state: () => ({ data: { total: 41, teams: { hooligans: 22, aliens: 19 }, teamSizes: { hooligans: 3, aliens: 3 }, mine: 2 } }),
+  }, tables: {
+    rc_vote_campaigns: campaignTable,
+    rc_campaign_proofs: (q) => ({ data: q.filters.status === 'verified' ? [] : rows }),
+  } })
+  const s = await getVotingStatus(db, { agentNo: 'agent001' }, NOW)
+  assert.equal(s.success, true)
+  assert.deepEqual(s.notices, { mnet: 'duplicate' })
+  assert.deepEqual(s.todayProofs, [{ missionId: 'mnet', status: 'review', checks: { certificate: true } }])
+  const json = JSON.stringify(s)
+  for (const leak of ['duplicate_certificate', 'duplicate_of', 'duplicate_kind', 'fingerprint', 'a'.repeat(64), 'b'.repeat(64), 'verify_note', '"note"'])
+    assert.ok(!json.includes(leak), `status must not carry ${leak}`)
+})

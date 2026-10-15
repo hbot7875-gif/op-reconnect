@@ -19,7 +19,7 @@
 import {
   kstDayOf, addDays, campaignPhase, missionById, parseXPostUrl, snowflakeTime, normalizeHandle,
   parseOembed, decideXProof, cityPhase, sanitizeMnetChecks, sanitizeClientCertChecks, decideMnetChecks,
-  normalizeCertificateNumber, participationMinuteKey, validUtcOffset, votingStreak, missionStates, missionProgress, giftState, pulseView,
+  normalizeCertificateNumber, participationMinuteKey, validUtcOffset, duplicateNotices, votingStreak, missionStates, missionProgress, giftState, pulseView,
 } from './vote-campaign-rules.js'
 
 export const PROOF_BUCKET = 'campaign-proofs'
@@ -264,7 +264,7 @@ export async function getVotingStatus(db, params, now = new Date()) {
   const [proofsRes, verifiedRes, handleRes, progressRes, opensRes, fillsRes, pulseRes, badgeRes, teamRes, battleRes, claimsRes, winnerRes] = await Promise.all([
     // Own rows only. Bounded: a short campaign, at most six proofs per day.
     db.from('rc_campaign_proofs')
-      .select('id, mission_id, vote_day, status, checks, verify_note, submitted_at, verified_at')
+      .select('id, mission_id, vote_day, status, checks, verify_note, submitted_at, verified_at, duplicate_kind')
       .eq('campaign_id', c.id).eq('agent_no', agentNo).order('submitted_at', { ascending: false }).limit(60),
     db.from('rc_campaign_proofs').select('vote_day')
       .eq('campaign_id', c.id).eq('agent_no', agentNo).eq('status', 'verified').limit(400),
@@ -316,8 +316,10 @@ export async function getVotingStatus(db, params, now = new Date()) {
     today,
     states: missionStates(c, proofs, today),
     todayProgress: missionProgress(c, proofs, today),
+    // No internal review notes: the player only ever gets the plain duplicate word.
     todayProofs: proofs.filter((p) => p.vote_day === today && p.status !== 'rejected')
-      .map((p) => ({ missionId: p.mission_id, status: p.status, checks: p.checks || {}, note: p.verify_note || null })),
+      .map((p) => ({ missionId: p.mission_id, status: p.status, checks: p.checks || {} })),
+    notices: duplicateNotices(c, proofs, today),
     stats: {
       verifiedVotes: (verifiedRes.data || []).length,
       votingDays: verifiedDays.length,
