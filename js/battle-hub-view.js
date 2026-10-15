@@ -117,7 +117,7 @@ export function teamPanel(team, { labels, busy = false, max = 6 } = {}) {
       <span class="vt-mem-av" aria-hidden="true">${esc(([...m.codename][0] || '?').toUpperCase())}</span>
       <span class="vt-mem-id"><span class="vt-mem-name">${esc(m.codename)}${m.me ? '<span class="vt-mem-you">YOU</span>' : ''}</span>${url
         ? `<a class="vt-mem-ig" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${ic('instagram')}@${esc(m.ig)}<span class="vt-sr"> on Instagram</span></a>` : ''}</span>
-      <span class="vt-mem-score${m.today ? '' : ' is-zero'}" aria-label="${m.today} of ${max} verified votes today">${m.today}<small>/${max}</small></span>
+      <span class="vt-mem-score${m.today ? (m.today >= max ? ' is-full' : '') : ' is-zero'}" aria-label="${m.today} of ${max} verified votes today">${m.today}<small>/${max}</small></span>
     </li>`
   }).join('')
   return `<div class="vt-hub-team"${teamAttr(team.team)}>

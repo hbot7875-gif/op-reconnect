@@ -561,7 +561,7 @@
 .vt-switch:focus-visible { outline: 2px solid var(--vt-violet-hi); outline-offset: 2px; }
 .vt-switch:disabled { opacity: .5; }
 .vt-roster { list-style: none; margin: 0; padding: 2px 14px; }
-.vt-mem { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 11px; align-items: center; padding: 10px 0; border-top: 1px solid var(--vt-line); }
+.vt-mem { display: grid; grid-template-columns: 34px minmax(0, 1fr) 50px; gap: 11px; align-items: center; padding: 10px 0; border-top: 1px solid var(--vt-line); }
 .vt-mem:first-child { border-top: 0; }
 .vt-mem-av { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font: 700 12px/1 var(--vt-disp); background: var(--vt-surface-3); color: var(--vt-violet-hi); border: 1px solid var(--vt-line-2); }
 .vt-mem-id { min-width: 0; display: grid; gap: 2px; }
@@ -570,9 +570,12 @@
 .vt-mem-ig { display: inline-flex; align-items: center; gap: 4px; width: fit-content; max-width: 100%; font-size: 12.5px; color: var(--vt-text-2); text-decoration: none; padding: 2px 0; }
 .vt-mem-ig .vt-i { width: 12px; height: 12px; }
 .vt-mem-ig:hover, .vt-mem-ig:focus-visible { color: var(--vt-text); text-decoration: underline; text-underline-offset: 2px; }
-.vt-mem-score { font: 700 13px/1 var(--vt-disp); color: var(--vt-score); font-variant-numeric: tabular-nums; padding: 6px 9px; border-radius: 999px; background: var(--vt-violet-tint); white-space: nowrap; }
-.vt-mem-score small { font: 11px/1 var(--vt-mono-f); color: var(--vt-text-3); margin-left: 1px; }
-.vt-mem-score.is-zero { color: var(--vt-text-3); background: transparent; }
+/* One tidy column: same width, one font, aligned digits. */
+.vt-mem-score { justify-self: end; width: 50px; height: 28px; display: inline-flex; align-items: baseline; justify-content: center; padding-top: 7px; border-radius: 8px; border: 1px solid transparent; background: var(--vt-violet-tint); font: 600 14px/1 var(--vt-sans); color: var(--vt-score); font-variant-numeric: tabular-nums; letter-spacing: .2px; white-space: nowrap; }
+.vt-mem-score small { font: 500 12px/1 var(--vt-sans); color: var(--vt-text-3); font-variant-numeric: tabular-nums; margin-left: 1px; }
+.vt-mem-score.is-zero { background: rgba(255, 255, 255, .025); color: var(--vt-text-3); }
+.vt-mem-score.is-full { border-color: var(--vt-violet-line); color: var(--vt-text); }
+.vt-mem-score.is-full small { color: var(--vt-violet-hi); }
 
 /* States and skeletons */
 .vt-hub-state { display: grid; justify-items: center; text-align: center; gap: 10px; padding: 30px 18px; }
