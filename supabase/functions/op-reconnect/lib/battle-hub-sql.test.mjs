@@ -11,6 +11,7 @@ import { pathToFileURL } from 'node:url'
 
 const MIGRATION = readFileSync(new URL('../../../migrations/20261015150000_rc_battle_hub.sql', import.meta.url), 'utf8')
 const TODAY_MIGRATION = readFileSync(new URL('../../../migrations/20261016090000_rc_battle_team_today.sql', import.meta.url), 'utf8')
+const IG_DEFAULT_MIGRATION = readFileSync(new URL('../../../migrations/20261016120000_rc_battle_team_ig_default_on.sql', import.meta.url), 'utf8')
 const modulePath = process.env.PGLITE_MODULE
 const skip = modulePath ? false : 'set PGLITE_MODULE to run the SQL suite'
 const C = 'mama_2026'
@@ -50,6 +51,7 @@ async function setup() {
   await db.exec(MIGRATION)
   await db.exec(MIGRATION) // re-runnable
   await db.exec(TODAY_MIGRATION)
+  await db.exec(IG_DEFAULT_MIGRATION)
   return db
 }
 const one = async (db, sql, args) => (await db.query(sql, args)).rows[0]
@@ -61,13 +63,17 @@ test('roster: own team only, A–Z with me first, Instagram only when opted in, 
   const db = await setup()
   try {
     await db.query(`insert into rc_campaign_proofs (campaign_id, agent_no, vote_day, status) values ($1, $2, '2026-10-15', 'verified'), ($1, $2, '2026-10-15', 'verified'), ($1, $3, '2026-10-15', 'review'), ($1, $4, '2026-10-14', 'verified'), ($1, $5, '2026-10-15', 'verified')`, [C, ag('H2'), ag('H3'), ag('H4'), ag('A1')])
-    await db.query(`update rc_campaign_teams set show_ig = true where agent_no in ($1, $2)`, [ag('H3'), ag('A1')])
+    // H3 switched it on; H1 switched it off; everyone else never chose (on by default).
+    await db.query(`update rc_campaign_teams set show_ig = true, show_ig_at = now() where agent_no = $1`, [ag('H3')])
+    await db.query(`update rc_campaign_teams set show_ig = false, show_ig_at = now() where agent_no = $1`, [ag('H1')])
     const r = await fn(db, 'rc_battle_team_roster', [C, ag('H4'), '2026-10-15'])
     assert.equal(r.team, 'hooligans')
     assert.equal(r.count, 4)
     assert.deepEqual(r.members.map((m) => m.codename), ['Tannie', 'Dalmajung', 'golden hour', 'Moonchild'], 'me first, then A–Z')
     assert.equal(r.members[0].me, true)
-    assert.deepEqual(r.members.map((m) => m.ig), [null, null, 'gold_jk', null], 'only the opted-in member, @ stripped')
+    assert.deepEqual(r.members.map((m) => m.ig), ['tannie', 'dal.ma', 'gold_jk', null], 'on by default, @ stripped; an explicit off is respected')
+    assert.equal(r.showIg, true, 'never chose = on')
+    assert.equal((await fn(db, 'rc_battle_team_roster', [C, ag('H1'), '2026-10-15'])).showIg, false, 'switched off stays off')
     assert.deepEqual(r.members.map((m) => m.today), [0, 2, 0, 0], 'verified votes today only — not in review, not yesterday, not the other team')
     assert.ok(r.members.every((m) => !('votedToday' in m)))
     const json = JSON.stringify(r)
@@ -233,6 +239,6 @@ test('retention: Chat, mutes and Instagram choices go 30 days after the event, n
     await db.query(`update rc_vote_campaigns set closes_at = now() - interval '31 days'`)
     assert.equal(await fn(db, 'rc_battle_chat_retention', []), 1)
     for (const t of ['rc_battle_chat', 'rc_battle_chat_reactions', 'rc_battle_chat_reports', 'rc_battle_chat_mutes']) assert.equal(await count(t), 0, t)
-    assert.equal((await one(db, 'select count(*)::int as n from rc_campaign_teams where show_ig')).n, 0)
+    assert.equal((await one(db, 'select count(*)::int as n from rc_campaign_teams where show_ig or show_ig_at is null')).n, 0, 'everyone recorded as off after the event')
   } finally { await db.close() }
 })

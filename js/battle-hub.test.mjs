@@ -93,7 +93,7 @@ test('Team: codename, opt-in Instagram link, votes today (4/6), and only counts 
   const html = teamPanel(TEAM, { labels: LABELS })
   assert.match(html, /Only HOOLIGANS can see this/)
   assert.match(html, /<b>34<\/b> members<\/span><span><b>9<\/b> online now/)
-  assert.match(html, /HOOLIGANS only · this event · off by default/, 'compact opt-in')
+  assert.match(html, /HOOLIGANS only · this event · on by default/, 'compact switch, on by default')
   assert.match(html, /Moonchild<span class="vt-mem-you">YOU<\/span>/)
   assert.match(html, /<a class="vt-mem-ig" href="https:\/\/instagram\.com\/goldenhour_jk" target="_blank" rel="noopener noreferrer">/)
   assert.equal((html.match(/vt-mem-ig/g) || []).length, 1, 'no link for members who did not opt in')
@@ -101,7 +101,7 @@ test('Team: codename, opt-in Instagram link, votes today (4/6), and only counts 
   assert.match(html, /<span class="vt-mem-score is-zero" aria-label="0 of 6 verified votes today">0<small>\/6<\/small>/)
   assert.match(teamPanel(TEAM, { labels: LABELS, max: 4 }), />6<small>\/4<\/small>/, 'the maximum comes from the day’s missions')
   assert.doesNotMatch(html, /Voted today/)
-  assert.match(html, /role="switch" data-vt-act="team-ig">/, 'off by default')
+  assert.match(html, /role="switch" data-vt-act="team-ig">/, 'unchecked when the server says off')
   assert.match(teamPanel({ ...TEAM, showIg: true }, { labels: LABELS }), /data-vt-act="team-ig" checked/)
   assert.match(html, /Show my Instagram username to my team/)
   assert.doesNotMatch(html, /AGENT\d|%|rank|#\d|online-dot|vt-on\b/i, 'no agent numbers, percentages, ranks or per-member online dots')
@@ -303,7 +303,8 @@ test('switching tabs never repaints (drafts survive); polling stops off-screen',
 test('privacy page explains Team, Instagram opt-in and Chat', () => {
   const html = read('../privacy.html')
   assert.match(html, /MAMA Battle Team and Chat/)
-  assert.match(html, /off unless you switch it on/)
+  assert.match(html, /This is on by default for this event, and you can switch it off at any time in Team\./)
+  assert.doesNotMatch(html, /off unless you switch it on/)
 })
 
 test('admin: Chat report card escapes text and offers restore, remove and timeouts', async () => {

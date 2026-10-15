@@ -127,7 +127,7 @@ export function teamPanel(team, { labels, busy = false, max = 6 } = {}) {
       <p class="vt-tm-counts"><span><b>${fmt(team.count)}</b> ${team.count === 1 ? 'member' : 'members'}</span><span><b>${fmt(team.online)}</b> online now</span></p>
     </div>
     <label class="vt-card vt-tm-opt">
-      <span class="vt-tm-opt-tx"><strong>Show my Instagram username to my team</strong><span>${esc(label)} only · this event · off by default</span></span>
+      <span class="vt-tm-opt-tx"><strong>Show my Instagram username to my team</strong><span>${esc(label)} only · this event · on by default</span></span>
       <input type="checkbox" class="vt-switch" role="switch" data-vt-act="team-ig"${team.showIg ? ' checked' : ''}${busy ? ' disabled' : ''}>
     </label>
     ${team.members.length > 1 ? '' : `<p class="vt-empty vt-card">You're the first ${esc(label)} here. Teammates show up as they join.</p>`}
