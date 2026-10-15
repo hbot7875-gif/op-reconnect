@@ -103,7 +103,7 @@ export function momentsCard(moments, labels) {
 const skeletonRows = (n) => Array.from({ length: n }, () => '<li class="vt-sk-row"><span class="vt-sk vt-sk-av"></span><span class="vt-sk vt-sk-line"></span></li>').join('')
 
 /** team: { loading } | { error } | the getBattleTeam result. */
-export function teamPanel(team, { labels, busy = false, max = 6 } = {}) {
+export function teamPanel(team, { labels, max = 6 } = {}) {
   if (!team || team.loading) {
     return `<div class="vt-hub-team" aria-busy="true"><div class="vt-tm-head vt-card"><span class="vt-sk vt-sk-title"></span><span class="vt-sk vt-sk-line"></span></div>
       <ul class="vt-card vt-roster">${skeletonRows(5)}</ul><span class="vt-sr" role="status">Loading your team…</span></div>`
@@ -126,10 +126,6 @@ export function teamPanel(team, { labels, busy = false, max = 6 } = {}) {
       <h2 class="vt-tm-name">${esc(label)}</h2>
       <p class="vt-tm-counts"><span><b>${fmt(team.count)}</b> ${team.count === 1 ? 'member' : 'members'}</span><span><b>${fmt(team.online)}</b> online now</span></p>
     </div>
-    <label class="vt-card vt-tm-opt">
-      <span class="vt-tm-opt-tx"><strong>Show my Instagram username to my team</strong><span>${esc(label)} only · this event · on by default</span></span>
-      <input type="checkbox" class="vt-switch" role="switch" data-vt-act="team-ig"${team.showIg ? ' checked' : ''}${busy ? ' disabled' : ''}>
-    </label>
     ${team.members.length > 1 ? '' : `<p class="vt-empty vt-card">You're the first ${esc(label)} here. Teammates show up as they join.</p>`}
     <ul class="vt-card vt-roster" aria-label="${esc(label)} members">${rows}</ul>
   </div>`

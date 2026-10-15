@@ -550,16 +550,6 @@
 .vt-tm-name::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--vt-tm); }
 .vt-tm-counts { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 13.5px; color: var(--vt-text-2); }
 .vt-tm-counts b { font: 700 15px/1 var(--vt-disp); color: var(--vt-text); margin-right: 3px; font-variant-numeric: tabular-nums; }
-.vt-tm-opt { display: flex; align-items: center; gap: 12px; padding: 11px 14px; cursor: pointer; }
-.vt-tm-opt-tx { flex: 1; min-width: 0; display: grid; gap: 2px; }
-.vt-tm-opt-tx strong { font-size: 13.5px; font-weight: 600; }
-.vt-tm-opt-tx span { font: 11.5px/1.3 var(--vt-mono-f); color: var(--vt-text-3); }
-.vt-switch { appearance: none; -webkit-appearance: none; margin: 0; flex: none; width: 44px; height: 26px; border-radius: 13px; background: #2b2740; position: relative; cursor: pointer; transition: background .2s; }
-.vt-switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #cfc8e0; transition: transform .2s; }
-.vt-switch:checked { background: var(--vt-accent); }
-.vt-switch:checked::after { transform: translateX(18px); background: #fff; }
-.vt-switch:focus-visible { outline: 2px solid var(--vt-violet-hi); outline-offset: 2px; }
-.vt-switch:disabled { opacity: .5; }
 .vt-roster { list-style: none; margin: 0; padding: 2px 14px; }
 .vt-mem { display: grid; grid-template-columns: 34px minmax(0, 1fr) 50px; gap: 11px; align-items: center; padding: 10px 0; border-top: 1px solid var(--vt-line); }
 .vt-mem:first-child { border-top: 0; }

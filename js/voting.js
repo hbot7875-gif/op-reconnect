@@ -43,7 +43,7 @@ function freshLocal() {
     chooser: null,
     share: null,
     tab: null,
-    hub: { chatOpen: false, draft: '', replyTo: null, selId: null, reportId: null, waitUntil: 0, error: null, sending: false, unread: false, igBusy: false },
+    hub: { chatOpen: false, draft: '', replyTo: null, selId: null, reportId: null, waitUntil: 0, error: null, sending: false, unread: false },
   }
 }
 
@@ -480,7 +480,6 @@ function onClick(e) {
 
 function onChange(e) {
   if (e.target.matches('[data-vt-act="mnet-file"]') && e.target.files?.[0]) sendCertificate(e.target.files[0])
-  else if (e.target.matches('[data-vt-act="team-ig"]')) setInstagram(e.target.checked)
 }
 
 function onSubmit(e) {
@@ -700,16 +699,6 @@ async function loadTeam() {
   if (JSON.stringify(next) === JSON.stringify(hubData.team)) return
   hubData.team = next
   if (local.tab === 'team') paint()
-}
-
-async function setInstagram(on) {
-  local.hub.igBusy = true
-  const r = await call('setBattleInstagram', { agentNo: getAgentNo(), on })
-  local.hub.igBusy = false
-  if (!r?.success) { toast("That didn't save. Try again."); paint(); return }
-  toast(on ? 'Your team can see your Instagram now' : 'Instagram hidden from your team')
-  await loadTeam()
-  paint()
 }
 
 // ── Chat ──
