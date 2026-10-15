@@ -829,7 +829,7 @@ function hubScreen(vm) {
     </header>
     <main class="vt-page vt-hub-page" data-vt-tab-now="${tab}">
       ${panel('battle', `${battle(vm)}${momentsCard(chat?.moments || [], labels)}${battleGifts(vm)}${pulse(vm)}`)}
-      ${panel('team', teamPanel(vm.hub?.team, { labels, busy: !!hub.igBusy }))}
+      ${panel('team', teamPanel(vm.hub?.team, { labels, busy: !!hub.igBusy, max: total || 6 }))}
       ${panel('voting', votingContent(vm))}
     </main>
     ${chatFab(hub)}

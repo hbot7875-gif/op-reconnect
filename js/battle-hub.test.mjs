@@ -83,13 +83,13 @@ test('Chat never shows two moments in a row; Instagram links only for real usern
 const TEAM = {
   success: true, team: 'hooligans', showIg: false, count: 34, online: 9,
   members: [
-    { codename: 'Moonchild', ig: null, votedToday: true, me: true },
-    { codename: 'Dalmajung', ig: null, votedToday: false, me: false },
-    { codename: 'Golden Hour', ig: 'goldenhour_jk', votedToday: true, me: false },
+    { codename: 'Moonchild', ig: null, today: 4, me: true },
+    { codename: 'Dalmajung', ig: null, today: 0, me: false },
+    { codename: 'Golden Hour', ig: 'goldenhour_jk', today: 6, me: false },
   ],
 }
 
-test('Team: codename, opt-in Instagram link, Voted today, and only counts at the top', () => {
+test('Team: codename, opt-in Instagram link, votes today (4/6), and only counts at the top', () => {
   const html = teamPanel(TEAM, { labels: LABELS })
   assert.match(html, /Only HOOLIGANS can see this/)
   assert.match(html, /<b>34<\/b> members<\/span><span><b>9<\/b> online now/)
@@ -97,7 +97,10 @@ test('Team: codename, opt-in Instagram link, Voted today, and only counts at the
   assert.match(html, /Moonchild<span class="vt-mem-you">YOU<\/span>/)
   assert.match(html, /<a class="vt-mem-ig" href="https:\/\/instagram\.com\/goldenhour_jk" target="_blank" rel="noopener noreferrer">/)
   assert.equal((html.match(/vt-mem-ig/g) || []).length, 1, 'no link for members who did not opt in')
-  assert.equal((html.match(/Voted today/g) || []).length, 2)
+  assert.match(html, /<span class="vt-mem-score" aria-label="4 of 6 verified votes today">4<small>\/6<\/small><\/span>/)
+  assert.match(html, /<span class="vt-mem-score is-zero" aria-label="0 of 6 verified votes today">0<small>\/6<\/small>/)
+  assert.match(teamPanel(TEAM, { labels: LABELS, max: 4 }), />6<small>\/4<\/small>/, 'the maximum comes from the day’s missions')
+  assert.doesNotMatch(html, /Voted today/)
   assert.match(html, /role="switch" data-vt-act="team-ig">/, 'off by default')
   assert.match(teamPanel({ ...TEAM, showIg: true }, { labels: LABELS }), /data-vt-act="team-ig" checked/)
   assert.match(html, /Show my Instagram username to my team/)
@@ -226,9 +229,9 @@ const NOW_OPEN = new Date('2026-10-16T05:00:00Z')
 
 test('getBattleTeam passes on only codename, Instagram, voted-today and me', async () => {
   const db = fakeDb({ rpc: { rc_battle_team_roster: { team: 'aliens', showIg: true, count: 2, online: 1,
-    members: [{ codename: 'Koya', ig: 'koya.nav', votedToday: true, me: true, agent_no: 'AGENT001', member_key: 'k', score: 9 }] } } })
+    members: [{ codename: 'Koya', ig: 'koya.nav', today: 3, me: true, agent_no: 'AGENT001', member_key: 'k', score: 9 }] } } })
   const r = await getBattleTeam(db, { agentNo: 'agent001' }, NOW_OPEN)
-  assert.deepEqual(r.members, [{ codename: 'Koya', ig: 'koya.nav', votedToday: true, me: true }])
+  assert.deepEqual(r.members, [{ codename: 'Koya', ig: 'koya.nav', today: 3, me: true }])
   assert.deepEqual(db.calls[0], ['rc_battle_team_roster', { p_campaign_id: 'mama_2026', p_agent_no: 'AGENT001', p_day: '2026-10-16' }])
   assert.equal((await getBattleTeam(fakeDb({ rpc: { rc_battle_team_roster: { team: null } } }), { agentNo: 'AGENT9' }, NOW_OPEN)).error, 'team_required')
 })

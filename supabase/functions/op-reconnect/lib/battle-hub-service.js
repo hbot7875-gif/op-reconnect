@@ -44,9 +44,10 @@ export async function getBattleTeam(db, params, now = new Date()) {
     showIg: !!data.showIg,
     count: Number(data.count) || 0,
     online: Number(data.online) || 0,
-    // Only these four fields, whatever the query returns.
+    // Only these four fields, whatever the query returns. `today` is the
+    // teammate's verified votes today (pending or in-review never count).
     members: (data.members || []).map((m) => ({
-      codename: String(m.codename || 'Agent'), ig: m.ig ? String(m.ig) : null, votedToday: !!m.votedToday, me: !!m.me,
+      codename: String(m.codename || 'Agent'), ig: m.ig ? String(m.ig) : null, today: Math.max(0, Number(m.today) || 0), me: !!m.me,
     })),
   }
 }

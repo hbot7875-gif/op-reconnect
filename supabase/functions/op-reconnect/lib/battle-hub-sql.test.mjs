@@ -10,6 +10,7 @@ import { readFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 
 const MIGRATION = readFileSync(new URL('../../../migrations/20261015150000_rc_battle_hub.sql', import.meta.url), 'utf8')
+const TODAY_MIGRATION = readFileSync(new URL('../../../migrations/20261016090000_rc_battle_team_today.sql', import.meta.url), 'utf8')
 const modulePath = process.env.PGLITE_MODULE
 const skip = modulePath ? false : 'set PGLITE_MODULE to run the SQL suite'
 const C = 'mama_2026'
@@ -48,6 +49,7 @@ async function setup() {
   }
   await db.exec(MIGRATION)
   await db.exec(MIGRATION) // re-runnable
+  await db.exec(TODAY_MIGRATION)
   return db
 }
 const one = async (db, sql, args) => (await db.query(sql, args)).rows[0]
@@ -58,7 +60,7 @@ const age = (db, k, seconds) => db.query(`update rc_battle_chat set created_at =
 test('roster: own team only, A–Z with me first, Instagram only when opted in, no agent numbers', { skip }, async () => {
   const db = await setup()
   try {
-    await db.query(`insert into rc_campaign_proofs (campaign_id, agent_no, vote_day, status) values ($1, $2, '2026-10-15', 'verified'), ($1, $3, '2026-10-15', 'review'), ($1, $4, '2026-10-14', 'verified')`, [C, ag('H2'), ag('H3'), ag('H4')])
+    await db.query(`insert into rc_campaign_proofs (campaign_id, agent_no, vote_day, status) values ($1, $2, '2026-10-15', 'verified'), ($1, $2, '2026-10-15', 'verified'), ($1, $3, '2026-10-15', 'review'), ($1, $4, '2026-10-14', 'verified'), ($1, $5, '2026-10-15', 'verified')`, [C, ag('H2'), ag('H3'), ag('H4'), ag('A1')])
     await db.query(`update rc_campaign_teams set show_ig = true where agent_no in ($1, $2)`, [ag('H3'), ag('A1')])
     const r = await fn(db, 'rc_battle_team_roster', [C, ag('H4'), '2026-10-15'])
     assert.equal(r.team, 'hooligans')
@@ -66,7 +68,8 @@ test('roster: own team only, A–Z with me first, Instagram only when opted in, 
     assert.deepEqual(r.members.map((m) => m.codename), ['Tannie', 'Dalmajung', 'golden hour', 'Moonchild'], 'me first, then A–Z')
     assert.equal(r.members[0].me, true)
     assert.deepEqual(r.members.map((m) => m.ig), [null, null, 'gold_jk', null], 'only the opted-in member, @ stripped')
-    assert.deepEqual(r.members.map((m) => m.votedToday), [false, true, false, false], 'verified today only')
+    assert.deepEqual(r.members.map((m) => m.today), [0, 2, 0, 0], 'verified votes today only — not in review, not yesterday, not the other team')
+    assert.ok(r.members.every((m) => !('votedToday' in m)))
     const json = JSON.stringify(r)
     assert.doesNotMatch(json, /AGENT9/, 'no agent numbers')
     for (const other of ['Koya', 'Star', 'Mochi', 'koya.nav']) assert.ok(!json.includes(other), `${other} is on the other team`)

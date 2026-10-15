@@ -103,7 +103,7 @@ export function momentsCard(moments, labels) {
 const skeletonRows = (n) => Array.from({ length: n }, () => '<li class="vt-sk-row"><span class="vt-sk vt-sk-av"></span><span class="vt-sk vt-sk-line"></span></li>').join('')
 
 /** team: { loading } | { error } | the getBattleTeam result. */
-export function teamPanel(team, { labels, busy = false } = {}) {
+export function teamPanel(team, { labels, busy = false, max = 6 } = {}) {
   if (!team || team.loading) {
     return `<div class="vt-hub-team" aria-busy="true"><div class="vt-tm-head vt-card"><span class="vt-sk vt-sk-title"></span><span class="vt-sk vt-sk-line"></span></div>
       <ul class="vt-card vt-roster">${skeletonRows(5)}</ul><span class="vt-sr" role="status">Loading your team…</span></div>`
@@ -117,7 +117,7 @@ export function teamPanel(team, { labels, busy = false } = {}) {
       <span class="vt-mem-av" aria-hidden="true">${esc(([...m.codename][0] || '?').toUpperCase())}</span>
       <span class="vt-mem-id"><span class="vt-mem-name">${esc(m.codename)}${m.me ? '<span class="vt-mem-you">YOU</span>' : ''}</span>${url
         ? `<a class="vt-mem-ig" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${ic('instagram')}@${esc(m.ig)}<span class="vt-sr"> on Instagram</span></a>` : ''}</span>
-      ${m.votedToday ? `<span class="vt-mem-voted">${ic('check')}Voted today</span>` : ''}
+      <span class="vt-mem-score${m.today ? '' : ' is-zero'}" aria-label="${m.today} of ${max} verified votes today">${m.today}<small>/${max}</small></span>
     </li>`
   }).join('')
   return `<div class="vt-hub-team"${teamAttr(team.team)}>
