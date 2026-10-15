@@ -4,6 +4,9 @@
 // events. Player-facing words: "Voting", never "Campaign"; "Voting Gift",
 // never "Supply Chest".
 import { vIcon as ic } from './voting-icons.js'
+import {
+  liveStrip, hubTabs, momentsCard, teamPanel, chatPanel, chatMessageSheet, chatReportSheet, chatMutedSheet,
+} from './battle-hub-view.js'
 import { LYRICS } from './battle-share-rules.js'
 import { LYRIC_MAX, LYRIC_ERRORS } from './battle-lyric-filter.js'
 import { daysLeft, nextKstMidnight, xComposeUrl } from '../supabase/functions/op-reconnect/lib/vote-campaign-rules.js'
@@ -400,7 +403,7 @@ function battle(vm) {
   const b = vm.status.battle
   if (!b) return ''
   const max = Math.max(1, ...b.teams.map((t) => t.points))
-  const rows = b.teams.map((t) => `<div class="vt-team${b.myTeam === t.id ? ' is-mine' : ''}">
+  const rows = b.teams.map((t) => `<div class="vt-team${b.myTeam === t.id ? ' is-mine' : ''}" data-team="${esc(t.id)}">
       <div class="vt-team-row"><span class="vt-team-name">${esc(t.label)}</span>${b.myTeam === t.id ? '<span class="vt-team-you">Your team</span>' : ''}<span class="vt-team-pts">${fmtCount(t.points)}</span></div>
       <span class="vt-team-bar" aria-hidden="true"><span style="width:${Math.round((t.points / max) * 100)}%"></span></span>
     </div>`).join('')
@@ -741,6 +744,35 @@ export function shareSheet(vm) {
 // ── Whole screen ─────────────────────────────────────────────────────
 
 export function votingScreen(vm) {
+  return vm.status.battle ? hubScreen(vm) : votingOnly(vm)
+}
+
+function sheets(vm) {
+  return `<div class="vt-scrim" data-vt-act="sheet-close" hidden></div>
+    ${guideSheet(vm)}
+    ${linkSheet(vm)}
+    ${vm.status.battle ? shareSheet(vm) : ''}
+    ${teamChooser(vm)}`
+}
+
+/** The Voting tab's content: today's missions and everything personal. */
+function votingContent(vm) {
+  const ms = vm.status.campaign.missions
+  return `${header(vm)}
+      ${todayProgress(vm)}
+      <section aria-labelledby="vt-h-missions">
+        <div class="vt-sec-h"><h2 id="vt-h-missions">Today's missions</h2><span class="vt-aside vt-mono">${esc(dayLabel(vm.status.today))} KST</span></div>
+        <div class="vt-missions">${ms.map((m) => (m.kind === 'x_post' ? xCard(vm, m) : mnetCard(vm, m))).join('')}</div>
+      </section>
+      ${votingGift(vm)}
+      ${stats(vm)}
+      ${activity(vm)}
+      ${guideButton()}
+      <p class="vt-foot">Unofficial fan project. Votes are cast on Mnet and X — ReConnect only records your proof.</p>`
+}
+
+/** No battle configured: the single Voting page, as before the hub. */
+function votingOnly(vm) {
   const ms = vm.status.campaign.missions
   return `<header class="vt-appbar">
       <button class="vt-icon-btn" type="button" aria-label="Back to City" data-vt-act="back">${ic('back')}</button>
@@ -749,7 +781,6 @@ export function votingScreen(vm) {
     </header>
     <main class="vt-page">
       ${header(vm)}
-      ${battle(vm)}
       ${todayProgress(vm)}
       <section aria-labelledby="vt-h-missions">
         <div class="vt-sec-h"><h2 id="vt-h-missions">Today's missions</h2><span class="vt-aside vt-mono">${esc(dayLabel(vm.status.today))} KST</span></div>
@@ -758,16 +789,49 @@ export function votingScreen(vm) {
       ${pulse(vm)}
       ${stats(vm)}
       ${votingGift(vm)}
-      ${battleGifts(vm)}
       ${activity(vm)}
       ${guideButton()}
       <p class="vt-foot">Unofficial fan project. Votes are cast on Mnet and X — ReConnect only records your proof.</p>
     </main>
-    <div class="vt-scrim" data-vt-act="sheet-close" hidden></div>
-    ${guideSheet(vm)}
-    ${linkSheet(vm)}
-    ${vm.status.battle ? shareSheet(vm) : ''}
-    ${teamChooser(vm)}`
+    ${sheets(vm)}`
+}
+
+/**
+ * The MAMA Event Hub: a live score strip, then Battle | Team | Chat | Voting.
+ * All four panels are in the page and only one is shown, so switching tabs
+ * never repaints (a half-typed message or X link survives). vm.hub holds
+ * Team and Chat data ({ loading } until the first answer).
+ */
+function hubScreen(vm) {
+  const b = vm.status.battle
+  const tab = vm.local.tab || 'voting'
+  const hub = vm.local.hub || {}
+  const labels = Object.fromEntries(b.teams.map((t) => [t.id, t.label]))
+  const progress = Object.values(vm.status.todayProgress || {})
+  const done = progress.reduce((n, p) => n + (p.verified || 0), 0)
+  const total = progress.reduce((n, p) => n + (p.max || 0), 0)
+  const panel = (id, body) => `<div class="vt-panel" role="tabpanel" id="vt-panel-${id}" aria-labelledby="vt-tab-${id}" data-vt-panel="${id}"${tab === id ? '' : ' hidden'}>${body}</div>`
+  const chat = vm.hub?.chat
+  const selected = chat?.messages?.find((m) => m.id === hub.selId) || null
+  return `<header class="vt-appbar">
+      <button class="vt-icon-btn" type="button" aria-label="Back to City" data-vt-act="back">${ic('back')}</button>
+      <div class="vt-appbar-title vt-appbar-event">${esc(vm.status.campaign.title)}</div>
+      <button class="vt-icon-btn" type="button" aria-label="Voting guide" data-vt-act="guide-open" aria-haspopup="dialog">${ic('book')}</button>
+    </header>
+    <div class="vt-hub-top">
+      ${liveStrip(b, vm.now)}
+      ${hubTabs(tab, { done, total, unread: !!hub.unread && tab !== 'chat' })}
+    </div>
+    <main class="vt-page vt-hub-page" data-vt-tab-now="${tab}">
+      ${panel('battle', `${battle(vm)}${momentsCard(chat?.moments || [], labels)}${battleGifts(vm)}${pulse(vm)}`)}
+      ${panel('team', teamPanel(vm.hub?.team, { labels, busy: !!hub.igBusy }))}
+      ${panel('chat', chatPanel(chat, hub, labels, vm.now))}
+      ${panel('voting', votingContent(vm))}
+    </main>
+    ${sheets(vm)}
+    ${chatMessageSheet(selected, labels)}
+    ${chatReportSheet(hub.reportId ? chat?.messages?.find((m) => m.id === hub.reportId) : null, labels)}
+    ${chatMutedSheet(chat?.muted)}`
 }
 
 /** The City result line for a finished battle. */

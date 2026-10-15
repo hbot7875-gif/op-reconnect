@@ -13,6 +13,8 @@ import { battleView, pickStyle, nextStyle, shareText, STYLES, STYLE_NAMES, BATTL
 import { posterFile, canShareFiles, sharePoster, shareLink, copyText, savePoster } from './battle-share-flow.js'
 import { checkLyric, LYRIC_MAX, LYRIC_ERRORS } from './battle-lyric-filter.js'
 import { trackEngagement } from './engagement.js'
+import { chatFeed, chatErrorText } from './battle-hub-view.js'
+import { checkChatText, CHAT_MAX } from '../supabase/functions/op-reconnect/lib/battle-text-filter.js'
 
 const MAX_ORIGINAL_BYTES = 20 * 1024 * 1024
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024
@@ -27,6 +29,10 @@ let ticker = null
 
 let chooserTimer = null
 let proofPoll = null
+// MAMA Event Hub data (Team roster, Chat feed), kept apart from `status`.
+let hubData = { team: { loading: true }, chat: { loading: true } }
+let hubTimer = null
+let hubTicks = 0
 
 function freshLocal() {
   return {
@@ -36,6 +42,8 @@ function freshLocal() {
     winnerReveal: null, winnerRequest: null,
     chooser: null,
     share: null,
+    tab: null,
+    hub: { draft: '', replyTo: null, selId: null, reportId: null, waitUntil: 0, error: null, sending: false, unread: false, igBusy: false },
   }
 }
 
@@ -53,9 +61,13 @@ export function renderVoting(container) {
   root.addEventListener('change', onChange)
   root.addEventListener('submit', onSubmit)
   root.addEventListener('keydown', onKeydown)
-  root.addEventListener('input', (e) => { if (e.target.matches?.('[data-vt-lyric]')) onLineInput(e.target) })
+  root.addEventListener('input', (e) => {
+    if (e.target.matches?.('[data-vt-lyric]')) onLineInput(e.target)
+    else if (e.target.matches?.('[data-vt-chat-input]')) onChatInput(e.target)
+  })
   local = freshLocal()
   openSheet = null
+  hubData = { team: { loading: true }, chat: { loading: true } }
   load()
 }
 
@@ -69,7 +81,9 @@ async function load() {
   status = r
   if (votedFlag()) local.mnet.voted = true
   if (composedFlag()) local.x.composed = true
+  if (status.battle && !local.tab) local.tab = firstTab()
   paint()
+  if (status.battle) startHub()
   // First visit once the battle is on and this agent has no side yet: the
   // 7-second choice. The server holds the clock and makes the timeout pick.
   if (status.battle && !status.battle.myTeam && status.campaign.phase === 'open' && !local.chooser) startChooser()
@@ -164,6 +178,10 @@ async function pickTeam(team) {
 function finishChooser(team, via) {
   local.chooser = { result: team, via }
   if (status.battle) status.battle.myTeam = team
+  // Team and Chat open up now that there's a side.
+  hubData = { team: { loading: true }, chat: { loading: true } }
+  loadTeam()
+  loadChat()
   paint()
   root.querySelector('[data-vt-act="chooser-done"]')?.focus()
 }
@@ -171,12 +189,26 @@ function finishChooser(team, via) {
 function paint() {
   if (!root?.isConnected || !status) return
   const sheet = openSheet
-  root.innerHTML = votingScreen({ status, local, now: new Date() })
+  // A repaint keeps Chat as it was: the caret in a half-typed message, and
+  // the list scrolled where the player left it (or pinned to the newest).
+  const input = root.querySelector('[data-vt-chat-input]')
+  const caret = input && document.activeElement === input ? [input.selectionStart, input.selectionEnd] : null
+  const pos = feedPosition()
+  root.innerHTML = votingScreen({ status, local, now: new Date(), hub: hubData })
   if (sheet) showSheet(sheet, false)
   // The team chooser is modal: nothing behind it is reachable while open.
-  if (local.chooser) for (const n of root.querySelectorAll('.vt-appbar, .vt-page')) n.inert = true
+  if (local.chooser) for (const n of root.querySelectorAll(BEHIND)) n.inert = true
+  restoreFeed(pos)
+  if (caret) {
+    const again = root.querySelector('[data-vt-chat-input]')
+    again?.focus()
+    again?.setSelectionRange(caret[0], caret[1])
+  }
   startTicker()
 }
+
+// Everything a sheet or the chooser makes unreachable.
+const BEHIND = '.vt-appbar, .vt-hub-top, .vt-page'
 
 function startTicker() {
   clearInterval(ticker)
@@ -185,6 +217,7 @@ function startTicker() {
     const left = nextKstMidnight().getTime() - Date.now()
     const span = root.querySelector('[data-vt-reset]')
     if (span) span.textContent = countdown(left)
+    tickSlowMode()
     // A new KST day: today's missions start over.
     if (status && new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10) !== status.today) {
       clearInterval(ticker)
@@ -345,7 +378,7 @@ function showSheet(name, moveFocus = true) {
   root.querySelector('.vt-scrim').hidden = false
   sheet.hidden = false
   root.classList.add('has-sheet')
-  for (const n of root.querySelectorAll('.vt-appbar, .vt-page')) n.inert = true
+  for (const n of root.querySelectorAll(BEHIND)) n.inert = true
   requestAnimationFrame(() => sheet.classList.add('is-open'))
   if (moveFocus) (sheet.querySelector('input, summary, button:not([data-vt-act="sheet-close"])') || sheet).focus()
 }
@@ -361,11 +394,21 @@ function closeSheet() {
   if (sheet) sheet.hidden = true
   root.querySelector('.vt-scrim').hidden = true
   root.classList.remove('has-sheet')
-  for (const n of root.querySelectorAll('.vt-appbar, .vt-page')) n.inert = false
+  for (const n of root.querySelectorAll(BEHIND)) n.inert = false
   if (lastFocus?.isConnected) lastFocus.focus()
 }
 
 function onKeydown(e) {
+  // Tabs: arrow keys move between them (WAI-ARIA tabs pattern).
+  if (!openSheet && e.target.matches?.('.vt-tab') && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) {
+    const tabs = [...root.querySelectorAll('.vt-tab')]
+    const i = tabs.indexOf(e.target)
+    const j = e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : (i + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length
+    e.preventDefault()
+    switchTab(tabs[j].dataset.vtTab)
+    tabs[j].focus()
+    return
+  }
   if (!openSheet) return
   if (e.key === 'Escape') { e.preventDefault(); closeSheet(); return }
   if (e.key === 'Enter' && e.target.matches?.('[data-vt-lyric]')) { e.preventDefault(); e.target.blur(); return }
@@ -412,13 +455,32 @@ function onClick(e) {
   else if (act === 'share-link') copyText(BATTLE_URL).then((ok) => { trackShare('copy_link', { outcome: ok ? 'copied' : 'failed' }); toast(ok ? 'Link copied' : BATTLE_URL) })
   else if (act === 'share-lines-reset') resetLines()
   else if (act === 'share-text' && shareSnap) copyText(shareSnap.text).then((ok) => { trackShare('copy_text', { outcome: ok ? 'copied' : 'failed' }); if (ok) toast('Text copied') })
+  else if (act === 'hub-tab') switchTab(t.dataset.vtTab)
+  else if (act === 'team-choose') startChooser()
+  else if (act === 'team-retry') { hubData.team = { loading: true }; paint(); loadTeam() }
+  else if (act === 'chat-retry') { hubData.chat = { loading: true }; paint(); loadChat() }
+  else if (act === 'chat-more') openMessage(Number(t.dataset.vtId))
+  else if (act === 'chat-react') reactTo(Number(t.dataset.vtId), t.dataset.vtEmoji)
+  else if (act === 'chat-reply') replyTo(Number(t.dataset.vtId))
+  else if (act === 'chat-reply-cancel') { local.hub.replyTo = null; paint(); root.querySelector('[data-vt-chat-input]')?.focus() }
+  else if (act === 'chat-mute') muteMember(t.dataset.vtKey, true)
+  else if (act === 'chat-unmute') muteMember(t.dataset.vtKey, false)
+  else if (act === 'chat-report-open') openReport(Number(t.dataset.vtId))
+  else if (act === 'chat-muted') showSheet('chat-muted')
 }
 
 function onChange(e) {
   if (e.target.matches('[data-vt-act="mnet-file"]') && e.target.files?.[0]) sendCertificate(e.target.files[0])
+  else if (e.target.matches('[data-vt-act="team-ig"]')) setInstagram(e.target.checked)
 }
 
 function onSubmit(e) {
+  if (e.target.matches('[data-vt-form="chat"]')) { e.preventDefault(); sendChat(); return }
+  if (e.target.matches('[data-vt-form="chat-report"]')) {
+    e.preventDefault()
+    sendReport(Number(e.target.dataset.vtId), new FormData(e.target).get('reason'))
+    return
+  }
   if (!e.target.matches('[data-vt-form="x"]')) return
   e.preventDefault()
   const form = new FormData(e.target)
@@ -543,4 +605,272 @@ async function claimBattle(index) {
   local.battleReveal = { index, rewards: r.rewards || [] }
   await load()
   refreshGameState()
+}
+
+// ── MAMA Event Hub: tabs, Team, Chat ─────────────────────────────────
+// Polls only while this screen is open and the page is visible: Chat every
+// 4 s on the Chat tab (30 s elsewhere, for Moments and the unread dot),
+// Team once a minute on the Team tab, and the live score once a minute.
+
+const CHAT_FAST_MS = 4_000
+const HUB_SLOW_MS = 30_000
+const HUB_TAB_IDS = ['battle', 'team', 'chat', 'voting']
+const tabKey = () => `vt:hubtab:${status.campaign.id}`
+const readKey = () => `vt:chatread:${status.campaign.id}`
+
+/** Voting while today's votes are still 0, otherwise the last tab used. */
+function firstTab() {
+  const done = Object.values(status.todayProgress || {}).reduce((n, p) => n + (p.verified || 0), 0)
+  if (!done && status.campaign.phase === 'open') return 'voting'
+  try {
+    const t = localStorage.getItem(tabKey())
+    if (HUB_TAB_IDS.includes(t)) return t
+  } catch { /* none saved */ }
+  return 'battle'
+}
+
+function startHub() {
+  clearTimeout(hubTimer)
+  hubTicks = 0
+  loadChat()
+  if (local.tab === 'team') loadTeam()
+  scheduleHub()
+}
+
+function scheduleHub() {
+  clearTimeout(hubTimer)
+  if (!root?.isConnected || !status?.battle) return
+  hubTimer = setTimeout(hubTick, local.tab === 'chat' ? CHAT_FAST_MS : HUB_SLOW_MS)
+}
+
+async function hubTick() {
+  if (!root?.isConnected) return
+  if (!document.hidden) {
+    hubTicks += 1
+    const minute = local.tab === 'chat' ? hubTicks % 15 === 0 : hubTicks % 2 === 0
+    await loadChat()
+    if (local.tab === 'team' && minute) await loadTeam()
+    if (minute) await refreshScore()
+  }
+  scheduleHub()
+}
+
+function switchTab(tab) {
+  if (!HUB_TAB_IDS.includes(tab) || tab === local.tab) return
+  local.tab = tab
+  try { localStorage.setItem(tabKey(), tab) } catch { /* in-memory only */ }
+  for (const b of root.querySelectorAll('.vt-tab')) {
+    const on = b.dataset.vtTab === tab
+    b.setAttribute('aria-selected', String(on))
+    b.tabIndex = on ? 0 : -1
+  }
+  for (const p of root.querySelectorAll('[data-vt-panel]')) p.hidden = p.dataset.vtPanel !== tab
+  root.querySelector('.vt-hub-page')?.setAttribute('data-vt-tab-now', tab)
+  if (tab === 'chat') { markRead(); restoreFeed(null) }
+  if (tab === 'team') loadTeam()
+  if (tab === 'chat') loadChat()
+  scheduleHub()
+}
+
+// ── Team ──
+
+async function loadTeam() {
+  const r = await call('getBattleTeam', { agentNo: getAgentNo() })
+  if (!root?.isConnected) return
+  const next = r?.success ? r : { error: r?.error || 'failed' }
+  if (JSON.stringify(next) === JSON.stringify(hubData.team)) return
+  hubData.team = next
+  if (local.tab === 'team') paint()
+}
+
+async function setInstagram(on) {
+  local.hub.igBusy = true
+  const r = await call('setBattleInstagram', { agentNo: getAgentNo(), on })
+  local.hub.igBusy = false
+  if (!r?.success) { toast("That didn't save. Try again."); paint(); return }
+  toast(on ? 'Your team can see your Instagram now' : 'Instagram hidden from your team')
+  await loadTeam()
+  paint()
+}
+
+// ── Chat ──
+
+const latestFromOthers = (chat) => Math.max(0, ...(chat?.messages || []).filter((m) => m.kind === 'player' && !m.mine).map((m) => Number(m.id)))
+function lastRead() {
+  try { return Number(localStorage.getItem(readKey())) || 0 } catch { return 0 }
+}
+function markRead() {
+  local.hub.unread = false
+  root.querySelector('.vt-tab-pip')?.remove()
+  const id = latestFromOthers(hubData.chat)
+  try { if (id) localStorage.setItem(readKey(), String(id)) } catch { /* in-memory only */ }
+}
+function setUnread() {
+  if (local.hub.unread) return
+  local.hub.unread = true
+  const tab = root.querySelector('.vt-tab[data-vt-tab="chat"]')
+  if (tab && !tab.querySelector('.vt-tab-pip')) tab.insertAdjacentHTML('beforeend', '<i class="vt-tab-pip" aria-label="new messages"></i>')
+}
+
+const lockKey = (c) => [c?.open, c?.paused, c?.timeoutUntil, (c?.muted || []).length].join('|')
+
+async function loadChat() {
+  const r = await call('getBattleChat', { agentNo: getAgentNo() })
+  if (!root?.isConnected) return
+  const prev = hubData.chat
+  const next = r?.success ? r : { error: r?.error || 'failed' }
+  if (JSON.stringify(next) === JSON.stringify(prev)) return
+  hubData.chat = next
+  if (local.tab === 'chat') markRead()
+  else if (latestFromOthers(next) > lastRead()) setUnread()
+  const structural = prev?.loading || prev?.error || next.error || lockKey(prev) !== lockKey(next)
+    || JSON.stringify(prev?.presence) !== JSON.stringify(next.presence)
+  const momentsChanged = JSON.stringify(prev?.moments) !== JSON.stringify(next.moments)
+  if (structural || (momentsChanged && local.tab === 'battle')) { paint(); return }
+  // Only messages or reactions changed: swap the list, leave the composer be.
+  const feed = root.querySelector('[data-vt-chat-feed]')
+  if (feed && !openSheet) {
+    const pos = feedPosition()
+    const labels = Object.fromEntries((status.battle?.teams || []).map((t) => [t.id, t.label]))
+    feed.innerHTML = chatFeed(next, labels, local.hub)
+    restoreFeed(pos)
+  }
+}
+
+function feedPosition() {
+  const feed = root?.querySelector('[data-vt-chat-feed]')
+  if (!feed || !feed.clientHeight) return null
+  return { top: feed.scrollTop, atEnd: feed.scrollHeight - feed.scrollTop - feed.clientHeight < 48 }
+}
+function restoreFeed(pos) {
+  const feed = root?.querySelector('[data-vt-chat-feed]')
+  if (!feed) return
+  feed.scrollTop = !pos || pos.atEnd ? feed.scrollHeight : pos.top
+}
+
+const IDLE_HINT = 'Both teams see this · no links or @usernames'
+
+function onChatInput(input) {
+  local.hub.draft = input.value
+  const count = root.querySelector('[data-vt-chat-count]')
+  if (count) count.textContent = `${[...input.value].length}/${CHAT_MAX}`
+  if (local.hub.error) {
+    local.hub.error = null
+    const hint = root.querySelector('[data-vt-chat-hint]')
+    if (hint) { hint.textContent = IDLE_HINT; hint.className = ''; hint.removeAttribute('role') }
+  }
+}
+
+function tickSlowMode() {
+  const btn = root?.querySelector('.vt-chat-send')
+  if (!btn || !local.hub.waitUntil) return
+  const left = Math.ceil((local.hub.waitUntil - Date.now()) / 1000)
+  if (left > 0) {
+    btn.disabled = true
+    btn.innerHTML = `<span class="vt-mono">${left}</span>`
+    btn.setAttribute('aria-label', `Send in ${left} seconds`)
+  } else {
+    local.hub.waitUntil = 0
+    paint()
+  }
+}
+
+function chatFail(r) {
+  if (r?.error === 'slow_down') local.hub.waitUntil = Date.now() + (Number(r.wait) || 5) * 1000
+  if (['timed_out', 'chat_closed', 'chat_paused'].includes(r?.error)) loadChat()
+  local.hub.error = chatErrorText(r?.error, r?.reason)
+}
+
+async function sendChat() {
+  const input = root.querySelector('[data-vt-chat-input]')
+  const text = checkChatText(input?.value ?? local.hub.draft)
+  if (!text.ok) { local.hub.error = chatErrorText('chat_text', text.reason); paint(); return }
+  if (local.hub.sending || local.hub.waitUntil > Date.now()) return
+  local.hub.sending = true
+  const r = await call('sendBattleChat', { agentNo: getAgentNo(), message: text.value, replyTo: local.hub.replyTo?.id || null })
+  local.hub.sending = false
+  if (!root?.isConnected) return
+  if (!r?.success) { chatFail(r); paint(); return }
+  local.hub.draft = ''
+  local.hub.replyTo = null
+  local.hub.error = null
+  local.hub.waitUntil = Date.now() + 5000 // the server's slow mode, shown up front
+  paint()
+  root.querySelector('[data-vt-chat-input]')?.focus()
+  await loadChat()
+  restoreFeed(null)
+}
+
+const messageById = (id) => hubData.chat?.messages?.find((m) => m.id === id)
+
+function openMessage(id) {
+  if (!messageById(id)) return
+  local.hub.selId = id
+  paint()
+  showSheet('chat-msg')
+}
+
+function replyTo(id) {
+  const m = messageById(id)
+  closeSheet()
+  if (!m) return
+  local.hub.replyTo = { id: m.id, codename: m.codename, team: m.team, body: (m.body || '').slice(0, 60) }
+  paint()
+  root.querySelector('[data-vt-chat-input]')?.focus()
+}
+
+async function reactTo(id, emoji) {
+  if (openSheet === 'chat-msg') closeSheet()
+  const r = await call('reactBattleChat', { agentNo: getAgentNo(), messageId: id, emoji })
+  if (!r?.success) { toast(chatErrorText(r?.error)); return }
+  await loadChat()
+}
+
+async function muteMember(key, on) {
+  if (!key) return
+  const chat = hubData.chat
+  const who = chat?.messages?.find((m) => m.memberKey === key)?.codename || chat?.muted?.find((m) => m.memberKey === key)?.codename || 'them'
+  const r = await call('muteBattleChat', { agentNo: getAgentNo(), memberKey: key, on })
+  if (!r?.success) { toast(chatErrorText(r?.error)); return }
+  closeSheet()
+  toast(on ? `Muted ${who}. You won't see their messages.` : `Unmuted ${who}`)
+  await loadChat()
+}
+
+function openReport(id) {
+  closeSheet()
+  if (!messageById(id)) return
+  local.hub.reportId = id
+  paint()
+  showSheet('chat-report')
+}
+
+async function sendReport(id, reason) {
+  const r = await call('reportBattleChat', { agentNo: getAgentNo(), messageId: id, reason })
+  if (!r?.success) { toast(chatErrorText(r?.error)); return }
+  closeSheet()
+  local.hub.reportId = null
+  toast("Thanks. It's hidden for you now.")
+  await loadChat()
+}
+
+// ── Live score (the strip on every tab) ──
+
+const leaderOf = (teams) => (teams[0].points === teams[1].points ? 'tie' : teams[0].points > teams[1].points ? teams[0].id : teams[1].id)
+
+async function refreshScore() {
+  const r = await call('getPublicBattle')
+  if (!r?.success || !root?.isConnected || !status?.battle) return
+  const b = status.battle
+  const before = leaderOf(b.teams)
+  let changed = false
+  for (const t of b.teams) {
+    const p = r.teams.find((x) => x.id === t.id)?.points
+    if (p != null && p !== t.points) { t.points = p; changed = true }
+  }
+  if (r.total !== b.total) { b.total = r.total; changed = true }
+  if (!changed) return
+  paint()
+  // A lead change eases the score in once (skipped for reduced motion).
+  if (leaderOf(b.teams) !== before) for (const el of root.querySelectorAll('.vt-ls-score, .vt-battle')) el.classList.add('is-flip')
 }

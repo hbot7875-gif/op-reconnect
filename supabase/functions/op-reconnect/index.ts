@@ -64,6 +64,8 @@ import {
   getVotingStatus, getPublicBattle, submitMnetProof, submitXProof, setXHandle, openVotingGift,
   startVotingTeamChoice, chooseVotingTeam, claimBattleGift, claimBattleWinner,
   adminListCampaignProofs, adminRecordCampaignChecks, adminReviewCampaignProof, cronVotePulse, cronMnetVerifyKick,
+  getBattleTeam, setBattleInstagram, getBattleChat, sendBattleChat, reactBattleChat, reportBattleChat, muteBattleChat,
+  adminListBattleChat, adminModerateBattleChat,
 } from './lib/vote-campaign.ts'
 import { getDearDiary, getDearDiaryArchive, getDearDiaryPreference, saveDearDiaryDecorations, saveDearDiaryNote, saveDearDiaryTheme } from './lib/dear-diary.ts'
 
@@ -217,6 +219,17 @@ const ROUTES: Record<string, Route> = {
   chooseVotingTeam: { auth: 'agent', handler: (sb, p) => chooseVotingTeam(sb, p) },
   claimBattleGift: { auth: 'agent', handler: (sb, p) => claimBattleGift(sb, p) },
   claimBattleWinner: { auth: 'agent', handler: (sb, p) => claimBattleWinner(sb, p) },
+  // MAMA Event Hub: Team is the caller's own team only; Chat is one room for
+  // both teams (lib/battle-hub-service.js). Moderation is admin-key gated.
+  getBattleTeam: { auth: 'agent', handler: (sb, p) => getBattleTeam(sb, p) },
+  setBattleInstagram: { auth: 'agent', handler: (sb, p) => setBattleInstagram(sb, p) },
+  getBattleChat: { auth: 'agent', handler: (sb, p) => getBattleChat(sb, p) },
+  sendBattleChat: { auth: 'agent', handler: (sb, p) => sendBattleChat(sb, p) },
+  reactBattleChat: { auth: 'agent', handler: (sb, p) => reactBattleChat(sb, p) },
+  reportBattleChat: { auth: 'agent', handler: (sb, p) => reportBattleChat(sb, p) },
+  muteBattleChat: { auth: 'agent', handler: (sb, p) => muteBattleChat(sb, p) },
+  adminListBattleChat: { auth: 'admin', handler: (sb, p) => adminListBattleChat(sb, p) },
+  adminModerateBattleChat: { auth: 'admin', handler: (sb, p) => adminModerateBattleChat(sb, p) },
   adminListCampaignProofs: { auth: 'admin', handler: (sb, p) => adminListCampaignProofs(sb, p) },
   adminRecordCampaignChecks: { auth: 'admin', handler: (sb, p) => adminRecordCampaignChecks(sb, p) },
   adminReviewCampaignProof: { auth: 'admin', handler: (sb, p) => adminReviewCampaignProof(sb, p) },

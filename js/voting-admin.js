@@ -92,6 +92,32 @@ export function reviewCardHtml(row) {
   </article>`
 }
 
+const CHAT_STATUS = { visible: ['is-neutral', 'chat', 'Visible'], auto_hidden: ['is-warn', 'flag', 'Hidden by reports'], removed: ['is-err', 'xCircle', 'Removed'] }
+
+/** One reported or hidden MAMA Chat message, with the moderation actions. */
+export function chatCardHtml(item) {
+  const [k, i, t] = CHAT_STATUS[item.status] || CHAT_STATUS.visible
+  const until = item.timeoutUntil ? kstStamp(item.timeoutUntil) : null
+  const btn = (act, label, min) => `<button type="button" class="vt-btn vt-btn-ghost vt-btn-sm" data-vta-chat="${act}"${min != null ? ` data-vta-min="${min}"` : ''}>${label}</button>`
+  return `<article class="vta-card" data-vta-chat-id="${item.id}">
+    <header class="vta-head">
+      <div><b class="vt-mono">${esc(item.agentNo)}</b> · ${esc(item.codename)} · ${esc(String(item.team || '').toUpperCase())} · Chat</div>
+      <span class="vt-badge ${k}">${ic(i)}${t}</span>
+    </header>
+    <div class="vta-side">
+      <p class="vta-chat-body">${esc(item.body)}</p>
+      <p class="vta-hint">${item.reports} ${item.reports === 1 ? 'report' : 'reports'} (${item.ownTeamReports} from their own team)${item.reasons.length ? ` · ${esc(item.reasons.join(', '))}` : ''} · sent ${esc(kstStamp(item.at))}${until ? ` · timed out until ${esc(until)}` : ''}</p>
+      <div class="vta-actions">
+        ${item.status === 'visible' ? '' : btn('restore', 'Restore')}
+        ${item.status === 'removed' ? '' : btn('remove', 'Remove')}
+        ${btn('timeout', 'Time out 1 h', 60)}${btn('timeout', '24 h', 1440)}${btn('timeout', 'Rest of event', 'event')}
+        ${until ? btn('timeout', 'Lift timeout', 0) : ''}
+      </div>
+      <p class="vta-out" role="status"></p>
+    </div>
+  </article>`
+}
+
 export function mountVotingReview(panel, call) {
   let status = 'verifying'
   let offset = 0
@@ -104,6 +130,7 @@ export function mountVotingReview(panel, call) {
       <div><h2 class="vta-title" data-vta-title>Voting review</h2><p class="vta-hint" data-vta-counts>—</p></div>
       <div class="vta-filters" role="tablist">
         ${Object.entries(STATUS).map(([s, [, , label]]) => `<button type="button" class="vta-filter" role="tab" data-vta-filter="${s}" aria-selected="${s === status}">${label}</button>`).join('')}
+        <button type="button" class="vta-filter" role="tab" data-vta-filter="chat" aria-selected="false">Chat reports</button>
       </div>
       <div class="vta-tools">
         <button type="button" class="vt-btn vt-btn-primary vt-btn-sm" data-vta-run>${ic('shield')}Retry checks</button>
@@ -119,6 +146,7 @@ export function mountVotingReview(panel, call) {
 
   async function load() {
     $('[data-vta-list]').innerHTML = '<p class="vta-hint">Loading…</p>'
+    if (status === 'chat') return loadChat()
     const r = await call('adminListCampaignProofs', { status, limit: PAGE, offset })
     if (!r?.success) { $('[data-vta-list]').innerHTML = `<p class="vta-hint">${esc(r?.error || 'Could not load')}</p>`; return }
     rows = r.proofs
@@ -129,6 +157,30 @@ export function mountVotingReview(panel, call) {
     $('[data-vta-prev]').disabled = offset === 0
     $('[data-vta-next]').disabled = offset + PAGE >= r.total
     $('[data-vta-run]').hidden = status !== 'verifying'
+  }
+
+  // MAMA Chat: reported and hidden messages (adminListBattleChat).
+  async function loadChat() {
+    const r = await call('adminListBattleChat', {})
+    $('[data-vta-run]').hidden = true
+    $('[data-vta-page]').textContent = ''
+    $('[data-vta-prev]').disabled = true
+    $('[data-vta-next]').disabled = true
+    if (!r?.success) { $('[data-vta-list]').innerHTML = `<p class="vta-hint">${esc(r?.error === 'no_battle' ? 'No battle running.' : r?.error || 'Could not load')}</p>`; return }
+    $('[data-vta-counts]').textContent = `${r.items.length} reported or hidden Chat ${r.items.length === 1 ? 'message' : 'messages'}`
+    $('[data-vta-list]').innerHTML = r.items.length
+      ? `<p class="vta-hint">Hidden automatically at 3 reports when one comes from the sender's own team, otherwise at 5. Restore or remove clears the reports.</p>${r.items.map(chatCardHtml).join('')}`
+      : '<p class="vta-hint">No Chat reports.</p>'
+  }
+
+  async function moderate(card, btn) {
+    const out = card.querySelector('.vta-out')
+    for (const b of card.querySelectorAll('button')) b.disabled = true
+    const res = await call('adminModerateBattleChat', { messageId: Number(card.dataset.vtaChatId), action: btn.dataset.vtaChat, minutes: btn.dataset.vtaMin })
+    if (res?.success) { out.textContent = 'Saved'; setTimeout(load, 500) } else {
+      out.textContent = res?.error || 'Failed'
+      for (const b of card.querySelectorAll('button')) b.disabled = false
+    }
   }
 
   function checksOf(card) {
@@ -199,6 +251,8 @@ export function mountVotingReview(panel, call) {
     if (e.target.closest('[data-vta-run]')) return runChecks()
     if (e.target.closest('[data-vta-prev]')) { offset = Math.max(0, offset - PAGE); return load() }
     if (e.target.closest('[data-vta-next]')) { offset += PAGE; return load() }
+    const mod = e.target.closest('[data-vta-chat]')
+    if (mod) return moderate(mod.closest('.vta-card'), mod)
     const act = e.target.closest('[data-vta]')
     if (act) decide(act.closest('.vta-card'), act.dataset.vta)
   })

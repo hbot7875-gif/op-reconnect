@@ -12,6 +12,11 @@ import {
   claimBattleWinner as battleWinner,
 } from './vote-campaign-service.js'
 import { runVotePulse } from './vote-pulse-service.js'
+import {
+  getBattleTeam as hubTeam, setBattleInstagram as hubIg, getBattleChat as hubChat, sendBattleChat as hubSend,
+  reactBattleChat as hubReact, reportBattleChat as hubReport, muteBattleChat as hubMute,
+  adminListBattleChat as hubAdminList, adminModerateBattleChat as hubAdminModerate,
+} from './battle-hub-service.js'
 
 type P = Record<string, unknown>
 
@@ -83,3 +88,16 @@ export const adminReviewCampaignProof = (sb: SupabaseDB, p: P) => review(sb, p)
 // BTS X Vote Pulse collector (scheduled; display only). The Apify token is
 // an Edge Function secret — never in the database or the client.
 export const cronVotePulse = (sb: SupabaseDB) => runVotePulse(sb, { token: Deno.env.get('APIFY_TOKEN') ?? '' })
+
+// MAMA Event Hub — Team and Chat (battle-hub-service.js, migration
+// 20261015150000). Chat's moments read the same shared 60s battle cache.
+export const getBattleTeam = (sb: SupabaseDB, p: P) => hubTeam(sb, p)
+export const setBattleInstagram = (sb: SupabaseDB, p: P) => hubIg(sb, p)
+export const getBattleChat = (sb: SupabaseDB, p: P) =>
+  hubChat(sb, p, new Date(), { cache: (key: string, ttl: number, f: () => Promise<unknown>) => cachedJson(sb, key, ttl, f) })
+export const sendBattleChat = (sb: SupabaseDB, p: P) => hubSend(sb, p)
+export const reactBattleChat = (sb: SupabaseDB, p: P) => hubReact(sb, p)
+export const reportBattleChat = (sb: SupabaseDB, p: P) => hubReport(sb, p)
+export const muteBattleChat = (sb: SupabaseDB, p: P) => hubMute(sb, p)
+export const adminListBattleChat = (sb: SupabaseDB, p: P) => hubAdminList(sb, p)
+export const adminModerateBattleChat = (sb: SupabaseDB, p: P) => hubAdminModerate(sb, p)

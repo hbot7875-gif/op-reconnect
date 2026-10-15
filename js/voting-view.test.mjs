@@ -15,11 +15,12 @@ const section = (html, id) => html.slice(html.indexOf(`id="${id}"`), html.indexO
 
 // ── Page structure and wording ───────────────────────────────────────
 
-test('final page hierarchy, in order', () => {
+test('final page hierarchy, in order: live strip, tabs, then Battle | Team | Chat | Voting panels', () => {
   const html = render()
-  const order = ['>Voting<', '>MAMA 2026<', "Fans&#39; Choice · Round 1", 'id="vt-h-battle"', 'id="vt-h-today"',
-    'id="vt-h-missions"', 'id="vt-h-pulse"', 'id="vt-h-stats"', 'id="vt-h-gift"', 'id="vt-h-bgifts"',
-    'id="vt-h-activity"', '<span class="vt-row-t">Voting guide</span>']
+  const order = ['>MAMA 2026<', 'class="vt-ls"', 'data-vt-tab="battle">Battle', 'data-vt-tab="team">Team', 'data-vt-tab="chat">Chat',
+    'data-vt-tab="voting">Voting', 'id="vt-panel-battle"', 'id="vt-h-battle"', 'id="vt-h-moments"', 'id="vt-h-bgifts"', 'id="vt-h-pulse"',
+    'id="vt-panel-team"', 'id="vt-panel-chat"', 'id="vt-panel-voting"', "Fans&#39; Choice · Round 1", 'id="vt-h-today"',
+    'id="vt-h-missions"', 'id="vt-h-gift"', 'id="vt-h-stats"', 'id="vt-h-activity"', '<span class="vt-row-t">Voting guide</span>']
   let at = -1
   for (const s of order) {
     const i = html.indexOf(s, at + 1)
@@ -235,10 +236,14 @@ test('Voting Gift: TBA, filling, ready, daily capped, opened reveal', () => {
   assert.equal(rewardText({ kind: 'backup_pass', amount: 1 }), '+1 Backup Pass')
 })
 
-test('rewards stay secondary: gift sections come after missions, pulse and stats', () => {
+test('rewards stay secondary: on Voting, the Voting Gift comes after the missions', () => {
   const html = render({ gift: 'ready' })
-  assert.ok(html.indexOf('id="vt-h-gift"') > html.indexOf('id="vt-h-stats"'))
-  assert.ok(html.indexOf('id="vt-h-missions"') < html.indexOf('id="vt-h-gift"'))
+  const voting = html.slice(html.indexOf('id="vt-panel-voting"'))
+  assert.ok(voting.indexOf('id="vt-h-missions"') < voting.indexOf('id="vt-h-gift"'))
+  assert.ok(voting.indexOf('id="vt-h-gift"') < voting.indexOf('id="vt-h-activity"'))
+  // Battle Gifts live on Battle, after the score and Moments.
+  const battle = html.slice(html.indexOf('id="vt-panel-battle"'), html.indexOf('id="vt-panel-team"'))
+  assert.ok(battle.indexOf('id="vt-h-battle"') < battle.indexOf('id="vt-h-bgifts"'))
 })
 
 // ── Activity, guide, sheets ──────────────────────────────────────────
@@ -324,8 +329,12 @@ test('stylesheet: scoped, one accent, no glow or purple dashboard', () => {
     if (/^(from|to|\d+%)$/.test(sel)) continue
     for (const part of sel.split(',')) assert.match(part.trim(), /^\.vt|^@/, `unscoped selector: ${part.trim()}`)
   }
-  // Both teams share one bar colour; only "your team" is tinted.
-  assert.doesNotMatch(css, /data-vt-team="hooligans"|data-vt-team="aliens"|\.is-hooligans|\.is-aliens/)
+  // Team colour is muted crimson / smoky emerald, marked only through the
+  // data-team tokens — never bright orange or cyan.
+  assert.match(css, /--vt-hoo: #a84a42;/)
+  assert.match(css, /--vt-ali: #3f7668;/)
+  assert.match(css, /--vt-gold: #c8a75a;/)
+  assert.doesNotMatch(css, /#ff6a2b|#2fc6ad|#00ffff|#ff8c00/i)
 })
 
 test('battle after the freeze: final result, winner reward states, tie', () => {
