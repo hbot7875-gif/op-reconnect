@@ -5,6 +5,7 @@
 import { call } from './api.js'
 import { getAgentNo, clearSession } from './session.js'
 import { renderAuth } from './ui-auth.js'
+import { sessionDecision, SESSION_RECHECK_MS, SIGNED_OUT_ELSEWHERE } from './session-guard.js'
 import { setState, getState, subscribe, toast, el, esc, showOverlay, hideOverlay } from './state.js'
 import { getScreen, onScreenChange } from './router.js'
 import { renderOnboarding } from './ui-onboarding.js'
@@ -34,11 +35,15 @@ const $ = (id) => document.getElementById(id)
 
 function show(id) {
   for (const s of ['auth', 'loading', 'onboarding', 'game']) $(s).hidden = s !== id
+  // Once past sign-in, drop the form: typed credentials don't sit in the
+  // page, and there's nothing left for a phone's compositor to paint back
+  // from stale tiles over the game (seen on Android, 2026-10-15).
+  if (id !== 'auth') $('auth').replaceChildren()
 }
 
-function showAuth() {
+function showAuth(opts = {}) {
   show('auth')
-  renderAuth($('auth'), refresh)
+  renderAuth($('auth'), refresh, opts)
 }
 
 let lastScreenName = null
@@ -198,24 +203,44 @@ onScreenChange((scr) => {
   renderScreen(state)
 })
 
+// One invalid_session while the game is open gets a second look before the
+// player is signed out (session-guard.js).
+let sessionRechecked = false
+let sessionRecheck = null
+
 async function refresh() {
   const agentNo = getAgentNo()
-  if (!agentNo) { showAuth(); return }
+  // Already on the sign-in screen (the 90 s poll or a resume can land here):
+  // leave it alone, so a half-typed sign-in and its notice aren't wiped.
+  if (!agentNo) { if ($('auth').hidden) showAuth(); return }
   const res = await call('getGameState', { agentNo })
-  if (!res.success && res.error !== 'invalid_session' && res.error !== 'agent_not_found') {
-    // A deployment or short network interruption must not look like logout.
-    // Keep a rendered game in place (or its loader on first boot) and retry.
+  const decision = sessionDecision(res, { gameOpen: !!getState()?.joined, rechecked: sessionRechecked })
+  if (decision === 'retry') {
+    // A deployment, a short network interruption or a database blip on the
+    // session check must not look like logout. Keep a rendered game in place
+    // (or its loader on first boot) and retry.
     if (!getState()?.joined) show('loading')
     retryRefresh()
     return
   }
-  if (!res.success) {
-    // A rejected or expired token means the stored session is no good — drop
-    // it so the player gets the sign-in screen instead of a silent dead end.
-    if (res.error === 'invalid_session' || res.error === 'agent_not_found') clearSession()
-    showAuth()
+  if (decision === 'recheck') {
+    sessionRechecked = true
+    clearTimeout(sessionRecheck)
+    sessionRecheck = setTimeout(() => { sessionRecheck = null; refresh() }, SESSION_RECHECK_MS)
     return
   }
+  if (decision === 'signout') {
+    // The stored session really is no good (this account signed in somewhere
+    // else, it expired, or the agent is gone) — drop it so the player gets
+    // the sign-in screen instead of a silent dead end, and say why.
+    sessionRechecked = false
+    clearTimeout(sessionRecheck)
+    sessionRecheck = null
+    clearSession()
+    showAuth(res?.error === 'invalid_session' ? { notice: SIGNED_OUT_ELSEWHERE } : {})
+    return
+  }
+  sessionRechecked = false
   if (refreshRetry) {
     clearTimeout(refreshRetry)
     refreshRetry = null

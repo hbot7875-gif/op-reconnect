@@ -29,7 +29,9 @@ const ERRORS = {
 }
 const friendly = (e) => ERRORS[e] || e || 'Something went wrong'
 
-export function renderAuth(container, onAuthed) {
+/** opts.notice: why the player is here (e.g. signed out because the account
+ *  signed in elsewhere) — shown above the forms, and it opens on sign-in. */
+export function renderAuth(container, onAuthed, opts = {}) {
   container.innerHTML = ''
   container.hidden = false
   const wrap = el('div', 'auth-wrap')
@@ -40,6 +42,11 @@ export function renderAuth(container, onAuthed) {
   // inputs sitting on top of it. Plain page background instead.
   wrap.appendChild(ambientToggle('audio/weather-ambient.mp3'))
 
+  if (opts.notice) {
+    const notice = el('p', 'auth-notice', opts.notice)
+    notice.setAttribute('role', 'status')
+    wrap.appendChild(notice)
+  }
   wrap.appendChild(el('div', 'eyebrow', 'OP: ReConnect'))
   wrap.appendChild(el('h1', 'title-sm', 'The network needs agents'))
   wrap.appendChild(el('p', 'muted auth-lede',
@@ -92,7 +99,7 @@ export function renderAuth(container, onAuthed) {
     panelOld.hidden = isNew
     if (focus) (isNew ? tabNew : tabOld).focus()
   }
-  selectTab(wantsSignIn ? 'old' : 'new')
+  selectTab(wantsSignIn || opts.notice ? 'old' : 'new')
 
   tabNew.onclick = () => selectTab('new')
   tabOld.onclick = () => selectTab('old')

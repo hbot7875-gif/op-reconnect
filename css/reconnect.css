@@ -8152,3 +8152,18 @@ select.rc-multi-native {
   background: var(--city-surface-quiet);
   border-color: var(--city-line-quiet);
 }
+
+/* Signed out because the account signed in elsewhere: say why, above the
+   forms (main.js → renderAuth's notice). */
+.auth-notice { margin: 20px 0 18px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--v-gold-line, rgba(242,197,108,.5));
+  background: var(--v-tint-gold, rgba(242,197,108,.11)); color: var(--text); font-size: 14px; line-height: 1.45; }
+
+/* Android phones: a blurred panel over the animated City scene makes the
+   compositor re-sample the scene every frame, and under memory pressure it
+   has painted stale tiles (old screens) over the game (2026-10-15). Same
+   remedy as the HUD above: solid panels on phones, no backdrop blur. */
+@media (max-width: 640px) {
+  .core-health, .core-health:hover { backdrop-filter: none; -webkit-backdrop-filter: none; background: rgba(9, 7, 18, .95); }
+  .mission-beacon { backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .stage-agents { backdrop-filter: none; -webkit-backdrop-filter: none; background: rgba(6, 5, 13, .86); }
+}

@@ -10,6 +10,7 @@
 
 import bcrypt from 'bcryptjs'
 import type { SupabaseDB } from './config.ts'
+import { sessionCheck } from './session-check.js'
 
 export interface RcAgentRow {
   agent_no: string
@@ -91,17 +92,26 @@ export async function getRcAgent(supabase: SupabaseDB, agentNo: string): Promise
 /** Every non-public action must pass this before touching game state.
  *  A null session_expires_at is treated as "no expiry" — accounts created
  *  before migration 023 keep working instead of being logged out by a
- *  column that didn't exist when they signed in. */
+ *  column that didn't exist when they signed in.
+ *  → 'ok' | 'invalid' | 'unavailable' (session-check.js). 'unavailable' means
+ *  the row couldn't be read — a database blip says nothing about the token,
+ *  so index.ts answers "try again" instead of signing the player out. */
+export async function checkSessionState(
+  supabase: SupabaseDB, agentNo: string, sessionToken: unknown,
+): Promise<'ok' | 'invalid' | 'unavailable'> {
+  if (!sessionToken || typeof sessionToken !== 'string') return 'invalid'
+  try {
+    const { data, error } = await supabase.from('rc_agents')
+      .select('session_token, session_expires_at, retired_at')
+      .eq('agent_no', String(agentNo).trim().toUpperCase()).maybeSingle()
+    return sessionCheck({ row: data, error }, sessionToken) as 'ok' | 'invalid' | 'unavailable'
+  } catch {
+    return 'unavailable'
+  }
+}
+
 export async function verifySession(supabase: SupabaseDB, agentNo: string, sessionToken: unknown): Promise<boolean> {
-  if (!sessionToken || typeof sessionToken !== 'string') return false
-  const agent = await getRcAgent(supabase, agentNo)
-  if (!agent || !agent.session_token || agent.session_token !== sessionToken) return false
-  if (agent.session_expires_at && new Date(agent.session_expires_at).getTime() <= Date.now()) return false
-  // A retired agent's session_token is cleared the moment they retire (see
-  // retireAccount), so this almost never fires in practice — it's here as a
-  // second gate in case a token was already in flight the instant they did.
-  if (agent.retired_at) return false
-  return true
+  return (await checkSessionState(supabase, agentNo, sessionToken)) === 'ok'
 }
 
 /** Live handle availability, so the sign-up form can say "taken" before

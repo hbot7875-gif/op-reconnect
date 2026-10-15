@@ -4,7 +4,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0'
 import { getGameState, joinGame, startDistrict, setMode, updateCodename, adminLaunchDefuse, extendDistrictDeadline, resetLapsedDistrict } from './lib/handlers.ts'
-import { registerAgent, loginAgent, logoutAgent, checkHandle, verifySession } from './lib/auth.ts'
+import { registerAgent, loginAgent, logoutAgent, checkHandle, checkSessionState } from './lib/auth.ts'
 import { getAccount, updateEmail, changePassword, generateScrobblePin, getWebhookPin, setStreamSource, setAppearOffline, retireAccount } from './lib/settings.ts'
 import { requestPasswordReset, resetPassword } from './lib/recovery.ts'
 import { handleWebScrobblerWebhook, handleListenBrainzLike } from './lib/scrobble-inbound.ts'
@@ -403,8 +403,11 @@ Deno.serve(async (req) => {
 
     if (route.auth === 'agent' || route.auth === 'badge') {
       if (!params.agentNo) return jsonResponse({ success: false, error: 'Agent number required' }, 401)
-      const ok = await verifySession(supabase, String(params.agentNo), params.sessionToken)
-      if (!ok) return jsonResponse({ success: false, error: 'invalid_session' }, 401)
+      const session = await checkSessionState(supabase, String(params.agentNo), params.sessionToken)
+      // A database blip says nothing about the token: answer "try again"
+      // (the game retries quietly) rather than signing the player out.
+      if (session === 'unavailable') return jsonResponse({ success: false, error: 'session_check_unavailable', retryable: true }, 503)
+      if (session !== 'ok') return jsonResponse({ success: false, error: 'invalid_session' }, 401)
     }
 
     // Checked only AFTER the session is proven, so this can never be used to
