@@ -472,12 +472,15 @@
 .vt-ls-t i { width: 6px; height: 6px; border-radius: 50%; background: var(--vt-tm); }
 .vt-ls-t b { font: 700 13px/1 var(--vt-disp); color: var(--vt-score); font-variant-numeric: tabular-nums; }
 .vt-ls-vs { color: var(--vt-text-3); }
-.vt-tabs { display: flex; gap: 24px; border-bottom: 1px solid var(--vt-line); }
-.vt-screen .vt-tab { position: relative; height: 40px; border: 0; background: none; color: var(--vt-text-3); font-size: 14.5px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; padding: 0; }
-.vt-screen .vt-tab[aria-selected="true"] { color: var(--vt-text); }
-.vt-screen .vt-tab[aria-selected="true"]::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; border-radius: 2px; background: var(--vt-violet-hi); }
-.vt-screen .vt-tab:focus-visible { outline: 2px solid var(--vt-violet-hi); outline-offset: 2px; border-radius: 6px; }
-.vt-tab-n { font: 11px/1 var(--vt-mono-f); color: var(--vt-text-3); }
+/* Event control, after RE:CELEBRATE's BATTLE / REPLAYS switch but lighter:
+   one rounded track, equal segments, the selected one filled with violet. */
+.vt-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 4px; border-radius: 14px; background: var(--vt-surface); border: 1px solid var(--vt-line); }
+.vt-screen .vt-tab { height: 44px; border: 1px solid transparent; border-radius: 10px; background: none; color: var(--vt-text-3); font-size: 14px; font-weight: 600; letter-spacing: .3px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 6px; min-width: 0; transition: background .18s ease, color .18s ease, border-color .18s ease; }
+.vt-screen .vt-tab:hover { color: var(--vt-text-2); background: rgba(255, 255, 255, .03); }
+.vt-screen .vt-tab[aria-selected="true"] { color: var(--vt-text); background: linear-gradient(180deg, rgba(139, 92, 246, .30), rgba(139, 92, 246, .18)); border-color: var(--vt-violet-line); }
+.vt-screen .vt-tab:focus-visible { outline: 2px solid var(--vt-violet-hi); outline-offset: 2px; }
+.vt-tab-n { font: 11px/1 var(--vt-mono-f); color: var(--vt-text-3); padding: 3px 5px; border-radius: 5px; background: rgba(255, 255, 255, .05); }
+.vt-tab[aria-selected="true"] .vt-tab-n { color: var(--vt-violet-hi); background: rgba(10, 9, 16, .35); }
 .vt-panel { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
 .vt-panel[hidden] { display: none; }
 .vt-screen .vt-hub-page { padding: 16px 0 24px; }
@@ -678,7 +681,7 @@
 .vt-mu-list .vt-btn { flex: none; }
 
 @media (prefers-reduced-motion: reduce) {
-  .vt-ls-dot, .vt-sk, .vt-hero.is-flip .vt-vs-pts, .vt-hero.is-flip .vt-battle-line, .vt-ls-score.is-flip b, .vt-tug span { animation: none; transition: none; }
+  .vt-ls-dot, .vt-sk, .vt-screen .vt-tab, .vt-hero.is-flip .vt-vs-pts, .vt-hero.is-flip .vt-battle-line, .vt-ls-score.is-flip b, .vt-tug span { animation: none; transition: none; }
 }
 
 .vta-chat-body { font-size: 15px; line-height: 1.45; overflow-wrap: anywhere; padding: 10px 12px; border-radius: var(--vt-r-md); background: var(--vt-bg); }
