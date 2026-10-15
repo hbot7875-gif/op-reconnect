@@ -57,13 +57,24 @@ export function untilLabel(iso, now = Date.now()) {
   return `in ${Math.ceil(hours / 24)} days`
 }
 
+/** "Oct 15, 7:20 PM" in the player's own timezone — for the moments a rule
+ *  turns on an exact time (the 24-hour skip wait), where "in 10 hours" alone
+ *  left AGENT107 asking why the button didn't work. */
+export function timeLabel(iso) {
+  const date = new Date(iso)
+  if (!iso || Number.isNaN(date.getTime())) return ''
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+  }).format(date)
+}
+
 function priceLabel(xp, cells) {
   return `${fmt(xp)} XP + ${fmt(cells)} ${Number(cells) === 1 ? 'Cell' : 'Cells'}`
 }
 
 /**
  * @param {object} quote rc_quest_skip_quote's payload
- * @returns {{action,free,button,title,lede,why,confirm,blocked,reason,hold,notes,showPrice}}
+ * @returns {{action,free,button,title,lede,why,confirm,blocked,reason,hold,holdTimes,notes,showPrice}}
  */
 export function questExitView(quote, now = Date.now()) {
   const action = EXIT_ACTIONS.includes(quote?.action) ? quote.action : 'skip'
@@ -78,10 +89,18 @@ export function questExitView(quote, now = Date.now()) {
   const blocked = waiting || cooling || short
 
   let hold = null
+  let holdTimes = null
   let reason = null
   if (waiting) {
     reason = 'waiting'
-    hold = `You've already streamed toward this quest, so it can be skipped ${untilLabel(quote.eligibleAt, now)} — once you've been on it for a day.`
+    hold = "You've already streamed toward this quest, so Skip Quest opens 24 hours after you joined the team."
+    // The two times the rule turns on, spelled out — not just a countdown.
+    const joined = timeLabel(quote.joinedAt)
+    const eligible = timeLabel(quote.eligibleAt)
+    holdTimes = [
+      ...(joined ? [{ label: 'You joined', value: joined }] : []),
+      { label: 'You can skip from', value: eligible ? `${eligible} (${untilLabel(quote.eligibleAt, now)})` : untilLabel(quote.eligibleAt, now) },
+    ]
   } else if (cooling) {
     reason = 'cooldown'
     hold = `You've skipped a quest recently. The next one is available ${untilLabel(quote.cooldownUntil, now)}.`
@@ -125,6 +144,7 @@ export function questExitView(quote, now = Date.now()) {
         : [
             `${priceLabel(quote.costXp, quote.costCells)}.`,
             'Spending XP never lowers your level, rank or earned rewards.',
+            "Once you've streamed for your team, you can skip 24 hours after joining it.",
             'One paid skip every 7 days.',
           ],
     },
@@ -141,10 +161,15 @@ export function questExitView(quote, now = Date.now()) {
     title: copy.title,
     lede: copy.lede,
     why: copy.why || null,
-    confirm: copy.confirm || `Skip for ${priceLabel(quote.costXp, quote.costCells)}`,
+    // A greyed-out "Skip for 75 XP" read as broken. While waiting, the
+    // button says when it opens instead.
+    confirm: reason === 'waiting' && timeLabel(quote.eligibleAt)
+      ? `Skip opens ${timeLabel(quote.eligibleAt)}`
+      : copy.confirm || `Skip for ${priceLabel(quote.costXp, quote.costCells)}`,
     blocked,
     reason,
     hold,
+    holdTimes,
     sections,
     notes,
     showPrice: !free,

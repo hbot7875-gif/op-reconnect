@@ -76,7 +76,15 @@ function skipSheet(quote, districtId, onDone) {
     sheet.appendChild(block)
   }
 
-  if (v.hold) sheet.appendChild(el('p', 'qs-hold', esc(v.hold)))
+  if (v.hold) {
+    const hold = el('div', 'qs-hold')
+    hold.appendChild(el('p', '', esc(v.hold)))
+    if (v.holdTimes?.length) {
+      hold.appendChild(el('dl', 'qs-hold-times', v.holdTimes
+        .map((t) => `<div><dt>${esc(t.label)}</dt><dd>${esc(t.value)}</dd></div>`).join('')))
+    }
+    sheet.appendChild(hold)
+  }
 
   const go = el('button', 'btn btn-primary qs-go', v.confirm)
   go.type = 'button'

@@ -5,7 +5,7 @@
 import { call } from './api.js'
 import { getAgentNo, clearSession } from './session.js'
 import { renderAuth } from './ui-auth.js'
-import { setState, getState, subscribe, toast } from './state.js'
+import { setState, getState, subscribe, toast, el, esc, showOverlay, hideOverlay } from './state.js'
 import { getScreen, onScreenChange } from './router.js'
 import { renderOnboarding } from './ui-onboarding.js'
 import { renderHud, renderTabbar } from './ui-hud.js'
@@ -27,6 +27,7 @@ import { checkForBadgeUnlocks } from './badge-reveal.js'
 import { checkForExamModeAnnounce } from './exam-mode-announce.js'
 import { playModeReview } from './mode-upgrade-announce.js'
 import { districtDisplayName } from './ward-tiles.js'
+import { lapseChoice } from './ui-district.js'
 import { trackEngagement } from './engagement.js'
 
 const $ = (id) => document.getElementById(id)
@@ -124,6 +125,7 @@ function renderScreen(state) {
 let celebratedLevel = null
 let shownModeReview = null
 const celebratedEraCards = new Set()
+let promptedLapse = null
 
 subscribe((state) => {
   if (!state || !state.joined) return
@@ -171,6 +173,17 @@ subscribe((state) => {
   // can never come back true on a later poll of the same district.
   if (state.expiredDistrict) {
     toast(`⏳ Time ran out on ${districtDisplayName(state.expiredDistrict)} — restoration reset. You can start it again.`, 4500)
+  }
+  // A lapsed attempt waiting on "extend or reset" — ask once per session
+  // wherever the agent happens to be. The same choice stays on the
+  // district's own board, so dismissing this loses nothing.
+  const lapsedDistrict = state.activeDistrict?.lapsed ? state.activeDistrict : null
+  if (lapsedDistrict && promptedLapse !== lapsedDistrict.id) {
+    promptedLapse = lapsedDistrict.id
+    const sheet = el('div', 'sheet lapse-sheet')
+    sheet.appendChild(el('div', 'eyebrow', esc(districtDisplayName(lapsedDistrict))))
+    sheet.appendChild(lapseChoice(lapsedDistrict, { onDone: hideOverlay }))
+    showOverlay(sheet)
   }
 })
 

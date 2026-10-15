@@ -388,6 +388,19 @@ export interface DistrictDeadline { expiresAt: string; msLeft: number; expired: 
 // during the final 2 days — see migrations/056 and 057.
 export const DEADLINE_EXTENSION_DAYS = 3
 
+// How long a lapsed attempt waits for its owner's "use an extension or
+// reset" answer before it resets on its own — see lapseChoiceOpen.
+export const LAPSE_CHOICE_DAYS = 3
+
+/** A lapsed attempt is held instead of deleted while its owner could still
+ *  rescue it: they hold an Extension Charge, haven't used this attempt's one
+ *  extension yet, and the deadline passed less than LAPSE_CHOICE_DAYS ago.
+ *  Otherwise there is nothing to choose and it resets as it always has. */
+export function lapseChoiceOpen(deadline: DistrictDeadline, deadlineExtended: boolean, charges: number): boolean {
+  if (!deadline.expired || deadlineExtended || charges < 1) return false
+  return Date.now() - new Date(deadline.expiresAt).getTime() < LAPSE_CHOICE_DAYS * 86400000
+}
+
 /** A district's restoration window — exactly `days` (plus `extraDays` from
  *  a used one-time extension, see EXTENSION_DAYS) from activation. Checked
  *  against `!progress.complete` by the caller: a completion that lands on

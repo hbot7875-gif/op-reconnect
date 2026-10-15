@@ -5,7 +5,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { questExitView, untilLabel, EXIT_ACTIONS } from './quest-exit-rules.js'
+import { questExitView, untilLabel, timeLabel, EXIT_ACTIONS } from './quest-exit-rules.js'
 
 const NOW = Date.parse('2026-09-24T12:00:00Z')
 const inHours = (h) => new Date(NOW + h * 3600_000).toISOString()
@@ -87,8 +87,24 @@ test('within 24h after contributing: blocked, and says why', () => {
   const v = questExitView(paid({ waitingPeriod: true, eligibleAt: inHours(5), hasContributed: true }), NOW)
   assert.equal(v.blocked, true)
   assert.equal(v.reason, 'waiting')
-  assert.match(v.hold, /in 5 hours/)
   assert.match(v.hold, /already streamed/)
+  assert.match(v.hold, /24 hours after you joined/)
+})
+
+test('waiting names when they joined and exactly when they can skip', () => {
+  const joinedAt = new Date(NOW - 19 * 3600000).toISOString()
+  const eligibleAt = inHours(5)
+  const v = questExitView(paid({ waitingPeriod: true, joinedAt, eligibleAt, hasContributed: true }), NOW)
+  assert.deepEqual(v.holdTimes.map((t) => t.label), ['You joined', 'You can skip from'])
+  assert.equal(v.holdTimes[0].value, timeLabel(joinedAt))
+  assert.equal(v.holdTimes[1].value, `${timeLabel(eligibleAt)} (in 5 hours)`)
+  assert.equal(v.confirm, `Skip opens ${timeLabel(eligibleAt)}`)
+})
+
+test('the 24-hour rule is listed with the limits even before it applies', () => {
+  const v = questExitView(paid(), NOW)
+  assert.equal(v.holdTimes, null)
+  assert.ok(v.notes.some((n) => n.includes('24 hours after joining')))
 })
 
 test('cooldown blocks and names the date', () => {

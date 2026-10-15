@@ -6,7 +6,7 @@ import type { GameContent, SupabaseDB, DistrictRow } from './config.ts'
 import { loadContent, rankFor, xpRules, restorationDays, streamsPerXpFor, PERSONAL_COUNT_CAP, trackArtistOverrides } from './config.ts'
 import { ensureDailyRollups, computeStreak, awardStreakBadges, totalXp, spendableXp, goalXpCountForDate } from './derive.ts'
 import { awardDailySideMissionXp, awardWeeklySideMissionXp, buildSideMissions } from './side-missions.ts'
-import { freezeGoals, computeBaseline, districtProgress, districtDeadline, filesRevealedCount, albumGoalStreamTotal, DEADLINE_EXTENSION_DAYS } from './districts.ts'
+import { freezeGoals, computeBaseline, districtProgress, districtDeadline, filesRevealedCount, albumGoalStreamTotal, DEADLINE_EXTENSION_DAYS, lapseChoiceOpen, LAPSE_CHOICE_DAYS } from './districts.ts'
 import { resolveReconnectStatus } from './reconnect-goal.ts'
 import { todayKst, nextKstMidnightUtc, kstDateOf } from './kst.ts'
 import { getBombView, launchDefuse } from './bomb.ts'
@@ -286,7 +286,15 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     // district (see the "still in progress" branch below), so there's
     // nothing to unwind — the district just goes back to available and
     // the agent can start it again.
-    if (!districtComplete && deadline.expired) {
+    //
+    // Unless the agent could still rescue it. AGENT107 lost a district while
+    // sitting on 21 unused Extension Charges: the button only lives inside
+    // the final 2 days, and they never saw it. Now an agent holding a charge
+    // gets asked instead — use one (+3 days from that tap) or reset — and the
+    // attempt waits for that answer for up to LAPSE_CHOICE_DAYS.
+    const lapsed = !districtComplete
+      && lapseChoiceOpen(deadline, !!activePd.deadline_extended, player.deadline_extension_charges || 0)
+    if (!districtComplete && deadline.expired && !lapsed) {
       await supabase.from('rc_player_districts').delete()
         .eq('agent_no', player.agent_no).eq('district_id', activePd.district_id).eq('status', 'active')
       expiredDistrict = { id: activePd.district_id, wardId: districtRow?.ward_id || null, name: districtRow?.name || activePd.district_id }
@@ -416,6 +424,12 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
       daysLeft: Math.ceil(deadline.msLeft / 86400000),
       deadlineExtended: !!activePd.deadline_extended,
       deadlineExtensionHours: Number(activePd.deadline_extension_hours) || 0,
+      // Set only while a lapsed attempt waits on "extend or reset".
+      lapsed: lapsed ? {
+        expiredAt: deadline.expiresAt,
+        choiceEndsAt: new Date(new Date(deadline.expiresAt).getTime() + LAPSE_CHOICE_DAYS * 86400000).toISOString(),
+        charges: player.deadline_extension_charges || 0,
+      } : null,
       restoredNow,
       xpAwarded,
       itemDropped,
@@ -844,7 +858,16 @@ export async function extendDistrictDeadline(supabase: SupabaseDB, params: any) 
 
   const deadline = districtDeadline(activePd.activated_at, restorationDays(content), districtDeadlineExtraDays(activePd))
   if (deadline.msLeft > 2 * 86400000) return { success: false, error: 'too_early' }
-  if (deadline.expired) return { success: false, error: 'already_expired' }
+  // Past the deadline, the attempt is only still here because getGameState
+  // is holding it for this exact answer (lapseChoiceOpen). The +3 days then
+  // run from this tap, not from the old deadline — the hours it sat lapsed
+  // are added as support hours, which never move activated_at or its
+  // stream-counting window.
+  const lateHours = deadline.expired
+    ? Math.ceil((Date.now() - new Date(deadline.expiresAt).getTime()) / 3600000)
+    : 0
+  if (deadline.expired && lateHours > LAPSE_CHOICE_DAYS * 24) return { success: false, error: 'already_expired' }
+  const supportHours = Math.max(0, Number(activePd.deadline_extension_hours) || 0)
 
   const { data: playerRow } = await supabase.from('rc_players')
     .select('deadline_extension_charges').eq('agent_no', agentNo).maybeSingle()
@@ -863,7 +886,9 @@ export async function extendDistrictDeadline(supabase: SupabaseDB, params: any) 
   if (!charged) return { success: false, error: 'no_extension_charges' }
 
   const { data: extended, error } = await supabase.from('rc_player_districts')
-    .update({ deadline_extended: true })
+    .update(lateHours > 0
+      ? { deadline_extended: true, deadline_extension_hours: supportHours + lateHours }
+      : { deadline_extended: true })
     .eq('agent_no', agentNo).eq('district_id', districtId).eq('status', 'active').eq('deadline_extended', false)
     .select('district_id').maybeSingle()
   if (error || !extended) {
@@ -875,9 +900,29 @@ export async function extendDistrictDeadline(supabase: SupabaseDB, params: any) 
   const newDeadline = districtDeadline(
     activePd.activated_at,
     restorationDays(content),
-    districtDeadlineExtraDays({ ...activePd, deadline_extended: true }),
+    districtDeadlineExtraDays({ ...activePd, deadline_extended: true, deadline_extension_hours: supportHours + lateHours }),
   )
   return { success: true, expiresAt: newDeadline.expiresAt, daysLeft: Math.ceil(newDeadline.msLeft / 86400000), chargesRemaining: charges - 1 }
+}
+
+/** The other answer to a lapsed attempt's "extend or reset" prompt: drop it
+ *  now, exactly as an unrescuable lapse always has (see getGameState), so
+ *  the agent can start any district fresh. Refuses anything still inside
+ *  its deadline — this is never a way to abandon a live attempt. */
+export async function resetLapsedDistrict(supabase: SupabaseDB, params: any) {
+  const content = await loadContent(supabase)
+  const agentNo = String(params.agentNo || '').trim().toUpperCase()
+  const districtId = String(params.districtId || '')
+
+  const { data: activePd } = await supabase.from('rc_player_districts')
+    .select('*').eq('agent_no', agentNo).eq('district_id', districtId).eq('status', 'active').maybeSingle()
+  if (!activePd) return { success: false, error: 'not_eligible' }
+  const deadline = districtDeadline(activePd.activated_at, restorationDays(content), districtDeadlineExtraDays(activePd))
+  if (!deadline.expired) return { success: false, error: 'not_expired' }
+
+  await supabase.from('rc_player_districts').delete()
+    .eq('agent_no', agentNo).eq('district_id', districtId).eq('status', 'active')
+  return { success: true }
 }
 
 /** Admin: launch a red-zone attack on the ARMY Bomb. */

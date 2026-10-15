@@ -15,7 +15,7 @@ const states=[
  ['HARD MODE (200 XP + 100 Cells)',{...base,mode:'hard',costXp:200,costCells:100,balanceCells:2255,balanceXp:2100}],
  ['EXAM (75 XP + 2 Cells)',{...base,mode:'exam',costXp:75,costCells:2,balanceXp:310,balanceCells:19}],
  ['INSUFFICIENT — short on both',{...base,balanceXp:40,balanceCells:6,shortXp:110,shortCells:9,canAfford:false}],
- ['24h WAITING PERIOD',{...base,waitingPeriod:true,eligibleAt:new Date(Date.now()+5*3600e3).toISOString()}],
+ ['24h WAITING PERIOD',{...base,waitingPeriod:true,joinedAt:new Date(Date.now()-19*3600e3).toISOString(),eligibleAt:new Date(Date.now()+5*3600e3).toISOString()}],
  ['7-DAY COOLDOWN',{...base,onCooldown:true,cooldownUntil:new Date(Date.now()+4*86400e3).toISOString()}],
  ['FREE — teammate rescue',{...base,action:'teammate_rescue',free:true,freeReason:'teammate_rescue',costXp:0,costCells:0}],
  ['FREE — expired quest',{...base,action:'expired',free:true,freeReason:'expired',costXp:0,costCells:0}],

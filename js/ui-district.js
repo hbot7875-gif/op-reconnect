@@ -102,6 +102,53 @@ function renderMissionGroup(card, icon, label, items, rowFn) {
   for (const it of ordered) card.appendChild(rowFn(it))
 }
 
+/** The "extend or reset" choice for an attempt whose deadline has passed
+ *  while its owner still holds an Extension Charge — the server keeps the
+ *  attempt waiting on this answer (districts.ts's lapseChoiceOpen) instead
+ *  of resetting it outright. Shared by the board card and the one-time
+ *  prompt main.js opens, so both say and do exactly the same thing. */
+export function lapseChoice(d, { onDone } = {}) {
+  const lapse = d.lapsed
+  const box = el('div', 'lapse-choice')
+  const ends = formatLocalDateTime(lapse.choiceEndsAt)
+  box.innerHTML = `
+    <div class="lapse-title">⏳ Time ran out on this district</div>
+    <p class="lapse-copy">Your progress is still here. Use 1 Extension Charge for 3 more days starting now, or reset and start any district fresh.${ends ? ` If you don't choose by ${esc(ends)} (your time), it resets on its own.` : ''}</p>
+  `
+  const actions = el('div', 'lapse-actions')
+  const extendBtn = el('button', 'btn btn-primary',
+    `Extend +3 days · ${lapse.charges} left`)
+  const resetBtn = el('button', 'btn btn-ghost', 'Reset district')
+  const msg = el('div', 'board-extend-msg')
+  const busy = (on) => { extendBtn.disabled = on; resetBtn.disabled = on }
+  const after = async (text) => {
+    toast(text)
+    onDone?.()
+    const fresh = await call('getGameState', { agentNo: getAgentNo() })
+    if (fresh.success) setState(fresh)
+  }
+  extendBtn.onclick = async () => {
+    busy(true)
+    const res = await call('extendDistrictDeadline', { agentNo: getAgentNo(), districtId: d.id })
+    if (res.success) return after('Deadline extended — 3 more days from now')
+    msg.textContent = res.error === 'already_expired' ? 'Too late to extend — this district can only be reset now.'
+      : res.error === 'no_extension_charges' ? 'No Extension Charges left — earn one by leveling up.'
+      : "Couldn't extend — try again."
+    busy(false)
+  }
+  resetBtn.onclick = async () => {
+    if (!window.confirm("Reset this district?\n\nIts progress is cleared and you can start any district fresh. This can't be undone.")) return
+    busy(true)
+    const res = await call('resetLapsedDistrict', { agentNo: getAgentNo(), districtId: d.id })
+    if (res.success) return after("District reset — start any district when you're ready")
+    msg.textContent = "Couldn't reset — try again."
+    busy(false)
+  }
+  actions.append(extendBtn, resetBtn)
+  box.append(actions, msg)
+  return box
+}
+
 /** opts.reconnectBox — the interactive panel screen-district.js already
  *  built for this district's reconnect goal (open/invite/accept/decline),
  *  handed in so it can be slotted into the checklist's own Track → Album →
@@ -128,6 +175,14 @@ export function renderBoard(board, d, opts = {}) {
   `
   board.appendChild(head)
 
+  // A lapsed attempt has one job left: extend or reset. The queue, deadline
+  // and in-window extension below would all be talking about a clock that
+  // has already run out, so they give way to the choice.
+  if (d.lapsed) {
+    board.appendChild(lapseChoice(d))
+    if (opts.vaultBox) board.appendChild(opts.vaultBox)
+  }
+
   // The queue belongs here too — this is the screen you're on when you're
   // about to go stream. Renamed from "Run the 148 Protocol": this is an
   // action for finishing goals, not a thing carried around in the Pack, so
@@ -137,7 +192,9 @@ export function renderBoard(board, d, opts = {}) {
   // it — one status block, not two that have to be read together.
   const left = remaining({ activeDistrict: d })
   const pace = dailyPace({ activeDistrict: d })
-  if (left.length) {
+  if (d.lapsed) {
+    // The choice above replaces the queue and deadline block.
+  } else if (left.length) {
     const totalNeed = left.reduce((a, x) => a + x.need, 0)
     const bits = [`${totalNeed} play${totalNeed === 1 ? '' : 's'} remaining`]
     if (pace.perTrack.length) {
@@ -180,7 +237,7 @@ export function renderBoard(board, d, opts = {}) {
   // ReConnect streams when her deadline hit) needs it most.
   const urgentDeadline = typeof d.daysLeft === 'number' && d.daysLeft <= 2
   const charges = getState()?.player?.deadlineExtensionCharges || 0
-  if (urgentDeadline && !d.deadlineExtended) {
+  if (urgentDeadline && !d.deadlineExtended && !d.lapsed) {
     const extendRow = el('div', 'board-extend')
     const extendBtn = el('button', 'btn btn-ghost',
       charges > 0 ? `⏳ Extend deadline +3 days (${charges} charge${charges === 1 ? '' : 's'})` : '⏳ Extend deadline +3 days (0 charges)')
@@ -220,7 +277,7 @@ export function renderBoard(board, d, opts = {}) {
     board.appendChild(extendRow)
   }
 
-  if (opts.vaultBox) board.appendChild(opts.vaultBox)
+  if (opts.vaultBox && !d.lapsed) board.appendChild(opts.vaultBox)
 
   if (goals.length) {
     const trackCard = el('div', 'card goal-card')
