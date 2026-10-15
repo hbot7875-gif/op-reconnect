@@ -162,9 +162,27 @@ test('upload wakes the checker without ever waiting on it', () => {
   const ts = read('../supabase/functions/op-reconnect/lib/vote-campaign.ts')
   assert.match(ts, /actions\/workflows\/mnet-auto-verify\.yml\/dispatches/)
   assert.match(ts, /body: JSON\.stringify\(\{ ref: 'master' \}\)/)
-  assert.match(ts, /if \(!token\) return/, 'no token → schedule only')
-  assert.match(ts, /\.catch\(\(\) => undefined\)/)
-  assert.match(ts, /if \(\(r as \{ success\?: boolean \}\)\?\.success\) wakeChecker\(\)\s*\n\s*return r/)
+  assert.match(ts, /if \(!token\) \{[\s\S]*?return \{ dispatched: false, status: 'no_token' \}/, 'no token → logged, nothing sent')
+  assert.match(ts, /\} catch \(e\) \{[\s\S]*?return \{ dispatched: false, status: 'network' \}/, 'never throws')
+  // One nudge per upload, not awaited by the upload response.
+  const upload = ts.slice(ts.indexOf('export const submitMnetProof'), ts.indexOf('export const cronMnetVerifyKick'))
+  assert.equal((upload.match(/wakeChecker\(\)/g) || []).length, 1, 'exactly one dispatch per upload')
+  assert.match(upload, /const nudge = wakeChecker\(\)[\s\S]*waitUntil\?\.\(nudge\)[\s\S]*return r/)
+  assert.doesNotMatch(upload, /await wakeChecker/)
+})
+
+test('pg_cron safety net re-sends the nudge only while a certificate waits', () => {
+  const sql = read('../supabase/migrations/20261015090000_rc_mnet_verify_kick.sql')
+  assert.match(sql, /p\.status = 'verifying'/)
+  assert.match(sql, /p\.submitted_at <= now\(\) - interval '60 seconds'/)
+  assert.match(sql, /p\.submitted_at >= now\(\) - interval '6 hours'/)
+  assert.match(sql, /'action', 'cronMnetVerifyKick'/)
+  assert.match(sql, /cron\.schedule\('rc-mnet-verify-kick', '\*\/2 \* \* \* \*'/)
+  assert.match(sql, /revoke all on function public\.rc_invoke_mnet_verify_kick\(\) from public, anon, authenticated/)
+  const idx = read('../supabase/functions/op-reconnect/index.ts')
+  assert.match(idx, /cronMnetVerifyKick: \{ auth: 'cron', handler: \(\) => cronMnetVerifyKick\(\) \}/, 'cron token required')
+  const ts = read('../supabase/functions/op-reconnect/lib/vote-campaign.ts')
+  assert.match(ts, /export const cronMnetVerifyKick = async \(\) => \(\{ success: true, \.\.\.\(await wakeChecker\(\)\) \}\)/)
 })
 
 test('player screen polls while a proof is verifying', () => {

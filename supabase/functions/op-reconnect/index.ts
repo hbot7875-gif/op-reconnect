@@ -63,7 +63,7 @@ import { getRecelebrateMessages, sendRecelebrateMessage } from './lib/recelebrat
 import {
   getVotingStatus, getPublicBattle, submitMnetProof, submitXProof, setXHandle, openVotingGift,
   startVotingTeamChoice, chooseVotingTeam, claimBattleGift, claimBattleWinner,
-  adminListCampaignProofs, adminRecordCampaignChecks, adminReviewCampaignProof, cronVotePulse,
+  adminListCampaignProofs, adminRecordCampaignChecks, adminReviewCampaignProof, cronVotePulse, cronMnetVerifyKick,
 } from './lib/vote-campaign.ts'
 import { getDearDiary, getDearDiaryArchive, getDearDiaryPreference, saveDearDiaryDecorations, saveDearDiaryNote, saveDearDiaryTheme } from './lib/dear-diary.ts'
 
@@ -222,6 +222,8 @@ const ROUTES: Record<string, Route> = {
   // BTS X Vote Pulse refresh — Supabase Cron, about 4 times a day during
   // voting (migration 20261013150500). Takes no params, like cronStorageSweep.
   cronVotePulse: { auth: 'cron', handler: (sb) => cronVotePulse(sb) },
+  // pg_cron rc-mnet-verify-kick: re-sends the auto-verify nudge while a certificate waits.
+  cronMnetVerifyKick: { auth: 'cron', handler: () => cronMnetVerifyKick() },
 
   // ── Backup Pass — see lib/backup-pass.ts and migration 20260819110000 ──
   getBackupStatus: { auth: 'agent', handler: async (sb, p) => getBackupStatus(sb, await loadContent(sb), p) },

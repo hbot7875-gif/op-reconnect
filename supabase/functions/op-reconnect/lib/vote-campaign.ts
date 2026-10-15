@@ -24,33 +24,50 @@ export const getVotingStatus = (sb: SupabaseDB, p: P) => status(sb, p)
 export const getPublicBattle = (sb: SupabaseDB) =>
   publicBattle(sb, new Date(), { cache: (key: string, ttl: number, f: () => Promise<unknown>) => cachedJson(sb, key, ttl, f) })
 // A stored certificate wakes the automatic checker (GitHub Actions,
-// .github/workflows/mnet-auto-verify.yml) so it doesn't wait for the 5-minute
-// schedule. Optional: GITHUB_DISPATCH_TOKEN is an Edge Function secret — a
-// fine-grained token for this repo only, with just "Actions: Read and write"
-// (it can start a workflow; it cannot read or change code). Fire-and-forget —
-// the upload's response never waits on GitHub, and a failure only means the
-// schedule picks the proof up instead.
-function wakeChecker() {
+// .github/workflows/mnet-auto-verify.yml) right away. GITHUB_DISPATCH_TOKEN
+// is an Edge Function secret — a fine-grained token for this repo only, with
+// just "Actions: Read and write" (it can start a workflow; it cannot read or
+// change code). GitHub's own schedule is far too irregular to rely on, so
+// rc-mnet-verify-kick (pg_cron, every 2 minutes) calls cronMnetVerifyKick to
+// send the same nudge again while a certificate is still waiting.
+// → { dispatched, status } and never throws.
+async function wakeChecker(): Promise<{ dispatched: boolean; status: number | string }> {
   const token = Deno.env.get('GITHUB_DISPATCH_TOKEN') ?? ''
-  if (!token) return
+  if (!token) {
+    console.warn('mnet auto-verify: GITHUB_DISPATCH_TOKEN is not set; only the schedule will run the checker')
+    return { dispatched: false, status: 'no_token' }
+  }
   const repo = Deno.env.get('GITHUB_DISPATCH_REPO') ?? 'hbot7875-gif/op-reconnect'
-  const sent = fetch(`https://api.github.com/repos/${repo}/actions/workflows/mnet-auto-verify.yml/dispatches`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json',
-      'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'op-reconnect',
-    },
-    body: JSON.stringify({ ref: 'master' }),
-    signal: AbortSignal.timeout(5000),
-  }).catch(() => undefined)
-  // deno-lint-ignore no-explicit-any
-  ;(globalThis as any).EdgeRuntime?.waitUntil?.(sent)
+  try {
+    const res = await fetch(`https://api.github.com/repos/${repo}/actions/workflows/mnet-auto-verify.yml/dispatches`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'op-reconnect',
+      },
+      body: JSON.stringify({ ref: 'master' }),
+      signal: AbortSignal.timeout(5000),
+    })
+    if (res.status !== 204) console.warn(`mnet auto-verify: workflow dispatch answered ${res.status}`)
+    return { dispatched: res.status === 204, status: res.status }
+  } catch (e) {
+    console.warn(`mnet auto-verify: workflow dispatch failed: ${(e as Error)?.message || e}`)
+    return { dispatched: false, status: 'network' }
+  }
 }
 export const submitMnetProof = async (sb: SupabaseDB, p: P) => {
   const r = await mnet(sb, p)
-  if ((r as { success?: boolean })?.success) wakeChecker()
+  if ((r as { success?: boolean })?.success) {
+    // Fire-and-forget: the upload's response never waits on GitHub.
+    const nudge = wakeChecker()
+    // deno-lint-ignore no-explicit-any
+    ;(globalThis as any).EdgeRuntime?.waitUntil?.(nudge)
+  }
   return r
 }
+// pg_cron safety net (rc_invoke_mnet_verify_kick): only called while a
+// certificate has been waiting for a minute or more.
+export const cronMnetVerifyKick = async () => ({ success: true, ...(await wakeChecker()) })
 export const submitXProof = (sb: SupabaseDB, p: P) => x(sb, p, { verifier: oembedXVerifier() })
 export const setXHandle = (sb: SupabaseDB, p: P) => handle(sb, p)
 export const openVotingGift = (sb: SupabaseDB, p: P) => gift(sb, p)
