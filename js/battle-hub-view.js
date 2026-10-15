@@ -13,7 +13,8 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const fmt = (n) => Number(n || 0).toLocaleString('en-US')
 const teamAttr = (id) => (/^[a-z0-9_]{1,24}$/.test(String(id || '')) ? ` data-team="${id}"` : '')
 
-export const HUB_TABS = [['battle', 'Battle'], ['team', 'Team'], ['chat', 'Chat'], ['voting', 'Voting']]
+// Chat is not a tab: it floats above the nav (ReCelebrate-style) and opens as a sheet.
+export const HUB_TABS = [['battle', 'Battle'], ['team', 'Team'], ['voting', 'Voting']]
 
 export const REPORT_LABELS = {
   harassment: 'Harassment or bullying', hate: 'Hate or slurs', sexual: 'Sexual content',
@@ -52,26 +53,31 @@ function timeLeft(closesAt, now) {
 
 // ── Live strip + tabs ─────────────────────────────────────────────────
 
-/** Always visible above the tabs: live state and the score. Off-white numbers;
- *  the team colour is only the small mark before each. */
-export function liveStrip(b, now) {
+/** Always visible above the tabs: live state, time left and — except on
+ *  Battle, where the matchup itself is the hero — the score. Off-white
+ *  numbers; the team colour is only the small dot beside each. */
+export function liveStrip(b, now, { score = true } = {}) {
   const left = timeLeft(b.closesAt, now)
   const state = b.frozen ? 'FINAL' : left ? 'LIVE' : 'VERIFYING'
   const [x, y] = b.teams
-  const score = (t) => `<span class="vt-ls-t"${teamAttr(t.id)}><i aria-hidden="true"></i><span class="vt-ls-name">${esc(t.label)}</span><b>${fmt(t.points)}</b></span>`
+  const pts = (t, end) => `<span class="vt-ls-t${end ? ' is-end' : ''}"${teamAttr(t.id)}><i aria-hidden="true"></i><b>${fmt(t.points)}</b></span>`
   return `<div class="vt-ls" data-vt-live="${state.toLowerCase()}">
     <span class="vt-ls-state">${state === 'LIVE' ? '<i class="vt-ls-dot" aria-hidden="true"></i>' : ''}${state}</span>
     ${left && !b.frozen ? `<span class="vt-ls-left">${esc(left)}</span>` : ''}
-    <span class="vt-ls-score" aria-label="${esc(`${x.label} ${fmt(x.points)}, ${y.label} ${fmt(y.points)}`)}">${score(x)}<span class="vt-ls-vs" aria-hidden="true">vs</span>${score(y)}</span>
+    ${score ? `<span class="vt-ls-score" aria-label="${esc(`${x.label} ${fmt(x.points)}, ${y.label} ${fmt(y.points)}`)}">${pts(x, false)}<span class="vt-ls-vs" aria-hidden="true">vs</span>${pts(y, true)}</span>` : ''}
   </div>`
 }
 
-export function hubTabs(tab, { done = 0, total = 0, unread = false } = {}) {
+export function hubTabs(tab, { done = 0, total = 0 } = {}) {
   return `<div class="vt-tabs" role="tablist" aria-label="MAMA Battle">${HUB_TABS.map(([id, label]) => {
-    const extra = id === 'voting' && total ? `<small class="vt-tab-n">${done}/${total}</small>`
-      : id === 'chat' && unread ? '<i class="vt-tab-pip" aria-label="new messages"></i>' : ''
+    const extra = id === 'voting' && total ? `<small class="vt-tab-n">${done}/${total}</small>` : ''
     return `<button class="vt-tab" type="button" role="tab" id="vt-tab-${id}" aria-controls="vt-panel-${id}" aria-selected="${tab === id}" tabindex="${tab === id ? 0 : -1}" data-vt-act="hub-tab" data-vt-tab="${id}">${label}${extra}</button>`
   }).join('')}</div>`
+}
+
+/** The floating Chat button above the nav. New messages show a dot, never a count. */
+export function chatFab(hub = {}) {
+  return `<button class="vt-chat-fab" type="button" data-vt-act="chat-open" aria-haspopup="dialog" aria-label="Open MAMA Chat${hub.unread ? ', new messages' : ''}">${ic('chat')}${hub.unread ? '<i class="vt-fab-dot" aria-hidden="true"></i>' : ''}</button>`
 }
 
 // ── Battle: Moments ───────────────────────────────────────────────────
@@ -85,10 +91,10 @@ export function momentsCard(moments, labels) {
     return esc(m.body.charAt(0) + m.body.slice(1).toLowerCase())
   }
   return `<section aria-labelledby="vt-h-moments">
-    <div class="vt-sec-h"><h2 id="vt-h-moments">Moments</h2><span class="vt-aside">Live from the battle</span></div>
-    <div class="vt-card vt-moments">${list.length
-      ? `<ul>${list.map((m) => `<li data-sys="${esc(m.sys)}"><time class="vt-mono">${esc(clockTime(m.at))}</time><span class="vt-mo-i">${ic(MOMENT_ICON[m.sys] || 'flag')}</span><span>${line(m)}</span></li>`).join('')}</ul>`
-      : '<p class="vt-empty">Lead changes, ties and gift countdowns show up here as they happen.</p>'}</div>
+    <div class="vt-sec-h"><h2 id="vt-h-moments">Moments</h2><span class="vt-aside">live</span></div>
+    ${list.length
+      ? `<div class="vt-card vt-moments"><ul>${list.map((m) => `<li data-sys="${esc(m.sys)}"><time class="vt-mono">${esc(clockTime(m.at))}</time><span class="vt-mo-i">${ic(MOMENT_ICON[m.sys] || 'flag')}</span><span>${line(m)}</span></li>`).join('')}</ul></div>`
+      : `<p class="vt-moments-empty">${ic('zap')}Lead changes and gift countdowns show up here.</p>`}
   </section>`
 }
 
@@ -115,13 +121,13 @@ export function teamPanel(team, { labels, busy = false } = {}) {
     </li>`
   }).join('')
   return `<div class="vt-hub-team"${teamAttr(team.team)}>
-    <div class="vt-card vt-tm-head">
+    <div class="vt-tm-head">
       <span class="vt-tm-only">${ic('lock')}Only ${esc(label)} can see this</span>
       <h2 class="vt-tm-name">${esc(label)}</h2>
       <p class="vt-tm-counts"><span><b>${fmt(team.count)}</b> ${team.count === 1 ? 'member' : 'members'}</span><span><b>${fmt(team.online)}</b> online now</span></p>
     </div>
     <label class="vt-card vt-tm-opt">
-      <span class="vt-tm-opt-tx"><strong>Show my Instagram username to my team</strong><span>Only ${esc(label)} see it, here only, for MAMA 2026. Off unless you turn it on.</span></span>
+      <span class="vt-tm-opt-tx"><strong>Show my Instagram username to my team</strong><span>${esc(label)} only · this event · off by default</span></span>
       <input type="checkbox" class="vt-switch" role="switch" data-vt-act="team-ig"${team.showIg ? ' checked' : ''}${busy ? ' disabled' : ''}>
     </label>
     ${team.members.length > 1 ? '' : `<p class="vt-empty vt-card">You're the first ${esc(label)} here. Teammates show up as they join.</p>`}
@@ -207,6 +213,14 @@ export function chatPanel(chat, hub, labels, now = new Date()) {
     </div>
     <div class="vt-chat-feed" data-vt-chat-feed aria-live="polite" aria-relevant="additions">${chatFeed(chat, labels, hub)}</div>
     ${composer(chat, hub, labels, now)}
+  </div>`
+}
+
+/** Chat as a sheet over any tab (opened from the floating button). */
+export function chatSheet(chat, hub, labels, now = new Date()) {
+  return `<div class="vt-sheet vt-chat-sheet" data-vt-sheet="chat" role="dialog" aria-modal="true" aria-labelledby="vt-chat-title" hidden tabindex="-1">
+    <div class="vt-sheet-h"><h2 id="vt-chat-title">MAMA Chat</h2><span class="vt-chat-sub">HOOLIGANS × ALIENS</span><button class="vt-icon-btn" type="button" aria-label="Close Chat" data-vt-act="sheet-close">${ic('x')}</button></div>
+    ${chatPanel(chat, hub, labels, now)}
   </div>`
 }
 

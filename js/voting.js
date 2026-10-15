@@ -43,7 +43,7 @@ function freshLocal() {
     chooser: null,
     share: null,
     tab: null,
-    hub: { draft: '', replyTo: null, selId: null, reportId: null, waitUntil: 0, error: null, sending: false, unread: false, igBusy: false },
+    hub: { chatOpen: false, draft: '', replyTo: null, selId: null, reportId: null, waitUntil: 0, error: null, sending: false, unread: false, igBusy: false },
   }
 }
 
@@ -195,7 +195,11 @@ function paint() {
   const caret = input && document.activeElement === input ? [input.selectionStart, input.selectionEnd] : null
   const pos = feedPosition()
   root.innerHTML = votingScreen({ status, local, now: new Date(), hub: hubData })
-  if (sheet) showSheet(sheet, false)
+  if (sheet) {
+    // A message's options or the report form sit on top of the open Chat.
+    if (sheet !== 'chat' && sheet.startsWith('chat') && local.hub.chatOpen) showSheet('chat', false)
+    showSheet(sheet, false)
+  }
   // The team chooser is modal: nothing behind it is reachable while open.
   if (local.chooser) for (const n of root.querySelectorAll(BEHIND)) n.inert = true
   restoreFeed(pos)
@@ -208,7 +212,7 @@ function paint() {
 }
 
 // Everything a sheet or the chooser makes unreachable.
-const BEHIND = '.vt-appbar, .vt-hub-top, .vt-page'
+const BEHIND = '.vt-appbar, .vt-ev, .vt-page, .vt-chat-fab'
 
 function startTicker() {
   clearInterval(ticker)
@@ -385,6 +389,7 @@ function showSheet(name, moveFocus = true) {
 
 function closeSheet() {
   if (!openSheet) return
+  const closing = openSheet
   const sheet = root.querySelector(`[data-vt-sheet="${openSheet}"]`)
   if (openSheet === 'share') releaseShare()
   openSheet = null
@@ -395,6 +400,9 @@ function closeSheet() {
   root.querySelector('.vt-scrim').hidden = true
   root.classList.remove('has-sheet')
   for (const n of root.querySelectorAll(BEHIND)) n.inert = false
+  if (closing === 'chat') { local.hub.chatOpen = false; scheduleHub() }
+  // Closing a message's options (or the report form) goes back to Chat.
+  else if (closing.startsWith('chat') && local.hub.chatOpen) { showSheet('chat', false); return }
   if (lastFocus?.isConnected) lastFocus.focus()
 }
 
@@ -467,6 +475,7 @@ function onClick(e) {
   else if (act === 'chat-unmute') muteMember(t.dataset.vtKey, false)
   else if (act === 'chat-report-open') openReport(Number(t.dataset.vtId))
   else if (act === 'chat-muted') showSheet('chat-muted')
+  else if (act === 'chat-open') openChat()
 }
 
 function onChange(e) {
@@ -609,12 +618,13 @@ async function claimBattle(index) {
 
 // ── MAMA Event Hub: tabs, Team, Chat ─────────────────────────────────
 // Polls only while this screen is open and the page is visible: Chat every
-// 4 s on the Chat tab (30 s elsewhere, for Moments and the unread dot),
-// Team once a minute on the Team tab, and the live score once a minute.
+// 4 s while the Chat sheet is open (30 s otherwise, for Moments and the
+// unread dot), Team once a minute on the Team tab, the live score once a
+// minute.
 
 const CHAT_FAST_MS = 4_000
 const HUB_SLOW_MS = 30_000
-const HUB_TAB_IDS = ['battle', 'team', 'chat', 'voting']
+const HUB_TAB_IDS = ['battle', 'team', 'voting']
 const tabKey = () => `vt:hubtab:${status.campaign.id}`
 const readKey = () => `vt:chatread:${status.campaign.id}`
 
@@ -640,14 +650,14 @@ function startHub() {
 function scheduleHub() {
   clearTimeout(hubTimer)
   if (!root?.isConnected || !status?.battle) return
-  hubTimer = setTimeout(hubTick, local.tab === 'chat' ? CHAT_FAST_MS : HUB_SLOW_MS)
+  hubTimer = setTimeout(hubTick, local.hub.chatOpen ? CHAT_FAST_MS : HUB_SLOW_MS)
 }
 
 async function hubTick() {
   if (!root?.isConnected) return
   if (!document.hidden) {
     hubTicks += 1
-    const minute = local.tab === 'chat' ? hubTicks % 15 === 0 : hubTicks % 2 === 0
+    const minute = local.hub.chatOpen ? hubTicks % 15 === 0 : hubTicks % 2 === 0
     await loadChat()
     if (local.tab === 'team' && minute) await loadTeam()
     if (minute) await refreshScore()
@@ -666,9 +676,18 @@ function switchTab(tab) {
   }
   for (const p of root.querySelectorAll('[data-vt-panel]')) p.hidden = p.dataset.vtPanel !== tab
   root.querySelector('.vt-hub-page')?.setAttribute('data-vt-tab-now', tab)
-  if (tab === 'chat') { markRead(); restoreFeed(null) }
   if (tab === 'team') loadTeam()
-  if (tab === 'chat') loadChat()
+  scheduleHub()
+}
+
+/** The floating button: Chat opens as a sheet over whichever tab is showing. */
+function openChat() {
+  local.hub.chatOpen = true
+  showSheet('chat')
+  markRead()
+  restoreFeed(null)
+  root.querySelector('[data-vt-chat-input]')?.focus({ preventScroll: true })
+  loadChat()
   scheduleHub()
 }
 
@@ -701,15 +720,18 @@ function lastRead() {
 }
 function markRead() {
   local.hub.unread = false
-  root.querySelector('.vt-tab-pip')?.remove()
+  root.querySelector('.vt-fab-dot')?.remove()
   const id = latestFromOthers(hubData.chat)
   try { if (id) localStorage.setItem(readKey(), String(id)) } catch { /* in-memory only */ }
 }
 function setUnread() {
   if (local.hub.unread) return
   local.hub.unread = true
-  const tab = root.querySelector('.vt-tab[data-vt-tab="chat"]')
-  if (tab && !tab.querySelector('.vt-tab-pip')) tab.insertAdjacentHTML('beforeend', '<i class="vt-tab-pip" aria-label="new messages"></i>')
+  const fab = root.querySelector('.vt-chat-fab')
+  if (fab && !fab.querySelector('.vt-fab-dot')) {
+    fab.insertAdjacentHTML('beforeend', '<i class="vt-fab-dot" aria-hidden="true"></i>')
+    fab.setAttribute('aria-label', 'Open MAMA Chat, new messages')
+  }
 }
 
 const lockKey = (c) => [c?.open, c?.paused, c?.timeoutUntil, (c?.muted || []).length].join('|')
@@ -721,7 +743,7 @@ async function loadChat() {
   const next = r?.success ? r : { error: r?.error || 'failed' }
   if (JSON.stringify(next) === JSON.stringify(prev)) return
   hubData.chat = next
-  if (local.tab === 'chat') markRead()
+  if (local.hub.chatOpen) markRead()
   else if (latestFromOthers(next) > lastRead()) setUnread()
   const structural = prev?.loading || prev?.error || next.error || lockKey(prev) !== lockKey(next)
     || JSON.stringify(prev?.presence) !== JSON.stringify(next.presence)
@@ -729,7 +751,7 @@ async function loadChat() {
   if (structural || (momentsChanged && local.tab === 'battle')) { paint(); return }
   // Only messages or reactions changed: swap the list, leave the composer be.
   const feed = root.querySelector('[data-vt-chat-feed]')
-  if (feed && !openSheet) {
+  if (feed && (!openSheet || openSheet === 'chat')) {
     const pos = feedPosition()
     const labels = Object.fromEntries((status.battle?.teams || []).map((t) => [t.id, t.label]))
     feed.innerHTML = chatFeed(next, labels, local.hub)

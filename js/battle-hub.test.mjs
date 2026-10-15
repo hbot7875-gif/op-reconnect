@@ -7,7 +7,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { decideMoments, collapseMoments, instagramUrl, LEAD_HOLD_MS, LEAD_GAP_MS } from '../supabase/functions/op-reconnect/lib/battle-hub-rules.js'
 import {
-  teamPanel, chatPanel, chatFeed, chatMessageSheet, chatReportSheet, liveStrip, hubTabs, momentsCard, chatLock, chatErrorText,
+  teamPanel, chatPanel, chatFeed, chatMessageSheet, chatReportSheet, liveStrip, hubTabs, momentsCard, chatLock, chatErrorText, chatFab, chatSheet,
 } from './battle-hub-view.js'
 import {
   getBattleTeam, getBattleChat, sendBattleChat, reactBattleChat, reportBattleChat, muteBattleChat, setBattleInstagram,
@@ -93,6 +93,7 @@ test('Team: codename, opt-in Instagram link, Voted today, and only counts at the
   const html = teamPanel(TEAM, { labels: LABELS })
   assert.match(html, /Only HOOLIGANS can see this/)
   assert.match(html, /<b>34<\/b> members<\/span><span><b>9<\/b> online now/)
+  assert.match(html, /HOOLIGANS only · this event · off by default/, 'compact opt-in')
   assert.match(html, /Moonchild<span class="vt-mem-you">YOU<\/span>/)
   assert.match(html, /<a class="vt-mem-ig" href="https:\/\/instagram\.com\/goldenhour_jk" target="_blank" rel="noopener noreferrer">/)
   assert.equal((html.match(/vt-mem-ig/g) || []).length, 1, 'no link for members who did not opt in')
@@ -172,14 +173,25 @@ test('live strip, tabs and moments card', () => {
   assert.match(strip, /data-vt-live="live"[\s\S]*LIVE[\s\S]*6d \d+h left/)
   assert.match(strip, /<b>1,060<\/b>[\s\S]*<b>1,054<\/b>/)
   assert.match(liveStrip({ ...b, frozen: true }, NOW), /FINAL/)
-  const tabs = hubTabs('team', { done: 1, total: 6, unread: true })
-  assert.deepEqual([...tabs.matchAll(/data-vt-tab="(\w+)">(\w+)/g)].map((m) => m[2]), ['Battle', 'Team', 'Chat', 'Voting'])
+  assert.doesNotMatch(liveStrip(b, NOW, { score: false }), /vt-ls-score/, 'Battle shows the matchup itself; the strip skips the score')
+  const tabs = hubTabs('team', { done: 1, total: 6 })
+  assert.deepEqual([...tabs.matchAll(/data-vt-tab="(\w+)">(\w+)/g)].map((m) => m[2]), ['Battle', 'Team', 'Voting'])
   assert.match(tabs, /aria-selected="true" tabindex="0" data-vt-act="hub-tab" data-vt-tab="team"/)
   assert.match(tabs, /Voting<small class="vt-tab-n">1\/6<\/small>/)
-  assert.match(tabs, /vt-tab-pip/)
-  assert.doesNotMatch(tabs, /Team HQ|Comms/)
+  assert.doesNotMatch(tabs, /Team HQ|Comms|Chat/)
   assert.match(momentsCard([{ id: 5, sys: 'lead', team: 'aliens', body: 'ALIENS TOOK THE LEAD', at: MSGS[4].at }], LABELS), /<b class="vt-tm-tx" data-team="aliens">ALIENS<\/b> took the lead/)
-  assert.match(momentsCard([], LABELS), /show up here as they happen/)
+  assert.match(momentsCard([], LABELS), /class="vt-moments-empty"[\s\S]*show up here/)
+})
+
+test('floating Chat: a dot for new messages, never a count; opens a sheet with the room', () => {
+  assert.match(chatFab({}), /class="vt-chat-fab"[^>]*data-vt-act="chat-open"[^>]*aria-label="Open MAMA Chat"/)
+  assert.doesNotMatch(chatFab({}), /vt-fab-dot/)
+  const unread = chatFab({ unread: true })
+  assert.match(unread, /aria-label="Open MAMA Chat, new messages"[\s\S]*vt-fab-dot/)
+  assert.doesNotMatch(unread, />\d+</, 'no unread number')
+  const sheet = chatSheet(CHAT, {}, LABELS, NOW)
+  assert.match(sheet, /data-vt-sheet="chat" role="dialog" aria-modal="true"[\s\S]*MAMA Chat[\s\S]*HOOLIGANS × ALIENS[\s\S]*data-vt-form="chat"/)
+  assert.match(sheet, /class="vt-moment" data-sys="lead" data-team="hooligans"/)
 })
 
 // ── Service: what reaches a phone ────────────────────────────────────
@@ -279,6 +291,9 @@ test('switching tabs never repaints (drafts survive); polling stops off-screen',
   assert.doesNotMatch(sw, /paint\(\)/)
   assert.match(sw, /p\.hidden = p\.dataset\.vtPanel !== tab/)
   assert.match(src, /if \(!document\.hidden\)/)
+  assert.match(src, /else if \(act === 'chat-open'\) openChat\(\)/)
+  assert.match(src, /hubTimer = setTimeout\(hubTick, local\.hub\.chatOpen \? CHAT_FAST_MS : HUB_SLOW_MS\)/)
+  assert.match(src, /else if \(closing\.startsWith\('chat'\) && local\.hub\.chatOpen\) \{ showSheet\('chat', false\); return \}/)
   assert.match(src, /if \(!root\?\.isConnected \|\| !status\?\.battle\) return/)
 })
 

@@ -15,19 +15,20 @@ const section = (html, id) => html.slice(html.indexOf(`id="${id}"`), html.indexO
 
 // ── Page structure and wording ───────────────────────────────────────
 
-test('final page hierarchy, in order: live strip, tabs, then Battle | Team | Chat | Voting panels', () => {
+test('final page hierarchy, in order: event header, live strip, Battle | Team | Voting, floating Chat', () => {
   const html = render()
-  const order = ['>MAMA 2026<', 'class="vt-ls"', 'data-vt-tab="battle">Battle', 'data-vt-tab="team">Team', 'data-vt-tab="chat">Chat',
+  const order = ['class="vt-ev"', '>MAMA 2026<', "Fans&#39; Choice · Round 1", 'class="vt-ls"', 'data-vt-tab="battle">Battle', 'data-vt-tab="team">Team',
     'data-vt-tab="voting">Voting', 'id="vt-panel-battle"', 'id="vt-h-battle"', 'id="vt-h-moments"', 'id="vt-h-bgifts"', 'id="vt-h-pulse"',
-    'id="vt-panel-team"', 'id="vt-panel-chat"', 'id="vt-panel-voting"', "Fans&#39; Choice · Round 1", 'id="vt-h-today"',
-    'id="vt-h-missions"', 'id="vt-h-gift"', 'id="vt-h-stats"', 'id="vt-h-activity"', '<span class="vt-row-t">Voting guide</span>']
+    'id="vt-panel-team"', 'id="vt-panel-voting"', 'id="vt-h-today"',
+    'id="vt-h-missions"', 'id="vt-h-gift"', 'id="vt-h-stats"', 'id="vt-h-activity"', '<span class="vt-row-t">Voting guide</span>',
+    'class="vt-chat-fab"', 'data-vt-sheet="chat"']
   let at = -1
   for (const s of order) {
     const i = html.indexOf(s, at + 1)
     assert.ok(i > at, `${s} in order`)
     at = i
   }
-  assert.match(html, /Voting closes <b>Oct 22<\/b> · KST/)
+  assert.doesNotMatch(html, /class="vt-appbar"|data-vt-tab="chat"/, 'no second app bar; Chat is not a tab')
 })
 
 test('player wording: no Campaign, no Supply Chest, no emoji', () => {
@@ -76,20 +77,22 @@ test('team chooser: selected Hooligans / Aliens and timed-out auto-assignment', 
 test('battle: tied, Hooligans leading, Aliens leading', () => {
   assert.match(section(render({ battle: 'tied' }), 'vt-h-battle'), /Tied at 120/)
   const h = section(render({ battle: 'hooligans', myTeam: 'hooligans' }), 'vt-h-battle')
-  assert.match(h, /HOOLIGANS<\/span><span class="vt-team-you">Your team<\/span><span class="vt-team-pts">214/)
+  assert.match(h, /data-team="hooligans">\s*<span class="vt-team-chip"><i aria-hidden="true"><\/i>HOOLIGANS<\/span>\s*<span class="vt-vs-pts">214<\/span>\s*<span class="vt-vs-you">Your team<\/span>/)
   assert.match(h, /Your team is leading by 16/)
   assert.match(section(render({ battle: 'aliens', myTeam: 'hooligans' }), 'vt-h-battle'), /Your team is 27 behind/)
   assert.match(section(render({ battle: 'aliens', myTeam: 'aliens' }), 'vt-h-battle'), /Your team is leading by 27/)
   const b = section(render(), 'vt-h-battle')
   assert.match(b, /Your contribution <b>9<\/b>/)
   assert.match(b, /Community total <b>412<\/b>/)
-  assert.match(b, /8d 11h left/)
+  assert.doesNotMatch(b, /8d 11h left/, 'the countdown lives in the live strip, not repeated in the matchup')
+  assert.match(render(), /class="vt-ls-left">8d 11h left/)
   assert.match(b, /every verified vote still supports BTS/)
 })
 
 test('battle: next milestone almost reached, and reached', () => {
-  const almost = section(render({ battle: 'almost' }), 'vt-h-battle')
+  const almost = section(render({ battle: 'almost' }), 'vt-h-bgifts')
   assert.match(almost, /Next Battle Gift at <b>500<\/b> · 3 to go/)
+  assert.match(almost, /class="vt-gp-steps"><li class="is-got">200 ✓<\/li><li class="is-next">500<\/li>/)
   const reached = section(render({ battle: 'reached' }), 'vt-h-bgifts')
   assert.match(reached, /data-vt-bgift="ready"[\s\S]*Battle Gift 2 · 500 votes[\s\S]*data-vt-act="battle-claim" data-vt-index="1"/)
   assert.equal(nextMilestone(votingStatus({ battle: 'reached' }).battle).target, 900)
@@ -320,7 +323,9 @@ test('admin review card: only what deciding needs, readable notes', () => {
 test('stylesheet: scoped, one accent, no glow or purple dashboard', () => {
   const css = readFileSync(new URL('../css/voting.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
   assert.doesNotMatch(css, /:root/)
-  assert.doesNotMatch(css, /#8b5cf6|#a78bfa|purple/i)
+  // The shared event palette is ReConnect's own violet (reconnect.css).
+  assert.match(css, /--vt-accent: #8b5cf6;/)
+  assert.match(css, /--vt-violet-hi: #bba2ff;/)
   assert.doesNotMatch(css, /text-shadow|drop-shadow|box-shadow:[^;]*\d{2,}px/, 'no glow')
   assert.doesNotMatch(css, /text-transform:\s*uppercase/)
   const selectors = css.match(/(^|})\s*([^{@}]+)\{/g) || []
@@ -329,12 +334,13 @@ test('stylesheet: scoped, one accent, no glow or purple dashboard', () => {
     if (/^(from|to|\d+%)$/.test(sel)) continue
     for (const part of sel.split(',')) assert.match(part.trim(), /^\.vt|^@/, `unscoped selector: ${part.trim()}`)
   }
-  // Team colour is muted crimson / smoky emerald, marked only through the
-  // data-team tokens — never bright orange or cyan.
-  assert.match(css, /--vt-hoo: #a84a42;/)
-  assert.match(css, /--vt-ali: #3f7668;/)
-  assert.match(css, /--vt-gold: #c8a75a;/)
-  assert.doesNotMatch(css, /#ff6a2b|#2fc6ad|#00ffff|#ff8c00/i)
+  // HOOLIGANS / ALIENS are small accents only (dots, chips, rails), through
+  // the data-team tokens — never neon, never a team-coloured card or bar fill.
+  assert.match(css, /--vt-hoo: #e58a7c;/)
+  assert.match(css, /--vt-ali: #6fc2ae;/)
+  assert.match(css, /--vt-gold: #f2c56c;/)
+  assert.doesNotMatch(css, /#ff6a2b|#2fc6ad|#00ffff|#ff8c00|#a84a42|#3f7668/i)
+  assert.doesNotMatch(css, /background:[^;]*var\(--vt-tm\)[^;]*;[^}]*(height|min-height): (?:[2-9]\d|\d{3})px/, 'no large team-coloured fills')
 })
 
 test('battle after the freeze: final result, winner reward states, tie', () => {

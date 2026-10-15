@@ -5,7 +5,7 @@
 // never "Supply Chest".
 import { vIcon as ic } from './voting-icons.js'
 import {
-  liveStrip, hubTabs, momentsCard, teamPanel, chatPanel, chatMessageSheet, chatReportSheet, chatMutedSheet,
+  liveStrip, hubTabs, momentsCard, teamPanel, chatFab, chatSheet, chatMessageSheet, chatReportSheet, chatMutedSheet,
 } from './battle-hub-view.js'
 import { LYRICS } from './battle-share-rules.js'
 import { LYRIC_MAX, LYRIC_ERRORS } from './battle-lyric-filter.js'
@@ -402,35 +402,38 @@ export function nextMilestone(b) {
 function battle(vm) {
   const b = vm.status.battle
   if (!b) return ''
-  const max = Math.max(1, ...b.teams.map((t) => t.points))
-  const rows = b.teams.map((t) => `<div class="vt-team${b.myTeam === t.id ? ' is-mine' : ''}" data-team="${esc(t.id)}">
-      <div class="vt-team-row"><span class="vt-team-name">${esc(t.label)}</span>${b.myTeam === t.id ? '<span class="vt-team-you">Your team</span>' : ''}<span class="vt-team-pts">${fmtCount(t.points)}</span></div>
-      <span class="vt-team-bar" aria-hidden="true"><span style="width:${Math.round((t.points / max) * 100)}%"></span></span>
-    </div>`).join('')
-  const next = nextMilestone(b)
-  const all = b.milestones && !next
-  const community = !b.milestones
-    ? '<span>Battle Gifts announced soon</span>'
-    : all ? '<span>All Battle Gifts unlocked</span>'
-      : `<span>Next Battle Gift at <b>${fmtCount(next.target)}</b> · ${fmtCount(next.target - b.total)} to go</span>`
-  const pct = next ? Math.min(100, Math.round((b.total / next.target) * 100)) : 100
-  return `<section aria-labelledby="vt-h-battle">
-    <div class="vt-sec-h"><h2 id="vt-h-battle">MAMA Battle</h2><span class="vt-aside">${b.frozen ? 'Final score' : esc(timeLeftText(b.closesAt, vm.now))}</span></div>
-    <div class="vt-card vt-battle" data-vt-battle="${b.teams[0]?.points === b.teams[1]?.points ? 'tied' : b.teams[0].points > b.teams[1].points ? b.teams[0].id : b.teams[1].id}">
-      <div class="vt-teams">${rows}</div>
-      <p class="vt-battle-line">${esc(battleLine(b))}</p>
-      <div class="vt-battle-meta">
-        <span>Your contribution <b>${fmtCount(b.myPoints)}</b></span>
-        <span>Community total <b>${fmtCount(b.total)}</b></span>
-      </div>
-      <div class="vt-battle-next">
-        ${b.milestones && next ? `<span class="vt-gift-bar" role="progressbar" aria-valuemin="0" aria-valuemax="${next.target}" aria-valuenow="${b.total}" aria-label="Community progress to the next Battle Gift"><span style="width:${pct}%"></span></span>` : ''}
-        <span class="vt-battle-next-t">${ic('flag')}${community}</span>
-      </div>
-      <p class="vt-battle-note">Friendly ReConnect battle — every verified vote still supports BTS.${b.frozen ? '' : ' Final score at 12:00 KST on Oct 23.'}</p>
-      <button class="vt-btn vt-btn-outline vt-battle-share" type="button" data-vt-act="battle-share" aria-haspopup="dialog">${ic('share')}Share battle</button>
-    </div>
+  const [x, y] = b.teams
+  const total = Math.max(1, x.points + y.points)
+  const leading = x.points === y.points ? null : x.points > y.points ? x.id : y.id
+  const side = (t, end) => `<div class="vt-vs-t${end ? ' is-end' : ''}" data-team="${esc(t.id)}">
+      <span class="vt-team-chip"><i aria-hidden="true"></i>${esc(t.label)}</span>
+      <span class="vt-vs-pts">${fmtCount(t.points)}</span>
+      <span class="vt-vs-you">${b.myTeam === t.id ? 'Your team' : '&nbsp;'}</span>
+    </div>`
+  return `<section class="vt-hero" aria-labelledby="vt-h-battle" data-vt-battle="${leading || 'tied'}">
+    <h2 class="vt-sr" id="vt-h-battle">MAMA Battle${b.frozen ? ' · Final score' : ''}</h2>
+    ${b.frozen ? '<p class="vt-hero-final">Final score</p>' : ''}
+    <div class="vt-vs">${side(x, false)}<span class="vt-vs-x" aria-hidden="true">VS</span>${side(y, true)}</div>
+    <div class="vt-tug" aria-hidden="true"><span class="${leading === y.id ? 'is-behind' : 'is-ahead'}" style="flex-grow:${(x.points / total).toFixed(4)}"></span><span class="${leading === y.id ? 'is-ahead' : 'is-behind'}" style="flex-grow:${(y.points / total).toFixed(4)}"></span></div>
+    <p class="vt-battle-line">${esc(battleLine(b))}</p>
+    <p class="vt-battle-meta"><span>Your contribution <b>${fmtCount(b.myPoints)}</b></span><span>Community total <b>${fmtCount(b.total)}</b></span></p>
+    <button class="vt-btn vt-btn-outline vt-battle-share" type="button" data-vt-act="battle-share" aria-haspopup="dialog">${ic('share')}Share battle${b.myTeam ? `<i class="vt-share-dot" data-team="${esc(b.myTeam)}" aria-hidden="true"></i>` : ''}</button>
+    <p class="vt-battle-note">Friendly ReConnect battle — every verified vote still supports BTS.${b.frozen ? '' : ' Final score at 12:00 KST on Oct 23.'}</p>
   </section>`
+}
+
+/** Gold: how close the next shared Battle Gift is, above the claim list. */
+function giftProgress(b) {
+  if (!b.milestones) return ''
+  const next = nextMilestone(b)
+  const pct = next ? Math.min(100, Math.round((b.total / next.target) * 100)) : 100
+  return `<div class="vt-gp">
+      <div class="vt-gp-row"><span class="vt-gp-ico">${ic('gift')}</span><span class="vt-gp-t">${next
+        ? `Next Battle Gift at <b>${fmtCount(next.target)}</b> · ${fmtCount(next.target - b.total)} to go`
+        : 'All Battle Gifts unlocked'}</span><span class="vt-aside vt-mono">${fmtCount(b.total)}</span></div>
+      ${next ? `<span class="vt-gift-bar" role="progressbar" aria-valuemin="0" aria-valuemax="${next.target}" aria-valuenow="${b.total}" aria-label="Community progress to the next Battle Gift"><span style="width:${pct}%"></span></span>` : ''}
+      <ol class="vt-gp-steps">${b.milestones.map((m) => `<li class="${m.reached ? 'is-got' : next && m.target === next.target ? 'is-next' : ''}">${fmtCount(m.target)}${m.reached ? ' ✓' : ''}</li>`).join('')}</ol>
+    </div>`
 }
 
 // ── Your voting ───────────────────────────────────────────────────────
@@ -578,6 +581,7 @@ function battleGifts(vm) {
   body += winnerRow(vm, b)
   return `<section aria-labelledby="vt-h-bgifts">
     <div class="vt-sec-h"><h2 id="vt-h-bgifts">Battle Gifts</h2><span class="vt-aside">Shared milestones</span></div>
+    ${giftProgress(b)}
     <ul class="vt-card vt-list">${body}</ul>
     <p class="vt-foot-note">Everyone who verified at least one MAMA vote can claim — on either team.</p>
     ${vm.local.error?.mission === 'battle' ? note('is-err', 'xCircle', esc(vm.local.error.text)) : ''}
@@ -758,8 +762,7 @@ function sheets(vm) {
 /** The Voting tab's content: today's missions and everything personal. */
 function votingContent(vm) {
   const ms = vm.status.campaign.missions
-  return `${header(vm)}
-      ${todayProgress(vm)}
+  return `${todayProgress(vm)}
       <section aria-labelledby="vt-h-missions">
         <div class="vt-sec-h"><h2 id="vt-h-missions">Today's missions</h2><span class="vt-aside vt-mono">${esc(dayLabel(vm.status.today))} KST</span></div>
         <div class="vt-missions">${ms.map((m) => (m.kind === 'x_post' ? xCard(vm, m) : mnetCard(vm, m))).join('')}</div>
@@ -804,6 +807,7 @@ function votingOnly(vm) {
  */
 function hubScreen(vm) {
   const b = vm.status.battle
+  const c = vm.status.campaign
   const tab = vm.local.tab || 'voting'
   const hub = vm.local.hub || {}
   const labels = Object.fromEntries(b.teams.map((t) => [t.id, t.label]))
@@ -813,22 +817,24 @@ function hubScreen(vm) {
   const panel = (id, body) => `<div class="vt-panel" role="tabpanel" id="vt-panel-${id}" aria-labelledby="vt-tab-${id}" data-vt-panel="${id}"${tab === id ? '' : ' hidden'}>${body}</div>`
   const chat = vm.hub?.chat
   const selected = chat?.messages?.find((m) => m.id === hub.selId) || null
-  return `<header class="vt-appbar">
-      <button class="vt-icon-btn" type="button" aria-label="Back to City" data-vt-act="back">${ic('back')}</button>
-      <div class="vt-appbar-title vt-appbar-event">${esc(vm.status.campaign.title)}</div>
-      <button class="vt-icon-btn" type="button" aria-label="Voting guide" data-vt-act="guide-open" aria-haspopup="dialog">${ic('book')}</button>
+  return `<header class="vt-ev">
+      <div class="vt-ev-top">
+        <button class="vt-ev-btn" type="button" aria-label="Back to City" data-vt-act="back">${ic('back')}</button>
+        <h1 class="vt-ev-name">${esc(c.title)}</h1>
+        <span class="vt-ev-round">${esc(c.roundLabel || '')}</span>
+        <button class="vt-ev-btn vt-ev-guide" type="button" aria-label="Voting guide" data-vt-act="guide-open" aria-haspopup="dialog">${ic('book')}</button>
+      </div>
+      ${liveStrip(b, vm.now, { score: tab !== 'battle' })}
+      ${hubTabs(tab, { done, total })}
     </header>
-    <div class="vt-hub-top">
-      ${liveStrip(b, vm.now)}
-      ${hubTabs(tab, { done, total, unread: !!hub.unread && tab !== 'chat' })}
-    </div>
     <main class="vt-page vt-hub-page" data-vt-tab-now="${tab}">
       ${panel('battle', `${battle(vm)}${momentsCard(chat?.moments || [], labels)}${battleGifts(vm)}${pulse(vm)}`)}
       ${panel('team', teamPanel(vm.hub?.team, { labels, busy: !!hub.igBusy }))}
-      ${panel('chat', chatPanel(chat, hub, labels, vm.now))}
       ${panel('voting', votingContent(vm))}
     </main>
+    ${chatFab(hub)}
     ${sheets(vm)}
+    ${chatSheet(chat, hub, labels, vm.now)}
     ${chatMessageSheet(selected, labels)}
     ${chatReportSheet(hub.reportId ? chat?.messages?.find((m) => m.id === hub.reportId) : null, labels)}
     ${chatMutedSheet(chat?.muted)}`
