@@ -58,6 +58,20 @@ export async function nodeIo() {
     },
     crop: ({ raw, info }, r) => sharp(raw, { raw: { width: info.width, height: info.height, channels: 4 } })
       .extract({ left: r.x, top: r.y, width: r.width, height: r.height }).png().toBuffer(),
+    // The "Participation Date" row across the full width, 3× (capped), for
+    // the date-only last pass. Located from the OCR's own line boxes.
+    dateRow: async (buf) => {
+      const { data } = await worker.recognize(buf, {}, { blocks: true })
+      const line = (data.blocks || []).flatMap((b) => b.paragraphs.flatMap((p) => p.lines)).find((l) => /participation/i.test(l.text))
+      if (!line) return null
+      const { width, height } = await sharp(buf).metadata()
+      const h = line.bbox.y1 - line.bbox.y0
+      const top = Math.max(0, line.bbox.y0 - Math.round(h * 0.6))
+      const rowHeight = Math.min(height - top, h + 2 * Math.round(h * 0.6))
+      if (rowHeight <= 0) return null
+      return sharp(buf).extract({ left: 0, top, width, height: rowHeight })
+        .resize({ width: Math.min(width * 3, 3200) }).grayscale().normalise().png().toBuffer()
+    },
     close: () => worker.terminate(),
   }
   return io

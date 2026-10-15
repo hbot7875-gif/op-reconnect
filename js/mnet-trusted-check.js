@@ -12,6 +12,8 @@
 //   io.contrast(source)       → upscaled greyscale/contrast copy (a source)
 //   io.pixels(source)         → { img: {width, height, data(RGBA)}, ... } capped at 1400 px wide
 //   io.crop(scaled, region)   → the region of a pixels() result, as a source
+//   io.dateRow(source)        → optional: the "Participation Date" row alone,
+//                               enlarged, as a source (or null if not found)
 //
 // Nothing here returns or keeps OCR text. The certificate number and
 // participation time leave only as values for the server to fingerprint.
@@ -50,6 +52,18 @@ export async function trustedCheckWith(io, source, mission, voteDay, window) {
     const p2 = await ocrPassesWith(io, await io.crop(scaled, region), mission, voteDay, window)
     texts.push(...p2.texts)
     text = { certificate: text.certificate || p2.checks.certificate, category: text.category || p2.checks.category, date: text.date || p2.checks.date }
+  }
+  // Last resort, for the date only: Mnet prints the participation time small,
+  // grey and right-aligned, and whole-image passes can drop it entirely
+  // (seen 2026-10-15). Read that row on its own, enlarged. Same date rule,
+  // same window — nothing is loosened. Adapters without dateRow skip it.
+  if (io.dateRow && (!text.date || !texts.some((t) => participationTime(t)))) {
+    const row = await io.dateRow(source)
+    if (row) {
+      const t = await io.ocr(row)
+      texts.push(t)
+      text = { ...text, date: text.date || evaluateCertificateText(t, mission, voteDay, window).date }
+    }
   }
   const len = Number(mission?.certificate?.number_length) || 16
   const certificateNumber = certificateNumberConsensus(texts.map((t) => certificateNumberFromText(t, len)), len)

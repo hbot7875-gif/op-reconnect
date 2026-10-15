@@ -45,7 +45,7 @@ test('card: possible duplicate — In review with the review message', () => {
 
 test('card: rejected duplicate and plain review keep their own wording', () => {
   assert.ok(screen('rejected', { mnet: 'duplicate' }).includes(DUPLICATE_TEXT.duplicate))
-  assert.match(screen('review', {}), /This certificate needs review — do not upload it again\./)
+  assert.match(screen('review', {}), /We couldn’t confidently read a couple of details, so it’s in review\. Your upload is safe\./)
   assert.match(screen('rejected', {}), /Today&#39;s earlier proof wasn&#39;t accepted|Today's earlier proof wasn't accepted/)
 })
 

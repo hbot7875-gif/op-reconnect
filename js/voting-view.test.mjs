@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import {
   votingScreen, mnetUiState, xUiState, votingEventCard, errorText, dayLabel, kstStamp, countdown,
-  battleLine, nextMilestone, teamChooser, rewardText, fmtCount, cityResultText, MNET_FAST_MS,
+  battleLine, nextMilestone, teamChooser, rewardText, fmtCount, cityResultText, MNET_CHECKING_MS, REVIEW_TEXT,
 } from './voting-view.js'
 import { cityBanner, CITY_NOW } from './voting-fixtures.js'
 import { reviewCardHtml, noteText } from './voting-admin.js'
@@ -132,27 +132,28 @@ test('Mnet: not started, upload needed, verifying, in review, complete', () => {
   assert.match(upload, /data-vt-state="upload"[\s\S]*Upload certificate/)
   assert.match(upload, /aria-current="step"><span class="vt-dot">2<\/span>Upload/)
   assert.match(upload, /The certificate number and account details are not stored/)
-  // Verifying: uploading → "Verifying…" for the first minutes → a calm
-  // "running" state. Never an endless spinner.
+  // Verifying: uploading → "Checking your certificate…" for the first
+  // minute → a calm "Still checking". Never an endless spinner.
   const local = votingLocal({ mnet: 'verifying' })
   const mnetAt = (mnet, extra) => card(votingScreen({ status: votingStatus({ mnet }), local: { ...local, mnet: { ...local.mnet, ...extra } }, now: FIXTURE_NOW }), 'mnet')
   const uploading = mnetAt('upload', { uploading: true })
   assert.match(uploading, /data-vt-state="verifying"[\s\S]*vt-spin[\s\S]*Uploading certificate…/)
-  assert.doesNotMatch(uploading, /Upload another|Verifying certificate|verification is running/)
-  const fresh = mnetAt('verifying', { sentAt: FIXTURE_NOW.getTime() - 60_000 })
-  assert.match(fresh, /data-vt-state="verifying"[\s\S]*vt-spin[\s\S]*Verifying certificate…/)
-  assert.match(fresh, /Checked automatically — no need to upload it again\. You can add another distinct certificate\./)
+  assert.doesNotMatch(uploading, /Upload another|Checking your certificate|Still checking/)
+  const fresh = mnetAt('verifying', { sentAt: FIXTURE_NOW.getTime() - 30_000 })
+  assert.match(fresh, /data-vt-state="verifying"[\s\S]*vt-spin[\s\S]*Checking your certificate…/)
+  assert.match(fresh, /Usually takes under 1–2 minutes\. You can leave this page — it will update automatically\. You can add another distinct certificate\./)
   assert.match(fresh, /Upload another/)
-  const later = mnetAt('verifying', { sentAt: FIXTURE_NOW.getTime() - MNET_FAST_MS - 1 })
+  const later = mnetAt('verifying', { sentAt: FIXTURE_NOW.getTime() - MNET_CHECKING_MS - 1 })
   for (const running of [later, card(render({ mnet: 'verifying' }), 'mnet')]) { // a reload has no upload time
-    assert.match(running, /data-vt-state="verifying"[\s\S]*Received — verification is running/)
-    assert.match(running, /You can leave this page\. No need to upload again\./)
+    assert.match(running, /data-vt-state="verifying"[\s\S]*Still checking — no need to upload again/)
+    assert.match(running, /You can leave this page — it will update automatically\./)
     assert.match(running, /Upload another/)
     assert.doesNotMatch(running, /vt-spin/, 'no spinner once the quick window has passed')
-    assert.doesNotMatch(running, /Checking certificate|Verifying certificate|admin/i)
+    assert.doesNotMatch(running, /Checking your certificate|Usually takes|admin/i)
   }
   const review = card(render({ mnet: 'review' }), 'mnet')
-  assert.match(review, /In review[\s\S]*This certificate needs review — do not upload it again\./)
+  assert.match(review, /In review/)
+  assert.ok(review.includes(REVIEW_TEXT.replace(/’/g, '&#39;')) || review.includes(REVIEW_TEXT), 'review explains, calmly')
   const done = card(render({ mnet: 'verified' }), 'mnet')
   assert.match(done, /data-vt-state="done"[\s\S]*Verified/)
   for (const chip of ['Certificate', "Fans&#39; Choice 1st Vote", 'Oct 14', 'BTS selected']) assert.ok(done.includes(chip) || done.includes(chip.replace('&#39;', "'")), chip)

@@ -140,6 +140,47 @@ test('shared check: no BTS tile → no card crop, image result passed through, n
   assert.equal(r.participationAt, '2026-10-14T01:21:00.000Z')
 })
 
+test('shared check: the date-row pass reads a time whole-image OCR dropped — same date rule, used only when needed', async () => {
+  // Dark-mode certificate (2026-10-15): the grey participation time was
+  // missing from every whole-image pass; the row alone reads it.
+  const NO_TIME = 'VOTING CERTIFICATE\nMnet Plus\nParticipation Date\nNo. x'
+  const blank = { width: 40, height: 40, data: new Uint8ClampedArray(40 * 40 * 4).fill(255) }
+  const io = (rowText, rows) => ({
+    ocr: async (s) => (s === 'row' ? rowText : s === 'full' ? GOOD : NO_TIME), contrast: async () => 'c', pixels: async () => ({ img: blank }),
+    dateRow: async () => { rows.push(1); return 'row' },
+  })
+  const win = { opensAt: '2026-10-12T10:00:00Z', closesAt: '2026-10-22T14:59:59Z', submittedAt: '2026-10-14T05:00:00Z', utcOffsetMinutes: 330 }
+  let rows = []
+  let r = await trustedCheckWith(io('Participation Date 2026.10.14 10:21', rows), 'orig', CERT, '2026-10-14', win)
+  assert.equal(r.checks.date, true, '10:21 IST = 13:51 KST on Oct 14, before the upload')
+  assert.equal(r.checks.category, false, 'the row never fills in another check')
+  assert.equal(r.participationAt, '2026-10-14T01:21:00.000Z', 'time now read for the duplicate fingerprint (as KST)')
+  assert.equal(rows.length, 1)
+  // Same rule as ever: wrong KST day, or printed after the upload → no.
+  r = await trustedCheckWith(io('Participation Date 2026.10.13 10:21', rows), 'orig', CERT, '2026-10-14', win)
+  assert.equal(r.checks.date, false)
+  r = await trustedCheckWith(io('Participation Date 2026.10.14 10:21', rows), 'orig', CERT, '2026-10-14', { ...win, submittedAt: '2026-10-14T04:00:00Z' })
+  assert.equal(r.checks.date, false)
+  // Row not found → unchanged result.
+  r = await trustedCheckWith({ ...io('', rows), dateRow: async () => null }, 'orig', CERT, '2026-10-14', win)
+  assert.equal(r.checks.date, false)
+  assert.equal(r.participationAt, null)
+  // Date and time already read → no extra pass.
+  rows = []
+  await trustedCheckWith({ ...io('', rows), ocr: async () => GOOD }, 'orig', CERT, '2026-10-14', win)
+  assert.equal(rows.length, 0)
+  // Adapters without dateRow (the browser) behave exactly as before.
+  r = await trustedCheckWith({ ocr: async () => NO_TIME, contrast: async () => 'c', pixels: async () => ({ img: blank }) }, 'orig', CERT, '2026-10-14', win)
+  assert.equal(r.checks.date, false)
+})
+
+test('worker io: date-row pass is the Node adapter only', () => {
+  const w = read('../scripts/mnet-verify-worker.mjs')
+  assert.match(w, /dateRow: async \(buf\) =>/)
+  assert.match(w, /\/participation\/i\.test\(l\.text\)/)
+  assert.doesNotMatch(read('./voting-proof.js'), /dateRow/)
+})
+
 // ── Wiring ──────────────────────────────────────────────────────────
 
 test('browser and worker run the same trusted check', () => {

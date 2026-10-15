@@ -6,7 +6,7 @@ import { call } from './api.js'
 import { getAgentNo } from './session.js'
 import { goWorld } from './router.js'
 import { setState, toast } from './state.js'
-import { votingScreen, errorText, countdown, MNET_FAST_MS } from './voting-view.js'
+import { votingScreen, errorText, countdown, MNET_FAST_MS, MNET_CHECKING_MS } from './voting-view.js'
 import { nextKstMidnight } from '../supabase/functions/op-reconnect/lib/vote-campaign-rules.js'
 import { sha256OfBlob, reencodeImage, blobToBase64, ocrCertificate } from './voting-proof.js'
 import { battleView, pickStyle, nextStyle, shareText, STYLES, STYLE_NAMES, BATTLE_URL } from './battle-share-rules.js'
@@ -82,7 +82,8 @@ async function load() {
 // half-typed X link survives the quiet polls.
 const POLL_FAST_MS = 10_000
 const POLL_SLOW_MS = 60_000
-const isFresh = () => !!local.mnet.sentAt && Date.now() - local.mnet.sentAt < MNET_FAST_MS
+const sentWithin = (ms) => !!local.mnet.sentAt && Date.now() - local.mnet.sentAt < ms
+const isFresh = () => sentWithin(MNET_FAST_MS)
 
 function scheduleProofPoll() {
   clearTimeout(proofPoll)
@@ -93,7 +94,7 @@ function scheduleProofPoll() {
 
 async function pollProofs() {
   if (!root?.isConnected) return
-  const wasFresh = isFresh()
+  const wasChecking = sentWithin(MNET_CHECKING_MS)
   const r = await call('getVotingStatus', { agentNo: getAgentNo() })
   if (!root?.isConnected) return
   if (r?.success) {
@@ -101,8 +102,9 @@ async function pollProofs() {
     const changed = key(r) !== key(status)
     const credited = (r.stats?.verifiedVotes || 0) > (status.stats?.verifiedVotes || 0)
     status = r
-    // Repaint on a real change, or once when "Verifying…" becomes "running".
-    if (changed || (wasFresh && !isFresh())) paint()
+    // Repaint on a real change, or once when "Checking your certificate…"
+    // becomes "Still checking".
+    if (changed || (wasChecking && !sentWithin(MNET_CHECKING_MS))) paint()
     if (credited) refreshGameState() // XP, Charge Cells and the HUD
   }
   scheduleProofPoll()

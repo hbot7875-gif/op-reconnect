@@ -12,9 +12,12 @@ export function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
 }
 
-/** How long after an upload the Mnet card shows "Verifying certificate…"
- *  before settling into "verification is running". The automatic check
- *  usually lands well inside this; the screen keeps polling either way. */
+/** How long after an upload the Mnet card shows "Checking your
+ *  certificate…" before it says "Still checking". The automatic check
+ *  usually lands inside this. */
+export const MNET_CHECKING_MS = 60_000
+/** How long after an upload the screen polls every 10 s (then once a
+ *  minute). It keeps polling while anything is verifying either way. */
 export const MNET_FAST_MS = 3 * 60_000
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -165,6 +168,9 @@ export const DUPLICATE_TEXT = {
   possible_duplicate: 'This certificate may have already been submitted. It’s been sent for review.',
 }
 
+// A certificate the automatic check couldn't fully read.
+export const REVIEW_TEXT = 'We couldn’t confidently read a couple of details, so it’s in review. Your upload is safe.'
+
 function mnetCard(vm, m) {
   const local = vm.local.mnet || {}
   const dup = vm.status.notices?.[m.id] || null
@@ -206,21 +212,23 @@ function mnetCard(vm, m) {
         <a class="vt-btn vt-btn-ghost" href="${esc(m.voteUrl || '#')}" target="_blank" rel="noopener noreferrer">Vote again</a>
       </div>`
   } else if (ui === 'verifying') {
-    // Uploading, then a short "Verifying…" while the automatic check usually
-    // lands; past that, a calm "running" state — never an endless spinner.
-    const fresh = !local.uploading && !!local.sentAt && vm.now - local.sentAt < MNET_FAST_MS
+    // Uploading, then "Checking your certificate…" for the first minute
+    // while the automatic check usually lands; past that (or after a reload),
+    // a calm "Still checking" — never an endless spinner. The screen keeps
+    // polling and updates by itself.
+    const fresh = !local.uploading && !!local.sentAt && vm.now - local.sentAt < MNET_CHECKING_MS
     const chip = local.uploading || fresh ? 'wait' : 'queued'
     status = local.uploading
       ? `<span class="vt-status">${ic('loader', 'vt-spin')}Uploading certificate…</span>`
       : fresh
-        ? `<span class="vt-status">${ic('loader', 'vt-spin')}Verifying certificate…</span>`
-        : `<span class="vt-status">${ic('clock')}Received — verification is running</span>`
+        ? `<span class="vt-status">${ic('loader', 'vt-spin')}Checking your certificate…</span>`
+        : `<span class="vt-status">${ic('clock')}Still checking — no need to upload again</span>`
     const another = count.remaining ? ' You can add another distinct certificate.' : ''
     body = `${stepper(STEPS, 2)}
       ${checkChips([['Certificate', chip], ["Fans' Choice 1st Vote", chip], [date, chip], ['BTS selected', chip]])}
       ${local.uploading ? '' : fresh
-        ? `<p class="vt-rule">Checked automatically — no need to upload it again.${another}</p>`
-        : `${note('', 'info', 'You can leave this page. No need to upload again.')}
+        ? `<p class="vt-rule">Usually takes under 1–2 minutes. You can leave this page — it will update automatically.${another}</p>`
+        : `${note('', 'info', 'You can leave this page — it will update automatically.')}
       ${another ? `<p class="vt-rule">${another.trim()}</p>` : ''}`}
       ${count.remaining && !local.uploading ? `<label class="vt-btn vt-btn-outline">${ic('upload')}Upload another<input type="file" accept="image/png,image/jpeg" class="vt-file" data-vt-act="mnet-file"></label>` : ''}`
   } else if (ui === 'review' && dup === 'duplicate') {
@@ -233,7 +241,7 @@ function mnetCard(vm, m) {
     status = badge('is-warn', 'hourglass', 'In review')
     body = `${stepper(STEPS, 2, true)}
       ${checkChips([['Certificate', c.certificate === true || 'unclear'], ["Fans' Choice 1st Vote", c.category === true || 'unclear'], [date, c.date === true || 'unclear'], ['BTS selected', c.bts === 'match' || 'unclear']])}
-      ${note('is-warn', 'info', dup === 'possible_duplicate' ? DUPLICATE_TEXT.possible_duplicate : 'This certificate needs review — do not upload it again.')}
+      ${note('is-warn', 'info', dup === 'possible_duplicate' ? DUPLICATE_TEXT.possible_duplicate : REVIEW_TEXT)}
       ${count.remaining ? `<label class="vt-btn vt-btn-outline">${ic('upload')}Upload another certificate<input type="file" accept="image/png,image/jpeg" class="vt-file" data-vt-act="mnet-file"></label>` : ''}`
   } else {
     status = badge('is-ok', 'check', 'Verified')
