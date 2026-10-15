@@ -13,7 +13,7 @@
 
 export const SESSION_RECHECK_MS = 4000
 
-export const SIGNED_OUT_ELSEWHERE = 'You were signed out because this account signed in on another device or browser.'
+export const SIGNED_OUT_ELSEWHERE = 'Your session ended. This can happen if this account was signed in on another device or browser.'
 
 export function sessionDecision(res, { gameOpen = false, rechecked = false } = {}) {
   if (res?.success) return 'ok'

@@ -52,7 +52,7 @@ test('game: what each getGameState answer means', () => {
   assert.equal(sessionDecision({ success: false, error: 'invalid_session' }, { gameOpen: false }), 'signout', 'at start-up there is no game to protect')
   assert.equal(sessionDecision({ success: false, error: 'agent_not_found' }, { gameOpen: true }), 'signout')
   assert.ok(SESSION_RECHECK_MS >= 2000 && SESSION_RECHECK_MS <= 10000)
-  assert.equal(SIGNED_OUT_ELSEWHERE, 'You were signed out because this account signed in on another device or browser.')
+  assert.equal(SIGNED_OUT_ELSEWHERE, 'Your session ended. This can happen if this account was signed in on another device or browser.')
 })
 
 test('game: a second-browser sign-in plays out as recheck → sign out with the reason', () => {
