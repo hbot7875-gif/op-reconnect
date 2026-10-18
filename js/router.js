@@ -13,7 +13,7 @@
 // which was tapped. A ?screen= query param read once at boot is what lets
 // those links actually mean what their labels say; goWorld/goResources/etc.
 // still work exactly as before for every in-app navigation after that.
-const DEEP_LINKABLE = new Set(['world', 'resources', 'moon', 'diary', 'settings', 'candystar', 'ranking', 'voting'])
+const DEEP_LINKABLE = new Set(['world', 'resources', 'moon', 'diary', 'settings', 'candystar', 'ranking', 'voting', 'runami'])
 function initialScreen() {
   const requested = new URLSearchParams(location.search).get('screen')
   return { name: DEEP_LINKABLE.has(requested) ? requested : 'world', wardId: null, districtId: null, origin: null }
@@ -72,6 +72,12 @@ export function goRecelebrate(origin = null) {
  *  can link straight to it with game.html?screen=voting. */
 export function goVoting(origin = null) {
   set({ name: 'voting', wardId: null, districtId: null, origin })
+}
+
+// RUN AMI — LAST CARD, the Game Room (screen-run-ami.js). Reached from its
+// card on City; deep-linkable as ?screen=runami.
+export function goRunAmi(origin = null) {
+  set({ name: 'runami', wardId: null, districtId: null, origin })
 }
 
 export function goRanking(origin = null) {

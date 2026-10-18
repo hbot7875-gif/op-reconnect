@@ -23,6 +23,7 @@ import { renderCandyStar } from './screen-candystar.js'
 import { renderRanking } from './screen-ranking.js'
 import { renderMoonStation, teardownMoonStation } from './screen-moon.js'
 import { renderVoting } from './voting.js'
+import { renderRunAmi, teardownRunAmi } from './screen-run-ami.js'
 import { playLevelUp } from './celebrate.js'
 import { checkForBadgeUnlocks } from './badge-reveal.js'
 import { checkForExamModeAnnounce } from './exam-mode-announce.js'
@@ -77,6 +78,8 @@ function renderScreen(state) {
   // Moon Station condenses the shared header while it is open; this
   // puts it back for every other screen.
   if (scr.name !== 'moon') teardownMoonStation()
+  // RUN AMI owns a socket, a poll and a turn timer; stop them on the way out.
+  if (scr.name !== 'runami') teardownRunAmi()
 
   // Only animate on an actual navigation (screen changed) — a plain data
   // refresh on the same screen (90s poll, tab-focus refresh) repaints in
@@ -97,6 +100,7 @@ function renderScreen(state) {
     else if (scr.name === 'recelebrate') renderRecelebrateParty(scene, state)
     else if (scr.name === 'moon') renderMoonStation(scene, state)
     else if (scr.name === 'voting') renderVoting(scene, state)
+    else if (scr.name === 'runami') renderRunAmi(scene, state)
     else renderWorld(scene, state)
     if (isNav) {
       scene.classList.remove('scene-out')

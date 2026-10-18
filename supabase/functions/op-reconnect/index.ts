@@ -68,6 +68,7 @@ import {
   adminListBattleChat, adminModerateBattleChat,
 } from './lib/vote-campaign.ts'
 import { getDearDiary, getDearDiaryArchive, getDearDiaryPreference, saveDearDiaryDecorations, saveDearDiaryNote, saveDearDiaryTheme } from './lib/dear-diary.ts'
+import { runAmiState, runAmiCreateRoom, runAmiJoinRoom, runAmiLeaveRoom, runAmiStart, runAmiAct, cronRunAmiSweep } from './lib/run-ami.ts'
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -142,6 +143,16 @@ const ROUTES: Record<string, Route> = {
   pingRecelebratePresence: { auth: 'agent', handler: (sb, p) => pingRecelebratePresence(sb, p) },
   getRecelebrateMessages: { auth: 'agent', handler: (sb, p) => getRecelebrateMessages(sb, p) },
   sendRecelebrateMessage: { auth: 'agent', handler: (sb, p) => sendRecelebrateMessage(sb, p) },
+  // RUN AMI — LAST CARD (lib/run-ami.ts). Server-authoritative: every
+  // player action is validated by run-ami-rules.js and lands through one
+  // version-checked commit; responses are per-seat views (run-ami-view.js)
+  // that never carry another seat's cards or any agent number.
+  runAmiState: { auth: 'agent', handler: (sb, p) => runAmiState(sb, p) },
+  runAmiCreateRoom: { auth: 'agent', handler: (sb, p) => runAmiCreateRoom(sb, p) },
+  runAmiJoinRoom: { auth: 'agent', handler: (sb, p) => runAmiJoinRoom(sb, p) },
+  runAmiLeaveRoom: { auth: 'agent', handler: (sb, p) => runAmiLeaveRoom(sb, p) },
+  runAmiStart: { auth: 'agent', handler: (sb, p) => runAmiStart(sb, p) },
+  runAmiAct: { auth: 'agent', handler: (sb, p) => runAmiAct(sb, p) },
   startDistrict: { auth: 'agent', handler: (sb, p) => startDistrict(sb, p) },
   extendDistrictDeadline: { auth: 'agent', handler: (sb, p) => extendDistrictDeadline(sb, p) },
   resetLapsedDistrict: { auth: 'agent', handler: (sb, p) => resetLapsedDistrict(sb, p) },
@@ -344,6 +355,9 @@ const ROUTES: Record<string, Route> = {
   // forwarding `reason` would let anything holding the cron token drain the
   // 'qa' rehearsal rows that rc_next_storage_deletions exists to keep separate.
   cronStorageSweep: { auth: 'cron', handler: (sb) => sweepStorageDeletions(sb) },
+  // RUN AMI: settle matches nobody is polling and close idle rooms (pg_cron
+  // every minute, migration 20261011120500).
+  cronRunAmiSweep: { auth: 'cron', handler: (sb) => cronRunAmiSweep(sb) },
   adminGetEngagementReport: { auth: 'admin', handler: (sb, p) => adminGetEngagementReport(sb, p) },
 
   // Batch-assign a series of connect/invite missions for one reconnect goal
