@@ -287,3 +287,20 @@
 .ra-color-pick.is-y { box-shadow: inset 4px 0 0 var(--ra-y); } .ra-color-pick.is-y i { color: var(--ra-y); }
 .ra-color-pick.is-g { box-shadow: inset 4px 0 0 var(--ra-g); } .ra-color-pick.is-g i { color: var(--ra-g); }
 .ra-color-pick.is-b { box-shadow: inset 4px 0 0 var(--ra-b); } .ra-color-pick.is-b i { color: var(--ra-b); }
+
+/* ── How to Play (js/run-ami-help.js) ─────────────────────────────── */
+.ra-help-btn { align-self: flex-start; margin: 2px 0 0; padding: 7px 12px; border-radius: 999px; cursor: pointer;
+  background: transparent; border: 1px solid var(--v-line-2); color: var(--v-ink-2); font-size: 12.5px; }
+.ra-help-q { flex: none; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; padding: 0;
+  background: transparent; border: 1px solid var(--v-line-2); color: var(--v-ink-2); font: 700 14px/1 var(--disp); }
+.ra-help h4 { margin: 16px 0 6px; font-family: var(--disp); font-size: 12.5px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--v-ink-1); }
+.ra-help ul { margin: 0; padding: 0 0 0 18px; display: grid; gap: 5px; }
+.ra-help li { font-size: 13.5px; line-height: 1.45; color: var(--v-ink-2); overflow-wrap: anywhere; }
+.ra-help li b { color: var(--v-ink-1); font-weight: 600; }
+.ra-help-lede { margin: 0; font-size: 14px; color: var(--v-ink-1); }
+.ra-help-note { margin: 8px 0 0; font-size: 12.5px; color: var(--v-ink-3); }
+.ra-help .ra-help-actions { list-style: none; padding: 0; gap: 8px; }
+.ra-help-action { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; align-items: center; }
+.ra-help-action .ra-card { --ra-cw: 34px; --ra-ch: 48px; border-radius: 6px; box-shadow: none; }
+.ra-help-action b { display: block; }
+.ra-help > .btn { width: 100%; margin-top: 18px; }

@@ -39,6 +39,8 @@ export const SETTINGS_ICON_PATHS = {
   copy: '<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
   external: '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
   chevron: '<path d="m9 18 6-6-6-6"/>',
+  // Two cards, one tilted behind the other (RUN AMI), drawn to Lucide's grid and stroke.
+  cards: '<rect width="12" height="16" x="3" y="5" rx="2"/><path d="m15.5 4.6 3.9 1.05a2 2 0 0 1 1.41 2.45l-3 11.2a2 2 0 0 1-2.45 1.41"/>',
 }
 
 export function setIcon(key) {

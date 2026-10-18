@@ -32,7 +32,8 @@
 import { el, esc, showOverlay, hideOverlay } from './state.js'
 import { call } from './api.js'
 import { getAgentNo } from './session.js'
-import { goWorld } from './router.js'
+import { goSettings } from './router.js'
+import { openHowToPlay } from './run-ami-help.js'
 import { armyBombCharge } from './army-bomb.js'
 import { COLORS, COLOR_ORDER, errorText, isWildKind } from './run-ami-cards.js'
 import { createTable } from './run-ami-table.js'
@@ -351,12 +352,13 @@ const tableHandlers = {
     const sheet = el('div', 'sheet ra-sheet')
     sheet.append(el('h3', '', 'Leave this round?'), el('p', 'muted', 'You will be out of this round. The others play on.'))
     const leave = el('button', 'btn btn-primary', 'Leave round')
-    leave.onclick = async () => { hideOverlay(); await roomAction(null, 'runAmiLeaveRoom', {}); goWorld() }
+    leave.onclick = async () => { hideOverlay(); await roomAction(null, 'runAmiLeaveRoom', {}); goSettings() }
     const stay = el('button', 'btn btn-ghost', 'Keep playing')
     stay.onclick = hideOverlay
     sheet.append(leave, stay)
     showOverlay(sheet)
   },
+  onHelp: () => openHowToPlay(),
   onDeadline: () => refresh(),
   bombLabel: () => {
     const c = armyBombCharge(gameState?.agentCharge)

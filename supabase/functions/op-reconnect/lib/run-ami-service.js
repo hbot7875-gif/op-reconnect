@@ -16,6 +16,10 @@
 // replay of one that already landed is answered from current state and
 // applied nothing twice.
 //
+// Closed test: only RUN_AMI_TESTERS (run-ami-access.js) get past the gate
+// at the bottom of this file; everyone else is answered `not_invited`
+// before any store call.
+//
 // ARMY Bomb: entry requires an active Bomb (checked inside the store's
 // create/join/start RPCs, which only ever READ rc_agent_charge). Nothing in
 // RUN AMI writes any charge, wallet or feed column.
@@ -23,6 +27,7 @@
 import { finalResults, newMatch, publicState, resolveConfig, topCard } from './run-ami-rules.js'
 import { applyAction, forfeitSeat, resolveClock } from './run-ami-actions.js'
 import { viewForEntry, viewForLobby, viewForMatch } from './run-ami-view.js'
+import { isRunAmiTester } from './run-ami-access.js'
 
 // No 0, O or 1: the three a player can't tell apart when reading a code
 // aloud or off a screenshot. (With 1 gone, I and L are unambiguous.)
@@ -38,7 +43,7 @@ export function normalizeRoomCode(raw) {
   return String(raw ?? '').toUpperCase().replace(/[\s-]/g, '')
 }
 
-export function createRunAmiService({ store, now = () => Date.now(), rng, randomCode, randomTopic }) {
+export function createRunAmiService({ store, now = () => Date.now(), rng, randomCode, randomTopic, allowAgent = isRunAmiTester }) {
   async function config() {
     return resolveConfig(await store.config())
   }
@@ -319,5 +324,18 @@ export function createRunAmiService({ store, now = () => Date.now(), rng, random
     return { success: true, closedRooms, settled }
   }
 
-  return { getState, createRoom, joinRoom, leaveRoom, startMatch, act, sweep }
+  // Every player route checks the agent first. Internal calls between these
+  // functions (createRoom → getState) use the ungated versions.
+  const gate = (fn) => (agentNo, ...rest) =>
+    (allowAgent(agentNo) ? fn(agentNo, ...rest) : Promise.resolve({ success: false, error: 'not_invited' }))
+
+  return {
+    getState: gate(getState),
+    createRoom: gate(createRoom),
+    joinRoom: gate(joinRoom),
+    leaveRoom: gate(leaveRoom),
+    startMatch: gate(startMatch),
+    act: gate(act),
+    sweep,
+  }
 }

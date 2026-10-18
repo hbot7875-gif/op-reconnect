@@ -20,6 +20,8 @@ import { openStreamSource, openPin, openSignalLog, openMoonStation, sourceName, 
 import { openModeSheet } from './ui-hud.js'
 import { agentManualSheet } from './agent-manual.js'
 import { setIcon } from './settings-icons.js'
+import { goRunAmi } from './router.js'
+import { isRunAmiTester } from '../supabase/functions/op-reconnect/lib/run-ami-access.js'
 
 let account = null
 
@@ -266,6 +268,15 @@ function paintSections(body, state) {
     },
   ]))
 
+  // RUN AMI's closed production test. The server refuses everyone else
+  // (run-ami-access.js); this only decides who sees the way in.
+  const runAmiRow = {
+    icon: 'cards', name: 'RUN AMI · Test Play', value: 'TEST', chip: 'neutral',
+    body: 'The last-card Game Room, before it opens to everyone.',
+    onClick: () => goRunAmi(),
+  }
+  const runAmiTester = isRunAmiTester(account.agentNo)
+
   // ── HT access — agent000 only. Not a real security boundary (admin.html
   // is still gated by its own SYNC_ADMIN_KEY), just keeps the entry point
   // out of every other agent's settings screen.
@@ -286,6 +297,7 @@ function paintSections(body, state) {
         body: 'District Vault playlists: playlist_makers and every badge maker.',
         onClick: () => { window.location.href = 'playlist-maker.html' },
       },
+      ...(runAmiTester ? [runAmiRow] : []),
     ], { admin: true }))
   } else if (state?.player?.isBadgeVaultEditor) {
     // Not agent000, but the server already confirmed they're on
@@ -297,6 +309,11 @@ function paintSections(body, state) {
         onClick: () => { window.location.href = 'badge-admin.html' },
       },
     ], { admin: true }))
+  }
+
+  // The other testers don't have HT Access: the same row, in the same place.
+  if (runAmiTester && (account.agentNo || '').toUpperCase() !== 'AGENT000') {
+    body.appendChild(section('Test Play', [runAmiRow], { admin: true }))
   }
 
   body.appendChild(el('div', 'set-foot',

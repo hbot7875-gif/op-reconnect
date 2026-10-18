@@ -43,6 +43,7 @@ export function createTable(handlers) {
     <header class="ra-top">
       <button class="ra-exit" type="button">← Exit</button>
       <div class="ra-title"><b>RUN AMI</b><span>LAST CARD</span></div>
+      <button class="ra-help-q" type="button" aria-label="How to play">?</button>
       <span class="ra-code" aria-label="Room code"></span>
     </header>
     <div class="ra-opps"></div>
@@ -82,6 +83,7 @@ export function createTable(handlers) {
   let ended = false // the finale is showing: nothing is playable any more
 
   $('.ra-exit').onclick = () => handlers.onExit()
+  $('.ra-help-q').onclick = () => handlers.onHelp()
   $('.ra-draw').onclick = () => { if (view?.me.canDraw && !busy) handlers.onDraw() }
   $('.ra-btn-draw').onclick = () => { if (view?.me.canDraw && !busy) handlers.onDraw() }
   $('.ra-btn-pass').onclick = () => { if (view?.me.canPass && !busy) handlers.onPass() }

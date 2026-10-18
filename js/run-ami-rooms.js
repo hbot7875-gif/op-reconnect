@@ -6,7 +6,8 @@
 //   ctx.roomAction — the controller's create/join/start/leave sender
 
 import { el, esc, showOverlay, hideOverlay } from './state.js'
-import { goWorld } from './router.js'
+import { goSettings } from './router.js'
+import { howToPlayButton } from './run-ami-help.js'
 import { armyBombCharge } from './army-bomb.js'
 import { openAgentCharge } from './agent-charge.js'
 import { badgeThumb } from './badge-art.js'
@@ -46,8 +47,9 @@ function header(backLabel, onBack) {
 
 export function entryView(view, ctx) {
   const wrap = el('div', 'ra-entry')
-  wrap.appendChild(header('City', () => goWorld()))
+  wrap.appendChild(header('Settings', () => goSettings()))
   wrap.appendChild(el('p', 'ra-lede', 'A last-card game for agents. 2–4 players, one room code.'))
+  wrap.appendChild(howToPlayButton())
   // Dropped from a round that ended while you were away: say how it went.
   if (view.lastResult) wrap.appendChild(resultCard(view.lastResult))
   const active = !!view.me.bombActive
@@ -121,6 +123,7 @@ export function lobbyView(view, ctx) {
     wrap.appendChild(el('p', 'ra-note', 'Waiting for the host to start.'))
   }
   if (!view.me.bombActive) wrap.appendChild(bombBlock(false, ctx))
+  wrap.appendChild(howToPlayButton())
   return wrap
 }
 

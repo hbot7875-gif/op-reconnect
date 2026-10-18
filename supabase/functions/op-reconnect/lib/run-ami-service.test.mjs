@@ -25,6 +25,7 @@ function setup({ dark = [], seed = 5 } = {}) {
     rng: mulberry32(seed),
     randomCode: () => ['AMI7K2', 'RUNAM2', 'LASTC4', 'PQRS23'][codeSeq++ % 4],
     randomTopic: () => 'x'.repeat(40) + codeSeq,
+    allowAgent: () => true, // these suites test the game; the closed-test gate has its own below
   })
   return { clock, db, svc }
 }
@@ -502,4 +503,44 @@ test('service: late call within grace registers', async () => {
   const r = await act(svc, agent, 'call')
   assert.deepEqual(r.reply, { runAmi: 'called' })
   assert.equal(r.view.me.runAmiCalled, true)
+})
+
+// ── Closed test ───────────────────────────────────────────────────────
+
+test('closed test: only the four testers pass the gate, whatever the case or spacing', async () => {
+  const { RUN_AMI_TESTERS, isRunAmiTester } = await import('./run-ami-access.js')
+  assert.deepEqual([...RUN_AMI_TESTERS].sort(), ['AGENT000', 'AGENT050', 'AGENT120', 'AGENT140'])
+  for (const a of ['AGENT000', 'agent050', ' Agent120 ', 'AGENT140']) assert.equal(isRunAmiTester(a), true, a)
+  for (const a of ['AGENT001', 'AGENT1400', 'AGENT14', '', null, undefined, 'AGENT000 x']) assert.equal(isRunAmiTester(a), false, String(a))
+})
+
+test('closed test: an outsider is refused on every route and nothing reaches the store', async () => {
+  const clock = { now: T0 }
+  const agents = Object.fromEntries(['AGENT000', 'AGENT050', 'AGENT777'].map((no) => [no, { codename: no, chargedUntil: T0 + 20 * HOUR, chargeCells: 4 }]))
+  const db = createTestStore({ clock, agents })
+  const touched = []
+  const store = new Proxy(db.store, { get: (t, k) => (typeof t[k] === 'function' ? (...a) => { touched.push(k); return t[k](...a) } : t[k]) })
+  const svc = createRunAmiService({ store, now: () => clock.now, rng: mulberry32(3), randomCode: () => 'AMI7K2', randomTopic: () => 't'.repeat(40) })
+
+  const created = await svc.createRoom('AGENT000')
+  assert.equal(created.success, true, JSON.stringify(created))
+  const code = created.view.room.code
+  touched.length = 0
+
+  const outsider = 'AGENT777'
+  const replies = [
+    await svc.getState(outsider),
+    await svc.createRoom(outsider),
+    await svc.joinRoom(outsider, code),
+    await svc.leaveRoom(outsider),
+    await svc.startMatch(outsider),
+    await svc.act(outsider, { type: 'draw', actionId: randomUUID() }),
+  ]
+  for (const r of replies) assert.deepEqual(r, { success: false, error: 'not_invited' })
+  assert.deepEqual(touched, [], 'no store call for an outsider')
+
+  // The room is untouched: still one seat, and a tester can still join.
+  assert.equal((await svc.joinRoom('AGENT050', code)).success, true) // run-ami.ts uppercases before this
+  const host = await svc.getState('AGENT000')
+  assert.equal(host.view.players.length, 2)
 })

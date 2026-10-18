@@ -91,6 +91,7 @@ export function logLine(e, nameOf, mySeat = null) {
 
 export const ERRORS = {
   bomb_dark: 'Your ARMY Bomb is dark. Recharge it to enter RUN AMI.',
+  not_invited: 'RUN AMI is in a closed test right now. It opens to everyone soon.',
   room_not_found: 'No open room with that code.',
   room_full: 'That room is full (4 agents).',
   room_in_match: 'That room is already playing. Try again after the round.',

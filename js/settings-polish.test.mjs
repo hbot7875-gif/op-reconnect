@@ -35,7 +35,7 @@ test('title is Orbitron Settings; no tracked mono eyebrow; no ReConnect on this 
 
 test('groups appear in the agreed order', () => {
   const order = [...paint.matchAll(/section\('([^']+)'/g)].map((m) => m[1])
-  assert.deepEqual(order, ['Connections', 'Agent', 'Security', 'Game', 'Privacy', 'Help & legal', 'Community', 'HT Access', 'Badge Vault'])
+  assert.deepEqual(order, ['Connections', 'Agent', 'Security', 'Game', 'Privacy', 'Help & legal', 'Community', 'HT Access', 'Badge Vault', 'Test Play'])
 })
 
 test('every action, link and gate is unchanged', () => {
