@@ -10,6 +10,13 @@
 -- (20260928130000). Not idempotent as a whole (cron.schedule), so it lives
 -- apart from the schema migration, same as that one.
 
+-- Every other job, as it stands before this migration: the post-condition
+-- below checks they are all still there, unchanged, whatever other
+-- schedules exist by the time this runs.
+drop table if exists pg_temp.run_ami_other_jobs;
+create temp table run_ami_other_jobs as
+  select jobname, schedule, command, active from cron.job where jobname <> 'rc-run-ami-sweep';
+
 create or replace function public.rc_invoke_run_ami_sweep()
 returns bigint
 language plpgsql
@@ -68,8 +75,19 @@ begin
     raise exception 'expected exactly 1 active rc-run-ami-sweep job, found %', n;
   end if;
 
-  select count(*) into n from cron.job;
-  if n <> 9 then
-    raise exception 'expected 9 cron jobs after this migration, found % -- check what else changed', n;
+  -- Nothing else added, removed or changed. (A fixed total would break as
+  -- soon as any other feature schedules a job; production had 11 others
+  -- when this shipped.)
+  select count(*) into n from (
+    (select jobname, schedule, command, active from cron.job where jobname <> 'rc-run-ami-sweep'
+     except all select * from run_ami_other_jobs)
+    union all
+    (select * from run_ami_other_jobs
+     except all select jobname, schedule, command, active from cron.job where jobname <> 'rc-run-ami-sweep')
+  ) d;
+  if n <> 0 then
+    raise exception 'other cron jobs changed during this migration (% rows differ)', n;
   end if;
 end $$;
+
+drop table if exists pg_temp.run_ami_other_jobs;
