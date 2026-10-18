@@ -1,6 +1,6 @@
 // In-memory stand-in for the RUN AMI database, for node --test only.
 //
-// Mirrors the contract of the RPCs in 20261011120000_rc_run_ami.sql closely
+// Mirrors the contract of the RPCs in 20261018120000_rc_run_ami.sql closely
 // enough to test the service's concurrency and privacy behaviour: a commit
 // lands only at the expected version, (match, agent, action_id) is unique,
 // one open seat per agent, the Bomb gate reads charge and never writes it.

@@ -4,7 +4,7 @@
 // to params.agentNo before any of these run); 'cron' for the sweep. This
 // file is only the database adapter: run-ami-service.js sequences each
 // request, run-ami-rules.js decides outcomes, run-ami-view.js decides what a
-// browser may see. See migration 20261011120000_rc_run_ami.sql for the RPCs.
+// browser may see. See migration 20261018120000_rc_run_ami.sql for the RPCs.
 //
 // Agent numbers stay on this side. They are how rows are found; no response
 // built from here carries one (players are seats + codename + avatar).

@@ -11,8 +11,8 @@ import { fileURLToPath } from 'node:url'
 const read = (rel) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8')
 const stripComments = (sql) => sql.replace(/--[^\n]*/g, '')
 
-const migration = read('../../../migrations/20261011120000_rc_run_ami.sql')
-const schedule = read('../../../migrations/20261011120500_rc_run_ami_sweep_schedule.sql')
+const migration = read('../../../migrations/20261018120000_rc_run_ami.sql')
+const schedule = read('../../../migrations/20261018120500_rc_run_ami_sweep_schedule.sql')
 const sql = stripComments(migration)
 const adapter = read('./run-ami.ts')
 const index = read('../index.ts')

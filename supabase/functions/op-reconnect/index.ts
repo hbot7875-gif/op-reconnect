@@ -356,7 +356,7 @@ const ROUTES: Record<string, Route> = {
   // 'qa' rehearsal rows that rc_next_storage_deletions exists to keep separate.
   cronStorageSweep: { auth: 'cron', handler: (sb) => sweepStorageDeletions(sb) },
   // RUN AMI: settle matches nobody is polling and close idle rooms (pg_cron
-  // every minute, migration 20261011120500).
+  // every minute, migration 20261018120500).
   cronRunAmiSweep: { auth: 'cron', handler: (sb) => cronRunAmiSweep(sb) },
   adminGetEngagementReport: { auth: 'admin', handler: (sb, p) => adminGetEngagementReport(sb, p) },
 

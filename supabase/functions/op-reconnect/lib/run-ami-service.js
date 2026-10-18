@@ -1,7 +1,7 @@
 // RUN AMI — request orchestration, independent of Supabase.
 //
 // run-ami.ts hands this a `store` backed by the database RPCs in
-// migration 20261011120000_rc_run_ami.sql; the tests hand it an in-memory
+// migration 20261018120000_rc_run_ami.sql; the tests hand it an in-memory
 // store with the same contract. Everything that decides an outcome lives in
 // run-ami-rules.js; everything a browser receives is built by
 // run-ami-view.js. This file only sequences them:
