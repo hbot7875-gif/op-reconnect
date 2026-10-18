@@ -544,3 +544,78 @@ test('closed test: an outsider is refused on every route and nothing reaches the
   const host = await svc.getState('AGENT000')
   assert.equal(host.view.players.length, 2)
 })
+
+// ── Room chat ─────────────────────────────────────────────────────────
+
+const say = (svc, agent, body, kind = 'text') => svc.sendChat(agent, { kind, body })
+
+test('chat: players in the room see each other’s messages with codename and time, never an agent number', async () => {
+  const { svc, players } = await startedRoom(3)
+  const sent = await say(svc, players[1], '  gg   no re  ')
+  assert.equal(sent.success, true, JSON.stringify(sent))
+  assert.equal((await say(svc, players[0], '🔥', 'react')).success, true)
+  for (const a of players) {
+    const { view } = await svc.getState(a)
+    assert.equal(view.phase, 'match', 'chat changes nothing about the game')
+    assert.deepEqual(view.chat.map((m) => [m.name, m.kind, m.body]), [['Codename1', 'text', 'gg no re'], ['Codename0', 'react', '🔥']])
+    assert.ok(view.chat.every((m) => typeof m.at === 'string' && Number.isInteger(m.id)))
+    assert.deepEqual(view.chat.map((m) => m.mine), [a === players[1], a === players[0]])
+    assert.doesNotMatch(JSON.stringify(view.chat), /AGENT\d/)
+  }
+})
+
+test('chat: lobby works too; another room, an empty seat and a left player see and send nothing', async () => {
+  const ctx = setup()
+  const a = await ctx.svc.createRoom(AGENTS[0])
+  await ctx.svc.joinRoom(AGENTS[1], a.view.room.code)
+  const b = await ctx.svc.createRoom(AGENTS[2])
+  assert.equal((await say(ctx.svc, AGENTS[0], 'lobby hello')).success, true)
+  assert.equal((await ctx.svc.getState(AGENTS[1])).view.chat.length, 1)
+  assert.equal(b.success, true)
+  assert.deepEqual((await ctx.svc.getState(AGENTS[2])).view.chat, [], 'other room')
+  assert.equal((await say(ctx.svc, AGENTS[3], 'hi')).error, 'not_in_room')
+  await ctx.svc.leaveRoom(AGENTS[1])
+  assert.equal((await say(ctx.svc, AGENTS[1], 'still here?')).error, 'not_in_room')
+  assert.equal((await ctx.svc.getState(AGENTS[1])).view.chat, undefined, 'entry screen has no chat')
+})
+
+test('chat: text is cleaned and screened, length capped, reactions limited to the five', async () => {
+  const { svc, players } = await startedRoom(2)
+  assert.equal((await say(svc, players[0], 'x'.repeat(121))).reason, 'too_long')
+  assert.equal((await say(svc, players[0], '   ')).reason, 'empty')
+  assert.equal((await say(svc, players[0], 'join me at www.example.com')).reason, 'link')
+  assert.equal((await say(svc, players[0], 'I am AGENT034 btw')).reason, 'agent_number')
+  assert.equal((await say(svc, players[0], '🤡', 'react')).reason, 'reaction')
+  assert.equal((await say(svc, players[0], 'one\nline\u200b<b>bold</b>')).success, true)
+  const last = (await svc.getState(players[1])).view.chat.at(-1)
+  assert.equal(last.body, 'one line <b>bold</b>', 'one line, control/zero-width removed; markup stays text (escaped on render)')
+  for (const r of ['😂', '😭', '💜', '👀']) assert.equal((await say(svc, players[1], r, 'react')).success, true)
+})
+
+test('chat: a burst is throttled, then allowed again after the window', async () => {
+  const { svc, clock, players } = await startedRoom(2)
+  for (let i = 0; i < 5; i++) assert.equal((await say(svc, players[0], `m${i}`)).success, true)
+  assert.equal((await say(svc, players[0], 'm5')).error, 'chat_slow')
+  assert.equal((await say(svc, players[1], 'other agent unaffected')).success, true)
+  clock.now += 16_000
+  assert.equal((await say(svc, players[0], 'later')).success, true)
+})
+
+test('chat: the room keeps its newest 100; closing the room deletes its chat', async () => {
+  const { svc, clock, db } = setup()
+  const created = await svc.createRoom(AGENTS[0])
+  for (let i = 0; i < 105; i++) { clock.now += 16_000; await say(svc, AGENTS[0], `n${i}`) }
+  const rows = db.inspect.chat.filter((m) => m.roomId)
+  assert.equal(rows.length, 100)
+  assert.equal(rows[0].body, 'n5')
+  assert.equal((await svc.getState(AGENTS[0])).view.chat.length, 30, 'views carry the newest 30')
+  await svc.leaveRoom(AGENTS[0])
+  assert.equal(db.inspect.chat.length, 0, 'last one out closes the room and clears chat')
+  assert.equal(created.success, true)
+})
+
+test('chat: outsiders are refused by the closed-test gate before anything runs', async () => {
+  const db = createTestStore({ clock: { now: T0 }, agents: { AGENT000: { codename: 'HQ', chargedUntil: T0 + HOUR } } })
+  const svc = createRunAmiService({ store: db.store, now: () => T0, rng: mulberry32(1), randomCode: () => 'AMI7K2', randomTopic: () => 't'.repeat(40) })
+  assert.deepEqual(await svc.sendChat('AGENT777', { kind: 'text', body: 'hi' }), { success: false, error: 'not_invited' })
+})

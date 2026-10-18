@@ -68,7 +68,7 @@ import {
   adminListBattleChat, adminModerateBattleChat,
 } from './lib/vote-campaign.ts'
 import { getDearDiary, getDearDiaryArchive, getDearDiaryPreference, saveDearDiaryDecorations, saveDearDiaryNote, saveDearDiaryTheme } from './lib/dear-diary.ts'
-import { runAmiState, runAmiCreateRoom, runAmiJoinRoom, runAmiLeaveRoom, runAmiStart, runAmiAct, cronRunAmiSweep } from './lib/run-ami.ts'
+import { runAmiState, runAmiCreateRoom, runAmiJoinRoom, runAmiLeaveRoom, runAmiStart, runAmiAct, runAmiChat, cronRunAmiSweep } from './lib/run-ami.ts'
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -153,6 +153,8 @@ const ROUTES: Record<string, Route> = {
   runAmiLeaveRoom: { auth: 'agent', handler: (sb, p) => runAmiLeaveRoom(sb, p) },
   runAmiStart: { auth: 'agent', handler: (sb, p) => runAmiStart(sb, p) },
   runAmiAct: { auth: 'agent', handler: (sb, p) => runAmiAct(sb, p) },
+  // Room chat (lib/run-ami-chat-rules.js): same gate and seat check; never touches the game.
+  runAmiChat: { auth: 'agent', handler: (sb, p) => runAmiChat(sb, p) },
   startDistrict: { auth: 'agent', handler: (sb, p) => startDistrict(sb, p) },
   extendDistrictDeadline: { auth: 'agent', handler: (sb, p) => extendDistrictDeadline(sb, p) },
   resetLapsedDistrict: { auth: 'agent', handler: (sb, p) => resetLapsedDistrict(sb, p) },

@@ -34,6 +34,7 @@ import { call } from './api.js'
 import { getAgentNo } from './session.js'
 import { goSettings } from './router.js'
 import { openHowToPlay } from './run-ami-help.js'
+import { createChat } from './run-ami-chat.js'
 import { armyBombCharge } from './army-bomb.js'
 import { COLORS, COLOR_ORDER, errorText, isWildKind } from './run-ami-cards.js'
 import { createTable } from './run-ami-table.js'
@@ -65,6 +66,7 @@ let appliedSeq = 0
 let failures = 0
 let finaleTimer = null
 let finaleShown = null
+let chat = null // room chat panel, while a lobby or match is open
 
 const say = errorText
 const isNetworkError = (res) => res?.success === false && !res.view && /network/i.test(res.error || '')
@@ -151,6 +153,8 @@ export function teardownRunAmi() {
   rtTopic = null
   table?.destroy()
   table = null
+  chat?.destroy()
+  chat = null
   view = null
   root = null
   body = null
@@ -215,6 +219,7 @@ function apply(next) {
   const prev = view
   view = next
   syncRealtime()
+  syncChat(next)
   // Holding the last play on screen: later reads just update `view`, and
   // the room appears with the newest one when the finale is done.
   if (finaleTimer && next.phase !== 'match') return
@@ -243,6 +248,7 @@ function apply(next) {
       table = createTable(tableHandlers)
       body.innerHTML = ''
       body.appendChild(table.el)
+      placeChatButton()
     }
     table.update(next)
     return
@@ -255,6 +261,39 @@ function paint() {
   if (!body || !view) return
   body.innerHTML = ''
   body.appendChild(view.phase === 'lobby' ? lobbyView(view, roomCtx) : entryView(view, roomCtx))
+  placeChatButton()
+}
+
+/* ── Room chat ──────────────────────────────────────────────────────── */
+
+// One panel per visit, alive while the agent is in a room (lobby or match).
+// Messages come with each room view; sending never touches the game.
+function syncChat(next) {
+  if (next.phase !== 'lobby' && next.phase !== 'match') {
+    chat?.destroy()
+    chat = null
+    return
+  }
+  if (!chat) {
+    chat = createChat({ onSend: sendChat, floor: () => body?.querySelector('.ra-hand')?.getBoundingClientRect().top ?? null })
+    root?.appendChild(chat.panel)
+  }
+  chat.update(next.chat)
+}
+
+function placeChatButton() {
+  const head = body?.querySelector('.ra-head, .ra-top')
+  if (!chat || !head) return
+  const code = head.querySelector('.ra-code')
+  head.insertBefore(chat.button, code || null)
+}
+
+async function sendChat(kind, text) {
+  const res = await timedCall('runAmiChat', { agentNo: getAgentNo(), kind, body: text })
+  if (isNetworkError(res)) noteFailure()
+  else if (res) noteSuccess()
+  if (res?.view) { appliedSeq = readSeq; apply(res.view) }
+  return res
 }
 
 async function roomAction(button, action, params) {

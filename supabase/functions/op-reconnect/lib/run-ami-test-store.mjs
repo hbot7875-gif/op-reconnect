@@ -37,6 +37,7 @@ export function createTestStore({ clock, agents, config = {} }) {
   const events = []
   const broadcasts = []
   const throttleHits = []
+  const chat = []
   let nextId = 1
   const iso = () => new Date(clock.now).toISOString()
 
@@ -50,13 +51,18 @@ export function createTestStore({ clock, agents, config = {} }) {
     const match = room.currentMatchId ? matches.get(room.currentMatchId) : null
     broadcasts.push({ topic: `run-ami:${room.topic}`, payload: { r: room.version, v: match ? match.version : null } })
   }
+  // Mirrors the rc_run_ami_chat_clear trigger: a closed room takes its chat.
+  const closeRoom = (room) => {
+    room.status = 'closed'
+    for (let i = chat.length - 1; i >= 0; i--) if (chat[i].roomId === room.id) chat.splice(i, 1)
+  }
   const releaseSeat = (roomId, agentNo) => {
     const s = seats.find((x) => x.roomId === roomId && x.agentNo === agentNo && !x.leftAt)
     if (!s) return
     s.leftAt = iso()
     const room = rooms.get(roomId)
     const next = seats.filter((x) => x.roomId === roomId && !x.leftAt).sort((a, b) => a.seat - b.seat)[0]
-    if (!next && !room.currentMatchId) room.status = 'closed'
+    if (!next && !room.currentMatchId) closeRoom(room)
     else if (room.hostAgentNo === agentNo && next) room.hostAgentNo = next.agentNo
     room.version++
     notify(roomId)
@@ -215,11 +221,27 @@ export function createTestStore({ clock, agents, config = {} }) {
         const live = seats.some((s) => s.roomId === room.id && !s.leftAt
           && clock.now - new Date(s.lastSeenAt).getTime() < idleMinutes * 60_000)
         if (live) continue
-        room.status = 'closed'
+        closeRoom(room)
         for (const s of seats) if (s.roomId === room.id && !s.leftAt) s.leftAt = iso()
         n++
       }
       return n
+    },
+    async chatSend({ agentNo, kind, body, name }) {
+      await tick()
+      const seat = openSeat(agentNo)
+      const room = seat && rooms.get(seat.roomId)
+      if (!room || room.status === 'closed') return { ok: false, error: 'not_in_room' }
+      if (!['text', 'react'].includes(kind) || ![...body].length || [...body].length > 120) return { ok: false, error: 'chat_text' }
+      const id = nextId++
+      chat.push({ id, roomId: room.id, agentNo, name: String(name).slice(0, 40), kind, body, createdAt: iso() })
+      const mine = chat.filter((m) => m.roomId === room.id)
+      for (const old of mine.slice(0, Math.max(0, mine.length - 100))) chat.splice(chat.indexOf(old), 1)
+      return { ok: true, id, room_id: room.id }
+    },
+    async chatRecent(roomId, limit) {
+      await tick()
+      return copy(chat.filter((m) => m.roomId === roomId).slice(-limit))
     },
     async dueMatches() {
       await tick()
@@ -229,7 +251,7 @@ export function createTestStore({ clock, agents, config = {} }) {
 
   return {
     store,
-    inspect: { charge, wallets, rooms, seats, matches, events, broadcasts },
+    inspect: { charge, wallets, rooms, seats, matches, events, broadcasts, chat },
     setLastSeen(agentNo, ms) { const s = openSeat(agentNo); if (s) s.lastSeenAt = new Date(ms).toISOString() },
   }
 }

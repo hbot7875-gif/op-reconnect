@@ -173,6 +173,21 @@ function makeStore(supabase: SupabaseDB) {
       return Number(data) || 0
     },
 
+    async chatSend({ agentNo, kind, body, name }: { agentNo: string; kind: string; body: string; name: string }) {
+      const { data, error } = await supabase.rpc('rc_run_ami_chat_send', { p_agent_no: agentNo, p_kind: kind, p_body: body, p_name: name })
+      return rpcResult(data, error)
+    },
+
+    // Newest `limit` messages, returned oldest first.
+    async chatRecent(roomId: string, limit: number) {
+      const { data } = await supabase.from('rc_run_ami_chat')
+        .select('id, agent_no, name, kind, body, created_at').eq('room_id', roomId)
+        .order('id', { ascending: false }).limit(limit)
+      return (data || []).reverse().map((m: any) => ({
+        id: m.id, agentNo: m.agent_no, name: m.name, kind: m.kind, body: m.body, createdAt: m.created_at,
+      }))
+    },
+
     async dueMatches(graceSeconds: number) {
       const { data } = await supabase.rpc('rc_run_ami_due_matches', { p_grace_seconds: graceSeconds })
       return (data || []).map((row: any) => (typeof row === 'string' ? row : row.rc_run_ami_due_matches))
@@ -190,4 +205,5 @@ export const runAmiJoinRoom = (sb: SupabaseDB, p: any) => service(sb).joinRoom(a
 export const runAmiLeaveRoom = (sb: SupabaseDB, p: any) => service(sb).leaveRoom(agentOf(p))
 export const runAmiStart = (sb: SupabaseDB, p: any) => service(sb).startMatch(agentOf(p))
 export const runAmiAct = (sb: SupabaseDB, p: any) => service(sb).act(agentOf(p), p)
+export const runAmiChat = (sb: SupabaseDB, p: any) => service(sb).sendChat(agentOf(p), { kind: p.kind, body: p.body })
 export const cronRunAmiSweep = (sb: SupabaseDB) => service(sb).sweep()

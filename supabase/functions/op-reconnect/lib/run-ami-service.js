@@ -28,6 +28,7 @@ import { finalResults, newMatch, publicState, resolveConfig, topCard } from './r
 import { applyAction, forfeitSeat, resolveClock } from './run-ami-actions.js'
 import { viewForEntry, viewForLobby, viewForMatch } from './run-ami-view.js'
 import { isRunAmiTester } from './run-ami-access.js'
+import { checkRunAmiChat } from './run-ami-chat-rules.js'
 
 // No 0, O or 1: the three a player can't tell apart when reading a code
 // aloud or off a screenshot. (With 1 gone, I and L are unambiguous.)
@@ -38,6 +39,11 @@ const ACTION_TYPES = new Set(['play', 'draw', 'pass', 'call', 'catch'])
 const LOG_LIMIT = 12
 const RESULT_SHOWN_MS = 15 * 60_000
 const JOIN_ATTEMPTS = { max: 12, windowSeconds: 300 }
+// Room chat: the newest messages ride along with every room view; sending
+// is throttled per agent (a short burst, then a per-minute ceiling).
+const CHAT_SHOWN = 30
+const CHAT_BURST = { max: 5, windowSeconds: 15 }
+const CHAT_MINUTE = { max: 30, windowSeconds: 60 }
 
 export function normalizeRoomCode(raw) {
   return String(raw ?? '').toUpperCase().replace(/[\s-]/g, '')
@@ -156,7 +162,8 @@ export function createRunAmiService({ store, now = () => Date.now(), rng, random
             seats, hostAgentNo: room.hostAgentNo, staleSeconds: match.state.cfg.heartbeatStaleSeconds, at,
           })
           const log = await store.recentEvents(match.id, LOG_LIMIT)
-          return viewForMatch({ state: match.state, seat: mySeat, players, version: match.version, now: at, log, room: roomPublic })
+          const view = viewForMatch({ state: match.state, seat: mySeat, players, version: match.version, now: at, log, room: roomPublic })
+          return { ...view, chat: await roomChat(roomId, agentNo) }
         }
         return buildView(agentNo, roomId, true)
       }
@@ -167,13 +174,38 @@ export function createRunAmiService({ store, now = () => Date.now(), rng, random
     const players = await publicPlayers(agents, {
       seats, hostAgentNo: room.hostAgentNo, staleSeconds: cfg.heartbeatStaleSeconds, at,
     })
-    return viewForLobby({
+    const view = viewForLobby({
       room: roomPublic,
       players,
       mySeat: agents.indexOf(agentNo),
       bombActive: await store.bombActive(agentNo),
       lastResult: await lastResult(room, agentNo, at),
     })
+    return { ...view, chat: await roomChat(roomId, agentNo) }
+  }
+
+  /** The room's newest messages, oldest first, from the reader's side. The
+   *  agent number is used only for `mine` and never leaves this function. */
+  async function roomChat(roomId, agentNo) {
+    const rows = await store.chatRecent(roomId, CHAT_SHOWN)
+    return rows.map((m) => ({ id: m.id, name: m.name, kind: m.kind, body: m.body, at: m.createdAt, mine: m.agentNo === agentNo }))
+  }
+
+  /** Send one chat message or quick reaction into the room the agent is
+   *  seated in. Nothing about the game changes. */
+  async function sendChat(agentNo, params) {
+    const checked = checkRunAmiChat(params?.kind === 'react' ? 'react' : 'text', params?.body)
+    if (!checked.ok) return { success: false, error: 'chat_text', reason: checked.reason }
+    const seat = await store.findSeat(agentNo)
+    if (!seat) return { success: false, error: 'not_in_room' }
+    if (!await store.throttle(`run-ami-chat:${agentNo}`, CHAT_BURST.max, CHAT_BURST.windowSeconds)
+      || !await store.throttle(`run-ami-chat-min:${agentNo}`, CHAT_MINUTE.max, CHAT_MINUTE.windowSeconds)) {
+      return { success: false, error: 'chat_slow' }
+    }
+    const name = (await store.profiles([agentNo])).get(agentNo)?.name || 'AGENT'
+    const res = await store.chatSend({ agentNo, kind: checked.kind, body: checked.body, name })
+    if (!res.ok) return { success: false, error: res.error || 'server_error' }
+    return { success: true, view: await buildView(agentNo, seat.roomId) }
   }
 
   /** Read (and heartbeat). Called on open, on every Realtime nudge and by
@@ -336,6 +368,7 @@ export function createRunAmiService({ store, now = () => Date.now(), rng, random
     leaveRoom: gate(leaveRoom),
     startMatch: gate(startMatch),
     act: gate(act),
+    sendChat: gate(sendChat),
     sweep,
   }
 }

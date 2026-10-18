@@ -21,6 +21,7 @@ const ROOT = new URL('../../../', import.meta.url)
 const migration = (name) => readFileSync(new URL(`migrations/${name}`, ROOT), 'utf8')
 const MAIN = migration('20261018120000_rc_run_ami.sql')
 const SCHEDULE = migration('20261018120500_rc_run_ami_sweep_schedule.sql')
+const CHAT = migration('20261018150000_rc_run_ami_chat.sql')
 
 const modulePath = process.env.PGLITE_MODULE
 const skip = modulePath ? false : 'set PGLITE_MODULE to run the SQL suite'
@@ -73,6 +74,8 @@ async function fresh(t) {
     await engine.exec(MAIN)
     await engine.exec(SCHEDULE)
     await engine.exec(SCHEDULE) // the schedule migration re-runs cleanly
+    await engine.exec(CHAT)
+    await engine.exec(CHAT) // and so does chat
   }
   await engine.exec('begin')
   t.after(() => engine.exec('rollback'))
@@ -107,7 +110,7 @@ const commit = (db, matchId, expected, actionId = randomUUID(), status = 'active
 test("both migrations apply on a real Postgres engine with production's 11 cron jobs present; the schedule adds one", { skip }, async (t) => {
   const db = await fresh(t)
   const tables = (await db.query(`select tablename from pg_tables where tablename like 'rc_run_ami%' order by 1`)).rows.map((r) => r.tablename)
-  assert.deepEqual(tables, ['rc_run_ami_events', 'rc_run_ami_match_players', 'rc_run_ami_match_secrets', 'rc_run_ami_matches', 'rc_run_ami_rooms', 'rc_run_ami_seats'])
+  assert.deepEqual(tables, ['rc_run_ami_chat', 'rc_run_ami_events', 'rc_run_ami_match_players', 'rc_run_ami_match_secrets', 'rc_run_ami_matches', 'rc_run_ami_rooms', 'rc_run_ami_seats'])
   const mine = (await db.query(`select jobname, schedule from cron.job where jobname like 'rc-run-ami%'`)).rows
   assert.deepEqual(mine, [{ jobname: 'rc-run-ami-sweep', schedule: '* * * * *' }])
   assert.equal(Number(await rpc(db, 'select count(*) from cron.job')), 12, "production's 11 jobs kept, plus this one")
@@ -129,6 +132,8 @@ test('browser roles can read no RUN AMI table and run no RUN AMI function', { sk
     await denied(`select rc_run_ami_create_room('AGENT000', 'ZZZZZZ', 'x')`)
     await denied(`select rc_run_ami_commit(null, 1, null, null, 'active', null, null, null, null, null, null, null)`)
     await denied('select rc_invoke_run_ami_sweep()')
+    await denied('select * from rc_run_ami_chat')
+    await denied(`select rc_run_ami_chat_send('AGENT000', 'text', 'hi', 'HQ')`)
     await db.exec('reset role')
   }
 })
@@ -179,4 +184,34 @@ test('the sweep makes no HTTP call while idle, and one with the Vault token when
   const call = (await db.query('select url, body from net.calls')).rows[0]
   assert.match(call.url, /\/functions\/v1\/op-reconnect$/)
   assert.deepEqual(call.body, { action: 'cronRunAmiSweep', cronToken: 'tok' })
+})
+
+test('chat: only a seated agent can send, into their own room; 100 kept; a closed room loses its chat', { skip }, async (t) => {
+  const db = await fresh(t)
+  const { roomId } = await lobby(db)
+  assert.deepEqual(await rpc(db, `select rc_run_ami_chat_send('AGENT120', 'text', 'hi', 'X')`), { ok: false, error: 'not_in_room' })
+  assert.equal((await rpc(db, `select rc_run_ami_chat_send('AGENT000', 'shout', 'hi', 'HQ')`)).error, 'chat_text')
+  assert.equal((await rpc(db, `select rc_run_ami_chat_send('AGENT000', 'text', $1, 'HQ')`, ['x'.repeat(121)])).error, 'chat_text')
+  const sent = await rpc(db, `select rc_run_ami_chat_send('AGENT050', 'react', '💜', 'MOCHI')`)
+  assert.equal(sent.ok, true, JSON.stringify(sent))
+  assert.equal(sent.room_id, roomId)
+  for (let i = 0; i < 104; i++) await rpc(db, `select rc_run_ami_chat_send('AGENT000', 'text', $1, 'HQ')`, [`n${i}`])
+  const rows = (await db.query('select body from rc_run_ami_chat where room_id = $1 order by id', [roomId])).rows.map((r) => r.body)
+  assert.equal(rows.length, 100)
+  assert.equal(rows[0], 'n4')
+  await rpc(db, `select rc_run_ami_leave_room('AGENT050')`)
+  assert.equal(Number(await rpc(db, 'select count(*) from rc_run_ami_chat where room_id = $1', [roomId])), 100, 'room still open')
+  await rpc(db, `select rc_run_ami_leave_room('AGENT000')`)
+  assert.equal((await db.query('select status from rc_run_ami_rooms where id = $1', [roomId])).rows[0].status, 'closed')
+  assert.equal(Number(await rpc(db, 'select count(*) from rc_run_ami_chat where room_id = $1', [roomId])), 0, 'closing cleared it')
+})
+
+test('chat: an idle room expired by the sweep loses its chat too', { skip }, async (t) => {
+  const db = await fresh(t)
+  const { roomId } = await lobby(db)
+  await rpc(db, `select rc_run_ami_chat_send('AGENT000', 'text', 'anyone?', 'HQ')`)
+  await db.query(`update rc_run_ami_seats set last_seen_at = now() - interval '2 hours' where room_id = $1`, [roomId])
+  await db.query(`update rc_run_ami_rooms set updated_at = now() - interval '2 hours' where id = $1`, [roomId])
+  assert.ok(Number(await rpc(db, 'select rc_run_ami_expire_rooms(30)')) >= 1)
+  assert.equal(Number(await rpc(db, 'select count(*) from rc_run_ami_chat where room_id = $1', [roomId])), 0)
 })
