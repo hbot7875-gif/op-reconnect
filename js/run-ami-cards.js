@@ -1,12 +1,13 @@
 // RUN AMI — card faces and the words for things.
 //
-// An original card system, not a familiar one restyled: dark glass cards
-// with a signal bar in one of four colours, a mono numeral and a shape
-// that repeats the colour for anyone who can't rely on hue (● ▲ ■ ◆).
-// Wilds carry all four signals. Nothing here decides anything; the server
-// sends card faces as { c, k } and this only draws them.
+// Era Poster cards (artwork in run-ami-art.js): a header band in one of
+// four colours carries the value and a shape that repeats the colour for
+// anyone who can't rely on hue (● ▲ ■ ◆); below it, artwork after one BTS
+// album era. Wilds carry all four colours. Nothing here decides anything;
+// the server sends card faces as { c, k } and this only draws them.
 
 import { esc } from './state.js'
+import { cardFaceSvg, cardBackSvg } from './run-ami-art.js'
 
 export const COLORS = {
   r: { name: 'Ember', shape: '●' },
@@ -16,11 +17,9 @@ export const COLORS = {
 }
 export const COLOR_ORDER = ['r', 'y', 'g', 'b']
 
-const MARK = { skip: '⊘', rev: '⇄', d2: '+2', wild: '✦', wd4: '+4' }
 const WORD = { skip: 'Skip', rev: 'Reverse', d2: 'Draw Two', wild: 'Wild', wd4: 'Wild Draw Four' }
 
 export const isWildKind = (k) => k === 'wild' || k === 'wd4'
-const mark = (k) => MARK[k] || String(k)
 
 export function describeCard(card) {
   if (!card) return 'a card'
@@ -33,21 +32,12 @@ export function describeCard(card) {
 export function cardHtml(card, extra = '') {
   const wild = isWildKind(card.k)
   const color = wild ? 'w' : card.c
-  const shape = wild ? '' : COLORS[card.c]?.shape || ''
   const action = /^[0-9]$/.test(card.k) ? '' : ' is-action'
-  return `<span class="ra-card is-${color}${action}${extra ? ` ${extra}` : ''}" data-k="${esc(card.k)}">
-    <span class="ra-card-bar" aria-hidden="true"></span>
-    <span class="ra-card-corner" aria-hidden="true">${esc(mark(card.k))}</span>
-    <span class="ra-card-mark" aria-hidden="true">${esc(mark(card.k))}</span>
-    <span class="ra-card-shape" aria-hidden="true">${shape}</span>
-    <span class="ra-sr">${esc(describeCard(card))}</span>
-  </span>`
+  return `<span class="ra-card is-${color}${action}${extra ? ` ${extra}` : ''}" data-k="${esc(card.k)}">${cardFaceSvg(color, String(card.k))}<span class="ra-sr">${esc(describeCard(card))}</span></span>`
 }
 
 export function cardBackHtml(extra = '') {
-  return `<span class="ra-card is-back${extra ? ` ${extra}` : ''}" aria-hidden="true">
-    <span class="ra-card-back-mark">RUN<br>AMI</span>
-  </span>`
+  return `<span class="ra-card is-back${extra ? ` ${extra}` : ''}" aria-hidden="true">${cardBackSvg()}</span>`
 }
 
 export function colorChipHtml(c) {
