@@ -1,6 +1,7 @@
 // Voting review (admin.html) — the generic queue for every voting campaign.
 //
-// A reviewer sees only what deciding needs: agent, mission, KST date, the
+// A reviewer sees only what deciding needs: agent (number and Instagram),
+// mission, KST date, the
 // proof (a 10-minute signed link, never a storage path), the structured
 // checks and the status. No OCR text exists to show.
 //
@@ -36,7 +37,67 @@ const NOTES = {
   x_unreachable: "X couldn't be reached",
   x_post_not_found: 'X says the post is missing, private or deleted',
   duplicate_certificate: 'Duplicate certificate — the same certificate number already backs another proof',
-  possible_duplicate_certificate: 'Possible duplicate — another agent sent a certificate from the same minute',
+  possible_duplicate_certificate: 'Same minute as another agent’s certificate — not a duplicate on its own',
+}
+
+// Why a proof is waiting (adminListCampaignProofs → summary / reason filter).
+export const REASONS = [
+  ['all', 'All pending'],
+  ['confirmed_duplicate', 'Confirmed duplicates'],
+  ['possible_duplicate', 'Possible duplicates'],
+  ['x_account', 'X account mismatches'],
+  ['certificate', 'Certificate/date/OCR issues'],
+  ['manual', 'Needs manual review'],
+]
+
+// What the duplicate evidence is. Worked out on the server, which keeps the
+// fingerprints; nothing here ever holds a certificate number.
+const DUP_REASONS = {
+  confirmed_fingerprint: ['is-err', 'Confirmed duplicate', 'Same certificate number as the related proof.'],
+  screenshot_match: ['is-err', 'Confirmed duplicate', 'The same screenshot file as the related proof.'],
+  timestamp_number_unreadable: ['is-warn', 'Timestamp-only warning', 'Same participation minute; a certificate number couldn’t be read on one side, so it isn’t known whether these are the same certificate.'],
+  timestamp_numbers_differ: ['is-neutral', 'Timestamp-only warning', 'Same participation minute, but both certificate numbers were read and they differ — two agents voting at the same time. Not a duplicate.'],
+}
+
+/** "AGENT060 · @instagram" — the agent number always shows. */
+export function agentLabel(agentNo, instagram) {
+  return `<b class="vt-mono">${esc(agentNo)}</b>${instagram ? ` <span class="vta-ig">· @${esc(instagram)}</span>` : ''}`
+}
+
+function proofFigure(label, p) {
+  const media = p.proofUrl
+    ? `<a href="${esc(p.proofUrl)}" target="_blank" rel="noopener noreferrer"><img src="${esc(p.proofUrl)}" alt="Proof #${Number(p.id)} from ${esc(p.agent_no)}" loading="lazy"></a>`
+    : p.post_url ? `<a class="vta-compare-post" href="${esc(p.post_url)}" target="_blank" rel="noopener noreferrer">${ic('ext')}Open post</a>`
+      : '<span class="vta-hint">Image already deleted.</span>'
+  return `<figure>${media}<figcaption>${label} · #${Number(p.id)}<br>${agentLabel(p.agent_no, p.instagram)}</figcaption></figure>`
+}
+
+/** Both sides of a duplicate: who, which proofs, why, the other proof's
+ *  status — and the two screenshots side by side, inline. */
+export function duplicateHtml(row) {
+  if (!row.duplicate_of) return ''
+  const [k, title, detail] = DUP_REASONS[row.duplicateReason] || (row.duplicate_kind === 'certificate' ? DUP_REASONS.confirmed_fingerprint : DUP_REASONS.timestamp_number_unreadable)
+  const o = row.related
+  const blocked = row.duplicate_kind === 'certificate' && o && o.status !== 'rejected'
+  if (!o) return `<div class="vta-dup ${k}"><p><b>${title}</b> · related proof #${Number(row.duplicate_of)} is no longer available.</p><p class="vta-hint">${esc(detail)}</p></div>`
+  const [sk, si, st] = STATUS[o.status] || STATUS.review
+  return `<div class="vta-dup ${k}">
+      <p><b>${title}</b> — ${esc(detail)}</p>
+      <dl class="vta-dup-pair">
+        <div><dt>This proof · #${Number(row.id)}</dt><dd>${agentLabel(row.agent_no, row.instagram)}</dd></div>
+        <div><dt>Related proof · #${Number(o.id)}</dt><dd>${agentLabel(o.agent_no, o.instagram)} <span class="vt-badge ${sk}">${ic(si)}${st}</span></dd></div>
+      </dl>
+      ${blocked ? '<p class="vta-hint">Can’t be verified while the related proof stands.</p>' : ''}
+      <details class="vta-compare"><summary>Compare proofs</summary>
+        <div class="vta-compare-grid">${proofFigure('This proof', row)}${proofFigure('Related', { ...o })}</div>
+      </details>
+    </div>`
+}
+
+/** The summary chips: counts of everything waiting, each one a filter. */
+export function summaryHtml(summary, active) {
+  if (!summary) return ''
+  return REASONS.map(([key, label]) => `<button type="button" class="vta-chip" data-vta-reason="${key}" aria-pressed="${(active || 'all') === key}"><b>${Number(summary[key]) || 0}</b> ${esc(label)}</button>`).join('')
 }
 export function noteText(code) {
   const c = String(code || '')
@@ -64,7 +125,7 @@ export function reviewCardHtml(row) {
         <span>Posted by <b>@${esc(row.post_author || '?')}</b> · linked <b>@${esc(row.expectedHandle || 'none')}</b></span></p>`
   return `<article class="vta-card" data-vta-id="${row.id}">
     <header class="vta-head">
-      <div><b class="vt-mono">${esc(row.agent_no)}</b> · ${esc(row.missionLabel)} · <span class="vt-mono">${esc(dayLabel(row.vote_day))} KST</span></div>
+      <div>${agentLabel(row.agent_no, row.instagram)} · ${esc(row.missionLabel)} · <span class="vt-mono">${esc(dayLabel(row.vote_day))} KST</span> · <span class="vta-hint">#${Number(row.id)}</span></div>
       <span class="vt-badge ${k}">${ic(i)}${t}</span>
     </header>
     <div class="vta-body">
@@ -77,7 +138,7 @@ export function reviewCardHtml(row) {
           ${BTS_CHOICES.map(([v, label]) => `<label class="vta-check"><input type="radio" name="bts-${row.id}" value="${v}"${(checks.bts || 'unclear') === v ? ' checked' : ''}> ${label}</label>`).join('')}
         </fieldset>` : ''}
         ${client}
-        ${row.duplicate_of ? `<p class="vta-hint vta-dup">${row.duplicate_kind === 'certificate' ? 'Same certificate as' : 'Check against'} proof #${Number(row.duplicate_of)}${row.duplicate_kind === 'certificate' ? ' — cannot be verified while that proof stands' : ''}</p>` : ''}
+        ${duplicateHtml(row)}
         <p class="vta-hint">${esc(noteText(row.verify_note))}${row.submitted_at ? ` · sent ${esc(kstStamp(row.submitted_at))}` : ''}</p>
         ${row.reviewed_by ? `<p class="vta-hint">Reviewed by ${esc(row.reviewed_by)}${row.reviewed_at ? ` · ${esc(kstStamp(row.reviewed_at))}` : ''}${row.review_note ? ` · “${esc(row.review_note)}”` : ''}</p>` : ''}
         ${open ? `<input class="vta-note" name="note" maxlength="300" placeholder="Note (optional)">
@@ -120,6 +181,7 @@ export function chatCardHtml(item) {
 
 export function mountVotingReview(panel, call) {
   let status = 'verifying'
+  let reason = null
   let offset = 0
   let rows = []
   let running = false
@@ -128,6 +190,7 @@ export function mountVotingReview(panel, call) {
   panel.innerHTML = `<div class="vt-admin">
     <div class="vta-top">
       <div><h2 class="vta-title" data-vta-title>Voting review</h2><p class="vta-hint" data-vta-counts>—</p></div>
+      <div class="vta-summary" data-vta-summary aria-label="Waiting for review, by reason"></div>
       <div class="vta-filters" role="tablist">
         ${Object.entries(STATUS).map(([s, [, , label]]) => `<button type="button" class="vta-filter" role="tab" data-vta-filter="${s}" aria-selected="${s === status}">${label}</button>`).join('')}
         <button type="button" class="vta-filter" role="tab" data-vta-filter="chat" aria-selected="false">Chat reports</button>
@@ -147,11 +210,12 @@ export function mountVotingReview(panel, call) {
   async function load() {
     $('[data-vta-list]').innerHTML = '<p class="vta-hint">Loading…</p>'
     if (status === 'chat') return loadChat()
-    const r = await call('adminListCampaignProofs', { status, limit: PAGE, offset })
+    const r = await call('adminListCampaignProofs', { status, reason: status === 'review' ? reason : null, limit: PAGE, offset })
     if (!r?.success) { $('[data-vta-list]').innerHTML = `<p class="vta-hint">${esc(r?.error || 'Could not load')}</p>`; return }
     rows = r.proofs
     $('[data-vta-title]').textContent = `${r.campaign.title} · Voting review`
     $('[data-vta-counts]').textContent = `${r.queue.verifying} verifying · ${r.queue.review} in review`
+    $('[data-vta-summary]').innerHTML = summaryHtml(r.summary, status === 'review' ? reason : 'none')
     $('[data-vta-list]').innerHTML = rows.length ? rows.map(reviewCardHtml).join('') : '<p class="vta-hint">Nothing here.</p>'
     $('[data-vta-page]').textContent = r.total ? `${offset + 1}–${Math.min(offset + PAGE, r.total)} of ${r.total}` : ''
     $('[data-vta-prev]').disabled = offset === 0
@@ -240,8 +304,18 @@ export function mountVotingReview(panel, call) {
 
   panel.addEventListener('click', (e) => {
     const f = e.target.closest('[data-vta-filter]')
+    const chip = e.target.closest('[data-vta-reason]')
+    if (chip) {
+      status = 'review'
+      reason = chip.dataset.vtaReason === 'all' ? null : chip.dataset.vtaReason
+      offset = 0
+      for (const b of panel.querySelectorAll('[data-vta-filter]')) b.setAttribute('aria-selected', String(b.dataset.vtaFilter === 'review'))
+      load()
+      return
+    }
     if (f) {
       status = f.dataset.vtaFilter
+      reason = null
       offset = 0
       for (const b of panel.querySelectorAll('[data-vta-filter]')) b.setAttribute('aria-selected', String(b === f))
       load()

@@ -443,3 +443,36 @@ export function cityPhase(campaign, at = new Date()) {
   if (t <= freeze + hours * 3600_000) return 'final'
   return null
 }
+
+// ── Review queue: why a proof is waiting (admin only) ─────────────────
+
+export const REVIEW_REASONS = ['confirmed_duplicate', 'possible_duplicate', 'x_account', 'certificate', 'manual']
+
+/** One reason per pending proof, for the admin summary and filters. */
+export function reviewReason(p, kind) {
+  if (p.duplicate_kind === 'certificate') return 'confirmed_duplicate'
+  if (p.duplicate_kind === 'possible') return 'possible_duplicate'
+  if (p.verify_note === 'author_mismatch') return 'x_account'
+  if (kind === 'mnet_certificate' && /^unclear:/.test(String(p.verify_note || ''))) return 'certificate'
+  return 'manual'
+}
+
+/**
+ * What the duplicate evidence actually is — fingerprints compared on the
+ * server, never sent anywhere:
+ *   screenshot_match       the same image file (stored or original hash)
+ *   confirmed_fingerprint  the same certificate number, read twice
+ *   timestamp_numbers_differ    same printed minute, but BOTH numbers were
+ *                               read and differ: two people voting at once
+ *   timestamp_number_unreadable same minute; a number couldn't be read on
+ *                               one side, so identity is unknown
+ * `row` and `related` carry has-fingerprint booleans and hash equality only.
+ */
+export function duplicateReason(row, related) {
+  if (!row?.duplicate_kind) return null
+  const sameImage = !!related && ((row.image_hash && row.image_hash === related.image_hash) || (row.original_hash && row.original_hash === related.original_hash))
+  if (sameImage) return 'screenshot_match'
+  if (row.duplicate_kind === 'certificate') return 'confirmed_fingerprint'
+  if (row.cert_fingerprint && related?.cert_fingerprint && row.cert_fingerprint !== related.cert_fingerprint) return 'timestamp_numbers_differ'
+  return 'timestamp_number_unreadable'
+}

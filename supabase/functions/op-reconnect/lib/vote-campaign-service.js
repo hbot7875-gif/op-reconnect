@@ -20,6 +20,7 @@ import {
   kstDayOf, addDays, campaignPhase, missionById, parseXPostUrl, snowflakeTime, normalizeHandle,
   parseOembed, decideXProof, missingHashtags, cityPhase, sanitizeMnetChecks, sanitizeClientCertChecks, decideMnetChecks,
   normalizeCertificateNumber, participationMinuteKey, validUtcOffset, duplicateNotices, votingStreak, missionStates, missionProgress, giftState, pulseView,
+  REVIEW_REASONS, reviewReason, duplicateReason,
 } from './vote-campaign-rules.js'
 
 export const PROOF_BUCKET = 'campaign-proofs'
@@ -612,25 +613,77 @@ function sanitizeChecksFor(kind, raw) {
 
 const QUEUE_STATUSES = new Set(['verifying', 'review', 'verified', 'rejected'])
 
+// Review rows read for the summary and the reason filter: enough to classify, no more.
+const REVIEW_SCAN_LIMIT = 1000
+const PROOF_COLS = 'id, mission_id, agent_no, vote_day, status, checks, client_checks, verify_method, verify_note, proof_path, post_url, post_author, submitted_at, reviewed_by, reviewed_at, review_note, duplicate_of, duplicate_kind, cert_utc_offset_min, image_hash, original_hash, cert_fingerprint'
+
+const instagramOf = (handle) => {
+  const h = String(handle || '').trim().replace(/^@+/, '')
+  return h || null
+}
+
 export async function adminListCampaignProofs(db, params) {
   const c = params.campaignId ? await loadCampaign(db, String(params.campaignId)) : await currentCampaign(db, new Date())
   if (!c) return fail('no_campaign')
   const status = QUEUE_STATUSES.has(String(params.status)) ? String(params.status) : 'review'
+  const reason = status === 'review' && REVIEW_REASONS.includes(String(params.reason)) ? String(params.reason) : null
   const limit = Math.min(50, Math.max(1, Number(params.limit) || 20))
   const offset = Math.max(0, Number(params.offset) || 0)
+  const kindOf = (r) => missionById(c, r.mission_id)?.kind || null
 
-  const [{ count }, { data, error }, counts] = await Promise.all([
+  // Every proof waiting for a person, classified once: the summary counts,
+  // and (with a reason) which of them this page shows.
+  const [{ count }, counts, { data: pending }] = await Promise.all([
     db.from('rc_campaign_proofs').select('id', { count: 'exact', head: true }).eq('campaign_id', c.id).eq('status', status),
-    db.from('rc_campaign_proofs')
-      .select('id, mission_id, agent_no, vote_day, status, checks, client_checks, verify_method, verify_note, proof_path, post_url, post_author, submitted_at, reviewed_by, reviewed_at, review_note, duplicate_of, duplicate_kind, cert_utc_offset_min')
-      .eq('campaign_id', c.id).eq('status', status).order('submitted_at', { ascending: true }).range(offset, offset + limit - 1),
     Promise.all(['verifying', 'review'].map((s) => db.from('rc_campaign_proofs')
       .select('id', { count: 'exact', head: true }).eq('campaign_id', c.id).eq('status', s))),
+    db.from('rc_campaign_proofs').select('id, mission_id, verify_note, duplicate_kind')
+      .eq('campaign_id', c.id).eq('status', 'review').order('submitted_at', { ascending: true }).limit(REVIEW_SCAN_LIMIT),
   ])
-  if (error) return fail('db_error')
-  const rows = data || []
+  const summary = Object.fromEntries([['all', 0], ...REVIEW_REASONS.map((k) => [k, 0])])
+  const matching = []
+  for (const r of pending || []) {
+    const why = reviewReason(r, kindOf(r))
+    summary.all++
+    summary[why]++
+    if (why === reason) matching.push(r.id)
+  }
 
-  const xAgents = [...new Set(rows.filter((r) => missionById(c, r.mission_id)?.kind === 'x_post').map((r) => r.agent_no))]
+  let rows
+  let total = count || 0
+  if (reason) {
+    total = matching.length
+    const ids = matching.slice(offset, offset + limit)
+    const { data, error } = ids.length ? await db.from('rc_campaign_proofs').select(PROOF_COLS).in('id', ids) : { data: [] }
+    if (error) return fail('db_error')
+    const at = new Map(ids.map((id, i) => [id, i]))
+    rows = (data || []).filter((r) => at.has(r.id)).sort((a, b) => at.get(a.id) - at.get(b.id))
+  } else {
+    const { data, error } = await db.from('rc_campaign_proofs').select(PROOF_COLS)
+      .eq('campaign_id', c.id).eq('status', status).order('submitted_at', { ascending: true }).range(offset, offset + limit - 1)
+    if (error) return fail('db_error')
+    rows = data || []
+  }
+
+  // The proof each duplicate points at. Fingerprints and hashes are compared
+  // here and never leave the server.
+  const relatedIds = [...new Set(rows.map((r) => r.duplicate_of).filter((id) => id !== null && id !== undefined))]
+  const relatedRows = new Map()
+  if (relatedIds.length) {
+    const { data: rs } = await db.from('rc_campaign_proofs')
+      .select('id, mission_id, agent_no, vote_day, status, proof_path, post_url, image_hash, original_hash, cert_fingerprint').in('id', relatedIds)
+    for (const r of rs || []) relatedRows.set(r.id, r)
+  }
+
+  // "AGENT060 · @instagram": the Instagram account the agent signs in with.
+  const agents = [...new Set([...rows.map((r) => r.agent_no), ...[...relatedRows.values()].map((r) => r.agent_no)])]
+  const instagram = new Map()
+  if (agents.length) {
+    const { data: as } = await db.from('rc_agents').select('agent_no, handle').in('agent_no', agents)
+    for (const a of as || []) instagram.set(a.agent_no, instagramOf(a.handle))
+  }
+
+  const xAgents = [...new Set(rows.filter((r) => kindOf(r) === 'x_post').map((r) => r.agent_no))]
   const handles = new Map()
   if (xAgents.length) {
     const { data: hs } = await db.from('rc_agent_x_handles').select('agent_no, x_handle').in('agent_no', xAgents)
@@ -640,7 +693,7 @@ export async function adminListCampaignProofs(db, params) {
   // An agent's phone offset should not move between uploads. If it has, none
   // of their offsets is trusted for the automatic date check: those proofs
   // read the printed time as KST, which sends a mismatch to a reviewer.
-  const mnetAgents = [...new Set(rows.filter((r) => missionById(c, r.mission_id)?.kind === 'mnet_certificate').map((r) => r.agent_no))]
+  const mnetAgents = [...new Set(rows.filter((r) => kindOf(r) === 'mnet_certificate').map((r) => r.agent_no))]
   const offsets = new Map()
   if (mnetAgents.length) {
     const { data: os } = await db.from('rc_campaign_proofs').select('agent_no, cert_utc_offset_min')
@@ -657,18 +710,26 @@ export async function adminListCampaignProofs(db, params) {
   const steadyOffsets = (set) => !!set && set.size > 0 && Math.max(...set) - Math.min(...set) <= 60
   const trustedOffset = (r) => (validUtcOffset(r.cert_utc_offset_min) !== null && steadyOffsets(offsets.get(r.agent_no)) ? r.cert_utc_offset_min : null)
 
+  const signed = async (path) => {
+    if (!path) return null
+    const { data: s } = await db.storage.from(PROOF_BUCKET).createSignedUrl(path, SIGNED_URL_TTL_SECONDS)
+    return s?.signedUrl || null
+  }
+
   const proofs = await Promise.all(rows.map(async (r) => {
-    const { proof_path, cert_utc_offset_min, ...rest } = r
-    let proofUrl = null
-    if (proof_path) {
-      const { data: s } = await db.storage.from(PROOF_BUCKET).createSignedUrl(proof_path, SIGNED_URL_TTL_SECONDS)
-      proofUrl = s?.signedUrl || null
-    }
+    const { proof_path, cert_utc_offset_min, image_hash, original_hash, cert_fingerprint, ...rest } = r
     const mission = missionById(c, r.mission_id)
+    const o = r.duplicate_kind ? relatedRows.get(r.duplicate_of) : null
     return {
       ...rest, kind: mission?.kind || null, missionLabel: mission?.label || r.mission_id,
-      expectedHandle: handles.get(r.agent_no) || null, proofUrl,
-      // What a trusted OCR run needs to know about this mission, nothing more.
+      instagram: instagram.get(r.agent_no) || null,
+      expectedHandle: handles.get(r.agent_no) || null, proofUrl: await signed(proof_path),
+      reviewReason: r.status === 'review' ? reviewReason(r, mission?.kind) : null,
+      duplicateReason: duplicateReason(r, o),
+      related: o ? {
+        id: o.id, agent_no: o.agent_no, instagram: instagram.get(o.agent_no) || null, status: o.status, vote_day: o.vote_day,
+        missionLabel: missionById(c, o.mission_id)?.label || o.mission_id, post_url: o.post_url || null, proofUrl: await signed(o.proof_path),
+      } : null,
       // What the trusted check needs for this mission, nothing more.
       certificate: mission?.kind === 'mnet_certificate' ? (mission.certificate || {}) : null,
       window: { opensAt: c.opens_at, closesAt: c.closes_at, submittedAt: r.submitted_at, utcOffsetMinutes: trustedOffset(r) },
@@ -677,8 +738,8 @@ export async function adminListCampaignProofs(db, params) {
   }))
 
   return {
-    success: true, campaign: { id: c.id, title: c.title }, status, proofs, total: count || 0, limit, offset,
-    queue: { verifying: counts[0].count || 0, review: counts[1].count || 0 },
+    success: true, campaign: { id: c.id, title: c.title }, status, reason, proofs, total, limit, offset,
+    queue: { verifying: counts[0].count || 0, review: counts[1].count || 0 }, summary,
   }
 }
 

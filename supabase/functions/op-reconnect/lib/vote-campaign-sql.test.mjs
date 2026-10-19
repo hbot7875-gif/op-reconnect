@@ -21,6 +21,7 @@ const migration = (name) => readFileSync(new URL(`migrations/${name}`, ROOT), 'u
 const MIGRATION = migration('20261013150000_rc_vote_campaigns.sql')
 const OFFSET_MIGRATION = migration('20261014090000_rc_campaign_cert_utc_offset.sql')
 const SELF_SERVICE_MIGRATION = migration('20261019120000_rc_vote_proof_self_service.sql')
+const MINUTE_MIGRATION = migration('20261020090000_rc_vote_duplicate_minute.sql')
 
 const modulePath = process.env.PGLITE_MODULE
 const skip = modulePath ? false : 'set PGLITE_MODULE to run the SQL suite'
@@ -78,6 +79,8 @@ async function fresh(t) {
     await engine.exec(OFFSET_MIGRATION) // re-runnable
     await engine.exec(SELF_SERVICE_MIGRATION)
     await engine.exec(SELF_SERVICE_MIGRATION) // re-runnable
+    await engine.exec(MINUTE_MIGRATION)
+    await engine.exec(MINUTE_MIGRATION) // re-runnable
   }
   await engine.exec('begin')
   t.after(() => engine.exec('rollback'))
@@ -748,6 +751,60 @@ test('number unreadable (no fingerprint): no guess — same minute from another 
   assert.equal((await transition(db, b.id, ['review'], 'verified', 'admin')).success, true, 'two people can vote in the same minute')
   const c = await submit(db, { hash: H('c'), agent: 'AGENT003' })
   assert.equal((await record(db, c.id, null, null)).status, 'verified', 'nothing read at all: existing checks stand')
+})
+
+test('same minute, both numbers read and different → two people voting at once: both credited, no flag', { skip }, async (t) => {
+  const db = await fresh(t)
+  const a = await submit(db, { hash: H('a'), agent: 'AGENT001' })
+  const b = await submit(db, { hash: H('b'), agent: 'AGENT002' })
+  assert.equal((await record(db, a.id, FP('c'), FP('d'))).status, 'verified')
+  assert.equal((await record(db, b.id, FP('e'), FP('d'))).status, 'verified')
+  const row = await q1(db, `select verify_note, duplicate_of, duplicate_kind from rc_campaign_proofs where id = $1`, [b.id])
+  assert.deepEqual([row.verify_note, row.duplicate_of, row.duplicate_kind], ['all_checks_passed', null, null])
+  assert.equal((await battle(db)).total, 2)
+})
+
+test('same minute, but the other proof\'s number was unreadable → still possible, for a person to look at', { skip }, async (t) => {
+  const db = await fresh(t)
+  const a = await submit(db, { hash: H('a'), agent: 'AGENT001' })
+  assert.equal((await record(db, a.id, null, FP('d'))).status, 'verified')
+  const b = await submit(db, { hash: H('b'), agent: 'AGENT002' })
+  assert.equal((await record(db, b.id, FP('e'), FP('d'))).status, 'review')
+  const row = await q1(db, `select verify_note, duplicate_of, duplicate_kind from rc_campaign_proofs where id = $1`, [b.id])
+  assert.deepEqual([row.verify_note, Number(row.duplicate_of), row.duplicate_kind], ['possible_duplicate_certificate', a.id, 'possible'])
+})
+
+test('same minute and same number from another agent → still a confirmed duplicate, blocked from credit', { skip }, async (t) => {
+  const db = await fresh(t)
+  const a = await submit(db, { hash: H('a'), agent: 'AGENT001' })
+  await record(db, a.id, FP('c'), FP('d'))
+  const b = await submit(db, { hash: H('b'), agent: 'AGENT002' })
+  assert.equal((await record(db, b.id, FP('c'), FP('d'))).status, 'review')
+  const row = await q1(db, `select verify_note, duplicate_kind from rc_campaign_proofs where id = $1`, [b.id])
+  assert.deepEqual([row.verify_note, row.duplicate_kind], ['duplicate_certificate', 'certificate'])
+  assert.equal((await transition(db, b.id, ['review'], 'verified', 'admin')).error, 'duplicate_certificate')
+})
+
+test('different numbers in the same minute never skip other uncertain checks', { skip }, async (t) => {
+  const db = await fresh(t)
+  const a = await submit(db, { hash: H('a'), agent: 'AGENT001' })
+  await record(db, a.id, FP('c'), FP('d'))
+  const b = await submit(db, { hash: H('b'), agent: 'AGENT002' })
+  const r = await record(db, b.id, FP('e'), FP('d'), 'review')
+  assert.equal(r.status, 'review')
+  const row = await q1(db, `select verify_note, duplicate_kind from rc_campaign_proofs where id = $1`, [b.id])
+  assert.deepEqual([row.verify_note, row.duplicate_kind], ['unclear:bts', null])
+})
+
+test('the new rule leaves earlier flags alone', { skip }, async (t) => {
+  const db = await fresh(t)
+  const a = await submit(db, { hash: H('a'), agent: 'AGENT001' })
+  await record(db, a.id, FP('c'), FP('d'))
+  const b = await submit(db, { hash: H('b'), agent: 'AGENT002' })
+  await db.query(`update rc_campaign_proofs set status = 'review', verify_note = 'possible_duplicate_certificate', duplicate_of = $1, duplicate_kind = 'possible', cert_fingerprint = $2, cert_time_fingerprint = $3 where id = $4`, [a.id, FP('e'), FP('d'), b.id])
+  await db.exec(MINUTE_MIGRATION)
+  const row = await q1(db, `select status, duplicate_kind from rc_campaign_proofs where id = $1`, [b.id])
+  assert.deepEqual([row.status, row.duplicate_kind], ['review', 'possible'], 'pending proof unchanged; a reviewer decides')
 })
 
 test('only fingerprints are stored; nothing in the database holds a raw number or time', { skip }, async (t) => {

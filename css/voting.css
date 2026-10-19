@@ -297,6 +297,26 @@
 .vta-note { height: 36px; border-radius: var(--vt-r-md); border: 1px solid var(--vt-line-2); background: var(--vt-bg); color: var(--vt-text); padding: 0 10px; font-size: 14px; width: 100%; }
 .vta-reject { color: var(--vt-err) !important; }
 .vta-out { font-size: 12.5px; color: var(--vt-text-2); margin: 0; min-height: 1em; }
+.vta-ig { color: var(--vt-text-2); font-weight: 400; }
+.vta-summary { display: flex; flex-wrap: wrap; gap: 6px; }
+.vta-summary:empty { display: none; }
+.vta-chip { min-height: 28px; padding: 3px 8px; border-radius: var(--vt-r-md); border: 1px solid var(--vt-line-2); background: var(--vt-bg); color: var(--vt-text-2); font: 500 12px var(--vt-sans); cursor: pointer; text-align: left; }
+.vta-chip b { color: var(--vt-text); font-variant-numeric: tabular-nums; margin-right: 2px; }
+.vta-chip[aria-pressed="true"] { border-color: var(--vt-accent); color: var(--vt-text); box-shadow: inset 0 0 0 1px var(--vt-accent); }
+.vta-dup { display: grid; gap: 6px; padding: 8px 10px; border-radius: var(--vt-r-md); border: 1px solid var(--vt-line-2); border-left-width: 3px; font-size: 12.5px; color: var(--vt-text-2); }
+.vta-dup p { margin: 0; }
+.vta-dup b { color: var(--vt-text); }
+.vta-dup.is-err { border-left-color: var(--vt-err); }
+.vta-dup.is-warn { border-left-color: var(--vt-warn, #d9a441); }
+.vta-dup-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.vta-dup-pair dt { font-size: 11.5px; color: var(--vt-text-3); }
+.vta-dup-pair dd { margin: 2px 0 0; overflow-wrap: anywhere; }
+.vta-dup-pair .vt-badge { margin-top: 4px; }
+.vta-compare summary { cursor: pointer; color: var(--vt-accent); font-weight: 500; min-height: 28px; display: inline-flex; align-items: center; }
+.vta-compare-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 6px; }
+.vta-compare-grid figure { margin: 0; display: grid; gap: 4px; }
+.vta-compare-grid img { width: 100%; max-height: 420px; object-fit: contain; border-radius: var(--vt-r-md); border: 1px solid var(--vt-line); background: #000; display: block; }
+.vta-compare-grid figcaption { font-size: 11.5px; color: var(--vt-text-3); overflow-wrap: anywhere; }
 
 /* ── Narrow phones (320px): keep labels whole instead of splitting them ── */
 .vt-camp-name, .vt-camp-round { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

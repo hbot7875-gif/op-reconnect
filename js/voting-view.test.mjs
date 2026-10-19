@@ -6,7 +6,7 @@ import {
   battleLine, nextMilestone, teamChooser, rewardText, fmtCount, cityResultText, MNET_CHECKING_MS, REVIEW_TEXT,
 } from './voting-view.js'
 import { cityBanner, CITY_NOW } from './voting-fixtures.js'
-import { reviewCardHtml, noteText } from './voting-admin.js'
+import { reviewCardHtml, noteText, summaryHtml, REASONS } from './voting-admin.js'
 import { votingStatus, votingLocal, FIXTURE_NOW, SAMPLE_GIFT_REVEAL } from './voting-fixtures.js'
 
 const render = (o = {}, l = {}) => votingScreen({ status: votingStatus(o), local: votingLocal({ ...o, ...l }), now: FIXTURE_NOW })
@@ -318,6 +318,61 @@ test('admin review card: only what deciding needs, readable notes', () => {
   assert.equal(noteText('x_unreachable'), "X couldn't be reached")
   const closed = reviewCardHtml({ id: 1, kind: 'x_post', missionLabel: 'X Vote', agent_no: 'A', vote_day: '2026-10-14', status: 'verified', checks: {}, post_author: 'me', expectedHandle: 'me', post_url: 'https://x.com/me/status/1' })
   assert.doesNotMatch(closed, /data-vta="verify"/)
+})
+
+test('admin review: "AGENT060 · @instagram" on Mnet and X cards; the agent number always shows', () => {
+  const mnet = reviewCardHtml({ id: 5, kind: 'mnet_certificate', missionLabel: 'Mnet Vote', agent_no: 'AGENT060', instagram: 'army_sixty', vote_day: '2026-10-14', status: 'review', checks: {}, proofUrl: 'u' })
+  assert.match(mnet, /<b class="vt-mono">AGENT060<\/b> <span class="vta-ig">· @army_sixty<\/span> · Mnet Vote/)
+  const x = reviewCardHtml({ id: 6, kind: 'x_post', missionLabel: 'X Vote', agent_no: 'AGENT061', instagram: 'purple<sky', vote_day: '2026-10-14', status: 'review', checks: {}, post_url: 'https://x.com/a/status/1', post_author: 'a', expectedHandle: 'a' })
+  assert.match(x, /AGENT061<\/b> <span class="vta-ig">· @purple&lt;sky<\/span>/, 'escaped')
+  const none = reviewCardHtml({ id: 7, kind: 'x_post', missionLabel: 'X Vote', agent_no: 'AGENT062', vote_day: '2026-10-14', status: 'review', checks: {} })
+  assert.match(none, /<b class="vt-mono">AGENT062<\/b> · X Vote/)
+})
+
+const dupRow = (reason, related = {}) => ({
+  id: 1411, kind: 'mnet_certificate', missionLabel: 'Mnet Vote', agent_no: 'AGENT060', instagram: 'army_sixty', vote_day: '2026-10-14', status: 'review', checks: {},
+  proofUrl: 'https://signed.example/a.jpg', duplicate_of: 900, duplicate_kind: reason === 'confirmed_fingerprint' ? 'certificate' : 'possible',
+  verify_note: reason === 'confirmed_fingerprint' ? 'duplicate_certificate' : 'possible_duplicate_certificate', duplicateReason: reason,
+  related: { id: 900, agent_no: 'AGENT061', instagram: 'purple.sky', status: 'verified', proofUrl: 'https://signed.example/b.jpg', ...related },
+})
+
+test('admin review: a duplicate shows both agents, both proof ids, the exact reason and the related status', () => {
+  const html = reviewCardHtml(dupRow('confirmed_fingerprint'))
+  assert.match(html, /<b>Confirmed duplicate<\/b> — Same certificate number as the related proof\./)
+  assert.match(html, /This proof · #1411<\/dt><dd><b class="vt-mono">AGENT060<\/b> <span class="vta-ig">· @army_sixty/)
+  assert.match(html, /Related proof · #900<\/dt><dd><b class="vt-mono">AGENT061<\/b> <span class="vta-ig">· @purple\.sky<\/span> <span class="vt-badge is-ok">[\s\S]*?Verified/)
+  assert.match(html, /Can’t be verified while the related proof stands/)
+  assert.match(reviewCardHtml(dupRow('screenshot_match')), /Confirmed duplicate<\/b> — The same screenshot file/)
+  const unknown = reviewCardHtml(dupRow('timestamp_number_unreadable', { status: 'review' }))
+  assert.match(unknown, /<b>Timestamp-only warning<\/b> — Same participation minute; a certificate number couldn’t be read/)
+  assert.match(unknown, /is-warn">[\s\S]*?In review/)
+  assert.doesNotMatch(unknown, /Can’t be verified/, 'a timestamp warning never blocks')
+  assert.match(reviewCardHtml(dupRow('timestamp_numbers_differ', { status: 'rejected' })), /both certificate numbers were read and they differ[\s\S]*?Not a duplicate\.[\s\S]*?Rejected/)
+  assert.equal(noteText('possible_duplicate_certificate'), 'Same minute as another agent’s certificate — not a duplicate on its own')
+})
+
+test('admin review: Compare proofs opens both screenshots side by side, on the page', () => {
+  const html = reviewCardHtml(dupRow('timestamp_number_unreadable'))
+  const cmp = html.slice(html.indexOf('<details class="vta-compare">'), html.indexOf('</details>'))
+  assert.match(cmp, /<summary>Compare proofs<\/summary>/)
+  assert.match(cmp, /<figure>[\s\S]*?src="https:\/\/signed\.example\/a\.jpg"[\s\S]*?This proof · #1411[\s\S]*?<figure>[\s\S]*?src="https:\/\/signed\.example\/b\.jpg"[\s\S]*?Related · #900/)
+  assert.ok(!/target="_self"|location\.|href="#"/.test(cmp), 'no navigation needed')
+  const gone = reviewCardHtml(dupRow('timestamp_number_unreadable', { proofUrl: null }))
+  assert.match(gone, /Image already deleted\./)
+  const missing = reviewCardHtml({ ...dupRow('confirmed_fingerprint'), related: null })
+  assert.match(missing, /related proof #900 is no longer available/)
+})
+
+test('admin review: summary chips count every pending reason and filter by it', () => {
+  assert.deepEqual(REASONS.map(([, l]) => l), ['All pending', 'Confirmed duplicates', 'Possible duplicates', 'X account mismatches', 'Certificate/date/OCR issues', 'Needs manual review'])
+  const html = summaryHtml({ all: 12, confirmed_duplicate: 1, possible_duplicate: 4, x_account: 2, certificate: 3, manual: 2 }, 'possible_duplicate')
+  assert.match(html, /data-vta-reason="all" aria-pressed="false"><b>12<\/b> All pending/)
+  assert.match(html, /data-vta-reason="possible_duplicate" aria-pressed="true"><b>4<\/b> Possible duplicates/)
+  assert.match(html, /data-vta-reason="certificate" aria-pressed="false"><b>3<\/b> Certificate\/date\/OCR issues/)
+  assert.match(summaryHtml({ all: 0 }, null), /data-vta-reason="all" aria-pressed="true"><b>0<\/b>/)
+  const src = readFileSync(new URL('./voting-admin.js', import.meta.url), 'utf8')
+  assert.match(src, /call\('adminListCampaignProofs', \{ status, reason: status === 'review' \? reason : null, limit: PAGE, offset \}\)/)
+  assert.doesNotMatch(src, /certificateNumber[^,)]*(innerHTML|textContent|console)/, 'numbers are never shown or logged')
 })
 
 test('stylesheet: scoped, one accent, no glow or purple dashboard', () => {

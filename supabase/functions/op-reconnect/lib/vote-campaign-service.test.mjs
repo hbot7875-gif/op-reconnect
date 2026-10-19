@@ -685,3 +685,71 @@ test('player status: a plain hint for what needs attention, and accounts with vo
   assert.deepEqual(s.xHandleLocked, ['me'], 'a verified vote locks @me; a rejected one does not lock @spare')
   assert.ok(!JSON.stringify(s).includes('author_mismatch') && !JSON.stringify(s).includes('unclear:'), 'no internal notes')
 })
+
+// ── Voting Review: who, why, and the proof a duplicate points at ──────
+
+function reviewDb(rows, extra = []) {
+  const all = [...rows, ...extra]
+  return fakeDb({ tables: {
+    rc_vote_campaigns: campaignTable,
+    rc_campaign_proofs: (q) => {
+      if (q.head) return { count: all.filter((r) => r.status === q.filters.status).length }
+      if (Array.isArray(q.filters.id)) return { data: all.filter((r) => q.filters.id.includes(r.id)) }
+      if (q.filters.status) return { data: all.filter((r) => r.status === q.filters.status) }
+      return { data: [] }
+    },
+    rc_agents: (q) => ({ data: [{ agent_no: 'AGENT060', handle: 'army_sixty' }, { agent_no: 'AGENT061', handle: '@purple.sky' }].filter((a) => q.filters.agent_no.includes(a.agent_no)) }),
+    rc_agent_x_handles: () => ({ data: [{ agent_no: 'AGENT060', x_handle: 'sixty_x' }] }),
+  } })
+}
+const base = { vote_day: '2026-10-14', checks: {}, client_checks: {}, submitted_at: '2026-10-14T01:00:00Z' }
+const FPA = 'a'.repeat(64)
+const FPB = 'b'.repeat(64)
+
+test('admin queue: each proof says who (agent + Instagram) and why it is waiting; summary counts every pending proof', async () => {
+  const rows = [
+    { ...base, id: 10, mission_id: 'mnet', agent_no: 'AGENT060', status: 'review', verify_note: 'duplicate_certificate', duplicate_of: 1, duplicate_kind: 'certificate', proof_path: 'p/10.jpg', cert_fingerprint: FPA, image_hash: 'c'.repeat(64) },
+    { ...base, id: 11, mission_id: 'mnet', agent_no: 'AGENT060', status: 'review', verify_note: 'possible_duplicate_certificate', duplicate_of: 2, duplicate_kind: 'possible', proof_path: 'p/11.jpg', cert_fingerprint: FPB },
+    { ...base, id: 12, mission_id: 'mnet', agent_no: 'AGENT061', status: 'review', verify_note: 'unclear:date', proof_path: 'p/12.jpg' },
+    { ...base, id: 13, mission_id: 'x', agent_no: 'AGENT060', status: 'review', verify_note: 'author_mismatch', post_url: 'https://x.com/a/status/1', post_author: 'a' },
+    { ...base, id: 14, mission_id: 'x', agent_no: 'AGENT061', status: 'review', verify_note: 'x_unavailable', post_url: 'https://x.com/b/status/2' },
+  ]
+  const related = [
+    { ...base, id: 1, mission_id: 'mnet', agent_no: 'AGENT061', status: 'verified', proof_path: 'p/1.jpg', cert_fingerprint: FPA, image_hash: 'd'.repeat(64) },
+    { ...base, id: 2, mission_id: 'mnet', agent_no: 'AGENT061', status: 'review', proof_path: 'p/2.jpg', cert_fingerprint: FPA },
+  ]
+  const r = await adminListCampaignProofs(reviewDb(rows, related), { campaignId: 'mama_2026', status: 'review' })
+  assert.deepEqual(r.summary, { all: 6, confirmed_duplicate: 1, possible_duplicate: 1, x_account: 1, certificate: 1, manual: 2 })
+  const by = Object.fromEntries(r.proofs.map((p) => [p.id, p]))
+  assert.deepEqual([by[10].agent_no, by[10].instagram], ['AGENT060', 'army_sixty'])
+  assert.equal(by[12].instagram, 'purple.sky', 'a stored @ is not doubled')
+  assert.deepEqual([10, 11, 12, 13, 14].map((id) => by[id].reviewReason), ['confirmed_duplicate', 'possible_duplicate', 'certificate', 'x_account', 'manual'])
+  // Both sides of a duplicate, with the related proof's status and image.
+  assert.deepEqual({ ...by[10].related, proofUrl: !!by[10].related.proofUrl },
+    { id: 1, agent_no: 'AGENT061', instagram: 'purple.sky', status: 'verified', vote_day: '2026-10-14', missionLabel: 'Mnet Vote', post_url: null, proofUrl: true })
+  assert.equal(by[10].duplicateReason, 'confirmed_fingerprint')
+  assert.equal(by[11].duplicateReason, 'timestamp_numbers_differ', 'same minute, two different numbers read: a legacy flag')
+  assert.equal(by[12].related, null)
+  // Nothing that identifies a certificate leaves the server.
+  const out = JSON.stringify(r)
+  for (const secret of [FPA, FPB, 'c'.repeat(64), 'd'.repeat(64), 'cert_fingerprint', 'image_hash', 'original_hash', 'proof_path']) assert.ok(!out.includes(secret), secret)
+})
+
+test('admin queue: the reason filter pages through matching proofs only', async () => {
+  const rows = Array.from({ length: 5 }, (_, i) => ({ ...base, id: 20 + i, mission_id: 'mnet', agent_no: 'AGENT060', status: 'review',
+    verify_note: i % 2 ? 'possible_duplicate_certificate' : 'unclear:date', duplicate_kind: i % 2 ? 'possible' : null, duplicate_of: i % 2 ? 99 : null }))
+  const db = reviewDb(rows)
+  const r = await adminListCampaignProofs(db, { campaignId: 'mama_2026', status: 'review', reason: 'certificate', limit: 2 })
+  assert.deepEqual([r.reason, r.total, r.proofs.map((p) => p.id)], ['certificate', 3, [20, 22]])
+  const next = await adminListCampaignProofs(db, { campaignId: 'mama_2026', status: 'review', reason: 'certificate', limit: 2, offset: 2 })
+  assert.deepEqual(next.proofs.map((p) => p.id), [24])
+  const p = await adminListCampaignProofs(db, { campaignId: 'mama_2026', status: 'review', reason: 'possible_duplicate' })
+  assert.deepEqual(p.proofs.map((x) => [x.id, x.duplicateReason, x.related]), [[21, 'timestamp_number_unreadable', null], [23, 'timestamp_number_unreadable', null]])
+  // Unknown reason, or not the review list: ignored.
+  assert.equal((await adminListCampaignProofs(db, { campaignId: 'mama_2026', status: 'review', reason: 'drop table' })).reason, null)
+  assert.equal((await adminListCampaignProofs(db, { campaignId: 'mama_2026', status: 'verified', reason: 'certificate' })).reason, null)
+})
+
+test('admin queue is admin-only', () => {
+  assert.match(readFileSync(new URL('../index.ts', import.meta.url), 'utf8'), /adminListCampaignProofs: \{ auth: 'admin'/)
+})
