@@ -14,6 +14,8 @@
 //   io.crop(scaled, region)   → the region of a pixels() result, as a source
 //   io.dateRow(source)        → optional: the "Participation Date" row alone,
 //                               enlarged, as a source (or null if not found)
+//   io.enlarge(source)        → optional: a small screenshot scaled up and
+//                               sharpened, as a source (or null if it's big)
 //
 // Nothing here returns or keeps OCR text. The certificate number and
 // participation time leave only as values for the server to fingerprint.
@@ -63,6 +65,17 @@ export async function trustedCheckWith(io, source, mission, voteDay, window) {
       const t = await io.ocr(row)
       texts.push(t)
       text = { ...text, date: text.date || evaluateCertificateText(t, mission, voteDay, window).date }
+    }
+  }
+  // Small screenshots (forwarded or cropped) lose the small print: read an
+  // enlarged copy once more for whatever is still missing. Same rules — it
+  // can only find words that are really there (seen 2026-10-19).
+  if (io.enlarge && !(text.certificate && text.category && text.date)) {
+    const big = await io.enlarge(source)
+    if (big) {
+      const p3 = await ocrPassesWith(io, big, mission, voteDay, window)
+      texts.push(...p3.texts)
+      text = { certificate: text.certificate || p3.checks.certificate, category: text.category || p3.checks.category, date: text.date || p3.checks.date }
     }
   }
   const len = Number(mission?.certificate?.number_length) || 16

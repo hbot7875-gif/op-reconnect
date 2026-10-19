@@ -30,7 +30,7 @@ test('card: confirmed duplicate — Not counted, plain message, no "verifying"',
   const c = screen('review', { mnet: 'duplicate' })
   assert.match(c, /Not counted/)
   assert.ok(c.includes(DUPLICATE_TEXT.duplicate))
-  assert.equal(DUPLICATE_TEXT.duplicate, 'This certificate was already submitted and won’t be counted again.')
+  assert.equal(DUPLICATE_TEXT.duplicate, 'This certificate has already been submitted. Please upload a new voting certificate.')
   assert.doesNotMatch(c, /Verifying|In review|vt-spin/)
   assert.match(c, /Upload another certificate/, 'their other daily slots stay usable')
 })

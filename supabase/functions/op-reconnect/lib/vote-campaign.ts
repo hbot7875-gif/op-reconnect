@@ -6,7 +6,7 @@ import type { SupabaseDB } from './config.ts'
 import { cachedJson } from './cache.ts'
 import {
   getVotingBanner as banner, getPublicBattle as publicBattle, getVotingStatus as status, submitMnetProof as mnet, submitXProof as x,
-  setXHandle as handle, openVotingGift as gift, adminListCampaignProofs as list,
+  setXHandle as handle, removeXHandle as unlinkHandle, openVotingGift as gift, adminListCampaignProofs as list,
   adminRecordCampaignChecks as record, adminReviewCampaignProof as review, oembedXVerifier,
   startVotingTeamChoice as teamStart, chooseVotingTeam as teamChoose, claimBattleGift as battleGift,
   claimBattleWinner as battleWinner,
@@ -75,6 +75,7 @@ export const submitMnetProof = async (sb: SupabaseDB, p: P) => {
 export const cronMnetVerifyKick = async () => ({ success: true, ...(await wakeChecker()) })
 export const submitXProof = (sb: SupabaseDB, p: P) => x(sb, p, { verifier: oembedXVerifier() })
 export const setXHandle = (sb: SupabaseDB, p: P) => handle(sb, p)
+export const removeXHandle = (sb: SupabaseDB, p: P) => unlinkHandle(sb, p)
 export const openVotingGift = (sb: SupabaseDB, p: P) => gift(sb, p)
 export const startVotingTeamChoice = (sb: SupabaseDB, p: P) => teamStart(sb, p)
 export const chooseVotingTeam = (sb: SupabaseDB, p: P) => teamChoose(sb, p)

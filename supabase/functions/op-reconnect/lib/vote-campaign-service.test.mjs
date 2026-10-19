@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import {
-  submitMnetProof, submitXProof, setXHandle, openVotingGift, getVotingStatus, getVotingBanner,
+  submitMnetProof, submitXProof, setXHandle, removeXHandle, openVotingGift, getVotingStatus, getVotingBanner,
   adminListCampaignProofs, adminRecordCampaignChecks, adminReviewCampaignProof, oembedXVerifier, sha256Hex, PROOF_BUCKET,
   startVotingTeamChoice, chooseVotingTeam, claimBattleGift, claimBattleWinner, certFingerprint,
 } from './vote-campaign-service.js'
@@ -138,15 +138,53 @@ test('X: confident server-side check verifies', async () => {
   assert.deepEqual([a.p_status, a.p_post_id, a.p_post_author, a.p_vote_day], ['verified', id, 'me', '2026-10-14'])
 })
 
-test('X: verification failure goes to review, never rejection', async () => {
+// Linked-handle table that honours filters (owner lookups by x_handle).
+const linkedTable = (rows) => (q) => {
+  const hit = rows.filter((r) => Object.entries(q.filters).every(([k, v]) => r[k] === undefined || r[k] === v))
+  return q.single ? { data: hit[0] || null } : { data: hit }
+}
+
+test('X: only uncertainty goes to review — an outage, or a linked handle in the link with another author (renamed account)', async () => {
   const id = postIdAt(new Date('2026-10-14T01:00:00Z'))
-  for (const result of [{ ok: false, reason: 'unavailable' }, { ok: false, reason: 'not_found' }, { ok: false, reason: 'forbidden' },
-    { ok: true, authorHandle: 'me', hashtags: ['bts'] }, { ok: true, authorHandle: 'someone_else', hashtags: ['2026mamavote', 'bts'] }]) {
+  for (const result of [{ ok: false, reason: 'unavailable' }, { ok: true, authorHandle: 'someone_else', hashtags: ['2026mamavote', 'bts'] }]) {
     const db = fakeDb({ tables: { rc_vote_campaigns: campaignTable, rc_agent_x_handles: handleTable('me') } })
     const r = await submitXProof(db, { agentNo: 'AGENT001', campaignId: 'mama_2026', postUrl: `https://x.com/me/status/${id}` }, { verifier: verifier(result), now: NOW })
     assert.equal(r.success, true, JSON.stringify(result))
     assert.equal(db.calls.rpc.find((c) => c.name === 'rc_campaign_submit_proof').args.p_status, 'review', JSON.stringify(result))
   }
+})
+
+test('X: problems X confirms are explained at submit — nothing stored, nothing for a reviewer', async () => {
+  const id = postIdAt(new Date('2026-10-14T01:00:00Z'))
+  const run = async (result, { url = `https://x.com/me/status/${id}`, linked = [{ agent_no: 'AGENT001', x_handle: 'me' }] } = {}) => {
+    const db = fakeDb({ tables: { rc_vote_campaigns: campaignTable, rc_agent_x_handles: linkedTable(linked) } })
+    const r = await submitXProof(db, { agentNo: 'AGENT001', campaignId: 'mama_2026', postUrl: url }, { verifier: verifier(result), now: NOW })
+    assert.equal(db.calls.rpc.some((c) => c.name === 'rc_campaign_submit_proof'), false, `${r.error}: nothing stored`)
+    return r
+  }
+  assert.equal((await run({ ok: false, reason: 'forbidden' })).error, 'x_post_private')
+  assert.equal((await run({ ok: false, reason: 'not_found' })).error, 'x_post_not_found')
+  assert.deepEqual(await run({ ok: true, authorHandle: 'me', hashtags: ['bts'] }), { success: false, error: 'x_missing_hashtags', missing: ['#2026MAMAVOTE'] })
+  // From an account nobody linked, with room to link it.
+  assert.deepEqual(await run({ ok: true, authorHandle: 'alt_acct', hashtags: ['2026mamavote', 'bts'] }, { url: `https://x.com/alt_acct/status/${id}` }),
+    { success: false, error: 'x_account_not_linked', author: 'alt_acct', canLink: true })
+  // Already three accounts: it says so, and can't offer to link.
+  const three = ['me', 'b', 'c'].map((x_handle) => ({ agent_no: 'AGENT001', x_handle }))
+  assert.deepEqual(await run({ ok: true, authorHandle: 'alt_acct', hashtags: ['2026mamavote', 'bts'] }, { url: `https://x.com/alt_acct/status/${id}`, linked: three }),
+    { success: false, error: 'x_account_not_linked', author: 'alt_acct', canLink: false })
+  // Another agent's account: named, never linkable.
+  const others = [{ agent_no: 'AGENT001', x_handle: 'me' }, { agent_no: 'AGENT777', x_handle: 'theirs' }]
+  assert.deepEqual(await run({ ok: true, authorHandle: 'theirs', hashtags: ['2026mamavote', 'bts'] }, { url: `https://x.com/theirs/status/${id}`, linked: others }),
+    { success: false, error: 'x_handle_taken', author: 'theirs' })
+})
+
+test('X accounts: remove goes through the locked SQL rule; bad input never reaches it', async () => {
+  const db = fakeDb({ rpc: { rc_campaign_remove_x_handle: (a) => ({ data: a.p_x_handle === 'used' ? { success: false, error: 'x_handle_has_votes' } : { success: true } }) } })
+  assert.deepEqual(await removeXHandle(db, { agentNo: 'agent001', campaignId: 'mama_2026', xHandle: '@Spare_One' }), { success: true, removed: 'spare_one' })
+  assert.deepEqual(db.calls.rpc[0].args, { p_campaign_id: 'mama_2026', p_agent_no: 'AGENT001', p_x_handle: 'spare_one' })
+  assert.equal((await removeXHandle(db, { agentNo: 'agent001', campaignId: 'mama_2026', xHandle: 'used' })).error, 'x_handle_has_votes')
+  assert.equal((await removeXHandle(db, { agentNo: 'agent001', campaignId: 'mama_2026', xHandle: '' })).error, 'bad_handle')
+  assert.equal(db.calls.rpc.length, 2)
 })
 
 test('X: day, handle and URL rules are checked before anything is fetched', async () => {
@@ -255,13 +293,15 @@ test('Mnet: the uploading phone\'s UTC offset is kept only when it is a real off
 test('admin queue: the trusted check gets the upload time and a consistent phone offset only', async () => {
   const row = (id, agent, off) => ({ id, mission_id: 'mnet', agent_no: agent, vote_day: '2026-10-14', status: 'verifying', checks: {}, client_checks: {},
     proof_path: `p/${id}.jpg`, submitted_at: '2026-10-13T16:13:37Z', cert_utc_offset_min: off })
-  const rows = [row(1, 'AGENT001', 330), row(2, 'AGENT002', 330), row(3, 'AGENT003', null)]
+  const rows = [row(1, 'AGENT001', 330), row(2, 'AGENT002', 330), row(3, 'AGENT003', null), row(4, 'AGENT004', 330)]
   // AGENT002 has uploaded from two different offsets this event.
   const history = [{ agent_no: 'AGENT001', cert_utc_offset_min: 330 }, { agent_no: 'AGENT002', cert_utc_offset_min: 330 },
-    { agent_no: 'AGENT002', cert_utc_offset_min: -300 }, { agent_no: 'AGENT003', cert_utc_offset_min: null }]
+    { agent_no: 'AGENT002', cert_utc_offset_min: -300 }, { agent_no: 'AGENT003', cert_utc_offset_min: null },
+    // AGENT004: two phones in neighbouring zones (+5:30 / +6:00), seen 2026-10-19.
+    { agent_no: 'AGENT004', cert_utc_offset_min: 330 }, { agent_no: 'AGENT004', cert_utc_offset_min: 360 }]
   const db = fakeDb({ tables: {
     rc_vote_campaigns: campaignTable,
-    rc_campaign_proofs: (q) => (q.head ? { count: 3 } : q.cols === 'agent_no, cert_utc_offset_min' ? { data: history } : { data: rows }),
+    rc_campaign_proofs: (q) => (q.head ? { count: 4 } : q.cols === 'agent_no, cert_utc_offset_min' ? { data: history } : { data: rows }),
   } })
   const r = await adminListCampaignProofs(db, { campaignId: 'mama_2026', status: 'verifying' })
   const w = Object.fromEntries(r.proofs.map((p) => [p.agent_no, p.window]))
@@ -269,6 +309,7 @@ test('admin queue: the trusted check gets the upload time and a consistent phone
   assert.equal(w.AGENT001.submittedAt, '2026-10-13T16:13:37Z')
   assert.equal(w.AGENT002.utcOffsetMinutes, null, 'a changed offset is not trusted — read as KST, so a mismatch goes to review')
   assert.equal(w.AGENT003.utcOffsetMinutes, null, 'older uploads without an offset keep the KST reading')
+  assert.equal(w.AGENT004.utcOffsetMinutes, 330, 'offsets within an hour of each other: the proof’s own offset is trusted')
   assert.equal(r.proofs[1].utcOffsetMinutes, 330, 'reviewers still see what was sent')
   assert.equal(r.proofs[0].cert_utc_offset_min, undefined)
 })
@@ -514,11 +555,12 @@ test('team safeguard: no MAMA team, no proof — and the upload is cleaned up', 
 
 test('X hashtags come from config and match case-insensitively; both are required', async () => {
   const id = postIdAt(new Date('2026-10-14T01:00:00Z'))
-  for (const [tags, want] of [[['2026mamavote', 'bts'], 'verified'], [['2026MamaVote', 'BTS'], 'verified'], [['2026mamavote'], 'review'], [['bts'], 'review']]) {
+  for (const [tags, want] of [[['2026mamavote', 'bts'], 'verified'], [['2026MamaVote', 'BTS'], 'verified'], [['2026mamavote'], ['#BTS']], [['bts'], ['#2026MAMAVOTE']]]) {
     const db = fakeDb({ tables: { rc_vote_campaigns: campaignTable, rc_agent_x_handles: handleTable('me') } })
-    await submitXProof(db, { agentNo: 'AGENT001', campaignId: 'mama_2026', postUrl: `https://x.com/me/status/${id}` },
+    const r = await submitXProof(db, { agentNo: 'AGENT001', campaignId: 'mama_2026', postUrl: `https://x.com/me/status/${id}` },
       { verifier: verifier({ ok: true, authorHandle: 'me', hashtags: tags.map((t) => t.toLowerCase()) }), now: NOW })
-    assert.equal(db.calls.rpc.find((c) => c.name === 'rc_campaign_submit_proof').args.p_status, want, tags.join(','))
+    if (typeof want === 'string') assert.equal(db.calls.rpc.find((c) => c.name === 'rc_campaign_submit_proof').args.p_status, want, tags.join(','))
+    else assert.deepEqual([r.error, r.missing], ['x_missing_hashtags', want], tags.join(','))
   }
 })
 
@@ -621,4 +663,25 @@ test('player status: a duplicate verdict is one plain word — no notes, numbers
   const json = JSON.stringify(s)
   for (const leak of ['duplicate_certificate', 'duplicate_of', 'duplicate_kind', 'fingerprint', 'a'.repeat(64), 'b'.repeat(64), 'verify_note', '"note"'])
     assert.ok(!json.includes(leak), `status must not carry ${leak}`)
+})
+
+test('player status: a plain hint for what needs attention, and accounts with votes are locked', async () => {
+  const rows = [
+    { id: 1, mission_id: 'mnet', vote_day: '2026-10-14', status: 'review', checks: { certificate: false, category: true }, verify_note: 'unclear:certificate', submitted_at: '2026-10-14T01:00:00Z' },
+    { id: 2, mission_id: 'x', vote_day: '2026-10-14', status: 'review', checks: { author: false }, verify_note: 'author_mismatch', post_author: 'alt_acct', submitted_at: '2026-10-14T01:05:00Z' },
+    { id: 3, mission_id: 'x', vote_day: '2026-10-13', status: 'verified', checks: {}, verify_note: 'all_checks_passed', post_author: 'me', submitted_at: '2026-10-13T01:05:00Z' },
+    { id: 4, mission_id: 'x', vote_day: '2026-10-13', status: 'rejected', checks: {}, verify_note: 'x', post_author: 'spare', submitted_at: '2026-10-13T02:05:00Z' },
+  ]
+  const db = fakeDb({ rpc: {
+    rc_campaign_team_resolve: () => ({ data: { team: 'aliens', via: 'timeout' } }),
+    rc_campaign_battle_state: () => ({ data: { total: 41, teams: { hooligans: 22, aliens: 19 }, teamSizes: { hooligans: 3, aliens: 3 }, mine: 2 } }),
+  }, tables: {
+    rc_vote_campaigns: campaignTable,
+    rc_campaign_proofs: (q) => ({ data: q.filters.status === 'verified' ? [] : rows }),
+    rc_agent_x_handles: handleTable(['me', 'spare']),
+  } })
+  const s = await getVotingStatus(db, { agentNo: 'agent001' }, NOW)
+  assert.deepEqual(s.todayProofs.map((p) => [p.missionId, p.hint, p.author]), [['mnet', 'unreadable', undefined], ['x', 'unlinked_account', 'alt_acct']])
+  assert.deepEqual(s.xHandleLocked, ['me'], 'a verified vote locks @me; a rejected one does not lock @spare')
+  assert.ok(!JSON.stringify(s).includes('author_mismatch') && !JSON.stringify(s).includes('unclear:'), 'no internal notes')
 })

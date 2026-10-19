@@ -20,6 +20,7 @@ const ROOT = new URL('../../../', import.meta.url)
 const migration = (name) => readFileSync(new URL(`migrations/${name}`, ROOT), 'utf8')
 const MIGRATION = migration('20261013150000_rc_vote_campaigns.sql')
 const OFFSET_MIGRATION = migration('20261014090000_rc_campaign_cert_utc_offset.sql')
+const SELF_SERVICE_MIGRATION = migration('20261019120000_rc_vote_proof_self_service.sql')
 
 const modulePath = process.env.PGLITE_MODULE
 const skip = modulePath ? false : 'set PGLITE_MODULE to run the SQL suite'
@@ -75,6 +76,8 @@ async function fresh(t) {
     await engine.exec(MIGRATION)
     await engine.exec(OFFSET_MIGRATION)
     await engine.exec(OFFSET_MIGRATION) // re-runnable
+    await engine.exec(SELF_SERVICE_MIGRATION)
+    await engine.exec(SELF_SERVICE_MIGRATION) // re-runnable
   }
   await engine.exec('begin')
   t.after(() => engine.exec('rollback'))
@@ -670,29 +673,59 @@ test('same certificate, same screenshot → blocked at submit', { skip }, async 
   assert.equal((await submit(db, { agent: 'AGENT002', hash: H('a') })).error, 'duplicate_proof')
 })
 
-test('same certificate re-screenshot/compressed to different bytes → review, never credited twice', { skip }, async (t) => {
+test('own certificate re-screenshot/compressed to different bytes → rejected, never credited twice', { skip }, async (t) => {
   const db = await fresh(t)
   const first = await submit(db, { hash: H('a'), agent: 'AGENT001' })
   assert.equal((await record(db, first.id, FP('c'), FP('d'))).status, 'verified')
   // Same agent and day, but a re-screenshot (different bytes) of the same certificate.
   const copy = await submit(db, { hash: H('b'), agent: 'AGENT001' })
   const r = await record(db, copy.id, FP('c'), FP('e'))
-  assert.equal(r.status, 'review')
-  const row = await q1(db, `select verify_note, duplicate_of, duplicate_kind from rc_campaign_proofs where id = $1`, [copy.id])
-  assert.deepEqual([row.verify_note, Number(row.duplicate_of), row.duplicate_kind], ['duplicate_certificate', first.id, 'certificate'])
-  assert.equal((await transition(db, copy.id, ['review'], 'verified', 'admin')).error, 'duplicate_certificate')
+  assert.equal(r.status, 'rejected', 'certain: their own certificate again')
+  const row = await q1(db, `select status, verify_note, duplicate_of, duplicate_kind from rc_campaign_proofs where id = $1`, [copy.id])
+  assert.deepEqual([row.status, row.verify_note, Number(row.duplicate_of), row.duplicate_kind], ['rejected', 'duplicate_certificate', first.id, 'certificate'])
   assert.deepEqual([await fill(db, 'AGENT001'), (await battle(db)).total], [1, 1], 'no second fill, no second point')
-  // If the original turns out to be the bad one, the copy can stand.
+  assert.equal(await n(db, `select count(*) from rc_campaign_proofs where agent_no = 'AGENT001' and status <> 'rejected'`), 1, 'the daily slot is freed for a new certificate')
+})
+
+test('another agent\'s certificate → still review (who owns it is a human call); the copy can stand if the original was the bad one', { skip }, async (t) => {
+  const db = await fresh(t)
+  const first = await submit(db, { hash: H('a'), agent: 'AGENT001' })
+  assert.equal((await record(db, first.id, FP('c'), FP('d'))).status, 'verified')
+  const copy = await submit(db, { hash: H('b'), agent: 'AGENT002' })
+  assert.equal((await record(db, copy.id, FP('c'), FP('e'))).status, 'review')
+  const row = await q1(db, `select verify_note, duplicate_kind from rc_campaign_proofs where id = $1`, [copy.id])
+  assert.deepEqual([row.verify_note, row.duplicate_kind], ['duplicate_certificate', 'certificate'])
+  assert.equal((await transition(db, copy.id, ['review'], 'verified', 'admin')).error, 'duplicate_certificate')
+  assert.equal((await battle(db)).total, 1, 'no second point')
   await db.query(`update rc_campaign_proofs set status = 'rejected' where id = $1`, [first.id])
   assert.equal((await transition(db, copy.id, ['review'], 'verified', 'admin')).success, true)
 })
 
-test('same agent, same certificate on a later day → still a duplicate', { skip }, async (t) => {
+test('same agent, same certificate on a later day → rejected as a duplicate', { skip }, async (t) => {
   const db = await fresh(t)
   const a = await submit(db, { hash: H('a'), day: '2026-10-13' })
   await record(db, a.id, FP('c'))
   const b = await submit(db, { hash: H('b'), day: '2026-10-14' })
-  assert.equal((await record(db, b.id, FP('c'))).status, 'review')
+  assert.equal((await record(db, b.id, FP('c'))).status, 'rejected')
+})
+
+test('X accounts: a player removes only an account with no counted or pending vote; slots and limits hold', { skip }, async (t) => {
+  const db = await fresh(t)
+  const reg = (agent, h) => json(db, `select rc_campaign_register_x_handle('mama_2026', $1, $2) as r`, [agent, h])
+  const rm = (agent, h) => json(db, `select rc_campaign_remove_x_handle('mama_2026', $1, $2) as r`, [agent, h])
+  for (const h of ['one', 'two', 'three']) assert.equal((await reg('AGENT001', h)).success, true)
+  assert.equal((await reg('AGENT001', 'four')).error, 'x_handle_limit')
+  await db.query(`insert into rc_campaign_proofs (campaign_id, mission_id, agent_no, vote_day, status, post_id, post_author)
+                  values ('mama_2026', 'x', 'AGENT001', '2026-10-14', 'verified', '1845000000000000111', 'one'),
+                         ('mama_2026', 'x', 'AGENT001', '2026-10-14', 'review', '1845000000000000222', 'two'),
+                         ('mama_2026', 'x', 'AGENT001', '2026-10-13', 'rejected', '1845000000000000333', 'three')`)
+  assert.equal((await rm('AGENT001', 'one')).error, 'x_handle_has_votes', 'credited: admin only')
+  assert.equal((await rm('AGENT001', 'two')).error, 'x_handle_has_votes', 'pending: admin only')
+  assert.equal((await rm('AGENT002', 'three')).error, 'x_handle_not_linked', 'someone else\'s account')
+  assert.equal((await rm('AGENT001', 'three')).success, true, 'only a rejected post: free to go')
+  assert.equal((await reg('AGENT001', 'four')).success, true, 'the freed slot can be used')
+  assert.equal((await reg('AGENT001', 'five')).error, 'x_handle_limit', 'still three at most')
+  assert.equal(await n(db, `select count(*) from rc_campaign_proofs where agent_no = 'AGENT001'`), 3, 'history untouched')
 })
 
 test('different certificate numbers → both credited', { skip }, async (t) => {

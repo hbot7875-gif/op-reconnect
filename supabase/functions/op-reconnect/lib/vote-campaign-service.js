@@ -18,7 +18,7 @@
 //     config and applies them only when a proof becomes verified.
 import {
   kstDayOf, addDays, campaignPhase, missionById, parseXPostUrl, snowflakeTime, normalizeHandle,
-  parseOembed, decideXProof, cityPhase, sanitizeMnetChecks, sanitizeClientCertChecks, decideMnetChecks,
+  parseOembed, decideXProof, missingHashtags, cityPhase, sanitizeMnetChecks, sanitizeClientCertChecks, decideMnetChecks,
   normalizeCertificateNumber, participationMinuteKey, validUtcOffset, duplicateNotices, votingStreak, missionStates, missionProgress, giftState, pulseView,
 } from './vote-campaign-rules.js'
 
@@ -264,7 +264,7 @@ export async function getVotingStatus(db, params, now = new Date()) {
   const [proofsRes, verifiedRes, handleRes, progressRes, opensRes, fillsRes, pulseRes, badgeRes, teamRes, battleRes, claimsRes, winnerRes] = await Promise.all([
     // Own rows only. Bounded: a short campaign, at most six proofs per day.
     db.from('rc_campaign_proofs')
-      .select('id, mission_id, vote_day, status, checks, verify_note, submitted_at, verified_at, duplicate_kind')
+      .select('id, mission_id, vote_day, status, checks, verify_note, submitted_at, verified_at, duplicate_kind, post_author')
       .eq('campaign_id', c.id).eq('agent_no', agentNo).order('submitted_at', { ascending: false }).limit(60),
     db.from('rc_campaign_proofs').select('vote_day')
       .eq('campaign_id', c.id).eq('agent_no', agentNo).eq('status', 'verified').limit(400),
@@ -318,7 +318,7 @@ export async function getVotingStatus(db, params, now = new Date()) {
     todayProgress: missionProgress(c, proofs, today),
     // No internal review notes: the player only ever gets the plain duplicate word.
     todayProofs: proofs.filter((p) => p.vote_day === today && p.status !== 'rejected')
-      .map((p) => ({ missionId: p.mission_id, status: p.status, checks: p.checks || {} })),
+      .map((p) => ({ missionId: p.mission_id, status: p.status, checks: p.checks || {}, ...proofHint(p) })),
     notices: duplicateNotices(c, proofs, today),
     stats: {
       verifiedVotes: (verifiedRes.data || []).length,
@@ -331,6 +331,10 @@ export async function getVotingStatus(db, params, now = new Date()) {
     xHandleLinked: (handleRes.data || []).length > 0,
     // Their own handles, shown only back to them on their own page.
     xHandles: (handleRes.data || []).map((r) => r.x_handle),
+    // Accounts that already carry a counted or pending vote can't be removed
+    // by the player (no rotating accounts for extra credit) — an admin can.
+    xHandleLocked: (handleRes.data || []).map((r) => r.x_handle)
+      .filter((h) => proofs.some((p) => p.post_author === h && p.status !== 'rejected')),
     xHandle: handleRes.data?.[0]?.x_handle || null,
     gift: {
       name: gift.name || 'Voting Gift',
@@ -484,6 +488,30 @@ export async function setXHandle(db, params) {
   return { success: true, xHandle: handle, replay: !!r.replay }
 }
 
+/** Unlink one of the player's X accounts. Only an account with no counted or
+ *  pending vote can go (rc_campaign_remove_x_handle); one with votes needs an
+ *  admin, so swapping accounts can never earn extra credit. */
+export async function removeXHandle(db, params) {
+  const agentNo = agentOf(params)
+  const handle = normalizeHandle(String(params.xHandle ?? '').trim())
+  if (!handle) return fail('bad_handle')
+  const { data: r, error } = await db.rpc('rc_campaign_remove_x_handle', {
+    p_campaign_id: String(params.campaignId || ''), p_agent_no: agentNo, p_x_handle: handle,
+  })
+  if (error || !r?.success) return fail(r?.error || 'db_error')
+  return { success: true, removed: handle }
+}
+
+/** A plain word the card can act on — never an internal review note.
+ *  'unreadable': the trusted check couldn't read the certificate wording.
+ *  'unlinked_account': an X post from an account not linked to this agent. */
+function proofHint(p) {
+  if (p.status !== 'review') return {}
+  if (p.mission_id !== 'x' && !p.duplicate_kind && p.checks?.certificate === false) return { hint: 'unreadable' }
+  if (p.verify_note === 'author_mismatch' && p.post_author) return { hint: 'unlinked_account', author: p.post_author }
+  return {}
+}
+
 export async function submitXProof(db, params, { verifier, now = new Date() } = {}) {
   const agentNo = agentOf(params)
   const c = await loadCampaign(db, String(params.campaignId || ''))
@@ -515,6 +543,25 @@ export async function submitXProof(db, params, { verifier, now = new Date() } = 
 
   const fetched = await (verifier || oembedXVerifier()).verify({ postId: parsed.postId })
   const fetchedAuthor = fetched?.ok ? normalizeHandle(fetched.authorHandle) : null
+
+  // Problems X itself confirms are explained right away instead of filling
+  // the review queue: nothing is stored, the player fixes it and sends the
+  // link again. Anything uncertain (X unreachable, or a linked handle in the
+  // link with another author — a renamed account) still goes to review.
+  if (!fetched?.ok && fetched?.reason === 'forbidden') return fail('x_post_private')
+  if (!fetched?.ok && fetched?.reason === 'not_found') return fail('x_post_not_found')
+  if (fetched?.ok) {
+    const missing = missingHashtags(fetched.hashtags, mission.hashtags || [])
+    if (missing.length) return fail('x_missing_hashtags', { missing: missing.map((h) => `#${String(h).replace(/^#/, '')}`) })
+    const urlLinked = !!parsed.urlHandle && registered.has(parsed.urlHandle)
+    if (mission.require_handle_match && fetchedAuthor && !registered.has(fetchedAuthor) && !urlLinked) {
+      const { data: owner } = await db.from('rc_agent_x_handles').select('agent_no')
+        .eq('campaign_id', c.id).eq('x_handle', fetchedAuthor).maybeSingle()
+      if (owner?.agent_no && owner.agent_no !== agentNo) return fail('x_handle_taken', { author: fetchedAuthor })
+      const maxHandles = Math.max(1, Number(mission.max_handles) || 1)
+      return fail('x_account_not_linked', { author: fetchedAuthor, canLink: registered.size < maxHandles })
+    }
+  }
   const expectedHandle = fetchedAuthor && registered.has(fetchedAuthor)
     ? fetchedAuthor
     : parsed.urlHandle && registered.has(parsed.urlHandle) ? parsed.urlHandle : null
@@ -604,7 +651,11 @@ export async function adminListCampaignProofs(db, params) {
       offsets.get(o.agent_no).add(o.cert_utc_offset_min)
     }
   }
-  const trustedOffset = (r) => (validUtcOffset(r.cert_utc_offset_min) !== null && offsets.get(r.agent_no)?.size === 1 ? r.cert_utc_offset_min : null)
+  // Trusted when the agent's uploads all agree, or differ by at most an hour
+  // (two phones, or a neighbouring zone: +5:30 / +6:00) — a wider spread
+  // still falls back to KST and a reviewer.
+  const steadyOffsets = (set) => !!set && set.size > 0 && Math.max(...set) - Math.min(...set) <= 60
+  const trustedOffset = (r) => (validUtcOffset(r.cert_utc_offset_min) !== null && steadyOffsets(offsets.get(r.agent_no)) ? r.cert_utc_offset_min : null)
 
   const proofs = await Promise.all(rows.map(async (r) => {
     const { proof_path, cert_utc_offset_min, ...rest } = r

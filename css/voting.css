@@ -679,3 +679,20 @@
 }
 
 .vta-chat-body { font-size: 15px; line-height: 1.45; overflow-wrap: anywhere; padding: 10px 12px; border-radius: var(--vt-r-md); background: var(--vt-bg); }
+
+/* Proof problems the player can fix: a short, specific note with the action
+   right under it. */
+.vt-attn { display: grid; gap: 10px; }
+.vt-attn .vt-note { margin: 0; }
+.vt-attn .vt-note b { color: var(--vt-text); font-weight: 600; }
+.vt-actions-wrap { flex-wrap: wrap; }
+.vt-actions-wrap .vt-btn { flex: 1 1 auto; }
+.vt-xacc { display: grid; gap: 6px; }
+.vt-xacc-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.vt-xacc-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 40px; padding: 0 2px; border-top: 1px solid var(--vt-line); font-size: 14px; }
+.vt-xacc-list li:first-child { border-top: 0; }
+.vt-xacc-list b { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vt-xacc-lock { font: 11px/1.2 var(--vt-mono-f); color: var(--vt-text-3); white-space: nowrap; }
+.vt-screen .vt-link { color: var(--vt-violet-hi); font-weight: 600; text-underline-offset: 2px; }
+.vt-screen .vt-link:hover, .vt-screen .vt-link:focus-visible { text-decoration: underline; }
+.vt-screen .vt-link.is-danger { color: var(--vt-err); font-weight: 600; }

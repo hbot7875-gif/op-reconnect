@@ -61,7 +61,7 @@ import { getRecelebrateBattle, claimRecelebrateAfterParty } from './lib/recelebr
 import { pingRecelebratePresence } from './lib/recelebrate-presence.ts'
 import { getRecelebrateMessages, sendRecelebrateMessage } from './lib/recelebrate-chat.ts'
 import {
-  getVotingStatus, getPublicBattle, submitMnetProof, submitXProof, setXHandle, openVotingGift,
+  getVotingStatus, getPublicBattle, submitMnetProof, submitXProof, setXHandle, removeXHandle, openVotingGift,
   startVotingTeamChoice, chooseVotingTeam, claimBattleGift, claimBattleWinner,
   adminListCampaignProofs, adminRecordCampaignChecks, adminReviewCampaignProof, cronVotePulse, cronMnetVerifyKick,
   getBattleTeam, setBattleInstagram, getBattleChat, sendBattleChat, reactBattleChat, reportBattleChat, muteBattleChat,
@@ -225,6 +225,7 @@ const ROUTES: Record<string, Route> = {
   submitMnetProof: { auth: 'agent', handler: (sb, p) => submitMnetProof(sb, p) },
   submitXProof: { auth: 'agent', handler: (sb, p) => submitXProof(sb, p) },
   setXHandle: { auth: 'agent', handler: (sb, p) => setXHandle(sb, p) },
+  removeXHandle: { auth: 'agent', handler: (sb, p) => removeXHandle(sb, p) },
   openVotingGift: { auth: 'agent', handler: (sb, p) => openVotingGift(sb, p) },
   // MAMA Battle (HOOLIGANS vs ALIENS). Named apart from RE:CELEBRATE's
   // startTeamChoice/chooseTeam, which keep their own tables and rules.

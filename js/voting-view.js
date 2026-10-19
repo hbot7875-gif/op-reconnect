@@ -43,7 +43,12 @@ export function countdown(ms) {
 const ERRORS = {
   already_submitted: "You've already sent today's proof for this mission.",
   duplicate_proof: 'This proof has already been used.',
-  duplicate_certificate: 'This certificate was already submitted and won’t be counted again.',
+  duplicate_certificate: 'This certificate has already been submitted. Please upload a new voting certificate.',
+  x_duplicate_post: 'This X post has already been submitted. Please submit a different voting post.',
+  x_post_private: 'We can’t see this post because the account is private. Make the account public on X, then add the link again.',
+  x_post_not_found: 'We couldn’t find this post on X. It may have been deleted. If you just posted it, wait a minute and try again — or post again and add the new link.',
+  x_handle_has_votes: 'This account already has votes counted, so only an admin can remove it.',
+  x_handle_not_linked: 'That account isn’t linked.',
   voting_closed: 'Voting is closed.',
   voting_not_open: 'Voting opens Oct 12 at 19:00 KST.',
   post_before_open: 'That post was made before voting opened. Post a new one.',
@@ -72,6 +77,8 @@ const ERRORS = {
   team_required: 'Choose your MAMA Battle side first — then send your proof.',
 }
 export function errorText(code, extra = {}) {
+  if (code === 'x_missing_hashtags') return `Your post is missing ${(extra.missing || ['a required hashtag']).join(' and ')}. Post again with both hashtags, then add the new link.`
+  if (code === 'x_handle_taken' && extra.author) return `This post was made from @${extra.author}, which is linked to another agent file. Post from one of your own linked accounts.`
   if (code === 'post_wrong_day') return `That post is from ${dayLabel(extra.postDay)} KST. Post a new one today.`
   return ERRORS[code] || 'Something went wrong. Try again.'
 }
@@ -167,12 +174,16 @@ export function mnetUiState(serverState, local) {
 
 // Duplicate outcomes, in the player's words. Never who, never how.
 export const DUPLICATE_TEXT = {
-  duplicate: 'This certificate was already submitted and won’t be counted again.',
+  duplicate: 'This certificate has already been submitted. Please upload a new voting certificate.',
   possible_duplicate: 'This certificate may have already been submitted. It’s been sent for review.',
 }
 
 // A certificate the automatic check couldn't fully read.
 export const REVIEW_TEXT = 'We couldn’t confidently read a couple of details, so it’s in review. Your upload is safe.'
+// The trusted check couldn't read the certificate's wording at all.
+export const UNREADABLE_TEXT = 'We couldn’t read your certificate clearly. Please upload the original certificate image or a clearer screenshot.'
+// Picked a very small image: say so before it goes anywhere (never a block).
+export const SMALL_IMAGE_TEXT = 'This screenshot is very small, so we may not be able to read it. Upload the original certificate image if you can.'
 
 function mnetCard(vm, m) {
   const local = vm.local.mnet || {}
@@ -207,6 +218,7 @@ function mnetCard(vm, m) {
         <strong>Upload your vote certificate</strong>
         <span>PNG or JPG · up to 5 MB</span>
       </label>
+      ${local.smallWarn ? `<div class="vt-attn" role="alert">${note('is-warn', 'info', SMALL_IMAGE_TEXT)}<div class="vt-actions"><button class="vt-btn vt-btn-outline" type="button" data-vt-act="mnet-small-cancel">Choose another image</button><button class="vt-btn vt-btn-ghost" type="button" data-vt-act="mnet-small-continue">Upload anyway</button></div></div>` : ''}
       ${pre ? checkChips([['Certificate', pre.certificate || 'unclear'], ["Fans' Choice 1st Vote", pre.category || 'unclear'], [date, pre.date || 'unclear']]) : ''}
       ${note('', 'shield', "We check only that it's today's Fans' Choice certificate and that BTS is selected. The certificate number and account details are not stored.")}
       ${err}
@@ -244,8 +256,8 @@ function mnetCard(vm, m) {
     status = badge('is-warn', 'hourglass', 'In review')
     body = `${stepper(STEPS, 2, true)}
       ${checkChips([['Certificate', c.certificate === true || 'unclear'], ["Fans' Choice 1st Vote", c.category === true || 'unclear'], [date, c.date === true || 'unclear'], ['BTS selected', c.bts === 'match' || 'unclear']])}
-      ${note('is-warn', 'info', dup === 'possible_duplicate' ? DUPLICATE_TEXT.possible_duplicate : REVIEW_TEXT)}
-      ${count.remaining ? `<label class="vt-btn vt-btn-outline">${ic('upload')}Upload another certificate<input type="file" accept="image/png,image/jpeg" class="vt-file" data-vt-act="mnet-file"></label>` : ''}`
+      ${note('is-warn', 'info', dup === 'possible_duplicate' ? DUPLICATE_TEXT.possible_duplicate : proof?.hint === 'unreadable' ? UNREADABLE_TEXT : REVIEW_TEXT)}
+      ${count.remaining ? `<label class="vt-btn vt-btn-outline">${ic('upload')}${proof?.hint === 'unreadable' ? 'Upload new certificate' : 'Upload another certificate'}<input type="file" accept="image/png,image/jpeg" class="vt-file" data-vt-act="mnet-file"></label>` : ''}`
   } else {
     status = badge('is-ok', 'check', 'Verified')
     body = `${checkChips([['Certificate', true], ["Fans' Choice 1st Vote", true], [date, true], ['BTS selected', true]])}
@@ -316,7 +328,10 @@ function xCard(vm, m) {
     status = badge('is-warn', 'hourglass', 'In review')
     body = `${stepper(STEPS, 2, true)}
       ${checkChips([['Hashtags', c.hashtags === true || 'unclear'], ['Public post', c.publicPost === true || 'unclear'], [date, c.date === true || 'unclear']])}
-      ${note('is-warn', 'info', 'This post needs review — do not submit it again.')}
+      ${proof?.hint === 'unlinked_account'
+        ? `${note('is-warn', 'info', `This post was made from <b>@${esc(proof.author)}</b>, but that account isn’t linked. A reviewer will check this one; link the account so your next posts from it count.`)}
+      <div class="vt-actions">${handles.length < (m.maxHandles || 3) && !handles.includes(proof.author) ? `<button class="vt-btn vt-btn-outline" type="button" data-vt-act="x-link-author" data-vt-author="${esc(proof.author)}">${ic('link')}Link @${esc(proof.author)}</button>` : ''}<button class="vt-btn vt-btn-ghost" type="button" data-vt-act="x-manage">Manage X accounts</button></div>`
+        : note('is-warn', 'info', 'This post needs review — do not submit it again.')}
       ${count.remaining ? `<div class="vt-actions"><a class="vt-btn vt-btn-primary" href="${esc(xComposeUrl(m.hashtags))}" target="_blank" rel="noopener noreferrer" data-vt-act="x-compose">Create another vote post ${ic('ext')}</a><button class="vt-btn vt-btn-outline" type="button" data-vt-act="x-link">${ic('link')}Add link</button></div>` : ''}`
   } else {
     status = badge('is-ok', 'check', 'Verified')
@@ -673,6 +688,34 @@ export function guideSheet(vm) {
   </div>`
 }
 
+/** "This post was made from @x, but that account isn't linked." — with the
+ *  three ways forward. Only after the server said so for this exact post. */
+function xUnlinkedPanel(vm, handles, handleMax) {
+  const u = vm.local.xUnlinked
+  if (!u) return ''
+  const room = u.canLink && handles.length < handleMax
+  return `<div class="vt-attn" role="alert">
+    ${note('is-warn', 'info', `This post was made from <b>@${esc(u.author)}</b>, but that account isn’t linked.${room ? '' : ` You already have ${handleMax} X accounts linked — remove one without votes below, or post from a linked account.`}`)}
+    <div class="vt-actions vt-actions-wrap">
+      ${room ? `<button class="vt-btn vt-btn-primary" type="button" data-vt-act="x-link-author" data-vt-author="${esc(u.author)}"${vm.local.x?.submitting ? ' disabled' : ''}>${ic('link')}Link this account</button>` : ''}
+      <button class="vt-btn vt-btn-outline" type="button" data-vt-act="x-choose-other">Choose another account</button>
+      <button class="vt-btn vt-btn-ghost" type="button" data-vt-act="sheet-close">Cancel</button>
+    </div>
+  </div>`
+}
+
+/** Linked X accounts, each removable unless it already carries a vote. */
+function xAccounts(vm, handles, handleMax) {
+  const locked = new Set(vm.status.xHandleLocked || [])
+  const confirm = vm.local.xRemoveConfirm
+  return `<div class="vt-xacc"><span class="vt-field-l">Your X accounts · ${handles.length}/${handleMax}</span>
+    <ul class="vt-xacc-list">${handles.map((h) => `<li><b>@${esc(h)}</b>${locked.has(h)
+      ? '<span class="vt-xacc-lock">Has votes · admin only</span>'
+      : `<button type="button" class="vt-link${confirm === h ? ' is-danger' : ''}" data-vt-act="x-remove-handle" data-vt-handle="${esc(h)}">${confirm === h ? 'Tap again to remove' : 'Remove'}</button>`}</li>`).join('')}</ul>
+    ${handles.length < handleMax ? '<button type="button" class="vt-link" data-vt-act="x-edit-handle">Add account</button>' : ''}
+  </div>`
+}
+
 export function linkSheet(vm) {
   const x = vm.status.campaign.missions.find((m) => m.kind === 'x_post')
   const handles = vm.status.xHandles || (vm.status.xHandle ? [vm.status.xHandle] : [])
@@ -682,10 +725,11 @@ export function linkSheet(vm) {
     <div class="vt-grabber" aria-hidden="true"></div>
     <div class="vt-sheet-h"><h2 id="vt-l-title">Add your vote post</h2><button class="vt-icon-btn" type="button" aria-label="Close" data-vt-act="sheet-close">${ic('x')}</button></div>
     <form class="vt-form" data-vt-form="x">
+      ${xUnlinkedPanel(vm, handles, handleMax)}
       ${needHandle || vm.local.editHandle ? `<label class="vt-field"><span class="vt-field-l">${handles.length ? 'Add another X account' : 'Your X handle'}</span>
         <span class="vt-input-wrap"><span class="vt-input-pre" aria-hidden="true">@</span><input name="handle" class="vt-input" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="16" value="" required></span>
         <span class="vt-field-h">X accounts stay linked for this event. Maximum ${handleMax}.</span></label>`
-        : `<p class="vt-field-h">Registered: ${handles.map((h) => `<b>@${esc(h)}</b>`).join(' · ')}${handles.length < handleMax ? ` · <button type="button" class="vt-link" data-vt-act="x-edit-handle">Add account</button>` : ''}</p>`}
+        : xAccounts(vm, handles, handleMax)}
       <label class="vt-field"><span class="vt-field-l">Post link</span>
         <input name="url" class="vt-input" type="url" inputmode="url" autocomplete="off" placeholder="https://x.com/…/status/…" required></label>
       ${vm.local.error?.mission === 'x-sheet' ? note('is-err', 'xCircle', esc(vm.local.error.text)) : ''}

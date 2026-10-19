@@ -394,6 +394,8 @@ function closeSheet() {
   if (openSheet === 'share') releaseShare()
   openSheet = null
   local.editHandle = false
+  local.xUnlinked = null
+  local.xRemoveConfirm = null
   if (local.error?.mission === 'x-sheet') local.error = null
   sheet?.classList.remove('is-open')
   if (sheet) sheet.hidden = true
@@ -448,6 +450,12 @@ function onClick(e) {
   else if (act === 'mnet-vote') { setVoted(); local.mnet.voted = true; setTimeout(paint, 400) }
   else if (act === 'mnet-voted') { setVoted(); local.mnet.voted = true; local.error = null; paint() }
   else if (act === 'mnet-pick') root.querySelector('[data-vt-act="mnet-file"]')?.click()
+  else if (act === 'mnet-small-continue') { const f = local.mnet.smallFile; local.mnet.smallWarn = false; local.mnet.smallFile = null; if (f) sendCertificate(f, { force: true }) }
+  else if (act === 'mnet-small-cancel') { local.mnet.smallWarn = false; local.mnet.smallFile = null; paint(); root.querySelector('[data-vt-act="mnet-file"]')?.click() }
+  else if (act === 'x-link-author') linkAuthor(t.dataset.vtAuthor)
+  else if (act === 'x-choose-other') chooseOtherPost()
+  else if (act === 'x-manage') { local.error = null; local.xUnlinked = null; paint(); showSheet('link') }
+  else if (act === 'x-remove-handle') removeHandle(t.dataset.vtHandle)
   else if (act === 'x-link') { local.error = null; paint(); showSheet('link') }
   else if (act === 'x-edit-handle') { local.editHandle = true; paint(); root.querySelector('input[name="handle"]')?.focus() }
   else if (act === 'gift-open') openGift()
@@ -499,11 +507,32 @@ function withTimeout(p, ms) {
   return Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))])
 }
 
-async function sendCertificate(file) {
+// Under this width the certificate's small print usually can't be read.
+const SMALL_IMAGE_PX = 500
+
+async function imageWidth(file) {
+  try {
+    const bmp = await createImageBitmap(file)
+    const w = bmp.width
+    bmp.close?.()
+    return w
+  } catch {
+    return null
+  }
+}
+
+async function sendCertificate(file, { force = false } = {}) {
   const mission = status.campaign.missions.find((m) => m.kind === 'mnet_certificate')
   local.error = null
   if (!/^image\/(png|jpeg)$/.test(file.type)) { local.error = { mission: mission.id, text: errorText('bad_image_type') }; paint(); return }
   if (file.size > MAX_ORIGINAL_BYTES) { local.error = { mission: mission.id, text: errorText('image_too_large') }; paint(); return }
+  // A forwarded or cropped thumbnail: offer the original first. Never a block.
+  if (!force) {
+    const w = await imageWidth(file)
+    if (w && w < SMALL_IMAGE_PX) { local.mnet.smallWarn = true; local.mnet.smallFile = file; paint(); return }
+  }
+  local.mnet.smallWarn = false
+  local.mnet.smallFile = null
   local.mnet.uploading = true
   paint()
   try {
@@ -556,7 +585,17 @@ async function sendXPost(url, handle) {
     }
     const r = await call('submitXProof', { agentNo: getAgentNo(), campaignId: status.campaign.id, missionId: mission.id, postUrl: url })
     if (r?.error === 'team_required') { closeSheet(); startChooser() }
+    if (r?.error === 'x_account_not_linked') {
+      local.x.submitting = false
+      local.xUnlinked = { author: r.author, canLink: !!r.canLink, url }
+      paint()
+      showSheet('link', false)
+      return
+    }
+    // The same post id already used — by this agent or another.
+    if (r?.error === 'duplicate_proof') throw Object.assign(new Error('x_duplicate_post'), { code: 'x_duplicate_post' })
     if (!r?.success) throw Object.assign(new Error(r?.error), { code: r?.error, extra: r })
+    local.xUnlinked = null
     local.x.submitting = false
     closeSheet()
     toast(r.status === 'verified' ? 'X vote verified' : 'Sent for review')
@@ -884,4 +923,58 @@ async function refreshScore() {
   paint()
   // A lead change eases the score in once (skipped for reduced motion).
   if (leaderOf(b.teams) !== before) for (const el of root.querySelectorAll('.vt-ls-score, .vt-battle')) el.classList.add('is-flip')
+}
+
+// ── X accounts: link the post's author, pick another post, remove one ──
+
+/** Link the account the server named, then send the same post again. From
+ *  a card in review there's no pending link: it just links for next time. */
+async function linkAuthor(author) {
+  if (!author) return
+  const pending = local.xUnlinked?.url || null
+  local.error = null
+  const h = await call('setXHandle', { agentNo: getAgentNo(), campaignId: status.campaign.id, xHandle: author })
+  if (!h?.success) {
+    local.error = { mission: 'x-sheet', text: errorText(h?.error) }
+    paint()
+    showSheet('link', false)
+    return
+  }
+  status.xHandles = [...new Set([...(status.xHandles || []), h.xHandle])]
+  status.xHandleLinked = true
+  local.xUnlinked = null
+  if (pending) return sendXPost(pending, null)
+  toast(`Linked @${h.xHandle}. New posts from it will count.`)
+  await load()
+}
+
+function chooseOtherPost() {
+  local.xUnlinked = null
+  local.error = null
+  paint()
+  showSheet('link', false)
+  const input = root.querySelector('[data-vt-form="x"] input[name="url"]')
+  if (input) { input.value = ''; input.focus() }
+}
+
+/** Two taps: the first asks, the second removes (only accounts without votes). */
+async function removeHandle(handle) {
+  if (!handle) return
+  if (local.xRemoveConfirm !== handle) {
+    local.xRemoveConfirm = handle
+    paint()
+    showSheet('link', false)
+    return
+  }
+  local.xRemoveConfirm = null
+  const r = await call('removeXHandle', { agentNo: getAgentNo(), campaignId: status.campaign.id, xHandle: handle })
+  if (!r?.success) {
+    local.error = { mission: 'x-sheet', text: errorText(r?.error) }
+    paint()
+    showSheet('link', false)
+    return
+  }
+  toast(`Removed @${handle}`)
+  await load()
+  showSheet('link', false)
 }

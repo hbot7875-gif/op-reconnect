@@ -72,6 +72,12 @@ export async function nodeIo() {
       return sharp(buf).extract({ left: 0, top, width, height: rowHeight })
         .resize({ width: Math.min(width * 3, 3200) }).grayscale().normalise().png().toBuffer()
     },
+    // Under 1000 px wide, an upscaled, sharpened copy for one more read.
+    enlarge: async (buf) => {
+      const { width } = await sharp(buf).metadata()
+      if (!width || width >= 1000) return null
+      return sharp(buf).resize({ width: 1400, kernel: 'lanczos3' }).grayscale().normalise().sharpen().png().toBuffer()
+    },
     close: () => worker.terminate(),
   }
   return io
