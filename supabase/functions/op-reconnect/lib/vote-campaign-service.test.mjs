@@ -5,6 +5,7 @@ import {
   submitMnetProof, submitXProof, setXHandle, removeXHandle, openVotingGift, getVotingStatus, getVotingBanner,
   adminListCampaignProofs, adminRecordCampaignChecks, adminReviewCampaignProof, oembedXVerifier, sha256Hex, PROOF_BUCKET,
   startVotingTeamChoice, chooseVotingTeam, claimBattleGift, claimBattleWinner, certFingerprint,
+  requestXReplacement, adminListXReplacements, adminDecideXReplacement,
 } from './vote-campaign-service.js'
 import { createHash } from 'node:crypto'
 import { normalizeCertificateNumber } from './vote-campaign-rules.js'
@@ -43,6 +44,7 @@ function fakeDb({ tables = {}, rpc = {}, uploadError = null } = {}) {
       select(cols, o) { q.cols = cols; q.head = !!o?.head; return api },
       eq(k, v) { q.filters[k] = v; return api },
       in(k, v) { q.filters[k] = v; return api },
+      is(k, v) { q.filters[k] = v; return api }, not(k, op, v) { q.not = { ...(q.not || {}), [k]: [op, v] }; return api },
       order() { return api }, limit() { return api }, range() { return api },
       delete() { q.op = 'delete'; calls.writes.push(q); return api },
       update(row) { q.op = 'update'; q.row = row; calls.writes.push(q); return api },
@@ -752,4 +754,85 @@ test('admin queue: the reason filter pages through matching proofs only', async 
 
 test('admin queue is admin-only', () => {
   assert.match(readFileSync(new URL('../index.ts', import.meta.url), 'utf8'), /adminListCampaignProofs: \{ auth: 'admin'/)
+})
+
+// ── X account replacement ────────────────────────────────────────────
+
+test('replacement request: handles normalised, a fixed reason, a short note — nothing else reaches the database', async () => {
+  const db = fakeDb({ rpc: { rc_campaign_request_x_replacement: () => ({ data: { success: true, id: 4, status: 'pending' } }) } })
+  const r = await requestXReplacement(db, { agentNo: 'agent001', campaignId: 'mama_2026', oldHandle: '@Old_One', newHandle: 'https://x.com/New_One',
+    reason: 'suspended', note: '  Suspended   on Oct 15  ', password: 'hunter2', code: '123456' })
+  assert.deepEqual(r, { success: true, id: 4, status: 'pending', oldHandle: 'old_one', newHandle: 'new_one' })
+  assert.deepEqual(db.calls.rpc[0].args, { p_campaign_id: 'mama_2026', p_agent_no: 'AGENT001', p_old_handle: 'old_one', p_new_handle: 'new_one', p_reason: 'suspended', p_note: 'Suspended on Oct 15' })
+  assert.ok(!JSON.stringify(db.calls.rpc).includes('hunter2') && !JSON.stringify(db.calls.rpc).includes('123456'))
+  assert.equal((await requestXReplacement(db, { agentNo: 'a', oldHandle: 'old', newHandle: 'new', reason: 'password' })).error, 'bad_reason')
+  assert.equal((await requestXReplacement(db, { agentNo: 'a', oldHandle: '', newHandle: 'new', reason: 'deleted' })).error, 'bad_handle')
+  assert.equal(db.calls.rpc.length, 1)
+  const long = await requestXReplacement(db, { agentNo: 'a', oldHandle: 'old', newHandle: 'new', reason: 'other', note: 'x'.repeat(500) })
+  assert.equal(long.success, true)
+  assert.equal(db.calls.rpc[1].args.p_note.length, 200)
+  const limited = fakeDb({ rpc: { rc_campaign_request_x_replacement: () => ({ data: { success: false, error: 'x_replacement_limit', limit: 1 } }) } })
+  assert.deepEqual(await requestXReplacement(limited, { agentNo: 'a', oldHandle: 'old', newHandle: 'new', reason: 'locked' }), { success: false, error: 'x_replacement_limit', limit: 1 })
+})
+
+test('X: a post from the player’s own replaced account is named, and nothing is stored', async () => {
+  const id = postIdAt(new Date('2026-10-14T01:00:00Z'))
+  const rows = [{ agent_no: 'AGENT001', x_handle: 'newone', retired_at: null }, { agent_no: 'AGENT001', x_handle: 'one', retired_at: '2026-10-14T00:00:00Z' }]
+  const db = fakeDb({ tables: { rc_vote_campaigns: campaignTable, rc_agent_x_handles: (q) => {
+    const hit = rows.filter((r) => Object.entries(q.filters).every(([k, v]) => r[k] === undefined || r[k] === v))
+    return q.single ? { data: hit[0] || null } : { data: hit }
+  } } })
+  const r = await submitXProof(db, { agentNo: 'AGENT001', campaignId: 'mama_2026', postUrl: `https://x.com/one/status/${id}` },
+    { verifier: verifier({ ok: true, authorHandle: 'one', hashtags: ['2026mamavote', 'bts'] }), now: NOW })
+  assert.deepEqual(r, { success: false, error: 'x_handle_retired', author: 'one' })
+  assert.equal(db.calls.rpc.some((c) => c.name === 'rc_campaign_submit_proof'), false)
+  assert.ok(db.calls.reads.some((q) => q.table === 'rc_agent_x_handles' && q.filters.retired_at === null), 'only active accounts count as linked')
+})
+
+test('player status: replacement requests show their status only, never the reviewer or their note', async () => {
+  const db = fakeDb({ rpc: {
+    rc_campaign_team_resolve: () => ({ data: { team: 'aliens', via: 'timeout' } }),
+    rc_campaign_battle_state: () => ({ data: { total: 1, teams: {}, teamSizes: {}, mine: 0 } }),
+  }, tables: {
+    rc_vote_campaigns: campaignTable,
+    rc_agent_x_handles: () => ({ data: [{ x_handle: 'newone' }] }),
+    rc_x_handle_replacements: () => ({ data: [
+      { id: 2, old_handle: 'two', new_handle: 'fresh', reason: 'deleted', status: 'pending', created_at: '2026-10-15T01:00:00Z', decided_at: null, admin_note: 'secret', decided_by: 'HT' },
+      { id: 1, old_handle: 'one', new_handle: 'newone', reason: 'suspended', status: 'approved', created_at: '2026-10-14T01:00:00Z', decided_at: '2026-10-14T02:00:00Z' },
+    ] }),
+  } })
+  const s = await getVotingStatus(db, { agentNo: 'agent001' }, NOW)
+  assert.deepEqual(s.xReplacements.map((r) => [r.oldHandle, r.newHandle, r.status]), [['two', 'fresh', 'pending'], ['one', 'newone', 'approved']])
+  assert.equal(s.xReplacementsLeft, 0)
+  assert.deepEqual(s.xHandles, ['newone'])
+  const out = JSON.stringify(s)
+  assert.ok(!out.includes('secret') && !out.includes('"HT"'))
+})
+
+test('admin: replacement queue shows who, both accounts, the reason and the old account’s votes; decisions go through SQL', async () => {
+  const db = fakeDb({ tables: {
+    rc_vote_campaigns: campaignTable,
+    rc_x_handle_replacements: (q) => (q.head ? { count: 1 } : { data: [{ id: 3, agent_no: 'AGENT060', old_handle: 'one', new_handle: 'fresh', reason: 'suspended', note: 'Suspended Oct 15', status: 'pending', created_at: '2026-10-15T01:00:00Z' }] }),
+    rc_agents: () => ({ data: [{ agent_no: 'AGENT060', handle: 'army_sixty' }] }),
+    rc_agent_x_handles: () => ({ data: [{ agent_no: 'AGENT060', x_handle: 'one', retired_at: null }, { agent_no: 'AGENT060', x_handle: 'two', retired_at: null }] }),
+    rc_campaign_proofs: () => ({ data: [
+      { agent_no: 'AGENT060', post_author: 'one', status: 'verified', vote_day: '2026-10-13' },
+      { agent_no: 'AGENT060', post_author: 'one', status: 'verified', vote_day: '2026-10-14' },
+      { agent_no: 'AGENT060', post_author: 'one', status: 'review', vote_day: '2026-10-15' },
+      { agent_no: 'AGENT060', post_author: 'one', status: 'rejected', vote_day: '2026-10-15' },
+      { agent_no: 'AGENT060', post_author: 'two', status: 'verified', vote_day: '2026-10-15' },
+    ] }),
+  }, rpc: { rc_campaign_decide_x_replacement: (a) => ({ data: { success: true, status: a.p_decision === 'approve' ? 'approved' : 'rejected' } }) } })
+  const r = await adminListXReplacements(db, { campaignId: 'mama_2026' })
+  assert.equal(r.pending, 1)
+  const q = r.requests[0]
+  assert.deepEqual([q.agent_no, q.instagram, q.old_handle, q.new_handle, q.reason, q.note], ['AGENT060', 'army_sixty', 'one', 'fresh', 'suspended', 'Suspended Oct 15'])
+  assert.deepEqual(q.oldHandleVotes, { verified: 2, pending: 1, lastDay: '2026-10-15' })
+  assert.deepEqual(await adminDecideXReplacement(db, { requestId: 3, decision: 'approve', admin: 'HT', note: 'checked' }), { success: true, status: 'approved' })
+  assert.deepEqual(db.calls.rpc[0].args, { p_request_id: 3, p_decision: 'approve', p_actor: 'HT', p_note: 'checked' })
+  assert.equal((await adminDecideXReplacement(db, { requestId: 3, decision: 'delete' })).error, 'bad_params')
+  const idx = readFileSync(new URL('../index.ts', import.meta.url), 'utf8')
+  assert.match(idx, /requestXReplacement: \{ auth: 'agent'/)
+  assert.match(idx, /adminListXReplacements: \{ auth: 'admin'/)
+  assert.match(idx, /adminDecideXReplacement: \{ auth: 'admin'/)
 })

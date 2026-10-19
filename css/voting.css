@@ -716,3 +716,13 @@
 .vt-screen .vt-link { color: var(--vt-violet-hi); font-weight: 600; text-underline-offset: 2px; }
 .vt-screen .vt-link:hover, .vt-screen .vt-link:focus-visible { text-decoration: underline; }
 .vt-screen .vt-link.is-danger { color: var(--vt-err); font-weight: 600; }
+
+/* Manage X accounts: one tap from the X card; replacement requests. */
+.vt-m-manage { justify-self: start; margin-top: 2px; font-size: 13px; }
+.vt-xrepl-list li { justify-content: space-between; gap: 8px; }
+.vt-xrepl-reasons { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.vt-xrepl-reasons legend { padding: 0; margin-bottom: 6px; }
+.vt-xrepl-reason { display: inline-flex; gap: 6px; align-items: center; min-height: 32px; font-size: 14px; }
+.vta-xr-swap { margin: 0; font-size: 15px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.vta-xr-swap a { display: inline-flex; gap: 4px; align-items: center; color: var(--vt-accent); overflow-wrap: anywhere; }
+.vt-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

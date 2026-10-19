@@ -396,6 +396,8 @@ function closeSheet() {
   local.editHandle = false
   local.xUnlinked = null
   local.xRemoveConfirm = null
+  local.xReplace = null
+  local.xManage = false
   if (local.error?.mission === 'x-sheet') local.error = null
   sheet?.classList.remove('is-open')
   if (sheet) sheet.hidden = true
@@ -454,9 +456,12 @@ function onClick(e) {
   else if (act === 'mnet-small-cancel') { local.mnet.smallWarn = false; local.mnet.smallFile = null; paint(); root.querySelector('[data-vt-act="mnet-file"]')?.click() }
   else if (act === 'x-link-author') linkAuthor(t.dataset.vtAuthor)
   else if (act === 'x-choose-other') chooseOtherPost()
-  else if (act === 'x-manage') { local.error = null; local.xUnlinked = null; paint(); showSheet('link') }
+  else if (act === 'x-manage') { local.error = null; local.xUnlinked = null; local.xManage = true; paint(); showSheet('link') }
+  else if (act === 'x-replace-open') { local.error = null; local.xReplace = t.dataset.vtHandle; paint(); showSheet('link', false); root.querySelector('[data-vt-xrepl] input')?.focus() }
+  else if (act === 'x-replace-cancel') { local.error = null; local.xReplace = null; paint(); showSheet('link', false) }
+  else if (act === 'x-replace-send') sendReplacement()
   else if (act === 'x-remove-handle') removeHandle(t.dataset.vtHandle)
-  else if (act === 'x-link') { local.error = null; paint(); showSheet('link') }
+  else if (act === 'x-link') { local.error = null; local.xManage = false; paint(); showSheet('link') }
   else if (act === 'x-edit-handle') { local.editHandle = true; paint(); root.querySelector('input[name="handle"]')?.focus() }
   else if (act === 'gift-open') openGift()
   else if (act === 'x-compose') { setComposed(); local.x.composed = true; setTimeout(paint, 400) }
@@ -975,6 +980,29 @@ async function removeHandle(handle) {
     return
   }
   toast(`Removed @${handle}`)
+  await load()
+  showSheet('link', false)
+}
+
+/** Ask to replace an account that stopped working. Only the reason code, the
+ *  new handle and an optional note go out — never anything about logging in. */
+async function sendReplacement() {
+  const panel = root.querySelector('[data-vt-xrepl]')
+  if (!panel || local.xReplaceSending) return
+  const reason = panel.querySelector('input[name="xr-reason"]:checked')?.value || ''
+  const newHandle = panel.querySelector('input[name="xr-new"]')?.value || ''
+  const extra = panel.querySelector('input[name="xr-note"]')?.value || ''
+  const fail = (code) => { local.error = { mission: 'x-sheet', text: errorText(code) }; paint(); showSheet('link', false) }
+  if (!reason) return fail('bad_reason')
+  if (!newHandle.trim()) return fail('bad_handle')
+  local.xReplaceSending = true
+  const r = await call('requestXReplacement', { agentNo: getAgentNo(), campaignId: status.campaign.id,
+    oldHandle: panel.dataset.vtXrepl, newHandle, reason, note: extra })
+  local.xReplaceSending = false
+  if (!r?.success) return fail(r?.error)
+  local.error = null
+  local.xReplace = null
+  toast(`Request sent — @${r.newHandle} is pending approval`)
   await load()
   showSheet('link', false)
 }

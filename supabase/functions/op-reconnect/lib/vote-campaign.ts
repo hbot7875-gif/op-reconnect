@@ -9,7 +9,8 @@ import {
   setXHandle as handle, removeXHandle as unlinkHandle, openVotingGift as gift, adminListCampaignProofs as list,
   adminRecordCampaignChecks as record, adminReviewCampaignProof as review, oembedXVerifier,
   startVotingTeamChoice as teamStart, chooseVotingTeam as teamChoose, claimBattleGift as battleGift,
-  claimBattleWinner as battleWinner,
+  claimBattleWinner as battleWinner, requestXReplacement as replaceRequest, adminListXReplacements as replaceList,
+  adminDecideXReplacement as replaceDecide,
 } from './vote-campaign-service.js'
 import { runVotePulse } from './vote-pulse-service.js'
 import {
@@ -76,6 +77,9 @@ export const cronMnetVerifyKick = async () => ({ success: true, ...(await wakeCh
 export const submitXProof = (sb: SupabaseDB, p: P) => x(sb, p, { verifier: oembedXVerifier() })
 export const setXHandle = (sb: SupabaseDB, p: P) => handle(sb, p)
 export const removeXHandle = (sb: SupabaseDB, p: P) => unlinkHandle(sb, p)
+export const requestXReplacement = (sb: SupabaseDB, p: P) => replaceRequest(sb, p)
+export const adminListXReplacements = (sb: SupabaseDB, p: P) => replaceList(sb, p)
+export const adminDecideXReplacement = (sb: SupabaseDB, p: P) => replaceDecide(sb, p)
 export const openVotingGift = (sb: SupabaseDB, p: P) => gift(sb, p)
 export const startVotingTeamChoice = (sb: SupabaseDB, p: P) => teamStart(sb, p)
 export const chooseVotingTeam = (sb: SupabaseDB, p: P) => teamChoose(sb, p)

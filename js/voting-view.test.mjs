@@ -6,7 +6,7 @@ import {
   battleLine, nextMilestone, teamChooser, rewardText, fmtCount, cityResultText, MNET_CHECKING_MS, REVIEW_TEXT,
 } from './voting-view.js'
 import { cityBanner, CITY_NOW } from './voting-fixtures.js'
-import { reviewCardHtml, noteText, summaryHtml, REASONS } from './voting-admin.js'
+import { reviewCardHtml, noteText, summaryHtml, REASONS, replacementCardHtml } from './voting-admin.js'
 import { votingStatus, votingLocal, FIXTURE_NOW, SAMPLE_GIFT_REVEAL } from './voting-fixtures.js'
 
 const render = (o = {}, l = {}) => votingScreen({ status: votingStatus(o), local: votingLocal({ ...o, ...l }), now: FIXTURE_NOW })
@@ -373,6 +373,25 @@ test('admin review: summary chips count every pending reason and filter by it', 
   const src = readFileSync(new URL('./voting-admin.js', import.meta.url), 'utf8')
   assert.match(src, /call\('adminListCampaignProofs', \{ status, reason: status === 'review' \? reason : null, limit: PAGE, offset \}\)/)
   assert.doesNotMatch(src, /certificateNumber[^,)]*(innerHTML|textContent|console)/, 'numbers are never shown or logged')
+})
+
+test('admin: an X replacement request shows the agent, both accounts, the reason and what approving does', () => {
+  const r = { id: 3, agent_no: 'AGENT060', instagram: 'army_sixty', old_handle: 'one', new_handle: 'fresh', reason: 'suspended', note: 'Suspended <Oct 15>',
+    status: 'pending', created_at: '2026-10-15T01:00:00Z', oldHandleVotes: { verified: 2, pending: 1, lastDay: '2026-10-15' },
+    accounts: [{ handle: 'one', retired: false }, { handle: 'two', retired: false }] }
+  const html = replacementCardHtml(r)
+  assert.match(html, /<b class="vt-mono">AGENT060<\/b> <span class="vta-ig">· @army_sixty<\/span> · X account replacement/)
+  assert.match(html, /href="https:\/\/x\.com\/one"[^>]*>@one[\s\S]*?href="https:\/\/x\.com\/fresh"[^>]*>@fresh/)
+  assert.match(html, /<b>Reason:<\/b> Suspended · “Suspended &lt;Oct 15&gt;”/)
+  assert.match(html, /<b>@one:<\/b> 2 verified · 1 pending · last vote Oct 15/)
+  assert.match(html, /Pending approval/)
+  assert.match(html, /data-vta-xr="approve"[\s\S]*data-vta-xr="reject"/)
+  const done = replacementCardHtml({ ...r, status: 'rejected', decided_at: '2026-10-15T03:00:00Z', decided_by: 'HT', admin_note: 'still active' })
+  assert.doesNotMatch(done, /data-vta-xr=/)
+  assert.match(done, /Rejected[\s\S]*rejected Oct 15 · 12:00 KST by HT · “still active”/)
+  const src = readFileSync(new URL('./voting-admin.js', import.meta.url), 'utf8')
+  assert.match(src, /data-vta-filter="xrepl" aria-selected="false">X replacements/)
+  assert.match(src, /call\('adminDecideXReplacement', \{ requestId: Number\(card\.dataset\.vtaXrId\), decision, note:/)
 })
 
 test('stylesheet: scoped, one accent, no glow or purple dashboard', () => {

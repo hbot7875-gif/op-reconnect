@@ -153,6 +153,36 @@ export function reviewCardHtml(row) {
   </article>`
 }
 
+const XR_STATUS = { pending: ['is-warn', 'hourglass', 'Pending approval'], approved: ['is-ok', 'check', 'Approved'], rejected: ['is-err', 'xCircle', 'Rejected'] }
+const XR_REASONS = { suspended: 'Suspended', deleted: 'Deleted', locked: 'Locked / can’t log in', other: 'Other' }
+
+/** One X account replacement request, with what approving would do. */
+export function replacementCardHtml(r) {
+  const [k, i, t] = XR_STATUS[r.status] || XR_STATUS.pending
+  const v = r.oldHandleVotes || {}
+  const profile = (h) => `<a href="https://x.com/${esc(h)}" target="_blank" rel="noopener noreferrer">@${esc(h)}${ic('ext')}</a>`
+  const accounts = (r.accounts || []).map((a) => `@${esc(a.handle)}${a.retired ? ' (replaced)' : ''}`).join(' · ')
+  return `<article class="vta-card" data-vta-xr-id="${Number(r.id)}">
+    <header class="vta-head">
+      <div>${agentLabel(r.agent_no, r.instagram)} · X account replacement · <span class="vta-hint">#${Number(r.id)}</span></div>
+      <span class="vt-badge ${k}">${ic(i)}${t}</span>
+    </header>
+    <div class="vta-side">
+      <p class="vta-xr-swap">${profile(r.old_handle)} <span aria-hidden="true">→</span><span class="vt-sr"> to </span> ${profile(r.new_handle)}</p>
+      <p class="vta-hint"><b>Reason:</b> ${esc(XR_REASONS[r.reason] || r.reason)}${r.note ? ` · “${esc(r.note)}”` : ''}</p>
+      <p class="vta-hint"><b>@${esc(r.old_handle)}:</b> ${Number(v.verified) || 0} verified · ${Number(v.pending) || 0} pending${v.lastDay ? ` · last vote ${esc(dayLabel(v.lastDay))}` : ''}${accounts ? ` · <b>Accounts:</b> ${accounts}` : ''}</p>
+      <p class="vta-hint">Requested ${esc(kstStamp(r.created_at))}${r.decided_at ? ` · ${esc(t.toLowerCase())} ${esc(kstStamp(r.decided_at))}${r.decided_by ? ` by ${esc(r.decided_by)}` : ''}` : ''}${r.admin_note ? ` · “${esc(r.admin_note)}”` : ''}</p>
+      ${r.status === 'pending' ? `<p class="vta-hint">Approving keeps every vote @${esc(r.old_handle)} already earned, retires it (no new credit, can’t be linked again) and links @${esc(r.new_handle)} in its slot. Check both profiles on X first.</p>
+      <input class="vta-note" name="note" maxlength="300" placeholder="Note (optional, not shown to the player)">
+      <div class="vta-actions">
+        <button type="button" class="vt-btn vt-btn-primary vt-btn-sm" data-vta-xr="approve">${ic('check')}Approve</button>
+        <button type="button" class="vt-btn vt-btn-ghost vt-btn-sm vta-reject" data-vta-xr="reject">Reject</button>
+      </div>` : ''}
+      <p class="vta-out" role="status"></p>
+    </div>
+  </article>`
+}
+
 const CHAT_STATUS = { visible: ['is-neutral', 'chat', 'Visible'], auto_hidden: ['is-warn', 'flag', 'Hidden by reports'], removed: ['is-err', 'xCircle', 'Removed'] }
 
 /** One reported or hidden MAMA Chat message, with the moderation actions. */
@@ -182,6 +212,7 @@ export function chatCardHtml(item) {
 export function mountVotingReview(panel, call) {
   let status = 'verifying'
   let reason = null
+  let xrStatus = 'pending'
   let offset = 0
   let rows = []
   let running = false
@@ -193,6 +224,7 @@ export function mountVotingReview(panel, call) {
       <div class="vta-summary" data-vta-summary aria-label="Waiting for review, by reason"></div>
       <div class="vta-filters" role="tablist">
         ${Object.entries(STATUS).map(([s, [, , label]]) => `<button type="button" class="vta-filter" role="tab" data-vta-filter="${s}" aria-selected="${s === status}">${label}</button>`).join('')}
+        <button type="button" class="vta-filter" role="tab" data-vta-filter="xrepl" aria-selected="false">X replacements</button>
         <button type="button" class="vta-filter" role="tab" data-vta-filter="chat" aria-selected="false">Chat reports</button>
       </div>
       <div class="vta-tools">
@@ -210,6 +242,7 @@ export function mountVotingReview(panel, call) {
   async function load() {
     $('[data-vta-list]').innerHTML = '<p class="vta-hint">Loading…</p>'
     if (status === 'chat') return loadChat()
+    if (status === 'xrepl') return loadReplacements()
     const r = await call('adminListCampaignProofs', { status, reason: status === 'review' ? reason : null, limit: PAGE, offset })
     if (!r?.success) { $('[data-vta-list]').innerHTML = `<p class="vta-hint">${esc(r?.error || 'Could not load')}</p>`; return }
     rows = r.proofs
@@ -226,6 +259,7 @@ export function mountVotingReview(panel, call) {
   // MAMA Chat: reported and hidden messages (adminListBattleChat).
   async function loadChat() {
     const r = await call('adminListBattleChat', {})
+    $('[data-vta-summary]').innerHTML = ''
     $('[data-vta-run]').hidden = true
     $('[data-vta-page]').textContent = ''
     $('[data-vta-prev]').disabled = true
@@ -235,6 +269,31 @@ export function mountVotingReview(panel, call) {
     $('[data-vta-list]').innerHTML = r.items.length
       ? `<p class="vta-hint">Hidden automatically at 3 reports when one comes from the sender's own team, otherwise at 5. Restore or remove clears the reports.</p>${r.items.map(chatCardHtml).join('')}`
       : '<p class="vta-hint">No Chat reports.</p>'
+  }
+
+  // X account replacements (adminListXReplacements / adminDecideXReplacement).
+  async function loadReplacements() {
+    const r = await call('adminListXReplacements', { status: xrStatus })
+    $('[data-vta-run]').hidden = true
+    $('[data-vta-page]').textContent = ''
+    $('[data-vta-prev]').disabled = true
+    $('[data-vta-next]').disabled = true
+    $('[data-vta-summary]').innerHTML = Object.entries(XR_STATUS).map(([key, [, , label]]) =>
+      `<button type="button" class="vta-chip" data-vta-xr-status="${key}" aria-pressed="${key === xrStatus}">${key === 'pending' && r?.success ? `<b>${Number(r.pending) || 0}</b> ` : ''}${label}</button>`).join('')
+    if (!r?.success) { $('[data-vta-list]').innerHTML = `<p class="vta-hint">${esc(r?.error || 'Could not load')}</p>`; return }
+    $('[data-vta-counts]').textContent = `${r.pending} X account ${r.pending === 1 ? 'replacement' : 'replacements'} waiting`
+    $('[data-vta-list]').innerHTML = r.requests.length ? r.requests.map(replacementCardHtml).join('') : '<p class="vta-hint">Nothing here.</p>'
+  }
+
+  async function decideReplacement(card, decision) {
+    const out = card.querySelector('.vta-out')
+    for (const b of card.querySelectorAll('button')) b.disabled = true
+    const res = await call('adminDecideXReplacement', { requestId: Number(card.dataset.vtaXrId), decision, note: card.querySelector('.vta-note')?.value || '' })
+    if (res?.success) { out.textContent = `Saved: ${res.status}`; setTimeout(load, 600) } else {
+      out.textContent = res?.error === 'x_handle_taken' ? 'The new account is already linked to an agent file — reject this request.'
+        : res?.error === 'x_handle_not_linked' ? 'The old account is no longer linked — reject this request.' : (res?.error || 'Failed')
+      for (const b of card.querySelectorAll('button')) b.disabled = false
+    }
   }
 
   async function moderate(card, btn) {
@@ -325,6 +384,10 @@ export function mountVotingReview(panel, call) {
     if (e.target.closest('[data-vta-run]')) return runChecks()
     if (e.target.closest('[data-vta-prev]')) { offset = Math.max(0, offset - PAGE); return load() }
     if (e.target.closest('[data-vta-next]')) { offset += PAGE; return load() }
+    const xs = e.target.closest('[data-vta-xr-status]')
+    if (xs) { xrStatus = xs.dataset.vtaXrStatus; return load() }
+    const xr = e.target.closest('[data-vta-xr]')
+    if (xr) return decideReplacement(xr.closest('.vta-card'), xr.dataset.vtaXr)
     const mod = e.target.closest('[data-vta-chat]')
     if (mod) return moderate(mod.closest('.vta-card'), mod)
     const act = e.target.closest('[data-vta]')

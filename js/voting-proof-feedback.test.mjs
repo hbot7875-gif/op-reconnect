@@ -7,7 +7,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import {
-  votingScreen, errorText, linkSheet, DUPLICATE_TEXT, UNREADABLE_TEXT, SMALL_IMAGE_TEXT,
+  votingScreen, errorText, linkSheet, DUPLICATE_TEXT, UNREADABLE_TEXT, SMALL_IMAGE_TEXT, replaceSheetBody, REPLACE_REASONS,
 } from './voting-view.js'
 import { votingStatus, votingLocal, FIXTURE_NOW } from './voting-fixtures.js'
 import { trustedCheckWith } from './mnet-trusted-check.js'
@@ -45,13 +45,15 @@ test('unlinked X account: named, with Link this account / Choose another account
   assert.match(atLimit, /You already have 3 X accounts linked — remove one without votes below, or post from a linked account\./)
 })
 
-test('X accounts: each listed; an account with votes is admin-only; remove takes two taps', () => {
+test('X accounts: each listed; an account with votes can only be replaced (or is admin-only); remove takes two taps', () => {
   const status = { ...votingStatus({ x: 'link' }), xHandles: ['main', 'spare'], xHandleLocked: ['main'] }
   const html = linkSheet({ status, local: votingLocal({ x: 'link' }) })
   assert.match(html, /Your X accounts · 2\/3/)
-  assert.match(html, /<b>@main<\/b><span class="vt-xacc-lock">Has votes · admin only<\/span>/)
+  assert.match(html, /<b>@main<\/b><span class="vt-xacc-lock">Has votes<\/span><button type="button" class="vt-link" data-vt-act="x-replace-open" data-vt-handle="main">Request replacement<\/button>/)
+  const used = linkSheet({ status: { ...status, xReplacementsLeft: 0 }, local: votingLocal({ x: 'link' }) })
+  assert.match(used, /<b>@main<\/b><span class="vt-xacc-lock">Has votes · admin only<\/span>/, 'no replacements left')
   assert.match(html, /<b>@spare<\/b><button type="button" class="vt-link" data-vt-act="x-remove-handle" data-vt-handle="spare">Remove<\/button>/)
-  assert.doesNotMatch(html, /data-vt-handle="main"/, 'no remove for a credited account')
+  assert.doesNotMatch(html, /data-vt-act="x-remove-handle" data-vt-handle="main"/, 'no remove for a credited account')
   assert.match(html, /data-vt-act="x-edit-handle">Add account/)
   const confirm = linkSheet({ status, local: { ...votingLocal({ x: 'link' }), xRemoveConfirm: 'spare' } })
   assert.match(confirm, /class="vt-link is-danger" data-vt-act="x-remove-handle" data-vt-handle="spare">Tap again to remove/)
@@ -119,4 +121,52 @@ test('trusted check: a small screenshot gets one enlarged read — same rules, o
   await trustedCheckWith({ ...io(FULL), ocr: async () => FULL }, 'orig', CERT, '2026-10-14', win)
   assert.equal(enlarged, 0)
   assert.match(read('../scripts/mnet-verify-worker.mjs'), /if \(!width \|\| width >= 1000\) return null/)
+})
+
+// ── X account replacement ────────────────────────────────────────────
+
+test('X card: Manage X accounts is one tap away, in every state', () => {
+  for (const x of ['todo', 'link', 'review', 'done']) {
+    const c = card(screen(votingStatus({ x }), votingLocal({ x })), 'x')
+    assert.match(c, /data-vt-act="x-manage">Manage X accounts</, x)
+  }
+  const st = { ...votingStatus({ x: 'todo' }), xReplacements: [{ id: 1, oldHandle: 'old', newHandle: 'new', reason: 'suspended', status: 'pending' }] }
+  assert.match(card(screen(st, votingLocal({ x: 'todo' })), 'x'), /Manage X accounts · replacement pending/)
+  const src = read('./voting.js')
+  assert.match(src, /act === 'x-manage'\) \{[^}]*local\.xManage = true; paint\(\); showSheet\('link'\)/)
+  assert.match(linkSheet({ status: votingStatus({ x: 'link' }), local: { ...votingLocal({ x: 'link' }), xManage: true } }), /<h2 id="vt-l-title">Manage X accounts<\/h2>/)
+})
+
+test('replacement form: reason, new account, optional note — and never a password', () => {
+  const status = { ...votingStatus({ x: 'link' }), xHandles: ['main', 'spare'], xHandleLocked: ['main'] }
+  const html = plain(linkSheet({ status, local: { ...votingLocal({ x: 'link' }), xReplace: 'main' } }))
+  assert.match(html, /<h2 id="vt-l-title">Replace @main<\/h2>/)
+  assert.doesNotMatch(html, /data-vt-form="x"/, 'the post form steps aside')
+  assert.deepEqual(REPLACE_REASONS.map(([v]) => v), ['suspended', 'deleted', 'locked', 'other'])
+  for (const [v] of REPLACE_REASONS) assert.match(html, new RegExp(`name="xr-reason" value="${v}"`))
+  assert.match(html, /name="xr-new"/)
+  assert.match(html, /name="xr-note"[^>]*maxlength="200"/)
+  assert.match(html, /Votes it already earned stay counted\. Once an admin approves, the new account takes its place and <b>@main<\/b> stops earning new votes\./)
+  assert.match(html, /We’ll never ask for your password, login codes or other private details\./)
+  assert.doesNotMatch(html, /type="password"|name="(password|code|otp|email)"/i)
+  assert.match(html, /data-vt-act="x-replace-send">Send request[\s\S]*data-vt-act="x-replace-cancel">Cancel/)
+  const src = read('./voting.js')
+  assert.match(src, /call\('requestXReplacement', \{ agentNo: getAgentNo\(\), campaignId: status\.campaign\.id,\s+oldHandle: panel\.dataset\.vtXrepl, newHandle, reason, note: extra \}\)/)
+})
+
+test('replacement status: Pending approval, Approved or Rejected; one request at a time', () => {
+  const reqs = [
+    { id: 3, oldHandle: 'spare', newHandle: 'spare2', reason: 'locked', status: 'pending' },
+    { id: 2, oldHandle: 'gone', newHandle: 'main', reason: 'suspended', status: 'approved' },
+    { id: 1, oldHandle: 'spare', newHandle: 'typo', reason: 'other', status: 'rejected' },
+  ]
+  const status = { ...votingStatus({ x: 'link' }), xHandles: ['main', 'spare'], xHandleLocked: ['main', 'spare'], xReplacements: reqs, xReplacementsLeft: 1 }
+  const html = linkSheet({ status, local: votingLocal({ x: 'link' }) })
+  assert.match(html, /@spare → <b>@spare2<\/b><\/span><span class="vt-badge is-warn">[\s\S]*?Pending approval/)
+  assert.match(html, /@gone → <b>@main<\/b><\/span><span class="vt-badge is-ok">[\s\S]*?Approved/)
+  assert.match(html, /@typo<\/b><\/span><span class="vt-badge is-err">[\s\S]*?Rejected/)
+  assert.match(html, /<b>@spare<\/b><span class="vt-xacc-lock">Replacement pending approval<\/span>/)
+  assert.doesNotMatch(html, /x-replace-open/, 'no second request while one waits')
+  assert.equal(errorText('x_handle_retired', { author: 'gone' }), '@gone was replaced on your file, so it can’t earn new votes. Post from one of your linked accounts.')
+  assert.match(errorText('x_replacement_limit'), /already replaced an X account/)
 })

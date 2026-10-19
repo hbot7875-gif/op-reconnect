@@ -49,6 +49,11 @@ const ERRORS = {
   x_post_not_found: 'We couldn’t find this post on X. It may have been deleted. If you just posted it, wait a minute and try again — or post again and add the new link.',
   x_handle_has_votes: 'This account already has votes counted, so only an admin can remove it.',
   x_handle_not_linked: 'That account isn’t linked.',
+  x_handle_retired: 'That X account was replaced on your file, so it can’t earn new votes. Post from one of your linked accounts.',
+  x_handle_no_votes: 'That account has no votes yet — you can simply remove it and add the new one.',
+  x_replacement_pending: 'You already have a replacement waiting for approval.',
+  x_replacement_limit: 'You’ve already replaced an X account for this event. Ask an admin if another one stopped working.',
+  bad_reason: 'Choose what happened to the account.',
   voting_closed: 'Voting is closed.',
   voting_not_open: 'Voting opens Oct 12 at 19:00 KST.',
   post_before_open: 'That post was made before voting opened. Post a new one.',
@@ -79,6 +84,7 @@ const ERRORS = {
 export function errorText(code, extra = {}) {
   if (code === 'x_missing_hashtags') return `Your post is missing ${(extra.missing || ['a required hashtag']).join(' and ')}. Post again with both hashtags, then add the new link.`
   if (code === 'x_handle_taken' && extra.author) return `This post was made from @${extra.author}, which is linked to another agent file. Post from one of your own linked accounts.`
+  if (code === 'x_handle_retired' && extra.author) return `@${extra.author} was replaced on your file, so it can’t earn new votes. Post from one of your linked accounts.`
   if (code === 'post_wrong_day') return `That post is from ${dayLabel(extra.postDay)} KST. Post a new one today.`
   return ERRORS[code] || 'Something went wrong. Try again.'
 }
@@ -341,7 +347,8 @@ function xCard(vm, m) {
   return `<article class="vt-card vt-mission" data-vt-mission="${esc(m.id)}" data-vt-state="${ui}" aria-labelledby="vt-m-${esc(m.id)}">
     <div class="vt-m-head">
       <span class="vt-m-logo" aria-hidden="true">X</span>
-      <div class="vt-m-title"><h3 id="vt-m-${esc(m.id)}">X votes · ${count.verified}/${count.max}</h3><div class="vt-sub">${ic('globe')}X accounts · ${handles.length}/${m.maxHandles || 3} · one vote per account daily</div></div>
+      <div class="vt-m-title"><h3 id="vt-m-${esc(m.id)}">X votes · ${count.verified}/${count.max}</h3><div class="vt-sub">${ic('globe')}X accounts · ${handles.length}/${m.maxHandles || 3} · one vote per account daily</div>
+        <button type="button" class="vt-link vt-m-manage" data-vt-act="x-manage">Manage X accounts${(vm.status.xReplacements || []).some((r) => r.status === 'pending') ? ' · replacement pending' : ''}</button></div>
       ${badgeInHead ? status : ''}
     </div>
     ${badgeInHead ? '' : status}
@@ -704,16 +711,55 @@ function xUnlinkedPanel(vm, handles, handleMax) {
   </div>`
 }
 
-/** Linked X accounts, each removable unless it already carries a vote. */
+export const REPLACE_STATUS = { pending: ['is-warn', 'hourglass', 'Pending approval'], approved: ['is-ok', 'check', 'Approved'], rejected: ['is-err', 'xCircle', 'Rejected'] }
+export const REPLACE_REASONS = [['suspended', 'Suspended'], ['deleted', 'Deleted'], ['locked', 'Locked / can’t log in'], ['other', 'Other']]
+
+/** Linked X accounts. One without votes can be removed; one with votes can
+ *  be replaced (admin-approved) if it stopped working. */
 function xAccounts(vm, handles, handleMax) {
   const locked = new Set(vm.status.xHandleLocked || [])
   const confirm = vm.local.xRemoveConfirm
+  const requests = vm.status.xReplacements || []
+  const pending = requests.find((r) => r.status === 'pending')
+  const canRequest = !pending && (vm.status.xReplacementsLeft ?? 1) > 0
+  const lockedRow = (h) => pending?.oldHandle === h
+    ? `<span class="vt-xacc-lock">Replacement pending approval</span>`
+    : canRequest
+      ? `<span class="vt-xacc-lock">Has votes</span><button type="button" class="vt-link" data-vt-act="x-replace-open" data-vt-handle="${esc(h)}">Request replacement</button>`
+      : pending ? '<span class="vt-xacc-lock">Has votes</span>' : '<span class="vt-xacc-lock">Has votes · admin only</span>'
   return `<div class="vt-xacc"><span class="vt-field-l">Your X accounts · ${handles.length}/${handleMax}</span>
     <ul class="vt-xacc-list">${handles.map((h) => `<li><b>@${esc(h)}</b>${locked.has(h)
-      ? '<span class="vt-xacc-lock">Has votes · admin only</span>'
+      ? lockedRow(h)
       : `<button type="button" class="vt-link${confirm === h ? ' is-danger' : ''}" data-vt-act="x-remove-handle" data-vt-handle="${esc(h)}">${confirm === h ? 'Tap again to remove' : 'Remove'}</button>`}</li>`).join('')}</ul>
     ${handles.length < handleMax ? '<button type="button" class="vt-link" data-vt-act="x-edit-handle">Add account</button>' : ''}
+    ${requests.length ? `<span class="vt-field-l">Replacement requests</span>
+    <ul class="vt-xacc-list vt-xrepl-list">${requests.slice(0, 3).map((r) => {
+      const [k, i, t] = REPLACE_STATUS[r.status] || REPLACE_STATUS.pending
+      return `<li><span>@${esc(r.oldHandle)} → <b>@${esc(r.newHandle)}</b></span>${badge(k, i, t)}</li>`
+    }).join('')}</ul>` : ''}
   </div>`
+}
+
+/** Replace an account that's suspended, deleted or locked. Votes it already
+ *  earned stay; after approval it stops earning and the new one takes its slot. */
+export function replaceSheetBody(vm, oldHandle) {
+  const err = vm.local.error?.mission === 'x-sheet' ? note('is-err', 'xCircle', esc(vm.local.error.text)) : ''
+  return `<div class="vt-form vt-xrepl" data-vt-xrepl="${esc(oldHandle)}">
+      <p class="vt-rule">Use this if <b>@${esc(oldHandle)}</b> was suspended, deleted, or you can no longer get into it. Votes it already earned stay counted. Once an admin approves, the new account takes its place and <b>@${esc(oldHandle)}</b> stops earning new votes.</p>
+      <fieldset class="vt-field vt-xrepl-reasons"><legend class="vt-field-l">What happened?</legend>
+        ${REPLACE_REASONS.map(([v, label]) => `<label class="vt-xrepl-reason"><input type="radio" name="xr-reason" value="${v}"> ${esc(label)}</label>`).join('')}
+      </fieldset>
+      <label class="vt-field"><span class="vt-field-l">New X account</span>
+        <span class="vt-input-wrap"><span class="vt-input-pre" aria-hidden="true">@</span><input name="xr-new" class="vt-input" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="40" value=""></span></label>
+      <label class="vt-field"><span class="vt-field-l">Anything else? (optional)</span>
+        <input name="xr-note" class="vt-input" maxlength="200" autocomplete="off" placeholder="e.g. suspended on Oct 15"></label>
+      <p class="vt-field-h">${ic('shield')}We’ll never ask for your password, login codes or other private details.</p>
+      ${err}
+      <div class="vt-actions">
+        <button class="vt-btn vt-btn-primary" type="button" data-vt-act="x-replace-send"${vm.local.xReplaceSending ? ' disabled' : ''}>Send request</button>
+        <button class="vt-btn vt-btn-ghost" type="button" data-vt-act="x-replace-cancel">Cancel</button>
+      </div>
+    </div>`
 }
 
 export function linkSheet(vm) {
@@ -721,10 +767,12 @@ export function linkSheet(vm) {
   const handles = vm.status.xHandles || (vm.status.xHandle ? [vm.status.xHandle] : [])
   const handleMax = x?.maxHandles || 3
   const needHandle = x?.requireHandleMatch && !handles.length
+  const replacing = vm.local.xReplace && handles.includes(vm.local.xReplace) ? vm.local.xReplace : null
+  const title = replacing ? `Replace @${esc(replacing)}` : vm.local.xManage ? 'Manage X accounts' : 'Add your vote post'
   return `<div class="vt-sheet" role="dialog" aria-modal="true" aria-labelledby="vt-l-title" data-vt-sheet="link" hidden>
     <div class="vt-grabber" aria-hidden="true"></div>
-    <div class="vt-sheet-h"><h2 id="vt-l-title">Add your vote post</h2><button class="vt-icon-btn" type="button" aria-label="Close" data-vt-act="sheet-close">${ic('x')}</button></div>
-    <form class="vt-form" data-vt-form="x">
+    <div class="vt-sheet-h"><h2 id="vt-l-title">${title}</h2><button class="vt-icon-btn" type="button" aria-label="Close" data-vt-act="sheet-close">${ic('x')}</button></div>
+    ${replacing ? replaceSheetBody(vm, replacing) : `<form class="vt-form" data-vt-form="x">
       ${xUnlinkedPanel(vm, handles, handleMax)}
       ${needHandle || vm.local.editHandle ? `<label class="vt-field"><span class="vt-field-l">${handles.length ? 'Add another X account' : 'Your X handle'}</span>
         <span class="vt-input-wrap"><span class="vt-input-pre" aria-hidden="true">@</span><input name="handle" class="vt-input" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="16" value="" required></span>
@@ -734,7 +782,7 @@ export function linkSheet(vm) {
         <input name="url" class="vt-input" type="url" inputmode="url" autocomplete="off" placeholder="https://x.com/…/status/…" required></label>
       ${vm.local.error?.mission === 'x-sheet' ? note('is-err', 'xCircle', esc(vm.local.error.text)) : ''}
       <button class="vt-btn vt-btn-primary" type="submit"${vm.local.x?.submitting ? ' disabled' : ''}>Verify post</button>
-    </form>
+    </form>`}
   </div>`
 }
 

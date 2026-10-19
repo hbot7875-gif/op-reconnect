@@ -22,6 +22,7 @@ const MIGRATION = migration('20261013150000_rc_vote_campaigns.sql')
 const OFFSET_MIGRATION = migration('20261014090000_rc_campaign_cert_utc_offset.sql')
 const SELF_SERVICE_MIGRATION = migration('20261019120000_rc_vote_proof_self_service.sql')
 const MINUTE_MIGRATION = migration('20261020090000_rc_vote_duplicate_minute.sql')
+const REPLACE_MIGRATION = migration('20261020120000_rc_vote_x_replacement.sql')
 
 const modulePath = process.env.PGLITE_MODULE
 const skip = modulePath ? false : 'set PGLITE_MODULE to run the SQL suite'
@@ -81,6 +82,8 @@ async function fresh(t) {
     await engine.exec(SELF_SERVICE_MIGRATION) // re-runnable
     await engine.exec(MINUTE_MIGRATION)
     await engine.exec(MINUTE_MIGRATION) // re-runnable
+    await engine.exec(REPLACE_MIGRATION)
+    await engine.exec(REPLACE_MIGRATION) // re-runnable
   }
   await engine.exec('begin')
   t.after(() => engine.exec('rollback'))
@@ -830,4 +833,118 @@ test('phone UTC offset column: real offsets only, null allowed', { skip }, async
     await assert.rejects(db.query(`update rc_campaign_proofs set cert_utc_offset_min = $1 where id = $2`, [bad, id]), /check/i, String(bad))
     await db.exec('rollback to savepoint s')
   }
+})
+
+// ── X account replacement (suspended / deleted / inaccessible) ────────
+
+const xreg = (db, agent, h) => json(db, `select rc_campaign_register_x_handle('mama_2026', $1, $2) as r`, [agent, h])
+const xrequest = (db, agent, oldH, newH, reason = 'suspended', note = null) =>
+  json(db, `select rc_campaign_request_x_replacement('mama_2026', $1, $2, $3, $4, $5) as r`, [agent, oldH, newH, reason, note])
+const xdecide = (db, id, decision, note = null) => json(db, `select rc_campaign_decide_x_replacement($1, $2, 'HT', $3) as r`, [id, decision, note])
+const activeHandles = async (db, agent = 'AGENT001') => (await db.query(
+  `select x_handle from rc_agent_x_handles where campaign_id = 'mama_2026' and agent_no = $1 and retired_at is null order by x_handle`, [agent])).rows.map((r) => r.x_handle)
+const credits = async (db, agent = 'AGENT001') => JSON.stringify([
+  (await db.query(`select * from rc_campaign_proofs where agent_no = $1 order by id`, [agent])).rows,
+  (await db.query(`select * from rc_vote_gift_fills where agent_no = $1 order by created_at`, [agent])).rows,
+  await fill(db, agent), (await battle(db, agent)).total,
+])
+
+test('replacement after verified votes: history, gift fill and team points stay; the old account is retired, not deleted', { skip }, async (t) => {
+  const db = await fresh(t)
+  await verifiedX(db, 'AGENT001', '2026-10-13', 'one')
+  await verifiedX(db, 'AGENT001', '2026-10-14', 'one')
+  await verifiedX(db, 'AGENT001', '2026-10-14', 'two')
+  assert.equal((await xreg(db, 'AGENT001', 'three')).success, true)
+  const before = await credits(db)
+
+  const r = await xrequest(db, 'AGENT001', 'one', 'newone', 'suspended', 'Suspended on Oct 15')
+  assert.deepEqual([r.success, r.status], [true, 'pending'])
+  assert.equal((await xrequest(db, 'AGENT001', 'two', 'other')).error, 'x_replacement_pending', 'one request at a time')
+  assert.equal((await xreg(db, 'AGENT002', 'newone')).error, 'x_handle_taken', 'a requested handle is reserved')
+  assert.deepEqual(await activeHandles(db), ['one', 'three', 'two'], 'nothing changes before approval')
+
+  assert.deepEqual(await xdecide(db, r.id, 'approve', 'checked X profile'), { success: true, id: r.id, status: 'approved' })
+  assert.deepEqual(await activeHandles(db), ['newone', 'three', 'two'], 'the new account takes the slot; still 3 active')
+  const old = await q1(db, `select retired_at is not null as retired, replaced_by, agent_no from rc_agent_x_handles where x_handle = 'one'`)
+  assert.deepEqual([old.retired, old.replaced_by, old.agent_no], [true, 'newone', 'AGENT001'], 'retired, kept, still theirs')
+  assert.equal(await credits(db), before, 'verified votes, days, gift fill and team points unchanged')
+  assert.equal((await xdecide(db, r.id, 'reject')).error, 'already_decided')
+
+  // The old account earns nothing new, can't come back, and nobody else can take it.
+  const late = await submit(db, { mission: 'x', agent: 'AGENT001', day: '2026-10-15', status: 'verified', post: '1846000000000009001', author: 'one', unregistered: true })
+  assert.equal(late.error, 'x_handle_unregistered')
+  assert.equal((await xreg(db, 'AGENT001', 'one')).error, 'x_handle_retired')
+  assert.equal((await xreg(db, 'AGENT002', 'one')).error, 'x_handle_taken')
+  assert.equal((await json(db, `select rc_campaign_remove_x_handle('mama_2026','AGENT001','one') as r`)).error, 'x_handle_not_linked', 'history is never deleted')
+  assert.equal((await xreg(db, 'AGENT001', 'four')).error, 'x_handle_limit', 'max 3 active')
+  // The new account works.
+  const ok = await submit(db, { mission: 'x', agent: 'AGENT001', day: '2026-10-15', status: 'verified', post: '1846000000000009002', author: 'newone', unregistered: true })
+  assert.equal(ok.status, 'verified')
+  // No rotation: one approved replacement this event.
+  assert.equal((await xrequest(db, 'AGENT001', 'two', 'another')).error, 'x_replacement_limit')
+})
+
+test('replacement during the same voting day: still 3 X votes that day across old and new accounts', { skip }, async (t) => {
+  const db = await fresh(t)
+  await verifiedX(db, 'AGENT001', '2026-10-14', 'one')
+  await verifiedX(db, 'AGENT001', '2026-10-14', 'two')
+  await xreg(db, 'AGENT001', 'three')
+  const r = await xrequest(db, 'AGENT001', 'one', 'fresh', 'deleted')
+  await xdecide(db, r.id, 'approve')
+  const x = (post, author) => submit(db, { mission: 'x', agent: 'AGENT001', day: '2026-10-14', status: 'verified', post, author, unregistered: true })
+  assert.equal((await x('1846000000000009101', 'fresh')).status, 'verified', 'third vote today, from the new account')
+  assert.equal((await x('1846000000000009102', 'three')).error, 'daily_mission_limit', 'the retired account’s vote still counts toward today’s 3')
+  assert.equal(await n(db, `select count(*) from rc_campaign_proofs where agent_no = 'AGENT001' and vote_day = '2026-10-14' and status = 'verified'`), 3)
+  assert.equal((await x('1846000000000009103', 'fresh')).error, 'x_handle_daily_limit', 'still one vote per account per day')
+})
+
+test('a vote made before retirement can still be verified by a reviewer; one sent after cannot', { skip }, async (t) => {
+  const db = await fresh(t)
+  await verifiedX(db, 'AGENT001', '2026-10-13', 'one')
+  const pend = await submit(db, { mission: 'x', agent: 'AGENT001', day: '2026-10-14', status: 'review', post: '1846000000000009201', author: 'one' })
+  await db.query(`update rc_campaign_proofs set submitted_at = now() - interval '1 hour' where id = $1`, [pend.id])
+  const r = await xrequest(db, 'AGENT001', 'one', 'fresh', 'locked')
+  await xdecide(db, r.id, 'approve')
+  const after = await submit(db, { mission: 'x', agent: 'AGENT001', day: '2026-10-15', status: 'review', post: '1846000000000009202', author: 'one', unregistered: true })
+  await db.query(`update rc_campaign_proofs set submitted_at = now() + interval '1 minute' where id = $1`, [after.id])
+  assert.equal((await transition(db, pend.id, ['review'], 'verified', 'admin')).status, 'verified', 'posted while the account worked')
+  assert.equal((await transition(db, after.id, ['review'], 'verified', 'admin')).error, 'x_handle_unregistered', 'posted after it was retired')
+})
+
+test('replacement requests: only for an own account with votes; no taken handles; reject changes nothing', { skip }, async (t) => {
+  const db = await fresh(t)
+  await verifiedX(db, 'AGENT001', '2026-10-14', 'one')
+  await xreg(db, 'AGENT001', 'spare')
+  await verifiedX(db, 'AGENT002', '2026-10-14', 'theirs')
+  assert.equal((await xrequest(db, 'AGENT001', 'spare', 'fresh')).error, 'x_handle_no_votes', 'no votes: just remove it')
+  assert.equal((await xrequest(db, 'AGENT001', 'theirs', 'fresh')).error, 'x_handle_not_linked')
+  assert.equal((await xrequest(db, 'AGENT001', 'one', 'theirs')).error, 'x_handle_taken', 'another agent’s account')
+  assert.equal((await xrequest(db, 'AGENT001', 'one', 'spare')).error, 'x_handle_taken', 'already linked')
+  assert.equal((await xrequest(db, 'AGENT001', 'one', 'one')).error, 'bad_handle')
+  assert.equal((await xrequest(db, 'AGENT001', 'one', 'Bad Handle!')).error, 'bad_handle')
+  assert.equal((await xrequest(db, 'AGENT001', 'one', 'fresh', 'password')).error, 'bad_reason')
+  const a = await xrequest(db, 'AGENT001', 'one', 'fresh')
+  assert.equal((await xrequest(db, 'AGENT002', 'theirs', 'fresh')).error, 'x_handle_taken', 'two agents can’t ask for the same account')
+  const before = await credits(db)
+  assert.equal((await xdecide(db, a.id, 'reject', 'still active on X')).status, 'rejected')
+  assert.deepEqual(await activeHandles(db), ['one', 'spare'])
+  assert.equal(await credits(db), before)
+  const again = await xrequest(db, 'AGENT001', 'one', 'fresh')
+  assert.equal(again.success, true, 'a rejected request can be sent again')
+  // Approval re-checks: the new handle got linked elsewhere in the meantime.
+  await db.query(`insert into rc_agent_x_handles (campaign_id, agent_no, x_handle) values ('mama_2026', 'AGENT003', 'fresh')`)
+  assert.equal((await xdecide(db, again.id, 'approve')).error, 'x_handle_taken')
+  assert.deepEqual(await activeHandles(db), ['one', 'spare'], 'nothing half-done')
+  assert.equal((await q1(db, `select status from rc_x_handle_replacements where id = $1`, [again.id])).status, 'pending')
+})
+
+test('replacement functions and table are service-role only', { skip }, async (t) => {
+  const db = await fresh(t)
+  for (const fn of ['rc_campaign_request_x_replacement(text,text,text,text,text,text)', 'rc_campaign_decide_x_replacement(bigint,text,text,text)']) {
+    assert.equal((await q1(db, `select has_function_privilege('anon', $1, 'execute') as a`, [fn])).a, false, fn)
+    assert.equal((await q1(db, `select has_function_privilege('authenticated', $1, 'execute') as a`, [fn])).a, false, fn)
+  }
+  assert.equal((await q1(db, `select has_table_privilege('anon', 'rc_x_handle_replacements', 'select') as a`)).a, false)
+  const cols = (await db.query(`select column_name from information_schema.columns where table_name = 'rc_x_handle_replacements'`)).rows.map((r) => r.column_name)
+  for (const bad of ['password', 'login', 'email', 'token']) assert.equal(cols.some((c) => c.includes(bad)), false, bad)
 })

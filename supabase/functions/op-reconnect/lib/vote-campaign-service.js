@@ -262,14 +262,16 @@ export async function getVotingStatus(db, params, now = new Date()) {
   const badgeTemplate = c.rewards?.badge_template_id || null
   const battleOn = !!c.battle?.enabled
 
-  const [proofsRes, verifiedRes, handleRes, progressRes, opensRes, fillsRes, pulseRes, badgeRes, teamRes, battleRes, claimsRes, winnerRes] = await Promise.all([
+  const [proofsRes, verifiedRes, handleRes, progressRes, opensRes, fillsRes, pulseRes, badgeRes, teamRes, battleRes, claimsRes, winnerRes, replRes] = await Promise.all([
     // Own rows only. Bounded: a short campaign, at most six proofs per day.
     db.from('rc_campaign_proofs')
       .select('id, mission_id, vote_day, status, checks, verify_note, submitted_at, verified_at, duplicate_kind, post_author')
       .eq('campaign_id', c.id).eq('agent_no', agentNo).order('submitted_at', { ascending: false }).limit(60),
     db.from('rc_campaign_proofs').select('vote_day')
       .eq('campaign_id', c.id).eq('agent_no', agentNo).eq('status', 'verified').limit(400),
-    db.from('rc_agent_x_handles').select('x_handle').eq('campaign_id', c.id).eq('agent_no', agentNo).order('created_at', { ascending: true }).limit(3),
+    // Active accounts only: a replaced (retired) account keeps its history but no slot.
+    db.from('rc_agent_x_handles').select('x_handle').eq('campaign_id', c.id).eq('agent_no', agentNo).is('retired_at', null)
+      .order('created_at', { ascending: true }).limit(3),
     db.from('rc_vote_gift_progress').select('fill').eq('campaign_id', c.id).eq('agent_no', agentNo).maybeSingle(),
     db.from('rc_vote_gift_opens').select('id', { count: 'exact', head: true })
       .eq('campaign_id', c.id).eq('agent_no', agentNo).eq('kst_day', today),
@@ -290,6 +292,8 @@ export async function getVotingStatus(db, params, now = new Date()) {
       : Promise.resolve({ data: [] }),
     battleOn ? db.from('rc_battle_winner_claims').select('team').eq('campaign_id', c.id).eq('agent_no', agentNo).maybeSingle()
       : Promise.resolve({ data: null }),
+    db.from('rc_x_handle_replacements').select('id, old_handle, new_handle, reason, status, created_at, decided_at')
+      .eq('campaign_id', c.id).eq('agent_no', agentNo).order('created_at', { ascending: false }).limit(5),
   ])
 
   const proofs = proofsRes.data || []
@@ -337,6 +341,12 @@ export async function getVotingStatus(db, params, now = new Date()) {
     xHandleLocked: (handleRes.data || []).map((r) => r.x_handle)
       .filter((h) => proofs.some((p) => p.post_author === h && p.status !== 'rejected')),
     xHandle: handleRes.data?.[0]?.x_handle || null,
+    // Their own replacement requests: the status only (Pending approval /
+    // Approved / Rejected) — never the reviewer's note or name.
+    xReplacements: (replRes?.data || []).map((r) => ({
+      id: r.id, oldHandle: r.old_handle, newHandle: r.new_handle, reason: r.reason, status: r.status, at: r.decided_at || r.created_at,
+    })),
+    xReplacementsLeft: Math.max(0, maxReplacements(xMission) - (replRes?.data || []).filter((r) => r.status === 'approved').length),
     gift: {
       name: gift.name || 'Voting Gift',
       fill,
@@ -503,6 +513,81 @@ export async function removeXHandle(db, params) {
   return { success: true, removed: handle }
 }
 
+// ── X account replacement ──────────────────────────────────────────────
+// For an account that is suspended, deleted or can't be accessed and already
+// carries votes. The player names the new account and picks a reason; an
+// admin approves. Nothing is ever asked that would prove access (no
+// passwords, codes or login details).
+
+export const X_REPLACEMENT_REASONS = ['suspended', 'deleted', 'locked', 'other']
+const maxReplacements = (mission) => Math.max(0, Number(mission?.max_replacements ?? 1) || 0)
+// "@name", "name" or a pasted profile link (x.com/name, twitter.com/name).
+const handleFrom = (raw) => normalizeHandle(String(raw ?? '').trim()
+  .replace(/^https?:\/\/(www\.|mobile\.)?(x|twitter)\.com\//i, '').split(/[/?#]/)[0])
+
+export async function requestXReplacement(db, params) {
+  const agentNo = agentOf(params)
+  const oldHandle = handleFrom(params.oldHandle)
+  const newHandle = handleFrom(params.newHandle)
+  if (!oldHandle || !newHandle) return fail('bad_handle')
+  const reason = String(params.reason || '')
+  if (!X_REPLACEMENT_REASONS.includes(reason)) return fail('bad_reason')
+  const note = String(params.note ?? '').replace(/\s+/g, ' ').trim().slice(0, 200) || null
+  const { data: r, error } = await db.rpc('rc_campaign_request_x_replacement', {
+    p_campaign_id: String(params.campaignId || ''), p_agent_no: agentNo,
+    p_old_handle: oldHandle, p_new_handle: newHandle, p_reason: reason, p_note: note,
+  })
+  if (error || !r?.success) return fail(r?.error || 'db_error', r?.limit ? { limit: r.limit } : {})
+  return { success: true, id: r.id, status: 'pending', oldHandle, newHandle }
+}
+
+const REPLACEMENT_STATUSES = new Set(['pending', 'approved', 'rejected'])
+
+export async function adminListXReplacements(db, params) {
+  const c = params.campaignId ? await loadCampaign(db, String(params.campaignId)) : await currentCampaign(db, new Date())
+  if (!c) return fail('no_campaign')
+  const status = REPLACEMENT_STATUSES.has(String(params.status)) ? String(params.status) : 'pending'
+  const [{ data: rows, error }, { count: pending }] = await Promise.all([
+    db.from('rc_x_handle_replacements')
+      .select('id, agent_no, old_handle, new_handle, reason, note, status, created_at, decided_at, decided_by, admin_note')
+      .eq('campaign_id', c.id).eq('status', status).order('created_at', { ascending: status === 'pending' }).limit(100),
+    db.from('rc_x_handle_replacements').select('id', { count: 'exact', head: true }).eq('campaign_id', c.id).eq('status', 'pending'),
+  ])
+  if (error) return fail('db_error')
+  const list = rows || []
+  const agents = [...new Set(list.map((r) => r.agent_no))]
+  const [ig, hs, ps] = agents.length ? await Promise.all([
+    db.from('rc_agents').select('agent_no, handle').in('agent_no', agents),
+    db.from('rc_agent_x_handles').select('agent_no, x_handle, retired_at').eq('campaign_id', c.id).in('agent_no', agents),
+    db.from('rc_campaign_proofs').select('agent_no, post_author, status, vote_day').eq('campaign_id', c.id).in('agent_no', agents).not('post_author', 'is', null),
+  ]) : [{ data: [] }, { data: [] }, { data: [] }]
+  const instagram = new Map((ig.data || []).map((a) => [a.agent_no, instagramOf(a.handle)]))
+  return {
+    success: true, campaign: { id: c.id, title: c.title }, status, pending: pending || 0,
+    requests: list.map((r) => {
+      const votes = (ps.data || []).filter((p) => p.agent_no === r.agent_no && p.post_author === r.old_handle && p.status !== 'rejected')
+      return {
+        ...r, instagram: instagram.get(r.agent_no) || null,
+        oldHandleVotes: { verified: votes.filter((v) => v.status === 'verified').length, pending: votes.filter((v) => v.status !== 'verified').length,
+          lastDay: votes.map((v) => v.vote_day).sort().pop() || null },
+        accounts: (hs.data || []).filter((h) => h.agent_no === r.agent_no).map((h) => ({ handle: h.x_handle, retired: !!h.retired_at })),
+      }
+    }),
+  }
+}
+
+export async function adminDecideXReplacement(db, params) {
+  const requestId = Number(params.requestId)
+  const decision = String(params.decision || '')
+  if (!Number.isInteger(requestId) || requestId <= 0 || !['approve', 'reject'].includes(decision)) return fail('bad_params')
+  const { data: r, error } = await db.rpc('rc_campaign_decide_x_replacement', {
+    p_request_id: requestId, p_decision: decision, p_actor: String(params.admin || 'admin').slice(0, 40),
+    p_note: params.note ? String(params.note).slice(0, 300) : null,
+  })
+  if (error || !r?.success) return fail(r?.error || 'db_error', r?.status ? { status: r.status } : {})
+  return { success: true, status: r.status }
+}
+
 /** A plain word the card can act on — never an internal review note.
  *  'unreadable': the trusted check couldn't read the certificate wording.
  *  'unlinked_account': an X post from an account not linked to this agent. */
@@ -532,7 +617,7 @@ export async function submitXProof(db, params, { verifier, now = new Date() } = 
   if (postedAt > new Date(c.closes_at)) return fail('post_after_close')
 
   const { data: registeredRows } = await db.from('rc_agent_x_handles').select('x_handle')
-    .eq('campaign_id', c.id).eq('agent_no', agentNo).limit(Math.max(1, Number(mission.max_handles) || 1))
+    .eq('campaign_id', c.id).eq('agent_no', agentNo).is('retired_at', null).limit(Math.max(1, Number(mission.max_handles) || 1))
   const registered = new Set((registeredRows || []).map((r) => r.x_handle))
   if (mission.require_handle_match && !registered.size) return fail('x_handle_required')
 
@@ -556,9 +641,11 @@ export async function submitXProof(db, params, { verifier, now = new Date() } = 
     if (missing.length) return fail('x_missing_hashtags', { missing: missing.map((h) => `#${String(h).replace(/^#/, '')}`) })
     const urlLinked = !!parsed.urlHandle && registered.has(parsed.urlHandle)
     if (mission.require_handle_match && fetchedAuthor && !registered.has(fetchedAuthor) && !urlLinked) {
-      const { data: owner } = await db.from('rc_agent_x_handles').select('agent_no')
+      const { data: owner } = await db.from('rc_agent_x_handles').select('agent_no, retired_at')
         .eq('campaign_id', c.id).eq('x_handle', fetchedAuthor).maybeSingle()
       if (owner?.agent_no && owner.agent_no !== agentNo) return fail('x_handle_taken', { author: fetchedAuthor })
+      // Their own replaced account: it keeps its old votes but earns no new ones.
+      if (owner?.agent_no === agentNo && owner.retired_at) return fail('x_handle_retired', { author: fetchedAuthor })
       const maxHandles = Math.max(1, Number(mission.max_handles) || 1)
       return fail('x_account_not_linked', { author: fetchedAuthor, canLink: registered.size < maxHandles })
     }

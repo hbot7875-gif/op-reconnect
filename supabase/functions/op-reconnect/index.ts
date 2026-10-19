@@ -62,6 +62,7 @@ import { pingRecelebratePresence } from './lib/recelebrate-presence.ts'
 import { getRecelebrateMessages, sendRecelebrateMessage } from './lib/recelebrate-chat.ts'
 import {
   getVotingStatus, getPublicBattle, submitMnetProof, submitXProof, setXHandle, removeXHandle, openVotingGift,
+  requestXReplacement, adminListXReplacements, adminDecideXReplacement,
   startVotingTeamChoice, chooseVotingTeam, claimBattleGift, claimBattleWinner,
   adminListCampaignProofs, adminRecordCampaignChecks, adminReviewCampaignProof, cronVotePulse, cronMnetVerifyKick,
   getBattleTeam, setBattleInstagram, getBattleChat, sendBattleChat, reactBattleChat, reportBattleChat, muteBattleChat,
@@ -226,6 +227,7 @@ const ROUTES: Record<string, Route> = {
   submitXProof: { auth: 'agent', handler: (sb, p) => submitXProof(sb, p) },
   setXHandle: { auth: 'agent', handler: (sb, p) => setXHandle(sb, p) },
   removeXHandle: { auth: 'agent', handler: (sb, p) => removeXHandle(sb, p) },
+  requestXReplacement: { auth: 'agent', handler: (sb, p) => requestXReplacement(sb, p) },
   openVotingGift: { auth: 'agent', handler: (sb, p) => openVotingGift(sb, p) },
   // MAMA Battle (HOOLIGANS vs ALIENS). Named apart from RE:CELEBRATE's
   // startTeamChoice/chooseTeam, which keep their own tables and rules.
@@ -247,6 +249,8 @@ const ROUTES: Record<string, Route> = {
   adminListCampaignProofs: { auth: 'admin', handler: (sb, p) => adminListCampaignProofs(sb, p) },
   adminRecordCampaignChecks: { auth: 'admin', handler: (sb, p) => adminRecordCampaignChecks(sb, p) },
   adminReviewCampaignProof: { auth: 'admin', handler: (sb, p) => adminReviewCampaignProof(sb, p) },
+  adminListXReplacements: { auth: 'admin', handler: (sb, p) => adminListXReplacements(sb, p) },
+  adminDecideXReplacement: { auth: 'admin', handler: (sb, p) => adminDecideXReplacement(sb, p) },
   // BTS X Vote Pulse refresh — Supabase Cron, about 4 times a day during
   // voting (migration 20261013150500). Takes no params, like cronStorageSweep.
   cronVotePulse: { auth: 'cron', handler: (sb) => cronVotePulse(sb) },
