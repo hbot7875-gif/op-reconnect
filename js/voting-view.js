@@ -206,7 +206,8 @@ function mnetCard(vm, m) {
 
   if (ui === 'todo') {
     status = `<span class="vt-status">${ic('circleDashed')}Mnet votes · ${count.verified}/${count.max}</span>`
-    body = `<p class="vt-rule">Vote for BTS in Fans' Choice, then save the certificate Mnet shows you.</p>
+    body = `${verifiedLine(count, 'Vote again on Mnet for the next certificate.')}
+      <p class="vt-rule">Vote for BTS in Fans' Choice, then save the certificate Mnet shows you.</p>
       ${err}
       <div class="vt-actions">
         <a class="vt-btn vt-btn-primary" href="${esc(m.voteUrl || '#')}" target="_blank" rel="noopener noreferrer" data-vt-act="mnet-vote"${closed ? ' aria-disabled="true"' : ''}>Vote on Mnet ${ic('ext')}</a>
@@ -284,6 +285,28 @@ function mnetCard(vm, m) {
 // ── X card ────────────────────────────────────────────────────────────
 
 /** Not started | Link needed | Verifying | In review | Complete. */
+/**
+ * "I've voted" / "I've posted" are the player's own notes for the day. Each
+ * is kept with the time it was set; once a proof for that mission has been
+ * sent after it, the note has done its job and the card goes back to its
+ * real state (a legacy "1" counts as set at the start of the day).
+ */
+export function dayFlagActive(raw, activity, missionId, today) {
+  if (raw === null || raw === undefined || raw === '') return false
+  const setAt = raw === '1' ? 0 : Number(raw) || 0
+  const latest = (activity || [])
+    .filter((a) => a.missionId === missionId && a.voteDay === today)
+    .reduce((t, a) => Math.max(t, Date.parse(a.at) || 0), -1)
+  return latest < 0 || setAt > latest
+}
+
+/** "1 of 3 verified today" — so a counted vote is visible on the card, not
+ *  only in a passing toast. */
+function verifiedLine(count, next) {
+  if (!count.verified) return ''
+  return note('is-ok', 'check', `${count.verified} of ${count.max} verified today.${count.remaining ? ` ${next}` : ''}`)
+}
+
 export function xUiState(serverState, local) {
   if (serverState === 'verified') return 'done'
   if (serverState === 'review') return 'review'
@@ -310,7 +333,8 @@ function xCard(vm, m) {
   if (ui === 'todo') {
     const rejected = vm.status.states[m.id] === 'rejected'
     status = `<span class="vt-status">${ic('circleDashed')}X votes · ${count.verified}/${count.max}</span>`
-    body = `${tagChips}
+    body = `${verifiedLine(count, 'For the next one, post from another linked account.')}
+      ${tagChips}
       ${rejected ? note('is-err', 'xCircle', "Today's earlier post wasn't accepted. Post again and add the new link.") : ''}
       ${err}
       <div class="vt-actions">

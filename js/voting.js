@@ -6,7 +6,7 @@ import { call } from './api.js'
 import { getAgentNo } from './session.js'
 import { goWorld } from './router.js'
 import { setState, toast } from './state.js'
-import { votingScreen, errorText, countdown, MNET_FAST_MS, MNET_CHECKING_MS } from './voting-view.js'
+import { votingScreen, errorText, countdown, MNET_FAST_MS, MNET_CHECKING_MS, dayFlagActive } from './voting-view.js'
 import { nextKstMidnight } from '../supabase/functions/op-reconnect/lib/vote-campaign-rules.js'
 import { sha256OfBlob, reencodeImage, blobToBase64, ocrCertificate } from './voting-proof.js'
 import { battleView, pickStyle, nextStyle, shareText, STYLES, STYLE_NAMES, BATTLE_URL } from './battle-share-rules.js'
@@ -80,8 +80,9 @@ async function load() {
     return
   }
   status = r
-  if (votedFlag()) local.mnet.voted = true
-  if (composedFlag()) local.x.composed = true
+  // Only a note set after today's latest proof for that mission still applies.
+  local.mnet.voted = dayFlagActive(readFlag(votedKey()), status.activity, missionIdOf('mnet_certificate'), status.today)
+  local.x.composed = dayFlagActive(readFlag(composedKey()), status.activity, missionIdOf('x_post'), status.today)
   if (status.battle && !local.tab) local.tab = firstTab()
   paint()
   if (status.battle) startHub()
@@ -133,12 +134,14 @@ async function refreshGameState() {
 }
 
 // "I've voted" is the player's own note, kept on this device for today only.
+// Stored as the time it was set, so a later proof makes it stale (dayFlagActive).
 function votedKey() { return `vt:voted:${status.campaign.id}:${status.today}` }
-function votedFlag() { try { return localStorage.getItem(votedKey()) === '1' } catch { return false } }
-function setVoted() { try { localStorage.setItem(votedKey(), '1') } catch { /* private mode: in-memory only */ } }
+function setVoted() { try { localStorage.setItem(votedKey(), String(Date.now())) } catch { /* private mode: in-memory only */ } }
 function composedKey() { return `vt:posted:${status.campaign.id}:${status.today}` }
-function composedFlag() { try { return localStorage.getItem(composedKey()) === '1' } catch { return false } }
-function setComposed() { try { localStorage.setItem(composedKey(), '1') } catch { /* in-memory only */ } }
+function setComposed() { try { localStorage.setItem(composedKey(), String(Date.now())) } catch { /* in-memory only */ } }
+function readFlag(key) { try { return localStorage.getItem(key) } catch { return null } }
+function clearFlag(key) { try { localStorage.removeItem(key) } catch { /* in-memory only */ } }
+function missionIdOf(kind) { return status.campaign.missions.find((m) => m.kind === kind)?.id }
 
 // ── Team chooser ─────────────────────────────────────────────────────
 
@@ -570,6 +573,9 @@ async function sendCertificate(file, { force = false } = {}) {
       if (r?.error === 'duplicate_proof') showDuplicateCertificatePopup()
       return
     }
+    // The "I've voted" note has done its job: the card follows the proof now.
+    clearFlag(votedKey())
+    local.mnet.voted = false
     toast('Certificate received')
     local.mnet.sentAt = Date.now()
     await load()
@@ -612,6 +618,9 @@ async function sendXPost(url, handle) {
     local.xUnlinked = null
     local.x.submitting = false
     closeSheet()
+    // Same for "I've posted": a verified (or reviewed) post isn't still "link needed".
+    clearFlag(composedKey())
+    local.x.composed = false
     toast(r.status === 'verified' ? 'X vote verified' : 'Sent for review')
     await load()
     refreshGameState()

@@ -241,3 +241,32 @@ test('popups share one tidy layout: icon, centred words, full-width buttons in n
   assert.match(css, /\.vt-pop-acts \.vt-pop-btn \{[^}]*text-transform: none/, 'beats .vt-screen button')
   assert.match(css, /\.vt-screen, \.vt-entry, \.vt-admin, \.vt-pop \{/, 'tokens reach popups over any screen')
 })
+
+// ── After a counted vote, the card says so (AGENT197, 2026-10-21) ─────
+
+test('a "posted" / "voted" note set before today’s latest proof no longer holds the card on "link needed"', async () => {
+  const { dayFlagActive, xUiState } = await import('./voting-view.js')
+  const today = '2026-10-21'
+  const verified = [{ missionId: 'x', voteDay: today, status: 'verified', at: '2026-10-21T14:08:39Z' }]
+  const tapped = String(Date.parse('2026-10-21T14:06:00Z'))
+  assert.equal(dayFlagActive(tapped, verified, 'x', today), false, 'posted, then the link was verified: back to the real state')
+  assert.equal(dayFlagActive('1', verified, 'x', today), false, 'an old-style flag is stale once a proof exists')
+  assert.equal(dayFlagActive(String(Date.parse('2026-10-21T14:20:00Z')), verified, 'x', today), true, 'a new post after it: link needed')
+  assert.equal(dayFlagActive('1', [], 'x', today), true, 'nothing sent yet today: the note still applies')
+  assert.equal(dayFlagActive(tapped, [{ ...verified[0], missionId: 'mnet' }], 'x', today), true, 'only the same mission counts')
+  assert.equal(dayFlagActive(null, verified, 'x', today), false)
+  assert.equal(xUiState('todo', { composed: false }), 'todo')
+  const src = read('./voting.js')
+  assert.match(src, /clearFlag\(composedKey\(\)\)\r?\n    local\.x\.composed = false\r?\n    toast\(r\.status === 'verified'/)
+  assert.match(src, /clearFlag\(votedKey\(\)\)\r?\n    local\.mnet\.voted = false\r?\n    toast\('Certificate received'\)/)
+})
+
+test('X and Mnet cards show what already counted today, with the next step', () => {
+  const s = votingStatus({ x: 'todo', mnet: 'todo' })
+  s.todayProgress = { ...s.todayProgress, x: { verified: 1, pending: 0, used: 1, remaining: 2, max: 3 }, mnet: { verified: 2, pending: 0, used: 2, remaining: 1, max: 3 } }
+  const html = plain(screen(s, votingLocal({ x: 'todo', mnet: 'todo' })))
+  assert.match(card(html, 'x'), /1 of 3 verified today\. For the next one, post from another linked account\./)
+  assert.match(card(html, 'mnet'), /2 of 3 verified today\. Vote again on Mnet for the next certificate\./)
+  const none = plain(screen(votingStatus({ x: 'todo' }), votingLocal({ x: 'todo' })))
+  assert.doesNotMatch(card(none, 'x'), /verified today/)
+})
