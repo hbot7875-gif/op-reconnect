@@ -27,6 +27,7 @@ import { renderRunAmi, teardownRunAmi } from './screen-run-ami.js'
 import { playLevelUp } from './celebrate.js'
 import { checkForBadgeUnlocks } from './badge-reveal.js'
 import { checkForExamModeAnnounce } from './exam-mode-announce.js'
+import { checkForMamaTeamPopup } from './mama-team-popup.js'
 import { playModeReview } from './mode-upgrade-announce.js'
 import { districtDisplayName } from './ward-tiles.js'
 import { lapseChoice } from './ui-district.js'
@@ -169,6 +170,7 @@ subscribe((state) => {
   checkForBadgeUnlocks(state)
   checkForExamModeAnnounce(state)
   checkForBirthdayEraPopup(state)
+  checkForMamaTeamPopup(state)
   for (const eraId of state.agentCharge?.newlyLitEraIds || []) {
     if (celebratedEraCards.has(eraId)) continue
     celebratedEraCards.add(eraId)
