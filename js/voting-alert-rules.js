@@ -24,6 +24,7 @@ export function markAlertsSeen(alerts, agentNo, storage) {
 
 export const DUPLICATE_POPUP = {
   eyebrow: 'MAMA 2026 · Mnet vote',
+  later: 'OK',
   title: 'Certificate not counted',
   body: 'This certificate has already been submitted. Please upload a new voting certificate.',
   action: 'Upload a new certificate',

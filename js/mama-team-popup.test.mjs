@@ -42,8 +42,9 @@ test('once per KST day until they pick; storage trouble never nags', () => {
 test('copy names both teams and the live score; the button opens Voting', () => {
   const c = mamaTeamPopupCopy(voting())
   assert.deepEqual([c.eyebrow, c.title, c.action], ['MAMA 2026 · Battle', 'Pick your side', 'Choose my team'])
-  assert.match(c.body, /^HOOLIGANS vs ALIENS are battling with every verified vote\./)
-  assert.equal(c.score, 'HOOLIGANS 812 · ALIENS 790')
+  assert.equal(c.body, 'Every verified vote adds a point for your team. Choose a side so your votes count.')
+  assert.deepEqual(c.teams.map((t) => [t.label, t.points]), [['HOOLIGANS', 812], ['ALIENS', 790]])
+  assert.equal(c.later, 'Not now')
   const src = readFileSync(new URL('./mama-team-popup.js', import.meta.url), 'utf8')
   assert.match(src, /go\.onclick = \(\) => \{ hideOverlay\(\); goVoting\(\) \}/)
   assert.match(readFileSync(new URL('./voting.js', import.meta.url), 'utf8'), /!status\.battle\.myTeam && status\.campaign\.phase === 'open' && !local\.chooser\) startChooser\(\)/, 'Voting starts the choice on arrival')

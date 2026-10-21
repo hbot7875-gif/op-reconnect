@@ -19,12 +19,12 @@ export function markMamaTeamPopupSeen(storage, agentNo, campaignId, now = new Da
 /** Pure: the words, with the live score when there is one. */
 export function mamaTeamPopupCopy(voting) {
   const teams = voting?.battle?.teams || []
-  const score = teams.length === 2 ? `${teams[0].label} ${teams[0].points} · ${teams[1].label} ${teams[1].points}` : null
   return {
     eyebrow: `${voting?.title || 'MAMA 2026'} · Battle`,
     title: 'Pick your side',
-    body: `${teams.map((t) => t.label).join(' vs ') || 'Two teams'} are battling with every verified vote. Choose your team so your votes count for your side.`,
-    score,
+    body: 'Every verified vote adds a point for your team. Choose a side so your votes count.',
+    teams: teams.length === 2 ? teams : [],
     action: 'Choose my team',
+    later: 'Not now',
   }
 }

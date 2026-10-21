@@ -704,7 +704,9 @@ export function xUnlinkedSheet(vm) {
   const handleMax = x?.maxHandles || 3
   return `<div class="vt-sheet" role="alertdialog" aria-modal="true" aria-labelledby="vt-xu-title" data-vt-sheet="xunlinked" hidden>
     <div class="vt-grabber" aria-hidden="true"></div>
-    <div class="vt-sheet-h"><h2 id="vt-xu-title">This account isn’t linked</h2><button class="vt-icon-btn" type="button" aria-label="Close" data-vt-act="sheet-close">${ic('x')}</button></div>
+    <div class="vt-sheet-h vt-sheet-h-end"><button class="vt-icon-btn" type="button" aria-label="Close" data-vt-act="sheet-close">${ic('x')}</button></div>
+    <div class="vt-pop-ico is-warn">${ic('link')}</div>
+    <h2 class="vt-pop-title" id="vt-xu-title">This account isn’t linked</h2>
     ${xUnlinkedPanel(vm, handles, handleMax)}
   </div>`
 }
@@ -713,12 +715,12 @@ function xUnlinkedPanel(vm, handles, handleMax) {
   const u = vm.local.xUnlinked
   if (!u) return ''
   const room = u.canLink && handles.length < handleMax
-  return `<div class="vt-attn" role="alert">
-    ${note('is-warn', 'info', `This post was made from <b>@${esc(u.author)}</b>, but that account isn’t linked.${room ? '' : ` You already have ${handleMax} X accounts linked — remove one without votes below, or post from a linked account.`}`)}
-    <div class="vt-actions vt-actions-wrap">
-      ${room ? `<button class="vt-btn vt-btn-primary" type="button" data-vt-act="x-link-author" data-vt-author="${esc(u.author)}"${vm.local.x?.submitting ? ' disabled' : ''}>${ic('link')}Link this account</button>` : ''}
-      <button class="vt-btn vt-btn-outline" type="button" data-vt-act="x-choose-other">Choose another account</button>
-      <button class="vt-btn vt-btn-ghost" type="button" data-vt-act="sheet-close">Cancel</button>
+  return `<div class="vt-xu" role="alert">
+    <p class="vt-pop-body">This post was made from <b>@${esc(u.author)}</b>, but that account isn’t linked.${room ? ' Link it and this post will be checked again.' : ` You already have ${handleMax} X accounts linked — remove one without votes below, or post from a linked account.`}</p>
+    <div class="vt-pop-acts">
+      ${room ? `<button class="vt-pop-btn is-primary" type="button" data-vt-act="x-link-author" data-vt-author="${esc(u.author)}"${vm.local.x?.submitting ? ' disabled' : ''}>Link this account</button>` : ''}
+      <button class="vt-pop-btn is-outline" type="button" data-vt-act="x-choose-other">Choose another account</button>
+      <button class="vt-pop-btn is-quiet" type="button" data-vt-act="sheet-close">Cancel</button>
     </div>
   </div>`
 }

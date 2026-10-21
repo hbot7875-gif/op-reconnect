@@ -7,9 +7,10 @@
 // the Voting screen both pass their `alerts` here; each one pops up once.
 
 import { getAgentNo } from './session.js'
-import { el, esc, hideOverlay, showOverlay } from './state.js'
+import { el, hideOverlay, showOverlay } from './state.js'
 import { getScreen, goVoting } from './router.js'
 import { unseenAlerts, markAlertsSeen, duplicatePopupCopy } from './voting-alert-rules.js'
+import { votePopupHtml } from './vote-popup.js'
 
 function overlayBusy() {
   const overlay = document.getElementById('overlay')
@@ -18,14 +19,11 @@ function overlayBusy() {
 }
 
 function popup(copy) {
-  const sheet = el('div', 'sheet')
-  sheet.setAttribute('role', 'alertdialog')
-  sheet.append(
-    el('div', 'eyebrow', esc(copy.eyebrow)),
-    el('h3', '', esc(copy.title)),
-    el('p', 'muted', esc(copy.body)),
-  )
-  const go = el('button', 'btn btn-primary', esc(copy.action))
+  const sheet = el('div', 'sheet vt-pop', votePopupHtml({
+    tone: 'err', icon: 'xCircle', eyebrow: copy.eyebrow, title: copy.title, body: copy.body,
+    primary: copy.action, secondary: copy.later,
+  }))
+  const go = sheet.querySelector('[data-vp="primary"]')
   go.onclick = () => {
     hideOverlay()
     if (getScreen()?.name !== 'voting') goVoting()
@@ -36,10 +34,9 @@ function popup(copy) {
       else document.querySelector('[data-vt-mission="mnet"]')?.scrollIntoView({ block: 'center', behavior: 'smooth' })
     }
   }
-  const ok = el('button', 'btn btn-ghost', 'OK')
-  ok.onclick = hideOverlay
-  sheet.append(go, ok)
+  sheet.querySelector('[data-vp="secondary"]').onclick = hideOverlay
   showOverlay(sheet)
+  sheet.setAttribute('role', 'alertdialog')
 }
 
 /** Show any not-yet-seen duplicate alerts as one popup. Waits for a free

@@ -6,7 +6,7 @@
    the two other roots that use them), not :root, so nothing here can
    restyle the rest of the game. */
 
-.vt-screen, .vt-entry, .vt-admin {
+.vt-screen, .vt-entry, .vt-admin, .vt-pop {
   /* ReConnect's own surfaces and violet (reconnect.css), so MAMA reads as
      part of the app. */
   --vt-bg: #0a0910;
@@ -726,3 +726,38 @@
 .vta-xr-swap { margin: 0; font-size: 15px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .vta-xr-swap a { display: inline-flex; gap: 4px; align-items: center; color: var(--vt-accent); overflow-wrap: anywhere; }
 .vt-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* MAMA popups (team choice, certificate not counted, unlinked X): an icon,
+   centred words, full-width buttons. Over any screen, so the tokens above
+   are scoped to .vt-pop too. */
+.vt-pop.sheet { text-align: center; padding: 26px 22px 20px; background: var(--vt-surface); border: 1px solid var(--vt-line-2); }
+.vt-pop-ico { width: 48px; height: 48px; margin: 4px auto 12px; border-radius: 50%; display: grid; place-items: center; background: var(--vt-accent-soft); color: var(--vt-violet-hi); }
+.vt-pop-ico .vt-i { width: 24px; height: 24px; }
+.vt-pop-ico.is-err { background: var(--vt-err-soft); color: #ff7a8a; }
+.vt-pop-ico.is-warn { background: var(--vt-warn-soft); color: var(--vt-warn); }
+.vt-pop-eyebrow { margin: 0 0 4px; font: 500 12px var(--vt-sans); letter-spacing: .3px; color: var(--vt-text-3); }
+.vt-pop-title, .vt-pop h3.vt-pop-title { margin: 0 0 8px; font: 600 19px/1.25 var(--vt-sans); letter-spacing: 0; color: var(--vt-text); text-align: center; }
+.vt-pop-body { margin: 0 auto; max-width: 32ch; font-size: 14.5px; line-height: 1.5; color: var(--vt-text-2); text-align: center; }
+.vt-pop-body b { color: var(--vt-text); font-weight: 600; }
+.vt-pop-teams { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; margin: 16px 0 2px; }
+.vt-pop-team { display: grid; gap: 2px; padding: 10px 8px; border-radius: var(--vt-r-md); background: var(--vt-surface-2); border: 1px solid var(--vt-line); }
+.vt-pop-team span { font: 600 11.5px var(--vt-sans); letter-spacing: .6px; color: var(--vt-text-2); }
+.vt-pop-team b { font: 700 20px var(--vt-sans); font-variant-numeric: tabular-nums; color: var(--vt-score); }
+.vt-pop-team.is-hoo span { color: var(--vt-hoo); }
+.vt-pop-team.is-ali span { color: var(--vt-ali); }
+.vt-pop-vs { font-size: 12px; color: var(--vt-text-3); }
+.vt-pop-acts { display: grid; gap: 8px; margin-top: 20px; }
+.vt-pop-acts .vt-pop-btn { width: 100%; min-height: 46px; padding: 0 16px; border-radius: 12px; border: 1px solid transparent; font: 600 15px var(--vt-sans); letter-spacing: 0; text-transform: none; cursor: pointer; }
+.vt-pop-acts .vt-pop-btn.is-primary { background: var(--vt-accent); color: var(--vt-accent-ink); }
+.vt-pop-acts .vt-pop-btn.is-primary:hover { background: var(--vt-accent-hover); }
+.vt-pop-acts .vt-pop-btn.is-outline { background: transparent; color: var(--vt-text); border-color: var(--vt-line-2); }
+.vt-pop-acts .vt-pop-btn.is-quiet { background: transparent; color: var(--vt-text-2); min-height: 40px; }
+.vt-pop-acts .vt-pop-btn:focus-visible { outline: 2px solid var(--vt-violet-hi); outline-offset: 2px; }
+.vt-pop-acts .vt-pop-btn:disabled { opacity: .55; cursor: default; }
+.vt-sheet-h-end { justify-content: flex-end; }
+.vt-sheet[data-vt-sheet="xunlinked"] { text-align: center; }
+.vt-xu .vt-pop-acts { margin-top: 18px; }
+.vt-sheet .vt-pop-body { margin: 0 auto; }
+.vt-sheet .vt-pop-title { margin: 0 0 8px; }
+/* The overlay's close button reserves room on the first child; the icon sits centred instead. */
+.vt-pop.sheet > .sheet-x-bar + * { padding-right: 0; }

@@ -9,9 +9,10 @@
 // on every poll.
 
 import { getAgentNo } from './session.js'
-import { el, esc, hideOverlay, showOverlay } from './state.js'
+import { el, hideOverlay, showOverlay } from './state.js'
 import { getScreen, goVoting } from './router.js'
 import { mamaTeamPopupDue, markMamaTeamPopupSeen, mamaTeamPopupCopy } from './mama-team-popup-rules.js'
+import { votePopupHtml, teamTilesHtml } from './vote-popup.js'
 
 export function checkForMamaTeamPopup(state) {
   const agentNo = getAgentNo()
@@ -25,17 +26,12 @@ export function checkForMamaTeamPopup(state) {
   markMamaTeamPopupSeen(storage, agentNo, state.voting.campaignId)
 
   const copy = mamaTeamPopupCopy(state.voting)
-  const sheet = el('div', 'sheet')
-  sheet.append(
-    el('div', 'eyebrow', esc(copy.eyebrow)),
-    el('h3', '', esc(copy.title)),
-    el('p', 'muted', esc(copy.body)),
-  )
-  if (copy.score) sheet.appendChild(el('p', 'dim', esc(copy.score)))
-  const go = el('button', 'btn btn-primary', esc(copy.action))
+  const sheet = el('div', 'sheet vt-pop', votePopupHtml({
+    tone: 'accent', icon: 'swords', eyebrow: copy.eyebrow, title: copy.title, body: copy.body,
+    extra: teamTilesHtml(copy.teams), primary: copy.action, secondary: copy.later,
+  }))
+  const go = sheet.querySelector('[data-vp="primary"]')
   go.onclick = () => { hideOverlay(); goVoting() }
-  const later = el('button', 'btn btn-ghost', 'Not now')
-  later.onclick = hideOverlay
-  sheet.append(go, later)
+  sheet.querySelector('[data-vp="secondary"]').onclick = hideOverlay
   showOverlay(sheet)
 }
