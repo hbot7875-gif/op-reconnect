@@ -695,8 +695,20 @@ export function guideSheet(vm) {
   </div>`
 }
 
-/** "This post was made from @x, but that account isn't linked." — with the
- *  three ways forward. Only after the server said so for this exact post. */
+/** "This post was made from @x, but that account isn't linked." — a popup of
+ *  its own with the three ways forward. Only after the server said so for
+ *  this exact post. */
+export function xUnlinkedSheet(vm) {
+  const x = vm.status.campaign.missions.find((m) => m.kind === 'x_post')
+  const handles = vm.status.xHandles || (vm.status.xHandle ? [vm.status.xHandle] : [])
+  const handleMax = x?.maxHandles || 3
+  return `<div class="vt-sheet" role="alertdialog" aria-modal="true" aria-labelledby="vt-xu-title" data-vt-sheet="xunlinked" hidden>
+    <div class="vt-grabber" aria-hidden="true"></div>
+    <div class="vt-sheet-h"><h2 id="vt-xu-title">This account isn’t linked</h2><button class="vt-icon-btn" type="button" aria-label="Close" data-vt-act="sheet-close">${ic('x')}</button></div>
+    ${xUnlinkedPanel(vm, handles, handleMax)}
+  </div>`
+}
+
 function xUnlinkedPanel(vm, handles, handleMax) {
   const u = vm.local.xUnlinked
   if (!u) return ''
@@ -773,7 +785,6 @@ export function linkSheet(vm) {
     <div class="vt-grabber" aria-hidden="true"></div>
     <div class="vt-sheet-h"><h2 id="vt-l-title">${title}</h2><button class="vt-icon-btn" type="button" aria-label="Close" data-vt-act="sheet-close">${ic('x')}</button></div>
     ${replacing ? replaceSheetBody(vm, replacing) : `<form class="vt-form" data-vt-form="x">
-      ${xUnlinkedPanel(vm, handles, handleMax)}
       ${needHandle || vm.local.editHandle ? `<label class="vt-field"><span class="vt-field-l">${handles.length ? 'Add another X account' : 'Your X handle'}</span>
         <span class="vt-input-wrap"><span class="vt-input-pre" aria-hidden="true">@</span><input name="handle" class="vt-input" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="16" value="" required></span>
         <span class="vt-field-h">X accounts stay linked for this event. Maximum ${handleMax}.</span></label>`
@@ -847,6 +858,7 @@ function sheets(vm) {
   return `<div class="vt-scrim" data-vt-act="sheet-close" hidden></div>
     ${guideSheet(vm)}
     ${linkSheet(vm)}
+    ${xUnlinkedSheet(vm)}
     ${vm.status.battle ? shareSheet(vm) : ''}
     ${teamChooser(vm)}`
 }

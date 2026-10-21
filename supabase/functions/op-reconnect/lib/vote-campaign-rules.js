@@ -476,3 +476,20 @@ export function duplicateReason(row, related) {
   if (row.cert_fingerprint && related?.cert_fingerprint && row.cert_fingerprint !== related.cert_fingerprint) return 'timestamp_numbers_differ'
   return 'timestamp_number_unreadable'
 }
+
+// ── Player alerts (popups) ────────────────────────────────────────────
+
+/**
+ * Certificates of this player's that were turned down as duplicates today or
+ * yesterday (KST) — each becomes one popup, whenever the check finished and
+ * whatever else was counted that day. Only the proof id and day: never who
+ * else submitted it or how it matched.
+ */
+export function duplicateAlerts(proofs, today) {
+  const since = addDays(today, -1)
+  return (proofs || [])
+    .filter((p) => p.status === 'rejected' && p.duplicate_kind === 'certificate' && String(p.vote_day) >= since)
+    .sort((a, b) => Number(b.id) - Number(a.id))
+    .slice(0, 3)
+    .map((p) => ({ id: Number(p.id), kind: 'duplicate_certificate', voteDay: p.vote_day }))
+}

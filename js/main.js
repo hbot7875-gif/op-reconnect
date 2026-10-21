@@ -28,6 +28,7 @@ import { playLevelUp } from './celebrate.js'
 import { checkForBadgeUnlocks } from './badge-reveal.js'
 import { checkForExamModeAnnounce } from './exam-mode-announce.js'
 import { checkForMamaTeamPopup } from './mama-team-popup.js'
+import { checkForVotingAlerts } from './voting-alerts.js'
 import { playModeReview } from './mode-upgrade-announce.js'
 import { districtDisplayName } from './ward-tiles.js'
 import { lapseChoice } from './ui-district.js'
@@ -171,6 +172,7 @@ subscribe((state) => {
   checkForExamModeAnnounce(state)
   checkForBirthdayEraPopup(state)
   checkForMamaTeamPopup(state)
+  checkForVotingAlerts(state.voting?.alerts)
   for (const eraId of state.agentCharge?.newlyLitEraIds || []) {
     if (celebratedEraCards.has(eraId)) continue
     celebratedEraCards.add(eraId)

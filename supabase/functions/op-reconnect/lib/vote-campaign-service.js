@@ -20,7 +20,7 @@ import {
   kstDayOf, addDays, campaignPhase, missionById, parseXPostUrl, snowflakeTime, normalizeHandle,
   parseOembed, decideXProof, missingHashtags, cityPhase, sanitizeMnetChecks, sanitizeClientCertChecks, decideMnetChecks,
   normalizeCertificateNumber, participationMinuteKey, validUtcOffset, duplicateNotices, votingStreak, missionStates, missionProgress, giftState, pulseView,
-  REVIEW_REASONS, reviewReason, duplicateReason,
+  REVIEW_REASONS, reviewReason, duplicateReason, duplicateAlerts,
 } from './vote-campaign-rules.js'
 
 export const PROOF_BUCKET = 'campaign-proofs'
@@ -135,18 +135,24 @@ export async function getVotingBanner(db, agentNo, now = new Date(), { cache } =
   const phase = cityPhase(c, now)
   const today = kstDayOf(now)
   const battleOn = !!c.battle?.enabled
-  const [proofsRes, teamRes, battle] = await Promise.all([
+  const [proofsRes, teamRes, battle, dupRes] = await Promise.all([
     phase === 'open'
       ? db.from('rc_campaign_proofs').select('mission_id, vote_day, status').eq('campaign_id', c.id).eq('agent_no', agentNo).eq('vote_day', today)
       : Promise.resolve({ data: [] }),
     battleOn ? db.from('rc_campaign_teams').select('team').eq('campaign_id', c.id).eq('agent_no', agentNo).maybeSingle() : Promise.resolve({ data: null }),
     battleOn ? cachedBattleScores(db, c, cache) : Promise.resolve(null),
+    // Their own certificates turned down as duplicates, for a one-time popup.
+    phase === 'open'
+      ? db.from('rc_campaign_proofs').select('id, vote_day, status, duplicate_kind').eq('campaign_id', c.id).eq('agent_no', agentNo)
+        .eq('status', 'rejected').eq('duplicate_kind', 'certificate').gte('vote_day', addDays(today, -1)).limit(10)
+      : Promise.resolve({ data: [] }),
   ])
   const states = missionStates(c, proofsRes.data || [], today)
   const progress = missionProgress(c, proofsRes.data || [], today)
   return {
     campaignId: c.id, title: c.title, roundLabel: c.round_label, phase,
     closesAt: c.closes_at, freezeAt: c.battle?.freeze_at || c.closes_at,
+    alerts: duplicateAlerts(dupRes?.data || [], today),
     done: Object.values(progress).reduce((n, p) => n + p.verified, 0),
     total: Object.values(progress).reduce((n, p) => n + p.max, 0),
     battle: battleOn ? {
@@ -325,6 +331,7 @@ export async function getVotingStatus(db, params, now = new Date()) {
     todayProofs: proofs.filter((p) => p.vote_day === today && p.status !== 'rejected')
       .map((p) => ({ missionId: p.mission_id, status: p.status, checks: p.checks || {}, ...proofHint(p) })),
     notices: duplicateNotices(c, proofs, today),
+    alerts: duplicateAlerts(proofs, today),
     stats: {
       verifiedVotes: (verifiedRes.data || []).length,
       votingDays: verifiedDays.length,

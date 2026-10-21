@@ -13,6 +13,7 @@ import { battleView, pickStyle, nextStyle, shareText, STYLES, STYLE_NAMES, BATTL
 import { posterFile, canShareFiles, sharePoster, shareLink, copyText, savePoster } from './battle-share-flow.js'
 import { checkLyric, LYRIC_MAX, LYRIC_ERRORS } from './battle-lyric-filter.js'
 import { trackEngagement } from './engagement.js'
+import { checkForVotingAlerts, showDuplicateCertificatePopup } from './voting-alerts.js'
 import { chatFeed, chatErrorText } from './battle-hub-view.js'
 import { checkChatText, CHAT_MAX } from '../supabase/functions/op-reconnect/lib/battle-text-filter.js'
 
@@ -87,6 +88,7 @@ async function load() {
   // First visit once the battle is on and this agent has no side yet: the
   // 7-second choice. The server holds the clock and makes the timeout pick.
   if (status.battle && !status.battle.myTeam && status.campaign.phase === 'open' && !local.chooser) startChooser()
+  else checkForVotingAlerts(status.alerts)
   scheduleProofPoll()
 }
 
@@ -119,6 +121,7 @@ async function pollProofs() {
     // Repaint on a real change, or once when "Checking your certificate…"
     // becomes "Still checking".
     if (changed || (wasChecking && !sentWithin(MNET_CHECKING_MS))) paint()
+    checkForVotingAlerts(status.alerts)
     if (credited) refreshGameState() // XP, Charge Cells and the HUD
   }
   scheduleProofPoll()
@@ -561,7 +564,12 @@ async function sendCertificate(file, { force = false } = {}) {
     local.mnet.uploading = false
     if (r?.error === 'team_required') { local.error = { mission: mission.id, text: errorText(r.error) }; paint(); startChooser(); return }
     // The same screenshot again is a confirmed duplicate: say so in plain words.
-    if (!r?.success) { local.error = { mission: mission.id, text: errorText(r?.error === 'duplicate_proof' ? 'duplicate_certificate' : r?.error) }; paint(); return }
+    if (!r?.success) {
+      local.error = { mission: mission.id, text: errorText(r?.error === 'duplicate_proof' ? 'duplicate_certificate' : r?.error) }
+      paint()
+      if (r?.error === 'duplicate_proof') showDuplicateCertificatePopup()
+      return
+    }
     toast('Certificate received')
     local.mnet.sentAt = Date.now()
     await load()
@@ -592,9 +600,10 @@ async function sendXPost(url, handle) {
     if (r?.error === 'team_required') { closeSheet(); startChooser() }
     if (r?.error === 'x_account_not_linked') {
       local.x.submitting = false
+      closeSheet()
       local.xUnlinked = { author: r.author, canLink: !!r.canLink, url }
       paint()
-      showSheet('link', false)
+      showSheet('xunlinked')
       return
     }
     // The same post id already used — by this agent or another.
@@ -937,6 +946,7 @@ async function refreshScore() {
 async function linkAuthor(author) {
   if (!author) return
   const pending = local.xUnlinked?.url || null
+  if (openSheet === 'xunlinked') closeSheet()
   local.error = null
   const h = await call('setXHandle', { agentNo: getAgentNo(), campaignId: status.campaign.id, xHandle: author })
   if (!h?.success) {
@@ -954,6 +964,7 @@ async function linkAuthor(author) {
 }
 
 function chooseOtherPost() {
+  if (openSheet === 'xunlinked') closeSheet()
   local.xUnlinked = null
   local.error = null
   paint()

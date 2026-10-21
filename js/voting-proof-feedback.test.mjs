@@ -7,8 +7,10 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import {
-  votingScreen, errorText, linkSheet, DUPLICATE_TEXT, UNREADABLE_TEXT, SMALL_IMAGE_TEXT, replaceSheetBody, REPLACE_REASONS,
+  votingScreen, errorText, linkSheet, DUPLICATE_TEXT, UNREADABLE_TEXT, SMALL_IMAGE_TEXT, replaceSheetBody, REPLACE_REASONS, xUnlinkedSheet,
 } from './voting-view.js'
+import { unseenAlerts, markAlertsSeen, duplicatePopupCopy } from './voting-alert-rules.js'
+import { duplicateAlerts } from '../supabase/functions/op-reconnect/lib/vote-campaign-rules.js'
 import { votingStatus, votingLocal, FIXTURE_NOW } from './voting-fixtures.js'
 import { trustedCheckWith } from './mnet-trusted-check.js'
 
@@ -31,16 +33,19 @@ test('messages say what went wrong and what to do', () => {
   assert.equal(DUPLICATE_TEXT.duplicate, errorText('duplicate_certificate'))
 })
 
-test('unlinked X account: named, with Link this account / Choose another account / Cancel', () => {
+test('unlinked X account: its own popup, named, with Link this account / Choose another account / Cancel', () => {
   const status = votingStatus({ x: 'link' })
-  const html = linkSheet({ status, local: { ...votingLocal({ x: 'link' }), xUnlinked: { author: 'alt_acct', canLink: true, url: 'u' } } })
+  const html = xUnlinkedSheet({ status, local: { ...votingLocal({ x: 'link' }), xUnlinked: { author: 'alt_acct', canLink: true, url: 'u' } } })
+  assert.match(html, /role="alertdialog"[^>]*data-vt-sheet="xunlinked"/)
+  assert.match(html, /<h2 id="vt-xu-title">This account isn’t linked<\/h2>/)
+  assert.doesNotMatch(linkSheet({ status, local: { ...votingLocal({ x: 'link' }), xUnlinked: { author: 'alt_acct', canLink: true, url: 'u' } } }), /alt_acct/, 'no longer buried in the link sheet')
   assert.match(html, /This post was made from <b>@alt_acct<\/b>, but that account isn’t linked\./)
   assert.match(html, /data-vt-act="x-link-author" data-vt-author="alt_acct"[^>]*>[\s\S]*?Link this account/)
   assert.match(html, /data-vt-act="x-choose-other">Choose another account/)
   assert.match(html, /data-vt-act="sheet-close">Cancel/)
   // At the limit: no link offer, and how to make room.
   const full = { ...status, xHandles: ['a', 'b', 'c'] }
-  const atLimit = linkSheet({ status: full, local: { ...votingLocal({ x: 'link' }), xUnlinked: { author: 'alt_acct', canLink: false, url: 'u' } } })
+  const atLimit = xUnlinkedSheet({ status: full, local: { ...votingLocal({ x: 'link' }), xUnlinked: { author: 'alt_acct', canLink: false, url: 'u' } } })
   assert.doesNotMatch(atLimit, /x-link-author/)
   assert.match(atLimit, /You already have 3 X accounts linked — remove one without votes below, or post from a linked account\./)
 })
@@ -169,4 +174,55 @@ test('replacement status: Pending approval, Approved or Rejected; one request at
   assert.doesNotMatch(html, /x-replace-open/, 'no second request while one waits')
   assert.equal(errorText('x_handle_retired', { author: 'gone' }), '@gone was replaced on your file, so it can’t earn new votes. Post from one of your linked accounts.')
   assert.match(errorText('x_replacement_limit'), /already replaced an X account/)
+})
+
+// ── Popups that reach the player wherever they are ────────────────────
+
+const memStore = () => { const m = new Map(); return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, String(v)) } }
+
+test('duplicate certificate: every one turned down today or yesterday becomes an alert — even with a counted one that day', () => {
+  const proofs = [
+    { id: 10, status: 'verified', duplicate_kind: null, vote_day: '2026-10-21' },
+    { id: 11, status: 'rejected', duplicate_kind: 'certificate', vote_day: '2026-10-21' },
+    { id: 9, status: 'rejected', duplicate_kind: 'certificate', vote_day: '2026-10-20' },
+    { id: 5, status: 'rejected', duplicate_kind: 'certificate', vote_day: '2026-10-19' },
+    { id: 12, status: 'review', duplicate_kind: 'certificate', vote_day: '2026-10-21' },
+    { id: 13, status: 'rejected', duplicate_kind: 'possible', vote_day: '2026-10-21' },
+    { id: 14, status: 'rejected', duplicate_kind: null, vote_day: '2026-10-21' },
+  ]
+  assert.deepEqual(duplicateAlerts(proofs, '2026-10-21'), [
+    { id: 11, kind: 'duplicate_certificate', voteDay: '2026-10-21' }, { id: 9, kind: 'duplicate_certificate', voteDay: '2026-10-20' }])
+  assert.ok(!JSON.stringify(duplicateAlerts(proofs, '2026-10-21')).match(/agent|fingerprint|hash|duplicate_of/))
+})
+
+test('duplicate popup: once per certificate per agent; a broken store never repeats it', () => {
+  const s = memStore()
+  const alerts = [{ id: 11, kind: 'duplicate_certificate', voteDay: '2026-10-21' }, { id: 9, kind: 'duplicate_certificate', voteDay: '2026-10-20' }]
+  assert.equal(unseenAlerts(alerts, 'AGENT001', s).length, 2)
+  markAlertsSeen(alerts.slice(0, 1), 'AGENT001', s)
+  assert.deepEqual(unseenAlerts(alerts, 'AGENT001', s).map((a) => a.id), [9])
+  assert.equal(unseenAlerts(alerts, 'AGENT002', s).length, 2, 'per agent')
+  assert.deepEqual(unseenAlerts([{ id: 'x', kind: 'duplicate_certificate' }, { id: 3, kind: 'other' }, null], 'AGENT001', s), [])
+  const broken = { getItem() { throw new Error('blocked') }, setItem() { throw new Error('blocked') } }
+  assert.deepEqual(unseenAlerts(alerts, 'AGENT001', broken), [])
+  assert.deepEqual(unseenAlerts(alerts, null, s), [])
+})
+
+test('duplicate popup copy: plain words, the same as the card', () => {
+  const one = duplicatePopupCopy([{ id: 1 }])
+  assert.deepEqual([one.title, one.action], ['Certificate not counted', 'Upload a new certificate'])
+  assert.equal(one.body, errorText('duplicate_certificate'))
+  assert.equal(duplicatePopupCopy([{ id: 1 }, { id: 2 }]).title, '2 certificates not counted')
+})
+
+test('wiring: City and Voting both check alerts; same-screenshot refusal pops up; unlinked X opens its own sheet', () => {
+  const v = read('./voting.js')
+  assert.match(v, /else checkForVotingAlerts\(status\.alerts\)/, 'after load, unless the team choice is up')
+  assert.match(v, /paint\(\)\r?\n    checkForVotingAlerts\(status\.alerts\)/, 'on every poll while a certificate is checked')
+  assert.match(v, /if \(r\?\.error === 'duplicate_proof'\) showDuplicateCertificatePopup\(\)/)
+  assert.match(v, /closeSheet\(\)\r?\n      local\.xUnlinked = \{ author: r\.author, canLink: !!r\.canLink, url \}\r?\n      paint\(\)\r?\n      showSheet\('xunlinked'\)/)
+  assert.match(read('./main.js'), /checkForVotingAlerts\(state\.voting\?\.alerts\)/)
+  const a = read('./voting-alerts.js')
+  assert.match(a, /document\.querySelector\('\.has-sheet'\)/, 'never under an open Voting sheet')
+  assert.match(a, /markAlertsSeen\(fresh, agentNo, storage\)\r?\n  popup\(/)
 })

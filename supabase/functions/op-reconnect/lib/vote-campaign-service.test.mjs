@@ -44,7 +44,7 @@ function fakeDb({ tables = {}, rpc = {}, uploadError = null } = {}) {
       select(cols, o) { q.cols = cols; q.head = !!o?.head; return api },
       eq(k, v) { q.filters[k] = v; return api },
       in(k, v) { q.filters[k] = v; return api },
-      is(k, v) { q.filters[k] = v; return api }, not(k, op, v) { q.not = { ...(q.not || {}), [k]: [op, v] }; return api },
+      gte(k, v) { q.gte = { ...(q.gte || {}), [k]: v }; return api }, is(k, v) { q.filters[k] = v; return api }, not(k, op, v) { q.not = { ...(q.not || {}), [k]: [op, v] }; return api },
       order() { return api }, limit() { return api }, range() { return api },
       delete() { q.op = 'delete'; calls.writes.push(q); return api },
       update(row) { q.op = 'update'; q.row = row; calls.writes.push(q); return api },
@@ -835,4 +835,16 @@ test('admin: replacement queue shows who, both accounts, the reason and the old 
   assert.match(idx, /requestXReplacement: \{ auth: 'agent'/)
   assert.match(idx, /adminListXReplacements: \{ auth: 'admin'/)
   assert.match(idx, /adminDecideXReplacement: \{ auth: 'admin'/)
+})
+
+test('City banner and Voting status carry the player’s own duplicate alerts — ids only', async () => {
+  const dup = [{ id: 21, vote_day: '2026-10-14', status: 'rejected', duplicate_kind: 'certificate' }]
+  const db = fakeDb({ tables: {
+    rc_vote_campaigns: (q) => ({ data: [CAMPAIGN] }),
+    rc_campaign_proofs: (q) => ({ data: q.filters.duplicate_kind === 'certificate' ? dup : [] }),
+  } })
+  const b = await getVotingBanner(db, 'AGENT001', NOW)
+  assert.deepEqual(b.alerts, [{ id: 21, kind: 'duplicate_certificate', voteDay: '2026-10-14' }])
+  const q = db.calls.reads.find((r) => r.table === 'rc_campaign_proofs' && r.filters.duplicate_kind === 'certificate')
+  assert.deepEqual([q.filters.agent_no, q.filters.status, q.gte.vote_day], ['AGENT001', 'rejected', '2026-10-13'], 'own rows, today and yesterday')
 })
