@@ -8,7 +8,7 @@
 //
 // Widening the test is an edit here plus a deploy of the Edge Function.
 
-export const RUN_AMI_TESTERS = Object.freeze(['AGENT000', 'AGENT050', 'AGENT120', 'AGENT140'])
+export const RUN_AMI_TESTERS = Object.freeze(['AGENT000', 'AGENT050', 'AGENT120', 'AGENT140', 'AGENT196'])
 
 export function isRunAmiTester(agentNo) {
   return RUN_AMI_TESTERS.includes(String(agentNo ?? '').trim().toUpperCase())

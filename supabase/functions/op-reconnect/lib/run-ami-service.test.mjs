@@ -507,10 +507,10 @@ test('service: late call within grace registers', async () => {
 
 // ── Closed test ───────────────────────────────────────────────────────
 
-test('closed test: only the four testers pass the gate, whatever the case or spacing', async () => {
+test('closed test: only the five testers pass the gate, whatever the case or spacing', async () => {
   const { RUN_AMI_TESTERS, isRunAmiTester } = await import('./run-ami-access.js')
-  assert.deepEqual([...RUN_AMI_TESTERS].sort(), ['AGENT000', 'AGENT050', 'AGENT120', 'AGENT140'])
-  for (const a of ['AGENT000', 'agent050', ' Agent120 ', 'AGENT140']) assert.equal(isRunAmiTester(a), true, a)
+  assert.deepEqual([...RUN_AMI_TESTERS].sort(), ['AGENT000', 'AGENT050', 'AGENT120', 'AGENT140', 'AGENT196'])
+  for (const a of ['AGENT000', 'agent050', ' Agent120 ', 'AGENT140', 'agent196']) assert.equal(isRunAmiTester(a), true, a)
   for (const a of ['AGENT001', 'AGENT1400', 'AGENT14', '', null, undefined, 'AGENT000 x']) assert.equal(isRunAmiTester(a), false, String(a))
 })
 
