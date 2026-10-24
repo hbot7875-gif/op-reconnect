@@ -41,11 +41,26 @@ export function isAdScrobble(trackName: string | null | undefined, artistName: s
   return false
 }
 
+// Allowlist entries are typed in composed Hangul ("방탄소년단"), but the artist
+// side has been through normalizeKey, whose NFKD step splits every Hangul
+// syllable into jamo — so a raw Korean entry could never match, and every
+// ListenBrainz play credited only "방탄소년단"/"진"/"정국" earned nothing.
+// Entries get the same normalizeKey; Latin entries come out unchanged.
+const entryKeys = new Map<string, string>()
+function entryKey(entry: string): string {
+  let key = entryKeys.get(entry)
+  if (key === undefined) { key = normalizeKey(entry); entryKeys.set(entry, key) }
+  return key
+}
+
 /** Word-boundary-safe allowlist check ("v" must not match "vantae"). */
 export function artistAllowed(artistNorm: string, allowlist: string[]): boolean {
   if (!artistNorm) return true // stats.fm rows carry no artist — trust linked sources
   const padded = ` ${artistNorm} `
-  return allowlist.some((entry) => padded.includes(` ${entry} `))
+  return allowlist.some((entry) => {
+    const key = entryKey(entry)
+    return !!key && padded.includes(` ${key} `)
+  })
 }
 
 /** Sums only the allowed-artist plays within one track's per-day artist
