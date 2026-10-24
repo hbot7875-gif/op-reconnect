@@ -1126,6 +1126,49 @@ async function recruitMissionView(supabase: SupabaseDB, content: any, agentNo: s
   }
 }
 
+/** A recruit leaves the team they joined. Free: Quest Exit is a priced skip
+ *  of the leaver's own district quest, which a recruit doesn't have here.
+ *  Their pooled plays stay with the team (rc_reconnect_recruit_leave freezes
+ *  them), and the recruit seat opens for someone else. A scrobble landing
+ *  between the snapshot and the RPC is ordinary, so retry with a fresh one. */
+export async function leaveRecruitTeam(supabase: SupabaseDB, content: unknown, params: any) {
+  const districtId = String(params.districtId || '')
+  const agentNo = String(params.agentNo || '').trim().toUpperCase()
+  if (!districtId) return { success: false, error: 'district_required' }
+
+  const pd = await myActivePd(supabase, agentNo, districtId)
+  if (pd?.status === 'active') return { success: false, error: 'use_quest_exit' }
+  const found = await joinedRecruitMission(supabase, agentNo, districtId)
+  if (!found || found.mission.status !== 'open') return { success: false, error: 'not_in_mission' }
+
+  let lastError = 'leave_failed'
+  for (let attempt = 0; attempt < 3; attempt++) {
+    let contribution = 0
+    let highWater = 0
+    try {
+      const { data: latest, error: latestError } = await supabase.from('rc_scrobbles')
+        .select('id').order('id', { ascending: false }).limit(1).maybeSingle()
+      if (latestError) return { success: false, error: 'contribution_unavailable' }
+      highWater = Number(latest?.id) || 0
+      const evidence = await questExitContributionEvidence(
+        supabase, found.mission, found.goal.variant === 'invite' ? 'invite' : 'connect', found.goal.config || {},
+      )
+      if (!(agentNo in evidence)) return { success: false, error: 'contribution_unavailable' }
+      contribution = Math.max(0, Number(evidence[agentNo]) || 0)
+    } catch (_e) {
+      return { success: false, error: 'contribution_unavailable' }
+    }
+    const { data, error } = await supabase.rpc('rc_reconnect_recruit_leave', {
+      p_agent: agentNo, p_mission: found.mission.id,
+      p_contribution: contribution, p_scrobble_high_water: highWater,
+    })
+    if (!error && data?.success) return { success: true, contributionKept: Number(data.contributionKept) || 0 }
+    lastError = data?.error || error?.message || 'leave_failed'
+    if (lastError !== 'contribution_changed') break
+  }
+  return { success: false, error: lastError }
+}
+
 /** Missions this agent is on as a recruit, for getGameState — without it a
  *  recruit had no way back to the team after accepting. Open ones, and
  *  completed ones for RECRUIT_COMPLETE_SHOWN_MS. The caller drops the

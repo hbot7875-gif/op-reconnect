@@ -32,7 +32,7 @@ import { adminListGoals, adminAddGoal, adminUpdateGoal, adminDeleteGoal } from '
 import {
   getReconnectMission, getInviteCandidates, openReconnectMission,
   inviteReconnectMission, removeReconnectParticipant, respondReconnectInvite, adminAutoAssignMissions,
-  getMyInvites, sendReconnectMessage, submitReconnectMissionCipherAnswer,
+  getMyInvites, sendReconnectMessage, leaveRecruitTeam, submitReconnectMissionCipherAnswer,
   adminListStuckReconnects, adminPairReconnect, setReconnectMatchAlert,
   getTeamBoostStatus, pickTeamBoostGoals,
 } from './lib/reconnect-missions.ts'
@@ -206,6 +206,7 @@ const ROUTES: Record<string, Route> = {
   removeReconnectParticipant: { auth: 'agent', handler: async (sb, p) => removeReconnectParticipant(sb, await loadContent(sb), p) },
   respondReconnectInvite: { auth: 'agent', handler: async (sb, p) => respondReconnectInvite(sb, await loadContent(sb), p) },
   sendReconnectMessage: { auth: 'agent', handler: async (sb, p) => sendReconnectMessage(sb, await loadContent(sb), p) },
+  leaveRecruitTeam: { auth: 'agent', handler: async (sb, p) => leaveRecruitTeam(sb, await loadContent(sb), p) },
   getTeamBoostStatus: { auth: 'agent', handler: (sb, p) => getTeamBoostStatus(sb, p) },
   pickTeamBoostGoals: { auth: 'agent', handler: (sb, p) => pickTeamBoostGoals(sb, p) },
   submitReconnectMissionCipherAnswer: { auth: 'agent', handler: async (sb, p) => submitReconnectMissionCipherAnswer(sb, p) },

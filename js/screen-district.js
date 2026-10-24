@@ -8,7 +8,7 @@ import { el, esc, setState, toast, unlockAfter, showOverlay, hideOverlay } from 
 import { call } from './api.js'
 import { questExitRow } from './quest-skip.js'
 import { getAgentNo } from './session.js'
-import { goWard, goDistrict } from './router.js'
+import { goWard, goDistrict, goWorld } from './router.js'
 import { wardDisplayName, districtDisplayName } from './ward-tiles.js'
 import { mountScene } from './scene.js'
 import { districtFraction, renderBoard } from './ui-district.js'
@@ -543,6 +543,54 @@ function recruitLinks(state, hereId) {
     link.onclick = (e) => goDistrict(h.wardId, h.districtId, { x: e.clientX, y: e.clientY })
     return link
   })
+}
+
+const RECRUIT_LEAVE_ERRORS = {
+  use_quest_exit: "You're restoring this district, so use the quest's exit options instead.",
+  not_in_mission: "You're no longer on this team.",
+  mission_complete: 'This team already finished the quest.',
+  contribution_unavailable: "Couldn't check your plays just now — try again in a moment.",
+  contribution_changed: 'A new play just came in — try again in a moment.',
+}
+
+/** A recruit's way off the team (leaveRecruitTeam): free, and their pooled
+ *  plays stay in the team's total. Sits where Quest Exit sits for everyone
+ *  else, in the same style. */
+function recruitLeaveRow(d, res, myRow) {
+  const row = el('div', 'qs-row')
+  const btn = el('button', 'qs-entry', `
+    <span class="qs-entry-copy">
+      <span class="qs-entry-title">Can't stay on this team?</span>
+      <span class="qs-entry-sub">Leave team &middot; free</span>
+    </span>
+    <span class="qs-entry-go" aria-hidden="true">↗</span>
+  `)
+  btn.type = 'button'
+  btn.onclick = async () => {
+    const plays = Number(myRow.streams) || 0
+    const seat = res.config.seats?.helperFrom ? `Your ${res.config.seats.helperFrom} seat` : 'Your seat'
+    if (!window.confirm(`Leave this ${districtDisplayName(d)} team?
+
+`
+      + (plays ? `Your ${plays} play${plays === 1 ? '' : 's'} stay in the team's total. ` : '')
+      + `${seat} opens for someone else.`)) return
+    btn.disabled = true
+    const r = await call('leaveRecruitTeam', { agentNo: getAgentNo(), districtId: d.id })
+    if (!r.success) {
+      btn.disabled = false
+      toast(RECRUIT_LEAVE_ERRORS[r.error] || reconnectError(r.error))
+      return
+    }
+    toast('You left the team')
+    // The team is gone from this screen now — back to the agent's own district.
+    const fresh = await call('getGameState', { agentNo: getAgentNo() })
+    if (fresh?.success) setState(fresh)
+    const home = fresh?.success ? fresh.activeDistrict : null
+    if (home?.wardId) goDistrict(home.wardId, home.id)
+    else goWorld()
+  }
+  row.appendChild(btn)
+  return row
 }
 
 function reconnectMissionBlock(title, body) {
@@ -1366,6 +1414,7 @@ function paintMissionPanel(box, d, res) {
   // Quest Exit waives the quest on the leaver's OWN district — meaningless
   // for a recruit, who has no attempt here to waive.
   const exitRow = myRow?.status === 'joined' && !res.recruit ? questExitRow(d.id, refresh) : null
+  const leaveRow = myRow?.status === 'joined' && res.recruit && m.status === 'open' ? recruitLeaveRow(d, res, myRow) : null
   const detailsBody = el('div', 'reconnect-details-body')
   const keep = new Set([
     box.querySelector(':scope > .eyebrow'),
@@ -1377,6 +1426,7 @@ function paintMissionPanel(box, d, res) {
     if (!keep.has(child)) detailsBody.appendChild(child)
   }
   if (exitRow) box.appendChild(exitRow)
+  if (leaveRow) box.appendChild(leaveRow)
   if (detailsBody.childElementCount) box.appendChild(reconnectDisclosure('Details', detailsBody))
 
   const chat = existingChat?.querySelector('.reconnect-chat') || chatPanel(d, m, refresh)
