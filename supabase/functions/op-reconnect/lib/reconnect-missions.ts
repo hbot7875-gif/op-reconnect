@@ -1067,13 +1067,107 @@ export async function getMissionStatus(supabase: SupabaseDB, agentNo: string, di
  *  site owner: strangers ending up 'joined' together with no invite ever
  *  sent between them read as an unrequested auto-accept, which it
  *  effectively was from either player's point of view. */
+/** How long a finished mission stays on a recruit's own screens (getGameState's
+ *  reconnectHelping) before it drops off — long enough to see "complete". */
+const RECRUIT_COMPLETE_SHOWN_MS = 3 * 86400000
+
+/** The mission a RECRUIT has joined on `districtId`: a crossDistrictEligible
+ *  helper (Urmi Terrace's Home Base seat) is a joined participant there
+ *  without restoring the district, so they have no rc_player_districts row
+ *  for it and every pd-gated path here turned them away. An open mission
+ *  wins; otherwise their most recent completed one. The goal row supplies
+ *  variant/config, as respondReconnectInvite already does for invitees. */
+async function joinedRecruitMission(supabase: SupabaseDB, agentNo: string, districtId: string) {
+  let mission = await findMyMission(supabase, agentNo, districtId, { status: 'joined' })
+  if (!mission) {
+    const { data: done } = await supabase.from('rc_reconnect_missions')
+      .select('id').eq('district_id', districtId).eq('status', 'complete')
+    const ids = (done || []).map((m: any) => m.id)
+    if (ids.length) {
+      const { data: rows } = await supabase.from('rc_reconnect_participants')
+        .select('mission_id').eq('agent_no', agentNo).eq('status', 'joined').in('mission_id', ids)
+      if (rows?.length) {
+        const { data: latest } = await supabase.from('rc_reconnect_missions').select('*')
+          .in('id', rows.map((r: any) => r.mission_id)).order('completed_at', { ascending: false }).limit(1)
+        mission = (latest || [])[0] || null
+      }
+    }
+  }
+  if (!mission) return null
+  const { data: goal } = await supabase.from('rc_goals').select('id, label, variant, config').eq('id', mission.goal_id).maybeSingle()
+  if (goal?.variant !== 'connect' && goal?.variant !== 'invite') return null
+  return { mission, goal }
+}
+
+/** getReconnectMission for a recruit. Before this they got {available:false}:
+ *  their plays counted toward the pooled total while they saw none of it — no
+ *  progress, no teammates, no chat. Same payload as a local member's, plus
+ *  `recruit` so the panel drops what belongs to the district's own agents
+ *  (inviting, removing, Quest Exit, Team Boost). */
+async function recruitMissionView(supabase: SupabaseDB, content: any, agentNo: string, districtId: string) {
+  const found = await joinedRecruitMission(supabase, agentNo, districtId)
+  if (!found) return { success: true, available: false }
+  const config = found.goal.config || {}
+  const mission = found.mission.status === 'open'
+    ? await refreshMission(supabase, found.mission, found.goal.variant, config)
+    : found.mission
+  const participants = await participantsFor(supabase, mission)
+  return {
+    success: true, available: true, variant: found.goal.variant, recruit: true,
+    config: {
+      requiredAgents: config.requiredAgents,
+      sharedTrack: config.sharedTrack || null,
+      checklist: config.checklist || null,
+      teamBoost: null,
+      seats: seatPanelInfo(config, content),
+    },
+    idleThreshold: IDLE_DAYS,
+    mission: await shapeWithMessages(supabase, mission, participants || [], agentNo, IDLE_DAYS, config.ciphers),
+  }
+}
+
+/** Missions this agent is on as a recruit, for getGameState — without it a
+ *  recruit had no way back to the team after accepting. Open ones, and
+ *  completed ones for RECRUIT_COMPLETE_SHOWN_MS. The caller drops the
+ *  district the agent is itself restoring: that's a local seat, not this. */
+export async function getMyRecruitMissions(supabase: SupabaseDB, content: GameContent, agentNo: string) {
+  const { data: rows } = await supabase.from('rc_reconnect_participants')
+    .select('mission_id').eq('agent_no', agentNo).eq('status', 'joined')
+  const ids = [...new Set((rows || []).map((r: any) => r.mission_id))]
+  if (!ids.length) return []
+  const { data: missions } = await supabase.from('rc_reconnect_missions')
+    .select('id, district_id, goal_id, status, completed_at').in('id', ids).in('status', ['open', 'complete'])
+  const now = Date.now()
+  const live = (missions || []).filter((m: any) => m.status === 'open'
+    || (m.completed_at && now - Date.parse(m.completed_at) < RECRUIT_COMPLETE_SHOWN_MS))
+  if (!live.length) return []
+  // A recruit seat only exists on a district the agent is not restoring.
+  const { data: local } = await supabase.from('rc_player_districts').select('district_id')
+    .eq('agent_no', agentNo).eq('status', 'active').in('district_id', live.map((m: any) => m.district_id))
+  const localDistricts = new Set((local || []).map((r: any) => r.district_id))
+  return live
+    .filter((m: any) => !localDistricts.has(m.district_id))
+    .map((m: any) => {
+      const district = content.districts.find((d) => d.id === m.district_id)
+      const goal = content.goals.find((g) => g.id === m.goal_id)
+      return {
+        districtId: m.district_id,
+        districtName: district?.name || m.district_id,
+        wardId: district?.ward_id || null,
+        questLabel: goal?.label || 'ReConnect Quest',
+        trackLabel: goal?.config?.sharedTrack?.label || null,
+        complete: m.status === 'complete',
+      }
+    })
+}
+
 export async function getReconnectMission(supabase: SupabaseDB, content: any, params: any) {
   const districtId = String(params.districtId || '')
   const agentNo = String(params.agentNo || '').trim().toUpperCase()
   if (!districtId) return { success: false, error: 'district_required' }
 
   const pd = await myActivePd(supabase, agentNo, districtId)
-  if (pd?.status !== 'active') return { success: true, available: false }
+  if (pd?.status !== 'active') return await recruitMissionView(supabase, content, agentNo, districtId)
   const reconnect = myReconnectGoal(pd)
   if (!reconnect) return { success: true, available: false }
 
@@ -1710,7 +1804,16 @@ export async function sendReconnectMessage(supabase: SupabaseDB, content: unknow
   if (!body) return { success: false, error: 'message_required' }
 
   const pd = await myActivePd(supabase, agentNo, districtId)
-  if (pd?.status !== 'active') return { success: false, error: 'not_eligible' }
+  // A recruit (see joinedRecruitMission) chats with the team they joined.
+  if (pd?.status !== 'active') {
+    const found = await joinedRecruitMission(supabase, agentNo, districtId)
+    if (!found) return { success: false, error: 'not_eligible' }
+    if (found.mission.status !== 'open') return { success: false, error: 'mission_' + found.mission.status }
+    const { error } = await supabase.from('rc_reconnect_messages')
+      .insert({ mission_id: found.mission.id, agent_no: agentNo, body })
+    if (error) return { success: false, error: error.message }
+    return { success: true }
+  }
   const reconnect = myReconnectGoal(pd)
   if (!reconnect) return { success: false, error: 'not_available' }
 

@@ -543,6 +543,13 @@ function invitesSheet(state) {
       }
       hideOverlay()
       toast(accepted ? 'Joined the mission' : 'Invite declined')
+      // Land on the team just joined. The reload went to the City, and a
+      // recruit from another district had no other road back to it.
+      if (accepted) {
+        const fresh = await call('getGameState', { agentNo: getAgentNo() })
+        const district = fresh?.success && (fresh.map?.districts || []).find((d) => d.id === inv.districtId)
+        if (district) { setState(fresh); goDistrict(district.wardId, district.id); return }
+      }
       location.reload()
     }
     accept.onclick = () => respond(true)

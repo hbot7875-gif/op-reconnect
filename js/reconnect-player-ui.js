@@ -11,6 +11,9 @@ export function reconnectPlayerNext(input = {}) {
   const sharedTrack = input.sharedTrack || null
   const checklist = input.checklist || null
   const myChecklistDone = Math.max(0, Number(input.myChecklistDone) || 0)
+  // A recruit joined from another district: inviting and dropping teammates
+  // belong to the district's own agents, so never tell them to do either.
+  const recruit = input.recruit ? { from: input.recruit.districtName || 'this district' } : null
 
   if (input.status === 'complete') return { title: 'Quest complete — finish the district', body: '' }
   if (input.myStatus === 'invited') {
@@ -28,7 +31,8 @@ export function reconnectPlayerNext(input = {}) {
   if (idleCount > 0) {
     return {
       title: 'A teammate has gone quiet',
-      body: input.isCreator ? 'Choose whether to wait or review the team in Details.' : 'You can wait or leave this quest from Details.',
+      body: recruit ? `${recruit.from} agents can drop them and invite someone new.`
+        : input.isCreator ? 'Choose whether to wait or review the team in Details.' : 'You can wait or leave this quest from Details.',
     }
   }
   if (need > 0 && pendingNames.length) {
@@ -36,6 +40,9 @@ export function reconnectPlayerNext(input = {}) {
       title: 'Waiting for an invited agent',
       body: `${pendingNames.join(' and ')} ${pendingNames.length === 1 ? 'has' : 'have'} 24 hours to respond.`,
     }
+  }
+  if (need > 0 && recruit) {
+    return { title: 'Your team is filling its last seat', body: `${recruit.from} agents send the invites. Every play you stream now already counts.` }
   }
   if (need > 0) return { title: 'Invite one teammate', body: 'Choose the best available match or see other agents.' }
   if (cipher) return { title: `Solve cipher ${cipher.index + 1} of ${cipher.total}`, body: 'Discuss it in Team Chat, then submit one shared answer.' }

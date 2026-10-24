@@ -8,7 +8,7 @@ import { el, esc, setState, toast, unlockAfter, showOverlay, hideOverlay } from 
 import { call } from './api.js'
 import { questExitRow } from './quest-skip.js'
 import { getAgentNo } from './session.js'
-import { goWard } from './router.js'
+import { goWard, goDistrict } from './router.js'
 import { wardDisplayName, districtDisplayName } from './ward-tiles.js'
 import { mountScene } from './scene.js'
 import { districtFraction, renderBoard } from './ui-district.js'
@@ -142,6 +142,9 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
       : null
     const vaultBox = districtVaultCard(districtId, districtDisplayName(mapD))
     renderBoard(board, d, { reconnectBox, vaultBox })
+    // A team this agent joined as a recruit somewhere else: the way back to it.
+    const helpingCards = recruitLinks(state, districtId)
+    if (helpingCards.length) board.querySelector(':scope > .board-head')?.after(...helpingCards)
     if (focusedComposer?.isConnected) {
       focusedComposer.focus({ preventScroll: true })
       if (composerSelection?.start != null) {
@@ -193,6 +196,23 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
   container.querySelector('.stage-meter-fill').style.width = pct + '%'
   container.querySelector('.stage-meter').setAttribute('aria-valuenow', String(pct))
   container.querySelector('.stage').classList.toggle('is-dark', pct < 34)
+
+  // A recruit: on this district's ReConnect team without restoring it
+  // (getGameState's reconnectHelping). The quest is all that's theirs here.
+  const helping = (state.reconnectHelping || []).find((h) => h.districtId === districtId)
+  if (helping) {
+    container.querySelector('.stage-eyebrow').textContent = 'YOUR TEAM'
+    const mounted = board.querySelector(':scope > .reconnect-card.is-recruit')
+    if (mounted?.dataset.districtId === districtId) { mounted.refreshMission?.(); return }
+    board.innerHTML = ''
+    const head = el('div', 'board-head mission-section')
+    head.innerHTML = `<span class="board-title">🤝 ReConnect Quest</span><span class="board-count${helping.complete ? ' all' : ''}">${helping.complete ? 'Complete' : 'You joined to help'}</span>`
+    const box = reconnectPanel({ ...mapD, reconnect: { variant: 'connect' } })
+    box.classList.add('is-recruit')
+    box.dataset.districtId = districtId
+    board.append(head, box)
+    return
+  }
 
   board.innerHTML = ''
   const card = el('div', 'card board-card')
@@ -509,6 +529,22 @@ function reconnectPanel(d) {
   return box
 }
 
+/** "You're helping …" links for ReConnect teams this agent joined as a
+ *  recruit on another district (getMyRecruitMissions). Accepting used to be
+ *  the last a recruit ever saw of their team. */
+function recruitLinks(state, hereId) {
+  return (state.reconnectHelping || []).filter((h) => h.districtId !== hereId).map((h) => {
+    const link = el('button', 'recruit-link', `
+      <span class="recruit-link-eyebrow">RECONNECT TEAM</span>
+      <b>You're helping ${esc(h.districtName)}</b>
+      <small>${h.complete ? 'Quest complete' : esc(h.trackLabel ? `Streaming ${h.trackLabel} together — see your team` : 'See your team')}</small>
+      <i aria-hidden="true">→</i>`)
+    link.type = 'button'
+    link.onclick = (e) => goDistrict(h.wardId, h.districtId, { x: e.clientX, y: e.clientY })
+    return link
+  })
+}
+
 function reconnectMissionBlock(title, body) {
   return el('section', 'reconnect-core reconnect-mission-core', `
     <span>MISSION</span><b>${esc(title || 'ReConnect Quest')}</b>
@@ -759,7 +795,7 @@ function paintMissionPanel(box, d, res) {
   box.appendChild(el('div', 'eyebrow', res.variant === 'invite' ? 'INVITE BACKUP' : 'CONNECT'))
   const m = res.mission
   const me = getAgentNo()
-  if (['open', 'complete'].includes(m?.status) && m.participants?.some(p => p.isMe && p.status === 'joined')) {
+  if (!res.recruit && ['open', 'complete'].includes(m?.status) && m.participants?.some(p => p.isMe && p.status === 'joined')) {
     const shareQuest = el('button', 'reconnect-quest-share', '↗ Share Quest')
     shareQuest.onclick = () => showOverlay(questShareSheet(d.id))
     box.appendChild(shareQuest)
@@ -806,7 +842,7 @@ function paintMissionPanel(box, d, res) {
     }
     completeScoreline.appendChild(completeScores)
     box.appendChild(completeScoreline)
-    box.appendChild(reconnectNextBlock('Quest complete — finish the district',
+    box.appendChild(reconnectNextBlock(res.recruit ? 'Quest complete — thanks for helping' : 'Quest complete — finish the district',
       m.sharedTrack ? `${esc(m.sharedTrack.label)} reached ${m.sharedTrack.target} combined plays${withWho}.`
         : m.checklist ? `Everyone cleared all ${m.checklist.total} tracks${withWho}.`
         : `You teamed up${withWho}.`))
@@ -913,7 +949,8 @@ function paintMissionPanel(box, d, res) {
       : m.checklist
         ? `Build a team of ${m.requiredAgents} agents. Each agent streams all ${m.checklist.total} tracks once.`
         : `Team up and stream active goals in ${esc(districtDisplayName(d))}.`
-  box.appendChild(reconnectMissionBlock(d.reconnect?.label || 'ReConnect Quest', missionBody))
+  box.appendChild(reconnectMissionBlock(d.reconnect?.label || 'ReConnect Quest', missionBody
+    + (res.recruit ? ` You joined from ${esc(res.config.seats?.helperFrom || 'another district')} — your plays count toward this total.` : '')))
   box.appendChild(reconnectTeamBlock(teamCopy))
   const problemHost = el('div', 'reconnect-problems')
   box.appendChild(problemHost)
@@ -933,6 +970,7 @@ function paintMissionPanel(box, d, res) {
     pendingNames: pending.map((p) => p.codename), expiredCount: expired.length,
     idleCount: idlers.length, isCreator: m.isCreator, cipher: m.cipher,
     sharedTrack: m.sharedTrack, checklist: m.checklist, myChecklistDone: myRow?.streams,
+    recruit: res.recruit ? { districtName: districtDisplayName(d) } : null,
   })
   const nextTitle = esc(next.title)
   const nextBody = esc(next.body)
@@ -1204,7 +1242,7 @@ function paintMissionPanel(box, d, res) {
     primaryHost.appendChild(accept)
     row.appendChild(decline)
     box.appendChild(row)
-  } else if (myRow?.status === 'joined') {
+  } else if (myRow?.status === 'joined' && !res.recruit) {
     // A live pending invite already reserves that open seat. Do not offer a
     // second primary invite action while the screen says to wait for the
     // first response; only recruit when uncovered seats remain.
@@ -1325,7 +1363,9 @@ function paintMissionPanel(box, d, res) {
   // The exit lives between the primary action and Details: secondary, but
   // never hidden inside a collapsed disclosure — the agents who need it most
   // are exactly the ones who won't go looking for it.
-  const exitRow = myRow?.status === 'joined' ? questExitRow(d.id, refresh) : null
+  // Quest Exit waives the quest on the leaver's OWN district — meaningless
+  // for a recruit, who has no attempt here to waive.
+  const exitRow = myRow?.status === 'joined' && !res.recruit ? questExitRow(d.id, refresh) : null
   const detailsBody = el('div', 'reconnect-details-body')
   const keep = new Set([
     box.querySelector(':scope > .eyebrow'),

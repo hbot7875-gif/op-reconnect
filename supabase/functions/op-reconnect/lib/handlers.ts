@@ -11,7 +11,7 @@ import { resolveReconnectStatus } from './reconnect-goal.ts'
 import { todayKst, nextKstMidnightUtc, kstDateOf } from './kst.ts'
 import { getBombView, launchDefuse } from './bomb.ts'
 import { getEraTimeline } from './era-timeline.ts'
-import { getMyInvites, countWaitingAgents, getReconnectMatchAlerts, getTeamBoostOverlay } from './reconnect-missions.ts'
+import { getMyInvites, getMyRecruitMissions, countWaitingAgents, getReconnectMatchAlerts, getTeamBoostOverlay } from './reconnect-missions.ts'
 import { creditChargeCells, resolveWalletCells, STREAMS_PER_CHARGE_CELL } from './charge-economy.ts'
 import { getAgentChargeView } from './agent-charge.ts'
 import { levelFor, applyLevelUpIfNeeded, nextLevelRewards } from './leveling.ts'
@@ -155,7 +155,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     const t0 = Date.now()
     return p.then((v) => { timing[`  ${label}`] = Date.now() - t0; return v })
   }
-  const [agentCharge, eraTimeline, { invites }, reconnectAlerts] = await Promise.all([
+  const [agentCharge, eraTimeline, { invites }, reconnectAlerts, reconnectHelping] = await Promise.all([
     timed('agentCharge', getAgentChargeView(supabase, content, player.agent_no)),
     timed('eraTimeline', getEraTimeline(supabase, content)),
     // Pending reconnect-mission invites — small, agent-scoped, cheap to
@@ -163,6 +163,8 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     // just this one agent's own rc_reconnect_participants rows).
     timed('invites', getMyInvites(supabase, content, player.agent_no)),
     timed('alerts', getReconnectMatchAlerts(supabase, content, player.agent_no)),
+    // ReConnect teams this agent joined as a recruit from another district.
+    timed('helping', getMyRecruitMissions(supabase, content, player.agent_no)),
   ])
   mark('batch1_charge_era_invites_alerts')
   // Sequential on purpose: see the reset-DELETE note above.
@@ -676,6 +678,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     eraTimeline,
     invites,
     reconnectAlerts,
+    reconnectHelping,
     broadcasts,
     // The one-time legal-pages notice: the notice's own id for an agent who
     // predates the release, otherwise null. Deliberately not joined_at —
