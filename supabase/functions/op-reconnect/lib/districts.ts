@@ -129,6 +129,11 @@ export function freezeGoals(content: GameContent, mode: string, district: Distri
           requiredAgents: cfg.requiredAgents, sharedTrack: cfg.sharedTrack || null,
           checklist: cfg.checklist || null, ciphers: cfg.ciphers || null,
           crossDistrictEligible: cfg.crossDistrictEligible || null,
+          // crossDistrictSeats (optional) makes the mix mandatory: exactly
+          // this many seats go to recruits from crossDistrictEligible
+          // districts, the rest to this district's own agents (see
+          // reconnect-seats.ts).
+          crossDistrictSeats: cfg.crossDistrictSeats || null,
           teamBoost: cfg.teamBoost || null,
         }
       : variant === 'sotd'

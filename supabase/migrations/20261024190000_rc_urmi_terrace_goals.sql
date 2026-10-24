@@ -117,13 +117,15 @@ insert into rc_goals (id, kind, label, artist, tracks, target, sort_order, distr
    2, 495, 'mono-urmi-terrace', true);
 
 -- ── ReConnect quest ────────────────────────────────────────────────────
--- Team up with one agent from Home Base (Relay Zero, relay-zero-hq) and stream
--- Jin's "I'll Be There" 50 times between you. Same shape as Hopesize Station's
--- quest: requiredAgents counts the whole team, so 2 = you + one partner, and
--- crossDistrictEligible lets an agent active on Home Base be recruited as the
--- helper regardless of their own goals (lib/reconnect-missions.ts's
--- eligiblePoolForGoal). As with Hopesize, another Urmi Terrace agent working
--- this same quest can also fill the second seat.
+-- A team of three: two Urmi Terrace agents, plus exactly one agent "kidnapped"
+-- from Home Base (Relay Zero, relay-zero-hq). Together they stream Jin's
+-- "I'll Be There" 50 times.
+--   requiredAgents 3            the whole team
+--   crossDistrictEligible       who may be recruited from outside: Home Base
+--   crossDistrictSeats 1        exactly one seat is a Home Base recruit, so the
+--                               other two must be restoring Urmi Terrace. New
+--                               rule, enforced on invite, accept and admin
+--                               auto-assign (lib/reconnect-seats.ts).
 --
 -- sharedTrack is pooled: every member's own plays of the track, from when they
 -- joined, add toward one total of 50. "ill be there" is the post-normalization
@@ -131,7 +133,7 @@ insert into rc_goals (id, kind, label, artist, tracks, target, sort_order, distr
 insert into rc_goals (id, kind, label, artist, target, sort_order, district_id, variant, config, active) values
   ('urmi-reconnect-ill-be-there-50', 'reconnect', 'I''ll Be There: 50 Together', 'Jin',
    1, 500, 'mono-urmi-terrace', 'connect',
-   '{"sharedTrack": {"keys": ["ill be there"], "label": "I''ll Be There", "target": 50}, "requiredAgents": 2, "crossDistrictEligible": ["relay-zero-hq"]}'::jsonb,
+   '{"sharedTrack": {"keys": ["ill be there"], "label": "I''ll Be There", "target": 50}, "requiredAgents": 3, "crossDistrictSeats": 1, "crossDistrictEligible": ["relay-zero-hq"]}'::jsonb,
    true);
 
 -- ── Proof everything landed ────────────────────────────────────────────

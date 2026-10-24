@@ -46,6 +46,8 @@ import {
   reconnectHealthFlags, reconnectPrimaryStatus, reconnectRecommendedAction,
   suggestedReconnectRoster,
 } from './reconnect-health.js'
+import { seatRule, countSeats, hasSeatFor, overSeats, seatError, composeTeams } from './reconnect-seats.ts'
+import type { SeatCounts } from './reconnect-seats.ts'
 
 /** Wrong-guess budget for a mission's cipher phase (see submitReconnect
  *  MissionCipherAnswer) — one shared pool per cipher, not per agent, so the
@@ -1104,6 +1106,10 @@ export async function getReconnectMission(supabase: SupabaseDB, content: any, pa
       // progress against.
       checklist: reconnect.config.checklist || null,
       teamBoost: reconnect.config.teamBoost || null,
+      // A mixed-district team: how many seats are reserved for recruits, and
+      // where those come from, so the panel can say "2 from here + 1 from
+      // Home Base" instead of just "3 agents".
+      seats: seatPanelInfo(reconnect.config, content),
     },
     idleThreshold,
     mission: mission ? await shapeWithMessages(supabase, mission, participants || [], agentNo, idleThreshold, reconnect.config.ciphers) : null,
@@ -1177,6 +1183,44 @@ async function eligiblePoolForGoal(
     if (sameDistrictSameGoal || recruitedHelper) pool.add(r.agent_no as string)
   }
   return { eligible: await excludeRetired(supabase, [...pool]), stillOn }
+}
+
+/** For a goal with crossDistrictSeats (see reconnect-seats.ts): which of these
+ *  agents would sit in a helper seat. A helper is anyone NOT actively
+ *  restoring the mission's own district — a recruit from one of the goal's
+ *  crossDistrictEligible districts. */
+async function helperFlags(supabase: SupabaseDB, districtId: string, agentNos: string[]): Promise<Map<string, boolean>> {
+  const unique = [...new Set(agentNos)]
+  if (!unique.length) return new Map()
+  const { data } = await supabase.from('rc_player_districts')
+    .select('agent_no').eq('district_id', districtId).eq('status', 'active').in('agent_no', unique)
+  const local = new Set<string>((data || []).map((r: any) => r.agent_no as string))
+  return new Map(unique.map((a) => [a, !local.has(a)]))
+}
+
+/** What the quest panel needs to describe a mixed-district team, or null for an
+ *  ordinary one. The starter district is called "Home Base" everywhere players
+ *  see it (js/ward-tiles.js's districtDisplayName), whatever its row is named. */
+function seatPanelInfo(config: Record<string, any>, content: any) {
+  const rule = seatRule(config)
+  if (!rule) return null
+  const names = (config.crossDistrictEligible || []).map((id: string) => {
+    const d = (content?.districts || []).find((x: any) => x.id === id)
+    return d?.is_tutorial ? 'Home Base' : (d?.name || id)
+  })
+  return { local: rule.localSeats, helper: rule.helperSeats, helperFrom: names.join(' or ') || 'another district' }
+}
+
+/** Helper/local seats already taken by JOINED members of a mission. Pending
+ *  invites hold no seat — several can be out at once, exactly as for plain
+ *  capacity — and the accept path re-checks, so two invitees can't both land
+ *  in the same last seat. */
+async function joinedSeatCounts(supabase: SupabaseDB, missionId: string, districtId: string): Promise<SeatCounts> {
+  const { data: rows } = await supabase.from('rc_reconnect_participants')
+    .select('agent_no').eq('mission_id', missionId).eq('status', 'joined')
+  const joined = (rows || []).map((r: any) => r.agent_no as string)
+  const flags = await helperFlags(supabase, districtId, joined)
+  return countSeats(joined.map((a) => !!flags.get(a)))
 }
 
 /** Every open-mission participant row for this reconnect goal, grouped by
@@ -1406,6 +1450,23 @@ export async function getInviteCandidates(supabase: SupabaseDB, content: GameCon
     emptyReason: eligible.every((candidate: string) => done.has(candidate)) ? 'everyone_completed' : 'everyone_busy',
   }
 
+  // A mixed-district team (crossDistrictSeats): only offer people who fit a
+  // seat that is still open. Before the caller has opened a mission they are
+  // its first local member, so the team they are about to build already has
+  // one local seat taken.
+  const rule = seatRule(reconnect.config)
+  let helperOf = new Map<string, boolean>()
+  if (rule) {
+    helperOf = await helperFlags(supabase, districtId, free.map((f) => f.agentNo))
+    const myMission = await findMyMission(supabase, agentNo, districtId, { goalId: reconnect.id })
+    const counts = myMission ? await joinedSeatCounts(supabase, myMission.id, districtId) : { helpers: 0, locals: 1 }
+    free = free.filter((f) => hasSeatFor(rule, counts, !!helperOf.get(f.agentNo)))
+    if (!free.length) return {
+      success: true, candidates: [], stillOnHomeBase, alertActive,
+      emptyReason: hasSeatFor(rule, counts, true) ? 'no_free_helper' : 'no_free_local',
+    }
+  }
+
   const names = await codenameMap(supabase, free.map((f) => f.agentNo))
   // Who's actually online right now (same last_seen_at cutoff "N agents
   // active now" uses, see feed.ts's ONLINE_WINDOW_MS) — an invite to someone
@@ -1423,7 +1484,11 @@ export async function getInviteCandidates(supabase: SupabaseDB, content: GameCon
   // group, not alphabetical: this is a queue of real people to help, not a
   // menu to pick from.
   const candidates = free
-    .map((f) => ({ agentNo: f.agentNo, codename: names.get(f.agentNo) || f.agentNo, waitingSince: f.waitingSince, online: online.has(f.agentNo) }))
+    .map((f) => ({
+      agentNo: f.agentNo, codename: names.get(f.agentNo) || f.agentNo, waitingSince: f.waitingSince, online: online.has(f.agentNo),
+      // Only meaningful for a mixed-district team: this one would fill the helper seat.
+      ...(rule ? { helper: !!helperOf.get(f.agentNo) } : {}),
+    }))
     .sort((a, b) => {
       if (a.online !== b.online) return a.online ? -1 : 1
       if (a.waitingSince && b.waitingSince) return a.waitingSince.localeCompare(b.waitingSince)
@@ -1592,6 +1657,18 @@ export async function inviteReconnectMission(supabase: SupabaseDB, content: unkn
     }
   }
   if (!inviteeEligible) return { success: false, error: 'invitee_not_eligible' }
+
+  // Mixed-district team (crossDistrictSeats): the invitee must fit a seat of
+  // their own kind that joined members have not already filled.
+  const rule = seatRule(reconnect.config)
+  if (rule) {
+    const joinedNos = (participants || []).filter((p: any) => p.status === 'joined').map((p: any) => p.agent_no as string)
+    const flags = await helperFlags(supabase, districtId, [...joinedNos, inviteeAgentNo])
+    const inviteeIsHelper = !!flags.get(inviteeAgentNo)
+    if (!hasSeatFor(rule, countSeats(joinedNos.map((a) => !!flags.get(a))), inviteeIsHelper)) {
+      return { success: false, error: seatError(inviteeIsHelper) }
+    }
+  }
 
   // An expired invite to this same person is deliberately kept as a record
   // for whoever sent it (see refreshMission), but (mission_id, agent_no) is
@@ -1853,6 +1930,15 @@ export async function respondReconnectInvite(supabase: SupabaseDB, content: unkn
     return { success: false, error: 'already_paired_elsewhere' }
   }
 
+  // Mixed-district team (crossDistrictSeats): this agent's kind of seat must
+  // still be open. Pending invites hold no seat, so two Home Base agents may
+  // both be invited; whoever accepts first takes the helper seat.
+  const rule = seatRule(goal?.config)
+  const iAmHelper = rule ? !!(await helperFlags(supabase, mission.district_id, [agentNo])).get(agentNo) : false
+  if (rule && !hasSeatFor(rule, await joinedSeatCounts(supabase, mission.id, mission.district_id), iAmHelper)) {
+    return { success: false, error: seatError(iAmHelper) }
+  }
+
   // rc_reconnect_accept_invite re-checks the invite and capacity, and
   // flips the status, all as one row-locked unit — the old separate
   // count-then-update here let two invitees accepting a mission's last
@@ -1862,6 +1948,25 @@ export async function respondReconnectInvite(supabase: SupabaseDB, content: unkn
   })
   const result = !rpcError && Array.isArray(rpcData) ? rpcData[0] : null
   if (rpcError || !result?.joined) return { success: false, error: result?.error || rpcError?.message || 'join_failed' }
+  // The RPC locks on total capacity only. If two agents of the same kind
+  // passed the check above in the same instant, the team is now over the
+  // rule. Both racers run this, so both must agree on who stays: members of
+  // that kind in joined_at order (agent_no breaks ties) keep their seats up to
+  // the kind's limit, and only someone beyond it — the later accept — leaves.
+  if (rule && overSeats(rule, await joinedSeatCounts(supabase, mission.id, mission.district_id))) {
+    const { data: joinedRows } = await supabase.from('rc_reconnect_participants')
+      .select('agent_no, joined_at').eq('mission_id', mission.id).eq('status', 'joined')
+    const flags = await helperFlags(supabase, mission.district_id, (joinedRows || []).map((r: any) => r.agent_no))
+    const sameKind = (joinedRows || [])
+      .filter((r: any) => !!flags.get(r.agent_no) === iAmHelper)
+      .sort((a: any, b: any) => String(a.joined_at).localeCompare(String(b.joined_at)) || String(a.agent_no).localeCompare(String(b.agent_no)))
+    const limit = iAmHelper ? rule.helperSeats : rule.localSeats
+    if (sameKind.findIndex((r: any) => r.agent_no === agentNo) >= limit) {
+      await supabase.from('rc_reconnect_participants').delete()
+        .eq('mission_id', mission.id).eq('agent_no', agentNo).eq('status', 'joined')
+      return { success: false, error: seatError(iAmHelper) }
+    }
+  }
   // rc_reconnect_accept_invite captures joined_mode in the same row-locked
   // update as acceptance, so there is no fallible post-join price stamp.
   await foldAwayDanglingMissions(supabase, agentNo, mission.id, mission.goal_id)
@@ -2008,11 +2113,21 @@ export async function adminAutoAssignMissions(supabase: SupabaseDB, params: any)
   }
 
   const available = shuffle(eligible.filter((a) => !alreadyIn.has(a)))
-  const groups: string[][] = []
-  for (let i = 0; i + requiredAgents <= available.length; i += requiredAgents) {
-    groups.push(available.slice(i, i + requiredAgents))
+  let groups: string[][] = []
+  let leftover: number
+  const rule = seatRule(goal.config)
+  if (rule) {
+    // Mixed-district team: every group gets exactly its local and helper seats.
+    const flags = await helperFlags(supabase, districtId, available)
+    const composed = composeTeams(rule, available.filter((a) => !flags.get(a)), available.filter((a) => !!flags.get(a)))
+    groups = composed.teams
+    leftover = composed.leftover
+  } else {
+    for (let i = 0; i + requiredAgents <= available.length; i += requiredAgents) {
+      groups.push(available.slice(i, i + requiredAgents))
+    }
+    leftover = available.length - groups.length * requiredAgents
   }
-  const leftover = available.length - groups.length * requiredAgents
 
   const created: string[] = []
   for (const group of groups) {
@@ -2243,6 +2358,20 @@ export async function adminPairReconnect(supabase: SupabaseDB, params: any) {
   const agentNos = (Array.isArray(params.agentNos) ? params.agentNos : [params.agentA, params.agentB])
     .map((value: any) => String(value || '').trim().toUpperCase()).filter(Boolean)
   if (!districtId || !goalId || agentNos.length < 2) return { success: false, error: 'missing_params' }
+  // Mixed-district team: an admin fill must still respect the seat rule,
+  // counting whoever has already joined the target mission.
+  const { data: goalRow } = await supabase.from('rc_goals').select('config').eq('id', goalId).maybeSingle()
+  const rule = seatRule(goalRow?.config)
+  if (rule) {
+    let members = [...agentNos]
+    if (params.missionId) {
+      const { data: existing } = await supabase.from('rc_reconnect_participants')
+        .select('agent_no').eq('mission_id', params.missionId).eq('status', 'joined')
+      members = [...new Set([...members, ...(existing || []).map((r: any) => r.agent_no as string)])]
+    }
+    const flags = await helperFlags(supabase, districtId, members)
+    if (overSeats(rule, countSeats(members.map((a) => !!flags.get(a))))) return { success: false, error: 'seat_rule_violation' }
+  }
   const { data, error } = await supabase.rpc('rc_admin_fill_reconnect_team', {
     p_district_id: districtId, p_goal_id: goalId,
     p_target_mission_id: params.missionId || null, p_agent_nos: agentNos,

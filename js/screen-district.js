@@ -452,6 +452,9 @@ const RECONNECT_ERRORS = {
   already_completed: "You've already finished this together — refreshing…",
   already_paired_elsewhere: "You're already teamed up with someone else here — decline this invite first if you want to switch.",
   invitee_not_eligible: "That agent isn't actively restoring this district.",
+  // Mixed-district teams (a goal with crossDistrictSeats).
+  helper_seat_taken: 'Your team already has its recruit from Home Base.',
+  district_seats_full: "This district's seats on your team are full — the last seat is for a recruit from Home Base.",
   invitee_retired: "That agent has retired and can't accept invites anymore — pick someone else.",
   invitee_required: 'Enter an agent number to invite.',
   cannot_invite_self: "You can't invite yourself.",
@@ -816,15 +819,23 @@ function paintMissionPanel(box, d, res) {
   if (!m || m.status !== 'open') {
     const st = res.config.sharedTrack
     const cl = res.config.checklist
+    // A mixed-district team (config.seats, from crossDistrictSeats): say who
+    // the team is made of, not just how big it is.
+    const seats = res.config.seats
+    const teamPhrase = seats
+      ? `Team up with ${seats.local - 1} more agent${seats.local - 1 === 1 ? '' : 's'} from ${esc(districtDisplayName(d))} and recruit ${seats.helper} from ${esc(seats.helperFrom)}`
+      : `Build a ${res.config.requiredAgents}-agent team`
     const missionBody = res.variant === 'invite'
-      ? `Build a ${res.config.requiredAgents}-agent team in ${esc(districtDisplayName(d))}.`
+      ? `${seats ? teamPhrase : `Build a ${res.config.requiredAgents}-agent team in ${esc(districtDisplayName(d))}`}.`
       : st
-        ? `Build a ${res.config.requiredAgents}-agent team, then stream ${esc(st.label)} to ${st.target} combined plays.`
+        ? `${teamPhrase}, then stream ${esc(st.label)} to ${st.target} combined plays.`
         : cl
-          ? `Build a team of ${res.config.requiredAgents} agents. Each agent streams all ${cl.tracks.length} tracks once.`
-          : `Build a ${res.config.requiredAgents}-agent team and stream your active district goals.`
+          ? `${seats ? teamPhrase : `Build a team of ${res.config.requiredAgents} agents`}. Each agent streams all ${cl.tracks.length} tracks once.`
+          : `${teamPhrase} and stream your active district goals.`
     box.appendChild(reconnectMissionBlock(d.reconnect?.label || 'ReConnect Quest', missionBody))
-    box.appendChild(reconnectTeamBlock(`You · ${Math.max(0, res.config.requiredAgents - 1)} open seat${res.config.requiredAgents - 1 === 1 ? '' : 's'}`))
+    box.appendChild(reconnectTeamBlock(seats
+      ? `You · ${seats.local - 1} seat${seats.local - 1 === 1 ? '' : 's'} for this district · ${seats.helper} for ${esc(seats.helperFrom)}`
+      : `You · ${Math.max(0, res.config.requiredAgents - 1)} open seat${res.config.requiredAgents - 1 === 1 ? '' : 's'}`))
     box.appendChild(reconnectNextBlock('Open this quest to find teammates'))
     const moreBody = el('div', 'reconnect-details-body')
     const how = el('details', 'reconnect-how')
@@ -1228,6 +1239,9 @@ function paintMissionPanel(box, d, res) {
             no_matching_agents: 'Nobody else has this ReConnect goal here yet.',
             everyone_completed: 'Everyone else with this goal has already completed it.',
             everyone_busy: 'Compatible agents are already teamed up or answering another invite.',
+            // Mixed-district team: every free agent belongs to a seat type the team has already filled.
+            no_free_helper: `Your team still needs its recruit from ${res.config?.seats?.helperFrom || 'Home Base'}, and nobody there is free right now.`,
+            no_free_local: `Your ${res.config?.seats?.helperFrom || 'Home Base'} seat is filled. You still need another agent from this district, and nobody here is free yet.`,
           }[res2.emptyReason] || "Nobody's free to invite right now."
           waitList.appendChild(el('p', 'muted reconnect-empty-reason', emptyCopy))
 
@@ -1269,8 +1283,11 @@ function paintMissionPanel(box, d, res) {
           for (const b of box.querySelectorAll('.rw-invite, .reconnect-best-invite')) b.disabled = false
         }
         const best = res2.candidates[0]
+        // Mixed-district team: name where a recruit comes from, so the inviter
+        // can see which seat each person would fill.
+        const fromTag = (c) => (c.helper ? ` &middot; ${esc(res.config?.seats?.helperFrom || 'Home Base')}` : '')
         const bestMeta = el('div', 'reconnect-best-meta',
-          `Best available &middot; ${best.online ? 'Online' : esc(waitedLabel(best.waitingSince))}`)
+          `Best available${fromTag(best)} &middot; ${best.online ? 'Online' : esc(waitedLabel(best.waitingSince))}`)
         const bestBtn = el('button', 'btn btn-primary reconnect-best-invite',
           `Invite ${best.codename}`)
         bestBtn.onclick = () => sendInvite(best)
@@ -1285,7 +1302,7 @@ function paintMissionPanel(box, d, res) {
           const row = el('div', 'reconnect-wait-row' + (c.online ? ' is-online' : ''))
           row.innerHTML = (c.online ? '<i class="rw-online-dot" title="Online now"></i>' : '')
             + `<span class="rw-name">${esc(c.codename)}</span>`
-            + `<span class="rw-since">${c.online ? 'Online now' : esc(waitedLabel(c.waitingSince))}</span>`
+            + `<span class="rw-since">${c.online ? 'Online now' : esc(waitedLabel(c.waitingSince))}${fromTag(c)}</span>`
           const btn = el('button', 'btn btn-ghost rw-invite', 'Invite')
           // Agent numbers ride along as data and are never rendered.
           btn.onclick = () => sendInvite(c)
