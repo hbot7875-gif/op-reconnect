@@ -52,12 +52,23 @@ insert into rc_goals (id, kind, label, artist, aliases, target, sort_order, dist
 
 -- SPAGHETTI is credited to "LE SSERAFIM" alone on about a fifth of its
 -- recorded plays (101 of 412+ in the last 60 days), and that string is not on
--- the BTS artist allowlist, so those plays would never count. A key-scoped
+-- the BTS artist allowlist, so those plays would earn no stream XP. A key-scoped
 -- override — the same mechanism as Wild Flower/youjeen and Winter Ahead/Park
 -- Hyo Shin — lets LE SSERAFIM count toward this one song only, never toward
 -- their own unrelated catalog.
+--
+-- Goal progress itself matches on the title key alone, so these plays already
+-- move the goals; the allowlist decides stream XP and streaks. stats.fm records
+-- only the first credited artist, so two more of this district's songs were
+-- moving goals while earning no XP (last 90 days):
+--   "Heart on the Window (with WENDY)" credited to "WENDY" — 627 plays (the
+--          same key also sits in Zeal's Happy album goal).
+--   "Make It Right (feat. Lauv)" and its remixes credited to "Lauv" — 171.
 update public.rc_config
-   set value = value || jsonb_build_object('spaghetti', jsonb_build_array('le sserafim')),
+   set value = value || jsonb_build_object(
+         'spaghetti', jsonb_build_array('le sserafim'),
+         'heart on the window', jsonb_build_array('wendy'),
+         'make it right', jsonb_build_array('lauv')),
        updated_at = now()
  where key = 'track_artist_overrides';
 
@@ -163,8 +174,9 @@ begin
      and coalesce(jsonb_array_length(tracks), 0) = 0;
   if v_empty > 0 then raise exception '% album goal(s) have an empty tracklist', v_empty; end if;
 
-  select value -> 'spaghetti' into v_override from rc_config where key = 'track_artist_overrides';
-  if v_override is distinct from '["le sserafim"]'::jsonb then
-    raise exception 'spaghetti artist override missing (got %)', v_override;
+  select jsonb_build_array(value -> 'spaghetti', value -> 'heart on the window', value -> 'make it right')
+    into v_override from rc_config where key = 'track_artist_overrides';
+  if v_override is distinct from '[["le sserafim"], ["wendy"], ["lauv"]]'::jsonb then
+    raise exception 'artist overrides missing (got %)', v_override;
   end if;
 end $$;
