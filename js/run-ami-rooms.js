@@ -121,7 +121,7 @@ export function lobbyView(view, ctx) {
     const p = view.players[i]
     const li = el('li', p ? `ra-seat${p.connected ? ' is-connected' : ''}` : 'ra-seat is-empty')
     li.innerHTML = p ? `
-      ${p.avatar ? `<img class="ra-avatar" src="${esc(badgeThumb(p.avatar))}" alt="" width="40" height="40" loading="lazy">` : `<span class="ra-avatar is-initial" aria-hidden="true">${esc(p.name.slice(0, 1).toUpperCase())}</span>`}
+      ${p.avatar ? `<img class="ra-avatar" src="${esc(badgeThumb(p.avatar))}" data-badge-full="${esc(p.avatar)}" alt="" width="40" height="40" loading="lazy">` : `<span class="ra-avatar is-initial" aria-hidden="true">${esc(p.name.slice(0, 1).toUpperCase())}</span>`}
       <b>${esc(p.name)}${p.isMe ? ' <small>(you)</small>' : ''}</b>
       <span class="ra-seat-tags">${p.isHost ? '<i>Host</i>' : ''}<em>${p.connected ? 'Ready ✓' : 'Reconnecting…'}</em></span>`
       : '<span class="ra-avatar is-empty" aria-hidden="true"></span><b>Waiting…</b>'

@@ -32,7 +32,7 @@ import { COLORS, cardHtml, cardBackHtml, colorChipHtml, isWildKind, logLine, res
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
 function avatarHtml(p) {
-  if (p.avatar) return `<img class="ra-avatar" src="${esc(badgeThumb(p.avatar))}" alt="" loading="lazy" decoding="async" width="40" height="40">`
+  if (p.avatar) return `<img class="ra-avatar" src="${esc(badgeThumb(p.avatar))}" data-badge-full="${esc(p.avatar)}" alt="" loading="lazy" decoding="async" width="40" height="40">`
   return `<span class="ra-avatar is-initial" aria-hidden="true">${esc((p.name || '?').slice(0, 1).toUpperCase())}</span>`
 }
 

@@ -33,6 +33,13 @@ test('How to Play is reachable from the entry screen, the lobby and the match he
   assert.match(screen, /onHelp: \(\) => openHowToPlay\(\)/)
 })
 
+test('lobby and table avatars fall back to original badge art when a thumbnail is missing', () => {
+  for (const file of ['./run-ami-rooms.js', './run-ami-table.js']) {
+    const src = readFileSync(new URL(file, import.meta.url), 'utf8')
+    assert.match(src, /src="\$\{esc\(badgeThumb\(p\.avatar\)\)\}" data-badge-full="\$\{esc\(p\.avatar\)\}"/, file)
+  }
+})
+
 test('Settings shows War of Cards · Test Play only to testers, below Playlist Makers for agent000', () => {
   const src = readFileSync(new URL('./screen-settings.js', import.meta.url), 'utf8')
   // The server's live tester list (rc_run_ami_testers), via the game state.
