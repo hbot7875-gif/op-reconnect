@@ -38,6 +38,7 @@ import { recelebrateKeepsake } from './arirang-recelebrate.js'
 import { packIcon } from './pack-icons.js'
 import { goDiary } from './router.js'
 import { cachedDiaryTheme, closedDiaryObject, rememberDiaryTheme } from './screen-diary.js'
+import { importantDatesOn, nextImportantDate } from '../supabase/functions/op-reconnect/lib/diary-dates.js'
 
 /* ── Agent ID ─────────────────────────────────────────────────────────── */
 function agentIdCard(state) {
@@ -445,7 +446,13 @@ export function renderResources(container, state) {
     <span class="ps-count">Private</span>
   `))
   const savedDiaryTheme = cachedDiaryTheme(null)
-  const diaryObject = closedDiaryObject({ theme: savedDiaryTheme || 'modern', onOpen: () => {
+  // A reason to open it: today's special day, or the next one coming up.
+  const kstToday = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10)
+  const todaySpecial = importantDatesOn(kstToday)[0]
+  const nextSpecial = todaySpecial ? null : nextImportantDate(kstToday)
+  const diaryStatus = todaySpecial ? `Today · ${todaySpecial.title} ${todaySpecial.icon}`
+    : nextSpecial ? `Next · ${new Date(`${nextSpecial.date}T12:00:00Z`).toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })} · ${nextSpecial.title}` : ''
+  const diaryObject = closedDiaryObject({ theme: savedDiaryTheme || 'modern', status: diaryStatus, onOpen: () => {
     const rect = diaryObject.getBoundingClientRect()
     goDiary({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 })
   } })

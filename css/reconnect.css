@@ -7064,6 +7064,55 @@ select.rc-select-native {
 .dd-calendar-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
 .dd-calendar-actions button { min-height:40px; padding:0 10px; border:1px solid color-mix(in srgb,var(--dd-ink) 20%,transparent); border-radius:9px; background:var(--dd-card); color:var(--dd-ink); cursor:pointer; font:17px/1 'Patrick Hand',cursive; }
 .dd-calendar-actions button:hover,.dd-calendar-actions button:focus-visible { border-color:var(--dd-accent); }
+
+/* ── Keep in Dear Diary (badge unlock, level up, restoration pop-ups) ──
+   js/diary-keep.js. Quiet under the pop-up's own actions: the moment is the
+   pop-up; this is the way to keep it. */
+.dd-keep { margin-top: 12px; text-align: center; }
+.dd-keep-start { appearance: none; border: 1px dashed var(--v-violet-line, rgba(160,124,255,.5)); background: none;
+  color: var(--v-violet-hi, #bba2ff); border-radius: 999px; padding: 8px 14px; font: 600 13px/1.2 var(--body); cursor: pointer; }
+.dd-keep-start:hover { background: rgba(139,92,246,.10); }
+.dd-keep-start span { margin-right: 4px; }
+.dd-keep-form { display: grid; gap: 8px; text-align: left; padding: 12px; border-radius: 12px;
+  background: rgba(139,92,246,.08); border: 1px solid var(--v-violet-line, rgba(160,124,255,.5)); }
+.dd-keep-label { font-size: 12.5px; color: var(--v-ink-2, #bcb5cc); }
+.dd-keep-label small { color: var(--v-ink-3, #8f88a3); }
+.dd-keep-form input { width: 100%; box-sizing: border-box; padding: 10px 11px; border-radius: 9px;
+  border: 1px solid var(--v-line-2, rgba(255,255,255,.22)); background: #0e0d15; color: var(--v-ink-1, #f6f3fb); font: 14px/1.3 var(--body); }
+.dd-keep-actions { display: flex; gap: 8px; align-items: center; }
+.dd-keep-actions .btn { width: auto; margin: 0; flex: 1; }
+.dd-keep-cancel { appearance: none; border: 0; background: none; color: var(--v-ink-3, #8f88a3); font: 13px var(--body); cursor: pointer; padding: 8px; }
+.dd-keep-done { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px 10px; font-size: 13px; color: var(--v-ink-2, #bcb5cc); }
+.dd-keep-open { appearance: none; border: 0; background: none; color: var(--v-violet-hi, #bba2ff); font: 700 13px var(--body); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+
+/* ── Diary: kept moments, "On this day", special days in the calendar ── */
+.dd-onthisday { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; margin: 0 0 8px; padding: 6px 8px;
+  border-radius: 5px; background: color-mix(in srgb, var(--dd-accent) 9%, transparent); }
+.dd-onthisday span { color: var(--dd-accent); font: 9px/1.4 var(--mono); letter-spacing: .14em; }
+.dd-onthisday b { color: var(--dd-ink); font: 700 18px/1.1 'Caveat', cursive; }
+.dd-onthisday i { font-style: normal; margin-right: 4px; }
+.dd-kept ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+.dd-kept-card { display: grid; grid-template-columns: 46px minmax(0, 1fr); gap: 9px; align-items: center; padding: 7px 8px;
+  border-radius: 6px; background: var(--dd-card, rgba(255,255,255,.4)); box-shadow: 0 1px 0 color-mix(in srgb, var(--dd-ink) 12%, transparent); transform: rotate(-.6deg); }
+.dd-kept-card:nth-child(2n) { transform: rotate(.5deg); }
+.dd-kept-art { width: 46px; height: 46px; display: grid; place-items: center; border-radius: 6px; overflow: hidden;
+  background: color-mix(in srgb, var(--dd-accent) 12%, transparent); color: var(--dd-accent); font-size: 20px; }
+.dd-kept-art img { width: 100%; height: 100%; object-fit: cover; }
+.dd-kept-copy b { display: block; color: var(--dd-ink); font: 17px/1.15 'Patrick Hand', cursive; }
+.dd-kept-copy p { margin: 2px 0 0; color: var(--dd-accent); font: 700 17px/1.15 'Caveat', cursive; overflow-wrap: anywhere; }
+.dd-calendar-day.is-important { color: var(--dd-accent); }
+.dd-calendar-mark { position: absolute; top: -3px; right: -1px; font-style: normal; font-size: 11px; line-height: 1; pointer-events: none; }
+.dd-calendar-day:disabled .dd-calendar-mark { opacity: .7; }
+.dd-calendar-legend i.is-important { width: 7px; height: 7px; border-radius: 2px; background: color-mix(in srgb, var(--dd-accent) 55%, transparent); transform: rotate(45deg); }
+.dd-calendar-dates { list-style: none; margin: 0 0 9px; padding: 0; display: grid; gap: 3px; }
+.dd-calendar-dates:empty { display: none; }
+.dd-calendar-dates li { display: grid; grid-template-columns: 18px auto minmax(0, 1fr); gap: 7px; align-items: baseline; padding: 3px 6px;
+  border-radius: 5px; color: var(--dd-ink); font: 15px/1.2 'Patrick Hand', cursive; }
+.dd-calendar-dates li i { font-style: normal; }
+.dd-calendar-dates li span { color: var(--dd-muted); font: 11px/1.2 var(--mono); white-space: nowrap; }
+.dd-calendar-dates li b { font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dd-calendar-dates li.is-future { opacity: .78; }
+.dd-calendar-dates li.is-next { background: color-mix(in srgb, var(--dd-accent) 8%, transparent); }
 .dd-calendar-today { background:var(--dd-accent) !important; border-color:var(--dd-accent) !important; color:var(--dd-button-text) !important; }
 .dd-decoration-tray { position:fixed; z-index:1250; inset:0; display:flex; align-items:flex-end; justify-content:center; padding:12px; background:rgba(8,6,13,.46); backdrop-filter:blur(3px); }
 .dd-decoration-panel { width:min(100%,430px); max-height:min(72svh,520px); overflow-y:auto; padding:15px 15px calc(15px + env(safe-area-inset-bottom)); border:1px solid color-mix(in srgb,var(--dd-accent-bright) 68%,transparent); border-radius:18px 18px 11px 11px; background:color-mix(in srgb,#141219 94%,var(--dd-accent) 6%); box-shadow:0 -14px 42px rgba(0,0,0,.52); color:#f1ebf0; }

@@ -16,6 +16,7 @@ import { mountScene } from './scene.js'
 import { openShare } from './share.js'
 import { itemArt, RARITY, itemsAt } from './items.js'
 import { wardDisplayName, districtDisplayName } from './ward-tiles.js'
+import { keepInDiaryControl } from './diary-keep.js'
 
 const REDUCED = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
 const buzz = (pattern) => { try { navigator.vibrate?.(pattern) } catch {} }
@@ -112,6 +113,7 @@ export function playRestoration(d, ward, state, onDone) {
   close.onclick = () => { overlay.hidden = true; overlay.innerHTML = ''; onDone?.() }
   actions.append(share, close)
   reveal.appendChild(actions)
+  reveal.appendChild(keepInDiaryControl({ kind: 'district', ref: d.id, close: () => { overlay.hidden = true; overlay.innerHTML = ''; onDone?.() } }))
   body.appendChild(reveal)
 
   cel.appendChild(body)
@@ -296,6 +298,7 @@ export function playLevelUp(state, onDone) {
   const go = el('button', 'btn btn-primary lvlup-go', 'Continue mission')
   go.onclick = () => { hideOverlay(); onDone?.() }
   box.appendChild(go)
+  box.appendChild(keepInDiaryControl({ kind: 'level', ref: String(levelUp.level), close: () => { hideOverlay(); onDone?.() } }))
 
   showOverlay(box)
   tickCountdowns() // paints the boost clock immediately instead of a 1s flash of --:--:--

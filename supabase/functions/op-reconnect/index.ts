@@ -68,7 +68,7 @@ import {
   getBattleTeam, setBattleInstagram, getBattleChat, sendBattleChat, reactBattleChat, reportBattleChat, muteBattleChat,
   adminListBattleChat, adminModerateBattleChat,
 } from './lib/vote-campaign.ts'
-import { getDearDiary, getDearDiaryArchive, getDearDiaryPreference, saveDearDiaryDecorations, saveDearDiaryNote, saveDearDiaryTheme } from './lib/dear-diary.ts'
+import { getDearDiary, getDearDiaryArchive, getDearDiaryPreference, keepDearDiaryMoment, saveDearDiaryDecorations, saveDearDiaryNote, saveDearDiaryTheme } from './lib/dear-diary.ts'
 import { runAmiState, runAmiCreateRoom, runAmiJoinRoom, runAmiWatchRoom, runAmiLeaveRoom, runAmiStart, runAmiAct, runAmiChat, cronRunAmiSweep } from './lib/run-ami.ts'
 
 const CORS_HEADERS: Record<string, string> = {
@@ -124,6 +124,7 @@ const ROUTES: Record<string, Route> = {
   getDearDiaryPreference: { auth: 'agent', handler: (sb, p) => getDearDiaryPreference(sb, p) },
   saveDearDiaryDecorations: { auth: 'agent', handler: (sb, p) => saveDearDiaryDecorations(sb, p) },
   saveDearDiaryNote: { auth: 'agent', handler: (sb, p) => saveDearDiaryNote(sb, p) },
+  keepDearDiaryMoment: { auth: 'agent', handler: async (sb, p) => keepDearDiaryMoment(sb, await loadContent(sb), p) },
   saveDearDiaryTheme: { auth: 'agent', handler: (sb, p) => saveDearDiaryTheme(sb, p) },
   createShareSnapshot: { auth: 'agent', handler: (sb, p) => createShareSnapshot(sb, p) },
   attachShareImage: { auth: 'agent', handler: (sb, p) => attachShareImage(sb, p) },

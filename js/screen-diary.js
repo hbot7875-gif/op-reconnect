@@ -13,6 +13,8 @@ import {
   diaryTurnTarget, normalizeDiaryDecorations, normalizeDiaryTheme,
 } from './dear-diary-rules.js'
 import { createDiaryArchive, createDiaryCalendar } from './dear-diary-archive.js'
+import { takeDiaryTarget } from './diary-keep.js'
+import { importantDatesOn, importantDatesInMonth, nextImportantDate } from '../supabase/functions/op-reconnect/lib/diary-dates.js'
 
 const diaryThemeKey = () => `rc:dear-diary:theme:${getAgentNo() || 'preview'}`
 const prefersReducedMotion = () => globalThis.__ddReduceMotion === true || matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -146,12 +148,16 @@ function diaryView(state, data) {
     return moment
   })
   if (shownProgress && moments.length < 2) moments.push({ kind: 'progress', text: `${shownProgress.name} reached ${shownProgress.percent}%. Finally moving.` })
-  const quiet = !badges.length && !shownProgress && !moments.length && !data.xp && !data.streams
+  const kept = Array.isArray(data.kept) ? data.kept : []
+  const important = Array.isArray(data.importantDates) ? data.importantDates : importantDatesOn(data.date)
+  const quiet = !badges.length && !shownProgress && !moments.length && !data.xp && !data.streams && !kept.length
   if (data.noRecordedEntry || data.archiveState === 'none' && data.summary == null) {
-    return { badges: [], moments: [], shownProgress: null, quiet: true, noRecorded: true, sheets: [[{ kind:'no-recorded', weight:1 }]] }
+    // An important day with nothing recorded is still a page you can write on.
+    if (important.length) return { badges: [], moments: [], kept: [], important, shownProgress: null, quiet: true, noRecorded: false, sheets: [[{ kind: 'important', weight: 1 }, { kind: 'note', weight: 2.5 }]] }
+    return { badges: [], moments: [], kept: [], important: [], shownProgress: null, quiet: true, noRecorded: true, sheets: [[{ kind:'no-recorded', weight:1 }]] }
   }
-  const sheets = diarySheetPlan({ summary: data.summary, badges, moments, quiet })
-  return { badges, moments, shownProgress, quiet, noRecorded: false, sheets }
+  const sheets = diarySheetPlan({ summary: data.summary, badges, moments, quiet, kept, important })
+  return { badges, moments, kept, important, shownProgress, quiet, noRecorded: false, sheets }
 }
 
 function decorateAction() {
@@ -165,7 +171,16 @@ function decorationSlot(slot, items, theme) {
   return `<button type="button" class="dd-decoration dd-decoration-${esc(item.size)} dd-slot-${esc(slot)}" data-decoration-slot="${esc(slot)}" aria-label="Edit ${esc(family?.label || 'page')} decoration">${decorationSvg(theme, item.decoration_id)}</button>`
 }
 
+function keptCard(k) {
+  const art = k.artworkUrl ? `<img src="${esc(badgeThumb(k.artworkUrl))}" data-badge-full="${esc(k.artworkUrl)}" alt="" loading="lazy" decoding="async">` : `<span aria-hidden="true">${k.kind === 'district' ? '⌂' : k.kind === 'level' ? '▲' : '✦'}</span>`
+  return `<li class="dd-kept-card is-${esc(k.kind)}"><div class="dd-kept-art">${art}</div><div class="dd-kept-copy"><b>${esc(k.title)}</b>${k.line ? `<p>“${esc(k.line)}”</p>` : ''}</div></li>`
+}
+
 function blockMarkup(block, data, view, context) {
+  if (block.kind === 'important') return `<section class="dd-onthisday" aria-label="On this day">
+      <span>ON THIS DAY</span>${view.important.map((d) => `<b><i aria-hidden="true">${esc(d.icon)}</i>${esc(d.title)}</b>`).join('')}
+    </section>`
+  if (block.kind === 'kept') return `<section class="dd-section dd-kept"><div class="dd-section-title"><span>✦</span><h2>Kept${block.start ? ' · continued' : ''}</h2></div><ul>${view.kept.slice(block.start, block.end).map(keptCard).join('')}</ul></section>`
   if (block.kind === 'no-recorded') return `<section class="dd-no-recorded" role="status">
       <span aria-hidden="true">—</span><p>No entry recorded for this day.</p>
     </section>`
@@ -184,8 +199,8 @@ function blockMarkup(block, data, view, context) {
   if (block.kind === 'note') {
     const note = data.note || ''
     const long = note.length > 180
-    return `<section class="dd-section dd-note"><div class="dd-section-title"><span>✎</span><h2>Anything else?</h2>${decorationSlot('note-heading', context.items, context.theme)}${context.first ? decorateAction() : ''}</div>
-      <div class="dd-note-read${long ? ' is-collapsed' : ''}"><p${note ? '' : ' class="is-empty"'}>${esc(note || 'Nothing written here yet.')}</p>
+    return `<section class="dd-section dd-note"><div class="dd-section-title"><span>✎</span><h2>${view.important?.length && !data.summary ? 'A note for this day' : 'Anything else?'}</h2>${decorationSlot('note-heading', context.items, context.theme)}${context.first ? decorateAction() : ''}</div>
+      <div class="dd-note-read${long ? ' is-collapsed' : ''}"><p${note ? '' : ' class="is-empty"'}>${esc(note || (view.important?.length && !data.summary ? `Write something for ${view.important[0].title}.` : 'Nothing written here yet.'))}</p>
       <div class="dd-note-actions">${long ? '<button type="button" class="dd-note-expand" aria-expanded="false">Read more</button>' : ''}<button type="button" class="dd-note-edit">✎ ${note ? 'edit' : 'add note'}</button></div></div>
       <div class="dd-note-editor" hidden><textarea maxlength="1200" rows="5" placeholder="Write something only you need to remember…">${esc(note)}</textarea>
       <div class="dd-note-foot"><span><b class="dd-note-count">${note.length}</b>/1200 · only you</span><button type="button" class="dd-save">save</button></div></div>
@@ -449,7 +464,8 @@ function makeBook(root, state, actions) {
       </div>
       <div class="dd-calendar-week" aria-hidden="true">${['S','M','T','W','T','F','S'].map((d) => `<span>${d}</span>`).join('')}</div>
       <div class="dd-calendar-grid" role="grid"></div>
-      <div class="dd-calendar-legend" aria-hidden="true"><span><i class="is-real"></i>entry</span><span><i class="is-light"></i>light day</span><span><i class="is-join"></i>first day</span></div>
+      <div class="dd-calendar-legend" aria-hidden="true"><span><i class="is-real"></i>entry</span><span><i class="is-light"></i>light day</span><span><i class="is-join"></i>first day</span><span><i class="is-important"></i>special day</span></div>
+      <ul class="dd-calendar-dates" aria-label="Special days this month"></ul>
       <div class="dd-calendar-actions"><button type="button" class="dd-calendar-first">First day</button><button type="button" class="dd-calendar-today">Today</button></div>
     </div>`
     root.appendChild(sheet)
@@ -457,7 +473,7 @@ function makeBook(root, state, actions) {
     let drawToken = 0
     const draw = () => {
       const token = ++drawToken
-      const view = diaryCalendarMonth({ month: calendar.month, today: archive.today, joinedDate: archive.joinedDate, stateOf: archive.stateOf, selected: current?.data.date })
+      const view = diaryCalendarMonth({ month: calendar.month, today: archive.today, joinedDate: archive.joinedDate, stateOf: archive.stateOf, selected: current?.data.date, importantOf: importantDatesOn })
       const ready = archive.monthReady(calendar.month)
       sheet.querySelector('#dd-calendar-title').textContent = monthLabel(calendar.month)
       sheet.querySelector('[data-step="-1"]').disabled = !view.canPrev
@@ -465,10 +481,17 @@ function makeBook(root, state, actions) {
       const grid = sheet.querySelector('.dd-calendar-grid')
       grid.classList.toggle('is-loading', !ready)
       grid.innerHTML = `${'<span class="dd-calendar-pad"></span>'.repeat(view.leading)}${view.days.map((day) => {
-        const cls = ['dd-calendar-day', day.state ? `is-${day.state}` : '', day.isToday ? 'is-today' : '', day.isSelected ? 'is-selected' : '', day.isJoin ? 'is-join' : ''].filter(Boolean).join(' ')
-        const label = `${prettyDate(day.date)}${day.isToday ? ', today' : ''}${day.isJoin ? ', first agent day' : ''}${day.state === 'real' ? ', diary entry' : day.state === 'light' ? ', light day' : ''}`
-        return `<button type="button" class="${cls}" data-date="${day.date}" aria-label="${esc(label)}"${day.isSelected ? ' aria-current="date"' : ''}${day.selectable && ready ? '' : ' disabled'}>${day.day}</button>`
+        const cls = ['dd-calendar-day', day.state ? `is-${day.state}` : '', day.isToday ? 'is-today' : '', day.isSelected ? 'is-selected' : '', day.isJoin ? 'is-join' : '', day.important.length ? 'is-important' : ''].filter(Boolean).join(' ')
+        const label = `${prettyDate(day.date)}${day.isToday ? ', today' : ''}${day.isJoin ? ', first agent day' : ''}${day.state === 'real' ? ', diary entry' : day.state === 'light' ? ', light day' : ''}${day.important.map((d) => `, ${d.title}`).join('')}`
+        return `<button type="button" class="${cls}" data-date="${day.date}" aria-label="${esc(label)}"${day.isSelected ? ' aria-current="date"' : ''}${day.selectable && ready ? '' : ' disabled'}>${day.day}${day.important.length ? `<i class="dd-calendar-mark" aria-hidden="true">${esc(day.important[0].icon)}</i>` : ''}</button>`
       }).join('')}`
+      // This month's important days, and what's next if none are left.
+      const list = importantDatesInMonth(calendar.month)
+      const upcoming = calendar.month === archive.today.slice(0, 7) && !list.some((d) => d.date > archive.today) ? nextImportantDate(archive.today) : null
+      sheet.querySelector('.dd-calendar-dates').innerHTML = [
+        ...list.map((d) => `<li class="${d.date > archive.today ? 'is-future' : ''}"><i aria-hidden="true">${esc(d.icon)}</i><span>${esc(shortDate(d.date))}</span><b>${esc(d.title)}</b></li>`),
+        upcoming ? `<li class="is-future is-next"><i aria-hidden="true">${esc(upcoming.icon)}</i><span>Next · ${esc(shortDate(upcoming.date))}</span><b>${esc(upcoming.title)}</b></li>` : '',
+      ].join('')
       if (!ready) archive.ensureMonth(calendar.month).then(() => { if (token === drawToken && calendar.open) draw() })
     }
     const done = (promise) => promise.then((jumped) => {
@@ -576,7 +599,9 @@ export function renderDearDiary(container, state, { previewData = null, previewD
     return res
   }
   const start = async () => {
-    const [res] = await Promise.all([fetchPage(today), archive.start()])
+    // A "Keep in Dear Diary" pop-up can ask for its own page.
+    const target = takeDiaryTarget()
+    const [res] = await Promise.all([fetchPage(target || today), archive.start()])
     if (!res) {
       root.innerHTML = '<div class="dd-error"><b>The diary won’t open right now.</b><p>Try again in a moment.</p><button type="button" class="btn btn-ghost">BACK TO PACK</button></div>'
       root.querySelector('button').onclick = () => goResources(); return

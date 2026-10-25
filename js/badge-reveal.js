@@ -6,6 +6,7 @@
 import { call } from './api.js'
 import { badgeDrawerSheet, badgeStory } from './badge-drawer.js'
 import { collectionBadgeIds } from './badges.js'
+import { keepInDiaryControl } from './diary-keep.js'
 import { getAgentNo } from './session.js'
 import { el, esc, getState, hideOverlay, showOverlay } from './state.js'
 import { badgeShareControls } from './badge-share.js'
@@ -119,6 +120,7 @@ export function unlockSheet(badge, additional, state) {
   }
   actions.append(view)
   if (Object.hasOwn(BADGE_MILESTONES,badge.templateId)) actions.append(badgeShareControls(badge.badgeId))
+  actions.append(keepInDiaryControl({ kind: 'badge', ref: badge.badgeId, close: () => { showing = false; hideOverlay(); setTimeout(pumpRevealQueue, 0) } }))
   actions.append(later)
   sheet.appendChild(actions)
   return sheet

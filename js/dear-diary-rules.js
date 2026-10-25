@@ -66,7 +66,7 @@ export function shiftDiaryMonth(month, delta) {
  * 'real' / 'light' mark (or nothing for an unsupported day). Only today and
  * marked days between the join date and today can be opened.
  */
-export function diaryCalendarMonth({ month, today, joinedDate, stateOf = () => null, selected = null }) {
+export function diaryCalendarMonth({ month, today, joinedDate, stateOf = () => null, selected = null, importantOf = () => [] }) {
   const [year, monthNo] = month.split('-').map(Number)
   const first = new Date(Date.UTC(year, monthNo - 1, 1))
   const daysInMonth = new Date(Date.UTC(year, monthNo, 0)).getUTCDate()
@@ -77,10 +77,13 @@ export function diaryCalendarMonth({ month, today, joinedDate, stateOf = () => n
     const isFuture = date > today
     const beforeJoin = !!joinedDate && date < joinedDate
     const state = isFuture || beforeJoin ? null : (stateOf(date) || null)
+    // Important days (diary-dates.js) are marked even in the future, and a
+    // past one opens even without an entry — it's a page worth writing on.
+    const important = importantOf(date) || []
     days.push({
-      date, day, state, isFuture, beforeJoin,
+      date, day, state, isFuture, beforeJoin, important,
       isToday: date === today, isJoin: date === joinedDate, isSelected: date === selected,
-      selectable: !isFuture && !beforeJoin && (!!state || date === today),
+      selectable: !isFuture && !beforeJoin && (!!state || date === today || important.length > 0),
     })
   }
   return {
@@ -105,11 +108,19 @@ export function clampDiaryMonth(month, today, joinedDate) {
  * Pack whole diary sections onto finite sheets. The weights model the mobile
  * book frame; blocks are never cut and the note remains one bounded editor.
  */
-export function diarySheetPlan({ summary = '', badges = [], moments = [], quiet = false } = {}) {
+export function diarySheetPlan({ summary = '', badges = [], moments = [], quiet = false, kept = [], important = [], entry = true } = {}) {
   // A short day (entry + one collectible/moment + note) belongs on one
   // physical sheet. Busier days still break before a whole section.
   const capacity = 8.4
-  const blocks = [{ kind: 'entry', weight: 3.35 + Math.min(.9, String(summary).length / 200) }]
+  const blocks = []
+  // "On this day" heads the page; kept moments come right after the entry,
+  // because the player chose them.
+  if (important.length) blocks.push({ kind: 'important', weight: .55 + important.length * .35 })
+  if (entry) blocks.push({ kind: 'entry', weight: 3.35 + Math.min(.9, String(summary).length / 200) })
+  for (let start = 0; start < kept.length; start += 2) {
+    const count = Math.min(2, kept.length - start)
+    blocks.push({ kind: 'kept', start, end: start + count, weight: .7 + count * 1.3 })
+  }
 
   for (let start = 0; start < badges.length; start += 3) {
     const count = Math.min(3, badges.length - start)

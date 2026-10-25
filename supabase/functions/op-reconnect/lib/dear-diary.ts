@@ -10,6 +10,7 @@ import {
   backupPassCandidates, candidateDigest, normalizeDiaryCandidate,
   selectDailyMemories, streamingXpKstDate, type DiaryCandidate,
 } from './diary-candidates.ts'
+import { importantDatesOn } from './diary-dates.js'
 
 const NOTE_MAX = 1200
 const DIARY_THEMES = new Set(['oldworld', 'school90s', 'y2k', 'modern', 'future'])
@@ -407,13 +408,17 @@ export async function getDearDiary(sb: SupabaseDB, content: GameContent, params:
   const live = frozen ? null : await realDay(sb, content, agentNo, date)
   const stored = existing?.summary_snapshot as DiarySnapshot | undefined
   const facts: DiaryFacts = frozen && stored ? factsFromFrozenSnapshot(stored) : live!.facts
-  const state = existing?.note && (frozen ? stored?._state : live!.state) === 'none' ? 'light' : (frozen ? (stored?._state || 'none') : live!.state)
+  const kept = storedDiaryKept(existing?.kept)
+  const baseState = frozen ? (stored?._state || 'none') : live!.state
+  // A written note or a kept moment makes a page worth opening on its own.
+  const state = (existing?.note || kept.length) && baseState === 'none' ? 'light' : baseState
+  const importantDates = importantDatesOn(date)
   const candidates = frozen ? (stored?._candidates || []) : live!.candidates
   const theme = DIARY_THEMES.has(preferenceRes.data?.theme) ? preferenceRes.data.theme : null
   if (isNoRecordedHistoricalDay(date, state, existing?.note || '')) {
     return {
       success: true, date, isToday: false, theme, summary: null, note: '',
-      archiveState: 'none', noRecordedEntry: true, isFirstAgentDay: false,
+      archiveState: 'none', noRecordedEntry: true, isFirstAgentDay: false, kept: [], importantDates,
       xp: 0, streams: 0, badges: [], completedDistricts: [], moments: [], decorations: EMPTY_DECORATIONS,
     }
   }
@@ -439,7 +444,7 @@ export async function getDearDiary(sb: SupabaseDB, content: GameContent, params:
     }, { onConflict: 'agent_no,kst_date' })
     if (saveError) return { success: false, error: saveError.message }
   }
-  return { success: true, date, isToday: date === todayKst(), theme, summary, note: existing?.note || '', decorations: storedDiaryDecorations(existing?.decorations), archiveState: state, isFirstAgentDay: !!join, ...facts }
+  return { success: true, date, isToday: date === todayKst(), theme, summary, note: existing?.note || '', decorations: storedDiaryDecorations(existing?.decorations), archiveState: state, isFirstAgentDay: !!join, kept, importantDates, ...facts }
 }
 
 /** Range-index endpoint: only dates with a reliable materialized/source row
@@ -455,7 +460,7 @@ export async function getDearDiaryArchive(sb: SupabaseDB, content: GameContent, 
   const from = new Date(`${fromDate}T00:00:00+09:00`).toISOString(), to = new Date(`${addDaysStr(before, 1)}T00:00:00+09:00`).toISOString()
   const backupOutcomeFilter = `and(status.eq.complete,completed_at.gte.${from},completed_at.lt.${to}),and(status.eq.banked,closed_at.gte.${from},closed_at.lt.${to})`
   const [entries, feed, badges, districts, daily, xp, streamXp, backupOwner, backupHelper, skips, chests, passes, presence, after, battle, playlists, saves, missionJoins, missionStreams] = await Promise.all([
-    sb.from('rc_dear_diary_entries').select('kst_date,note,summary_snapshot').eq('agent_no', agentNo).gte('kst_date', fromDate).lte('kst_date', before),
+    sb.from('rc_dear_diary_entries').select('kst_date,note,kept,summary_snapshot').eq('agent_no', agentNo).gte('kst_date', fromDate).lte('kst_date', before),
     sb.from('rc_feed_events').select('created_at').eq('agent_no', agentNo).gte('created_at', from).lt('created_at', to),
     sb.from('rc_badges').select('earned_at').eq('agent_no', agentNo).gte('earned_at', from).lt('earned_at', to),
     sb.from('rc_player_districts').select('completed_at').eq('agent_no', agentNo).gte('completed_at', from).lt('completed_at', to),
@@ -484,7 +489,10 @@ export async function getDearDiaryArchive(sb: SupabaseDB, content: GameContent, 
   const dates = new Map<string, 'real' | 'light'>()
   const mark = (value: any, state: 'real' | 'light' = 'real', unix = false) => { if (!value) return; const d = kstDateOf(unix ? Number(value) : Date.parse(value) / 1000); if (d >= fromDate && d <= before && (state === 'real' || !dates.has(d))) dates.set(d, state) }
   dates.set(joinedDate, 'real')
-  for (const row of entries.data || []) if (row.note || row.summary_snapshot?._state !== 'none') dates.set(row.kst_date, row.summary_snapshot?._state === 'real' ? 'real' : 'light')
+  for (const row of entries.data || []) {
+    const hasKept = Array.isArray(row.kept) && row.kept.length > 0
+    if (row.note || hasKept || row.summary_snapshot?._state !== 'none') dates.set(row.kst_date, hasKept || row.summary_snapshot?._state === 'real' ? 'real' : 'light')
+  }
   for (const result of [feed, badges, districts, skips, chests, presence, after, playlists]) for (const row of result.data || []) mark(row.created_at || row.earned_at || row.completed_at || row.opened_at || row.watched_at || row.claimed_at)
   for (const row of [...(backupOwner.data || []), ...(backupHelper.data || [])]) { if (row.status === 'complete' && row.helper_agent_no) mark(row.completed_at); if (row.status === 'banked' && row.helper_agent_no && Number(row.banked_credit) > 0) mark(row.closed_at) }
   for (const row of passes.data || []) { mark(row.pass_issued_at); mark(row.team_chosen_at) }
@@ -515,6 +523,79 @@ export async function saveDearDiaryNote(sb: SupabaseDB, params: Record<string, u
     summary_snapshot: existing?.summary_snapshot || {}, updated_at: new Date().toISOString(),
   }, { onConflict: 'agent_no,kst_date' })
   return error ? { success: false, error: error.message } : { success: true, note }
+}
+
+const KEPT_LINE_MAX = 140
+const KEPT_PER_DAY = 12
+const KEEP_KINDS = new Set(['badge', 'district', 'level'])
+
+export type DiaryKept = { kind: string; ref: string; title: string; line: string; artworkUrl: string | null; keptAt: string }
+
+/** Stored kept items, re-checked on the way out (the column is ours, but a
+ *  malformed row must never break a page). */
+export function storedDiaryKept(value: unknown): DiaryKept[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((k: any) => k && KEEP_KINDS.has(k.kind) && typeof k.ref === 'string' && typeof k.title === 'string')
+    .slice(0, KEPT_PER_DAY)
+    .map((k: any) => ({
+      kind: k.kind, ref: k.ref, title: k.title, line: String(k.line || '').slice(0, KEPT_LINE_MAX),
+      artworkUrl: k.artworkPath ? artUrl(String(k.artworkPath)) : null, keptAt: String(k.keptAt || ''),
+    }))
+}
+
+/** "Keep in Dear Diary" from a pop-up. The browser names only what to keep
+ *  (kind + ref) and an optional line; the fact itself — that this agent
+ *  really earned that badge, restored that district or reached that level,
+ *  and on which KST day — is read from the ledgers here. It is kept on the
+ *  day it happened, so a late badge reveal still lands on the right page. */
+export async function keepDearDiaryMoment(sb: SupabaseDB, content: GameContent, params: Record<string, unknown>) {
+  const agentNo = String(params.agentNo || '').trim().toUpperCase()
+  const kind = String(params.kind || '')
+  const ref = String(params.ref || '').slice(0, 120)
+  const line = String(params.line || '').replace(/\s+/g, ' ').trim().slice(0, KEPT_LINE_MAX)
+  if (!KEEP_KINDS.has(kind) || !ref) return { success: false, error: 'That moment can’t be kept.' }
+
+  let occurredAt: string | null = null, title = '', artworkPath: string | null = null
+  if (kind === 'badge') {
+    const { data: row } = await sb.from('rc_badges').select('badge_id,artwork_id,earned_at').eq('agent_no', agentNo).eq('badge_id', ref).maybeSingle()
+    if (row) {
+      const [{ data: template }, { data: art }] = await Promise.all([
+        sb.from('rc_badge_catalog').select('name').eq('id', templateId(ref)).maybeSingle(),
+        row.artwork_id ? sb.from('rc_badge_art').select('storage_path').eq('id', row.artwork_id).maybeSingle() : Promise.resolve({ data: null }),
+      ])
+      occurredAt = row.earned_at
+      title = `Earned the ${template?.name || 'badge'} badge.`
+      artworkPath = (art as any)?.storage_path || null
+    }
+  } else if (kind === 'district') {
+    const { data: row } = await sb.from('rc_player_districts').select('district_id,completed_at,status').eq('agent_no', agentNo).eq('district_id', ref).maybeSingle()
+    if (row?.status === 'restored' && row.completed_at) {
+      occurredAt = row.completed_at
+      title = `Restored ${content.districts.find((d) => d.id === ref)?.name || 'a district'}.`
+    }
+  } else if (kind === 'level') {
+    const { data: row } = await sb.from('rc_feed_events').select('payload,created_at').eq('agent_no', agentNo)
+      // logFeedEvent stores its key with a `feed:` prefix (feed.ts).
+      .eq('event_type', 'level_up').eq('dedup_key', `feed:level:${agentNo}:${Number(ref) || 0}`).maybeSingle()
+    if (row) {
+      occurredAt = row.created_at
+      title = `Reached Level ${Number(ref)}${row.payload?.name ? ` · ${row.payload.name}` : ''}.`
+    }
+  }
+  if (!occurredAt) return { success: false, error: 'That moment isn’t on your record yet.' }
+
+  const date = kstDateOf(Date.parse(occurredAt) / 1000)
+  const { data: existing } = await sb.from('rc_dear_diary_entries').select('note,summary_text,summary_version,summary_snapshot,kept')
+    .eq('agent_no', agentNo).eq('kst_date', date).maybeSingle()
+  const kept = (Array.isArray(existing?.kept) ? existing.kept : []).filter((k: any) => !(k?.kind === kind && k?.ref === ref))
+  if (kept.length >= KEPT_PER_DAY) return { success: false, error: 'That page already holds twelve keepsakes.' }
+  kept.push({ kind, ref, title, line, artworkPath, keptAt: new Date().toISOString() })
+  const { error } = await sb.from('rc_dear_diary_entries').upsert({
+    agent_no: agentNo, kst_date: date, note: existing?.note || '',
+    summary_text: existing?.summary_text || null, summary_version: existing?.summary_version || 0,
+    summary_snapshot: existing?.summary_snapshot || {}, kept, updated_at: new Date().toISOString(),
+  }, { onConflict: 'agent_no,kst_date' })
+  return error ? { success: false, error: error.message } : { success: true, date, isToday: date === todayKst() }
 }
 
 export async function saveDearDiaryTheme(sb: SupabaseDB, params: Record<string, unknown>) {
