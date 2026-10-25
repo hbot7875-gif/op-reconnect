@@ -56,6 +56,6 @@ test('routes are agent-only; the poll awards and never fails on the Album', () =
 })
 
 test('RUN AMI lets in testers or a full album, nobody else', () => {
-  assert.match(runAmi, /const allowAgent = async \(agentNo: string\) => isRunAmiTester\(agentNo\) \|\| albumService\(supabase\)\.isComplete\(agentNo\)\.catch\(\(\) => false\)/)
+  assert.match(runAmi, /const allowAgent = async \(agentNo: string\) =>\s+\(await testers\(supabase\)\.isTester\(agentNo\)\.catch\(\(\) => false\)\) \|\| albumService\(supabase\)\.isComplete\(agentNo\)\.catch\(\(\) => false\)/)
   assert.match(runAmi, /createRunAmiService\(\{[^}]*allowAgent \}\)/)
 })

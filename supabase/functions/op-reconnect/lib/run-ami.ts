@@ -14,7 +14,7 @@ import { throttle } from './auth.ts'
 import { resolveEquippedBadges } from './badge-profile.ts'
 import { RULES_VERSION } from './run-ami-rules.js'
 import { createRunAmiService, ROOM_CODE_ALPHABET } from './run-ami-service.js'
-import { isRunAmiTester } from './run-ami-access.js'
+import { createTesterService } from './run-ami-testers.js'
 import { albumService } from './album.ts'
 
 function cryptoRng(): number {
@@ -225,11 +225,52 @@ function makeStore(supabase: SupabaseDB) {
   }
 }
 
+/** The live tester list (rc_run_ami_testers, migration 20261025190000). */
+function testerStore(supabase: SupabaseDB) {
+  return {
+    async hasTester(agentNo: string) {
+      const { data } = await supabase.from('rc_run_ami_testers').select('agent_no').eq('agent_no', agentNo).maybeSingle()
+      return !!data
+    },
+    async listTesters() {
+      const { data } = await supabase.from('rc_run_ami_testers').select('agent_no, added_at').order('added_at', { ascending: true })
+      return (data || []).map((r: any) => ({ agentNo: r.agent_no, addedAt: r.added_at }))
+    },
+    async addTester(agentNo: string, addedBy: string) {
+      const { data: agent } = await supabase.from('rc_agents').select('agent_no').eq('agent_no', agentNo).is('retired_at', null).maybeSingle()
+      if (!agent) return { ok: false, error: 'tester_no_agent' }
+      const { error } = await supabase.from('rc_run_ami_testers').upsert({ agent_no: agentNo, added_by: addedBy }, { onConflict: 'agent_no', ignoreDuplicates: true })
+      return error ? { ok: false, error: 'server_error' } : { ok: true }
+    },
+    async removeTester(agentNo: string) {
+      await supabase.from('rc_run_ami_testers').delete().eq('agent_no', agentNo)
+    },
+    async names(agentNos: string[]) {
+      const out = new Map<string, string>()
+      const { data } = await supabase.from('rc_players').select('agent_no, codename').in('agent_no', agentNos)
+      for (const r of data || []) out.set(r.agent_no, String(r.codename || 'AGENT'))
+      return out
+    },
+  }
+}
+
+const testers = (supabase: SupabaseDB) => createTesterService({ store: testerStore(supabase) })
+
 function service(supabase: SupabaseDB) {
-  // In: the closed-test list, or anyone holding all 15 album covers.
-  const allowAgent = async (agentNo: string) => isRunAmiTester(agentNo) || albumService(supabase).isComplete(agentNo).catch(() => false)
+  // In: a tester (AGENT000 or the rc_run_ami_testers list), or anyone
+  // holding all 15 album covers.
+  const allowAgent = async (agentNo: string) =>
+    (await testers(supabase).isTester(agentNo).catch(() => false)) || albumService(supabase).isComplete(agentNo).catch(() => false)
   return createRunAmiService({ store: makeStore(supabase), rng: cryptoRng, randomCode, randomTopic, allowAgent })
 }
+
+// Owner-only (run-ami-testers.js checks the caller is AGENT000).
+export const runAmiTesters = (sb: SupabaseDB, p: any) => testers(sb).list(agentOf(p))
+export const runAmiTesterAdd = (sb: SupabaseDB, p: any) => testers(sb).add(agentOf(p), p.target)
+export const runAmiTesterRemove = (sb: SupabaseDB, p: any) => testers(sb).remove(agentOf(p), p.target)
+
+/** For buildState: whether the app should show this agent the way in. */
+export const runAmiTesterForState = (sb: SupabaseDB, agentNo: string) => testers(sb).isTester(agentNo).catch(() => false)
 
 export const runAmiState = (sb: SupabaseDB, p: any) => service(sb).getState(agentOf(p))
 export const runAmiCreateRoom = (sb: SupabaseDB, p: any) => service(sb).createRoom(agentOf(p))

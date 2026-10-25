@@ -755,3 +755,25 @@
 .rarmy-launch-open { margin: 12px 0 0; font-size: 13px; color: var(--ra-g); text-align: center; }
 .rarmy-launch .btn { width: 100%; margin-top: 12px; }
 .rarmy-launch .btn + .btn { margin-top: 8px; }
+
+/* ── War of Cards testers (js/run-ami-testers.js, AGENT000 only) ──── */
+.tm-sheet { text-align: left; }
+.tm-sheet h3 { margin: 8px 0 4px; font-family: var(--disp); letter-spacing: 1.5px; outline: none; }
+.tm-lede { margin: 0 0 12px; font-size: 13px; line-height: 1.45; color: var(--v-ink-2); outline: none; }
+.tm-add { display: flex; gap: 8px; }
+.tm-add input { flex: 1; min-width: 0; height: 42px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--v-line-2);
+  background: var(--v-surface-1); color: var(--v-ink-1); font-size: 16px; }
+.tm-add .btn { flex: none; width: auto; margin: 0; padding: 0 18px; }
+.tm-err { margin: 8px 0 0; font-size: 12.5px; color: var(--v-gold); }
+.tm-count { margin: 14px 0 6px; font-family: var(--mono); font-size: 10.5px; letter-spacing: 1.4px; text-transform: uppercase; color: var(--v-ink-3); }
+.tm-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.tm-row { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 9px 12px; border-radius: 12px; background: var(--v-surface-1); border: 1px solid var(--v-line-1); }
+.tm-who { flex: 1; min-width: 0; }
+.tm-who b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; color: var(--v-ink-1); }
+.tm-who small { font-family: var(--mono); font-size: 11px; color: var(--v-ink-3); }
+.tm-owner { flex: none; font-style: normal; font-family: var(--mono); font-size: 10px; letter-spacing: 1px; color: var(--v-gold);
+  border: 1px solid var(--v-gold-line); border-radius: 6px; padding: 2px 6px; }
+.tm-remove { flex: none; min-height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--v-red-line); background: none;
+  color: var(--v-ink-2); font-size: 12px; cursor: pointer; }
+.tm-remove[data-confirm="1"] { background: var(--v-tint-red); color: var(--v-ink-1); }
+.tm-sheet > .btn { width: 100%; margin-top: 16px; }

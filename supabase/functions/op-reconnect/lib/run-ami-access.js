@@ -1,12 +1,11 @@
-// RUN AMI — who may play during the closed production test.
+// RUN AMI — the first closed-test list.
 //
-// Enforced in run-ami-service.js, which every RUN AMI route goes through:
-// anyone else gets `not_invited` from state, create, join, leave, start and
-// act alike, before anything is read or written. The Settings entry
-// (js/screen-settings.js) imports this same list, but only to decide what
-// to show; hiding it there is not the protection.
-//
-// Widening the test is an edit here plus a deploy of the Edge Function.
+// No longer the live list: since migration 20261025190000 the testers are
+// the rc_run_ami_testers table, which that migration seeded with these five
+// and which AGENT000 manages from Settings (run-ami-testers.js). In
+// production run-ami.ts asks the table (plus the Album). This constant stays
+// as run-ami-service.js's default gate, which the tests and the local
+// harness use without a database.
 
 export const RUN_AMI_TESTERS = Object.freeze(['AGENT000', 'AGENT050', 'AGENT120', 'AGENT140', 'AGENT196'])
 

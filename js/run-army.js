@@ -18,7 +18,6 @@ import { goRunAmi } from './router.js'
 import { getAgentNo } from './session.js'
 import { cardHtml } from './run-ami-cards.js'
 import { openAlbum } from './album.js'
-import { isRunAmiTester } from '../supabase/functions/op-reconnect/lib/run-ami-access.js'
 import { ALBUM_SIZE } from '../supabase/functions/op-reconnect/lib/album-rules.js'
 
 // Three cards from three different eras (the artwork follows the card's
@@ -45,7 +44,7 @@ export function openRunArmy() {
   markRunArmyOpened()
   const album = getState()?.album || null
   const count = Math.min(ALBUM_SIZE, Number(album?.count) || 0)
-  const open = isRunAmiTester(getAgentNo()) || !!album?.complete
+  const open = !!getState()?.runAmiTester || !!album?.complete
   const sheet = el('div', 'sheet ra-sheet rarmy-sheet')
   sheet.innerHTML = `
     <span class="rarmy-eyebrow">🎮 ARMY games</span>
@@ -109,7 +108,7 @@ export function checkForRunAmiLaunch(state) {
   try { localStorage.setItem(`${LAUNCH_KEY}${agentNo}`, '1') } catch (_) {}
 
   const album = state.album || null
-  const open = isRunAmiTester(agentNo) || !!album?.complete
+  const open = !!state.runAmiTester || !!album?.complete
   const count = Math.min(ALBUM_SIZE, Number(album?.count) || 0)
   const sheet = el('div', 'sheet ra-sheet rarmy-sheet rarmy-launch')
   sheet.innerHTML = `

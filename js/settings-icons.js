@@ -41,6 +41,7 @@ export const SETTINGS_ICON_PATHS = {
   chevron: '<path d="m9 18 6-6-6-6"/>',
   // Two cards, one tilted behind the other (RUN AMI), drawn to Lucide's grid and stroke.
   cards: '<rect width="12" height="16" x="3" y="5" rx="2"/><path d="m15.5 4.6 3.9 1.05a2 2 0 0 1 1.41 2.45l-3 11.2a2 2 0 0 1-2.45 1.41"/>',
+  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
 }
 
 export function setIcon(key) {

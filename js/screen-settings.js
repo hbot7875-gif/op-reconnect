@@ -21,7 +21,7 @@ import { openModeSheet } from './ui-hud.js'
 import { agentManualSheet } from './agent-manual.js'
 import { setIcon } from './settings-icons.js'
 import { goRunAmi } from './router.js'
-import { isRunAmiTester } from '../supabase/functions/op-reconnect/lib/run-ami-access.js'
+import { openTesterManager } from './run-ami-testers.js'
 
 let account = null
 
@@ -268,14 +268,15 @@ function paintSections(body, state) {
     },
   ]))
 
-  // RUN AMI's closed production test. The server refuses everyone else
-  // (run-ami-access.js); this only decides who sees the way in.
+  // War of Cards' closed test. The server refuses everyone else (run-ami.ts:
+  // the tester table or a full album); the game state's runAmiTester only
+  // decides who sees the way in.
   const runAmiRow = {
     icon: 'cards', name: 'War of Cards · Test Play', value: 'TEST', chip: 'neutral',
     body: 'The last-card Game Room, before it opens to everyone.',
     onClick: () => goRunAmi(),
   }
-  const runAmiTester = isRunAmiTester(account.agentNo)
+  const runAmiTester = !!state?.runAmiTester
 
   // ── HT access — agent000 only. Not a real security boundary (admin.html
   // is still gated by its own SYNC_ADMIN_KEY), just keeps the entry point
@@ -298,6 +299,11 @@ function paintSections(body, state) {
         onClick: () => { window.location.href = 'playlist-maker.html' },
       },
       ...(runAmiTester ? [runAmiRow] : []),
+      {
+        icon: 'users', name: 'War of Cards testers', value: '',
+        body: 'Add or remove who can play before collecting all 15 covers.',
+        onClick: () => openTesterManager(),
+      },
     ], { admin: true }))
   } else if (state?.player?.isBadgeVaultEditor) {
     // Not agent000, but the server already confirmed they're on

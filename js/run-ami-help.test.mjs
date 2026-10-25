@@ -35,7 +35,10 @@ test('How to Play is reachable from the entry screen, the lobby and the match he
 
 test('Settings shows War of Cards · Test Play only to testers, below Playlist Makers for agent000', () => {
   const src = readFileSync(new URL('./screen-settings.js', import.meta.url), 'utf8')
-  assert.match(src, /const runAmiTester = isRunAmiTester\(account\.agentNo\)/)
+  // The server's live tester list (rc_run_ami_testers), via the game state.
+  assert.match(src, /const runAmiTester = !!state\?\.runAmiTester/)
+  // AGENT000 manages that list from HT Access.
+  assert.match(src, /name: 'War of Cards testers'[\s\S]*?onClick: \(\) => openTesterManager\(\)/)
   assert.match(src, /name: 'War of Cards · Test Play', value: 'TEST'/)
   const playlist = src.indexOf("window.location.href = 'playlist-maker.html'")
   const row = src.indexOf('...(runAmiTester ? [runAmiRow] : [])')
@@ -56,7 +59,7 @@ test('City reaches RUN AMI only through Run ARMY: testers get Play, everyone els
   assert.match(world, /onRunArmy: \(\) => openRunArmy\(\)/)
   const zone = readFileSync(new URL('./run-army.js', import.meta.url), 'utf8')
   // Same rule as the server (run-ami.ts allowAgent): testers, or a full album.
-  assert.match(zone, /const open = isRunAmiTester\(getAgentNo\(\)\) \|\| !!album\?\.complete/)
+  assert.match(zone, /const open = !!getState\(\)\?\.runAmiTester \|\| !!album\?\.complete/)
   // The only way in is the Play button, and it exists only for testers.
   assert.match(zone, /if \(open\) \{\s*const play = el\('button', 'btn btn-primary rarmy-play', 'Play War of Cards'\)/)
   assert.equal(zone.match(/goRunAmi\(/g).length, 1)

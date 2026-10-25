@@ -69,7 +69,7 @@ import {
   adminListBattleChat, adminModerateBattleChat,
 } from './lib/vote-campaign.ts'
 import { getDearDiary, getDearDiaryArchive, getDearDiaryPreference, keepDearDiaryMoment, saveDearDiaryDecorations, saveDearDiaryNote, saveDearDiaryTheme } from './lib/dear-diary.ts'
-import { runAmiState, runAmiCreateRoom, runAmiJoinRoom, runAmiWatchRoom, runAmiLeaveRoom, runAmiStart, runAmiAct, runAmiChat, cronRunAmiSweep } from './lib/run-ami.ts'
+import { runAmiState, runAmiCreateRoom, runAmiJoinRoom, runAmiWatchRoom, runAmiLeaveRoom, runAmiStart, runAmiAct, runAmiChat, cronRunAmiSweep, runAmiTesters, runAmiTesterAdd, runAmiTesterRemove } from './lib/run-ami.ts'
 import { albumState, albumGift } from './lib/album.ts'
 
 const CORS_HEADERS: Record<string, string> = {
@@ -164,6 +164,10 @@ const ROUTES: Record<string, Route> = {
   // live in the migration's RPCs, not here.
   albumState: { auth: 'agent', handler: (sb, p) => albumState(sb, p) },
   albumGift: { auth: 'agent', handler: (sb, p) => albumGift(sb, p) },
+  // War of Cards testers (lib/run-ami-testers.js): AGENT000 only, checked there.
+  runAmiTesters: { auth: 'agent', handler: (sb, p) => runAmiTesters(sb, p) },
+  runAmiTesterAdd: { auth: 'agent', handler: (sb, p) => runAmiTesterAdd(sb, p) },
+  runAmiTesterRemove: { auth: 'agent', handler: (sb, p) => runAmiTesterRemove(sb, p) },
   startDistrict: { auth: 'agent', handler: (sb, p) => startDistrict(sb, p) },
   extendDistrictDeadline: { auth: 'agent', handler: (sb, p) => extendDistrictDeadline(sb, p) },
   resetLapsedDistrict: { auth: 'agent', handler: (sb, p) => resetLapsedDistrict(sb, p) },
