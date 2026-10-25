@@ -10,10 +10,10 @@ import { esc } from './state.js'
 import { cardFaceSvg, cardBackSvg } from './run-ami-art.js'
 
 export const COLORS = {
-  r: { name: 'Ember', shape: '●' },
-  y: { name: 'Solar', shape: '▲' },
-  g: { name: 'Jade', shape: '■' },
-  b: { name: 'Cobalt', shape: '◆' },
+  r: { name: 'Red', shape: '●' },
+  y: { name: 'Yellow', shape: '▲' },
+  g: { name: 'Green', shape: '■' },
+  b: { name: 'Blue', shape: '◆' },
 }
 export const COLOR_ORDER = ['r', 'y', 'g', 'b']
 

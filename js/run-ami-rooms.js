@@ -40,7 +40,7 @@ function header(backLabel, onBack) {
   const back = el('button', 'ra-back', `← ${esc(backLabel)}`)
   back.type = 'button'
   back.onclick = onBack
-  head.append(back, el('div', 'ra-brand', '<b>RUN AMI</b><span>LAST CARD</span>'))
+  head.append(back, el('div', 'ra-brand', '<b>RUN AMI</b>'))
   return head
 }
 
