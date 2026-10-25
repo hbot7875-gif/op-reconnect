@@ -119,3 +119,14 @@ test('special cards are explained where they happen', () => {
   assert.match(screen, /'Choose the next colour'/)
   assert.match(screen, /The next agent also picks 4 cards and misses their turn/)
 })
+
+test('How to Play leads with four easy steps; the fine print folds away', () => {
+  const html = howToPlayHtml()
+  const steps = html.slice(html.indexOf('<ol class="ra-help-steps">'), html.indexOf('</ol>'))
+  assert.equal((steps.match(/<li>/g) || []).length, 4)
+  const more = html.indexOf('<details class="ra-help-more">')
+  assert.ok(more > html.indexOf('The two shouts'), 'More rules comes after the basics')
+  for (const fine of ['Create room', 'grace period', 'turns in a row', 'last agent standing']) {
+    assert.ok(html.indexOf(fine) > more, `${fine} belongs under More rules`)
+  }
+})

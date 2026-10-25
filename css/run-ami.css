@@ -519,6 +519,21 @@
 .ra-help-action .ra-card { --ra-cw: 34px; --ra-ch: 48px; border-radius: 6px; box-shadow: none; }
 .ra-help-action b { display: block; }
 .ra-help > .btn { width: 100%; margin-top: 18px; }
+/* The easy part first: numbered basics, then the two shouts as boxes. */
+.ra-help h3 { outline: none; }
+.ra-help-steps { margin: 0; padding: 0; list-style: none; counter-reset: step; display: grid; gap: 8px; }
+.ra-help-steps li { counter-increment: step; position: relative; padding: 9px 10px 9px 42px; border-radius: 12px;
+  background: var(--v-surface-1); border: 1px solid var(--v-line-1); font-size: 13.5px; line-height: 1.45; color: var(--v-ink-2); }
+.ra-help-steps li::before { content: counter(step); position: absolute; left: 10px; top: 9px; width: 22px; height: 22px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; background: var(--v-violet); color: #fff; font: 700 11px/1 var(--disp); }
+.ra-help-steps li b { color: var(--v-ink-1); }
+.ra-help-shouts { display: grid; gap: 8px; }
+.ra-help-shout { margin: 0; padding: 10px 12px; border-radius: 12px; background: var(--v-tint-violet); border: 1px solid var(--v-violet-line);
+  font-size: 13px; line-height: 1.45; color: var(--v-ink-2); }
+.ra-help-shout b { display: block; margin-bottom: 2px; font-family: var(--disp); font-size: 12.5px; letter-spacing: 1.2px; color: var(--v-violet-hi); }
+.ra-help-more { margin-top: 16px; border-top: 1px solid var(--v-line-1); padding-top: 10px; }
+.ra-help-more summary { cursor: pointer; padding: 6px 0; font-family: var(--disp); font-size: 12.5px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--v-ink-2); }
+.ra-help-more[open] summary { color: var(--v-ink-1); }
 
 /* ── Room chat (js/run-ami-chat.js) ───────────────────────────────── */
 /* The icon lives in the lobby/match header; the panel is pinned under the

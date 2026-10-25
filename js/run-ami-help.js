@@ -14,73 +14,85 @@ const cfg = DEFAULT_CONFIG
 const sec = (ms) => `${Math.round(ms / 1000)} second${Math.round(ms / 1000) === 1 ? '' : 's'}`
 
 const ACTIONS = [
-  [{ c: 'g', k: 'skip' }, 'Skip', 'The next agent misses their turn.'],
-  [{ c: 'b', k: 'rev' }, 'Reverse', `Play changes direction. With ${MIN_PLAYERS} agents it works like Skip.`],
-  [{ c: 'r', k: 'd2' }, 'Pick Two', 'The next agent picks 2 cards and misses their turn.'],
-  [{ c: null, k: 'wild' }, 'Wild', 'Play it on anything, then choose the next colour.'],
-  [{ c: null, k: 'wd4' }, 'Wild Pick Four', 'Play it on anything and choose the colour. The next agent picks 4 cards and misses their turn.'],
+  [{ c: 'g', k: 'skip' }, 'Skip', 'The next agent misses a turn.'],
+  [{ c: 'b', k: 'rev' }, 'Reverse', `Turns go the other way. With ${MIN_PLAYERS} agents it works like Skip.`],
+  [{ c: 'r', k: 'd2' }, 'Pick Two', 'The next agent picks 2 cards and misses a turn.'],
+  [{ c: null, k: 'wild' }, 'Wild', 'Goes on anything. You choose the next colour.'],
+  [{ c: null, k: 'wd4' }, 'Wild Pick Four', 'Goes on anything. You choose the colour, and the next agent picks 4 cards and misses a turn.'],
 ]
 
-/** The sheet's content, separate from showing it (tests read this). */
+/** The sheet's content, separate from showing it (tests read this).
+ *  Easy first: four steps, the special cards and the two shouts are all a
+ *  new player needs; the fine print folds away under "More rules". */
 export function howToPlayHtml() {
   const actions = ACTIONS.map(([card, name, text]) => `
     <li class="ra-help-action">${cardHtml(card)}<span><b>${esc(name)}</b>${esc(text)}</span></li>`).join('')
   return `
-    <h3>How to play War of Cards</h3>
-    <p class="ra-help-lede">Be the first agent to play every card in your hand.</p>
+    <h3 tabindex="-1" data-autofocus="true">How to play War of Cards</h3>
+    <p class="ra-help-lede">Be the first to get rid of every card in your hand.</p>
 
-    <h4>Get a room</h4>
-    <ul>
-      <li><b>Create room</b> and share the 6-character code, or type a friend's code and tap <b>Join</b>.</li>
-      <li>${MIN_PLAYERS}–${MAX_PLAYERS} agents per room. The host taps <b>Start game</b>.</li>
-      <li>You need an active ARMY Bomb to enter. Playing costs no charge.</li>
-    </ul>
+    <h4>The basics</h4>
+    <ol class="ra-help-steps">
+      <li><b>Match the top card.</b> Play one card with the same <b>colour</b>, <b>number</b> or <b>action</b> symbol. Wilds go on anything.</li>
+      <li><b>Nothing to play?</b> Tap <b>Pick</b> to take a card from the pile. If it fits, play it. If you'd rather keep it, tap <b>Pass</b>.</li>
+      <li><b>Down to your last card?</b> On your second-to-last card, select it and tap <b>MIC CHECK!</b> It plays the card and calls in one go.</li>
+      <li><b>No cards left = you win!</b></li>
+    </ol>
+    <p class="ra-help-note">Everyone starts with ${HAND_SIZE} cards, and each turn has ${cfg.turnSeconds} seconds.</p>
 
-    <h4>Your turn</h4>
-    <ul>
-      <li>Everyone starts with ${HAND_SIZE} cards.</li>
-      <li>Play one card that matches the top card's <b>colour</b>, <b>number</b> or <b>action</b>. Wilds go on anything.</li>
-      <li>Can't play, or don't want to? Tap <b>Pick</b> to take a card from the pile. If the card you picked fits, you can play it straight away. If it doesn't, your turn passes by itself.</li>
-      <li>After picking you can also tap <b>Pass</b> and keep the card.</li>
-    </ul>
-
-    <h4>Action cards</h4>
+    <h4>Special cards</h4>
     <ul class="ra-help-actions">${actions}</ul>
-    <p class="ra-help-note">No stacking: a Pick Two can't be passed on with another one.</p>
+    <p class="ra-help-note">No stacking: you can't answer a Pick Two with another one.</p>
 
-    <h4>MIC CHECK!</h4>
-    <ul>
-      <li>When you play your second-to-last card, call <b>MIC CHECK!</b></li>
-      <li>Easiest: select that card and tap <b>MIC CHECK!</b> It plays the card and calls in one go.</li>
-      <li>Or play the card, then tap <b>MIC CHECK!</b> within ${sec(cfg.runAmiGraceMs)}.</li>
-    </ul>
+    <h4>The two shouts</h4>
+    <div class="ra-help-shouts">
+      <p class="ra-help-shout"><b>MIC CHECK!</b>Tap it on your second-to-last card, so everyone knows you're almost out.</p>
+      <p class="ra-help-shout"><b>RUN AMI</b>Someone is on 1 card and forgot MIC CHECK!? Tap RUN AMI and they pick ${cfg.catchPenalty} cards.</p>
+    </div>
 
-    <h4>RUN AMI!</h4>
-    <ul>
-      <li>If an agent drops to one card without calling, they get a ${Math.round(cfg.runAmiGraceMs / 1000)}-second grace period.</li>
-      <li>After that, anyone can tap <b>RUN AMI</b>. The forgetful agent picks ${cfg.catchPenalty} cards.</li>
-      <li>Be quick: the chance ends as soon as anyone plays, picks or passes.</li>
-      <li>Tapping when there's nobody to catch does nothing, and nobody sees it.</li>
-    </ul>
+    <details class="ra-help-more">
+      <summary>More rules</summary>
 
-    <h4>Timer</h4>
-    <ul>
-      <li>Each turn has ${cfg.turnSeconds} seconds. If time runs out, you pick a card automatically and play moves on.</li>
-      <li>Run out of time ${cfg.maxTimeouts} turns in a row and you're out of the round.</li>
-    </ul>
+      <h4>Rooms</h4>
+      <ul>
+        <li><b>Create room</b> and share the 6-character code, or type a friend's code and tap <b>Join</b>.</li>
+        <li>${MIN_PLAYERS}–${MAX_PLAYERS} agents per room. The host taps <b>Start game</b>.</li>
+        <li>You need an active ARMY Bomb to enter. Playing costs no charge.</li>
+      </ul>
 
-    <h4>Connection</h4>
-    <ul>
-      <li>Lost signal? Your seat waits ${cfg.disconnectGraceSeconds} seconds. Come back in time and carry on.</li>
-      <li>Gone longer, and you're out of the round. Your cards go back into the pile.</li>
-      <li>Leaving during a round also puts you out of it.</li>
-    </ul>
+      <h4>Picking</h4>
+      <ul>
+        <li>If the card you picked doesn't fit, your turn passes by itself.</li>
+        <li>After picking, only the card you picked can be played.</li>
+      </ul>
 
-    <h4>Winning</h4>
-    <ul>
-      <li>Play your last card and you win the round.</li>
-      <li>If everyone else drops out or leaves, the round ends and you're the last agent standing.</li>
-    </ul>`
+      <h4>Calling and catching</h4>
+      <ul>
+        <li>Forgot to select first? Play your second-to-last card, then tap <b>MIC CHECK!</b> within ${sec(cfg.runAmiGraceMs)}.</li>
+        <li>An agent who drops to one card without calling gets a ${Math.round(cfg.runAmiGraceMs / 1000)}-second grace period before anyone can tap <b>RUN AMI</b>.</li>
+        <li>Be quick: the chance ends as soon as anyone plays, picks or passes.</li>
+        <li>Tapping either one when it doesn't apply does nothing, and nobody else sees it.</li>
+      </ul>
+
+      <h4>Timer</h4>
+      <ul>
+        <li>If your ${cfg.turnSeconds} seconds run out, you pick a card automatically and play moves on.</li>
+        <li>Run out of time ${cfg.maxTimeouts} turns in a row and you're out of the round.</li>
+      </ul>
+
+      <h4>Connection</h4>
+      <ul>
+        <li>Lost signal? Your seat waits ${cfg.disconnectGraceSeconds} seconds. Come back in time and carry on.</li>
+        <li>Gone longer, and you're out of the round. Your cards go back into the pile.</li>
+        <li>Leaving during a round also puts you out of it.</li>
+      </ul>
+
+      <h4>Winning</h4>
+      <ul>
+        <li>Play your last card and you win the round.</li>
+        <li>If everyone else drops out or leaves, the round ends and you're the last agent standing.</li>
+      </ul>
+    </details>`
 }
 
 export function openHowToPlay() {
