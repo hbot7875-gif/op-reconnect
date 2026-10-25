@@ -16,9 +16,9 @@ const sec = (ms) => `${Math.round(ms / 1000)} second${Math.round(ms / 1000) === 
 const ACTIONS = [
   [{ c: 'g', k: 'skip' }, 'Skip', 'The next agent misses their turn.'],
   [{ c: 'b', k: 'rev' }, 'Reverse', `Play changes direction. With ${MIN_PLAYERS} agents it works like Skip.`],
-  [{ c: 'r', k: 'd2' }, 'Draw Two', 'The next agent draws 2 and misses their turn.'],
+  [{ c: 'r', k: 'd2' }, 'Pick Two', 'The next agent picks 2 cards and misses their turn.'],
   [{ c: null, k: 'wild' }, 'Wild', 'Play it on anything, then choose the next colour.'],
-  [{ c: null, k: 'wd4' }, 'Wild Draw Four', 'Play it on anything and choose the colour. The next agent draws 4 and misses their turn.'],
+  [{ c: null, k: 'wd4' }, 'Wild Pick Four', 'Play it on anything and choose the colour. The next agent picks 4 cards and misses their turn.'],
 ]
 
 /** The sheet's content, separate from showing it (tests read this). */
@@ -40,13 +40,13 @@ export function howToPlayHtml() {
     <ul>
       <li>Everyone starts with ${HAND_SIZE} cards.</li>
       <li>Play one card that matches the top card's <b>colour</b>, <b>number</b> or <b>action</b>. Wilds go on anything.</li>
-      <li>Can't play, or don't want to? Tap <b>Draw</b>. If the card you drew fits, you can play it straight away. If it doesn't, your turn passes by itself.</li>
-      <li>After drawing you can also tap <b>Pass</b> and keep the card.</li>
+      <li>Can't play, or don't want to? Tap <b>Pick</b> to take a card from the pile. If the card you picked fits, you can play it straight away. If it doesn't, your turn passes by itself.</li>
+      <li>After picking you can also tap <b>Pass</b> and keep the card.</li>
     </ul>
 
     <h4>Action cards</h4>
     <ul class="ra-help-actions">${actions}</ul>
-    <p class="ra-help-note">No stacking: a Draw Two can't be passed on with another one.</p>
+    <p class="ra-help-note">No stacking: a Pick Two can't be passed on with another one.</p>
 
     <h4>MIC CHECK!</h4>
     <ul>
@@ -58,14 +58,14 @@ export function howToPlayHtml() {
     <h4>RUN AMI!</h4>
     <ul>
       <li>If an agent drops to one card without calling, they get a ${Math.round(cfg.runAmiGraceMs / 1000)}-second grace period.</li>
-      <li>After that, anyone can tap <b>RUN AMI</b>. The forgetful agent draws ${cfg.catchPenalty}.</li>
-      <li>Be quick: the chance ends as soon as anyone plays, draws or passes.</li>
+      <li>After that, anyone can tap <b>RUN AMI</b>. The forgetful agent picks ${cfg.catchPenalty} cards.</li>
+      <li>Be quick: the chance ends as soon as anyone plays, picks or passes.</li>
       <li>Tapping when there's nobody to catch does nothing, and nobody sees it.</li>
     </ul>
 
     <h4>Timer</h4>
     <ul>
-      <li>Each turn has ${cfg.turnSeconds} seconds. If time runs out, you draw a card automatically and play moves on.</li>
+      <li>Each turn has ${cfg.turnSeconds} seconds. If time runs out, you pick a card automatically and play moves on.</li>
       <li>Run out of time ${cfg.maxTimeouts} turns in a row and you're out of the round.</li>
     </ul>
 

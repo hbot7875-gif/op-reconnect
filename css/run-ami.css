@@ -281,6 +281,7 @@
   padding: 4px 12px; border-radius: 999px; background: rgba(10,9,16,.88); border: 1px solid var(--v-violet-line);
   color: var(--v-violet-hi); font: 700 10.5px/1.35 var(--disp); letter-spacing: 1.4px; text-transform: uppercase;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; animation: raCueRise 1.1s ease forwards; }
+.ra-felt-cue.is-pick { color: #fff; background: rgba(255,93,82,.92); border-color: transparent; }
 .ra-felt-cue.is-r { color: var(--ra-r); border-color: color-mix(in srgb, var(--ra-r) 60%, transparent); }
 .ra-felt-cue.is-y { color: var(--ra-y); border-color: color-mix(in srgb, var(--ra-y) 60%, transparent); }
 .ra-felt-cue.is-g { color: var(--ra-g); border-color: color-mix(in srgb, var(--ra-g) 60%, transparent); }
@@ -422,10 +423,12 @@
   .ra-pod.is-winner { animation: raWinGlow 1.6s ease-in-out infinite alternate; }
   .is-my-turn .ra-turn-dot { animation: raBlink 1.6s ease-in-out infinite; }
   .ra-log li.is-new { animation: raFeedIn .35s ease-out; }
+  .ra-hand-card.is-new .ra-card { animation: raNewCard 2.4s ease-out; }
   /* Your own last card, for your eyes only: a slow breath round its edge. */
   .ra-hand[data-count="1"] .ra-hand-card .ra-card { animation: raLastCard 2.4s ease-in-out infinite; }
 }
 @media (prefers-reduced-motion: reduce) {
+  .ra-hand-card.is-new .ra-card { box-shadow: 0 6px 16px rgba(0,0,0,.45), 0 0 0 2px var(--v-gold); }
   .ra-hand[data-count="1"] .ra-hand-card .ra-card { box-shadow: 0 6px 16px rgba(0,0,0,.45), 0 0 0 1.5px var(--v-violet-hi); }
 }
 @keyframes raPop { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: none; } }
@@ -448,6 +451,10 @@
 @keyframes raShake { 20% { transform: translateX(-4px); } 40% { transform: translateX(4px); } 60% { transform: translateX(-2px); } 80% { transform: translateX(2px); } }
 @keyframes raWinGlow { to { box-shadow: 0 0 0 4px rgba(242,197,108,.2), 0 0 34px rgba(242,197,108,.5), 0 6px 16px rgba(0,0,0,.45); } }
 @keyframes raBlink { 50% { opacity: .35; } }
+@keyframes raNewCard {
+  0%, 60% { box-shadow: 0 6px 16px rgba(0,0,0,.45), 0 0 0 2px var(--v-gold), 0 0 16px rgba(242,197,108,.55); }
+  100% { box-shadow: 0 6px 16px rgba(0,0,0,.45); }
+}
 @keyframes raFeedIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 @keyframes raLastCard {
   0%, 100% { box-shadow: 0 6px 16px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.32); }
@@ -486,6 +493,7 @@
 
 /* ── Sheets ──────────────────────────────────────────────────────── */
 .ra-sheet .btn { width: 100%; }
+.ra-color-note { margin: -4px 0 12px; font-size: 13px; line-height: 1.45; color: var(--v-ink-2); }
 .ra-color-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .ra-color-pick { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 18px 8px; border-radius: var(--r);
   background: var(--ra-glass); border: 1px solid var(--v-line-2); color: var(--v-ink-1); font-size: 14px; cursor: pointer; }

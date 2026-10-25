@@ -17,7 +17,7 @@ export const COLORS = {
 }
 export const COLOR_ORDER = ['r', 'y', 'g', 'b']
 
-const WORD = { skip: 'Skip', rev: 'Reverse', d2: 'Draw Two', wild: 'Wild', wd4: 'Wild Draw Four' }
+const WORD = { skip: 'Skip', rev: 'Reverse', d2: 'Pick Two', wild: 'Wild', wd4: 'Wild Pick Four' }
 
 export const isWildKind = (k) => k === 'wild' || k === 'wd4'
 
@@ -63,9 +63,9 @@ export function logLine(e, nameOf, mySeat = null) {
     }
     case 'CARD_DRAWN':
       if (!who) return null
-      if (e.auto) return `${who} ran out of time and drew`
-      if (e.forced) return `${who} drew ${e.count}`
-      return `${who} drew a card`
+      if (e.auto) return `${who} ran out of time and picked a card`
+      if (e.forced) return `${who} picked ${e.count}`
+      return `${who} picked a card`
     case 'TURN_PASSED': return who ? `${who} passed` : null
     case 'TURN_SKIPPED': return who ? `${who} ${verb('was', 'were')} skipped` : null
     case 'DIRECTION_REVERSED': return 'Direction reversed'
@@ -105,9 +105,9 @@ export const ERRORS = {
   not_host: 'Only the host can start.',
   not_your_turn: 'Not your turn.',
   illegal_card: "That card can't be played now.",
-  drawn_card_only: 'After drawing, only the drawn card can be played.',
-  must_draw_first: 'Draw a card first.',
-  already_drew: 'You already drew this turn.',
+  drawn_card_only: 'After picking, only the card you picked can be played.',
+  must_draw_first: 'Pick a card first.',
+  already_drew: 'You already picked a card this turn.',
   color_required: 'Choose a colour.',
   card_not_in_hand: "That card isn't in your hand.",
   match_over: 'This round is over.',

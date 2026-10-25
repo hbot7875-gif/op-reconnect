@@ -345,9 +345,13 @@ async function act(type, extra = {}) {
   return res
 }
 
-function chooseColor(onPick) {
+/** The colour sheet for a Wild, saying what the card is about to do. */
+function chooseColor(onPick, card) {
   const sheet = el('div', 'sheet ra-sheet ra-color-sheet')
-  sheet.appendChild(el('h3', '', 'Choose a colour'))
+  sheet.appendChild(el('h3', '', 'Choose the next colour'))
+  sheet.appendChild(el('p', 'ra-color-note', card?.k === 'wd4'
+    ? 'Everyone must match this colour next. The next agent also picks 4 cards and misses their turn.'
+    : 'Everyone must match this colour next.'))
   const grid = el('div', 'ra-color-grid')
   for (const c of COLOR_ORDER) {
     const b = el('button', `ra-color-pick is-${c}`, `<i aria-hidden="true">${COLORS[c].shape}</i>${esc(COLORS[c].name)}`)
@@ -368,7 +372,7 @@ function playCard(cardId, card, runAmi) {
     // server's view), so no extra note here.
     act('play', { cardId, color, runAmi })
   }
-  if (card && isWildKind(card.k)) chooseColor(send)
+  if (card && isWildKind(card.k)) chooseColor(send, card)
   else send(undefined)
 }
 
@@ -388,7 +392,7 @@ const tableHandlers = {
     })
   },
   onCatch: () => act('catch').then((res) => {
-    if (res?.reply) table?.flashPrivate(res.reply.caught ? 'RUN AMI! They draw 2.' : 'Nobody to catch. RUN AMI is for an agent on 1 card who didn’t call.', 2800)
+    if (res?.reply) table?.flashPrivate(res.reply.caught ? 'RUN AMI! They pick 2.' : 'Nobody to catch. RUN AMI is for an agent on 1 card who didn’t call.', 2800)
   }),
   onExit: () => {
     const sheet = el('div', 'sheet ra-sheet')

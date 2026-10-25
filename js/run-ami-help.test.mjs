@@ -13,10 +13,10 @@ test('How to Play states the implemented rules, with numbers from the server con
   assert.equal(DEFAULT_CONFIG.runAmiGraceMs, 2000)
   for (const phrase of [
     'Create room', 'Join', '2–4 agents', `starts with ${HAND_SIZE} cards`,
-    'colour', 'number', 'action', 'Draw', 'Pass',
-    'Skip', 'Reverse', 'Draw Two', 'Wild', 'Wild Draw Four', 'No stacking',
+    'colour', 'number', 'action', 'Pick', 'Pass',
+    'Skip', 'Reverse', 'Pick Two', 'Wild', 'Wild Pick Four', 'No stacking',
     'second-to-last card', 'MIC CHECK!', 'within 2 seconds', '2-second grace period',
-    'RUN AMI', `draws ${DEFAULT_CONFIG.catchPenalty}`,
+    'RUN AMI', `picks ${DEFAULT_CONFIG.catchPenalty} cards`,
     `${DEFAULT_CONFIG.turnSeconds} seconds`, `${DEFAULT_CONFIG.maxTimeouts} turns in a row`,
     `${DEFAULT_CONFIG.disconnectGraceSeconds} seconds`, 'last agent standing', 'last card',
   ]) assert.ok(text.includes(phrase), `missing: ${phrase}`)
@@ -102,4 +102,20 @@ test('MIC CHECK! only plays a selected card when it is your second-to-last', () 
   const table = readFileSync(new URL('./run-ami-table.js', import.meta.url), 'utf8')
   assert.match(table, /const playIt = !!selected && playableNow\(selected\) && view\?\.me\.hand\.length === 2/)
   assert.match(table, /handlers\.onRunAmi\(playIt \? selected : null, playIt \? cardOf\(selected\) : null\)/)
+})
+
+test('special cards are explained where they happen', () => {
+  const table = readFileSync(new URL('./run-ami-table.js', import.meta.url), 'utf8')
+  const screen = readFileSync(new URL('./screen-run-ami.js', import.meta.url), 'utf8')
+  const cards = readFileSync(new URL('./run-ami-cards.js', import.meta.url), 'utf8')
+  // Players see "Pick", never "Draw".
+  assert.match(cards, /d2: 'Pick Two'/)
+  assert.match(cards, /wd4: 'Wild Pick Four'/)
+  assert.match(table, /class="ra-btn ra-btn-draw" type="button">Pick</)
+  // A Pick Two / Pick Four is announced on the table, once, naming who it hit.
+  assert.match(table, /`\+\$\{n\} · You pick \$\{n\} and skip`/)
+  assert.match(table, /if \(!hit\.has\(e\.seat\)\) cue\(/)
+  // The colour sheet says what the Wild will do.
+  assert.match(screen, /'Choose the next colour'/)
+  assert.match(screen, /The next agent also picks 4 cards and misses their turn/)
 })

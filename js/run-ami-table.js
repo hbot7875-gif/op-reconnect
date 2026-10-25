@@ -75,7 +75,7 @@ export function createTable(handlers) {
       <div class="ra-opps"></div>
       <div class="ra-table">
         <div class="ra-piles">
-          <button class="ra-pile ra-draw" type="button" aria-label="Draw a card">${cardBackHtml()}<span class="ra-pile-count"></span></button>
+          <button class="ra-pile ra-draw" type="button" aria-label="Pick a card from the pile">${cardBackHtml()}<span class="ra-pile-count"></span></button>
           <div class="ra-pile ra-discard" aria-live="polite"></div>
         </div>
         <div class="ra-state">
@@ -94,7 +94,7 @@ export function createTable(handlers) {
       <div class="ra-hand" role="list" aria-label="Your hand"></div>
       <p class="ra-watch-strip" hidden><b>Watching</b><span class="ra-watch-text"></span></p>
       <div class="ra-controls">
-        <button class="ra-btn ra-btn-draw" type="button">Draw</button>
+        <button class="ra-btn ra-btn-draw" type="button">Pick</button>
         <button class="ra-btn ra-btn-pass" type="button">Pass</button>
         <button class="ra-btn ra-btn-play" type="button">Play</button>
         <span class="ra-controls-gap"></span>
@@ -206,12 +206,21 @@ export function createTable(handlers) {
 
   /** A short word on the felt (REVERSE, SKIP, a new colour) that rises and
    *  fades. Motion only: the activity feed carries the same news. */
+  // Cues queue rather than stack: a Wild Pick Four sets a colour AND hits
+  // the next agent, and both words used to land on the same spot at once.
+  let cueFreeAt = 0
   function cue(text, cls = '') {
     if (reducedMotion()) return
-    const node = el('span', `ra-felt-cue${cls ? ` ${cls}` : ''}`, text)
-    node.setAttribute('aria-hidden', 'true')
-    $('.ra-table').appendChild(node)
-    setTimeout(() => node.remove(), 1100)
+    const now = Date.now()
+    const wait = Math.max(0, cueFreeAt - now)
+    cueFreeAt = Math.max(now, cueFreeAt) + 950
+    setTimeout(() => {
+      if (!root.isConnected) return
+      const node = el('span', `ra-felt-cue${cls ? ` ${cls}` : ''}`, text)
+      node.setAttribute('aria-hidden', 'true')
+      $('.ra-table').appendChild(node)
+      setTimeout(() => node.remove(), 1100)
+    }, wait)
   }
 
   function fanHtml(n) {
@@ -313,7 +322,7 @@ export function createTable(handlers) {
     $('.ra-exit').setAttribute('aria-label', watching ? 'Stop watching' : 'Exit')
     $('.ra-turn-text').textContent = watching ? `${nameOf(view.table.turn)}'s turn`
       : view.me.out ? OUT_TEXT[view.me.outReason] || 'You are out of this round'
-      : mine ? (view.me.canPass ? 'YOUR TURN · play the drawn card or pass' : 'YOUR TURN') : `${nameOf(view.table.turn)}'s turn`
+      : mine ? (view.me.canPass ? 'YOUR TURN · play the card you picked, or pass' : 'YOUR TURN') : `${nameOf(view.table.turn)}'s turn`
     $('.ra-btn-draw').disabled = !view.me.canDraw || busy
     $('.ra-btn-pass').disabled = !view.me.canPass || busy
     $('.ra-btn-runami').disabled = view.me.out || watching || busy
@@ -382,6 +391,9 @@ export function createTable(handlers) {
 
   function animate(entries, before) {
     const topCard = () => $('.ra-discard .ra-card.is-top')
+    // Seats hit by a Pick Two / Wild Pick Four in this batch: their skip is
+    // part of the same story, told once by the +N cue.
+    const hit = new Set()
     for (const e of entries) {
       const drawCard = $('.ra-draw .ra-card')
       const drawRect = rectOf(drawCard)
@@ -407,10 +419,15 @@ export function createTable(handlers) {
           for (let i = 0; i < n; i++) setTimeout(() => fly(drawRect, rectOf(tile?.querySelector('.ra-fan') || tile), cardBackHtml(), { card: drawRect, spin: -8 }), i * 90)
         }
         if (e.type === 'PLAYER_CAUGHT') flash(seat === view.me.seat ? $('.ra-me') : oppTile(seat), 'is-caught', 900)
+        if (e.type === 'CARD_DRAWN' && e.forced && e.count) {
+          hit.add(seat)
+          const n = Number(e.count)
+          cue(seat === view.me.seat ? `+${n} · You pick ${n} and skip` : `+${n} · ${esc(nameOf(seat))} picks ${n} and skips`, 'is-pick')
+        }
       } else if (e.type === 'TURN_SKIPPED') {
         flash(seatTile(e.seat), 'is-skipped', 900)
         if (e.seat === view.me.seat) flash($('.ra-turnbar'), 'is-skipped', 900)
-        cue(`⊘ Skip · ${esc(nameOf(e.seat))}`)
+        if (!hit.has(e.seat)) cue(`⊘ Skip · ${esc(nameOf(e.seat))}`)
       } else if (e.type === 'DIRECTION_REVERSED') {
         flash($('.ra-dir'), 'is-flipping', 600)
         flash($('.ra-table'), 'is-reversing', 900)
@@ -455,7 +472,11 @@ export function createTable(handlers) {
       paintLog()
       tickTimer()
       before.added = [...nextIds].filter((id) => !prevIds.has(id))
-      if (!fresh) animate(newEntries, before)
+      if (!fresh) {
+        animate(newEntries, before)
+        // Cards you just picked glow for a moment, so you can find them.
+        for (const id of before.added) flash(nodes.get(id), 'is-new', 2400)
+      }
     },
     /** The round just ended (r = the lobby's lastResult). Land the final
      *  card on the pile from whoever played it and say who won, so nobody
