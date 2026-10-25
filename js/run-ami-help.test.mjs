@@ -97,3 +97,9 @@ test('the launch pop-up shows once per agent, waits for other sheets, and opens 
   assert.match(zone, /if \(overlay && !overlay\.hidden\) return/)
   assert.match(zone, /go\.onclick = \(\) => \{ hideOverlay\(\); openRunArmy\(\) \}/)
 })
+
+test('MIC CHECK! only plays a selected card when it is your second-to-last', () => {
+  const table = readFileSync(new URL('./run-ami-table.js', import.meta.url), 'utf8')
+  assert.match(table, /const playIt = !!selected && playableNow\(selected\) && view\?\.me\.hand\.length === 2/)
+  assert.match(table, /handlers\.onRunAmi\(playIt \? selected : null, playIt \? cardOf\(selected\) : null\)/)
+})

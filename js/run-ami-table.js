@@ -126,7 +126,15 @@ export function createTable(handlers) {
   $('.ra-btn-draw').onclick = () => { if (view?.me.canDraw && !busy) handlers.onDraw() }
   $('.ra-btn-pass').onclick = () => { if (view?.me.canPass && !busy) handlers.onPass() }
   $('.ra-btn-play').onclick = () => { if (selected && !busy) handlers.onPlay(selected, cardOf(selected)) }
-  $('.ra-btn-runami').onclick = () => { if (!busy) handlers.onRunAmi(selected && playableNow(selected) ? selected : null, selected ? cardOf(selected) : null) }
+  // MIC CHECK! plays the selected card only when it's your second-to-last:
+  // the one moment a call means anything. Otherwise it's a plain call, so a
+  // card picked up just to look at is never played by accident. Either way
+  // the server sees an ordinary play or call; nobody else can tell.
+  $('.ra-btn-runami').onclick = () => {
+    if (busy) return
+    const playIt = !!selected && playableNow(selected) && view?.me.hand.length === 2
+    handlers.onRunAmi(playIt ? selected : null, playIt ? cardOf(selected) : null)
+  }
   $('.ra-btn-catch').onclick = () => { if (!busy) handlers.onCatch() }
   $('.ra-feed-more').onclick = () => {
     feedOpen = !feedOpen
