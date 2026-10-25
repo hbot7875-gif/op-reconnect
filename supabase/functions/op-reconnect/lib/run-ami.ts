@@ -101,6 +101,34 @@ function makeStore(supabase: SupabaseDB) {
       return rpcResult(data, error)
     },
 
+    async watchRoom({ agentNo, code, maxWatchers }: { agentNo: string; code: string; maxWatchers: number }) {
+      const { data, error } = await supabase.rpc('rc_run_ami_watch_room', { p_agent_no: agentNo, p_code: code, p_max_watchers: maxWatchers })
+      return rpcResult(data, error)
+    },
+
+    async unwatch({ agentNo }: { agentNo: string }) {
+      const { data, error } = await supabase.rpc('rc_run_ami_unwatch', { p_agent_no: agentNo })
+      return rpcResult(data, error)
+    },
+
+    // Heartbeat for a watcher: their room id, or null once the watch has ended.
+    async watchTouch(agentNo: string, idleMinutes: number) {
+      const { data } = await supabase.rpc('rc_run_ami_watch_touch', { p_agent_no: agentNo, p_idle_minutes: idleMinutes })
+      return typeof data === 'string' ? data : null
+    },
+
+    async findWatch(agentNo: string) {
+      const { data } = await supabase.from('rc_run_ami_watchers')
+        .select('room_id').eq('agent_no', agentNo).is('left_at', null).maybeSingle()
+      return data?.room_id || null
+    },
+
+    async listWatchers(roomId: string) {
+      const { data } = await supabase.from('rc_run_ami_watchers')
+        .select('agent_no, last_seen_at').eq('room_id', roomId).is('left_at', null).order('joined_at')
+      return (data || []).map((w: any) => ({ agentNo: w.agent_no, lastSeenAt: w.last_seen_at }))
+    },
+
     async leaveRoom({ agentNo }: { agentNo: string }) {
       const { data, error } = await supabase.rpc('rc_run_ami_leave_room', { p_agent_no: agentNo })
       return rpcResult(data, error)
@@ -181,10 +209,10 @@ function makeStore(supabase: SupabaseDB) {
     // Newest `limit` messages, returned oldest first.
     async chatRecent(roomId: string, limit: number) {
       const { data } = await supabase.from('rc_run_ami_chat')
-        .select('id, agent_no, name, kind, body, created_at').eq('room_id', roomId)
+        .select('id, agent_no, name, kind, body, watching, created_at').eq('room_id', roomId)
         .order('id', { ascending: false }).limit(limit)
       return (data || []).reverse().map((m: any) => ({
-        id: m.id, agentNo: m.agent_no, name: m.name, kind: m.kind, body: m.body, createdAt: m.created_at,
+        id: m.id, agentNo: m.agent_no, name: m.name, kind: m.kind, body: m.body, watching: !!m.watching, createdAt: m.created_at,
       }))
     },
 
@@ -202,6 +230,7 @@ function service(supabase: SupabaseDB) {
 export const runAmiState = (sb: SupabaseDB, p: any) => service(sb).getState(agentOf(p))
 export const runAmiCreateRoom = (sb: SupabaseDB, p: any) => service(sb).createRoom(agentOf(p))
 export const runAmiJoinRoom = (sb: SupabaseDB, p: any) => service(sb).joinRoom(agentOf(p), p.code)
+export const runAmiWatchRoom = (sb: SupabaseDB, p: any) => service(sb).watchRoom(agentOf(p), p.code)
 export const runAmiLeaveRoom = (sb: SupabaseDB, p: any) => service(sb).leaveRoom(agentOf(p))
 export const runAmiStart = (sb: SupabaseDB, p: any) => service(sb).startMatch(agentOf(p))
 export const runAmiAct = (sb: SupabaseDB, p: any) => service(sb).act(agentOf(p), p)

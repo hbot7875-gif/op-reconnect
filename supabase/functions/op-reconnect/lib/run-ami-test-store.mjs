@@ -38,6 +38,7 @@ export function createTestStore({ clock, agents, config = {} }) {
   const broadcasts = []
   const throttleHits = []
   const chat = []
+  const watchers = []
   let nextId = 1
   const iso = () => new Date(clock.now).toISOString()
 
@@ -46,6 +47,17 @@ export function createTestStore({ clock, agents, config = {} }) {
     return !!row?.charged_until && new Date(row.charged_until).getTime() > clock.now
   }
   const openSeat = (agentNo) => seats.find((s) => s.agentNo === agentNo && !s.leftAt)
+  const openWatch = (agentNo) => watchers.find((w) => w.agentNo === agentNo && !w.leftAt)
+  // Mirrors rc_run_ami_ping: a refetch nudge that touches no version.
+  const ping = (roomId, kind) => {
+    const room = rooms.get(roomId)
+    if (room) broadcasts.push({ topic: `run-ami:${room.topic}`, event: 'p', payload: { k: kind } })
+  }
+  const endWatch = (agentNo) => {
+    const w = openWatch(agentNo)
+    if (w) { w.leftAt = iso(); ping(w.roomId, 'w') }
+    return w?.roomId || null
+  }
   const notify = (roomId) => {
     const room = rooms.get(roomId)
     const match = room.currentMatchId ? matches.get(room.currentMatchId) : null
@@ -54,6 +66,8 @@ export function createTestStore({ clock, agents, config = {} }) {
   // Mirrors the rc_run_ami_chat_clear trigger: a closed room takes its chat.
   const closeRoom = (room) => {
     room.status = 'closed'
+    // ...and the rc_run_ami_watchers_release trigger: every watch ends.
+    for (const w of watchers) if (w.roomId === room.id && !w.leftAt) w.leftAt = iso()
     for (let i = chat.length - 1; i >= 0; i--) if (chat[i].roomId === room.id) chat.splice(i, 1)
   }
   const releaseSeat = (roomId, agentNo) => {
@@ -102,6 +116,7 @@ export function createTestStore({ clock, agents, config = {} }) {
       const id = `room-${nextId++}`
       rooms.set(id, { id, code, hostAgentNo: agentNo, status: 'waiting', topic, version: 1, currentMatchId: null, lastMatchId: null })
       seats.push({ roomId: id, agentNo, seat: 0, lastSeenAt: iso(), leftAt: null })
+      endWatch(agentNo)
       return { ok: true, room_id: id }
     },
     async joinRoom({ agentNo, code }) {
@@ -117,9 +132,40 @@ export function createTestStore({ clock, agents, config = {} }) {
       const free = [0, 1, 2, 3].find((n) => !taken.has(n))
       if (free === undefined) return { ok: false, error: 'room_full' }
       seats.push({ roomId: room.id, agentNo, seat: free, lastSeenAt: iso(), leftAt: null })
+      endWatch(agentNo)
       room.version++
       notify(room.id)
       return { ok: true, room_id: room.id }
+    },
+    async watchRoom({ agentNo, code, maxWatchers }) {
+      await tick()
+      const room = [...rooms.values()].find((r) => r.code === code && r.status !== 'closed')
+      if (!room) return { ok: false, error: 'room_not_found' }
+      const seat = openSeat(agentNo)
+      if (seat?.roomId === room.id) return { ok: true, room_id: room.id, already: true, seated: true }
+      if (seat) return { ok: false, error: 'already_seated' }
+      const mine = openWatch(agentNo)
+      if (mine?.roomId === room.id) { mine.lastSeenAt = iso(); return { ok: true, room_id: room.id, already: true } }
+      if (watchers.filter((w) => w.roomId === room.id && !w.leftAt).length >= maxWatchers) return { ok: false, error: 'watchers_full' }
+      endWatch(agentNo)
+      watchers.push({ roomId: room.id, agentNo, joinedAt: iso(), lastSeenAt: iso(), leftAt: null })
+      ping(room.id, 'w')
+      return { ok: true, room_id: room.id }
+    },
+    async unwatch({ agentNo }) { await tick(); return { ok: true, room_id: endWatch(agentNo) } },
+    async watchTouch(agentNo, idleMinutes) {
+      await tick()
+      const w = openWatch(agentNo)
+      if (!w) return null
+      const room = rooms.get(w.roomId)
+      if (room.status === 'closed' || clock.now - new Date(w.lastSeenAt).getTime() > idleMinutes * 60_000) { w.leftAt = iso(); return null }
+      w.lastSeenAt = iso()
+      return w.roomId
+    },
+    async findWatch(agentNo) { await tick(); return openWatch(agentNo)?.roomId || null },
+    async listWatchers(roomId) {
+      await tick()
+      return copy(watchers.filter((w) => w.roomId === roomId && !w.leftAt).map((w) => ({ agentNo: w.agentNo, lastSeenAt: w.lastSeenAt })))
     },
     async leaveRoom({ agentNo }) {
       await tick()
@@ -230,13 +276,15 @@ export function createTestStore({ clock, agents, config = {} }) {
     async chatSend({ agentNo, kind, body, name }) {
       await tick()
       const seat = openSeat(agentNo)
-      const room = seat && rooms.get(seat.roomId)
+      const watch = seat ? null : openWatch(agentNo)
+      const room = rooms.get(seat?.roomId || watch?.roomId)
       if (!room || room.status === 'closed') return { ok: false, error: 'not_in_room' }
       if (!['text', 'react'].includes(kind) || ![...body].length || [...body].length > 120) return { ok: false, error: 'chat_text' }
       const id = nextId++
-      chat.push({ id, roomId: room.id, agentNo, name: String(name).slice(0, 40), kind, body, createdAt: iso() })
+      chat.push({ id, roomId: room.id, agentNo, name: String(name).slice(0, 40), kind, body, watching: !!watch, createdAt: iso() })
       const mine = chat.filter((m) => m.roomId === room.id)
       for (const old of mine.slice(0, Math.max(0, mine.length - 100))) chat.splice(chat.indexOf(old), 1)
+      ping(room.id, 'c')
       return { ok: true, id, room_id: room.id }
     },
     async chatRecent(roomId, limit) {
@@ -251,7 +299,8 @@ export function createTestStore({ clock, agents, config = {} }) {
 
   return {
     store,
-    inspect: { charge, wallets, rooms, seats, matches, events, broadcasts, chat },
+    inspect: { charge, wallets, rooms, seats, matches, events, broadcasts, chat, watchers },
+    setWatchSeen(agentNo, ms) { const w = openWatch(agentNo); if (w) w.lastSeenAt = new Date(ms).toISOString() },
     setLastSeen(agentNo, ms) { const s = openSeat(agentNo); if (s) s.lastSeenAt = new Date(ms).toISOString() },
   }
 }

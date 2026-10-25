@@ -66,7 +66,7 @@ export function createChat({ onSend, floor = () => null }) {
     const atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 24
     list.innerHTML = messages.length ? messages.map((m) => `
       <li class="ra-msg${m.mine ? ' is-mine' : ''}${m.kind === 'react' ? ' is-react' : ''}">
-        <span class="ra-msg-meta"><b>${esc(m.mine ? 'You' : m.name)}</b><time>${esc(time(m.at))}</time></span>
+        <span class="ra-msg-meta"><b>${esc(m.mine ? 'You' : m.name)}</b>${m.watching ? '<small class="ra-msg-tag">watching</small>' : ''}<time>${esc(time(m.at))}</time></span>
         <span class="ra-msg-body">${esc(m.body)}</span>
       </li>`).join('') : '<li class="ra-chat-empty">No messages yet. Say hi!</li>'
     if (atBottom || open) list.scrollTop = list.scrollHeight

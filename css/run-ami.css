@@ -350,3 +350,29 @@
 /* Small phones: the match header makes room for the chat icon. The code is
    still on the lobby screen and in Copy. */
 @media (max-width: 374px) { .ra-top .ra-code { display: none; } .ra-top { gap: 6px; } }
+
+/* ── Watching ────────────────────────────────────────────────────────
+   A room code can seat you or let you watch (lib/run-ami-view.js
+   viewForSpectator). Watchers get the same table with no hand and no
+   controls; the lobby says so and offers a free seat between rounds. */
+.ra-join-row .ra-watch-btn { background: none; }
+.ra-watch-offer { margin-top: 0; }
+.ra-watch-banner { margin: 0; display: flex; flex-direction: column; gap: 2px; padding: 12px 16px;
+  border-radius: var(--r-lg); background: var(--v-tint-violet); border: 1px solid var(--v-violet-line); }
+.ra-watch-banner b { font-family: var(--disp); font-size: 14px; letter-spacing: 1.5px; color: var(--v-violet-hi); }
+.ra-watch-banner span { font-size: var(--fs-small); color: var(--v-ink-2); }
+.ra-watchers { margin: 0; font-size: var(--fs-small); color: var(--v-ink-3); text-align: center;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ra-watchers b { color: var(--v-ink-2); font-weight: 600; }
+.ra-sit { margin-top: 0; }
+
+.ra-watch-strip { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 18px 12px;
+  border-radius: var(--r); border: 1px dashed var(--v-line-2); text-align: center; }
+.ra-watch-strip b { font-family: var(--disp); font-size: 14px; letter-spacing: 2px; color: var(--v-violet-hi); }
+.ra-watch-strip span { font-size: var(--fs-small); color: var(--v-ink-3); }
+.ra-match.is-watching .ra-hand,
+.ra-match.is-watching .ra-controls { display: none; }
+.ra-match.is-watching .ra-draw { cursor: default; }
+
+.ra-msg-tag { font-family: var(--mono); font-size: 9.5px; letter-spacing: .8px; text-transform: uppercase;
+  color: var(--v-violet-hi); border: 1px solid var(--v-violet-line); border-radius: 5px; padding: 0 4px; }

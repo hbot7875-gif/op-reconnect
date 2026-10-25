@@ -9,6 +9,10 @@
 // (lib/run-ami-view.js). Opponents are names, avatars and card COUNTS — this
 // file never has anyone else's cards to show.
 //
+// Watching (view.me.watching, lib/run-ami-view.js viewForSpectator): the same
+// table with no seat of its own — every player along the top, no hand, no
+// controls, and the turn bar follows whoever is up.
+//
 // Deliberately absent: any public cue that a player is on one card. An
 // opponent on one card looks exactly like an opponent on five, except for
 // the number. The RUN AMI and CAUGHT! controls never change shape, glow or
@@ -60,6 +64,7 @@ export function createTable(handlers) {
     <div class="ra-me">
       <div class="ra-turnbar"><span class="ra-turn-text"></span><span class="ra-turn-time"></span><i class="ra-turn-progress" aria-hidden="true"></i></div>
       <div class="ra-hand" role="list" aria-label="Your hand"></div>
+      <p class="ra-watch-strip" hidden><b>Watching</b><span>Everyone's cards stay hidden. Chat is open.</span></p>
       <div class="ra-controls">
         <button class="ra-btn ra-btn-draw" type="button">Draw</button>
         <button class="ra-btn ra-btn-pass" type="button">Pass</button>
@@ -138,7 +143,8 @@ export function createTable(handlers) {
 
   function paintOpponents() {
     const box = $('.ra-opps')
-    const me = view.me.seat
+    // A watcher has no seat: everyone, in seat order.
+    const me = view.me.seat ?? 0
     const n = view.players.length
     const order = view.players.filter((p) => !p.isMe)
       .sort((a, b) => ((a.seat - me + n) % n) - ((b.seat - me + n) % n))
@@ -194,16 +200,24 @@ export function createTable(handlers) {
 
   function paintMe() {
     const mine = isMyTurn()
+    const watching = !!view.me.watching
     root.classList.toggle('is-my-turn', mine)
     root.classList.toggle('is-out', view.me.out)
-    $('.ra-turn-text').textContent = view.me.out
-      ? OUT_TEXT[view.me.outReason] || 'You are out of this round'
+    root.classList.toggle('is-watching', watching)
+    $('.ra-watch-strip').hidden = !watching
+    // Same short label as a player's: the sheet it opens says "Stop watching?".
+    $('.ra-exit').setAttribute('aria-label', watching ? 'Stop watching' : 'Exit')
+    $('.ra-turn-text').textContent = watching ? `${nameOf(view.table.turn)}'s turn`
+      : view.me.out ? OUT_TEXT[view.me.outReason] || 'You are out of this round'
       : mine ? (view.me.canPass ? 'YOUR TURN · play the drawn card or pass' : 'YOUR TURN') : `${nameOf(view.table.turn)}'s turn`
     $('.ra-btn-draw').disabled = !view.me.canDraw || busy
     $('.ra-btn-pass').disabled = !view.me.canPass || busy
-    $('.ra-btn-runami').disabled = view.me.out || busy
-    $('.ra-btn-catch').disabled = view.me.out || busy
-    $('.ra-bomb').textContent = handlers.bombLabel?.() || ''
+    $('.ra-btn-runami').disabled = view.me.out || watching || busy
+    $('.ra-btn-catch').disabled = view.me.out || watching || busy
+    const w = view.watchers?.count || 0
+    $('.ra-bomb').textContent = watching
+      ? `👀 Watching${w > 1 ? ` with ${w - 1} other${w === 2 ? '' : 's'}` : ''}`
+      : `${handlers.bombLabel?.() || ''}${w ? ` · 👀 ${w} watching` : ''}`
     $('.ra-called-slot').innerHTML = view.me.runAmiCalled ? '<span class="ra-called">RUN AMI ✓</span>' : ''
   }
 

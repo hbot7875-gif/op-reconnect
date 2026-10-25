@@ -47,7 +47,27 @@ function playerRow(p, state, mySeat) {
   }
 }
 
-export function viewForMatch({ state, seat, players, version, now, log = [], room }) {
+/** Who is watching the room: a count and codenames only. */
+function watcherList(watchers) {
+  const names = (watchers?.names || []).slice(0, 12).map((n) => String(n || 'AGENT'))
+  return { count: Number(watchers?.count) || 0, names }
+}
+
+function tableOf(state) {
+  return {
+    top: card(topCard(state)),
+    color: state.color,
+    dir: state.dir,
+    turn: state.turn,
+    turnNo: state.turnNo,
+    deadline: state.deadline,
+    turnSeconds: state.cfg.turnSeconds,
+    drawCount: state.draw.length,
+    drewThisTurn: state.drewThisTurn,
+  }
+}
+
+export function viewForMatch({ state, seat, players, version, now, log = [], room, watchers = null }) {
   const mine = state.seats[seat]
   const isTurn = state.status === 'active' && state.turn === seat && !mine.out
   return {
@@ -58,17 +78,8 @@ export function viewForMatch({ state, seat, players, version, now, log = [], roo
     status: state.status,
     endReason: state.endReason,
     winnerSeat: state.winner,
-    table: {
-      top: card(topCard(state)),
-      color: state.color,
-      dir: state.dir,
-      turn: state.turn,
-      turnNo: state.turnNo,
-      deadline: state.deadline,
-      turnSeconds: state.cfg.turnSeconds,
-      drawCount: state.draw.length,
-      drewThisTurn: state.drewThisTurn,
-    },
+    table: tableOf(state),
+    watchers: watcherList(watchers),
     players: players.map((p) => playerRow(p, state, seat)),
     me: {
       seat,
@@ -86,7 +97,38 @@ export function viewForMatch({ state, seat, players, version, now, log = [], roo
   }
 }
 
-export function viewForLobby({ room, players, mySeat, bombActive, lastResult = null, minPlayers = 2 }) {
+/** A watcher at a live table: everything public, nobody's cards. `me`
+ *  keeps the seat view's shape (empty hand, nothing playable) so the table
+ *  renders without a seat of its own, and says `watching`. */
+export function viewForSpectator({ state, players, version, now, log = [], room, watchers = null }) {
+  return {
+    phase: 'match',
+    version,
+    serverNow: now,
+    room: { code: room.code, isHost: false, topic: room.topic || null, version: room.version },
+    status: state.status,
+    endReason: state.endReason,
+    winnerSeat: state.winner,
+    table: tableOf(state),
+    watchers: watcherList(watchers),
+    players: players.map((p) => playerRow(p, state, null)),
+    me: {
+      seat: null,
+      watching: true,
+      out: false,
+      outReason: null,
+      hand: [],
+      playable: [],
+      canDraw: false,
+      canPass: false,
+      drawnId: null,
+      runAmiCalled: false,
+    },
+    log: log.map(logEntry),
+  }
+}
+
+export function viewForLobby({ room, players, mySeat, bombActive, lastResult = null, minPlayers = 2, watching = false, watchers = null }) {
   const seated = players.length
   return {
     phase: 'lobby',
@@ -97,11 +139,14 @@ export function viewForLobby({ room, players, mySeat, bombActive, lastResult = n
       topic: room.topic || null,
       version: room.version,
       canStart: !!room.isHost && seated >= minPlayers,
+      // A watcher can sit in while a seat is free (the room is waiting here).
+      canSeat: !!watching && seated < 4,
       minPlayers,
       maxPlayers: 4,
     },
+    watchers: watcherList(watchers),
     players: players.map((p) => playerRow(p, null, mySeat)),
-    me: { seat: mySeat, bombActive: !!bombActive },
+    me: { seat: mySeat, bombActive: !!bombActive, watching: !!watching },
     lastResult,
   }
 }

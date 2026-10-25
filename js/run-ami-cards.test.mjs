@@ -45,7 +45,7 @@ test('the end of a round, from each side', () => {
 test('error codes without words never reach the player raw', () => {
   assert.equal(errorText('create_failed'), 'Something went wrong. Try again.')
   assert.equal(errorText(undefined), 'Something went wrong. Try again.')
-  assert.equal(errorText('room_full'), 'That room is full (4 agents).')
+  assert.equal(errorText('room_full'), 'That room is full (4 agents). You can still watch.')
   assert.equal(errorText('not_in_room'), 'You are not in a room any more.')
   // A sentence passes through (the network message).
   assert.equal(errorText('Network error — check your connection'), 'Network error — check your connection')

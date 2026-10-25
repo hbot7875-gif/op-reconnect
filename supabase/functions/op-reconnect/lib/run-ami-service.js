@@ -26,7 +26,7 @@
 
 import { finalResults, newMatch, publicState, resolveConfig, topCard } from './run-ami-rules.js'
 import { applyAction, forfeitSeat, resolveClock } from './run-ami-actions.js'
-import { viewForEntry, viewForLobby, viewForMatch } from './run-ami-view.js'
+import { viewForEntry, viewForLobby, viewForMatch, viewForSpectator } from './run-ami-view.js'
 import { isRunAmiTester } from './run-ami-access.js'
 import { checkRunAmiChat } from './run-ami-chat-rules.js'
 
@@ -44,6 +44,11 @@ const JOIN_ATTEMPTS = { max: 12, windowSeconds: 300 }
 const CHAT_SHOWN = 30
 const CHAT_BURST = { max: 5, windowSeconds: 15 }
 const CHAT_MINUTE = { max: 30, windowSeconds: 60 }
+// Watchers: per-room cap, and how recently one must have been seen to be
+// listed as watching (a watch nobody touches for WATCH_IDLE_MINUTES ends).
+const MAX_WATCHERS = 20
+const WATCHER_FRESH_SECONDS = 60
+const WATCH_IDLE_MINUTES = 30
 
 export function normalizeRoomCode(raw) {
   return String(raw ?? '').toUpperCase().replace(/[\s-]/g, '')
@@ -142,6 +147,15 @@ export function createRunAmiService({ store, now = () => Date.now(), rng, random
     }
   }
 
+  /** Who is watching this room right now: count and codenames. Agent
+   *  numbers are used to look the names up and go no further. */
+  async function watcherInfo(roomId, at) {
+    const rows = (await store.listWatchers(roomId))
+      .filter((w) => seenWithin(w.lastSeenAt, WATCHER_FRESH_SECONDS, at))
+    const profiles = await store.profiles(rows.map((w) => w.agentNo))
+    return { count: rows.length, names: rows.map((w) => profiles.get(w.agentNo)?.name || 'AGENT') }
+  }
+
   async function buildView(agentNo, roomId, settled = false) {
     const at = now()
     const cfg = await config()
@@ -162,7 +176,10 @@ export function createRunAmiService({ store, now = () => Date.now(), rng, random
             seats, hostAgentNo: room.hostAgentNo, staleSeconds: match.state.cfg.heartbeatStaleSeconds, at,
           })
           const log = await store.recentEvents(match.id, LOG_LIMIT)
-          const view = viewForMatch({ state: match.state, seat: mySeat, players, version: match.version, now: at, log, room: roomPublic })
+          const view = viewForMatch({
+            state: match.state, seat: mySeat, players, version: match.version, now: at, log, room: roomPublic,
+            watchers: await watcherInfo(roomId, at),
+          })
           return { ...view, chat: await roomChat(roomId, agentNo) }
         }
         return buildView(agentNo, roomId, true)
@@ -180,6 +197,46 @@ export function createRunAmiService({ store, now = () => Date.now(), rng, random
       mySeat: agents.indexOf(agentNo),
       bombActive: await store.bombActive(agentNo),
       lastResult: await lastResult(room, agentNo, at),
+      watchers: await watcherInfo(roomId, at),
+    })
+    return { ...view, chat: await roomChat(roomId, agentNo) }
+  }
+
+  /** The same room from a watcher's side: the live table without anyone's
+   *  cards (viewForSpectator), or the lobby with a way to sit in. Watchers
+   *  settle the clock like any reader, so a table everyone is only watching
+   *  still moves on when a turn runs out. */
+  async function buildWatchView(agentNo, roomId, settled = false) {
+    const at = now()
+    const cfg = await config()
+    const room = await store.getRoom(roomId)
+    if (!room || room.status === 'closed') return viewForEntry({ bombActive: await store.bombActive(agentNo) })
+    const seats = await store.listSeats(roomId)
+    const roomPublic = { code: room.code, isHost: false, topic: room.topic, version: room.version }
+    const watchers = await watcherInfo(roomId, at)
+
+    if (room.currentMatchId && !settled) {
+      let match = await store.loadMatch(room.currentMatchId)
+      if (match?.status === 'active') match = await settle(match, seats)
+      if (match?.status === 'active') {
+        const players = await publicPlayers(match.agents, {
+          seats, hostAgentNo: room.hostAgentNo, staleSeconds: match.state.cfg.heartbeatStaleSeconds, at,
+        })
+        const log = await store.recentEvents(match.id, LOG_LIMIT)
+        const view = viewForSpectator({ state: match.state, players, version: match.version, now: at, log, room: roomPublic, watchers })
+        return { ...view, chat: await roomChat(roomId, agentNo) }
+      }
+      // Ended inside settle(): the room is waiting again; read it fresh.
+      if (match) return buildWatchView(agentNo, roomId, true)
+    }
+
+    const ordered = [...seats].sort((a, b) => a.seat - b.seat)
+    const players = await publicPlayers(ordered.map((s) => s.agentNo), {
+      seats, hostAgentNo: room.hostAgentNo, staleSeconds: cfg.heartbeatStaleSeconds, at,
+    })
+    const view = viewForLobby({
+      room: roomPublic, players, mySeat: -1, bombActive: await store.bombActive(agentNo),
+      lastResult: await lastResult(room, agentNo, at), watching: true, watchers,
     })
     return { ...view, chat: await roomChat(roomId, agentNo) }
   }
@@ -188,7 +245,10 @@ export function createRunAmiService({ store, now = () => Date.now(), rng, random
    *  agent number is used only for `mine` and never leaves this function. */
   async function roomChat(roomId, agentNo) {
     const rows = await store.chatRecent(roomId, CHAT_SHOWN)
-    return rows.map((m) => ({ id: m.id, name: m.name, kind: m.kind, body: m.body, at: m.createdAt, mine: m.agentNo === agentNo }))
+    return rows.map((m) => ({
+      id: m.id, name: m.name, kind: m.kind, body: m.body, at: m.createdAt,
+      mine: m.agentNo === agentNo, watching: !!m.watching,
+    }))
   }
 
   /** Send one chat message or quick reaction into the room the agent is
@@ -197,7 +257,8 @@ export function createRunAmiService({ store, now = () => Date.now(), rng, random
     const checked = checkRunAmiChat(params?.kind === 'react' ? 'react' : 'text', params?.body)
     if (!checked.ok) return { success: false, error: 'chat_text', reason: checked.reason }
     const seat = await store.findSeat(agentNo)
-    if (!seat) return { success: false, error: 'not_in_room' }
+    const watchRoomId = seat ? null : await store.findWatch(agentNo)
+    if (!seat && !watchRoomId) return { success: false, error: 'not_in_room' }
     if (!await store.throttle(`run-ami-chat:${agentNo}`, CHAT_BURST.max, CHAT_BURST.windowSeconds)
       || !await store.throttle(`run-ami-chat-min:${agentNo}`, CHAT_MINUTE.max, CHAT_MINUTE.windowSeconds)) {
       return { success: false, error: 'chat_slow' }
@@ -205,7 +266,7 @@ export function createRunAmiService({ store, now = () => Date.now(), rng, random
     const name = (await store.profiles([agentNo])).get(agentNo)?.name || 'AGENT'
     const res = await store.chatSend({ agentNo, kind: checked.kind, body: checked.body, name })
     if (!res.ok) return { success: false, error: res.error || 'server_error' }
-    return { success: true, view: await buildView(agentNo, seat.roomId) }
+    return { success: true, view: seat ? await buildView(agentNo, seat.roomId) : await buildWatchView(agentNo, watchRoomId) }
   }
 
   /** Read (and heartbeat). Called on open, on every Realtime nudge and by
@@ -214,8 +275,10 @@ export function createRunAmiService({ store, now = () => Date.now(), rng, random
   async function getState(agentNo) {
     const cfg = await config()
     const seat = await store.touchSeat(agentNo, cfg.heartbeatStaleSeconds)
-    if (!seat) return { success: true, view: viewForEntry({ bombActive: await store.bombActive(agentNo), lastResult: await droppedResult(agentNo) }) }
-    return { success: true, view: await buildView(agentNo, seat.roomId) }
+    if (seat) return { success: true, view: await buildView(agentNo, seat.roomId) }
+    const watchRoomId = await store.watchTouch(agentNo, WATCH_IDLE_MINUTES)
+    if (watchRoomId) return { success: true, view: await buildWatchView(agentNo, watchRoomId) }
+    return { success: true, view: viewForEntry({ bombActive: await store.bombActive(agentNo), lastResult: await droppedResult(agentNo) }) }
   }
 
   /** An agent dropped for disconnecting loses the seat if they are still
@@ -249,9 +312,24 @@ export function createRunAmiService({ store, now = () => Date.now(), rng, random
     return getState(agentNo)
   }
 
+  /** Watch the room with this code: the live table, lobby and chat, without
+   *  a seat. No Bomb needed — watching powers nothing. Shares the join
+   *  throttle, so codes can't be guessed faster through this door. */
+  async function watchRoom(agentNo, rawCode) {
+    if (!await store.throttle(`run-ami-join:${agentNo}`, JOIN_ATTEMPTS.max, JOIN_ATTEMPTS.windowSeconds)) {
+      return { success: false, error: 'rate_limited' }
+    }
+    const code = normalizeRoomCode(rawCode)
+    if (!ROOM_CODE_RE.test(code)) return { success: false, error: 'room_not_found' }
+    const res = await store.watchRoom({ agentNo, code, maxWatchers: MAX_WATCHERS })
+    if (!res.ok) return { success: false, error: res.error || 'watch_failed', view: (await getState(agentNo)).view }
+    return getState(agentNo)
+  }
+
   async function leaveRoom(agentNo) {
     const seat = await store.findSeat(agentNo)
-    if (!seat) return getState(agentNo)
+    // A watcher leaving just stops watching; nothing about the game changes.
+    if (!seat) { await store.unwatch({ agentNo }); return getState(agentNo) }
     const room = await store.getRoom(seat.roomId)
     if (room?.currentMatchId) {
       // Leaving mid-match is a forfeit, committed like any other action
@@ -365,6 +443,7 @@ export function createRunAmiService({ store, now = () => Date.now(), rng, random
     getState: gate(getState),
     createRoom: gate(createRoom),
     joinRoom: gate(joinRoom),
+    watchRoom: gate(watchRoom),
     leaveRoom: gate(leaveRoom),
     startMatch: gate(startMatch),
     act: gate(act),

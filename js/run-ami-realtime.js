@@ -2,7 +2,8 @@
 //
 // The database broadcasts {r, v} (room and match version numbers) on the
 // room's unguessable topic after every committed change
-// (rc_run_ami_notify). This module listens and calls onNudge; the screen
+// (rc_run_ami_notify), and a bare ping after every chat message or watcher
+// change (rc_run_ami_ping). This module listens and calls onNudge; the screen
 // then fetches its own private view from the Edge Function. Nothing here
 // ever sends anything to the channel, and nothing it receives is trusted as
 // state: a forged message can at most cause an extra fetch.
@@ -10,14 +11,14 @@
 // No supabase-js: a broadcast-only subscriber is a few Phoenix frames, and
 // the app has never shipped a Supabase client.
 //
-// DISABLED until REALTIME_KEY is set. Connecting needs the project's
-// publishable (anon) key in the browser, and on 2026-10-11 the live database
-// still granted anon full access to three non-rc tables (spotify_oauth,
-// bts_song_catalog, spotify_filler_library, RLS off). Until those grants
-// are closed the key must not ship; with it empty the game runs on the
-// polling fallback alone, which is a complete, correct experience.
+// The key is the project's PUBLISHABLE key, made to be shipped to browsers.
+// It was held back until 2026-10-25, while three non-rc tables still granted
+// anon full access; migration 20261025000500_rc_lock_spotify_tables.sql closed
+// them, after which this key reaches no table or function (pg_class/pg_proc
+// audit before release). All it can do is join broadcast channels — and a
+// room's topic is only ever shown to agents seated in or watching it.
 
-const REALTIME_KEY = ''
+const REALTIME_KEY = 'sb_publishable_PII5mQADp0gA1lazxobAQQ_5Fx_To_G'
 const SOCKET_URL = 'wss://lcvmwlioqpyaprxicdfl.supabase.co/realtime/v1/websocket'
 const HEARTBEAT_MS = 25_000
 const RETRY_MS = [1000, 3000, 8000, 15000]
@@ -67,6 +68,7 @@ export function subscribeRoom(topic, onNudge) {
         const p = msg.payload.payload || {}
         onNudge({ r: Number.isInteger(p.r) ? p.r : null, v: Number.isInteger(p.v) ? p.v : null })
       }
+      if (msg.event === 'broadcast' && msg.payload?.event === 'p') onNudge({ ping: true })
       if (msg.event === 'phx_error' || msg.event === 'phx_close') live = false
     }
     socket.onclose = () => {

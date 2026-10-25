@@ -69,7 +69,7 @@ import {
   adminListBattleChat, adminModerateBattleChat,
 } from './lib/vote-campaign.ts'
 import { getDearDiary, getDearDiaryArchive, getDearDiaryPreference, saveDearDiaryDecorations, saveDearDiaryNote, saveDearDiaryTheme } from './lib/dear-diary.ts'
-import { runAmiState, runAmiCreateRoom, runAmiJoinRoom, runAmiLeaveRoom, runAmiStart, runAmiAct, runAmiChat, cronRunAmiSweep } from './lib/run-ami.ts'
+import { runAmiState, runAmiCreateRoom, runAmiJoinRoom, runAmiWatchRoom, runAmiLeaveRoom, runAmiStart, runAmiAct, runAmiChat, cronRunAmiSweep } from './lib/run-ami.ts'
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -151,6 +151,7 @@ const ROUTES: Record<string, Route> = {
   runAmiState: { auth: 'agent', handler: (sb, p) => runAmiState(sb, p) },
   runAmiCreateRoom: { auth: 'agent', handler: (sb, p) => runAmiCreateRoom(sb, p) },
   runAmiJoinRoom: { auth: 'agent', handler: (sb, p) => runAmiJoinRoom(sb, p) },
+  runAmiWatchRoom: { auth: 'agent', handler: (sb, p) => runAmiWatchRoom(sb, p) },
   runAmiLeaveRoom: { auth: 'agent', handler: (sb, p) => runAmiLeaveRoom(sb, p) },
   runAmiStart: { auth: 'agent', handler: (sb, p) => runAmiStart(sb, p) },
   runAmiAct: { auth: 'agent', handler: (sb, p) => runAmiAct(sb, p) },

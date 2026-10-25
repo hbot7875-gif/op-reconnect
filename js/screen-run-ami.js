@@ -9,8 +9,9 @@
 // or a second device all recover the same way: ask the server, which finds
 // the agent's seat from their session. localStorage is not used.
 //
-// Updates: a Realtime nudge ({r, v} version numbers, run-ami-realtime.js)
-// triggers a fetch of this seat's own view. While Realtime is not live —
+// Updates: a Realtime nudge ({r, v} version numbers, or a ping after a chat
+// message or a watcher change; run-ami-realtime.js) triggers a fetch of this
+// seat's own view. While Realtime is not live —
 // including while it is disabled — the screen polls every 4s whenever a
 // lobby or match is open and the tab is visible. With Realtime live it
 // still refreshes every 15s so connection states stay current.
@@ -211,7 +212,8 @@ function syncRealtime() {
   if (!topic || !realtimeAvailable()) return
   rt = subscribeRoom(topic, (nudge) => {
     if (!view) return
-    if (!nudge || nudge.r !== view.room?.version || nudge.v !== view.version) refresh()
+    // A ping (chat, watchers) carries no versions: always worth a fetch.
+    if (!nudge || nudge.ping || nudge.r !== view.room?.version || nudge.v !== view.version) refresh()
   })
 }
 
@@ -304,6 +306,7 @@ async function roomAction(button, action, params) {
   else if (res) noteSuccess()
   if (res?.view) apply(res.view)
   if (!res?.success) notice(say(res?.error))
+  return res
 }
 
 function notice(text) {
@@ -389,6 +392,17 @@ const tableHandlers = {
   }),
   onExit: () => {
     const sheet = el('div', 'sheet ra-sheet')
+    if (view?.me?.watching) {
+      // A watcher has no round to leave: stopping changes nothing at the table.
+      sheet.append(el('h3', '', 'Stop watching?'), el('p', 'muted', 'You can watch again with the code while the room stays open.'))
+      const stop = el('button', 'btn btn-primary', 'Stop watching')
+      stop.onclick = async () => { hideOverlay(); await roomAction(null, 'runAmiLeaveRoom', {}) }
+      const keep = el('button', 'btn btn-ghost', 'Keep watching')
+      keep.onclick = hideOverlay
+      sheet.append(stop, keep)
+      showOverlay(sheet)
+      return
+    }
     sheet.append(el('h3', '', 'Leave this round?'), el('p', 'muted', 'You will be out of this round. The others play on.'))
     const leave = el('button', 'btn btn-primary', 'Leave round')
     leave.onclick = async () => { hideOverlay(); await roomAction(null, 'runAmiLeaveRoom', {}); goSettings() }
