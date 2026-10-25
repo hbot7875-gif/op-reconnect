@@ -2,6 +2,9 @@
 // The earlier fire/star/XP/district emoji achievements are intentionally kept
 // out of the Drawer, HUD count and profile-icon resolver. Their historical DB
 // rows can remain as harmless audit history without showing up to players.
+// The server now sends the live catalog's template ids with every state
+// (player.badgeCollectionTemplates, from rc_badge_catalog — what the Drawer
+// itself reads). This list is only the fallback for a state without them.
 const COLLECTION_TEMPLATES = new Set([
   'district_frag_1', 'district_frag_2', 'district_frag_3',
   'district_restored', 'ward', 'mission_bond',
@@ -27,6 +30,10 @@ const COLLECTION_TEMPLATES = new Set([
   // server awards but this set omits is earned silently, with no unlock
   // reveal and no place in the Pack's badge count.
   'backup_helper',
+  // The eight that fell off this list while it was the only source.
+  'event_vma_community_chest', 'event_mama_2026',
+  'event_arirang_recelebrate_2026', 'event_rc26_after_party', 'event_rc26_party_crasher',
+  'event_rc26_arirang_cult', 'event_rc26_side_quest_aliens', 'event_rc26_side_quest_hooligans',
 ])
 
 export const BADGE_CATALOG = []
@@ -36,9 +43,11 @@ export function badgeById(id) {
 }
 
 export function collectionBadgeIds(state) {
+  const live = state?.player?.badgeCollectionTemplates
+  const templates = Array.isArray(live) && live.length ? new Set(live) : COLLECTION_TEMPLATES
   return [...new Set((state?.player?.badges || []).filter((badgeId) => {
     const templateId = String(badgeId).split(':', 1)[0]
-    return COLLECTION_TEMPLATES.has(templateId)
+    return templates.has(templateId)
   }))]
 }
 

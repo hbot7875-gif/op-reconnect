@@ -12,6 +12,7 @@ import { badgeShareControls } from './badge-share.js'
 import { BADGE_MILESTONES } from '../supabase/functions/op-reconnect/lib/badge-share-layout.js'
 
 const SEEN_KEY = 'rc_seen_collection_badges:'
+const LATE_REVEAL_MS = 24 * 3600_000
 const pending = new Set()
 const queue = []
 let showing = false
@@ -85,13 +86,18 @@ function pumpRevealQueue() {
 
 export function unlockSheet(badge, additional, state) {
   const rare = badge.rarity === 'rare'
+  // A badge earned well before this reveal (one the app failed to announce
+  // at the time) is welcomed as a catch-up, not as something just unlocked.
+  const earnedMs = Date.parse(badge.earnedAt || '')
+  const late = Number.isFinite(earnedMs) && Date.now() - earnedMs > LATE_REVEAL_MS
+  const earnedOn = late ? new Date(earnedMs).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''
   const sheet = el('div', 'sheet badge-unlock' + (rare ? ' is-rare' : ''))
   const art = badge.artworkUrl
     ? `<img src="${esc(badge.artworkUrl)}" alt="" decoding="async">`
     : `<span>${rare ? '🎖️' : '◇'}</span>`
   sheet.innerHTML = `
     <div class="bgu-rays" aria-hidden="true"></div>
-    <div class="bgu-eyebrow">${rare ? '✦ RARE BADGE FOUND' : '◇ BADGE UNLOCKED'}</div>
+    <div class="bgu-eyebrow">${late ? `◇ EARNED EARLIER${earnedOn ? ` · ${esc(earnedOn)}` : ''}` : rare ? '✦ RARE BADGE FOUND' : '◇ BADGE UNLOCKED'}</div>
     <div class="bgu-art"><div class="bgu-scan" aria-hidden="true"></div>${art}</div>
     <div class="bgu-name">${esc(badge.name)}</div>
     <p class="bgu-story">${esc(badgeStory(badge, state))}</p>

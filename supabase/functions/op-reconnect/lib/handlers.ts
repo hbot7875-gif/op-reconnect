@@ -532,7 +532,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
   const [
     modeReview, { data: badgeRows }, { data: itemRows }, broadcasts, cityFeed,
     waitingAgents, onlineNow, districtMessages, equippedMap, isBadgeVaultEditor, leaveInfo, vma,
-    { data: backupOpenRows }, { data: backupMineRow }, { data: backupHelpingRow }, voting,
+    { data: backupOpenRows }, { data: backupMineRow }, { data: backupHelpingRow }, voting, { data: catalogRows },
   ] = await Promise.all([
     // A review hint only — see the note above getModeVolumeReview's caller.
     player.agent_no === 'AGENT120' ? Promise.resolve(null) : timed('modeReview', getModeVolumeReview(supabase, player.agent_no, player.mode)),
@@ -584,6 +584,12 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     // Voting campaign summary for the World-screen card (MAMA 2026 first).
     // Null outside a voting window. Last, for the same reason as above.
     timed('voting', getVotingBanner(supabase, player.agent_no)),
+    // Which badge templates make up the Badge Collection. The HUD count and
+    // the unlock reveal used a hand-kept list in js/badges.js that fell
+    // behind every new event (eight event badges, 370 awards, never got a
+    // reveal or a count). The catalog the Drawer reads is the one source.
+    // Last, for the same reason as above.
+    timed('badgeCatalog', supabase.from('rc_badge_catalog').select('id').eq('active', true)),
   ])
   const equippedBadgeArtwork = equippedMap.get(player.agent_no) || null
   // One extra read only when someone is actually helping — the codename is
@@ -626,6 +632,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
           : null),
       streak,
       badges: (badgeRows || []).map((b: any) => b.badge_id),
+      badgeCollectionTemplates: (catalogRows || []).map((c: any) => c.id),
       equippedBadgeId: player.equipped_badge_id || null,
       equippedBadgeArtwork,
       avatarCrop: player.avatar_crop || null,
