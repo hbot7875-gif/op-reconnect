@@ -14,6 +14,8 @@ import { throttle } from './auth.ts'
 import { resolveEquippedBadges } from './badge-profile.ts'
 import { RULES_VERSION } from './run-ami-rules.js'
 import { createRunAmiService, ROOM_CODE_ALPHABET } from './run-ami-service.js'
+import { isRunAmiTester } from './run-ami-access.js'
+import { albumService } from './album.ts'
 
 function cryptoRng(): number {
   return crypto.getRandomValues(new Uint32Array(1))[0] / 4294967296
@@ -224,7 +226,9 @@ function makeStore(supabase: SupabaseDB) {
 }
 
 function service(supabase: SupabaseDB) {
-  return createRunAmiService({ store: makeStore(supabase), rng: cryptoRng, randomCode, randomTopic })
+  // In: the closed-test list, or anyone holding all 15 album covers.
+  const allowAgent = async (agentNo: string) => isRunAmiTester(agentNo) || albumService(supabase).isComplete(agentNo).catch(() => false)
+  return createRunAmiService({ store: makeStore(supabase), rng: cryptoRng, randomCode, randomTopic, allowAgent })
 }
 
 export const runAmiState = (sb: SupabaseDB, p: any) => service(sb).getState(agentOf(p))

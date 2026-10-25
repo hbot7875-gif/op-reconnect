@@ -266,10 +266,12 @@ export function cardFaceSvg(c, k) {
     ${value(String(k), 9.6, HB / 2 + .3)}${c === 'w' ? '' : shape(c, 23.6, HB / 2, 3)}`)
 }
 
-/** The back: sixteen era colours in one band, RUN AMI on top. */
+/** The back: sixteen era colours in one band, WAR OF CARDS on top. The
+ *  plate is wider than the old two-word RUN AMI; textLength holds each line
+ *  inside it whatever the font's real widths turn out to be. */
 export function cardBackSvg() {
   const stripes = JOURNEY.map((a, i) => `<rect x="${-40 + i * 9}" y="-20" width="9" height="140" fill="${a}"/>`).join('')
-  return svg(`<g transform="rotate(28 31 44)">${stripes}</g><rect x="9" y="30" width="44" height="28" rx="5" fill="${INK}"/>
-    <text x="31" y="42.5" text-anchor="middle" font-family="Outfit, sans-serif" font-weight="900" font-size="11" fill="#fff">RUN</text>
-    <text x="31" y="53" text-anchor="middle" font-family="Outfit, sans-serif" font-weight="900" font-size="11" fill="#fff">AMI</text>`)
+  return svg(`<g transform="rotate(28 31 44)">${stripes}</g><rect x="6" y="30" width="50" height="28" rx="5" fill="${INK}"/>
+    <text x="31" y="42" text-anchor="middle" font-family="Outfit, sans-serif" font-weight="900" font-size="9.5" textLength="38" lengthAdjust="spacingAndGlyphs" fill="#fff">WAR OF</text>
+    <text x="31" y="52.6" text-anchor="middle" font-family="Outfit, sans-serif" font-weight="900" font-size="9.5" textLength="38" lengthAdjust="spacingAndGlyphs" fill="#fff">CARDS</text>`)
 }

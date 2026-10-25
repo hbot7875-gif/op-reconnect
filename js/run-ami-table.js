@@ -21,8 +21,8 @@
 //
 // Deliberately absent: any public cue that a player is on one card. An
 // opponent on one card looks exactly like an opponent on five, except for
-// the number (and a fan of one). The RUN AMI and CAUGHT! controls never
-// change shape, glow or position with the game state. Only a RUN AMI that
+// the number (and a fan of one). The MIC CHECK! and RUN AMI controls never
+// change shape, glow or position with the game state. Only a MIC CHECK! that
 // was actually called — already public in the log — gets its own moment.
 
 import { el, esc } from './state.js'
@@ -67,7 +67,7 @@ export function createTable(handlers) {
   root.innerHTML = `
     <header class="ra-top">
       <button class="ra-exit" type="button">← Exit</button>
-      <div class="ra-title"><b>RUN AMI</b></div>
+      <div class="ra-title"><b>WAR OF CARDS</b></div>
       <button class="ra-help-q" type="button" aria-label="How to play">?</button>
       <span class="ra-code" aria-label="Room code"></span>
     </header>
@@ -98,8 +98,10 @@ export function createTable(handlers) {
         <button class="ra-btn ra-btn-pass" type="button">Pass</button>
         <button class="ra-btn ra-btn-play" type="button">Play</button>
         <span class="ra-controls-gap"></span>
-        <button class="ra-btn ra-btn-runami" type="button">RUN AMI</button>
-        <button class="ra-btn ra-btn-catch" type="button">CAUGHT!</button>
+        <button class="ra-btn ra-btn-runami" type="button" aria-describedby="ra-hint-mic">MIC CHECK!</button>
+        <button class="ra-btn ra-btn-catch" type="button" aria-describedby="ra-hint-run">RUN AMI</button>
+        <span class="ra-call-hint" id="ra-hint-mic">As you play your second-to-last card</span>
+        <span class="ra-call-hint" id="ra-hint-run">On anyone left on 1 card who didn't call</span>
       </div>
       <div class="ra-foot"><span class="ra-bomb"></span><span class="ra-private" aria-live="polite"><span class="ra-called-slot"></span><span class="ra-note-slot"></span></span></div>
     </div>`
@@ -313,7 +315,7 @@ export function createTable(handlers) {
     $('.ra-bomb').textContent = watching
       ? `👀 Watching${w > 1 ? ` with ${w - 1} other${w === 2 ? '' : 's'}` : ''}`
       : `${handlers.bombLabel?.() || ''}${w ? ` · 👀 ${w} watching` : ''}`
-    $('.ra-called-slot').innerHTML = view.me.runAmiCalled ? '<span class="ra-called">RUN AMI ✓</span>' : ''
+    $('.ra-called-slot').innerHTML = view.me.runAmiCalled ? '<span class="ra-called">MIC CHECK ✓</span>' : ''
   }
 
   /** The feed's mark for one event: the card that was played (with the
@@ -419,11 +421,11 @@ export function createTable(handlers) {
       if (view) { paintMe(); paintTable(); paintSelection() }
     },
     clearSelection() { selected = null; if (view) paintSelection() },
-    flashPrivate(text) {
+    flashPrivate(text, ms = 1600) {
       const node = el('span', 'ra-private-note', esc(text))
       const slot = $('.ra-note-slot')
       slot.replaceChildren(node)
-      setTimeout(() => node.remove(), 1600)
+      setTimeout(() => node.remove(), ms)
     },
     update(next) {
       offset = (next.serverNow || Date.now()) - Date.now()

@@ -232,7 +232,7 @@
 .ra-turnbar.is-skipped::after { top: 50%; left: auto; right: 44px; margin-top: -11px; }
 .ra-pod.is-skipped { opacity: .62; }
 .ra-pod.is-caught, .ra-me.is-caught { border-color: var(--v-red-line); }
-.ra-pod.is-calling::before { content: 'RUN AMI!'; position: absolute; z-index: 5; left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%);
+.ra-pod.is-calling::before { content: 'MIC CHECK!'; position: absolute; z-index: 5; left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%);
   padding: 3px 9px; border-radius: 999px; background: var(--v-violet); color: #fff; white-space: nowrap;
   font: 700 10px/1.3 var(--disp); letter-spacing: 1.2px; box-shadow: 0 4px 14px rgba(139,92,246,.45); }
 .ra-pod[data-pos="top"].is-calling::before { bottom: auto; top: calc(100% + 6px); }
@@ -385,21 +385,25 @@
 .ra-btn-draw, .ra-btn-pass, .ra-btn-play { grid-column: span 2; }
 .ra-btn-runami, .ra-btn-catch { grid-column: span 3; }
 .ra-controls-gap { display: none; }
+/* When each call is for. Always shown, never changes: the buttons must give
+   nothing away about anyone's hand, so the help is fixed text, not a cue. */
+.ra-call-hint { grid-column: span 3; margin-top: -2px; padding: 0 4px; text-align: center;
+  font-size: 10.5px; line-height: 1.3; color: var(--v-ink-3); }
 .ra-btn { font-family: var(--disp); font-weight: 700; font-size: 11.5px; letter-spacing: 1.1px; text-transform: uppercase;
   color: var(--v-ink-1); background: var(--v-surface-2); border: 1px solid var(--v-line-2); border-radius: 10px;
   padding: 10px 11px; cursor: pointer; min-height: 40px; }
 .ra-btn:disabled { opacity: .38; cursor: default; }
 .ra-btn-play { background: var(--v-ink-1); color: #0e0d15; border-color: transparent; }
-/* RUN AMI and CAUGHT! never change with game state: same colour, same size,
+/* MIC CHECK! and RUN AMI never change with game state: same colour, same size,
    same place, enabled whenever you are in the round. */
 .ra-btn-runami, .ra-btn-catch { background: transparent; }
 @media (max-width: 359px) { .ra-btn { padding: 9px 8px; font-size: 10.5px; letter-spacing: .8px; } }
 
-.ra-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 22px; }
-.ra-bomb { font-family: var(--mono); font-size: 11px; color: var(--v-ink-3); letter-spacing: .8px; }
-.ra-private { display: flex; gap: 6px; align-items: center; }
+.ra-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; min-height: 22px; }
+.ra-bomb { font-family: var(--mono); font-size: 11px; color: var(--v-ink-3); letter-spacing: .8px; white-space: nowrap; }
+.ra-private { display: flex; flex: 1 1 200px; gap: 6px; align-items: center; min-width: 0; justify-content: flex-end; }
 .ra-called { font-family: var(--mono); font-size: 11px; color: var(--ra-g); border: 1px solid color-mix(in srgb, var(--ra-g) 50%, transparent); border-radius: 999px; padding: 2px 8px; }
-.ra-private-note { font-size: 11.5px; color: var(--v-ink-2); }
+.ra-private-note { font-size: 11.5px; line-height: 1.35; color: var(--v-ink-2); text-align: right; }
 /* Motion for the moments of play (js/run-ami-table.js animate). Short and
    quiet; with reduced motion the state still changes, just without them. */
 @media (prefers-reduced-motion: no-preference) {
@@ -628,3 +632,103 @@
   .ra-controls { max-width: 560px; width: 100%; margin: 0 auto; }
   .ra-screen:has(.ra-match) .ra-chat { top: 132px; right: max(16px, calc(50vw - 540px + 16px)); width: 290px; max-height: min(70vh, 560px); }
 }
+
+
+/* ── Run ARMY: the City's games corner (js/run-army.js) ──────────── */
+.rarmy-sheet { text-align: left; }
+.rarmy-eyebrow { display: inline-block; font-family: var(--mono); font-size: 10px; letter-spacing: 1.6px; text-transform: uppercase;
+  color: var(--v-violet-hi); border: 1px solid var(--v-violet-line); background: var(--v-tint-violet); border-radius: 999px; padding: 3px 10px; }
+.rarmy-sheet h3 { margin: 8px 0 2px; font-family: var(--disp); letter-spacing: 2px; }
+.rarmy-lede { margin: 0 0 14px; font-size: 13.5px; color: var(--v-ink-2); }
+.rarmy-game { display: grid; grid-template-columns: 92px minmax(0, 1fr); align-items: center; gap: 12px; margin-top: 10px; padding: 12px;
+  border-radius: var(--r-lg); background: var(--v-surface-1); border: 1px solid var(--v-line-1); }
+.rarmy-game.is-open { border-color: var(--v-violet-line); }
+.rarmy-game-text { min-width: 0; }
+.rarmy-game-text b { display: block; font-family: var(--disp); font-size: 14px; letter-spacing: 1.5px; color: var(--v-ink-1); }
+.rarmy-game-text span { display: block; margin-top: 2px; font-size: 12px; color: var(--v-ink-3); }
+.rarmy-lock { margin: 8px 0 0; font-size: 12.5px; line-height: 1.4; color: var(--v-ink-2); }
+.rarmy-fan { display: flex; justify-content: center; padding: 4px 0 6px; }
+.rarmy-fan .ra-card { --ra-cw: 40px; --ra-ch: 57px; margin-left: -16px; border-radius: 6px; transform-origin: 50% 120%; box-shadow: 0 4px 10px rgba(0,0,0,.45); }
+.rarmy-fan .ra-card:first-child { margin-left: 0; transform: rotate(-12deg) translateY(3px); }
+.rarmy-fan .ra-card:last-child { transform: rotate(12deg) translateY(3px); }
+.rarmy-game.is-locked .rarmy-fan { filter: saturate(.55) brightness(.75); }
+.rarmy-play { grid-column: 1 / -1; width: 100%; margin-top: 2px !important; }
+.rarmy-game.is-soon { background: transparent; border-style: dashed; }
+.rarmy-soon-icon { justify-self: center; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px;
+  border-radius: 12px; border: 1px dashed var(--v-line-2); color: var(--v-ink-3); font-size: 18px; }
+.rarmy-sheet > .btn { width: 100%; margin-top: 14px; }
+.rarmy-album-icon { justify-self: center; font-size: 30px; line-height: 1; }
+.rarmy-album .rarmy-album-open { background: var(--v-surface-2); border: 1px solid var(--v-line-2); color: var(--v-ink-1); }
+
+/* ── Album (js/album.js) ─────────────────────────────────────────── */
+.al-sheet { text-align: left; }
+.al-sheet h3 { margin: 8px 0 10px; font-family: var(--disp); letter-spacing: 1.5px; outline: none; }
+.al-loading { margin: 24px 0; text-align: center; color: var(--v-ink-3); font-size: 13px; }
+.al-progress { display: flex; align-items: center; gap: 12px; }
+.al-progress b { flex: none; font-family: var(--disp); font-size: 22px; color: var(--v-ink-1); }
+.al-progress b small { font-size: 13px; color: var(--v-ink-3); }
+.al-bar { position: relative; display: block; flex: 1; height: 6px; margin-top: 6px; border-radius: 4px; background: rgba(255,255,255,.07); overflow: hidden; }
+.al-progress .al-bar { margin-top: 0; }
+.al-bar i { position: absolute; inset: 0; transform-origin: left; transform: scaleX(var(--p, 0)); background: var(--v-violet); border-radius: 4px; }
+.al-why { margin: 10px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--v-ink-3); }
+.al-me { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 8px 10px; border-radius: 10px; background: var(--v-surface-1); border: 1px solid var(--v-line-1); }
+.al-me span { flex: 1; min-width: 0; font-size: 12px; color: var(--v-ink-3); }
+.al-me b { font-family: var(--mono); font-size: 14px; letter-spacing: 1px; color: var(--v-ink-1); }
+.al-copy { flex: none; padding: 5px 11px; border-radius: 999px; border: 1px solid var(--v-line-2); background: none; color: var(--v-ink-2); font-size: 12px; cursor: pointer; }
+.al-me + .al-gift-note { margin: 6px 0 12px; }
+.al-today { margin: 8px 0 14px; font-size: 13px; line-height: 1.45; color: var(--v-ink-2); }
+.al-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 10px; }
+@media (min-width: 520px) { .al-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+.al-cover { display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; text-align: center; }
+.al-cover b { font-size: 11px; font-weight: 600; line-height: 1.25; color: var(--v-ink-1); overflow-wrap: anywhere; }
+.al-cover.is-missing b { color: var(--v-ink-3); font-weight: 400; }
+.al-art .ra-card { --ra-cw: 62px; --ra-ch: 88px; }
+.al-slot { display: flex; align-items: center; justify-content: center; width: 62px; height: 88px; border-radius: 9px;
+  border: 1px dashed var(--v-line-2); background: rgba(255,255,255,.02); color: var(--v-ink-3); font: 700 20px var(--disp); }
+.al-tag { font-style: normal; font-family: var(--mono); font-size: 9.5px; letter-spacing: .4px; color: var(--v-violet-hi);
+  border: 1px solid var(--v-violet-line); border-radius: 999px; padding: 1px 6px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.al-tag.is-gift { color: var(--v-gold); border-color: var(--v-gold-line); }
+.al-gift { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--v-line-1); }
+.al-gift h4 { margin: 0 0 8px; font-family: var(--disp); font-size: 12.5px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--v-ink-1); }
+.al-gift-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.al-pick { margin: 0; padding: 0; border: 0; }
+.al-pick legend { padding: 0; margin-bottom: 4px; }
+.al-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.al-chip { position: relative; cursor: pointer; }
+.al-chip input { position: absolute; opacity: 0; pointer-events: none; }
+.al-chip span { display: inline-block; padding: 7px 11px; border-radius: 999px; border: 1px solid var(--v-line-2); background: var(--v-surface-1);
+  font-size: 12.5px; color: var(--v-ink-2); }
+.al-chip input:checked + span { border-color: var(--v-violet-line); background: var(--v-tint-violet); color: var(--v-violet-hi); }
+.al-chip input:focus-visible + span { outline: 2px solid var(--v-violet-hi); outline-offset: 2px; }
+.al-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; font-size: 11.5px; color: var(--v-ink-3); }
+.al-field input { min-width: 0; height: 40px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--v-line-2);
+  background: var(--v-surface-1); color: var(--v-ink-1); font-size: 16px; }
+.al-send { grid-column: 1 / -1; width: 100%; margin-top: 2px !important; }
+.al-gift-note { margin: 8px 0 0; font-size: 12px; color: var(--v-ink-3); }
+.al-gift-err { margin: 8px 0 0; font-size: 12.5px; color: var(--v-gold); }
+.al-sheet > .btn { width: 100%; margin-top: 16px; }
+
+/* Run ARMY's map marker: a small dot until the agent has opened it once. */
+.cm-tool-new { fill: var(--ra-r); stroke: #0a0910; stroke-width: .4; pointer-events: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .cm-tool.is-run-army.is-new .cm-tool-halo { animation: rarmyHalo 2.4s ease-in-out infinite; }
+}
+@keyframes rarmyHalo { 50% { fill: rgba(139,92,246,.26); } }
+
+/* The one-time launch pop-up (run-army.js checkForRunAmiLaunch). */
+.rarmy-launch h3 { outline: none; }
+.rarmy-launch-fan { display: flex; justify-content: center; padding: 14px 0 16px; }
+.rarmy-launch-fan .ra-card { --ra-cw: 58px; --ra-ch: 82px; margin-left: -18px; transform-origin: 50% 120%; box-shadow: 0 8px 18px rgba(0,0,0,.5); }
+.rarmy-launch-fan .ra-card:first-child { margin-left: 0; transform: rotate(-12deg) translateY(4px); }
+.rarmy-launch-fan .ra-card:last-child { transform: rotate(12deg) translateY(4px); }
+.rarmy-launch-lede { margin: 0 0 12px; font-size: 14px; line-height: 1.5; color: var(--v-ink-1); }
+.rarmy-launch-lede b { color: var(--v-violet-hi); }
+.rarmy-launch-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.rarmy-launch-steps li { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 8px; align-items: start; padding: 9px 10px;
+  border-radius: 12px; background: var(--v-surface-1); border: 1px solid var(--v-line-1); }
+.rarmy-launch-steps span { font-size: 18px; line-height: 1.3; text-align: center; }
+.rarmy-launch-steps p { margin: 0; font-size: 13px; line-height: 1.45; color: var(--v-ink-2); }
+.rarmy-launch-steps b { color: var(--v-ink-1); font-weight: 600; }
+.rarmy-launch-open { margin: 12px 0 0; font-size: 13px; color: var(--ra-g); text-align: center; }
+.rarmy-launch .btn { width: 100%; margin-top: 12px; }
+.rarmy-launch .btn + .btn { margin-top: 8px; }

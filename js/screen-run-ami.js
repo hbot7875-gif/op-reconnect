@@ -364,7 +364,7 @@ function chooseColor(onPick) {
 function playCard(cardId, card, runAmi) {
   const send = (color) => {
     table?.clearSelection()
-    // A registered call shows as the persistent RUN AMI ✓ chip (from the
+    // A registered call shows as the persistent MIC CHECK ✓ chip (from the
     // server's view), so no extra note here.
     act('play', { cardId, color, runAmi })
   }
@@ -384,11 +384,11 @@ const tableHandlers = {
   onRunAmi: (cardId, card) => {
     if (cardId) { playCard(cardId, card, true); return }
     act('call').then((res) => {
-      if (res?.reply?.runAmi !== 'called') table?.flashPrivate('Nothing to call')
+      if (res?.reply?.runAmi !== 'called') table?.flashPrivate('Nothing to call. MIC CHECK! is for your second-to-last card.', 2800)
     })
   },
   onCatch: () => act('catch').then((res) => {
-    if (res?.reply) table?.flashPrivate(res.reply.caught ? 'Caught! +2' : 'Nothing to catch')
+    if (res?.reply) table?.flashPrivate(res.reply.caught ? 'RUN AMI! They draw 2.' : 'Nobody to catch. RUN AMI is for an agent on 1 card who didn’t call.', 2800)
   }),
   onExit: () => {
     const sheet = el('div', 'sheet ra-sheet')

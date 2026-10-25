@@ -25,7 +25,7 @@ function bombBlock(active, ctx) {
       <b>${active ? 'ACTIVE ⚡' : 'DARK'}</b>
     </div>
     <span class="ra-bomb-meter" style="--charge:${active ? frac.toFixed(3) : 0}" aria-hidden="true"><i></i></span>
-    <p>${active ? 'Your Bomb powers access to the Game Room.' : 'Recharge your ARMY Bomb to enter RUN AMI.'}</p>`
+    <p>${active ? 'Your Bomb powers access to the Game Room.' : 'Recharge your ARMY Bomb to enter War of Cards.'}</p>`
   if (!active) {
     const recharge = el('button', 'btn btn-primary ra-recharge', 'Recharge ARMY Bomb')
     recharge.type = 'button'
@@ -40,7 +40,7 @@ function header(backLabel, onBack) {
   const back = el('button', 'ra-back', `← ${esc(backLabel)}`)
   back.type = 'button'
   back.onclick = onBack
-  head.append(back, el('div', 'ra-brand', '<b>RUN AMI</b>'))
+  head.append(back, el('div', 'ra-brand', '<b>WAR OF CARDS</b>'))
   return head
 }
 

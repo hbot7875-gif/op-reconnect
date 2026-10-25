@@ -436,8 +436,9 @@ export function createRunAmiService({ store, now = () => Date.now(), rng, random
 
   // Every player route checks the agent first. Internal calls between these
   // functions (createRoom → getState) use the ungated versions.
-  const gate = (fn) => (agentNo, ...rest) =>
-    (allowAgent(agentNo) ? fn(agentNo, ...rest) : Promise.resolve({ success: false, error: 'not_invited' }))
+  // allowAgent may answer now or later (run-ami.ts asks the Album).
+  const gate = (fn) => async (agentNo, ...rest) =>
+    ((await allowAgent(agentNo)) ? fn(agentNo, ...rest) : { success: false, error: 'not_invited' })
 
   return {
     getState: gate(getState),

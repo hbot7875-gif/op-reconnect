@@ -64,7 +64,7 @@ test('"Now restoring" is flat violet on a Surface 3 track', () => {
 test('City moves the existing ReConnect notice below City News', () => {
   const news = world.indexOf('wrap.appendChild(cityFeedCard(state))')
   const notice = world.indexOf("document.getElementById('hudReconnectStatus')")
-  const sweep = world.indexOf('wrap.appendChild(sideMissionsPanel(state.sideMissions))')
+  const sweep = world.indexOf('wrap.appendChild(sideMissionsPanel(state.sideMissions')
   assert.ok(news >= 0 && news < notice && notice < sweep)
   assert.match(world.slice(notice, sweep), /removeAttribute\('id'\)/)
   assert.match(world.slice(notice, sweep), /classList\.add\('city-reconnect-notice'\)/)

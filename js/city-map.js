@@ -837,5 +837,21 @@ export function renderCityMap(wards, districts, onSelect, homeFraction, onCandyS
         : opts.backupState === 'wanted' ? 'is-backup-wanted' : 'is-backup-quiet'))
   }
 
+  // Run ARMY — the City's games corner, on the south-west diagonal: the one
+  // seam left between the bottom pair (VMA / Golden Corner) and the Helping
+  // Zone, 45° from each. Always open; what's inside it decides its own
+  // access (run-army.js). Two words, so toolMarker splits the label the way
+  // it does for Helping Zone at this kind of angle.
+  // opts.runArmyNew adds a small dot until the agent has opened it once.
+  if (opts.onRunArmy) {
+    const angle = (Math.PI * 3) / 4
+    const marker = toolMarker(angle, '🎮', 'Run ARMY', opts.onRunArmy, `is-run-army${opts.runArmyNew ? ' is-new' : ''}`)
+    if (opts.runArmyNew) {
+      const [mx, my] = pt(angle, 49)
+      marker.appendChild(n('circle', { cx: (mx + 3.2).toFixed(2), cy: (my - 3.2).toFixed(2), r: 1.25, class: 'cm-tool-new' }))
+    }
+    svg.appendChild(marker)
+  }
+
   return svg
 }

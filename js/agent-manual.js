@@ -8,9 +8,12 @@
 // Cell and 2 hours per Cell (charge-economy.ts), 10-hour Era Cards, the
 // 5/10/15/20/30 goal-stream XP cadence (config.ts), +10/+30 Signal Sweep
 // (side-missions.ts), +50 district restoration (config.ts), 24-hour invite
-// expiry (reconnect-missions.ts), and the 7/14-day safety clocks.
+// expiry (reconnect-missions.ts), and the 7/14-day safety clocks. Run ARMY
+// and the Album follow album-rules.js: 15 covers, one per daily Signal Sweep,
+// one gift sent and one received a day, gifting from day 3.
 
 import { el, hideOverlay } from './state.js'
+import { ALBUM_SIZE, ALBUM_GIFT_MIN_DAYS } from '../supabase/functions/op-reconnect/lib/album-rules.js'
 
 const QUICK_START = [
   ['1', 'Check your ARMY Bomb', 'Open City and tap the Bomb. Feed it a Charge Cell, or switch on Auto Feed so it can use one when power runs out.'],
@@ -21,9 +24,16 @@ const QUICK_START = [
 
 const XP_SOURCES = [
   ['🎵', 'Assigned goal streams', 'School/Exam: 5 streams = 1 XP · Easy: 10 · Easy+: 15 · Medium: 20 · Hard: 30. Only streams for your active Track and Album Goals count.'],
-  ['📡', 'Signal Sweep', "Stream Wild Flower, Don't Say You Love Me, Haegeum, and Killin' It Girl. All four once before midnight KST earns +10 XP; all four at 20 streams in one week earns another +30 XP."],
+  ['📡', 'Signal Sweep', "Stream Wild Flower, Don't Say You Love Me, Haegeum, and Killin' It Girl. All four once before midnight KST earns +10 XP and one new BTS album cover; all four at 20 streams in one week earns another +30 XP."],
   ['🏙️', 'Restore a district', 'Complete every mission on its board to bring it online and earn +50 XP.'],
   ['🚨', 'Red Zone', 'Stream at least 7 times to qualify. If the network wins, the displayed XP pool is split among all qualifying agents.'],
+]
+
+const RUN_ZONE = [
+  ['🎮', 'Run ARMY', 'The games corner on the City map, bottom left. War of Cards, a last-card game for 2–4 agents, is the first game, with more coming.'],
+  ['💿', 'Album', `${ALBUM_SIZE} BTS album covers, one for each era in the War of Cards deck. Each day you finish Signal Sweep, you collect one you don't have yet.`],
+  ['🎁', 'Gifts', `Once a day you can share a copy of a cover with a friend who doesn't have it. You keep yours. Each agent can receive one gift a day. Gifting opens ${ALBUM_GIFT_MIN_DAYS} days after you join. Your agent number is in the Album and in Settings.`],
+  ['🃏', 'Play War of Cards', `Collect all ${ALBUM_SIZE} covers and War of Cards opens for you in Run ARMY.`],
 ]
 
 const TEAM_STEPS = [
@@ -106,6 +116,10 @@ export function agentManualSheet() {
   extras.body.appendChild(infoRow('🪽', 'Wings', 'The Magic Shop sells up to 3 Wings a day for 1 XP total. Candy Star spends 1 Wing each time it generates a playlist.'))
   extras.body.appendChild(infoRow('🎫', 'Ticket', 'Unlocks at Level 7 after restoring 3 districts while holding 50 XP. Claiming it does not spend that XP.'))
   content.appendChild(extras.section)
+
+  const games = detailSection('Run ARMY and the Album')
+  for (const [icon, title, body] of RUN_ZONE) games.body.appendChild(infoRow(icon, title, body))
+  content.appendChild(games.section)
 
   const safety = detailSection('Deadlines and account safety')
   safety.body.appendChild(infoRow('⏳', 'District deadline', 'If the 7-day timer expires, that attempt resets and its goal progress is cleared. Start the district again whenever you like; XP, Charges, merch, and badges remain safe.'))

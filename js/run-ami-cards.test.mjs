@@ -26,8 +26,8 @@ test('other agents keep the third person', () => {
 })
 
 test('being caught reads "caught you", lower case', () => {
-  assert.equal(logLine({ type: 'PLAYER_CAUGHT', seat: 1, target: 0, penalty: 2 }, nameOf(0), 0), 'KOYA caught you · +2')
-  assert.equal(logLine({ type: 'PLAYER_CAUGHT', seat: 0, target: 2, penalty: 2 }, nameOf(0), 0), 'You caught TATA · +2')
+  assert.equal(logLine({ type: 'PLAYER_CAUGHT', seat: 1, target: 0, penalty: 2 }, nameOf(0), 0), 'KOYA called RUN AMI on you · +2')
+  assert.equal(logLine({ type: 'PLAYER_CAUGHT', seat: 0, target: 2, penalty: 2 }, nameOf(0), 0), 'You called RUN AMI on TATA · +2')
 })
 
 test('without a seat the old wording is unchanged', () => {

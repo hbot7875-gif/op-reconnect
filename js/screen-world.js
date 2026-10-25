@@ -38,6 +38,9 @@ import { cityFeedCard } from './city-feed.js'
 import { openSuggestions } from './suggestions.js'
 import { openMagicShop } from './magic-shop.js'
 import { openHelpingZone } from './helping-zone.js'
+import { openRunArmy, runArmyIsNew } from './run-army.js'
+import { announceNewCover } from './album.js'
+import { albumEra } from '../supabase/functions/op-reconnect/lib/album-rules.js'
 import { vmaEventCard, openVmaMission } from './vma.js'
 import { votingEventCard } from './voting-view.js'
 import { redZoneSheet, defuseResultSheet, defenderCommsSheet, getCommsSeen } from './bomb-sheet.js'
@@ -56,6 +59,7 @@ export function renderWorld(container, state) {
   container.innerHTML = ''
   const wrap = el('div', 'world-screen')
   const b = state.bomb || { charge: 0, defuse: null, brownout: false }
+  announceNewCover(state.album)
 
   const bc = broadcastCards(state)
   if (bc.children.length) wrap.appendChild(bc)
@@ -130,7 +134,7 @@ export function renderWorld(container, state) {
     wrap.appendChild(reconnectNotice)
   }
 
-  if (state.sideMissions) wrap.appendChild(sideMissionsPanel(state.sideMissions))
+  if (state.sideMissions) wrap.appendChild(sideMissionsPanel(state.sideMissions, state.album))
 
   // Personal weekly Era Cards are the Bomb's emergency reserve. This is not
   // the community/all-time Era Timeline: every count here belongs to this
@@ -160,7 +164,16 @@ function weekRangeLabel(weekDates) {
 }
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
-function sideMissionsPanel(mission) {
+/** Signal Sweep's album reward (album-rules.js): each day's sweep also
+ *  brings one new BTS album cover until all 15 are collected. Says so where
+ *  the player earns it, and names the cover once today's has landed. */
+function albumRewardRow(album, total) {
+  if (!album || album.complete) return ''
+  const era = album.todayGoalEra ? albumEra(album.todayGoalEra) : null
+  return `<div class="side-reward-row${era ? ' is-done' : ''}"><span>Album</span><i>${era ? esc(era.name) : `Complete all ${total} today`}</i><b>+1 cover</b></div>`
+}
+
+function sideMissionsPanel(mission, album = null) {
   const done = Number(mission.todayDoneCount) || 0
   const total = mission.tracks?.length || 4
   const weekGaps = (mission.tracks || []).filter((t) => !t.weeklyDone).length
@@ -182,6 +195,7 @@ function sideMissionsPanel(mission) {
     <div class="side-mission-rewards">
       <div class="side-reward-row${mission.todayDone ? ' is-done' : ''}"><span>Today</span><i>${mission.todayDone ? 'Secured' : `Complete all ${total}`}</i><b>+${mission.xpOnComplete} XP</b></div>
       <div class="side-reward-row${mission.weekDone ? ' is-done' : ''}"><span>This week</span><i>${weekNote}</i><b>+${mission.weeklyXpOnComplete} XP</b></div>
+      ${albumRewardRow(album, total)}
     </div>
     <p class="side-mission-reset" title="Daily resets at midnight KST · week resets Monday KST · this week: ${esc(weekRangeLabel(mission.weekDates))}">Resets at midnight KST &middot; week ends Monday</p>`
 
@@ -458,7 +472,7 @@ function cityPlan(state) {
       arirangPartyIsComplete(),
       arirangPartyIsCounting(),
     ] : [null, false, null, false, false]),
-    { ...backupMapOpts(state), ...(jiminRoom ? { birthdayIcon: '🌙', birthdayLabel: 'Jimin Day Party', birthdayAtTop: true } : {}),
+    { ...backupMapOpts(state), onRunArmy: () => openRunArmy(), runArmyNew: runArmyIsNew(), ...(jiminRoom ? { birthdayIcon: '🌙', birthdayLabel: 'Jimin Day Party', birthdayAtTop: true } : {}),
       // MAMA 2026: on the map exactly while the server sends its summary
       // (voting → verification → 48h of final result), then gone by itself.
       ...(state.voting ? { voting: { label: 'MAMA 2026', live: state.voting.phase === 'open', onOpen: (origin) => goVoting(origin) } } : {}) }))

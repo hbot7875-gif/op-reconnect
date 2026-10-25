@@ -12,6 +12,7 @@ import { renderOnboarding } from './ui-onboarding.js'
 import { renderHud, renderTabbar } from './ui-hud.js'
 import { startMoonReviewCheck } from './moon-review-dot.js'
 import { renderWorld, renderGoldenCorner, renderSerendipityRoom, checkForBirthdayEraPopup } from './screen-world.js'
+import { checkForRunAmiLaunch } from './run-army.js'
 import { birthdayCompleteMessage } from './birthday-era-popup.js'
 import { renderRecelebrateParty } from './screen-recelebrate.js'
 import { renderWard, teardownWard } from './screen-ward.js'
@@ -171,6 +172,7 @@ subscribe((state) => {
   checkForBadgeUnlocks(state)
   checkForExamModeAnnounce(state)
   checkForBirthdayEraPopup(state)
+  checkForRunAmiLaunch(state)
   checkForMamaTeamPopup(state)
   checkForVotingAlerts(state.voting?.alerts)
   for (const eraId of state.agentCharge?.newlyLitEraIds || []) {

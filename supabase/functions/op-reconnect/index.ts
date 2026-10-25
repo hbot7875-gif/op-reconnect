@@ -70,6 +70,7 @@ import {
 } from './lib/vote-campaign.ts'
 import { getDearDiary, getDearDiaryArchive, getDearDiaryPreference, keepDearDiaryMoment, saveDearDiaryDecorations, saveDearDiaryNote, saveDearDiaryTheme } from './lib/dear-diary.ts'
 import { runAmiState, runAmiCreateRoom, runAmiJoinRoom, runAmiWatchRoom, runAmiLeaveRoom, runAmiStart, runAmiAct, runAmiChat, cronRunAmiSweep } from './lib/run-ami.ts'
+import { albumState, albumGift } from './lib/album.ts'
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -158,6 +159,11 @@ const ROUTES: Record<string, Route> = {
   runAmiAct: { auth: 'agent', handler: (sb, p) => runAmiAct(sb, p) },
   // Room chat (lib/run-ami-chat-rules.js): same gate and seat check; never touches the game.
   runAmiChat: { auth: 'agent', handler: (sb, p) => runAmiChat(sb, p) },
+  // The Album (lib/album.ts): your own covers, and sharing a copy of one.
+  // Exactly-once rules (one goal cover and one gift each way per KST day)
+  // live in the migration's RPCs, not here.
+  albumState: { auth: 'agent', handler: (sb, p) => albumState(sb, p) },
+  albumGift: { auth: 'agent', handler: (sb, p) => albumGift(sb, p) },
   startDistrict: { auth: 'agent', handler: (sb, p) => startDistrict(sb, p) },
   extendDistrictDeadline: { auth: 'agent', handler: (sb, p) => extendDistrictDeadline(sb, p) },
   resetLapsedDistrict: { auth: 'agent', handler: (sb, p) => resetLapsedDistrict(sb, p) },

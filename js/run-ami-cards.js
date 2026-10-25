@@ -69,11 +69,11 @@ export function logLine(e, nameOf, mySeat = null) {
     case 'TURN_PASSED': return who ? `${who} passed` : null
     case 'TURN_SKIPPED': return who ? `${who} ${verb('was', 'were')} skipped` : null
     case 'DIRECTION_REVERSED': return 'Direction reversed'
-    case 'RUN_AMI_CALLED': return who ? `${who} called RUN AMI.` : null
+    case 'RUN_AMI_CALLED': return who ? `${who} called MIC CHECK!` : null
     case 'PLAYER_CAUGHT': {
       if (!who) return null
       const target = e.target === mySeat ? 'you' : nameOf(e.target)
-      return `${who} caught ${target} · +${e.penalty}`
+      return `${who} called RUN AMI on ${target} · +${e.penalty}`
     }
     case 'TURN_TIMEOUT': return null // the auto-draw line already says it
     case 'PLAYER_FORFEITED':
@@ -90,8 +90,8 @@ export function logLine(e, nameOf, mySeat = null) {
 }
 
 export const ERRORS = {
-  bomb_dark: 'Your ARMY Bomb is dark. Recharge it to enter RUN AMI.',
-  not_invited: 'RUN AMI is in a closed test right now. It opens to everyone soon.',
+  bomb_dark: 'Your ARMY Bomb is dark. Recharge it to enter War of Cards.',
+  not_invited: 'War of Cards is in a closed test right now. Collect all 15 album covers to play.',
   chat_slow: 'Slow down a little, then try again.',
   chat_text: 'That message can’t be sent.',
   room_not_found: 'No open room with that code.',

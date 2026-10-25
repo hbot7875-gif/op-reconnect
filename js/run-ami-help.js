@@ -26,7 +26,7 @@ export function howToPlayHtml() {
   const actions = ACTIONS.map(([card, name, text]) => `
     <li class="ra-help-action">${cardHtml(card)}<span><b>${esc(name)}</b>${esc(text)}</span></li>`).join('')
   return `
-    <h3>How to play</h3>
+    <h3>How to play War of Cards</h3>
     <p class="ra-help-lede">Be the first agent to play every card in your hand.</p>
 
     <h4>Get a room</h4>
@@ -48,17 +48,17 @@ export function howToPlayHtml() {
     <ul class="ra-help-actions">${actions}</ul>
     <p class="ra-help-note">No stacking: a Draw Two can't be passed on with another one.</p>
 
-    <h4>RUN AMI!</h4>
+    <h4>MIC CHECK!</h4>
     <ul>
-      <li>When you play your second-to-last card, call <b>RUN AMI</b>.</li>
-      <li>Easiest: select that card and tap <b>RUN AMI</b>. It plays the card and calls in one go.</li>
-      <li>Or play the card, then tap <b>RUN AMI</b> within ${sec(cfg.runAmiGraceMs)}.</li>
+      <li>When you play your second-to-last card, call <b>MIC CHECK!</b></li>
+      <li>Easiest: select that card and tap <b>MIC CHECK!</b> It plays the card and calls in one go.</li>
+      <li>Or play the card, then tap <b>MIC CHECK!</b> within ${sec(cfg.runAmiGraceMs)}.</li>
     </ul>
 
-    <h4>CAUGHT!</h4>
+    <h4>RUN AMI!</h4>
     <ul>
       <li>If an agent drops to one card without calling, they get a ${Math.round(cfg.runAmiGraceMs / 1000)}-second grace period.</li>
-      <li>After that, anyone can tap <b>CAUGHT!</b>. The forgetful agent draws ${cfg.catchPenalty}.</li>
+      <li>After that, anyone can tap <b>RUN AMI</b>. The forgetful agent draws ${cfg.catchPenalty}.</li>
       <li>Be quick: the chance ends as soon as anyone plays, draws or passes.</li>
       <li>Tapping when there's nobody to catch does nothing, and nobody sees it.</li>
     </ul>

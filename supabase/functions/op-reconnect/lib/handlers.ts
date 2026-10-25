@@ -6,6 +6,7 @@ import type { GameContent, SupabaseDB, DistrictRow } from './config.ts'
 import { loadContent, rankFor, xpRules, restorationDays, streamsPerXpFor, PERSONAL_COUNT_CAP, trackArtistOverrides } from './config.ts'
 import { ensureDailyRollups, computeStreak, awardStreakBadges, totalXp, spendableXp, goalXpCountForDate } from './derive.ts'
 import { awardDailySideMissionXp, awardWeeklySideMissionXp, buildSideMissions } from './side-missions.ts'
+import { albumForState } from './album.ts'
 import { freezeGoals, computeBaseline, districtProgress, districtDeadline, filesRevealedCount, albumGoalStreamTotal, DEADLINE_EXTENSION_DAYS, lapseChoiceOpen, LAPSE_CHOICE_DAYS } from './districts.ts'
 import { resolveReconnectStatus } from './reconnect-goal.ts'
 import { todayKst, nextKstMidnightUtc, kstDateOf } from './kst.ts'
@@ -201,6 +202,9 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
   const sideMissions = buildSideMissions(rollups, today, allowlist, trackArtistOverrides(content))
   await awardDailySideMissionXp(supabase, player.agent_no, today, sideMissions)
   await awardWeeklySideMissionXp(supabase, player.agent_no, sideMissions)
+  // The Album (album.ts): finishing today's Signal Sweep also brings one
+  // album cover the agent doesn't have yet, once per KST day.
+  const album = await albumForState(supabase, player.agent_no, today, !!sideMissions.todayDone)
 
   // ── Active district progress (+ completion latch) ──────────
   let activeDistrict: any = null
@@ -700,6 +704,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     onlineNow,
     districtMessages,
     sideMissions,
+    album,
     today: {
       kstDate: today,
       countedStreams: counted,

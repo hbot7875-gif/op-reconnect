@@ -271,7 +271,7 @@ function paintSections(body, state) {
   // RUN AMI's closed production test. The server refuses everyone else
   // (run-ami-access.js); this only decides who sees the way in.
   const runAmiRow = {
-    icon: 'cards', name: 'RUN AMI · Test Play', value: 'TEST', chip: 'neutral',
+    icon: 'cards', name: 'War of Cards · Test Play', value: 'TEST', chip: 'neutral',
     body: 'The last-card Game Room, before it opens to everyone.',
     onClick: () => goRunAmi(),
   }
