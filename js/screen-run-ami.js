@@ -381,6 +381,8 @@ function chooseColor(onPick, card) {
 
 function playCard(cardId, card, runAmi) {
   const send = (color) => {
+    // Show the play at once; the server's answer confirms or undoes it.
+    table?.playNow(cardId, card, color)
     table?.clearSelection()
     // A registered call shows as the persistent MIC CHECK ✓ chip (from the
     // server's view), so no extra note here.

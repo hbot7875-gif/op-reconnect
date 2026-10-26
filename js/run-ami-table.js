@@ -117,6 +117,10 @@ export function createTable(handlers) {
   let busy = false
   let ended = false // the finale is showing: nothing is playable any more
   let pileKey = null
+  // A card you played that the server hasn't confirmed yet (playNow). Until
+  // its answer arrives, the pile and colour show your card, not the old view.
+  let instant = null
+  let instantTimer = null
   let feedOpen = false
   let feedSeen = null // newest log seq already shown in the feed
 
@@ -300,6 +304,11 @@ export function createTable(handlers) {
   function paintTable() {
     const t = view.table
     $('.ra-code').textContent = view.room.code
+    if (instant) {
+      // Your own play is on the pile already; the server's answer redraws it.
+      $('.ra-draw').disabled = true
+      return
+    }
     paintDiscard()
     $('.ra-pile-count').textContent = String(t.drawCount)
     $('.ra-draw').dataset.depth = String(Math.min(2, Math.max(0, t.drawCount - 1)))
@@ -400,6 +409,9 @@ export function createTable(handlers) {
       if (e.type === 'CARD_PLAYED') {
         const to = rectOf(topCard())
         const from = e.seat === view.me.seat ? before.removed : rectOf(oppTile(e.seat)?.querySelector('.ra-fan') || oppTile(e.seat))
+        // Your own card already flew when you tapped (playNow): the server's
+        // confirmation shouldn't land it a second time.
+        if (e.seat === view.me.seat && before.instant) continue
         fly(from, to, cardHtml(e.card), { spin: e.seat === view.me.seat ? -6 : 10 })
         if (!reducedMotion()) {
           flash($('.ra-discard'), 'is-landed', 420)
@@ -452,6 +464,47 @@ export function createTable(handlers) {
       slot.replaceChildren(node)
       setTimeout(() => node.remove(), ms)
     },
+    /** Your play, shown the moment you tap: the card leaves your hand and
+     *  lands on the pile (with the colour you chose, for a Wild) before the
+     *  server answers. The server's next view is the truth either way: it
+     *  confirms the move, or puts the card back if it was refused. */
+    playNow(cardId, card, color) {
+      const node = nodes.get(cardId)
+      if (!node || !card || !view || ended) return
+      const from = rectOf(node)
+      node.remove()
+      nodes.delete(cardId)
+      selected = null
+      hand.dataset.count = String(nodes.size)
+      const wild = isWildKind(card.k)
+      const shown = { c: wild ? null : card.c, k: card.k }
+      const landed = el('span', '', cardHtml(shown, 'is-top')).firstElementChild
+      const top = $('.ra-discard .ra-card.is-top')
+      if (top) top.replaceWith(landed)
+      else $('.ra-discard').prepend(landed)
+      pileKey = null
+      fly(from, rectOf(landed), cardHtml(shown), { spin: -6 })
+      if (!reducedMotion()) flash($('.ra-discard'), 'is-landed', 420)
+      if (wild && COLORS[color]) {
+        root.dataset.color = color
+        $('.ra-color').innerHTML = colorChipHtml(color)
+        if (!reducedMotion()) {
+          flash($('.ra-discard'), 'is-recolor', 900)
+          cue(`${COLORS[color].shape} ${COLORS[color].name}`, `is-color is-${color}`)
+        }
+      }
+      instant = { cardId }
+      paintSelection()
+      // If no answer ever comes (offline), go back to what the server last said.
+      clearTimeout(instantTimer)
+      instantTimer = setTimeout(() => {
+        if (!instant || !view) return
+        instant = null
+        pileKey = null
+        paintTable()
+        paintHand()
+      }, 8000)
+    },
     update(next) {
       offset = (next.serverNow || Date.now()) - Date.now()
       const fresh = lastSeq === null
@@ -462,7 +515,9 @@ export function createTable(handlers) {
       const prevIds = new Set(nodes.keys())
       const nextIds = new Set(next.me.hand.map((c) => c.id))
       const removedId = [...prevIds].find((id) => !nextIds.has(id))
-      const before = { removed: removedId ? rectOf(nodes.get(removedId)) : null }
+      const before = { removed: removedId ? rectOf(nodes.get(removedId)) : null, instant: !!instant }
+      // The server has answered: its view replaces the instant play.
+      if (instant) { instant = null; clearTimeout(instantTimer); pileKey = null }
 
       view = next
       paintOpponents()
@@ -528,7 +583,7 @@ export function createTable(handlers) {
       return FINALE_MS
     },
     selectedCard: () => (selected ? cardOf(selected) : null),
-    destroy() { clearInterval(timer); root.remove() },
+    destroy() { clearInterval(timer); clearTimeout(instantTimer); root.remove() },
   }
 }
 

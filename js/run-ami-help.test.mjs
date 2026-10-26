@@ -150,3 +150,15 @@ test('a match is full screen: the City chrome steps aside, and comes back after'
   assert.equal((screen.match(/setPlaying\(false\)/g) || []).length, 3)
   assert.match(css, /body\.ra-playing #hud,\s*body\.ra-playing #tabbar,\s*body\.ra-playing \.page-foot \{ display: none; \}/)
 })
+
+test('your play shows at once, and the server answer confirms or undoes it', () => {
+  const table = readFileSync(new URL('./run-ami-table.js', import.meta.url), 'utf8')
+  const screen = readFileSync(new URL('./screen-run-ami.js', import.meta.url), 'utf8')
+  // Played before the request goes out.
+  assert.match(screen, /table\?\.playNow\(cardId, card, color\)\s*\n\s*table\?\.clearSelection\(\)/)
+  // While unconfirmed, the old view can't repaint the pile over it.
+  assert.match(table, /if \(instant\) \{[\s\S]*?return\s*\n\s*\}\s*\n\s*paintDiscard\(\)/)
+  // The server's view always wins, and the confirmation doesn't land the card twice.
+  assert.match(table, /if \(instant\) \{ instant = null; clearTimeout\(instantTimer\); pileKey = null \}/)
+  assert.match(table, /if \(e\.seat === view\.me\.seat && before\.instant\) continue/)
+})
