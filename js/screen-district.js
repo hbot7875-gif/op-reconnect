@@ -209,7 +209,7 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
     expiredTeamNote = el('div', 'card board-card', `
       <p class="muted"><b>⏳ Your ReConnect team ran out of time</b>${helping.expiredAt ? ` on ${esc(new Date(helping.expiredAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))}` : ''} before the quest finished.
       You joined to help, so ${esc(districtDisplayName(mapD))} was never your own district and its meter stays at 0% for you.
-      Your plays weren't lost — they still count anywhere else they match.</p>`)
+      Your plays still count toward your own district's goals.</p>`)
   } else if (helping) {
     container.querySelector('.stage-eyebrow').textContent = 'YOUR TEAM'
     const mounted = board.querySelector(':scope > .reconnect-card.is-recruit')

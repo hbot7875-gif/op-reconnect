@@ -51,5 +51,5 @@ export function lastAttemptHtml(lapse) {
     <p class="la-reason">${escHtml(REASONS[lapse.reason] || REASONS.deadline)}</p>
     ${doneParts.length ? `<div class="la-done">Finished: ${doneParts.join(' · ')}</div>` : ''}
     ${missed.length ? `<div class="la-missed-title">Not achieved</div><ul class="la-missed">${missed.map(missedLine).join('')}</ul>` : ''}
-    <p class="la-foot">Your plays weren't deleted. Starting again begins a new attempt at 0% — only plays from the new start count, and you get the full time again.</p>`
+    <p class="la-foot">Progress doesn't carry over. If you start again, you begin from 0% with a new deadline.</p>`
 }
