@@ -344,6 +344,12 @@ export async function getVotingStatus(db, params, now = new Date()) {
     db.from('rc_x_handle_replacements').select('id, old_handle, new_handle, reason, status, created_at, decided_at')
       .eq('campaign_id', c.id).eq('agent_no', agentNo).order('created_at', { ascending: false }).limit(5),
   ])
+  // Extra badges (rewards.extra_badges): N days in this round alone.
+  const extraBadges = (Array.isArray(c.rewards?.extra_badges) ? c.rewards.extra_badges : [])
+    .filter((x) => /^[a-z0-9_]{3,60}$/.test(String(x?.template_id || '')) && Number(x.verified_days) > 0)
+  const extraEarned = extraBadges.length
+    ? await db.from('rc_badges').select('badge_id').eq('agent_no', agentNo).in('badge_id', extraBadges.map((x) => x.template_id))
+    : { data: [] }
   const scopeRes = badgeTemplate && badgeScope.length > 1
     ? await db.from('rc_campaign_proofs').select('vote_day').in('campaign_id', badgeScope)
       .eq('agent_no', agentNo).eq('status', 'verified').limit(800)
@@ -426,6 +432,14 @@ export async function getVotingStatus(db, params, now = new Date()) {
       acrossRounds: badgeScope.length > 1,
       earned: !!badgeRes.data,
     } : null,
+    // This round's own badges, e.g. MAMA 2026 · Daesang (7 days in Round 2).
+    extraBadges: extraBadges.map((x) => ({
+      templateId: x.template_id,
+      name: String(x.name || ''),
+      verifiedDays: Number(x.verified_days),
+      daysDone: verifiedDays.length,
+      earned: (extraEarned.data || []).some((r) => r.badge_id === x.template_id),
+    })),
     battle: battleOn ? battleView(c, battleRes.data, teamRes.data, claimsRes.data, winnerRes.data, (verifiedRes.data || []).length) : null,
     pulse: c.pulse?.enabled ? pulseView(pulseRes.data, xMission?.hashtags || [], now) : null,
   }

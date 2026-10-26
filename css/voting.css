@@ -776,3 +776,4 @@
 .vt-bonus-teams b { color: var(--vt-text); font-variant-numeric: tabular-nums; }
 .vt-bonus-teams small { font-size: 12px; }
 .vt-bonus-next { margin: 0; font-size: 12.5px; color: var(--vt-text-2); }
+.vt-stat-wide { grid-column: 1 / -1; }

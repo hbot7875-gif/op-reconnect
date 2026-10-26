@@ -551,6 +551,11 @@ function stats(vm) {
   const days = bd?.earned
     ? `${s.votingDays} <small>· MAMA badge earned</small>`
     : bd?.verifiedDays ? `${bd.daysDone ?? s.votingDays} <small>/ ${bd.verifiedDays} for MAMA badge${bd.acrossRounds ? ' · both rounds' : ''}</small>` : `${s.votingDays}`
+  // This round's own badge (MAMA 2026 · Daesang): its own row under the stats.
+  const extra = (vm.status.extraBadges || []).map((x) => `<div class="vt-card vt-stat vt-stat-wide" data-vt-xbadge="${x.earned ? 'earned' : 'progress'}">
+        <span class="vt-stat-k">${ic('award')}${esc(x.name || 'Round badge')}</span>
+        <span class="vt-stat-v is-days">${x.earned ? '<small>Badge earned</small>' : `${Math.min(x.daysDone, x.verifiedDays)} <small>/ ${x.verifiedDays} voting days this round</small>`}</span>
+      </div>`).join('')
   return `<section aria-labelledby="vt-h-stats">
     <div class="vt-sec-h"><h2 id="vt-h-stats">Your voting</h2></div>
     <div class="vt-stats">
@@ -558,6 +563,7 @@ function stats(vm) {
       <div class="vt-card vt-stat" data-vt-badge="${bd?.earned ? 'earned' : 'progress'}"><span class="vt-stat-k">${ic('calendar')}Voting days</span><span class="vt-stat-v is-days">${days}</span></div>
       <div class="vt-card vt-stat"><span class="vt-stat-k">${ic('target')}Today's votes</span><span class="vt-stat-v">${done} <small>/ ${total}</small></span></div>
       <div class="vt-card vt-stat"><span class="vt-stat-k">${ic('award')}Next reward</span><span class="vt-stat-v is-sm">${nextReward(vm)}</span></div>
+      ${extra}
     </div>
   </section>`
 }

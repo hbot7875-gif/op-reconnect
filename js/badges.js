@@ -31,7 +31,7 @@ const COLLECTION_TEMPLATES = new Set([
   // reveal and no place in the Pack's badge count.
   'backup_helper',
   // The eight that fell off this list while it was the only source.
-  'event_vma_community_chest', 'event_mama_2026',
+  'event_vma_community_chest', 'event_mama_2026', 'event_mama_2026_daesang',
   'event_arirang_recelebrate_2026', 'event_rc26_after_party', 'event_rc26_party_crasher',
   'event_rc26_arirang_cult', 'event_rc26_side_quest_aliens', 'event_rc26_side_quest_hooligans',
 ])

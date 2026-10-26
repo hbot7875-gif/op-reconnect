@@ -26,6 +26,7 @@ const REPLACE_MIGRATION = migration('20261020120000_rc_vote_x_replacement.sql')
 const HUB_MIGRATIONS = ['20261015150000_rc_battle_hub.sql', '20261016090000_rc_battle_team_today.sql',
   '20261016120000_rc_battle_team_ig_default_on.sql', '20261016150000_rc_battle_team_ig_open.sql'].map(migration)
 const ROUND2_MIGRATION = migration('20261026180000_rc_mama_round2.sql')
+const DAESANG_MIGRATION = migration('20261027120000_rc_mama_daesang_badge.sql')
 // The same file without its own transaction, to re-run inside a test's.
 const ROUND2_BODY = ROUND2_MIGRATION.replace(/^(begin|commit);\r?$/gm, '')
 
@@ -94,6 +95,8 @@ async function fresh(t) {
     for (const m of HUB_MIGRATIONS) await engine.exec(m)
     await engine.exec(ROUND2_MIGRATION)
     await engine.exec(ROUND2_MIGRATION) // re-runnable
+    await engine.exec(DAESANG_MIGRATION)
+    await engine.exec(DAESANG_MIGRATION) // re-runnable
     // The real freezes (Oct 23, Nov 9) pass while this suite lives on, and a
     // frozen battle stamps no points. Tests run before a far-off freeze;
     // freezeNow() moves it when a test needs one. The approved times are
@@ -1130,4 +1133,27 @@ test('Round 1 has no recruit bonus: its scores are votes only', { skip }, async 
   for (const a of ['AGENT004', 'AGENT005', 'AGENT006']) { await joinTeam(db, a, 'aliens'); await verifiedX(db, a, '2026-10-14') }
   const b = await battle(db)
   assert.deepEqual([b.teams.aliens, b.bonus.aliens, b.total], [3, 0, 3])
+})
+
+test('MAMA 2026 · Daesang: 7 verified days in Round 2 alone, awarded once; the MAMA badge rule unchanged', { skip }, async (t) => {
+  const db = await fresh(t)
+  await joinTeam(db, 'AGENT001', 'hooligans')
+  for (const d of ['2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16', '2026-10-17']) await verifiedX(db, 'AGENT001', d)
+  await db.exec(ROUND2_BODY)
+  await db.exec(DAESANG_MIGRATION.replace(/^(begin|commit);\r?$/gm, ''))
+  const has = (id) => n(db, `select count(*) from rc_badges where agent_no='AGENT001' and badge_id=$1`, [id])
+  assert.equal(await has('event_mama_2026'), 1, 'Round 1 days already earned the MAMA badge')
+  assert.equal(await has('event_mama_2026_daesang'), 0, 'Round 1 days never count for the Round 2 badge')
+  const days = ['2026-10-28', '2026-10-29', '2026-10-30', '2026-10-31', '2026-11-01', '2026-11-02']
+  for (const d of days) await verifiedXIn(db, R2, 'AGENT001', d)
+  assert.equal(await has('event_mama_2026_daesang'), 0, '6 days')
+  await verifiedXIn(db, R2, 'AGENT001', '2026-11-03')
+  assert.equal(await has('event_mama_2026_daesang'), 1, '7th day')
+  await verifiedXIn(db, R2, 'AGENT001', '2026-11-04')
+  assert.equal(await has('event_mama_2026_daesang'), 1, 'once')
+  const cat = await q1(db, `select name, rarity, active from rc_badge_catalog where id = 'event_mama_2026_daesang'`)
+  assert.deepEqual([cat.name, cat.rarity, cat.active], ['MAMA 2026 · Daesang', 'rare', true])
+  const r2 = await q1(db, `select rewards, battle from rc_vote_campaigns where id = $1`, [R2])
+  assert.deepEqual(r2.rewards.extra_badges, [{ template_id: 'event_mama_2026_daesang', name: 'MAMA 2026 · Daesang', verified_days: 7 }])
+  assert.deepEqual(r2.battle.milestones, [400, 1000, 1800, 2700, 3800])
 })

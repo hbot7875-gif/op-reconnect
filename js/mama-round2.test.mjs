@@ -401,6 +401,7 @@ test('player status during the promo: Round 2, recruiting, badge days across rou
   assert.deepEqual([s.battle.myTeam, s.battle.assignedVia], ['aliens', 'carried'])
   assert.deepEqual(s.battle.teams.map((t) => [t.id, t.size, t.recruits]), [['hooligans', 412, 21], ['aliens', 398, 37]])
   assert.deepEqual([s.badge.daysDone, s.badge.acrossRounds], [2, true], 'distinct days over both rounds')
+  assert.deepEqual(s.extraBadges, [], 'no extra badge configured in this fixture')
 })
 
 test('City banner and public page during the promo: phase soon, head counts from the shared cache', async () => {
@@ -474,4 +475,24 @@ test('recruit bonus on the public pages, posters and share text', () => {
   const ctx = fakeCtx()
   drawRecruitPoster(ctx, 'V1', recruitView(summary(), 'hooligans', PROMO_NOW), 'Watch this.')
   assert.ok(ctx.words.some((w) => w.s === '★ EVERY 3 NEW ARMY WHO VOTE = +1 POINT' && w.w <= W - 60), 'on the poster, inside the margins')
+})
+
+test('MAMA 2026 · Daesang badge: its own progress row, this round\'s days only', async () => {
+  const R2B = { ...R2, rewards: { ...R2.rewards, extra_badges: [{ template_id: 'event_mama_2026_daesang', name: 'MAMA 2026 · Daesang', verified_days: 7 }] } }
+  const db = fakeDb({
+    campaigns: [R2B, R1],
+    rpc: { rc_campaign_battle_state: () => battleState, rc_campaign_team_resolve: () => ({ data: { team: 'aliens', via: 'carried' } }) },
+    tables: {
+      rc_campaign_proofs: (q) => ({ data: q.filters.campaign_id === R2.id ? [{ vote_day: '2026-10-28' }, { vote_day: '2026-10-29' }, { vote_day: '2026-10-29' }] : [] }),
+      rc_badges: (q) => ({ data: Array.isArray(q.filters.badge_id) ? [] : null }),
+    },
+  })
+  const s = await getVotingStatus(db, { agentNo: 'AGENT001' }, OPEN_NOW)
+  assert.deepEqual(s.extraBadges, [{ templateId: 'event_mama_2026_daesang', name: 'MAMA 2026 · Daesang', verifiedDays: 7, daysDone: 2, earned: false }])
+  const st = promoStatus()
+  st.extraBadges = s.extraBadges
+  const html = screen(st, 'voting')
+  assert.match(html, /data-vt-xbadge="progress"[\s\S]*MAMA 2026 · Daesang[\s\S]*2 <small>\/ 7 voting days this round<\/small>/)
+  st.extraBadges = [{ ...s.extraBadges[0], earned: true }]
+  assert.match(screen(st, 'voting'), /data-vt-xbadge="earned"[\s\S]*Badge earned/)
 })
