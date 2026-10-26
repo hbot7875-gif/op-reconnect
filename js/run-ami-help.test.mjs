@@ -162,3 +162,18 @@ test('your play shows at once, and the server answer confirms or undoes it', () 
   assert.match(table, /if \(instant\) \{ instant = null; clearTimeout\(instantTimer\); pileKey = null \}/)
   assert.match(table, /if \(e\.seat === view\.me\.seat && before\.instant\) continue/)
 })
+
+test('sentences wrap instead of being cut off with an ellipsis', () => {
+  const css = readFileSync(new URL('../css/run-ami.css', import.meta.url), 'utf8')
+  const rule = (sel) => {
+    const at = css.search(new RegExp(`^${sel.replace(/\./g, '\\.')} \\{`, 'm'))
+    return at < 0 ? '' : css.slice(at, css.indexOf('}', at) + 1)
+  }
+  // Table pop-ups, feed lines, the turn bar, the watching strip, the lobby
+  // watcher list and the Album's "From …" tag: never an ellipsis.
+  for (const sel of ['.ra-felt-cue', '.ra-ft', '.ra-ft b', '.ra-fr', '.ra-turn-text', '.ra-watch-strip span', '.ra-watchers', '.al-tag']) {
+    const r = rule(sel)
+    assert.ok(r, `${sel} rule exists`)
+    assert.doesNotMatch(r, /text-overflow: ellipsis/, `${sel} must wrap, not cut`)
+  }
+})
