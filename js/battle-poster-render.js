@@ -8,7 +8,7 @@ import montserrat900 from '@fontsource/montserrat/files/montserrat-latin-900-nor
 import inter600 from '@fontsource/inter/files/inter-latin-600-normal.woff2?url'
 import inter700 from '@fontsource/inter/files/inter-latin-700-normal.woff2?url'
 import inter800 from '@fontsource/inter/files/inter-latin-800-normal.woff2?url'
-import { drawPoster, W, H, FONT_DISPLAY, FONT_SANS } from './battle-poster.js'
+import { drawPoster, drawRecruitPoster, W, H, FONT_DISPLAY, FONT_SANS } from './battle-poster.js'
 import { LYRICS } from './battle-share-rules.js'
 
 const FONT_TIMEOUT_MS = 4000
@@ -28,13 +28,22 @@ function loadFonts() {
 /** The poster for one style, one battle view and the two team lines
  *  (defaults when a line is empty), as a PNG Blob. */
 export async function renderPoster(style, view, lines = {}) {
+  return draw((ctx) => drawPoster(ctx, style, view, {
+    hooligans: lines.hooligans || LYRICS.hooligans,
+    aliens: lines.aliens || LYRICS.aliens,
+  }))
+}
+
+/** One side's recruit poster (recruitView), with that side's line. */
+export async function renderRecruitPoster(style, rv, lines = {}) {
+  return draw((ctx) => drawRecruitPoster(ctx, style, rv, lines[rv.team.id] || LYRICS[rv.team.id] || ''))
+}
+
+async function draw(paint) {
   await loadFonts()
   const canvas = document.createElement('canvas')
   canvas.width = W
   canvas.height = H
-  drawPoster(canvas.getContext('2d'), style, view, {
-    hooligans: lines.hooligans || LYRICS.hooligans,
-    aliens: lines.aliens || LYRICS.aliens,
-  })
+  paint(canvas.getContext('2d'))
   return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('poster_failed'))), 'image/png'))
 }

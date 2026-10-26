@@ -56,15 +56,17 @@ function timeLeft(closesAt, now) {
 /** Always visible above the tabs: live state, time left and — except on
  *  Battle, where the matchup itself is the hero — the score. Off-white
  *  numbers; the team colour is only the small dot beside each. */
-export function liveStrip(b, now, { score = true } = {}) {
-  const left = timeLeft(b.closesAt, now)
-  const state = b.frozen ? 'FINAL' : left ? 'LIVE' : 'VERIFYING'
+export function liveStrip(b, now, { score = true, promo = false } = {}) {
+  // Before voting opens (promo): SOON, the countdown, and agents per side.
+  const left = promo ? timeLeft(b.opensAt, now)?.replace(' left', '') : timeLeft(b.closesAt, now)
+  const state = promo ? 'SOON' : b.frozen ? 'FINAL' : left ? 'LIVE' : 'VERIFYING'
   const [x, y] = b.teams
-  const pts = (t, end) => `<span class="vt-ls-t${end ? ' is-end' : ''}"${teamAttr(t.id)}><i aria-hidden="true"></i><b>${fmt(t.points)}</b></span>`
+  const n = (t) => (promo ? t.size : t.points)
+  const pts = (t, end) => `<span class="vt-ls-t${end ? ' is-end' : ''}"${teamAttr(t.id)}><i aria-hidden="true"></i><b>${fmt(n(t))}</b></span>`
   return `<div class="vt-ls" data-vt-live="${state.toLowerCase()}">
     <span class="vt-ls-state">${state === 'LIVE' ? '<i class="vt-ls-dot" aria-hidden="true"></i>' : ''}${state}</span>
-    ${left && !b.frozen ? `<span class="vt-ls-left">${esc(left)}</span>` : ''}
-    ${score ? `<span class="vt-ls-score" aria-label="${esc(`${x.label} ${fmt(x.points)}, ${y.label} ${fmt(y.points)}`)}">${pts(x, false)}<span class="vt-ls-vs" aria-hidden="true">vs</span>${pts(y, true)}</span>` : ''}
+    ${left && !b.frozen ? `<span class="vt-ls-left">${promo ? `opens in ${esc(left)}` : esc(left)}</span>` : ''}
+    ${score ? `<span class="vt-ls-score" aria-label="${esc(`${x.label} ${fmt(n(x))}, ${y.label} ${fmt(n(y))}${promo ? ' agents' : ''}`)}">${pts(x, false)}<span class="vt-ls-vs" aria-hidden="true">vs</span>${pts(y, true)}</span>` : ''}
   </div>`
 }
 

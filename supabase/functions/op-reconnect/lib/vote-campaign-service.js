@@ -18,7 +18,7 @@
 //     config and applies them only when a proof becomes verified.
 import {
   kstDayOf, addDays, campaignPhase, missionById, parseXPostUrl, snowflakeTime, normalizeHandle,
-  parseOembed, decideXProof, missingHashtags, cityPhase, sanitizeMnetChecks, sanitizeClientCertChecks, decideMnetChecks,
+  parseOembed, decideXProof, missingHashtags, cityPhase, inPromo, sanitizeMnetChecks, sanitizeClientCertChecks, decideMnetChecks,
   normalizeCertificateNumber, participationMinuteKey, validUtcOffset, duplicateNotices, votingStreak, missionStates, missionProgress, giftState, pulseView,
   REVIEW_REASONS, reviewReason, duplicateReason, duplicateAlerts,
 } from './vote-campaign-rules.js'
@@ -58,13 +58,17 @@ async function loadCampaign(db, id) {
   return data || null
 }
 
-/** The campaign the player page should show: the open one, else the one that
- *  closed most recently (so a ready Voting Gift is still reachable). */
-async function currentCampaign(db, now) {
+/** The campaign the player page should show: the open one, else (players
+ *  only) one in its battle's promo window, else the one that closed most
+ *  recently (so a ready Voting Gift is still reachable). The admin queue
+ *  never jumps to a round that can't have proofs yet. */
+async function currentCampaign(db, now, { promo = false } = {}) {
   const { data } = await db.from('rc_vote_campaigns').select('*').eq('active', true)
     .order('closes_at', { ascending: false }).limit(5)
   const rows = data || []
-  return rows.find((c) => campaignPhase(c, now) === 'open') || rows.find((c) => campaignPhase(c, now) === 'closed') || null
+  return rows.find((c) => campaignPhase(c, now) === 'open')
+    || (promo && rows.find((c) => inPromo(c, now)))
+    || rows.find((c) => campaignPhase(c, now) === 'closed') || null
 }
 
 // ── X verification (swappable) ─────────────────────────────────────────
@@ -106,13 +110,42 @@ export function oembedXVerifier(fetchImpl = globalThis.fetch, timeoutMs = 6000) 
 
 // ── World-screen summary (rides getGameState) ──────────────────────────
 
+/** battle.recruit_bonus as the pages need it, or null when off. */
+function recruitBonusOf(c) {
+  const r = c.battle?.recruit_bonus || {}
+  const per = Math.floor(Number(r.per) || 0)
+  const points = Math.floor(Number(r.points) || 0)
+  return per > 0 && points > 0 ? { per, points } : null
+}
+
+/** One side's numbers: score (votes + recruit bonus), votes, bonus, and
+ *  head counts. Aggregates only. */
+function teamNumbers(t, b) {
+  const points = Number(b?.teams?.[t.id]) || 0
+  return {
+    id: t.id, label: t.label, points,
+    votes: b?.votes ? Number(b.votes[t.id]) || 0 : points,
+    bonus: Number(b?.bonus?.[t.id]) || 0,
+    qualified: Number(b?.qualified?.[t.id]) || 0,
+    agents: Number((b?.sizes || b?.teamSizes)?.[t.id]) || 0,
+    recruits: Number(b?.recruits?.[t.id]) || 0,
+  }
+}
+
 /** Team scores from the SHARED 60s cache row (vote_battle:{id}) — the one
  *  aggregate the City banner and the public battle page both read, so it
  *  runs about once a minute however many people are looking. */
 function cachedBattleScores(db, c, cache) {
   const scores = async () => {
     const { data: b } = await db.rpc('rc_campaign_battle_state', { p_campaign_id: c.id, p_agent_no: '' })
-    return { teams: b?.teams || {}, total: Number(b?.total) || 0, frozen: !!b?.frozen, winners: b?.winners || null, at: new Date().toISOString() }
+    return {
+      teams: b?.teams || {}, total: Number(b?.total) || 0, frozen: !!b?.frozen, winners: b?.winners || null,
+      // Aggregate head counts per side, and how many joined this round.
+      sizes: b?.teamSizes || {}, recruits: b?.recruits || {},
+      // The recruit bonus: score = votes + bonus (rc_campaign_battle_state).
+      votes: b?.votes || null, bonus: b?.bonus || {}, qualified: b?.qualified || {},
+      at: new Date().toISOString(),
+    }
   }
   return cache ? cache(`vote_battle:${c.id}`, 60_000, scores) : scores()
 }
@@ -151,13 +184,14 @@ export async function getVotingBanner(db, agentNo, now = new Date(), { cache } =
   const progress = missionProgress(c, proofsRes.data || [], today)
   return {
     campaignId: c.id, title: c.title, roundLabel: c.round_label, phase,
-    closesAt: c.closes_at, freezeAt: c.battle?.freeze_at || c.closes_at,
+    opensAt: c.opens_at, closesAt: c.closes_at, freezeAt: c.battle?.freeze_at || c.closes_at,
     alerts: duplicateAlerts(dupRes?.data || [], today),
     done: Object.values(progress).reduce((n, p) => n + p.verified, 0),
     total: Object.values(progress).reduce((n, p) => n + p.max, 0),
     battle: battleOn ? {
       myTeam: teamRes.data?.team || null,
-      teams: (c.battle.teams || []).map((t) => ({ id: t.id, label: t.label, points: Number(battle?.teams?.[t.id]) || 0 })),
+      teams: (c.battle.teams || []).map((t) => teamNumbers(t, battle)),
+      recruitBonus: recruitBonusOf(c),
       total: battle?.total || 0,
       milestones: (Array.isArray(c.battle.milestones) ? c.battle.milestones : []).map((target) => ({
         target: Number(target), reached: (battle?.total || 0) >= Number(target),
@@ -191,9 +225,13 @@ export async function getPublicBattle(db, now = new Date(), { cache } = {}) {
     success: true,
     campaign: { id: c.id, title: c.title, roundLabel: c.round_label },
     phase,
+    opensAt: c.opens_at,
     closesAt: c.closes_at,
     freezeAt: c.battle.freeze_at || c.closes_at,
-    teams: (c.battle.teams || []).map((t) => ({ id: t.id, label: t.label, points: Number(b?.teams?.[t.id]) || 0 })),
+    // Points, plus aggregate head counts (no agent, no names): how many
+    // agents are on each side and how many joined this round.
+    teams: (c.battle.teams || []).map((t) => teamNumbers(t, b)),
+    recruitBonus: recruitBonusOf(c),
     total,
     milestones,
     next: next ? { target: next.target, remaining: next.target - total } : null,
@@ -218,9 +256,10 @@ function poolKinds(pool) {
  *  the winner reward needs a point actually scored for the winning team. */
 function battleView(c, b, team, claims, winnerClaim, verifiedCount) {
   const cfg = c.battle || {}
-  const teams = (cfg.teams || []).map((t) => ({
-    id: t.id, label: t.label, points: Number(b?.teams?.[t.id]) || 0, size: Number(b?.teamSizes?.[t.id]) || 0,
-  }))
+  const teams = (cfg.teams || []).map((t) => {
+    const n = teamNumbers(t, b)
+    return { ...n, size: n.agents }
+  })
   const total = Number(b?.total) || 0
   const mine = Number(b?.mine) || 0
   const claimed = new Set((claims || []).map((r) => Number(r.milestone_index)))
@@ -241,6 +280,8 @@ function battleView(c, b, team, claims, winnerClaim, verifiedCount) {
     assignedVia: team?.via || null,
     myPoints: mine,
     total,
+    recruitBonus: recruitBonusOf(c),
+    opensAt: c.opens_at,
     closesAt: c.closes_at,
     freezeAt: b?.freezeAt || cfg.freeze_at || c.closes_at,
     frozen,
@@ -262,10 +303,12 @@ function battleView(c, b, team, claims, winnerClaim, verifiedCount) {
 
 export async function getVotingStatus(db, params, now = new Date()) {
   const agentNo = agentOf(params)
-  const c = params.campaignId ? await loadCampaign(db, String(params.campaignId)) : await currentCampaign(db, now)
+  const c = params.campaignId ? await loadCampaign(db, String(params.campaignId)) : await currentCampaign(db, now, { promo: true })
   if (!c) return fail('no_campaign')
   const today = kstDayOf(now)
   const badgeTemplate = c.rewards?.badge_template_id || null
+  // Badge days may span rounds (rewards.badge_scope), as the database counts them.
+  const badgeScope = [...new Set([...(Array.isArray(c.rewards?.badge_scope) ? c.rewards.badge_scope.map(String) : []), c.id])]
   const battleOn = !!c.battle?.enabled
 
   const [proofsRes, verifiedRes, handleRes, progressRes, opensRes, fillsRes, pulseRes, badgeRes, teamRes, battleRes, claimsRes, winnerRes, replRes] = await Promise.all([
@@ -301,6 +344,10 @@ export async function getVotingStatus(db, params, now = new Date()) {
     db.from('rc_x_handle_replacements').select('id, old_handle, new_handle, reason, status, created_at, decided_at')
       .eq('campaign_id', c.id).eq('agent_no', agentNo).order('created_at', { ascending: false }).limit(5),
   ])
+  const scopeRes = badgeTemplate && badgeScope.length > 1
+    ? await db.from('rc_campaign_proofs').select('vote_day').in('campaign_id', badgeScope)
+      .eq('agent_no', agentNo).eq('status', 'verified').limit(800)
+    : verifiedRes
 
   const proofs = proofsRes.data || []
   const verifiedDays = [...new Set((verifiedRes.data || []).map((r) => r.vote_day))]
@@ -315,11 +362,19 @@ export async function getVotingStatus(db, params, now = new Date()) {
     campaign: {
       id: c.id, title: c.title, roundLabel: c.round_label, opensAt: c.opens_at, closesAt: c.closes_at,
       phase: campaignPhase(c, now),
+      // Before voting opens: the battle is recruiting (sides, chat, countdown).
+      promo: inPromo(c, now),
+      freezeAt: c.battle?.freeze_at || c.closes_at,
       // Mission config the page needs to render; nothing reward-related.
       missions: (c.missions || []).map((m) => ({
         id: m.id, kind: m.kind, label: m.label, voteUrl: m.vote_url || null,
         maxDaily: Math.max(1, Number(m.max_daily) || 1), maxHandles: Math.max(1, Number(m.max_handles) || 1),
         hashtags: m.hashtags || [], requireHandleMatch: !!m.require_handle_match,
+        exclusiveHashtags: !!m.exclusive_hashtags,
+        ...(m.category_label ? { categoryLabel: String(m.category_label) } : {}),
+        // This round's own words for the card and the guide, when it has them.
+        ...(m.rule ? { rule: String(m.rule) } : {}),
+        ...(Array.isArray(m.guide) ? { guide: m.guide.map(String).slice(0, 8) } : {}),
         // For the browser's friendly pre-check only.
         ...(m.kind === 'mnet_certificate' ? { certificate: m.certificate || {} } : {}),
       })),
@@ -367,7 +422,8 @@ export async function getVotingStatus(db, params, now = new Date()) {
     badge: badgeTemplate ? {
       templateId: badgeTemplate,
       verifiedDays: Number(rewards.badge_verified_days) || null,
-      daysDone: verifiedDays.length,
+      daysDone: new Set((scopeRes.data || []).map((r) => r.vote_day)).size,
+      acrossRounds: badgeScope.length > 1,
       earned: !!badgeRes.data,
     } : null,
     battle: battleOn ? battleView(c, battleRes.data, teamRes.data, claimsRes.data, winnerRes.data, (verifiedRes.data || []).length) : null,
@@ -395,7 +451,8 @@ function teamOut(c, state, now = new Date()) {
 export async function startVotingTeamChoice(db, params, now = new Date()) {
   const c = await loadCampaign(db, String(params.campaignId || ''))
   if (!c?.battle?.enabled) return fail('battle_off')
-  if (campaignPhase(c, now) === 'upcoming') return fail('voting_not_open')
+  // Sides open with the promo window, before voting does.
+  if (campaignPhase(c, now) === 'upcoming' && !inPromo(c, now)) return fail('voting_not_open')
   const { data, error } = await db.rpc('rc_campaign_team_start', { p_campaign_id: c.id, p_agent_no: agentOf(params) })
   if (error || data?.error) return fail(data?.error || 'db_error')
   return teamOut(c, data, now)
@@ -602,6 +659,7 @@ function proofHint(p) {
   if (p.status !== 'review') return {}
   if (p.mission_id !== 'x' && !p.duplicate_kind && p.checks?.certificate === false) return { hint: 'unreadable' }
   if (p.verify_note === 'author_mismatch' && p.post_author) return { hint: 'unlinked_account', author: p.post_author }
+  if (p.verify_note === 'extra_hashtags') return { hint: 'extra_hashtags' }
   return {}
 }
 
@@ -661,7 +719,7 @@ export async function submitXProof(db, params, { verifier, now = new Date() } = 
     ? fetchedAuthor
     : parsed.urlHandle && registered.has(parsed.urlHandle) ? parsed.urlHandle : null
   const decision = decideXProof({
-    fetched, requiredHashtags: mission.hashtags || [], expectedHandle,
+    fetched, requiredHashtags: mission.hashtags || [], exclusiveHashtags: !!mission.exclusive_hashtags, expectedHandle,
     requireHandleMatch: !!mission.require_handle_match, dateOk: true,
   })
   const author = fetchedAuthor

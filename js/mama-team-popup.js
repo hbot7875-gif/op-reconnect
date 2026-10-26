@@ -1,7 +1,8 @@
 // MAMA Battle: the team choice used to appear only inside the Voting screen,
 // so an agent who never opened Voting was never asked to pick a side. This
-// asks from the City instead — once per KST day, only while voting is open
-// and only for an agent with no team — and "Choose my team" opens Voting,
+// asks from the City instead — once per KST day, while voting is open or the
+// battle recruits before it opens, and only for an agent with no team (a
+// recruit link's team leads the title) — and "Choose my team" opens Voting,
 // where the usual 7-second choice starts by itself (voting.js).
 //
 // Same localStorage-seen pattern as exam-mode-announce.js and
@@ -13,6 +14,7 @@ import { el, hideOverlay, showOverlay } from './state.js'
 import { getScreen, goVoting } from './router.js'
 import { mamaTeamPopupDue, markMamaTeamPopupSeen, mamaTeamPopupCopy } from './mama-team-popup-rules.js'
 import { votePopupHtml, teamTilesHtml } from './vote-popup.js'
+import { readInvite } from './battle-invite.js'
 
 export function checkForMamaTeamPopup(state) {
   const agentNo = getAgentNo()
@@ -25,7 +27,7 @@ export function checkForMamaTeamPopup(state) {
   if (overlay && !overlay.hidden) return
   markMamaTeamPopupSeen(storage, agentNo, state.voting.campaignId)
 
-  const copy = mamaTeamPopupCopy(state.voting)
+  const copy = mamaTeamPopupCopy(state.voting, readInvite(storage))
   const sheet = el('div', 'sheet vt-pop', votePopupHtml({
     tone: 'accent', icon: 'swords', eyebrow: copy.eyebrow, title: copy.title, body: copy.body,
     extra: teamTilesHtml(copy.teams), primary: copy.action, secondary: copy.later,

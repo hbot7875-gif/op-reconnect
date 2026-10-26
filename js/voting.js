@@ -9,10 +9,11 @@ import { setState, toast } from './state.js'
 import { votingScreen, errorText, countdown, MNET_FAST_MS, MNET_CHECKING_MS, dayFlagActive } from './voting-view.js'
 import { nextKstMidnight } from '../supabase/functions/op-reconnect/lib/vote-campaign-rules.js'
 import { sha256OfBlob, reencodeImage, blobToBase64, ocrCertificate } from './voting-proof.js'
-import { battleView, pickStyle, nextStyle, shareText, STYLES, STYLE_NAMES, BATTLE_URL } from './battle-share-rules.js'
+import { battleView, recruitView, pickStyle, nextStyle, shareText, recruitText, recruitUrl, STYLES, STYLE_NAMES, BATTLE_URL } from './battle-share-rules.js'
 import { posterFile, canShareFiles, sharePoster, shareLink, copyText, savePoster } from './battle-share-flow.js'
 import { checkLyric, LYRIC_MAX, LYRIC_ERRORS } from './battle-lyric-filter.js'
 import { trackEngagement } from './engagement.js'
+import { readInvite, clearInvite } from './battle-invite.js'
 import { checkForVotingAlerts, showDuplicateCertificatePopup } from './voting-alerts.js'
 import { chatFeed, chatErrorText } from './battle-hub-view.js'
 import { checkChatText, CHAT_MAX } from '../supabase/functions/op-reconnect/lib/battle-text-filter.js'
@@ -88,7 +89,8 @@ async function load() {
   if (status.battle) startHub()
   // First visit once the battle is on and this agent has no side yet: the
   // 7-second choice. The server holds the clock and makes the timeout pick.
-  if (status.battle && !status.battle.myTeam && status.campaign.phase === 'open' && !local.chooser) startChooser()
+  // Voting open, or the battle recruiting before it opens.
+  if (status.battle && !status.battle.myTeam && (status.campaign.phase === 'open' || status.campaign.promo) && !local.chooser) startChooser()
   else checkForVotingAlerts(status.alerts)
   scheduleProofPoll()
 }
@@ -149,7 +151,9 @@ async function startChooser() {
   const r = await call('startVotingTeamChoice', { agentNo: getAgentNo(), campaignId: status.campaign.id })
   if (!r?.success || !root?.isConnected) return
   if (r.team) { finishChooser(r.team, r.via); return }
-  local.chooser = { secondsLeft: r.secondsLeft, picked: null, result: null }
+  let invite = null
+  try { invite = readInvite(localStorage) } catch { /* no storage */ }
+  local.chooser = { secondsLeft: r.secondsLeft, picked: null, result: null, invite }
   paint()
   root.querySelector('[data-vt-act="team-pick"]')?.focus()
   clearInterval(chooserTimer)
@@ -182,6 +186,7 @@ async function pickTeam(team) {
 }
 
 function finishChooser(team, via) {
+  try { clearInvite(localStorage) } catch { /* no storage */ }
   local.chooser = { result: team, via }
   if (status.battle) status.battle.myTeam = team
   // Team and Chat open up now that there's a side.
@@ -241,19 +246,24 @@ function startTicker() {
 // One snapshot of the public battle summary per opening of the sheet; the
 // poster styles and the two team lines only redraw that snapshot. Nothing
 // here writes battle data, the team lines never leave this sheet, and the
-// only link shared is the public /battle page.
+// only links shared are the public /battle page and a side's recruit page
+// (…/battle?team=aliens — a team, never the agent who shared it).
+//
+// Two posters: 'recruit' (your own side, the default once you have one) and
+// 'battle' (both sides).
 
 const LINE_REDRAW_MS = 120
-// { view, text, lines, drafts, errors, posters: Map(key → { blob, url }) }
+// { summary, mode, team, view, text, url, lines, drafts, errors, posters: Map(key → { blob, url }) }
 let shareSnap = null
 let lineTimer = null
 
-const posterKey = (style, lines) => `${style}|${lines.hooligans}|${lines.aliens}`
+const posterKey = (style, lines, mode = 'battle') => `${mode}|${style}|${lines.hooligans}|${lines.aliens}`
 
 // Private usage counts (rc_engagement_events, 'battle_share'): which action
-// ran, the style, and how it ended. Fixed words only — never the team lines.
+// ran, the style, the poster kind and how it ended. Fixed words only —
+// never the team lines.
 const trackShare = (action, extra = {}) =>
-  trackEngagement('battle_share', { screen: 'voting', metadata: { action, style: local.share?.style, ...extra } })
+  trackEngagement('battle_share', { screen: 'voting', metadata: { action, style: local.share?.style, mode: shareSnap?.mode, ...extra } })
 
 function releaseShare() {
   clearTimeout(lineTimer)
@@ -262,7 +272,7 @@ function releaseShare() {
   local.share = null
 }
 
-async function openShare() {
+async function openShare(mode) {
   releaseShare()
   local.share = { loading: true }
   paint()
@@ -270,23 +280,40 @@ async function openShare() {
   const r = await call('getPublicBattle')
   if (!root?.isConnected || openSheet !== 'share') return
   if (!r?.success) { local.share = { error: true }; paint(); return }
-  const view = battleView(r, new Date())
+  const team = status.battle?.myTeam || null
   shareSnap = {
-    view, text: shareText(view), posters: new Map(),
+    summary: r, team, posters: new Map(),
     lines: { hooligans: '', aliens: '' }, drafts: { hooligans: '', aliens: '' }, errors: {},
   }
-  const first = pickStyle(view)
-  trackEngagement('battle_share', { screen: 'voting', metadata: { action: 'opened', style: first } })
+  setShareMode(shareSnap, mode === 'battle' || !team ? 'battle' : 'recruit')
+  const first = pickStyle(shareSnap.view)
+  trackEngagement('battle_share', { screen: 'voting', metadata: { action: 'opened', style: first, mode: shareSnap.mode } })
   showStyle(first)
+}
+
+/** Points the snapshot at one poster kind: its view, text and link. */
+function setShareMode(snap, mode) {
+  snap.mode = mode === 'recruit' && snap.team ? 'recruit' : 'battle'
+  if (snap.mode === 'recruit') {
+    snap.view = recruitView(snap.summary, snap.team, new Date())
+    snap.text = recruitText(snap.view)
+    snap.url = recruitUrl(snap.team)
+  } else {
+    snap.view = battleView(snap.summary, new Date())
+    snap.text = shareText(snap.view)
+    snap.url = BATTLE_URL
+  }
 }
 
 /** The poster for a style + the current team lines (drawn once, then cached). */
 async function posterFor(snap, style) {
-  const key = posterKey(style, snap.lines)
+  const key = posterKey(style, snap.lines, snap.mode)
   let p = snap.posters.get(key)
   if (!p) {
-    const { renderPoster } = await import('./battle-poster-render.js')
-    const blob = await renderPoster(style, snap.view, snap.lines)
+    const { renderPoster, renderRecruitPoster } = await import('./battle-poster-render.js')
+    const blob = snap.mode === 'recruit'
+      ? await renderRecruitPoster(style, snap.view, snap.lines)
+      : await renderPoster(style, snap.view, snap.lines)
     p = { blob, url: URL.createObjectURL(blob) }
     snap.posters.set(key, p)
   }
@@ -304,8 +331,11 @@ async function showStyle(style, focusStyle = false) {
   if (snap !== shareSnap || openSheet !== 'share') return
   const v = snap.view
   local.share = {
-    style, styleName: STYLE_NAMES[style], styleIndex: STYLES.indexOf(style) + 1, clock: v.clock, url: p.url, key: posterKey(style, snap.lines),
-    alt: `MAMA Battle poster: ${v.h.label} ${v.h.points}, ${v.a.label} ${v.a.points}. ${v.gapLine}.`,
+    style, styleName: STYLE_NAMES[style], styleIndex: STYLES.indexOf(style) + 1, clock: v.clock, url: p.url, key: posterKey(style, snap.lines, snap.mode),
+    mode: snap.mode, team: snap.team, link: snap.url,
+    alt: snap.mode === 'recruit'
+      ? `${v.shout} poster: ${v.agentsLine}. ${v.hype.join(' ')} ${v.hostPath}.`
+      : `MAMA Battle poster: ${v.h.label} ${v.shown(v.h)}, ${v.a.label} ${v.shown(v.a)}. ${v.gapLine}.`,
     canFiles: canShareFiles(posterFile(p.blob)), hold: false, drafts: snap.drafts, errors: snap.errors,
   }
   paint()
@@ -339,7 +369,7 @@ async function redrawPreview(snap) {
   try { p = await posterFor(snap, style) } catch { return }
   if (snap !== shareSnap || openSheet !== 'share' || local.share?.style !== style) return
   local.share.url = p.url
-  local.share.key = posterKey(style, snap.lines)
+  local.share.key = posterKey(style, snap.lines, snap.mode)
   local.share.canFiles = canShareFiles(posterFile(p.blob))
   const img = root.querySelector('.vt-share-img')
   if (img) img.src = p.url
@@ -365,7 +395,7 @@ async function shareGo() {
     if (r !== 'failed') return
   }
   // No image sharing here (or it just failed): the link still goes.
-  const r = await shareLink(shareSnap.text)
+  const r = await shareLink(shareSnap.text, shareSnap.url)
   trackShare('share_link', { outcome: r })
   if (r === 'copied') toast('Link copied')
 }
@@ -475,11 +505,18 @@ function onClick(e) {
   else if (act === 'chooser-done') { local.chooser = null; load() }
   else if (act === 'battle-claim') claimBattle(Number(t.dataset.vtIndex))
   else if (act === 'winner-claim') claimWinner()
-  else if (act === 'battle-share') openShare()
+  else if (act === 'battle-share') openShare(t.dataset.vtMode)
+  else if (act === 'share-mode' && shareSnap && t.dataset.vtMode !== shareSnap.mode) {
+    setShareMode(shareSnap, t.dataset.vtMode)
+    showStyle(local.share?.style || pickStyle(shareSnap.view))
+  }
   else if (act === 'share-style' && local.share?.style) { const next = nextStyle(local.share.style); trackShare('try_style', { style: next }); showStyle(next, true) }
   else if (act === 'share-go') shareGo()
   else if (act === 'share-save') shareSave()
-  else if (act === 'share-link') copyText(BATTLE_URL).then((ok) => { trackShare('copy_link', { outcome: ok ? 'copied' : 'failed' }); toast(ok ? 'Link copied' : BATTLE_URL) })
+  else if (act === 'share-link') {
+    const link = shareSnap?.url || (t.dataset.vtTeam ? recruitUrl(t.dataset.vtTeam) : BATTLE_URL)
+    copyText(link).then((ok) => { trackShare('copy_link', { outcome: ok ? 'copied' : 'failed' }); toast(ok ? 'Link copied' : link) })
+  }
   else if (act === 'share-lines-reset') resetLines()
   else if (act === 'share-text' && shareSnap) copyText(shareSnap.text).then((ok) => { trackShare('copy_text', { outcome: ok ? 'copied' : 'failed' }); if (ok) toast('Text copied') })
   else if (act === 'hub-tab') switchTab(t.dataset.vtTab)

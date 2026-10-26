@@ -22,6 +22,8 @@ test('metadata: only the fixed action / style / outcome words are kept', () => {
     battleShareMetadata({ action: 'copy_text', style: 'V3', outcome: 'copied', lines: { hooligans: 'secret' }, text: 'MAMA Battle is live', agentNo: 'AGENT001' }),
     { action: 'copy_text', style: 'V3', outcome: 'copied' }, 'team lines, share text and anything else are dropped')
   assert.deepEqual(battleShareMetadata({ action: 'save', style: 'A1', outcome: 'exploded' }), { action: 'save' }, 'unknown style/outcome dropped')
+  assert.deepEqual(battleShareMetadata({ action: 'opened', style: 'V1', mode: 'recruit' }), { action: 'opened', style: 'V1', mode: 'recruit' }, 'which poster (Round 2)')
+  assert.deepEqual(battleShareMetadata({ action: 'opened', mode: 'aliens' }), { action: 'opened' }, 'never a team or anything else')
   for (const bad of [null, {}, { action: 'deleted_everything' }, { action: 'OPENED' }, 'opened']) assert.equal(battleShareMetadata(bad), null)
   assert.deepEqual(BATTLE_SHARE_ACTIONS, ['opened', 'share_poster', 'share_link', 'try_style', 'save', 'copy_link', 'copy_text'])
 })
@@ -29,7 +31,7 @@ test('metadata: only the fixed action / style / outcome words are kept', () => {
 test('share sheet sends one battle_share event per action, never the team lines', () => {
   const src = read('js/voting.js')
   assert.match(src, /import \{ trackEngagement \} from '\.\/engagement\.js'/)
-  assert.match(src, /trackEngagement\('battle_share', \{ screen: 'voting', metadata: \{ action: 'opened', style: first \} \}\)/)
+  assert.match(src, /trackEngagement\('battle_share', \{ screen: 'voting', metadata: \{ action: 'opened', style: first, mode: shareSnap\.mode \} \}\)/)
   for (const action of ['share_poster', 'share_link', 'try_style', 'save', 'copy_link', 'copy_text'])
     assert.match(src, new RegExp(`trackShare\\('${action}'`), action)
   const helper = src.slice(src.indexOf('const trackShare'), src.indexOf('function releaseShare'))

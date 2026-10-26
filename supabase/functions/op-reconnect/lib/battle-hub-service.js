@@ -11,7 +11,7 @@
 //     for this event, and only in their own team's roster.
 // The atomic parts (slow mode, report thresholds, mutes) are SQL functions
 // in migration 20261015150000.
-import { kstDayOf, campaignPhase, cityPhase } from './vote-campaign-rules.js'
+import { kstDayOf, campaignPhase, cityPhase, inPromo } from './vote-campaign-rules.js'
 import { getPublicBattle } from './vote-campaign-service.js'
 import { checkChatText } from './battle-text-filter.js'
 import { decideMoments, CHAT_EMOJI, REPORT_REASONS } from './battle-hub-rules.js'
@@ -99,7 +99,8 @@ export async function getBattleChat(db, params, now = new Date(), { cache } = {}
   return {
     success: true,
     team: data.team,
-    open: phase === 'open' && !c.battle?.chat_paused,
+    // Chat opens with the promo window, so a side can talk while it recruits.
+    open: (phase === 'open' || inPromo(c, now)) && !c.battle?.chat_paused,
     paused: !!c.battle?.chat_paused,
     timeoutUntil: data.timeoutUntil || null,
     presence: data.presence || {},

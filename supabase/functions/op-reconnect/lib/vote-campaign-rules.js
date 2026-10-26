@@ -137,7 +137,7 @@ export function missingHashtags(found, required) {
  * goes to review — an unreachable X, a deleted post or a missing hashtag is
  * for a person to judge, never an automatic rejection.
  */
-export function decideXProof({ fetched, requiredHashtags, expectedHandle, requireHandleMatch, dateOk }) {
+export function decideXProof({ fetched, requiredHashtags, exclusiveHashtags = false, expectedHandle, requireHandleMatch, dateOk }) {
   const checks = { date: !!dateOk }
   if (!fetched || !fetched.ok) {
     checks.found = null
@@ -147,13 +147,23 @@ export function decideXProof({ fetched, requiredHashtags, expectedHandle, requir
   checks.publicPost = true // oEmbed only ever serves public posts
   const missing = missingHashtags(fetched.hashtags, requiredHashtags)
   checks.hashtags = missing.length === 0
+  // "Only one artist hashtag is permitted": with exclusive hashtags, any tag
+  // beyond the required ones may be another artist's, so a person decides.
+  if (exclusiveHashtags) checks.onlyTags = extraHashtags(fetched.hashtags, requiredHashtags).length === 0
   if (requireHandleMatch) checks.author = !!expectedHandle && fetched.authorHandle === expectedHandle
-  const pass = checks.date && checks.hashtags && (!requireHandleMatch || checks.author)
+  const pass = checks.date && checks.hashtags && checks.onlyTags !== false && (!requireHandleMatch || checks.author)
   let note = 'all_checks_passed'
   if (!checks.hashtags) note = 'missing_hashtags'
+  else if (checks.onlyTags === false) note = 'extra_hashtags'
   else if (requireHandleMatch && !checks.author) note = 'author_mismatch'
   else if (!checks.date) note = 'wrong_day'
   return { status: pass ? 'verified' : 'review', checks, note }
+}
+
+/** Hashtags on a post beyond the required ones (case-insensitive). */
+export function extraHashtags(found, required) {
+  const want = new Set((required || []).map((h) => String(h).replace(/^#/, '').toLowerCase()))
+  return [...new Set((found || []).map((h) => String(h).replace(/^#/, '').toLowerCase()))].filter((h) => h && !want.has(h))
 }
 
 /** Prefilled composer link. Hashtags only — the player adds anything else. */
@@ -423,12 +433,22 @@ export function pulseView(row, hashtags, now = new Date()) {
 
 // ── City presence (map marker + banner) ──────────────────────────────
 
+/** The battle's pre-open promo window: battle.promo_from up to opens_at.
+ *  Sides can be picked and the City counts down; no proof counts yet. */
+export function inPromo(campaign, at = new Date()) {
+  const t = typeof at === 'number' ? at : new Date(at).getTime()
+  const from = Date.parse(campaign?.battle?.promo_from || '')
+  return !!campaign?.battle?.enabled && Number.isFinite(from) && t >= from && t < new Date(campaign.opens_at).getTime()
+}
+
 /**
  * Where an event stands for the City screen:
+ *   'soon'       the battle's promo window, before voting opens (inPromo)
  *   'open'       voting is live
  *   'verifying'  voting closed, reviews still landing, before the freeze
  *   'final'      after the freeze, for battle.final_visible_hours (48)
- *   null         before voting opens, or once the final window has passed
+ *   null         before the promo window (or voting, without one), or once
+ *                the final window has passed
  */
 export function cityPhase(campaign, at = new Date()) {
   if (!campaign) return null
@@ -437,7 +457,7 @@ export function cityPhase(campaign, at = new Date()) {
   const closes = new Date(campaign.closes_at).getTime()
   const freeze = new Date(campaign.battle?.freeze_at || campaign.closes_at).getTime()
   const hours = Number(campaign.battle?.final_visible_hours ?? 48)
-  if (t < opens) return null
+  if (t < opens) return inPromo(campaign, t) ? 'soon' : null
   if (t <= closes) return 'open'
   if (t <= freeze) return 'verifying'
   if (t <= freeze + hours * 3600_000) return 'final'
@@ -446,13 +466,14 @@ export function cityPhase(campaign, at = new Date()) {
 
 // ── Review queue: why a proof is waiting (admin only) ─────────────────
 
-export const REVIEW_REASONS = ['confirmed_duplicate', 'possible_duplicate', 'x_account', 'certificate', 'manual']
+export const REVIEW_REASONS = ['confirmed_duplicate', 'possible_duplicate', 'x_account', 'x_hashtags', 'certificate', 'manual']
 
 /** One reason per pending proof, for the admin summary and filters. */
 export function reviewReason(p, kind) {
   if (p.duplicate_kind === 'certificate') return 'confirmed_duplicate'
   if (p.duplicate_kind === 'possible') return 'possible_duplicate'
   if (p.verify_note === 'author_mismatch') return 'x_account'
+  if (p.verify_note === 'extra_hashtags') return 'x_hashtags'
   if (kind === 'mnet_certificate' && /^unclear:/.test(String(p.verify_note || ''))) return 'certificate'
   return 'manual'
 }

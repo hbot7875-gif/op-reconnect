@@ -47,6 +47,6 @@ test('copy names both teams and the live score; the button opens Voting', () => 
   assert.equal(c.later, 'Not now')
   const src = readFileSync(new URL('./mama-team-popup.js', import.meta.url), 'utf8')
   assert.match(src, /go\.onclick = \(\) => \{ hideOverlay\(\); goVoting\(\) \}/)
-  assert.match(readFileSync(new URL('./voting.js', import.meta.url), 'utf8'), /!status\.battle\.myTeam && status\.campaign\.phase === 'open' && !local\.chooser\) startChooser\(\)/, 'Voting starts the choice on arrival')
+  assert.match(readFileSync(new URL('./voting.js', import.meta.url), 'utf8'), /!status\.battle\.myTeam && \(status\.campaign\.phase === 'open' \|\| status\.campaign\.promo\) && !local\.chooser\) startChooser\(\)/, 'Voting starts the choice on arrival')
   assert.match(readFileSync(new URL('./main.js', import.meta.url), 'utf8'), /checkForMamaTeamPopup\(state\)/)
 })

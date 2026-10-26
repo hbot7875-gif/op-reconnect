@@ -1,4 +1,6 @@
 // MAMA Battle share poster — 1080×1350, drawn onto any 2D canvas context.
+// Two layouts: the battle poster (both sides, below) and, for Round 2, one
+// recruit poster per side (drawRecruitPoster) that links that side's page.
 //
 // One campaign-graphic structure, three colourways (approved):
 //   MAMA VOTING BATTLE / HOOLIGANS {score} {line} / ALIENS {score} {line} /
@@ -96,8 +98,8 @@ function scribble(ctx, cx, y, w, color) {
   ctx.stroke()
 }
 
-/** V3 — a small LIVE sticker, tilted, in the top corner. */
-function liveSticker(ctx, p) {
+/** V3 — a small LIVE (or SOON) sticker, tilted, in the top corner. */
+function liveSticker(ctx, p, label = 'LIVE') {
   ctx.save()
   ctx.translate(W - 158, 14)
   ctx.rotate(0.14)
@@ -108,7 +110,7 @@ function liveSticker(ctx, p) {
   ctx.arc(24, 22, 6, 0, Math.PI * 2)
   ctx.fillStyle = LIVE_RED
   ctx.fill()
-  text(ctx, 'LIVE', 39, 31, sans(800, 24), p.bg, { align: 'left', spacing: 2.4 })
+  text(ctx, label, 39, 31, sans(800, 24), p.bg, { align: 'left', spacing: 2.4 })
   ctx.restore()
 }
 
@@ -143,13 +145,15 @@ export function drawPoster(ctx, style, v, lines) {
   const title = 'MAMA VOTING BATTLE'
   text(ctx, title, CX, 146, disp(fitSize(ctx, title, 92, MAX_W, disp, 60)), p.fg, { spacing: -3 })
 
-  // Both scores share one size so neither team looks stronger.
+  // Scores — or, before voting opens, agents on each side. Both share one
+  // size so neither team looks stronger.
+  const num = (t) => fmt(v.shown ? v.shown(t) : t.points)
   const scoreSize = Math.min(
-    fitSize(ctx, fmt(v.h.points), 270, MAX_W, disp, 120),
-    fitSize(ctx, fmt(v.a.points), 270, MAX_W, disp, 120),
+    fitSize(ctx, num(v.h), 270, MAX_W, disp, 120),
+    fitSize(ctx, num(v.a), 270, MAX_W, disp, 120),
   )
   // A thousands comma hangs below the baseline; keep each line clear of it.
-  const comma = fmt(v.h.points).includes(',') || fmt(v.a.points).includes(',') ? Math.round(scoreSize * 0.12) : 0
+  const comma = num(v.h).includes(',') || num(v.a).includes(',') ? Math.round(scoreSize * 0.12) : 0
   // TEAM / score / that team's line — HOOLIGANS speaks, then ALIENS replies.
   // With commas the stack runs taller, so it tightens a little to keep the
   // gap line clear of the call to action.
@@ -157,9 +161,9 @@ export function drawPoster(ctx, style, v, lines) {
   let nameY = comma ? 224 : 236
   let lineY = 0
   for (const [team, color, line] of [[v.h, 'hoo', lines.hooligans], [v.a, 'ali', lines.aliens]]) {
-    text(ctx, team.label, CX, nameY, disp(54), p[color], { spacing: 3 })
+    text(ctx, v.unit ? `${team.label} · ${v.unit}` : team.label, CX, nameY, disp(54), p[color], { spacing: 3 })
     const scoreY = nameY + 219
-    const w = text(ctx, fmt(team.points), CX, scoreY, disp(scoreSize), p.fg, { spacing: -scoreSize * 0.06 })
+    const w = text(ctx, num(team), CX, scoreY, disp(scoreSize), p.fg, { spacing: -scoreSize * 0.06 })
     ends[team.id] = { right: CX + w / 2, top: scoreY - scoreSize * 0.72 }
     lineY = scoreY + 53 + comma
     teamLine(ctx, line, lineY, p[color], p)
@@ -179,8 +183,9 @@ export function drawPoster(ctx, style, v, lines) {
   const gapY = gapTop + 95
   text(ctx, v.gapLine, CX, gapY, disp(gapSize), p.gapFg, { spacing: -2 })
 
-  text(ctx, v.posterCta[0], CX, 1156, disp(78), p.fg, { spacing: -2 })
-  text(ctx, v.posterCta[1], CX, 1236, disp(78), p.fg, { spacing: -2 })
+  for (const [i, line] of v.posterCta.entries()) {
+    text(ctx, line, CX, 1156 + i * 80, disp(fitSize(ctx, line, 78, MAX_W, disp, 48)), p.fg, { spacing: -2 })
+  }
   text(ctx, 'hopetrackers.org/battle', CX, 1288, sans(700, 30), p.soft)
   text(ctx, v.liveLine, CX, 1324, sans(600, 20), p.faint, { spacing: 1.6 })
 
@@ -190,5 +195,68 @@ export function drawPoster(ctx, style, v, lines) {
     star(ctx, Math.min(W - 70, e.right + 44), e.top + 18, 88, v.leader === 'hooligans' ? p.hoo : p.ali)
   }
   if (key === 'V2') scribble(ctx, CX, gapY + 26, Math.min(MAX_W, gw + 60), p.hoo)
-  if (key === 'V3') liveSticker(ctx, p)
+  if (key === 'V3') liveSticker(ctx, p, v.phase === 'soon' ? 'SOON' : 'LIVE')
+}
+
+/**
+ * One side's recruit poster. `rv` is recruitView(); `line` is that side's
+ * line. Same three colourways and the same one-handmade-touch rule:
+ *   MAMA VOTING BATTLE · ROUND 2 / {TEAM} / ARE RECRUITING | NEED YOU /
+ *   "line" / {agents | score} {caption} / two hype lines / {when} /
+ *   JOIN {TEAM}. VOTE FOR BTS. / that side's link
+ */
+export function drawRecruitPoster(ctx, style, rv, line) {
+  const key = PALETTES[style] ? style : 'V1'
+  const p = PALETTES[key]
+  const tc = rv.team.id === 'aliens' ? p.ali : p.hoo
+  const live = rv.phase === 'open'
+  ctx.fillStyle = p.bg
+  ctx.fillRect(0, 0, W, H)
+
+  const kicker = 'MAMA VOTING BATTLE · ROUND 2'
+  text(ctx, kicker, CX, 108, sans(800, fitSize(ctx, kicker, 32, MAX_W, (px) => sans(800, px), 20)), p.soft, { spacing: 4 })
+
+  // The side's name is the poster.
+  const nameSize = fitSize(ctx, rv.team.label, 200, MAX_W, disp, 96)
+  const nameW = text(ctx, rv.team.label, CX, 300, disp(nameSize), tc, { spacing: -nameSize * 0.04 })
+  const rest = rv.shout.replace(rv.team.label, '').trim()
+  text(ctx, rest, CX, 390, disp(fitSize(ctx, rest, 76, MAX_W, disp, 44)), p.fg, { spacing: -1 })
+  teamLine(ctx, line, 450, tc, p)
+
+  // Agents ready (and new this round), or once voting runs, the score.
+  const big = fmt(live ? rv.team.points : rv.team.agents)
+  const bigSize = fitSize(ctx, big, 170, MAX_W, disp, 90)
+  text(ctx, big, CX, 650, disp(bigSize), p.fg, { spacing: -bigSize * 0.05 })
+  const caption = live ? `${rv.team.label} VOTES · ${rv.standing}` : `${rv.team.agents === 1 ? 'AGENT' : 'AGENTS'} READY · ${rv.recruitsLine}`
+  text(ctx, caption, CX, 712, sans(800, fitSize(ctx, caption, 32, MAX_W, (px) => sans(800, px), 20)), tc, { spacing: 2 })
+
+  for (const [i, h] of rv.hype.entries()) {
+    text(ctx, h, CX, 832 + i * 78, disp(fitSize(ctx, h, 70, MAX_W, disp, 40)), p.fg, { spacing: -2 })
+  }
+
+  // When: the opening, or the time left.
+  const when = live ? `${(rv.left || '').toUpperCase()} · EVERY VOTE COUNTS` : rv.opens ? `VOTING OPENS ${rv.opens.toUpperCase()}` : 'VOTING OPENS SOON'
+  const whenSize = fitSize(ctx, when, 40, MAX_W - 68, (px) => sans(800, px), 24)
+  ctx.font = sans(800, whenSize)
+  const ww = ctx.measureText(when).width
+  roundRect(ctx, CX - ww / 2 - 30, 950, ww + 60, 74, 6)
+  ctx.fillStyle = tc
+  ctx.fill()
+  text(ctx, when, CX, 999, sans(800, whenSize), p.bg, { spacing: 1.5 })
+
+  // The recruit bonus, when this round has one.
+  if (rv.bonusShort) {
+    const b = `★ ${rv.bonusShort}`
+    text(ctx, b, CX, 1072, sans(800, fitSize(ctx, b, 30, MAX_W, (px) => sans(800, px), 20)), tc, { spacing: 1 })
+  }
+  for (const [i, c] of rv.teamCta.entries()) {
+    text(ctx, c, CX, 1146 + i * 80, disp(fitSize(ctx, c, 78, MAX_W, disp, 48)), i === 0 ? tc : p.fg, { spacing: -2 })
+  }
+  text(ctx, rv.hostPath, CX, 1288, sans(700, fitSize(ctx, rv.hostPath, 30, MAX_W, (px) => sans(700, px), 20)), p.soft)
+  text(ctx, `${rv.liveLine} · UNOFFICIAL ARMY FAN PROJECT`, CX, 1324, sans(600, 18), p.faint, { spacing: 1.4 })
+
+  // One handmade touch, never more.
+  if (key === 'V1') star(ctx, Math.min(W - 70, CX + nameW / 2 + 40), 300 - nameSize * 0.62, 84, tc)
+  if (key === 'V2') scribble(ctx, CX, 314, Math.min(MAX_W, nameW + 40), tc)
+  if (key === 'V3') liveSticker(ctx, p, live ? 'LIVE' : 'SOON')
 }

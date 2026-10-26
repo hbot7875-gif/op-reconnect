@@ -333,7 +333,7 @@ test('player status never carries paths, hashes or other agents', async () => {
   assert.deepEqual(s.stats, { verifiedVotes: 2, votingDays: 2, streak: 2 })
   assert.deepEqual([s.gift.name, s.gift.state, s.gift.threshold, s.gift.dailyCap], ['Voting Gift', 'filling', 5, 2])
   assert.deepEqual(s.gift.pool, [{ kind: 'charge_cell', amount: 1 }, { kind: 'xp', amount: 10 }], 'kinds and amounts, no weights')
-  assert.deepEqual(s.badge, { templateId: 'event_mama_2026', verifiedDays: 5, daysDone: 2, earned: false })
+  assert.deepEqual(s.badge, { templateId: 'event_mama_2026', verifiedDays: 5, daysDone: 2, acrossRounds: false, earned: false })
   assert.deepEqual([s.battle.myTeam, s.battle.total, s.battle.myPoints, s.battle.milestones], ['aliens', 41, 2, null])
   assert.deepEqual(s.battle.teams.map((t) => [t.label, t.points]), [['HOOLIGANS', 22], ['ALIENS', 19]])
   assert.equal(s.pulse.count, null, 'no snapshot yet: collecting, not zero')
@@ -721,7 +721,7 @@ test('admin queue: each proof says who (agent + Instagram) and why it is waiting
     { ...base, id: 2, mission_id: 'mnet', agent_no: 'AGENT061', status: 'review', proof_path: 'p/2.jpg', cert_fingerprint: FPA },
   ]
   const r = await adminListCampaignProofs(reviewDb(rows, related), { campaignId: 'mama_2026', status: 'review' })
-  assert.deepEqual(r.summary, { all: 6, confirmed_duplicate: 1, possible_duplicate: 1, x_account: 1, certificate: 1, manual: 2 })
+  assert.deepEqual(r.summary, { all: 6, confirmed_duplicate: 1, possible_duplicate: 1, x_account: 1, x_hashtags: 0, certificate: 1, manual: 2 })
   const by = Object.fromEntries(r.proofs.map((p) => [p.id, p]))
   assert.deepEqual([by[10].agent_no, by[10].instagram], ['AGENT060', 'army_sixty'])
   assert.equal(by[12].instagram, 'purple.sky', 'a stored @ is not doubled')

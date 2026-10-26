@@ -364,7 +364,7 @@ test('admin review: Compare proofs opens both screenshots side by side, on the p
 })
 
 test('admin review: summary chips count every pending reason and filter by it', () => {
-  assert.deepEqual(REASONS.map(([, l]) => l), ['All pending', 'Confirmed duplicates', 'Possible duplicates', 'X account mismatches', 'Certificate/date/OCR issues', 'Needs manual review'])
+  assert.deepEqual(REASONS.map(([, l]) => l), ['All pending', 'Confirmed duplicates', 'Possible duplicates', 'X account mismatches', 'Extra hashtags on X', 'Certificate/date/OCR issues', 'Needs manual review'])
   const html = summaryHtml({ all: 12, confirmed_duplicate: 1, possible_duplicate: 4, x_account: 2, certificate: 3, manual: 2 }, 'possible_duplicate')
   assert.match(html, /data-vta-reason="all" aria-pressed="false"><b>12<\/b> All pending/)
   assert.match(html, /data-vta-reason="possible_duplicate" aria-pressed="true"><b>4<\/b> Possible duplicates/)
@@ -429,8 +429,8 @@ test('battle after the freeze: final result, winner reward states, tie', () => {
   assert.match(section(tie, 'vt-h-battle'), /Final: tied at 1,100 — both teams win/)
   assert.match(section(tie, 'vt-h-bgifts'), /data-vt-winner="claimable"/)
   const before = section(render({ battle: 'hooligans' }), 'vt-h-bgifts')
-  assert.match(before, /data-vt-winner="pending"[\s\S]*final score Oct 23 12:00 KST/)
-  assert.match(section(render({ battle: 'hooligans' }), 'vt-h-battle'), /Final score at 12:00 KST on Oct 23\./)
+  assert.match(before, /data-vt-winner="pending"[\s\S]*final score Oct 23, 12:00 KST/)
+  assert.match(section(render({ battle: 'hooligans' }), 'vt-h-battle'), /Final score Oct 23, 12:00 KST\./)
   assert.match(section(render({ battle: 'final', contributor: false }), 'vt-h-bgifts'), /data-vt-winner="not_contributor"/)
 })
 

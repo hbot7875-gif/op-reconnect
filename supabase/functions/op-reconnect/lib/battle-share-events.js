@@ -9,6 +9,8 @@ export const BATTLE_SHARE_ACTIONS = ['opened', 'share_poster', 'share_link', 'tr
 export const BATTLE_SHARE_STYLES = ['V1', 'V2', 'V3']
 // What a share attempt ended as (from battle-share-flow.js).
 export const BATTLE_SHARE_OUTCOMES = ['shared', 'cancelled', 'failed', 'copied', 'downloaded', 'hold']
+// Which poster: both sides, or one side's recruit poster (Round 2).
+export const BATTLE_SHARE_MODES = ['battle', 'recruit']
 
 /** The stored metadata for one battle_share event, or null if the action
  *  isn't one we record. Everything else the client sent is dropped. */
@@ -18,5 +20,6 @@ export function battleShareMetadata(raw) {
   const out = { action: m.action }
   if (BATTLE_SHARE_STYLES.includes(m.style)) out.style = m.style
   if (BATTLE_SHARE_OUTCOMES.includes(m.outcome)) out.outcome = m.outcome
+  if (BATTLE_SHARE_MODES.includes(m.mode)) out.mode = m.mode
   return out
 }

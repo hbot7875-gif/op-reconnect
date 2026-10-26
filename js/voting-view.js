@@ -7,7 +7,7 @@ import { vIcon as ic } from './voting-icons.js'
 import {
   liveStrip, hubTabs, momentsCard, teamPanel, chatFab, chatSheet, chatMessageSheet, chatReportSheet, chatMutedSheet,
 } from './battle-hub-view.js'
-import { LYRICS } from './battle-share-rules.js'
+import { LYRICS, RECRUIT, recruitUrl, kstWhen, untilText, bonusRule, bonusProgress } from './battle-share-rules.js'
 import { LYRIC_MAX, LYRIC_ERRORS } from './battle-lyric-filter.js'
 import { daysLeft, nextKstMidnight, xComposeUrl } from '../supabase/functions/op-reconnect/lib/vote-campaign-rules.js'
 
@@ -55,7 +55,7 @@ const ERRORS = {
   x_replacement_limit: 'You’ve already replaced an X account for this event. Ask an admin if another one stopped working.',
   bad_reason: 'Choose what happened to the account.',
   voting_closed: 'Voting is closed.',
-  voting_not_open: 'Voting opens Oct 12 at 19:00 KST.',
+  voting_not_open: 'Voting hasn’t opened yet. Pick your side now — the vote starts soon.',
   post_before_open: 'That post was made before voting opened. Post a new one.',
   post_after_close: 'That post was made after voting closed.',
   bad_url: 'Paste the link to your post — it looks like x.com/name/status/…',
@@ -76,7 +76,7 @@ const ERRORS = {
   not_reached: 'This Battle Gift is not unlocked yet.',
   not_contributor: 'Verify at least one MAMA vote to claim Battle Gifts.',
   not_configured: 'Battle Gifts are announced soon.',
-  not_final: 'The final score is in at 12:00 KST on Oct 23.',
+  not_final: 'The final score isn’t in yet.',
   not_winner: 'The winner reward goes to the winning team.',
   battle_off: 'The MAMA Battle is not running.',
   team_required: 'Choose your MAMA Battle side first — then send your proof.',
@@ -125,6 +125,7 @@ function header(vm) {
   const left = daysLeft({ closes_at: c.closesAt }, vm.now)
   const closes = dayLabel(new Date(new Date(c.closesAt).getTime() + 9 * 3600_000).toISOString().slice(0, 10))
   const pill = c.phase === 'open' ? 'Voting open' : c.phase === 'upcoming' ? 'Opens soon' : 'Voting closed'
+  const opens = c.phase === 'upcoming' && c.opensAt ? kstWhen(c.opensAt) : null
   return `<section class="vt-camp" aria-labelledby="vt-title">
     <div class="vt-camp-top">
       <span class="vt-camp-mark" aria-hidden="true">MA</span>
@@ -135,7 +136,7 @@ function header(vm) {
       <span class="vt-live${c.phase === 'open' ? '' : ' is-off'}">${pill}</span>
     </div>
     <div class="vt-camp-meta">
-      <span>${ic('clock')}Voting closes <b>${esc(closes)}</b> · KST</span>
+      <span>${ic('clock')}${opens ? `Voting opens <b>${esc(opens.replace(' KST', ''))}</b> · KST` : `Voting closes <b>${esc(closes)}</b> · KST`}</span>
       ${c.phase === 'open' ? `<span>${left} ${left === 1 ? 'day' : 'days'} left</span>` : ''}
     </div>
   </section>`
@@ -200,6 +201,7 @@ function mnetCard(vm, m) {
   const date = dayLabel(vm.status.today)
   const STEPS = ['Vote', 'Upload', 'Verify', 'Complete']
   const closed = vm.status.campaign.phase !== 'open'
+  const cat = m.categoryLabel || "Fans' Choice 1st Vote"
   const err = vm.local.error?.mission === m.id ? note('is-err', 'xCircle', esc(vm.local.error.text)) : ''
   let status = ''
   let body = ''
@@ -207,7 +209,7 @@ function mnetCard(vm, m) {
   if (ui === 'todo') {
     status = `<span class="vt-status">${ic('circleDashed')}Mnet votes · ${count.verified}/${count.max}</span>`
     body = `${verifiedLine(count, 'Vote again on Mnet for the next certificate.')}
-      <p class="vt-rule">Vote for BTS in Fans' Choice, then save the certificate Mnet shows you.</p>
+      <p class="vt-rule">${esc(m.rule || "Vote for BTS in Fans' Choice, then save the certificate Mnet shows you.")}</p>
       ${err}
       <div class="vt-actions">
         <a class="vt-btn vt-btn-primary" href="${esc(m.voteUrl || '#')}" target="_blank" rel="noopener noreferrer" data-vt-act="mnet-vote"${closed ? ' aria-disabled="true"' : ''}>Vote on Mnet ${ic('ext')}</a>
@@ -226,7 +228,7 @@ function mnetCard(vm, m) {
         <span>PNG or JPG · up to 5 MB</span>
       </label>
       ${local.smallWarn ? `<div class="vt-attn" role="alert">${note('is-warn', 'info', SMALL_IMAGE_TEXT)}<div class="vt-actions"><button class="vt-btn vt-btn-outline" type="button" data-vt-act="mnet-small-cancel">Choose another image</button><button class="vt-btn vt-btn-ghost" type="button" data-vt-act="mnet-small-continue">Upload anyway</button></div></div>` : ''}
-      ${pre ? checkChips([['Certificate', pre.certificate || 'unclear'], ["Fans' Choice 1st Vote", pre.category || 'unclear'], [date, pre.date || 'unclear']]) : ''}
+      ${pre ? checkChips([['Certificate', pre.certificate || 'unclear'], [cat, pre.category || 'unclear'], [date, pre.date || 'unclear']]) : ''}
       ${note('', 'shield', "We check only that it's today's Fans' Choice certificate and that BTS is selected. The certificate number and account details are not stored.")}
       ${err}
       <div class="vt-actions">
@@ -247,7 +249,7 @@ function mnetCard(vm, m) {
         : `<span class="vt-status">${ic('clock')}Still checking — no need to upload again</span>`
     const another = count.remaining ? ' You can add another distinct certificate.' : ''
     body = `${stepper(STEPS, 2)}
-      ${checkChips([['Certificate', chip], ["Fans' Choice 1st Vote", chip], [date, chip], ['BTS selected', chip]])}
+      ${checkChips([['Certificate', chip], [cat, chip], [date, chip], ['BTS selected', chip]])}
       ${local.uploading ? '' : fresh
         ? `<p class="vt-rule">Usually takes under 1–2 minutes. You can leave this page — it will update automatically.${another}</p>`
         : `${note('', 'info', 'You can leave this page — it will update automatically.')}
@@ -262,12 +264,12 @@ function mnetCard(vm, m) {
     const c = proof?.checks || {}
     status = badge('is-warn', 'hourglass', 'In review')
     body = `${stepper(STEPS, 2, true)}
-      ${checkChips([['Certificate', c.certificate === true || 'unclear'], ["Fans' Choice 1st Vote", c.category === true || 'unclear'], [date, c.date === true || 'unclear'], ['BTS selected', c.bts === 'match' || 'unclear']])}
+      ${checkChips([['Certificate', c.certificate === true || 'unclear'], [cat, c.category === true || 'unclear'], [date, c.date === true || 'unclear'], ['BTS selected', c.bts === 'match' || 'unclear']])}
       ${note('is-warn', 'info', dup === 'possible_duplicate' ? DUPLICATE_TEXT.possible_duplicate : proof?.hint === 'unreadable' ? UNREADABLE_TEXT : REVIEW_TEXT)}
       ${count.remaining ? `<label class="vt-btn vt-btn-outline">${ic('upload')}${proof?.hint === 'unreadable' ? 'Upload new certificate' : 'Upload another certificate'}<input type="file" accept="image/png,image/jpeg" class="vt-file" data-vt-act="mnet-file"></label>` : ''}`
   } else {
     status = badge('is-ok', 'check', 'Verified')
-    body = `${checkChips([['Certificate', true], ["Fans' Choice 1st Vote", true], [date, true], ['BTS selected', true]])}
+    body = `${checkChips([['Certificate', true], [cat, true], [date, true], ['BTS selected', true]])}
       <div class="vt-sub">${ic('clock')}Next vote opens at <span class="vt-mono">00:00 KST</span></div>`
   }
   const badgeInHead = ui === 'review' || ui === 'done'
@@ -335,6 +337,7 @@ function xCard(vm, m) {
     status = `<span class="vt-status">${ic('circleDashed')}X votes · ${count.verified}/${count.max}</span>`
     body = `${verifiedLine(count, 'For the next one, post from another linked account.')}
       ${tagChips}
+      ${m.rule ? `<p class="vt-rule">${esc(m.rule)}</p>` : ''}
       ${rejected ? note('is-err', 'xCircle', "Today's earlier post wasn't accepted. Post again and add the new link.") : ''}
       ${err}
       <div class="vt-actions">
@@ -361,7 +364,9 @@ function xCard(vm, m) {
       ${proof?.hint === 'unlinked_account'
         ? `${note('is-warn', 'info', `This post was made from <b>@${esc(proof.author)}</b>, but that account isn’t linked. A reviewer will check this one; link the account so your next posts from it count.`)}
       <div class="vt-actions">${handles.length < (m.maxHandles || 3) && !handles.includes(proof.author) ? `<button class="vt-btn vt-btn-outline" type="button" data-vt-act="x-link-author" data-vt-author="${esc(proof.author)}">${ic('link')}Link @${esc(proof.author)}</button>` : ''}<button class="vt-btn vt-btn-ghost" type="button" data-vt-act="x-manage">Manage X accounts</button></div>`
-        : note('is-warn', 'info', 'This post needs review — do not submit it again.')}
+        : proof?.hint === 'extra_hashtags'
+          ? note('is-warn', 'info', 'Your post has other hashtags too. Mnet doesn’t count a post with a second artist hashtag, so a reviewer will check it. Next time use only the two above.')
+          : note('is-warn', 'info', 'This post needs review — do not submit it again.')}
       ${count.remaining ? `<div class="vt-actions"><a class="vt-btn vt-btn-primary" href="${esc(xComposeUrl(m.hashtags))}" target="_blank" rel="noopener noreferrer" data-vt-act="x-compose">Create another vote post ${ic('ext')}</a><button class="vt-btn vt-btn-outline" type="button" data-vt-act="x-link">${ic('link')}Add link</button></div>` : ''}`
   } else {
     status = badge('is-ok', 'check', 'Verified')
@@ -445,9 +450,51 @@ export function nextMilestone(b) {
   return (b.milestones || []).find((m) => !m.reached) || null
 }
 
+/** The recruit bonus card: the rule, and each side's bonus so far (with
+ *  how many more new voters your own side needs for the next point). */
+export function recruitBonusCard(b) {
+  const rb = b?.recruitBonus
+  if (!bonusRule(rb)) return ''
+  const mine = b.teams.find((t) => t.id === b.myTeam)
+  const p = mine ? bonusProgress(mine, rb) : null
+  return `<div class="vt-card vt-bonus" data-vt-bonus>
+      <div class="vt-gp-row"><span class="vt-gp-ico">${ic('users')}</span><span class="vt-gp-t"><b>Recruit bonus</b> · ${esc(bonusRule(rb))}</span></div>
+      <p class="vt-bonus-teams">${b.teams.map((t) => `<span data-team="${esc(t.id)}">${esc(t.label)} <b>+${fmtCount(t.bonus || 0)}</b> <small>${fmtCount(t.qualified || 0)} new voters</small></span>`).join('')}</p>
+      ${p ? `<p class="vt-bonus-next">${esc(mine.label)} need ${p.toNext} more new ${p.toNext === 1 ? 'voter' : 'voters'} for the next +${rb.points}. Share your team link.</p>` : ''}
+    </div>`
+}
+
+/** Before voting opens: the two sides recruiting, a countdown, your link. */
+function promoBattle(vm) {
+  const b = vm.status.battle
+  const c = vm.status.campaign
+  const [x, y] = b.teams
+  const mine = b.teams.find((t) => t.id === b.myTeam)
+  const side = (t, end) => `<div class="vt-vs-t${end ? ' is-end' : ''}" data-team="${esc(t.id)}">
+      <span class="vt-team-chip"><i aria-hidden="true"></i>${esc(t.label)}</span>
+      <span class="vt-vs-pts">${fmtCount(t.size)}</span>
+      <span class="vt-vs-you">${b.myTeam === t.id ? 'Your team' : t.recruits ? `+${fmtCount(t.recruits)} new` : 'agents'}</span>
+    </div>`
+  const starts = untilText(c.opensAt, vm.now)
+  return `<section class="vt-hero" aria-labelledby="vt-h-battle" data-vt-battle="soon">
+    <h2 class="vt-sr" id="vt-h-battle">MAMA Battle · ${esc(c.roundLabel || '')} · recruiting</h2>
+    <p class="vt-hero-final">${esc(c.roundLabel || 'Round 2')} · agents on each side</p>
+    <div class="vt-vs">${side(x, false)}<span class="vt-vs-x" aria-hidden="true">VS</span>${side(y, true)}</div>
+    <p class="vt-battle-line">${starts ? `Voting opens in ${esc(starts)}` : 'Voting opens soon'} · ${esc(kstWhen(c.opensAt))}</p>
+    <p class="vt-battle-meta"><span>${mine ? `${esc(mine.label)}, start recruiting! Share your team link.` : 'Pick a side before the vote opens.'}</span></p>
+    ${mine
+      ? `<button class="vt-btn vt-btn-primary vt-battle-share" type="button" data-vt-act="battle-share" data-vt-mode="recruit" aria-haspopup="dialog">${ic('share')}Recruit for ${esc(mine.label)}</button>
+    <button class="vt-btn vt-btn-outline vt-battle-share" type="button" data-vt-act="share-link" data-vt-team="${esc(mine.id)}">${ic('link')}Copy ${esc(mine.label)} invite link</button>`
+      : `<button class="vt-btn vt-btn-primary vt-battle-share" type="button" data-vt-act="team-choose">${ic('swords')}Choose your team</button>`}
+    <p class="vt-battle-note">${esc(mine ? (RECRUIT[mine.id]?.pitch || '') : 'Friendly ReConnect battle — every verified vote still supports BTS.')}</p>
+  </section>
+  ${recruitBonusCard(b)}`
+}
+
 function battle(vm) {
   const b = vm.status.battle
   if (!b) return ''
+  if (vm.status.campaign.promo) return promoBattle(vm)
   const [x, y] = b.teams
   const total = Math.max(1, x.points + y.points)
   const leading = x.points === y.points ? null : x.points > y.points ? x.id : y.id
@@ -463,9 +510,10 @@ function battle(vm) {
     <div class="vt-tug" aria-hidden="true"><span class="${leading === y.id ? 'is-behind' : 'is-ahead'}" style="flex-grow:${(x.points / total).toFixed(4)}"></span><span class="${leading === y.id ? 'is-ahead' : 'is-behind'}" style="flex-grow:${(y.points / total).toFixed(4)}"></span></div>
     <p class="vt-battle-line">${esc(battleLine(b))}</p>
     <p class="vt-battle-meta"><span>Your contribution <b>${fmtCount(b.myPoints)}</b></span><span>Community total <b>${fmtCount(b.total)}</b></span></p>
-    <button class="vt-btn vt-btn-outline vt-battle-share" type="button" data-vt-act="battle-share" aria-haspopup="dialog">${ic('share')}Share battle${b.myTeam ? `<i class="vt-share-dot" data-team="${esc(b.myTeam)}" aria-hidden="true"></i>` : ''}</button>
-    <p class="vt-battle-note">Friendly ReConnect battle — every verified vote still supports BTS.${b.frozen ? '' : ' Final score at 12:00 KST on Oct 23.'}</p>
-  </section>`
+    <button class="vt-btn vt-btn-outline vt-battle-share" type="button" data-vt-act="battle-share" aria-haspopup="dialog">${ic('share')}${b.myTeam && !b.frozen ? 'Share · recruit' : 'Share battle'}${b.myTeam ? `<i class="vt-share-dot" data-team="${esc(b.myTeam)}" aria-hidden="true"></i>` : ''}</button>
+    <p class="vt-battle-note">Friendly ReConnect battle — every verified vote still supports BTS.${b.frozen ? '' : ` Final score ${esc(kstWhen(b.freezeAt))}.`}</p>
+  </section>
+  ${b.frozen ? '' : recruitBonusCard(b)}`
 }
 
 /** Gold: how close the next shared Battle Gift is, above the claim list. */
@@ -502,7 +550,7 @@ function stats(vm) {
   const bd = vm.status.badge
   const days = bd?.earned
     ? `${s.votingDays} <small>· MAMA badge earned</small>`
-    : bd?.verifiedDays ? `${s.votingDays} <small>/ ${bd.verifiedDays} for MAMA badge</small>` : `${s.votingDays}`
+    : bd?.verifiedDays ? `${bd.daysDone ?? s.votingDays} <small>/ ${bd.verifiedDays} for MAMA badge${bd.acrossRounds ? ' · both rounds' : ''}</small>` : `${s.votingDays}`
   return `<section aria-labelledby="vt-h-stats">
     <div class="vt-sec-h"><h2 id="vt-h-stats">Your voting</h2></div>
     <div class="vt-stats">
@@ -647,7 +695,7 @@ function winnerRow(vm, b) {
     sub = `Your team won · ${what}`
   } else if (w.state === 'not_winner') { right = badge('is-neutral', 'flag', 'Final'); sub = 'Goes to the winning team. Your Battle Gifts stay yours.' }
   else if (w.state === 'not_contributor') { right = badge('is-neutral', 'lock', 'Not eligible'); sub = 'For agents who scored for the winning team' }
-  else { right = badge('is-neutral', 'lock', 'After final'); sub = `${what} for the winning team · final score Oct 23 12:00 KST` }
+  else { right = badge('is-neutral', 'lock', 'After final'); sub = `${what} for the winning team · final score ${esc(kstWhen(b.freezeAt))}` }
   return `<li data-vt-winner="${w.state}"><span class="vt-l-ico">${ic('award')}</span><span class="vt-l-txt"><span class="vt-l-t">Winner reward</span><span class="vt-l-s">${sub}</span>${reveal ? rewardTiles(reveal) : ''}</span>${right}</li>`
 }
 
@@ -668,7 +716,7 @@ export function teamChooser(vm) {
       <div class="vt-chooser-in">
         <p class="vt-chooser-kicker">MAMA Battle</p>
         <h2 class="vt-chooser-title" id="vt-ch-title">You're on ${esc(t?.label || '')}</h2>
-        <p class="vt-chooser-sub">${ch.via === 'timeout' ? 'Time ran out, so you joined the smaller team.' : 'Locked for MAMA 2026.'} Every verified vote still supports BTS.</p>
+        <p class="vt-chooser-sub">${ch.via === 'timeout' ? 'Time ran out, so you joined the smaller team.' : ch.via === 'carried' ? 'Your Round 1 side carries over.' : 'Locked for MAMA 2026.'} Every verified vote still supports BTS.</p>
         <button class="vt-btn vt-btn-primary" type="button" data-vt-act="chooser-done">Continue</button>
       </div>
     </div>`
@@ -679,7 +727,7 @@ export function teamChooser(vm) {
       <h2 class="vt-chooser-title" id="vt-ch-title">Choose your side</h2>
       <div class="vt-chooser-count" aria-live="polite"><span class="vt-chooser-num">${Math.max(0, ch.secondsLeft)}</span><span class="vt-chooser-unit">seconds</span></div>
       <div class="vt-chooser-teams">
-        ${teams.map((t) => `<button class="vt-chooser-team${ch.picked === t.id ? ' is-picked' : ''}" type="button" data-vt-act="team-pick" data-vt-team="${esc(t.id)}"${ch.picked ? ' disabled' : ''}>${esc(t.label)}</button>`).join('')}
+        ${teams.map((t) => `<button class="vt-chooser-team${ch.picked === t.id ? ' is-picked' : ''}${ch.invite === t.id ? ' is-invited' : ''}" type="button" data-vt-act="team-pick" data-vt-team="${esc(t.id)}"${ch.picked ? ' disabled' : ''}>${esc(t.label)}${ch.invite === t.id ? '<small>Your invite</small>' : ''}</button>`).join('')}
       </div>
       <p class="vt-chooser-sub">Friendly ReConnect battle. Your side is locked for MAMA 2026. No pick in time puts you on the smaller team.</p>
     </div>
@@ -691,20 +739,23 @@ export function teamChooser(vm) {
 export function guideSheet(vm) {
   const c = vm.status.campaign
   const x = c.missions.find((m) => m.kind === 'x_post')
+  const mn = c.missions.find((m) => m.kind === 'mnet_certificate')
   const tags = (x?.hashtags || []).map((h) => `#${String(h).replace(/^#/, '')}`).join(' ')
+  const span = `${kstWhen(c.opensAt).replace(' KST', '')} – ${kstWhen(c.closesAt)}`.replace(/, /g, ' ')
+  const items = (list) => list.map((t) => `<li>${esc(t)}</li>`).join('')
   return `<div class="vt-sheet" role="dialog" aria-modal="true" aria-labelledby="vt-g-title" data-vt-sheet="guide" hidden>
     <div class="vt-grabber" aria-hidden="true"></div>
     <div class="vt-sheet-h"><h2 id="vt-g-title">Voting guide</h2><button class="vt-icon-btn" type="button" aria-label="Close" data-vt-act="sheet-close">${ic('x')}</button></div>
-    <p class="vt-sheet-desc">${esc(c.roundLabel || '')} · Oct 12 19:00 – Oct 22 23:59 KST</p>
+    <p class="vt-sheet-desc">${esc(c.roundLabel || '')} · ${esc(span)}</p>
     <div class="vt-acc">
       <details open><summary>Mnet rules ${ic('chevD')}</summary><ul>
-        <li>Vote once per day. The day resets at 00:00 KST.</li>
+        ${mn?.guide ? items(mn.guide) : `<li>Vote once per day. The day resets at 00:00 KST.</li>
         <li>Choose BTS in Fans' Choice (Male) and finish the vote.</li>
-        <li>Save the certificate Mnet shows after voting.</li></ul></details>
+        <li>Save the certificate Mnet shows after voting.</li>`}</ul></details>
       <details><summary>X rules ${ic('chevD')}</summary><ul>
-        <li>Your account must be public, or the vote won't count.</li>
+        ${x?.guide ? items(x.guide) : `<li>Your account must be public, or the vote won't count.</li>
         <li>Use the hashtags exactly: ${esc(tags)}.</li>
-        <li>One vote post per day. Don't delete it until voting closes.</li></ul></details>
+        <li>One vote post per day. Don't delete it until voting closes.</li>`}</ul></details>
       <details><summary>Proof requirements ${ic('chevD')}</summary><ul>
         <li>Mnet: an unedited screenshot of today's certificate.</li>
         <li>X: the link to today's post, from the X account you linked.</li>
@@ -850,16 +901,22 @@ export function shareSheet(vm) {
   const off = ready ? '' : ' disabled'
   return `<div class="vt-sheet vt-share" role="dialog" aria-modal="true" aria-labelledby="vt-s-title" data-vt-sheet="share" hidden>
     <div class="vt-grabber" aria-hidden="true"></div>
-    <div class="vt-sheet-h"><h2 id="vt-s-title">Share battle</h2><button class="vt-icon-btn" type="button" aria-label="Close" data-vt-act="sheet-close">${ic('x')}</button></div>
-    <p class="vt-sheet-desc">A snapshot of the score${s.clock ? ` at ${esc(s.clock)} KST` : ''}. The link always shows the live score.</p>
+    <div class="vt-sheet-h"><h2 id="vt-s-title">${s.mode === 'recruit' ? 'Recruit for your team' : 'Share battle'}</h2><button class="vt-icon-btn" type="button" aria-label="Close" data-vt-act="sheet-close">${ic('x')}</button></div>
+    ${s.team ? `<div class="vt-seg-ctl" role="group" aria-label="Poster">
+      <button type="button" data-vt-act="share-mode" data-vt-mode="recruit" aria-pressed="${s.mode === 'recruit'}"${ready ? '' : ' disabled'}>Recruit poster</button>
+      <button type="button" data-vt-act="share-mode" data-vt-mode="battle" aria-pressed="${s.mode !== 'recruit'}"${ready ? '' : ' disabled'}>Battle poster</button>
+    </div>` : ''}
+    <p class="vt-sheet-desc">${s.mode === 'recruit'
+      ? `Your side's own poster and link. Anyone who opens <b class="vt-mono">${esc((s.link || '').replace('https://', ''))}</b> sees your team's page and can join it. The link names the team, never you.`
+      : `A snapshot of the score${s.clock ? ` at ${esc(s.clock)} KST` : ''}. The link always shows the live score.`}</p>
     ${ready && !s.canFiles ? `<p class="vt-share-note">${ic('info')}Image sharing isn’t available in this browser.</p>` : ''}
     ${s.hold && ready
       ? `<div class="vt-share-hold"><img class="vt-share-img" src="${esc(s.url)}" alt="${esc(s.alt || 'MAMA Battle poster')}"><p class="vt-share-note">Press and hold the poster to save it.</p></div>`
       : `<div class="vt-share-prev">${preview}</div>`}
     ${ready ? `<p class="vt-share-style"><b>${esc(s.styleName)}</b><span>Style ${s.styleIndex} of 3</span></p>
     <div class="vt-share-lines">
-      ${lineField(s, 'hooligans', 'HOOLIGANS line')}
-      ${lineField(s, 'aliens', 'ALIENS line')}
+      ${s.mode !== 'recruit' || s.team === 'hooligans' ? lineField(s, 'hooligans', 'HOOLIGANS line') : ''}
+      ${s.mode !== 'recruit' || s.team === 'aliens' ? lineField(s, 'aliens', 'ALIENS line') : ''}
       <button class="vt-link vt-share-reset" type="button" data-vt-act="share-lines-reset">Reset to default</button>
     </div>` : ''}
     <div class="vt-share-acts">
@@ -890,7 +947,31 @@ function sheets(vm) {
 }
 
 /** The Voting tab's content: today's missions and everything personal. */
+function promoVoting(vm) {
+  const c = vm.status.campaign
+  const starts = untilText(c.opensAt, vm.now)
+  const card = (m) => `<article class="vt-card vt-mission" data-vt-mission="${esc(m.id)}" data-vt-state="soon">
+      <div class="vt-m-head"><span class="vt-m-logo" aria-hidden="true">${m.kind === 'x_post' ? 'X' : 'M'}</span>
+        <div class="vt-m-title"><h3>${m.kind === 'x_post' ? 'X votes' : 'Mnet votes'} · up to ${m.maxDaily} a day</h3><div class="vt-sub">${ic('clock')}Opens ${esc(kstWhen(c.opensAt))}</div></div></div>
+      ${m.rule ? `<p class="vt-rule">${esc(m.rule)}</p>` : ''}
+    </article>`
+  return `<section aria-labelledby="vt-h-soon">
+      <div class="vt-card vt-progress">
+        <div class="vt-progress-row"><h2 class="vt-progress-label" id="vt-h-soon">${esc(c.roundLabel || 'Voting')} opens</h2><span class="vt-progress-val">${starts ? esc(starts) : 'soon'}</span></div>
+        <div class="vt-progress-foot"><span>${esc(kstWhen(c.opensAt))} – ${esc(kstWhen(c.closesAt))}</span></div>
+      </div>
+    </section>
+    <section aria-labelledby="vt-h-missions">
+      <div class="vt-sec-h"><h2 id="vt-h-missions">How to vote on day one</h2></div>
+      <div class="vt-missions">${c.missions.map(card).join('')}</div>
+    </section>
+    ${stats(vm)}
+    ${guideButton()}
+    <p class="vt-foot">Unofficial fan project. Votes are cast on Mnet and X — ReConnect only records your proof.</p>`
+}
+
 function votingContent(vm) {
+  if (vm.status.campaign.promo) return promoVoting(vm)
   const ms = vm.status.campaign.missions
   return `${todayProgress(vm)}
       <section aria-labelledby="vt-h-missions">
@@ -954,7 +1035,7 @@ function hubScreen(vm) {
         <span class="vt-ev-round">${esc(c.roundLabel || '')}</span>
         <button class="vt-ev-btn vt-ev-guide" type="button" aria-label="Voting guide" data-vt-act="guide-open" aria-haspopup="dialog">${ic('book')}</button>
       </div>
-      ${liveStrip(b, vm.now, { score: tab !== 'battle' })}
+      ${liveStrip(b, vm.now, { score: tab !== 'battle', promo: !!c.promo })}
       ${hubTabs(tab, { done, total })}
     </header>
     <main class="vt-page vt-hub-page" data-vt-tab-now="${tab}">
@@ -991,6 +1072,21 @@ export function votingEventCard(v, now = new Date()) {
   let status
   let cta
   let state
+  if (v.phase === 'soon' && b) {
+    // Recruiting: head counts, not points, and the countdown to the vote.
+    const starts = untilText(v.opensAt, now)
+    const sides = `<span class="vt-city-score">${b.teams.map((t) => `<span${b.myTeam === t.id ? ' class="is-mine"' : ''}>${esc(t.label)} <b>${fmtCount(t.agents)}</b></span>`).join('<i aria-hidden="true">·</i>')}<small>agents</small></span>`
+    const mine = b.teams.find((t) => t.id === b.myTeam)
+    status = `${esc(v.roundLabel || 'Round 2')} · voting opens ${starts ? `in ${esc(starts)}` : 'soon'}`
+    cta = mine ? `Recruit for ${mine.label}` : 'Choose your team'
+    return `<button class="vt-entry vt-city" type="button" data-vt-open data-vt-city="soon">
+    <span class="vt-city-top">
+      <span class="vt-entry-ico">${ic('swords')}</span>
+      <span class="vt-entry-txt"><span class="vt-entry-t">${esc(v.title)} <span class="vt-city-vs">${vs}</span></span>${sides}</span>
+    </span>
+    <span class="vt-city-bottom"><span class="vt-entry-s">${status}</span><span class="vt-city-cta">${esc(cta)}${ic('chevR')}</span></span>
+  </button>`
+  }
   if (v.phase === 'final' && cityResultText(b)) {
     state = 'final'
     status = `<b class="vt-city-result">${esc(cityResultText(b))}</b> · final score`

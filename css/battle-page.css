@@ -47,3 +47,25 @@ body { margin: 0; background: var(--bp-bg); color: var(--bp-fg); font: 15px/1.45
 .bp-fine { font-size: 12px; color: var(--bp-3); margin-top: 18px; }
 .bp-toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--bp-fg); color: var(--bp-bg); font: 700 13px var(--bp-sans); padding: 8px 14px; border-radius: 999px; }
 @media (prefers-reduced-motion: no-preference) { .bp-bar i { transition: width .4s ease; } }
+
+/* Round 2: pick a side straight from the page, and one side's recruit page. */
+.bp-pts small { display: block; font: 600 11px var(--bp-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--bp-3); margin-top: 2px; }
+.bp-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 359px) { .bp-pick { grid-template-columns: 1fr; } }
+.bp-join.bp-hooligans { background: var(--bp-hoo); color: #17151a; }
+.bp-join.bp-aliens { background: var(--bp-ali); color: #17151a; }
+.bp-kicker { font: 800 12px var(--bp-sans); letter-spacing: .16em; text-transform: uppercase; margin: 22px 0 0; color: var(--bp-2); }
+.bp-kicker + h1 { margin-top: 6px; }
+h1 .bp-tname { display: block; font-size: clamp(42px, 14vw, 64px); letter-spacing: -.04em; }
+h1.bp-hooligans .bp-tname { color: var(--bp-hoo); }
+h1.bp-aliens .bp-tname { color: var(--bp-ali); }
+.bp-recruit { padding: 16px; margin-bottom: 14px; }
+.bp-recruit.bp-hooligans { border-color: rgba(255, 106, 43, .45); }
+.bp-recruit.bp-aliens { border-color: rgba(47, 198, 173, .45); }
+.bp-r-big { font: 900 clamp(44px, 14vw, 56px)/1 var(--bp-disp); letter-spacing: -.04em; }
+.bp-r-big small { font: 600 13px var(--bp-sans); letter-spacing: .04em; color: var(--bp-2); margin-left: 8px; }
+.bp-r-sub { font: 700 12.5px var(--bp-sans); letter-spacing: .06em; text-transform: uppercase; color: var(--bp-3); margin-top: 8px; overflow-wrap: anywhere; }
+.bp-r-hype { font: 900 17px/1.2 var(--bp-disp); margin: 12px 0 0; letter-spacing: -.01em; }
+.bp-alt { display: block; text-align: center; color: var(--bp-2); font: 600 14px var(--bp-sans); margin-top: 14px; }
+.bp-alt:focus-visible, .bp-join:focus-visible { outline: 2px solid var(--bp-fg); outline-offset: 2px; }
+.bp-bonus { font: 600 13px/1.45 var(--bp-sans); color: var(--bp-gold); border: 1px solid rgba(233, 196, 106, .35); border-radius: 12px; padding: 10px 12px; margin: 0 0 14px; }

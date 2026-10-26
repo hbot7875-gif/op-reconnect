@@ -211,7 +211,7 @@ test('sheet: in-app fallback is one neutral line and Share link; hold-to-save; l
   assert.match(shareSheet(vm({ error: true })), /Couldn't load the battle score/)
 })
 
-test('share flow: snapshot per opening, style changes never refetch, only the public link', () => {
+test('share flow: snapshot per opening, style changes never refetch, only the public or recruit link', () => {
   const src = read('./voting.js')
   const open = src.slice(src.indexOf('async function openShare'), src.indexOf('async function showStyle'))
   const style = src.slice(src.indexOf('async function showStyle'), src.indexOf('async function shareGo'))
@@ -219,20 +219,23 @@ test('share flow: snapshot per opening, style changes never refetch, only the pu
   assert.doesNotMatch(style, /call\(/, 'Try another style only redraws the snapshot')
   const flow = read('./battle-share-flow.js')
   assert.match(flow, /navigator\.share\(\{ files: \[file\], title: 'MAMA Battle', text \}\)/)
-  assert.match(flow, /url: BATTLE_URL/)
-  assert.match(flow, /return \(await copyText\(BATTLE_URL\)\) \? 'copied' : 'failed'/, 'no share at all → copy the link')
+  assert.match(flow, /export async function shareLink\(text, url = BATTLE_URL\)/, 'the public page unless a side\'s recruit link is given')
+  assert.match(flow, /return \(await copyText\(url\)\) \? 'copied' : 'failed'/, 'no share at all → copy the link')
+  assert.match(src, /snap\.url = recruitUrl\(snap\.team\)/, 'recruit poster → that side\'s link')
+  assert.match(src, /snap\.url = BATTLE_URL/)
 })
 
 // ── public page ───────────────────────────────────────────────────
 
-test('public page: scores, leader, gap, total, next gift, time left, Join the Battle', () => {
+test('public page: scores, leader, gap, total, next gift, time left, join a side', () => {
   const html = battlePageHtml(summary(652, 611), NOW)
   assert.match(html, /HOOLIGANS<span class="bp-badge">LEADS \+41<\/span>[\s\S]*data-bp-score="hooligans">652</)
   assert.match(html, /data-bp-score="aliens">611</)
   assert.match(html, /Community votes<b>1,263<\/b>/)
   assert.match(html, /Time left<b>8d 2h<\/b>/)
   assert.match(html, /Next Battle Gift · 1,400 <span>137 to go<\/span>/)
-  assert.match(html, new RegExp(`href="${JOIN_URL.replace('?', '\\?')}"[^>]*>[\\s\\S]*?Join the Battle`))
+  assert.match(html, /href="\/game\?screen=voting&team=hooligans"[^>]*>[\s\S]*?Join HOOLIGANS/)
+  assert.match(html, /href="\/game\?screen=voting&team=aliens"[^>]*>[\s\S]*?Join ALIENS/)
   assert.equal(JOIN_URL, '/game?screen=voting', 'onboarding keeps ?screen=voting, then the 7-second chooser runs')
   assert.match(html, /Unofficial ARMY fan project · Scores are verified ReConnect votes/)
   assert.match(battlePageHtml(summary(702, 702), NOW), /TIED AT 702/)
@@ -261,19 +264,24 @@ function db(rpcCalls) {
   }
 }
 
-test('getPublicBattle: team totals from the shared cache, nothing about any agent', async () => {
+test('getPublicBattle: team totals and head counts from the shared cache, nothing about any agent', async () => {
   const calls = []
   const keys = []
   const cache = async (key, ttl, f) => { keys.push([key, ttl]); return f() }
   const r = await getPublicBattle(db(calls), NOW, { cache })
   assert.deepEqual(keys, [['vote_battle:mama_2026', 60000]], 'same cache row as the City banner')
   assert.deepEqual(calls[0], ['rc_campaign_battle_state', { p_campaign_id: 'mama_2026', p_agent_no: '' }])
-  assert.deepEqual(Object.keys(r).sort(), ['campaign', 'closesAt', 'freezeAt', 'milestones', 'next', 'phase', 'success', 'teams', 'total', 'updatedAt', 'winners'])
-  assert.deepEqual(r.teams, [{ id: 'hooligans', label: 'HOOLIGANS', points: 652 }, { id: 'aliens', label: 'ALIENS', points: 611 }])
+  assert.deepEqual(Object.keys(r).sort(), ['campaign', 'closesAt', 'freezeAt', 'milestones', 'next', 'opensAt', 'phase', 'recruitBonus', 'success', 'teams', 'total', 'updatedAt', 'winners'])
+  // Round 2: aggregate head counts per side are public (the recruiting hype);
+  // still no agent, no names, no per-agent numbers.
+  assert.deepEqual(r.teams, [
+    { id: 'hooligans', label: 'HOOLIGANS', points: 652, votes: 652, bonus: 0, qualified: 0, agents: 40, recruits: 0 },
+    { id: 'aliens', label: 'ALIENS', points: 611, votes: 611, bonus: 0, qualified: 0, agents: 39, recruits: 0 },
+  ])
   assert.deepEqual(r.next, { target: 1400, remaining: 137 })
   assert.equal(r.winners, null)
   const json = JSON.stringify(r)
-  for (const banned of ['teamSizes', 'mine', 'agent', 'AGENT', 'handle', 'proof', 'certificate']) assert.ok(!json.includes(banned), banned)
+  for (const banned of ['teamSizes', 'mine', 'agent_no', 'agentNo', 'AGENT', 'codename', 'handle', 'proof', 'certificate']) assert.ok(!json.includes(banned), banned)
   const hit = await getPublicBattle(db([]), NOW, { cache: async () => ({ teams: { hooligans: 1, aliens: 2 }, total: 3, frozen: false, at: '2026-10-14T12:39:00Z' }) })
   assert.equal(hit.updatedAt, '2026-10-14T12:39:00Z', 'the cached score time is shown, not the request time')
   assert.match(read('../supabase/functions/op-reconnect/index.ts'), /getPublicBattle: \{ auth: 'public'/)
@@ -326,7 +334,7 @@ test('flow: typing redraws the preview only — no fetch, no server, kept across
   assert.doesNotMatch(typing, /call\(/, 'never refetches')
   assert.doesNotMatch(typing, /paint\(\)/, 'no full repaint while typing (the caret stays)')
   assert.match(typing, /checkLyric\(input\.value\)/)
-  assert.match(src, /const posterKey = \(style, lines\) => `\$\{style\}\|\$\{lines\.hooligans\}\|\$\{lines\.aliens\}`/, 'posters cached per style + lines')
+  assert.match(src, /const posterKey = \(style, lines, mode = 'battle'\) => `\$\{mode\}\|\$\{style\}\|\$\{lines\.hooligans\}\|\$\{lines\.aliens\}`/, 'posters cached per kind + style + lines')
   assert.match(src, /lines: \{ hooligans: '', aliens: '' \}, drafts:/, 'lines live in the share snapshot, which closing the sheet throws away')
   assert.doesNotMatch(read('./battle-share-flow.js') + read('./battle-share-rules.js'), /hooligans:.*draft|lines\./, 'custom lines never reach the share text or link')
 })

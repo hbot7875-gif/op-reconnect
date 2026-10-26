@@ -32,6 +32,7 @@ const NOTES = {
   auto_check_failed: 'Automatic check could not read the image',
   all_checks_passed: 'All checks passed',
   missing_hashtags: 'Hashtags missing',
+  extra_hashtags: 'Other hashtags too — check it has no second artist hashtag',
   author_mismatch: 'Posted from a different account',
   wrong_day: 'Posted on another day',
   x_unreachable: "X couldn't be reached",
@@ -46,6 +47,7 @@ export const REASONS = [
   ['confirmed_duplicate', 'Confirmed duplicates'],
   ['possible_duplicate', 'Possible duplicates'],
   ['x_account', 'X account mismatches'],
+  ['x_hashtags', 'Extra hashtags on X'],
   ['certificate', 'Certificate/date/OCR issues'],
   ['manual', 'Needs manual review'],
 ]

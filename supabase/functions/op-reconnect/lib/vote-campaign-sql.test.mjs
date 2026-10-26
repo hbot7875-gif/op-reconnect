@@ -23,6 +23,11 @@ const OFFSET_MIGRATION = migration('20261014090000_rc_campaign_cert_utc_offset.s
 const SELF_SERVICE_MIGRATION = migration('20261019120000_rc_vote_proof_self_service.sql')
 const MINUTE_MIGRATION = migration('20261020090000_rc_vote_duplicate_minute.sql')
 const REPLACE_MIGRATION = migration('20261020120000_rc_vote_x_replacement.sql')
+const HUB_MIGRATIONS = ['20261015150000_rc_battle_hub.sql', '20261016090000_rc_battle_team_today.sql',
+  '20261016120000_rc_battle_team_ig_default_on.sql', '20261016150000_rc_battle_team_ig_open.sql'].map(migration)
+const ROUND2_MIGRATION = migration('20261026180000_rc_mama_round2.sql')
+// The same file without its own transaction, to re-run inside a test's.
+const ROUND2_BODY = ROUND2_MIGRATION.replace(/^(begin|commit);\r?$/gm, '')
 
 const modulePath = process.env.PGLITE_MODULE
 const skip = modulePath ? false : 'set PGLITE_MODULE to run the SQL suite'
@@ -84,6 +89,16 @@ async function fresh(t) {
     await engine.exec(MINUTE_MIGRATION) // re-runnable
     await engine.exec(REPLACE_MIGRATION)
     await engine.exec(REPLACE_MIGRATION) // re-runnable
+    // Round 2 also touches the Event Hub's chat and team columns.
+    await engine.exec('alter table rc_players add column codename text; create table rc_cache (key text primary key, value jsonb, updated_at timestamptz);')
+    for (const m of HUB_MIGRATIONS) await engine.exec(m)
+    await engine.exec(ROUND2_MIGRATION)
+    await engine.exec(ROUND2_MIGRATION) // re-runnable
+    // The real freezes (Oct 23, Nov 9) pass while this suite lives on, and a
+    // frozen battle stamps no points. Tests run before a far-off freeze;
+    // freezeNow() moves it when a test needs one. The approved times are
+    // checked against the migration files instead.
+    await engine.exec(`update rc_vote_campaigns set battle = battle || '{"freeze_at": "2099-01-01T00:00:00Z"}'::jsonb`)
   }
   await engine.exec('begin')
   t.after(() => engine.exec('rollback'))
@@ -155,7 +170,7 @@ test('migration applies cleanly; MAMA config is isolated from VMA', { skip }, as
   assert.deepEqual(c.rewards, { badge_template_id: 'event_mama_2026', badge_verified_days: 5 })
   assert.deepEqual(c.battle.teams.map((x) => x.label), ['HOOLIGANS', 'ALIENS'])
   assert.deepEqual(c.battle.milestones, [200, 500, 900, 1400, 2200])
-  assert.equal(new Date(c.battle.freeze_at).toISOString(), '2026-10-23T03:00:00.000Z', 'Oct 23 12:00 KST')
+  assert.match(MIGRATION, /"freeze_at": "2026-10-23T12:00:00\+09:00"/, 'Oct 23 12:00 KST')
   assert.deepEqual(c.battle.gift.pool.map((p) => [p.kind, p.weight, p.amount]), [
     ['charge_cell', 32, 1], ['xp', 26, 10], ['wings', 17, 1], ['streak_freeze', 15, 1], ['extension', 6, 1], ['backup_pass', 4, 1]])
   assert.equal(c.battle.gift.pool.reduce((s, p) => s + p.weight, 0), 100)
@@ -947,4 +962,172 @@ test('replacement functions and table are service-role only', { skip }, async (t
   assert.equal((await q1(db, `select has_table_privilege('anon', 'rc_x_handle_replacements', 'select') as a`)).a, false)
   const cols = (await db.query(`select column_name from information_schema.columns where table_name = 'rc_x_handle_replacements'`)).rows.map((r) => r.column_name)
   for (const bad of ['password', 'login', 'email', 'token']) assert.equal(cols.some((c) => c.includes(bad)), false, bad)
+})
+
+// ── MAMA 2026 · Round 2 (migration 20261026180000) ─────────────────────
+
+const R2 = 'mama_2026_r2'
+const r2Join = async (db, agent, team) => {
+  await json(db, `select rc_campaign_team_start($1,$2) as r`, [R2, agent])
+  return json(db, `select rc_campaign_team_choose($1,$2,$3) as r`, [R2, agent, team])
+}
+const r2State = (db, agent) => json(db, `select rc_campaign_team_state($1,$2) as r`, [R2, agent])
+/** A verified X proof in a given round (the agent must already have a side there). */
+async function verifiedXIn(db, campaign, agent, day) {
+  seq++
+  const author = `${agent.toLowerCase()}r${campaign.length}`.slice(0, 15)
+  await json(db, `select rc_campaign_register_x_handle($1,$2,$3) as r`, [campaign, agent, author])
+  return json(db, `select rc_campaign_submit_proof($1,'x',$2,$3::date,'verified','{}'::jsonb,'{}'::jsonb,null,null,null,null,null,$4,null,$5) as r`,
+    [campaign, agent, day, String(1847000000000000000n + BigInt(seq)), author])
+}
+
+test('round 2: its own row, the approved window and config; Round 1 untouched', { skip }, async (t) => {
+  const db = await fresh(t)
+  const r2 = await q1(db, `select * from rc_vote_campaigns where id = $1`, [R2])
+  assert.equal(new Date(r2.opens_at).toISOString(), '2026-10-28T09:00:00.000Z')
+  assert.equal(new Date(r2.closes_at).toISOString(), '2026-11-08T14:59:59.000Z')
+  assert.deepEqual(r2.battle.teams.map((x) => x.id), ['hooligans', 'aliens'])
+  assert.equal(r2.battle.carry_teams_from, 'mama_2026')
+  assert.ok(Date.parse(r2.battle.promo_from) < Date.parse(r2.opens_at), 'promo before voting')
+  assert.match(ROUND2_MIGRATION, /"freeze_at": "2026-11-09T12:00:00\+09:00"/, 'Nov 9 12:00 KST')
+  assert.deepEqual(r2.missions.find((m) => m.id === 'x').hashtags, ['2026MAMAVOTE', 'BTS'])
+  assert.equal(r2.missions.find((m) => m.id === 'x').exclusive_hashtags, true)
+  assert.deepEqual(r2.rewards.badge_scope, ['mama_2026'])
+  assert.equal(r2.pulse.enabled, false)
+  const r1 = await q1(db, `select * from rc_vote_campaigns where id = 'mama_2026'`)
+  assert.deepEqual(r1.battle.milestones, [200, 500, 900, 1400, 2200], 'Round 1 config unchanged')
+  assert.equal(r1.rewards.badge_scope, undefined)
+})
+
+test('round 2: Round 1 sides carry over with each agent’s Instagram choice; no side, no carry', { skip }, async (t) => {
+  const db = await fresh(t)
+  await joinTeam(db, 'AGENT001', 'hooligans')
+  await joinTeam(db, 'AGENT002', 'aliens')
+  await json(db, `select rc_campaign_team_start('mama_2026','AGENT003') as r`) // started, never picked
+  await db.query(`update rc_campaign_teams set show_ig = false, show_ig_at = now() where campaign_id = 'mama_2026' and agent_no = 'AGENT002'`)
+  await db.exec(ROUND2_BODY)
+  const rows = (await db.query(`select agent_no, team, assigned_via, show_ig, show_ig_at is not null as chose from rc_campaign_teams where campaign_id = $1 order by agent_no`, [R2])).rows
+  assert.deepEqual(rows.map((r) => [r.agent_no, r.team, r.assigned_via]), [['AGENT001', 'hooligans', 'carried'], ['AGENT002', 'aliens', 'carried']])
+  assert.deepEqual([rows[1].show_ig, rows[1].chose], [false, true], 'an explicit "off" stays off')
+  assert.equal((await r2State(db, 'AGENT001')).team, 'hooligans')
+  // A carried side is locked like any other: a pick can't move it.
+  await r2Join(db, 'AGENT001', 'aliens')
+  assert.equal((await r2State(db, 'AGENT001')).team, 'hooligans')
+  // Re-running the migration changes nothing.
+  await db.exec(ROUND2_BODY)
+  assert.equal(await n(db, `select count(*) from rc_campaign_teams where campaign_id = $1`, [R2]), 2)
+})
+
+test('round 2: new agents pick a side before voting opens; recruits and head counts are counted', { skip }, async (t) => {
+  const db = await fresh(t)
+  await joinTeam(db, 'AGENT001', 'hooligans')
+  await db.exec(ROUND2_BODY)
+  await r2Join(db, 'AGENT004', 'aliens')
+  await r2Join(db, 'AGENT005', 'aliens')
+  const b = await json(db, `select rc_campaign_battle_state($1,'') as r`, [R2])
+  assert.deepEqual(b.teamSizes, { hooligans: 1, aliens: 2 })
+  assert.deepEqual(b.recruits, { hooligans: 0, aliens: 2 }, 'carried agents are not recruits')
+  assert.deepEqual([b.total, b.teams.hooligans, b.teams.aliens], [0, 0, 0])
+})
+
+test('round 2: no proof before its first voting day; scores and gifts are separate from Round 1', { skip }, async (t) => {
+  const db = await fresh(t)
+  await joinTeam(db, 'AGENT001', 'hooligans')
+  await verifiedX(db, 'AGENT001', '2026-10-20') // a Round 1 point
+  await db.exec(ROUND2_BODY)
+  await json(db, `select rc_campaign_register_x_handle($1,'AGENT001','agent001early') as r`, [R2])
+  const early = await json(db, `select rc_campaign_submit_proof($1,'x','AGENT001','2026-10-27'::date,'verified','{}'::jsonb,'{}'::jsonb,null,null,null,null,null,'1847999999999999999',null,'agent001early') as r`, [R2])
+  assert.equal(early.error, 'voting_closed')
+  const ok = await verifiedXIn(db, R2, 'AGENT001', '2026-10-29')
+  assert.equal(ok.success, true)
+  const r1 = await json(db, `select rc_campaign_battle_state('mama_2026','') as r`)
+  const r2 = await json(db, `select rc_campaign_battle_state($1,'') as r`, [R2])
+  assert.deepEqual([r1.teams.hooligans, r1.total, r2.teams.hooligans, r2.total], [1, 1, 1, 1])
+  assert.equal(await n(db, `select coalesce((select fill from rc_vote_gift_progress where campaign_id=$1 and agent_no='AGENT001'),0)`, [R2]), 1, 'own Voting Gift')
+})
+
+test('round 2: the MAMA badge counts verified days across both rounds, once', { skip }, async (t) => {
+  const db = await fresh(t)
+  await joinTeam(db, 'AGENT001', 'hooligans')
+  for (const d of ['2026-10-13', '2026-10-15', '2026-10-17']) await verifiedX(db, 'AGENT001', d)
+  await db.exec(ROUND2_BODY)
+  const badge = (a = 'AGENT001') => n(db, `select count(*) from rc_badges where agent_no=$1 and badge_id='event_mama_2026'`, [a])
+  assert.equal(await badge(), 0)
+  await verifiedXIn(db, R2, 'AGENT001', '2026-10-29')
+  assert.equal(await badge(), 0, '4 days')
+  await verifiedXIn(db, R2, 'AGENT001', '2026-10-30')
+  assert.equal(await badge(), 1, '3 + 2 days')
+  await verifiedXIn(db, R2, 'AGENT001', '2026-10-31')
+  assert.equal(await badge(), 1, 'awarded once')
+  // Round 1's own rule is unchanged: its days alone.
+  await joinTeam(db, 'AGENT002', 'aliens')
+  for (const d of ['2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16']) await verifiedX(db, 'AGENT002', d)
+  assert.equal(await badge('AGENT002'), 0)
+})
+
+test('round 2: team chat opens with the promo window, not before; closed after voting', { skip }, async (t) => {
+  const db = await fresh(t)
+  await db.exec(ROUND2_BODY)
+  await r2Join(db, 'AGENT004', 'aliens')
+  const send = (body) => json(db, `select rc_battle_chat_send($1,'AGENT004',$2,null) as r`, [R2, body])
+  await db.query(`update rc_vote_campaigns set opens_at = now() + interval '2 days', closes_at = now() + interval '14 days',
+    battle = battle || jsonb_build_object('promo_from', now() - interval '1 hour') where id = $1`, [R2])
+  assert.equal((await send('aliens, we land at 18:00')).ok, true, 'promo: open')
+  await db.query(`update rc_vote_campaigns set battle = battle || jsonb_build_object('promo_from', now() + interval '1 hour') where id = $1`, [R2])
+  assert.equal((await send('too early')).error, 'chat_closed', 'before the promo')
+  await db.query(`update rc_vote_campaigns set battle = battle - 'promo_from' where id = $1`, [R2])
+  assert.equal((await send('no promo set')).error, 'chat_closed', 'no promo window → opens with voting, as in Round 1')
+  await db.query(`update rc_vote_campaigns set opens_at = now() - interval '14 days', closes_at = now() - interval '1 second' where id = $1`, [R2])
+  assert.equal((await send('after')).error, 'chat_closed')
+})
+
+test('round 2 recruit bonus: every 3 new agents who scored = +1 for their side; carried and non-voting recruits never count', { skip }, async (t) => {
+  const db = await fresh(t)
+  await joinTeam(db, 'AGENT001', 'hooligans') // a Round 1 side: carried, never a recruit
+  await db.exec(ROUND2_BODY)
+  const state = () => json(db, `select rc_campaign_battle_state($1,'') as r`, [R2])
+  await verifiedXIn(db, R2, 'AGENT001', '2026-10-29')
+  for (const a of ['AGENT004', 'AGENT005', 'AGENT006', 'AGENT007']) await r2Join(db, a, 'aliens')
+  let b = await state()
+  assert.deepEqual([b.qualified.aliens, b.bonus.aliens, b.teams.aliens], [0, 0, 0], 'joining alone earns nothing')
+  for (const a of ['AGENT004', 'AGENT005']) await verifiedXIn(db, R2, a, '2026-10-29')
+  b = await state()
+  assert.deepEqual([b.qualified.aliens, b.bonus.aliens, b.teams.aliens], [2, 0, 2], 'two voters: no bonus yet')
+  await verifiedXIn(db, R2, 'AGENT006', '2026-10-29')
+  b = await state()
+  assert.deepEqual([b.qualified.aliens, b.bonus.aliens, b.votes.aliens, b.teams.aliens], [3, 1, 3, 4], 'third voter: +1')
+  await verifiedXIn(db, R2, 'AGENT006', '2026-10-30')
+  b = await state()
+  assert.equal(b.qualified.aliens, 3, 'a recruit counts once, however often they vote')
+  assert.deepEqual([b.qualified.hooligans, b.bonus.hooligans, b.teams.hooligans], [0, 0, 1], 'carried agents are not recruits')
+  assert.equal(b.total, 5, 'the community total (milestones) is verified votes only')
+})
+
+test('round 2 recruit bonus decides the winner; after the freeze it stops with the votes', { skip }, async (t) => {
+  const db = await fresh(t)
+  await joinTeam(db, 'AGENT001', 'hooligans')
+  await joinTeam(db, 'AGENT002', 'hooligans')
+  await db.exec(ROUND2_BODY)
+  for (const a of ['AGENT001', 'AGENT002']) { await verifiedXIn(db, R2, a, '2026-10-29'); await verifiedXIn(db, R2, a, '2026-10-30') } // 4 votes
+  for (const a of ['AGENT004', 'AGENT005']) await r2Join(db, a, 'aliens')
+  for (const a of ['AGENT004', 'AGENT005']) await verifiedXIn(db, R2, a, '2026-10-29') // 2 votes
+  await r2Join(db, 'AGENT006', 'aliens')
+  const pending = await json(db, `select rc_campaign_submit_proof($1,'mnet','AGENT006','2026-10-31'::date,'verifying','{}'::jsonb,'{}'::jsonb,null,null,null,$2,null,null,null,null) as r`, [R2, H('9')])
+  await verifiedXIn(db, R2, 'AGENT006', '2026-10-30') // 3 votes, 3 recruits who voted → +1 = 4: a tie
+  await db.query(`update rc_vote_campaigns set battle = battle || jsonb_build_object('freeze_at', now() - interval '1 second') where id = $1`, [R2])
+  let b = await json(db, `select rc_campaign_battle_state($1,'') as r`, [R2])
+  assert.deepEqual([b.teams.hooligans, b.teams.aliens, b.winners], [4, 4, ['aliens', 'hooligans']], 'the bonus point turns a loss into a draw')
+  await transition(db, pending.id, ['verifying'], 'verified', 'admin') // after the freeze: no point, no change
+  b = await json(db, `select rc_campaign_battle_state($1,'') as r`, [R2])
+  assert.deepEqual([b.teams.aliens, b.bonus.aliens], [4, 1])
+  // The winner reward reads the same state: both sides' contributors may claim.
+  const r = await json(db, `select rc_battle_winner_claim($1,'AGENT004',gen_random_uuid()) as r`, [R2])
+  assert.equal(r.success, true)
+})
+
+test('Round 1 has no recruit bonus: its scores are votes only', { skip }, async (t) => {
+  const db = await fresh(t)
+  for (const a of ['AGENT004', 'AGENT005', 'AGENT006']) { await joinTeam(db, a, 'aliens'); await verifiedX(db, a, '2026-10-14') }
+  const b = await battle(db)
+  assert.deepEqual([b.teams.aliens, b.bonus.aliens, b.total], [3, 0, 3])
 })

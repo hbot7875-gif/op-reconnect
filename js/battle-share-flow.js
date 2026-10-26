@@ -41,19 +41,20 @@ export async function sharePoster(file, text) {
   }
 }
 
-/** Link-only share; with no system share at all, copy the link instead.
+/** Link-only share — the public page, or one side's recruit page; with no
+ *  system share at all, copy the link instead.
  *  → 'shared' | 'cancelled' | 'copied' | 'failed' */
-export async function shareLink(text) {
-  const body = text.replace(`\n${BATTLE_URL}`, '')
+export async function shareLink(text, url = BATTLE_URL) {
+  const body = text.replace(`\n${url}`, '')
   if (typeof navigator.share === 'function') {
     try {
-      await navigator.share({ title: 'MAMA Battle', text: body, url: BATTLE_URL })
+      await navigator.share({ title: 'MAMA Battle', text: body, url })
       return 'shared'
     } catch (e) {
       if (cancelled(e)) return 'cancelled'
     }
   }
-  return (await copyText(BATTLE_URL)) ? 'copied' : 'failed'
+  return (await copyText(url)) ? 'copied' : 'failed'
 }
 
 export async function copyText(s) {

@@ -34,8 +34,12 @@ import { playModeReview } from './mode-upgrade-announce.js'
 import { districtDisplayName } from './ward-tiles.js'
 import { lapseChoice } from './ui-district.js'
 import { trackEngagement } from './engagement.js'
+import { rememberInvite } from './battle-invite.js'
 
 const $ = (id) => document.getElementById(id)
+
+// A MAMA Battle recruit link (?team=) is kept through sign-in and onboarding.
+try { rememberInvite(location.search, localStorage) } catch { /* no storage: no invite mark */ }
 
 function show(id) {
   for (const s of ['auth', 'loading', 'onboarding', 'game']) $(s).hidden = s !== id

@@ -474,8 +474,9 @@ function cityPlan(state) {
     ] : [null, false, null, false, false]),
     { ...backupMapOpts(state), onRunArmy: () => openRunArmy(), runArmyNew: runArmyIsNew(), ...(jiminRoom ? { birthdayIcon: '🌙', birthdayLabel: 'Jimin Day Party', birthdayAtTop: true } : {}),
       // MAMA 2026: on the map exactly while the server sends its summary
-      // (voting → verification → 48h of final result), then gone by itself.
-      ...(state.voting ? { voting: { label: 'MAMA 2026', live: state.voting.phase === 'open', onOpen: (origin) => goVoting(origin) } } : {}) }))
+      // (recruiting → voting → verification → 48h of final result), then
+      // gone by itself. It pulses while the battle recruits or voting runs.
+      ...(state.voting ? { voting: { label: 'MAMA 2026', live: state.voting.phase === 'open' || state.voting.phase === 'soon', onOpen: (origin) => goVoting(origin) } } : {}) }))
   return box
 }
 

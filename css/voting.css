@@ -761,3 +761,18 @@
 .vt-sheet .vt-pop-title { margin: 0 0 8px; }
 /* The overlay's close button reserves room on the first child; the icon sits centred instead. */
 .vt-pop.sheet > .sheet-x-bar + * { padding-right: 0; }
+
+/* MAMA Round 2: recruit vs battle poster, the invite mark, the promo banner. */
+.vt-seg-ctl { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border: 1px solid var(--vt-line); border-radius: var(--vt-r-md); background: var(--vt-surface-2); margin-bottom: 10px; }
+.vt-seg-ctl button { min-height: 36px; border: 0; border-radius: calc(var(--vt-r-md) - 3px); background: transparent; color: var(--vt-text-2); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.vt-seg-ctl button[aria-pressed="true"] { background: var(--vt-surface); color: var(--vt-text); box-shadow: 0 0 0 1px var(--vt-line-2); }
+.vt-seg-ctl button:focus-visible { outline: 2px solid var(--vt-text); outline-offset: 1px; }
+.vt-chooser-team small { display: block; font-size: 11px; font-weight: 600; letter-spacing: .02em; opacity: .8; margin-top: 2px; }
+.vt-chooser-team.is-invited { box-shadow: 0 0 0 2px var(--vt-text); }
+.vt-city-score small { font-size: 11px; color: var(--vt-text-2); margin-left: 6px; }
+.vt-hero[data-vt-battle="soon"] .vt-battle-share + .vt-battle-share { margin-top: 8px; }
+.vt-bonus { padding: 12px 14px; display: grid; gap: 8px; }
+.vt-bonus-teams { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; font-size: 13px; color: var(--vt-text-2); }
+.vt-bonus-teams b { color: var(--vt-text); font-variant-numeric: tabular-nums; }
+.vt-bonus-teams small { font-size: 12px; }
+.vt-bonus-next { margin: 0; font-size: 12.5px; color: var(--vt-text-2); }
