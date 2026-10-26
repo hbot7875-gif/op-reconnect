@@ -187,7 +187,7 @@ subscribe((state) => {
   // rc_player_districts row in the same request that reports it, so it
   // can never come back true on a later poll of the same district.
   if (state.expiredDistrict) {
-    toast(`⏳ Time ran out on ${districtDisplayName(state.expiredDistrict)} — restoration reset. You can start it again.`, 4500)
+    toast(`⏳ Time ran out on ${districtDisplayName(state.expiredDistrict)} — open it to see what was missing. You can start it again.`, 6000)
   }
   // A lapsed attempt waiting on "extend or reset" — ask once per session
   // wherever the agent happens to be. The same choice stays on the

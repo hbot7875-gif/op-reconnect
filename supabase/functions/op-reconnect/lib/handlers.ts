@@ -8,7 +8,9 @@ import { ensureDailyRollups, computeStreak, awardStreakBadges, totalXp, spendabl
 import { awardDailySideMissionXp, awardWeeklySideMissionXp, buildSideMissions } from './side-missions.ts'
 import { albumForState } from './album.ts'
 import { runAmiTesterForState } from './run-ami.ts'
-import { freezeGoals, computeBaseline, districtProgress, districtDeadline, filesRevealedCount, albumGoalStreamTotal, DEADLINE_EXTENSION_DAYS, lapseChoiceOpen, LAPSE_CHOICE_DAYS } from './districts.ts'
+import { freezeGoals, computeBaseline, districtProgress, districtDeadline, districtDeadlineExtraDays, filesRevealedCount, albumGoalStreamTotal, lapseChoiceOpen, LAPSE_CHOICE_DAYS } from './districts.ts'
+import { recordDistrictLapse } from './district-lapse-store.ts'
+import { latestLapsesByDistrict } from './district-lapse.js'
 import { resolveReconnectStatus } from './reconnect-goal.ts'
 import { todayKst, nextKstMidnightUtc, kstDateOf } from './kst.ts'
 import { getBombView, launchDefuse } from './bomb.ts'
@@ -31,13 +33,6 @@ import { getModeVolumeReview } from './mode-guard.ts'
 import { activationDayBounds, activationDayCounts } from './activation-window.ts'
 import { activeLeave, leaveStatus, frozenDistrictDates } from './leave.ts'
 
-/** Administrative grace time is stored separately from activated_at so a
- * support extension never shifts the stream-counting window or its frozen
- * baseline. Player-bought extensions remain the existing one-time +3 days. */
-function districtDeadlineExtraDays(activePd: any): number {
-  const supportHours = Math.max(0, Number(activePd?.deadline_extension_hours) || 0)
-  return (activePd?.deadline_extended ? DEADLINE_EXTENSION_DAYS : 0) + supportHours / 24
-}
 
 // rc_agents (migration 016) is this season's own account table — a clean
 // break from the old site's `agents`. Migrations 019/020 added the columns
@@ -304,6 +299,8 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     const lapsed = !districtComplete
       && lapseChoiceOpen(deadline, !!activePd.deadline_extended, player.deadline_extension_charges || 0)
     if (!districtComplete && deadline.expired && !lapsed) {
+      // Keep what the attempt reached before it goes (rc_district_lapses).
+      await recordDistrictLapse(supabase, content, player.agent_no, activePd, deadline.expiresAt, 'deadline', { progress, reconnect })
       await supabase.from('rc_player_districts').delete()
         .eq('agent_no', player.agent_no).eq('district_id', activePd.district_id).eq('status', 'active')
       expiredDistrict = { id: activePd.district_id, wardId: districtRow?.ward_id || null, name: districtRow?.name || activePd.district_id }
@@ -461,6 +458,18 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     }
     }
   }
+
+  // ── Ended attempts ─────────────────────────────────────────
+  // The newest lapsed attempt per district this agent isn't on now, so the
+  // district screen can say what it reached and what was missing instead of
+  // a bare 0% (district-lapse.js). An attempt deleted by this very request
+  // is already recorded above and shows at once.
+  const { data: lapseRows } = await supabase.from('rc_district_lapses')
+    .select('district_id, activated_at, deadline_at, lapsed_at, reason, summary')
+    .eq('agent_no', player.agent_no).order('lapsed_at', { ascending: false }).limit(30)
+  const onDistrict = new Set<string>(restored)
+  if (activePd && !expiredDistrict) onDistrict.add(activePd.district_id)
+  const districtLapses = latestLapsesByDistrict(lapseRows || [], onDistrict)
 
   // ── Map ────────────────────────────────────────────────────
   const unlockedWards = wardStates(content, restored)
@@ -675,6 +684,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     map: { wards, districts },
     activeDistrict,
     expiredDistrict,
+    districtLapses,
     resources,
     items,
     bomb,
@@ -939,6 +949,7 @@ export async function resetLapsedDistrict(supabase: SupabaseDB, params: any) {
   const deadline = districtDeadline(activePd.activated_at, restorationDays(content), districtDeadlineExtraDays(activePd))
   if (!deadline.expired) return { success: false, error: 'not_expired' }
 
+  await recordDistrictLapse(supabase, content, agentNo, activePd, deadline.expiresAt, 'reset')
   await supabase.from('rc_player_districts').delete()
     .eq('agent_no', agentNo).eq('district_id', districtId).eq('status', 'active')
   return { success: true }

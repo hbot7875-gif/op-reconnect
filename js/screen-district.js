@@ -13,6 +13,7 @@ import { wardDisplayName, districtDisplayName } from './ward-tiles.js'
 import { mountScene } from './scene.js'
 import { districtFraction, renderBoard } from './ui-district.js'
 import { districtPercent } from './district-progress.js'
+import { lastAttemptHtml } from './last-attempt.js'
 import { playRestoration } from './celebrate.js'
 import { itemTile, itemSheet, itemsAt, itemsInPack } from './items.js'
 import { trackEngagementOnce } from './engagement.js'
@@ -200,7 +201,16 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
   // A recruit: on this district's ReConnect team without restoring it
   // (getGameState's reconnectHelping). The quest is all that's theirs here.
   const helping = (state.reconnectHelping || []).find((h) => h.districtId === districtId)
-  if (helping) {
+  // A team this agent helped ran out of time. The meter above is about the
+  // agent's own attempt (none here), so say what happened to the team
+  // instead of leaving a bare 0% that reads as lost progress.
+  let expiredTeamNote = null
+  if (helping?.expired) {
+    expiredTeamNote = el('div', 'card board-card', `
+      <p class="muted"><b>⏳ Your ReConnect team ran out of time</b>${helping.expiredAt ? ` on ${esc(new Date(helping.expiredAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))}` : ''} before the quest finished.
+      You joined to help, so ${esc(districtDisplayName(mapD))} was never your own district and its meter stays at 0% for you.
+      Your plays weren't lost — they still count anywhere else they match.</p>`)
+  } else if (helping) {
     container.querySelector('.stage-eyebrow').textContent = 'YOUR TEAM'
     const mounted = board.querySelector(':scope > .reconnect-card.is-recruit')
     if (mounted?.dataset.districtId === districtId) { mounted.refreshMission?.(); return }
@@ -215,6 +225,12 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
   }
 
   board.innerHTML = ''
+  if (expiredTeamNote) board.appendChild(expiredTeamNote)
+  // This agent's own attempt here ended without restoring it: say what it
+  // reached, the deadline and what was missing, so the 0% above isn't read
+  // as lost progress.
+  const lapse = mapD.status !== 'restored' ? state.districtLapses?.[districtId] : null
+  if (lapse) board.appendChild(el('div', 'card board-card last-attempt', lastAttemptHtml(lapse)))
   const card = el('div', 'card board-card')
 
   if (mapD.status === 'locked') {
@@ -537,7 +553,7 @@ function recruitLinks(state, hereId) {
     const link = el('button', 'recruit-link', `
       <span class="recruit-link-eyebrow">RECONNECT TEAM</span>
       <b>You're helping ${esc(h.districtName)}</b>
-      <small>${h.complete ? 'Quest complete' : esc(h.trackLabel ? `Streaming ${h.trackLabel} together — see your team` : 'See your team')}</small>
+      <small>${h.complete ? 'Quest complete' : h.expired ? 'Team ran out of time' : esc(h.trackLabel ? `Streaming ${h.trackLabel} together — see your team` : 'See your team')}</small>
       <i aria-hidden="true">→</i>`)
     link.type = 'button'
     link.onclick = (e) => goDistrict(h.wardId, h.districtId, { x: e.clientX, y: e.clientY })

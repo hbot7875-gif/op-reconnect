@@ -1083,6 +1083,16 @@ body.red-zone .cm-mark.active .cm-glow { fill: url(#cm-g-alert); }
 .sn-body { color: var(--muted); font-size: 14px; line-height: 1.65; margin-top: 8px; }
 .sn-body b { color: var(--text); font-weight: 700; }
 .sealed-note + .btn { display: block; width: 100%; }
+.last-attempt { border-color: var(--border-str); }
+.last-attempt .la-head { font-family: var(--disp); font-weight: 800; font-size: 16px; }
+.last-attempt .la-head b { color: var(--text); }
+.last-attempt .la-dates, .last-attempt .la-done { color: var(--muted); font-size: 13px; margin-top: 6px; }
+.last-attempt .la-dates b { color: var(--text); font-weight: 700; }
+.last-attempt .la-reason, .last-attempt .la-foot { color: var(--muted); font-size: 13px; line-height: 1.6; margin-top: 8px; }
+.last-attempt .la-missed-title { font-weight: 700; font-size: 13px; margin-top: 12px; }
+.last-attempt .la-missed { margin: 6px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.6; }
+.last-attempt .la-missed b { font-weight: 700; }
+.last-attempt .la-missed small { display: block; color: var(--muted); font-size: 12px; }
 
 /* group headers + the sealed fold */
 .wt-group { display: flex; align-items: baseline; gap: 8px; margin: 18px 2px 2px;

@@ -13,7 +13,8 @@ import { districtProgress } from './districts.ts'
 import { getBackupOverlay } from './backup-pass.ts'
 import { BIRTHDAY_ERA_EVENTS, BIRTHDAY_LIGHTS_PER_TRACK, birthdayTrackEntries, isBirthdayEventDate } from './birthday-eras.ts'
 import { allocateTrackHits } from './era-match.js'
-import { annotateBotzStreams, botzSourceSetup, botzTrackingState } from './botz-rules.js'
+import { annotateBotzStreams, botzDistrictStillNeeded, botzSourceSetup, botzTrackingState } from './botz-rules.js'
+import { resolveReconnectStatus } from './reconnect-goal.ts'
 import { flagStreamRows, findPossibleAlts, flagExcessStreamDays, countIngestionDuplicates, canonicalStreamResult } from './police-check.ts'
 import { suggestedModeFor } from './mode-guard.ts'
 import { resolveEquippedBadges } from './badge-profile.ts'
@@ -137,16 +138,18 @@ export async function getSignalLog(supabase: SupabaseDB, params: Record<string, 
       activeFrom: Math.floor(new Date(activePd.activated_at).getTime() / 1000),
       trackSlots: (activePd.goals.trackGoals || []).map((goal: any) => {
         const progress = before.trackGoals.find((g: any) => g.id === goal.id)
-        return { keys: goal.keys, remaining: Math.max(0, (progress?.target || goal.target) - (progress?.progress || 0)) }
+        return { keys: goal.keys, label: goal.label, remaining: Math.max(0, (progress?.target || goal.target) - (progress?.progress || 0)) }
       }),
       albums: (activePd.goals.albumGoals || []).map((album: any) => {
         const progress = before.albums.find((a: any) => a.id === album.id)
         return {
+          label: album.label,
           target: progress?.target || album.target,
           cap: album.target,
           bonus: progress?.backup?.bonus || 0,
           slots: album.tracks.map((track: any) => ({
             keys: track.keys,
+            label: track.label,
             have: progress?.tracks?.find((t: any) => t.label === track.label)?.have || 0,
           })),
         }
@@ -179,7 +182,8 @@ export async function getSignalLog(supabase: SupabaseDB, params: Record<string, 
     }
   }
 
-  annotateBotzStreams(allStreams, { district: districtContext, birthday: birthdayContext })
+  const spent: any = {}
+  annotateBotzStreams(allStreams, { district: districtContext, birthday: birthdayContext }, spent)
   const visibleStreams = allStreams.filter((stream) => stream.at >= from)
   const streams = visibleStreams.slice(0, 50)
     .map(({ key: _key, recelebrate: _rc, ...stream }) => stream)
@@ -200,6 +204,14 @@ export async function getSignalLog(supabase: SupabaseDB, params: Record<string, 
     missions.push({
       kind: 'district', id: districtContext.id, label: districtContext.label, icon: '📍',
       today: helpedToday.filter((stream) => stream.attributions.some((a: any) => a.kind === 'district')).length,
+      // What is left, so "goal already complete" on most jams reads as
+      // "nearly there" instead of "BOTZ isn't counting". The team quest is
+      // listed separately: it can hold a district open after every solo goal
+      // is full, and that is exactly when the attempt lapses unnoticed.
+      stillNeeded: botzDistrictStillNeeded(spent.district),
+      teamQuestPending: activePd.goals.reconnect
+        ? (await resolveReconnectStatus(supabase, content, agentNo, activePd.district_id, activePd.goals.reconnect).catch(() => null))?.done === false
+        : false,
     })
   }
   const setup = botzSourceSetup(agentRow)

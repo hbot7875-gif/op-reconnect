@@ -406,6 +406,14 @@ export function lapseChoiceOpen(deadline: DistrictDeadline, deadlineExtended: bo
   return Date.now() - new Date(deadline.expiresAt).getTime() < LAPSE_CHOICE_DAYS * 86400000
 }
 
+/** Administrative grace time is stored separately from activated_at so a
+ * support extension never shifts the stream-counting window or its frozen
+ * baseline. Player-bought extensions remain the existing one-time +3 days. */
+export function districtDeadlineExtraDays(activePd: any): number {
+  const supportHours = Math.max(0, Number(activePd?.deadline_extension_hours) || 0)
+  return (activePd?.deadline_extended ? DEADLINE_EXTENSION_DAYS : 0) + supportHours / 24
+}
+
 /** A district's restoration window — exactly `days` (plus `extraDays` from
  *  a used one-time extension, see EXTENSION_DAYS) from activation. Checked
  *  against `!progress.complete` by the caller: a completion that lands on

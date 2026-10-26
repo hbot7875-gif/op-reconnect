@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { annotateBotzStreams, botzSourceSetup, botzTrackingState } from './botz-rules.js'
+import { annotateBotzStreams, botzDistrictStillNeeded, botzSourceSetup, botzTrackingState } from './botz-rules.js'
 
 const jam = (track, at = 100) => ({ track, key: track.toLowerCase(), at, eligible: true })
 
@@ -60,4 +60,29 @@ test('tracking state separates quiet accounts from failed checks', () => {
   assert.equal(botzTrackingState({ setupOk: true, checkOk: true, hasRecent: false }), 'connected_no_recent')
   assert.equal(botzTrackingState({ setupOk: true, checkOk: false, hasRecent: false }), 'check_failed')
   assert.equal(botzTrackingState({ setupOk: false, checkOk: true, hasRecent: false }), 'needs_setup')
+})
+
+test('still-needed lists what is left after the jams are spent', () => {
+  const district = {
+    id: 'zeal', label: 'Zeal Arcade', activeFrom: 0,
+    trackSlots: [{ keys: ['swim'], label: 'SWIM', remaining: 1 }, { keys: ['normal'], label: 'Normal', remaining: 3 }],
+    albums: [{
+      label: 'Keep Swimming', target: 7, cap: 7, bonus: 0,
+      slots: [{ keys: ['swim with jin'], label: 'SWIM with Jin', have: 6 }, { keys: ['swim with v'], label: 'SWIM with V', have: 8 }],
+    }],
+  }
+  const out = {}
+  annotateBotzStreams([jam('SWIM', 1), jam('Normal', 2)], { district }, out)
+  assert.deepEqual(botzDistrictStillNeeded(out.district), {
+    items: [{ label: 'SWIM with Jin', plays: 1, album: 'Keep Swimming' }, { label: 'Normal', plays: 2 }],
+    total: 2,
+  })
+  // The caller's context is never mutated.
+  assert.equal(district.trackSlots[0].remaining, 1)
+})
+
+test('still-needed is empty once every goal is filled', () => {
+  const district = { trackSlots: [{ keys: ['swim'], label: 'SWIM', remaining: 0 }], albums: [{ label: 'A', target: 3, cap: 3, bonus: 1, slots: [{ label: 'x', have: 2 }] }] }
+  assert.deepEqual(botzDistrictStillNeeded(district), { items: [], total: 0 })
+  assert.deepEqual(botzDistrictStillNeeded(null), { items: [], total: 0 })
 })

@@ -68,8 +68,22 @@ function renderToday(today, missions) {
     const progress = mission.kind === 'birthday'
       ? `${mission.progress || 0}/${mission.total || 0}`
       : `+${mission.today || 0} today`
-    return `<div class="botz-mission-line"><span>${escapeHtml(mission.icon || '✦')} ${escapeHtml(mission.label)} · <b>${escapeHtml(progress)}</b></span></div>`
+    return `<div class="botz-mission-line"><span>${escapeHtml(mission.icon || '✦')} ${escapeHtml(mission.label)} · <b>${escapeHtml(progress)}</b></span>${stillNeededHtml(mission)}</div>`
   }).join('') || '<div class="botz-muted">No active mission context</div>'
+}
+
+// A mostly-full district marks most jams "goal already complete"; say what
+// is actually left so that never reads as BOTZ not counting.
+function stillNeededHtml(mission) {
+  if (mission.kind !== 'district' || !mission.stillNeeded) return ''
+  const { items = [], total = 0 } = mission.stillNeeded
+  const parts = items.map((item) => `${escapeHtml(item.label)} <b>×${Number(item.plays) || 0}</b>`)
+  if (total > items.length) parts.push(`+${total - items.length} more`)
+  if (mission.teamQuestPending) parts.push('the ReConnect team quest')
+  const body = parts.length
+    ? `Still needed: ${parts.join(' · ')}`
+    : 'Every goal here is filled.'
+  return `<span class="botz-still-needed">${body}</span>`
 }
 
 function renderProfile(profile) {

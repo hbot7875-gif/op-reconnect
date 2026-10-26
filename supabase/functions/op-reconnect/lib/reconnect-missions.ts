@@ -1171,18 +1171,31 @@ export async function leaveRecruitTeam(supabase: SupabaseDB, content: unknown, p
 
 /** Missions this agent is on as a recruit, for getGameState — without it a
  *  recruit had no way back to the team after accepting. Open ones, and
- *  completed ones for RECRUIT_COMPLETE_SHOWN_MS. The caller drops the
- *  district the agent is itself restoring: that's a local seat, not this. */
+ *  completed or expired ones for RECRUIT_COMPLETE_SHOWN_MS. An expired team
+ *  used to vanish the moment it ran out of time, leaving the recruit looking
+ *  at a district meter that reads 0% (it isn't theirs) with no word about
+ *  what happened (AGENT027, 2026-10). The caller drops the district the
+ *  agent is itself restoring: that's a local seat, not this. */
 export async function getMyRecruitMissions(supabase: SupabaseDB, content: GameContent, agentNo: string) {
   const { data: rows } = await supabase.from('rc_reconnect_participants')
     .select('mission_id').eq('agent_no', agentNo).eq('status', 'joined')
   const ids = [...new Set((rows || []).map((r: any) => r.mission_id))]
   if (!ids.length) return []
   const { data: missions } = await supabase.from('rc_reconnect_missions')
-    .select('id, district_id, goal_id, status, completed_at').in('id', ids).in('status', ['open', 'complete'])
+    .select('id, district_id, goal_id, status, completed_at, expires_at').in('id', ids).in('status', ['open', 'complete', 'expired'])
   const now = Date.now()
-  const live = (missions || []).filter((m: any) => m.status === 'open'
-    || (m.completed_at && now - Date.parse(m.completed_at) < RECRUIT_COMPLETE_SHOWN_MS))
+  const recent = (m: any) => m.status === 'open'
+    || (m.status === 'complete' && m.completed_at && now - Date.parse(m.completed_at) < RECRUIT_COMPLETE_SHOWN_MS)
+    || (m.status === 'expired' && m.expires_at && now - Date.parse(m.expires_at) < RECRUIT_COMPLETE_SHOWN_MS)
+  // A newer open/complete team on the same district outranks an expired one.
+  const settled = new Set((missions || []).filter((m: any) => m.status !== 'expired' && recent(m)).map((m: any) => m.district_id))
+  const latestExpired = new Map<string, any>()
+  for (const m of missions || []) {
+    if (m.status !== 'expired' || !recent(m) || settled.has(m.district_id)) continue
+    const prev = latestExpired.get(m.district_id)
+    if (!prev || Date.parse(m.expires_at) > Date.parse(prev.expires_at)) latestExpired.set(m.district_id, m)
+  }
+  const live = (missions || []).filter((m: any) => m.status !== 'expired' ? recent(m) : latestExpired.get(m.district_id) === m)
   if (!live.length) return []
   // A recruit seat only exists on a district the agent is not restoring.
   const { data: local } = await supabase.from('rc_player_districts').select('district_id')
@@ -1200,6 +1213,8 @@ export async function getMyRecruitMissions(supabase: SupabaseDB, content: GameCo
         questLabel: goal?.label || 'ReConnect Quest',
         trackLabel: goal?.config?.sharedTrack?.label || null,
         complete: m.status === 'complete',
+        expired: m.status === 'expired',
+        expiredAt: m.status === 'expired' ? m.expires_at : null,
       }
     })
 }

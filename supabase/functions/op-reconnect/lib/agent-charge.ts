@@ -12,7 +12,9 @@
 
 import type { SupabaseDB, GameContent } from './config.ts'
 import { leaveOverlapMs } from './leave.ts'
-import { trackArtistOverrides } from './config.ts'
+import { trackArtistOverrides, restorationDays } from './config.ts'
+import { districtDeadline, districtDeadlineExtraDays } from './districts.ts'
+import { recordDistrictLapse } from './district-lapse-store.ts'
 import { todayKst, kstWeekKey } from './kst.ts'
 import { countedArtistPlays } from './text.ts'
 import { ERA_CATALOG, allocateEraMatches, eraCatalogTrackDone, eraTrackTitle } from './era-timeline.ts'
@@ -68,7 +70,15 @@ async function rescueWithFreezes(
  *  7-day restoration-deadline lapse in handlers.ts — nothing was ever baked
  *  into lifetime resources for an in-progress district, so there's nothing
  *  to unwind. */
-async function softReset(supabase: SupabaseDB, agentNo: string) {
+async function softReset(supabase: SupabaseDB, content: GameContent, agentNo: string) {
+  // Keep what it reached first (rc_district_lapses), so the district screen
+  // can explain the 0% instead of showing it bare.
+  const { data: active } = await supabase.from('rc_player_districts')
+    .select('*').eq('agent_no', agentNo).eq('status', 'active')
+  for (const pd of active || []) {
+    const deadline = districtDeadline(pd.activated_at, restorationDays(content), districtDeadlineExtraDays(pd))
+    await recordDistrictLapse(supabase, content, agentNo, pd, deadline.expiresAt, 'blackout')
+  }
   await supabase.from('rc_player_districts').delete().eq('agent_no', agentNo).eq('status', 'active')
 }
 
@@ -698,7 +708,7 @@ export async function getAgentChargeView(supabase: SupabaseDB, content: GameCont
       freezes = rescued.freezesLeft
       daysDark = rescued.daysDark
       if (daysDark >= SOFT_RESET_DAYS) {
-        await softReset(supabase, agentNo)
+        await softReset(supabase, content, agentNo)
         softResetAt = new Date().toISOString()
         await supabase.from('rc_agent_charge').update({ soft_reset_at: softResetAt }).eq('agent_no', agentNo)
       }
