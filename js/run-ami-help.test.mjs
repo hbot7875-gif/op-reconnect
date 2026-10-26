@@ -140,3 +140,13 @@ test('How to Play leads with four easy steps; the fine print folds away', () => 
     assert.ok(html.indexOf(fine) > more, `${fine} belongs under More rules`)
   }
 })
+
+test('a match is full screen: the City chrome steps aside, and comes back after', () => {
+  const screen = readFileSync(new URL('./screen-run-ami.js', import.meta.url), 'utf8')
+  const css = readFileSync(new URL('../css/run-ami.css', import.meta.url), 'utf8')
+  assert.match(screen, /document\.body\.classList\.toggle\('ra-playing', on\)/)
+  // On for a match; off for the lobby, after the finale, and on leaving War of Cards.
+  assert.match(screen, /if \(next\.phase === 'match'\) \{\s*setPlaying\(true\)/)
+  assert.equal((screen.match(/setPlaying\(false\)/g) || []).length, 3)
+  assert.match(css, /body\.ra-playing #hud,\s*body\.ra-playing #tabbar,\s*body\.ra-playing \.page-foot \{ display: none; \}/)
+})

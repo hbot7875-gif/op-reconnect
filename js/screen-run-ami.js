@@ -138,8 +138,19 @@ export function renderRunAmi(container, state) {
   refresh()
 }
 
+/** Full screen while a match is on the table: the City's top bar, bottom
+ *  nav and footer step aside (run-ami.css, body.ra-playing) so the table,
+ *  your hand and both calls fit on a phone without scrolling. They come
+ *  back for the lobby, and whenever the agent leaves War of Cards. */
+function setPlaying(on) {
+  const was = document.body.classList.contains('ra-playing')
+  document.body.classList.toggle('ra-playing', on)
+  if (on && !was) window.scrollTo(0, 0)
+}
+
 /** Called by main.js whenever the screen changes away from RUN AMI. */
 export function teardownRunAmi() {
+  setPlaying(false)
   clearInterval(ticker)
   ticker = null
   clearTimeout(finaleTimer)
@@ -239,12 +250,14 @@ function apply(next) {
       if (!root) return
       table?.destroy()
       table = null
+      setPlaying(false)
       paint()
     }, ms)
     return
   }
 
   if (next.phase === 'match') {
+    setPlaying(true)
     if (!table || prev?.phase !== 'match') {
       table?.destroy()
       table = createTable(tableHandlers)
@@ -256,6 +269,7 @@ function apply(next) {
     return
   }
   if (table) { table.destroy(); table = null }
+  setPlaying(false)
   paint()
 }
 
