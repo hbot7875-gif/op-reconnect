@@ -439,33 +439,29 @@ test('battle after the freeze: final result, winner reward states, tie', () => {
 
 // ── City banner ──────────────────────────────────────────────────────
 
-test('City banner: live with no team, team assigned (leading / behind / tied)', () => {
-  const noTeam = votingEventCard(cityBanner({ myTeam: null }), CITY_NOW)
-  assert.match(noTeam, /data-vt-city="no-team"/)
-  assert.match(noTeam, /MAMA 2026 <span class="vt-city-vs">HOOLIGANS vs ALIENS/)
-  assert.match(noTeam, />Choose your team</)
-  const lead = votingEventCard(cityBanner({ myTeam: 'hooligans', scores: [214, 198] }), CITY_NOW)
-  assert.match(lead, /data-vt-city="live"[\s\S]*HOOLIGANS <b>214<\/b>[\s\S]*ALIENS <b>198<\/b>/)
-  assert.match(lead, /Your team is leading by 16 · 1\/6 votes verified today · Next Gift 500 · 8d 11h left/)
-  assert.match(lead, />Open MAMA Battle</)
-  assert.match(votingEventCard(cityBanner({ myTeam: 'hooligans', scores: [176, 203] }), CITY_NOW), /Your team is 27 behind/)
-  assert.match(votingEventCard(cityBanner({ myTeam: 'aliens', scores: [176, 203] }), CITY_NOW), /Your team is leading by 27/)
-  assert.match(votingEventCard(cityBanner({ myTeam: 'aliens', scores: [120, 120] }), CITY_NOW), /Tied at 120/)
-  assert.match(votingEventCard(cityBanner({ myTeam: 'aliens', done: 6 }), CITY_NOW), /Today&#39;s votes done|Today's votes done/)
+test('City banner: a compact entry — the countdown, never the score or a CTA', () => {
+  // Detailed states and the countdown live in voting-city-clock.test.mjs.
+  for (const o of [{ myTeam: null }, { myTeam: 'hooligans', scores: [214, 198] }, { myTeam: 'aliens', done: 6 }]) {
+    const html = votingEventCard(cityBanner(o), CITY_NOW)
+    assert.match(html, /data-vt-city="live"/)
+    assert.match(html, /<span class="vt-city-vs">HOOLIGANS vs ALIENS<\/span>/)
+    assert.match(html, /Voting closes in<\/span><span class="vt-city-cv">8d 11h<\/span>/)
+    assert.doesNotMatch(html, /\b214\b|\b198\b|Choose your team|Open MAMA Battle|votes verified today/, 'the MAMA page has those')
+  }
 })
 
-test('City banner: voting closed and verifying, then the final result', () => {
-  const closed = votingEventCard(cityBanner({ phase: 'verifying' }), CITY_NOW)
-  assert.match(closed, /data-vt-city="verifying"[\s\S]*Voting closed · Final result after verification/)
-  assert.match(votingEventCard(cityBanner({ phase: 'final', winners: ['hooligans'] }), CITY_NOW), /HOOLIGANS WIN/)
-  assert.match(votingEventCard(cityBanner({ phase: 'final', winners: ['aliens'] }), CITY_NOW), /ALIENS WIN/)
-  assert.match(votingEventCard(cityBanner({ phase: 'final', winners: ['aliens', 'hooligans'] }), CITY_NOW), /Battle Draw/)
-  // A freshly frozen battle whose cached score hasn't caught up yet: still "verifying", never a wrong winner.
-  assert.match(votingEventCard(cityBanner({ phase: 'final', winners: null }), CITY_NOW), /data-vt-city="verifying"/)
+test('City banner: voting closed, then the final result from the server', () => {
+  assert.match(votingEventCard(cityBanner({ phase: 'verifying' }), CITY_NOW), /data-vt-city="closed"[\s\S]*Voting closed<\/span><span class="vt-city-cv is-word">Results pending/)
+  for (const winners of [['hooligans'], ['aliens'], ['aliens', 'hooligans']]) {
+    assert.match(votingEventCard(cityBanner({ phase: 'final', winners }), CITY_NOW), /data-vt-city="final"[\s\S]*Battle ended<\/span><span class="vt-city-cv is-word">View results/)
+  }
+  // A freshly frozen battle whose cached score hasn't caught up yet: still pending, never a wrong winner.
+  assert.match(votingEventCard(cityBanner({ phase: 'final', winners: null }), CITY_NOW), /data-vt-city="closed"/)
   assert.equal(cityResultText({ teams: [], winners: [] }), null)
+  assert.equal(cityResultText({ teams: [{ id: 'aliens', label: 'ALIENS' }], winners: ['aliens'] }), 'ALIENS WIN')
 })
 
-test('City banner: no emoji, no Campaign wording, scores never computed in the browser', () => {
+test('City banner: no emoji, no Campaign wording, nothing computed from scores in the browser', () => {
   for (const o of [{}, { myTeam: null }, { phase: 'verifying' }, { phase: 'final', winners: ['aliens'] }]) {
     const html = votingEventCard(cityBanner(o), CITY_NOW)
     assert.doesNotMatch(html, /\p{Extended_Pictographic}/u)
@@ -473,7 +469,5 @@ test('City banner: no emoji, no Campaign wording, scores never computed in the b
   }
   const src = readFileSync(new URL('./voting-view.js', import.meta.url), 'utf8')
   const card = src.slice(src.indexOf('export function votingEventCard'))
-  assert.doesNotMatch(card, /reduce\(|\.points \+/, 'banner only displays the server totals')
-  assert.doesNotMatch(card, /\b(?:40|100|180|280|400)\b/, 'City banner has no legacy milestone constants')
-  assert.match(card, /nextMilestone\(b\)/, 'City banner reads the next target from server-provided milestone state')
+  assert.doesNotMatch(card.slice(0, card.indexOf('\n}\n')), /reduce\(|\.points/, 'banner shows no scores')
 })

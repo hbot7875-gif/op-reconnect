@@ -77,6 +77,12 @@ export function hubTabs(tab, { done = 0, total = 0 } = {}) {
   }).join('')}</div>`
 }
 
+/** Would the Chat button (rect `fab`) sit over any of these control rects?
+ *  `pad` keeps a small gap. Pure, so the rule is testable in Node. */
+export function fabCovers(fab, rects, pad = 6) {
+  return (rects || []).some((e) => e.width > 0 && e.right > fab.left - pad && e.left < fab.right + pad && e.bottom > fab.top - pad && e.top < fab.bottom + pad)
+}
+
 /** The floating Chat button above the nav. New messages show a dot, never a count. */
 export function chatFab(hub = {}) {
   return `<button class="vt-chat-fab" type="button" data-vt-act="chat-open" aria-haspopup="dialog" aria-label="Open MAMA Chat${hub.unread ? ', new messages' : ''}">${ic('chat')}${hub.unread ? '<i class="vt-fab-dot" aria-hidden="true"></i>' : ''}</button>`

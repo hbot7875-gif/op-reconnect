@@ -26,7 +26,7 @@ const PROMO_NOW = new Date('2026-10-26T09:00:00Z') // Oct 26, 18:00 KST — two 
 const OPEN_NOW = new Date('2026-10-30T03:00:00Z') // Oct 30, 12:00 KST
 
 const R2 = {
-  id: 'mama_2026_r2', title: 'MAMA 2026', round_label: 'Round 2 · Daesang', active: true,
+  id: 'mama_2026_r2', title: 'MAMA 2026', round_label: "Round 2 · Fans' Choice", active: true,
   opens_at: '2026-10-28T18:00:00+09:00', closes_at: '2026-11-08T23:59:59+09:00',
   missions: [
     { id: 'mnet', kind: 'mnet_certificate', label: 'Mnet Vote', max_daily: 3, vote_url: 'https://mnetplus.world/event/2026-mama',
@@ -108,7 +108,7 @@ test('soon: head counts lead, the vote opening is the urgency, the Daesang is th
   assert.equal(v.gapLine, 'OPENS OCT 28, 18:00')
   assert.equal(v.startsIn, '2d 0h')
   assert.deepEqual(v.posterCta, ['PICK A SIDE.', 'VOTE FOR BTS DAILY.'])
-  assert.match(shareText(v), /HOOLIGANS 412 agents vs ALIENS 398 agents[\s\S]*Daesang vote opens Oct 28, 18:00 KST/)
+  assert.match(shareText(v), /HOOLIGANS 412 agents vs ALIENS 398 agents[\s\S]*Round 2 of Fans’ Choice opens Oct 28, 18:00 KST, with the Daesang \(VISA Fans’ Choice of the Year\)/)
   assert.equal(kstWhen('2026-11-09T12:00:00+09:00'), 'Nov 9, 12:00 KST')
   assert.equal(untilText(R2.opens_at, OPEN_NOW), null)
 })
@@ -279,7 +279,8 @@ test('hub before voting: SOON strip, agents per side, recruit for your side, you
 test('voting tab before voting: what to do on day one, no upload or post buttons', () => {
   const html = screen(promoStatus(), 'voting')
   const panel = html.slice(html.indexOf('data-vt-panel="voting"'))
-  assert.match(panel, /Round 2 · Daesang opens/)
+  assert.match(panel, /data-vt-clock>[\s\S]*Voting opens in <b>2d 0h<\/b>[\s\S]*Oct 28, 18:00 KST – Nov 8, 23:59 KST/)
+  assert.match(panel, /<b>0 <small>\/ 6<\/small><\/b><span>votes a day once it opens/)
   assert.match(panel, /How to vote on day one/)
   assert.match(panel, /Male → BTS, Female → your pick, Of the Year with VISA → BTS/)
   assert.match(panel, /Use only #2026MAMAVOTE and #BTS\./)
@@ -289,7 +290,7 @@ test('voting tab before voting: what to do on day one, no upload or post buttons
 test('guide and cards use this round\'s words and dates, not Round 1\'s', () => {
   const s = promoStatus()
   const g = guideSheet({ status: s, local: votingLocal(), now: PROMO_NOW })
-  assert.match(g, /Round 2 · Daesang · Oct 28 18:00 – Nov 8 23:59 KST/)
+  assert.match(g, /Round 2 · Fans&#39; Choice · Oct 28 18:00 – Nov 8 23:59 KST/)
   assert.match(g, /Vote in all three categories/)
   assert.match(g, /Add no other artist hashtag/)
   assert.doesNotMatch(g, /Oct 12|Oct 22/)
@@ -340,13 +341,13 @@ const soonBanner = (myTeam) => ({
   battle: { myTeam, teams: [{ id: 'hooligans', label: 'HOOLIGANS', points: 0, agents: 412 }, { id: 'aliens', label: 'ALIENS', points: 0, agents: 398 }], total: 0, milestones: [], winners: null },
 })
 
-test('City banner before voting: agents per side, the countdown, recruit or choose', () => {
-  const mine = votingEventCard(soonBanner('aliens'), PROMO_NOW)
-  assert.match(mine, /data-vt-city="soon"/)
-  assert.match(mine, /HOOLIGANS <b>412<\/b>[\s\S]*class="is-mine">ALIENS <b>398<\/b>[\s\S]*<small>agents<\/small>/)
-  assert.match(mine, /Round 2 · Daesang · voting opens in 2d 0h/)
-  assert.match(mine, /Recruit for ALIENS/)
-  assert.match(votingEventCard(soonBanner(null), PROMO_NOW), /Choose your team/)
+test('City banner before voting: the countdown to the opening, no head counts or recruit button', () => {
+  for (const team of ['aliens', null]) {
+    const html = votingEventCard(soonBanner(team), PROMO_NOW)
+    assert.match(html, /data-vt-city="soon"/)
+    assert.match(html, /Voting opens in<\/span><span class="vt-city-cv">2d 0h<\/span>/)
+    assert.doesNotMatch(html, /\b412\b|\b398\b|Recruit for|Choose your team/)
+  }
 })
 
 test('team popup asks during the promo too, once a day, with the invite\'s side first', () => {
@@ -497,4 +498,65 @@ test('MAMA 2026 · Daesang badge: its own progress row, this round\'s days only'
   assert.match(html, /data-vt-xbadge="progress"[\s\S]*MAMA 2026 · Daesang[\s\S]*2 <small>\/ 7 voting days this round<\/small>/)
   st.extraBadges = [{ ...s.extraBadges[0], earned: true }]
   assert.match(screen(st, 'voting'), /data-vt-xbadge="earned"[\s\S]*Badge earned/)
+})
+
+// ── official category names, the guide sheet, badge wording ───────────
+
+test('names: the header reads MAMA 2026 · Round 2 · Fans’ Choice; the guide names all three categories', async () => {
+  const { categoryList, guideSheet: gs } = await import('./voting-view.js')
+  const st = promoStatus()
+  st.campaign.roundLabel = "Round 2 · Fans' Choice"
+  st.campaign.missions[0].categories = [
+    { name: "Fans' Choice Male", pick: 'BTS' }, { name: "Fans' Choice Female", pick: 'Your pick' },
+    { name: "VISA Fans' Choice of the Year", tag: 'Daesang', pick: 'BTS' },
+  ]
+  const html = screen(st, 'voting')
+  assert.match(html, /<h1 class="vt-ev-name">MAMA 2026<\/h1>\s*<span class="vt-ev-round">· Round 2 · Fans&#39; Choice<\/span>/)
+  const cats = categoryList(st.campaign.missions[0])
+  assert.match(cats, /Fans&#39; Choice Male<\/span><span class="vt-cat-p is-bts">BTS/)
+  assert.match(cats, /Fans&#39; Choice Female<\/span><span class="vt-cat-p">Your pick/)
+  assert.match(cats, /VISA Fans&#39; Choice of the Year <em>Daesang<\/em><\/span><span class="vt-cat-p is-bts">BTS/)
+  assert.equal(categoryList({}), '', 'Round 1 has no list')
+  const g = gs({ status: st, local: votingLocal(), now: PROMO_NOW })
+  // Sections open one at a time; Mnet rules first and alone.
+  assert.equal((g.match(/<details name="vt-guide" data-vt-acc/g) || []).length, 4)
+  assert.equal((g.match(/data-vt-acc open/g) || []).length, 1)
+  assert.match(g, /data-vt-acc open><summary>Mnet rules[\s\S]*vt-cats/)
+  assert.match(g, /<b class="vt-gtag">#2026MAMAVOTE<\/b>/, 'hashtags stand out')
+  assert.doesNotMatch(g, /vt-gtag">#39/, 'an apostrophe is never a hashtag')
+  const { guideText } = await import('./voting-view.js')
+  assert.equal(guideText("Fans' Choice · use #BTS <b>"), 'Fans&#39; Choice · use <b class="vt-gtag">#BTS</b> &lt;b&gt;')
+  assert.match(g, /<li><b>Mnet:<\/b> an unedited screenshot/)
+  for (const kept of ['Privacy and safety', 'Crop out notifications', 'never ask for your Mnet or X login', 'Proof requirements']) assert.ok(g.includes(kept), kept)
+})
+
+test('an earned MAMA badge with no days yet this round says which number is which', () => {
+  const st = promoStatus()
+  st.stats = { ...st.stats, votingDays: 0 }
+  st.badge = { ...st.badge, earned: true }
+  const html = screen(st, 'voting')
+  assert.match(html, /data-vt-badge="earned"[\s\S]*0 <small>this round · MAMA badge earned ✓<\/small>/)
+})
+
+test('voting open: the arena keeps team size apart from the score', () => {
+  const st = promoStatus()
+  st.campaign = { ...st.campaign, phase: 'open', promo: false }
+  st.battle = { ...st.battle, teams: st.battle.teams.map((t) => ({ ...t, points: t.id === 'aliens' ? 120 : 98 })) }
+  const html = screen(st, 'battle')
+  assert.match(html, /<p class="vt-arena-key">Score = verified votes<\/p>/)
+  assert.match(html, /class="vt-sizes"><span>412 <small>agents<\/small><\/span>[\s\S]*aria-label="Team size: HOOLIGANS 412 agents, ALIENS 398 agents"[\s\S]*<span>398 <small>agents<\/small>/)
+})
+
+test('the Chat button tucks away only when it would sit over a control', async () => {
+  const { fabCovers } = await import('./battle-hub-view.js')
+  const fab = { left: 300, right: 350, top: 600, bottom: 650 }
+  const r = (left, top, w = 100, h = 44) => ({ left, top, right: left + w, bottom: top + h, width: w })
+  assert.equal(fabCovers(fab, [r(260, 610)]), true, 'Copy link under it')
+  assert.equal(fabCovers(fab, [r(16, 610, 200)]), false, 'a button to its left is fine')
+  assert.equal(fabCovers(fab, [r(260, 520)]), false, 'clear above (more than the gap)')
+  assert.equal(fabCovers(fab, [r(260, 552)]), true, 'within the 6px gap counts')
+  assert.equal(fabCovers(fab, [{ left: 300, right: 300, top: 600, bottom: 650, width: 0 }]), false, 'hidden controls ignored')
+  assert.equal(fabCovers(fab, []), false)
+  const src = (await import('node:fs')).readFileSync(new URL('./voting.js', import.meta.url), 'utf8')
+  assert.match(src, /fab\.classList\.toggle\('is-tucked', hit\)/)
 })

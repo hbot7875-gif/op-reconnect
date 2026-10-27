@@ -26,7 +26,7 @@ export function mamaTeamPopupCopy(voting, invite = null) {
     eyebrow: `${voting?.title || 'MAMA 2026'} · ${soon ? voting?.roundLabel || 'Battle' : 'Battle'}`,
     title: invited ? `${invited.label} want you` : soon ? 'The battle is back' : 'Pick your side',
     body: soon
-      ? 'Round 2 is the Daesang vote and every vote resets to zero. Pick your side before it opens — each verified vote adds a point for your team.'
+      ? 'Round 2 of Fans’ Choice is coming, the Daesang (VISA Fans’ Choice of the Year) included, and every vote resets to zero. Pick your side before it opens — each verified vote adds a point for your team.'
       : 'Every verified vote adds a point for your team. Choose a side so your votes count.',
     teams: teams.length === 2 ? teams : [],
     action: 'Choose my team',

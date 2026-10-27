@@ -381,6 +381,11 @@ export async function getVotingStatus(db, params, now = new Date()) {
         // This round's own words for the card and the guide, when it has them.
         ...(m.rule ? { rule: String(m.rule) } : {}),
         ...(Array.isArray(m.guide) ? { guide: m.guide.map(String).slice(0, 8) } : {}),
+        // The categories one Mnet round asks for (Round 2: Male, Female, and
+        // VISA Fans' Choice of the Year), for the card and the guide.
+        ...(Array.isArray(m.categories) ? { categories: m.categories.slice(0, 6).map((x) => ({
+          name: String(x?.name || ''), pick: String(x?.pick || ''), ...(x?.tag ? { tag: String(x.tag) } : {}),
+        })) } : {}),
         // For the browser's friendly pre-check only.
         ...(m.kind === 'mnet_certificate' ? { certificate: m.certificate || {} } : {}),
       })),

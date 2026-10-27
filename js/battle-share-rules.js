@@ -24,10 +24,11 @@ export const LYRICS = { hooligans: 'Watch this.', aliens: 'Yeah, we aliens.' }
 // Recruiting, in each side's own voice. Modelled on how BTS voting
 // fanbases post on X during MAMA (Oct 2026): "START LOCKING IN", "WHERE ARE
 // YOU ARMY??", "PROTECT THE GAP", "daily voting is a MUST", "it only takes
-// a few minutes" — direct, urgent, practical, never a slogan. The Daesang is
-// Fans' Choice of the Year with VISA: BTS won it 2018–2023, so a win now is
-// their 7th as a group (the line fan accounts are using); votes reset to
-// zero for this round.
+// a few minutes" — direct, urgent, practical, never a slogan. Round 2 is
+// Fans' Choice (Male, Female, and VISA Fans' Choice of the Year); the
+// Daesang is VISA Fans' Choice of the Year, which BTS won 2018–2023, so a
+// win now is their 7th as a group (the line fan accounts are using); votes
+// reset to zero for this round.
 export const RECRUIT = {
   hooligans: {
     emoji: '🔥',
@@ -35,7 +36,7 @@ export const RECRUIT = {
     hype: ['HOOLIGANS, START LOCKING IN.', 'LET’S GET BTS THEIR 7TH DAESANG.'],
     behind: 'WE’RE BEHIND. HOOLIGANS, LOCK IN!',
     ahead: 'WE’RE AHEAD. PROTECT THE GAP!',
-    pitch: '🚨 HOOLIGANS, start locking in! BTS won Fans’ Choice of the Year 6 times in a row, so this would be their 7th Daesang. Votes reset to zero, every day counts. Let’s make it happen 💜☝️',
+    pitch: '🚨 HOOLIGANS, start locking in! BTS won Fans’ Choice of the Year 6 times in a row, so the VISA Fans’ Choice of the Year Daesang would be their 7th. Votes reset to zero, every day counts. Let’s make it happen 💜☝️',
   },
   aliens: {
     emoji: '👽',
@@ -43,7 +44,7 @@ export const RECRUIT = {
     hype: ['ALIENS, WHERE ARE YOU??', 'BTS’S 7TH DAESANG STARTS DAY ONE.'],
     behind: 'WE’RE BEHIND. WHERE ARE YOU ALIENS??',
     ahead: 'WE’RE AHEAD. PROTECT THE GAP!',
-    pitch: '🔔 ALIENS, we need every vote! If BTS win the Daesang it’s their 7th Fans’ Choice of the Year. It only takes a few minutes a day, so vote with us 🥹🙏',
+    pitch: '🔔 ALIENS, we need every vote! If BTS win VISA Fans’ Choice of the Year it’s their 7th Daesang. It only takes a few minutes a day, so vote with us 🥹🙏',
   },
 }
 
@@ -244,7 +245,7 @@ export function nextStyle(style) {
 export function shareText(view) {
   const score = `${view.h.label} ${fmt(view.h.points)} vs ${view.a.label} ${fmt(view.a.points)}`
   if (view.phase === 'soon') {
-    return `MAMA Battle · Round 2 is coming 🔥👽\n${view.h.label} ${fmt(view.h.agents)} agents vs ${view.a.label} ${fmt(view.a.agents)} agents\nThe Daesang vote opens ${view.opens || 'soon'}. Pick a side before it starts.\n${BATTLE_URL}`
+    return `MAMA Battle · Round 2 is coming 🔥👽\n${view.h.label} ${fmt(view.h.agents)} agents vs ${view.a.label} ${fmt(view.a.agents)} agents\nRound 2 of Fans’ Choice opens ${view.opens || 'soon'}, with the Daesang (VISA Fans’ Choice of the Year) on the line. Pick a side before it starts.\n${BATTLE_URL}`
   }
   if (view.phase === 'final') return `MAMA Battle final score 🔥\n${score}\nEvery vote went to BTS.\n${BATTLE_URL}`
   if (view.phase === 'verifying') return `MAMA Battle · voting closed\n${score}\nFinal score ${view.finalAt}.\n${BATTLE_URL}`
@@ -255,7 +256,7 @@ export function shareText(view) {
 export function recruitText(rv) {
   const w = rv.words
   if (rv.phase === 'soon') {
-    return `${w.emoji} ${rv.team.label} ARE RECRUITING · MAMA Battle Round 2\n${w.pitch}\nDaesang voting opens ${rv.opens || 'soon'} · ${fmt(rv.team.agents)} agents ready${rv.team.recruits ? `, +${fmt(rv.team.recruits)} new this round` : ''}${rv.bonusLine ? `\n${rv.bonusLine}.` : ''}\n${rv.url}`
+    return `${w.emoji} ${rv.team.label} ARE RECRUITING · MAMA Battle Round 2\n${w.pitch}\nRound 2 of Fans’ Choice opens ${rv.opens || 'soon'} · ${fmt(rv.team.agents)} agents ready${rv.team.recruits ? `, +${fmt(rv.team.recruits)} new this round` : ''}${rv.bonusLine ? `\n${rv.bonusLine}.` : ''}\n${rv.url}`
   }
   if (rv.phase === 'open') {
     return `${w.emoji} ${rv.team.label} NEED YOU · MAMA Battle Round 2\n${rv.team.label} ${fmt(rv.team.points)} vs ${rv.rival.label} ${fmt(rv.rival.points)} (${rv.standing.toLowerCase()})\nEvery verified vote moves the score and goes to BTS. The Daesang is on the line.${rv.bonusLine ? `\n${rv.bonusLine}.` : ''}\n${rv.url}`

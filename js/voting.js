@@ -16,7 +16,7 @@ import { trackEngagement } from './engagement.js'
 import { readInvite, clearInvite } from './battle-invite.js'
 import { mountCompactHud } from './compact-hud.js'
 import { checkForVotingAlerts, showDuplicateCertificatePopup } from './voting-alerts.js'
-import { chatFeed, chatErrorText } from './battle-hub-view.js'
+import { chatFeed, chatErrorText, fabCovers } from './battle-hub-view.js'
 import { checkChatText, CHAT_MAX } from '../supabase/functions/op-reconnect/lib/battle-text-filter.js'
 
 const MAX_ORIGINAL_BYTES = 20 * 1024 * 1024
@@ -69,6 +69,15 @@ export function renderVoting(container) {
     else if (e.target.matches?.('[data-vt-chat-input]')) onChatInput(e.target)
     else if (e.target.matches?.('[data-vt-team-search]')) filterTeam(e.target.value)
   })
+  // The guide's sections open one at a time (browsers without
+  // <details name> support get the same behaviour here).
+  root.addEventListener('toggle', (e) => {
+    queueChatFab() // a section opening moves what sits under the Chat button
+    const d = e.target
+    if (!d.matches?.('details[data-vt-acc]') || !d.open) return
+    for (const o of d.parentElement.querySelectorAll('details[data-vt-acc][open]')) if (o !== d) o.open = false
+  }, true)
+  watchChatFab()
   local = freshLocal()
   openSheet = null
   hubData = { team: { loading: true }, chat: { loading: true } }
@@ -229,12 +238,47 @@ function paint() {
   // The team chooser is modal: nothing behind it is reachable while open.
   if (local.chooser) for (const n of root.querySelectorAll(BEHIND)) n.inert = true
   restoreFeed(pos)
+  queueChatFab()
   if (caret) {
     const again = root.querySelector('[data-vt-chat-input]')
     again?.focus()
     again?.setSelectionRange(caret[0], caret[1])
   }
   startTicker()
+}
+
+// ── Floating Chat button: never on top of a control ──────────────────
+// While the button would sit over a button, link or field, it tucks into a
+// small tab at the screen edge (still tappable); when the spot is clear it
+// comes back. Measured once per frame at most, only while this screen is up.
+let fabQueued = false
+const FAB_TARGETS = '.vt-page button, .vt-page a[href], .vt-page summary, .vt-page input, .vt-page label.vt-btn'
+
+function placeChatFab() {
+  fabQueued = false
+  const fab = root?.isConnected && root.querySelector('.vt-chat-fab')
+  if (!fab) return
+  fab.classList.remove('is-tucked') // measure where it would be (no paint between)
+  const hit = fabCovers(fab.getBoundingClientRect(), [...root.querySelectorAll(FAB_TARGETS)].map((el) => el.getBoundingClientRect()))
+  fab.classList.toggle('is-tucked', hit)
+}
+
+function queueChatFab() {
+  if (fabQueued) return
+  fabQueued = true
+  requestAnimationFrame(placeChatFab)
+}
+
+let fabWatching = false
+function watchChatFab() {
+  if (fabWatching) return
+  fabWatching = true
+  const onMove = () => {
+    if (!root?.isConnected) return
+    queueChatFab()
+  }
+  window.addEventListener('scroll', onMove, { passive: true })
+  window.addEventListener('resize', onMove, { passive: true })
 }
 
 // Everything a sheet or the chooser makes unreachable.
@@ -791,6 +835,7 @@ function switchTab(tab) {
   root.querySelector('.vt-hub-page')?.setAttribute('data-vt-tab-now', tab)
   if (tab === 'team') loadTeam()
   scheduleHub()
+  queueChatFab()
 }
 
 /** The floating button: Chat opens as a sheet over whichever tab is showing. */

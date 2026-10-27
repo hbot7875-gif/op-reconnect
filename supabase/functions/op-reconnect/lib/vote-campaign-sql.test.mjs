@@ -27,6 +27,7 @@ const HUB_MIGRATIONS = ['20261015150000_rc_battle_hub.sql', '20261016090000_rc_b
   '20261016120000_rc_battle_team_ig_default_on.sql', '20261016150000_rc_battle_team_ig_open.sql'].map(migration)
 const ROUND2_MIGRATION = migration('20261026180000_rc_mama_round2.sql')
 const DAESANG_MIGRATION = migration('20261027120000_rc_mama_daesang_badge.sql')
+const TERMS_MIGRATION = migration('20261027180000_rc_mama_round2_terms.sql')
 // The same file without its own transaction, to re-run inside a test's.
 const ROUND2_BODY = ROUND2_MIGRATION.replace(/^(begin|commit);\r?$/gm, '')
 
@@ -97,6 +98,8 @@ async function fresh(t) {
     await engine.exec(ROUND2_MIGRATION) // re-runnable
     await engine.exec(DAESANG_MIGRATION)
     await engine.exec(DAESANG_MIGRATION) // re-runnable
+    await engine.exec(TERMS_MIGRATION)
+    await engine.exec(TERMS_MIGRATION) // re-runnable
     // The real freezes (Oct 23, Nov 9) pass while this suite lives on, and a
     // frozen battle stamps no points. Tests run before a far-off freeze;
     // freezeNow() moves it when a test needs one. The approved times are
@@ -1156,4 +1159,22 @@ test('MAMA 2026 · Daesang: 7 verified days in Round 2 alone, awarded once; the 
   const r2 = await q1(db, `select rewards, battle from rc_vote_campaigns where id = $1`, [R2])
   assert.deepEqual(r2.rewards.extra_badges, [{ template_id: 'event_mama_2026_daesang', name: 'MAMA 2026 · Daesang', verified_days: 7 }])
   assert.deepEqual(r2.battle.milestones, [400, 1000, 1800, 2700, 3800])
+})
+
+test('round 2 names: Round 2 · Fans’ Choice, three named categories; nothing a rule reads has changed', { skip }, async (t) => {
+  const db = await fresh(t)
+  const r2 = await q1(db, `select round_label, missions, opens_at, closes_at from rc_vote_campaigns where id = $1`, [R2])
+  assert.equal(r2.round_label, "Round 2 · Fans' Choice")
+  const [mnet, x] = r2.missions
+  assert.deepEqual([mnet.id, x.id], ['mnet', 'x'], 'order kept')
+  assert.deepEqual(mnet.categories.map((c) => c.name), ["Fans' Choice Male", "Fans' Choice Female", "VISA Fans' Choice of the Year"])
+  assert.equal(mnet.categories[2].tag, 'Daesang')
+  assert.ok(mnet.guide.some((g) => g.includes("VISA Fans' Choice of the Year (the Daesang)")))
+  assert.ok(x.guide.some((g) => g.includes("VISA Fans' Choice of the Year")))
+  // Untouched: the schedule, certificate keywords, hashtags and limits.
+  assert.equal(new Date(r2.opens_at).toISOString(), '2026-10-28T09:00:00.000Z')
+  assert.equal(new Date(r2.closes_at).toISOString(), '2026-11-08T14:59:59.000Z')
+  assert.deepEqual(mnet.certificate.category_keywords, ["fans' choice category 2nd vote", "fans choice category 2nd vote", "fans' choice of the year", "fans choice of the year"])
+  assert.deepEqual([mnet.max_daily, x.max_daily, x.max_handles, x.exclusive_hashtags], [3, 3, 3, true])
+  assert.deepEqual(x.hashtags, ['2026MAMAVOTE', 'BTS'])
 })

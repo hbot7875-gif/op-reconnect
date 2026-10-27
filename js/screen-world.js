@@ -43,6 +43,7 @@ import { announceNewCover } from './album.js'
 import { albumEra } from '../supabase/functions/op-reconnect/lib/album-rules.js'
 import { vmaEventCard, openVmaMission } from './vma.js'
 import { votingEventCard } from './voting-view.js'
+import { startCityClock } from './voting-city-clock.js'
 import { redZoneSheet, defuseResultSheet, defenderCommsSheet, getCommsSeen } from './bomb-sheet.js'
 import { tickCountdowns } from './countdown.js'
 import { redZonePercent, personalSignalCopy, redZoneHeadline, redZoneGoalCopy,
@@ -72,13 +73,15 @@ export function renderWorld(container, state) {
   // progress. See maybeShowDefuseResult for the one-shot success/failure
   // acknowledgement, which also used to be this card's job.
   if (state.vma) wrap.appendChild(vmaEventCard(state))
-  // Voting (MAMA 2026 first): one compact row while voting is open. The
-  // page itself is its own screen, not a sheet over the City.
+  // Voting (MAMA 2026 first): one compact entry card with a live countdown
+  // (voting-city-clock.js updates it in place each second). The page itself
+  // is its own screen, not a sheet over the City.
   if (state.voting) {
     const holder = el('div', '', votingEventCard(state.voting))
     const entry = holder.firstElementChild
     entry.onclick = (e) => goVoting({ x: e.clientX, y: e.clientY })
     wrap.appendChild(entry)
+    startCityClock()
   }
   const goldenBanner = goldenCornerBanner(state)
   if (goldenBanner) wrap.appendChild(goldenBanner)

@@ -20,7 +20,7 @@ const ic = (n) => `<svg class="bp-i" viewBox="0 0 24 24" aria-hidden="true" focu
 
 const HEADLINE = { soon: 'The MAMA Battle is back', open: 'The MAMA Battle is live', verifying: 'Voting is closed', final: 'The final score is in' }
 function lead(v) {
-  if (v.phase === 'soon') return `Round 2 — the Daesang vote — opens ${v.opens || 'soon'}. ARMY, pick your side before it starts.`
+  if (v.phase === 'soon') return `Round 2 of Fans’ Choice opens ${v.opens || 'soon'} — Fans’ Choice Male and the Daesang, VISA Fans’ Choice of the Year. ARMY, pick your side before it starts.`
   if (v.phase === 'verifying') return `Votes are being verified. The final score lands ${v.finalAt}.`
   if (v.phase === 'final') return 'Every vote went to BTS. Thank you, ARMY.'
   return 'ARMY, pick your side. Vote for BTS. Move the score.'

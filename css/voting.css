@@ -405,22 +405,6 @@
 .vt-gift, .vt-pulse, .vt-form, .vt-field, .vt-admin, .vta-top, .vta-side { grid-template-columns: minmax(0, 1fr); }
 
 /* ── City banner (MAMA live event) ── */
-.vt-city { display: grid; gap: 8px; padding: 10px 12px; }
-.vt-city-top { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.vt-city .vt-entry-ico { width: 30px; height: 30px; }
-.vt-city .vt-entry-t { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; font: 700 13px/1.2 var(--vt-disp); letter-spacing: .3px; }
-.vt-city-vs { font: 600 11.5px/1.2 var(--vt-sans); color: var(--vt-text-2); letter-spacing: 0; }
-.vt-city-score { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; font-size: 12.5px; color: var(--vt-text-2); }
-.vt-city-score b { color: var(--vt-text); font-weight: 700; font-variant-numeric: tabular-nums; }
-.vt-city-score .is-mine b { color: var(--vt-accent); }
-.vt-city-score i { font-style: normal; color: var(--vt-text-3); }
-.vt-city-bottom { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
-.vt-city-bottom .vt-entry-s { min-width: 0; font-size: 12px; }
-.vt-city-cta { flex: none; display: inline-flex; align-items: center; gap: 2px; height: 28px; padding: 0 6px 0 10px; border-radius: 999px; background: var(--vt-accent); color: var(--vt-accent-ink); font-size: 12px; font-weight: 600; }
-.vt-city-cta .vt-i { width: 14px; height: 14px; }
-.vt-city-result { color: var(--vt-text); font-family: var(--vt-disp); letter-spacing: .4px; }
-.vt-city[data-vt-city="verifying"] .vt-city-cta { background: var(--vt-surface-2); color: var(--vt-text); border: 1px solid var(--vt-line-2); }
-.vt-city > .vt-i:last-child { display: none; }
 
 /* ── City map marker (MAMA live event) — the standard event marker, azure ── */
 .vt-map-mama .cm-tool-body { fill: #0c1420; stroke: rgba(76, 157, 255, .7); }
@@ -769,7 +753,6 @@
 .vt-seg-ctl button:focus-visible { outline: 2px solid var(--vt-text); outline-offset: 1px; }
 .vt-chooser-team small { display: block; font-size: 11px; font-weight: 600; letter-spacing: .02em; opacity: .8; margin-top: 2px; }
 .vt-chooser-team.is-invited { box-shadow: 0 0 0 2px var(--vt-text); }
-.vt-city-score small { font-size: 11px; color: var(--vt-text-2); margin-left: 6px; }
 .vt-hero[data-vt-battle="soon"] .vt-battle-share + .vt-battle-share { margin-top: 8px; }
 .vt-bonus { padding: 12px 14px; display: grid; gap: 8px; }
 .vt-bonus-teams { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; font-size: 13px; color: var(--vt-text-2); }
@@ -921,4 +904,105 @@
 @media (prefers-reduced-motion: reduce) {
   .vt-gt-node[data-state="ready"] .vt-gt-ico { animation: none; }
   .vt-split span, .vt-gd > summary .vt-i:last-child { transition: none; }
+}
+
+/* ══ Round 2 refinements: guide sheet, categories, chat tab ═══════════ */
+
+/* Sheets stay above Android's navigation and scroll on their own. */
+.vt-sheet { max-height: min(84vh, calc(100dvh - 48px)); overscroll-behavior: contain; }
+.vt-sheet[data-vt-sheet="guide"] { padding-top: 0; }
+.vt-sheet[data-vt-sheet="guide"] .vt-grabber { margin-top: 8px; }
+.vt-sheet[data-vt-sheet="guide"] .vt-sheet-h { position: sticky; top: 0; z-index: 1; margin: 0 -16px 4px; padding: 6px 8px 6px 16px; background: var(--vt-surface); border-bottom: 1px solid var(--vt-line); }
+
+/* The guide: separate sections, readable lists */
+.vt-acc { border: 0; border-radius: 0; overflow: visible; display: grid; gap: 8px; }
+.vt-acc details { border: 1px solid var(--vt-line); border-radius: var(--vt-r-lg); background: rgba(255, 255, 255, .015); }
+.vt-acc details:first-child { border-top: 1px solid var(--vt-line); }
+.vt-acc details[open] { border-color: var(--vt-violet-line); background: var(--vt-violet-tint); }
+.vt-acc ul { padding: 0 16px 16px 32px; font-size: 13.5px; line-height: 1.55; gap: 9px; }
+.vt-acc li::marker { color: var(--vt-violet-hi); }
+.vt-acc ul b { color: var(--vt-text); font-weight: 650; }
+.vt-gtag { display: inline-block; padding: 1px 7px; margin: 0 1px; border-radius: 6px; background: rgba(139, 92, 246, .2); color: var(--vt-text); font: 600 12.5px/1.5 var(--vt-mono-f); letter-spacing: .2px; white-space: nowrap; }
+.vt-gtags { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 16px 10px; }
+.vt-gtags .vt-gtag { font-size: 13.5px; padding: 3px 10px; }
+
+/* One Mnet round: three categories, each its own row */
+.vt-cats { list-style: none; margin: 0; padding: 0; display: grid; border: 1px solid var(--vt-line); border-radius: var(--vt-r-md); overflow: hidden; }
+.vt-cats li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 12px; font-size: 13px; }
+.vt-cats li + li { border-top: 1px solid var(--vt-line); }
+.vt-cat-n { min-width: 0; color: var(--vt-text-2); }
+.vt-cat-n em { font-style: normal; font: 600 10.5px/1 var(--vt-mono-f); letter-spacing: .4px; color: var(--vt-gold); padding: 2px 6px; margin-left: 4px; border-radius: 5px; background: var(--vt-gold-tint); vertical-align: 1px; }
+.vt-cat-p { flex: none; font-weight: 650; color: var(--vt-text-2); }
+.vt-cat-p.is-bts { color: var(--vt-violet-hi); }
+.vt-acc .vt-cats { margin: 0 16px 12px; }
+
+/* Before voting: a slim countdown instead of a card */
+.vt-soon-top { display: grid; gap: 8px; }
+.vt-soon-daily { display: flex; align-items: baseline; gap: 8px; font-size: 12.5px; color: var(--vt-text-3); }
+.vt-soon-daily b { font: 800 20px/1 var(--vt-disp); color: var(--vt-text); font-variant-numeric: tabular-nums; }
+.vt-soon-daily small { font-family: var(--vt-sans); font-size: 13px; color: var(--vt-text-3); }
+
+/* Live arena: team size, compact and clearly not the score */
+.vt-sizes { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; font: 600 12px/1 var(--vt-mono-f); color: var(--vt-text-2); }
+.vt-sizes small { font-weight: 400; color: var(--vt-text-3); }
+.vt-sizes .vt-split { height: 3px; gap: 3px; }
+
+/* Tighter Voting tab and a quieter disclaimer */
+.vt-panel[data-vt-panel="voting"] { gap: 16px; }
+.vt-panel[data-vt-panel="voting"] .vt-sec-h { margin-bottom: 8px; }
+.vt-foot { font-size: 11.5px; line-height: 1.5; opacity: .85; padding: 0 8px; }
+.vt-statpanel .vt-stat { padding-top: 9px; padding-bottom: 9px; }
+
+/* The Chat button tucks to a slim edge tab over controls */
+.vt-screen .vt-chat-fab { transition: right .2s ease, width .2s ease, border-radius .2s ease, opacity .2s ease; }
+.vt-screen .vt-chat-fab.is-tucked { right: 0; width: 30px; border-radius: 25px 0 0 25px; border-right: 0; opacity: .9; justify-items: start; padding-left: 7px; }
+.vt-chat-fab.is-tucked .vt-i { width: 17px; height: 17px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .vt-screen .vt-chat-fab { transition: none; }
+}
+@media (max-width: 359px) {
+  .vt-ev-name { letter-spacing: .8px; font-size: 14px; }
+  .vt-ev-round { letter-spacing: 0; font-size: 10px; }
+}
+.vt-arena .vt-sizes { padding-top: 10px; border-top: 1px solid var(--vt-line); }
+@media (max-width: 359px) {
+  .vt-ev-top { flex-wrap: wrap; row-gap: 2px; }
+  .vt-ev-round { order: 3; flex-basis: 100%; padding-left: 32px; font-size: 10.5px; }
+}
+
+/* ══ City banner: a compact entry with a live countdown ═══════════════
+   One button: the sword, MAMA 2026, the matchup and the round, one
+   countdown (voting-city-clock.js swaps its text in place, every second,
+   from the event's own timestamps), and a chevron. Fixed-width digits so a
+   ticking or re-formatted countdown never moves the layout. */
+.vt-entry.vt-city { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 12px; padding: 11px 8px 11px 12px; margin: 0 0 12px; border-color: rgba(160, 124, 255, .3); background: linear-gradient(180deg, rgba(139, 92, 246, .1), rgba(139, 92, 246, .03)), var(--vt-surface); }
+.vt-entry.vt-city:hover { border-color: var(--vt-violet-line); }
+.vt-city .vt-entry-ico { width: 36px; height: 36px; color: var(--vt-violet-hi); background: var(--vt-violet-tint); }
+.vt-city-txt { display: grid; gap: 3px; min-width: 0; }
+.vt-city-t { display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; font: 800 14.5px/1.1 var(--vt-disp); letter-spacing: .6px; color: var(--vt-text); white-space: nowrap; }
+.vt-city-live { display: inline-flex; align-items: center; gap: 4px; padding: 3px 6px; border-radius: 5px; font: 700 9.5px/1 var(--vt-mono-f); letter-spacing: 1px; color: var(--vt-text); background: rgba(240, 67, 90, .16); }
+.vt-city-live[hidden] { display: none; }
+.vt-city-live i { width: 5px; height: 5px; border-radius: 50%; background: var(--vt-live); }
+.vt-city-vs { font: 600 12px/1.2 var(--vt-sans); color: var(--vt-text-2); letter-spacing: .2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vt-city-round { font: 11px/1.2 var(--vt-mono-f); color: var(--vt-text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vt-city-clock { width: 88px; display: grid; justify-items: end; gap: 4px; text-align: right; }
+.vt-city-cl { font-size: 10.5px; line-height: 1; color: var(--vt-text-3); white-space: nowrap; }
+.vt-city-cv { min-width: 8ch; font: 700 15px/1 var(--vt-mono-f); letter-spacing: .5px; color: var(--vt-text); font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+.vt-city-cv.is-word { font: 600 12px/1 var(--vt-sans); letter-spacing: 0; color: var(--vt-violet-hi); }
+.vt-city[data-vt-city="final"] .vt-city-cv { color: var(--vt-gold); }
+.vt-city-go { display: grid; color: var(--vt-text-3); }
+.vt-city-go .vt-i { width: 16px; height: 16px; }
+@media (max-width: 379px) {
+  .vt-entry.vt-city { gap: 7px; padding: 10px 4px 10px 9px; }
+  .vt-city-round { font-size: 10px; letter-spacing: -.2px; }
+  .vt-city .vt-entry-ico { width: 28px; height: 28px; }
+  .vt-city .vt-entry-ico .vt-i { width: 15px; height: 15px; }
+  .vt-city-t { gap: 6px; font-size: 13.5px; letter-spacing: .3px; }
+  .vt-city-live { padding: 2px 4px; font-size: 8.5px; letter-spacing: .6px; }
+  .vt-city-vs { font-size: 11.5px; letter-spacing: 0; }
+  .vt-city-clock { width: 78px; }
+  .vt-city-cv { font-size: 14px; }
+  .vt-city-cl { font-size: 9.5px; }
+  .vt-city-go .vt-i { width: 14px; height: 14px; }
 }
