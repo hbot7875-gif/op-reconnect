@@ -25,7 +25,7 @@ import { districtDisplayName } from './ward-tiles.js'
 import { redZonePercent } from './red-zone-ui.js'
 import { getReconnectChatSeen, reconnectChatUnreadCount,
   reconnectChatBadgeText } from './reconnect-chat-unread.js'
-import { navIcon } from './nav-icons.js'
+import { navIcon, hudIcon } from './nav-icons.js'
 import { hasMoonReview } from './moon-review-dot.js'
 
 /** { multiplier, minsLeft } while state.player.boost is live, else null. */
@@ -233,7 +233,7 @@ export function renderHud(container, state) {
   // an edge-to-edge social avatar; see .hud-crest.has-photo.
   const collectionBadge = p.equippedBadgeArtwork || null
   const badgeArt = collectionBadge?.artworkUrl || null
-  const streakLabel = p.streak.current > 0 ? `🔥 ${p.streak.current}D` : '○ 0D'
+  const streakLabel = `${hudIcon('flame')}${p.streak.current > 0 ? p.streak.current : 0}D`
   // Authored pass: gold is reserved for things actually earned, so a
   // streak of zero renders muted instead. rarity comes off the equipped
   // badge payload (badge-profile.ts's resolveEquippedBadges) — an
@@ -277,16 +277,16 @@ export function renderHud(container, state) {
           <span class="hud-who">
             <span class="hud-code-row">
               <span class="hud-code">${displayCode}</span>
-              <button class="hud-eye" id="hudEyeBtn" type="button" title="${codenameHidden ? 'Show codename' : 'Hide codename'}" aria-label="${codenameHidden ? 'Show codename' : 'Hide codename'}">${codenameHidden ? '🙈' : '👁'}</button>
+              <button class="hud-eye" id="hudEyeBtn" type="button" title="${codenameHidden ? 'Show codename' : 'Hide codename'}" aria-label="${codenameHidden ? 'Show codename' : 'Hide codename'}">${hudIcon(codenameHidden ? 'eyeOff' : 'eye')}</button>
             </span>
             <span class="hud-meta">${lvl.name ? `<em>${esc(lvl.name)}</em><i>·</i>` : ''}<b>Level ${lvl.level}</b></span>
           </span>
         </div>
         <div class="hud-streak${streakCold}" title="${p.streak.current} days in a row">${streakLabel}</div>
-        <button class="hud-sync" id="syncBtn" type="button" title="Sync streams now" aria-label="Sync streams now">🔄</button>
+        <button class="hud-sync" id="syncBtn" type="button" title="Sync streams now" aria-label="Sync streams now">${hudIcon('sync')}</button>
         <button class="hud-bell${unreadTotal ? ' has-messages' : ''}" id="bellBtn" type="button" title="Signals"
           aria-label="${signalCount ? `${signalCount} signal${signalCount === 1 ? '' : 's'}${unreadTotal ? `, including ${unreadTotal} unread message${unreadTotal === 1 ? '' : 's'}` : ''}` : 'No signals'}">
-          🔔${signalCount ? `<span class="hud-bell-count">${signalCount}</span>` : ''}
+          ${hudIcon('bell')}${signalCount ? `<span class="hud-bell-count">${signalCount}</span>` : ''}
         </button>
       </div>
     </div>

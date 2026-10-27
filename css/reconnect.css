@@ -6320,6 +6320,22 @@ body {
   letter-spacing: .35px;
 }
 .hud-streak.is-cold { background: transparent; }
+/* Header icons: the bottom nav's outline family (nav-icons.js), in
+   currentColor. Bell and sync sit in the nav's neutral ink and turn purple on
+   hover, like a tab; the streak flame takes the streak's own gold, or its
+   muted colour at zero. */
+.hud-ico { display: inline-grid; place-items: center; line-height: 0; }
+.hud-ico svg { width: 18px; height: 18px; fill: none; stroke: currentColor;
+  stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+.hud-bell, .hud-sync { color: var(--v-ink-2); }
+.hud-bell:hover, .hud-sync:hover:not(:disabled), .hud-sync.is-syncing { color: var(--v-violet-hi); }
+.hud-bell.has-messages { color: var(--v-ink-1); }
+.hud-streak { display: inline-flex; align-items: center; gap: 4px; }
+.hud-streak .hud-ico svg { width: 13px; height: 13px; stroke-width: 2; }
+.hud-eye .hud-ico svg { width: 14px; height: 14px; }
+#hud.is-collapsed .hud-bell .hud-ico svg, #hud.is-collapsed .hud-sync .hud-ico svg { width: 15px; height: 15px; }
+#hud.is-collapsed .hud-streak .hud-ico svg { width: 11px; height: 11px; }
+#hud.is-collapsed .hud-eye .hud-ico svg { width: 12px; height: 12px; }
 .hud-xp { padding: 8px var(--space-4) 10px; gap: var(--space-2); }
 .xp-bar { height: 6px; }
 .hud-xp-note { font-size: 10.5px; letter-spacing: .25px; }
