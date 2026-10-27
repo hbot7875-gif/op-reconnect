@@ -560,3 +560,40 @@ test('the Chat button tucks away only when it would sit over a control', async (
   const src = (await import('node:fs')).readFileSync(new URL('./voting.js', import.meta.url), 'utf8')
   assert.match(src, /fab\.classList\.toggle\('is-tucked', hit\)/)
 })
+
+// ── recruiting copy: one call for both sides, no award-history claims ──
+
+test('the recruiting call: same words for HOOLIGANS and ALIENS, with the real opening day', async () => {
+  const { recruitPitch } = await import('./battle-share-rules.js')
+  const opens = '2026-10-28T18:00:00+09:00'
+  for (const team of ['HOOLIGANS', 'ALIENS']) {
+    assert.equal(recruitPitch(team, opens, new Date('2026-10-27T03:00:00Z')),
+      `🚨 ${team}, start locking in! MAMA Round 2 starts October 28. Votes reset to zero, so every day counts. Share your team link, bring more ARMYs in, and let's get BTS that Daesang! 💜✊`)
+  }
+  // 23:30 KST on Oct 27 is still before the opening: the day is KST's.
+  assert.match(recruitPitch('ALIENS', opens, new Date('2026-10-27T14:30:00Z')), /starts October 28\./)
+  // Once voting runs, "starts" would be stale.
+  assert.match(recruitPitch('ALIENS', opens, new Date('2026-10-28T09:00:01Z')), /MAMA Round 2 is live\./)
+  // Each side sees its own name everywhere the call appears.
+  for (const [id, label] of [['aliens', 'ALIENS'], ['hooligans', 'HOOLIGANS']]) {
+    const st = promoStatus({ myTeam: id })
+    assert.match(screen(st, 'battle'), new RegExp(`vt-battle-note">🚨 ${label}, start locking in! MAMA Round 2 starts October 28\.`))
+    assert.match(battlePageHtml(summary(), PROMO_NOW, id), new RegExp(`bp-lead">🚨 ${label}, start locking in!`))
+    assert.match(recruitText(recruitView(summary(), id, PROMO_NOW)), new RegExp(`\n🚨 ${label}, start locking in! MAMA Round 2 starts October 28\.`))
+  }
+})
+
+test('no MAMA copy claims a win streak or counts past awards', async () => {
+  const { readFileSync } = await import('node:fs')
+  const files = ['./battle-share-rules.js', './battle-page-view.js', './voting-view.js', './mama-team-popup-rules.js', './battle-poster.js', './battle-hub-view.js', './voting-city-clock.js', '../battle.html']
+  for (const f of files) {
+    const src = readFileSync(new URL(f, import.meta.url), 'utf8')
+    assert.doesNotMatch(src, /\b(?:[2-9]|1\d)(?:st|nd|rd|th)\s+(?:Daesang|Fans|win)|seventh|consecutive (?:win|year|time)|times in a row|in a row\b(?![^\n]*(?:Chat|moments))|20(?:1[0-9]|2[0-5])\s*[–-]\s*20\d\d/i, f)
+  }
+  for (const id of ['hooligans', 'aliens']) {
+    for (const phase of ['soon', 'open']) {
+      const rv = recruitView(summary({ phase, points: [10, 9] }), id, phase === 'soon' ? PROMO_NOW : OPEN_NOW)
+      for (const line of [...rv.hype, rv.shout, rv.pitch, recruitText(rv)]) assert.doesNotMatch(line, /7th|seventh|in a row|consecutive/i, line)
+    }
+  }
+})

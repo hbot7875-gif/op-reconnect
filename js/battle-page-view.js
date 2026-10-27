@@ -2,7 +2,7 @@
 // Shows the public battle summary and nothing about any agent. With
 // ?team=hooligans|aliens it is that side's recruit page: the same live
 // numbers, led by the side that sent the link.
-import { battleView, recruitView, bonusRule, LYRICS, RECRUIT, kstWhen } from './battle-share-rules.js'
+import { battleView, recruitView, bonusRule, LYRICS, kstWhen } from './battle-share-rules.js'
 
 export const JOIN_URL = '/game?screen=voting'
 /** "Join ALIENS" carries the team into the game, where it only marks the
@@ -93,12 +93,11 @@ export function recruitPageHtml(summary, now, team) {
   const rv = { ...recruitView(summary, team, now), closesAt: summary.closesAt }
   const me = rv.team
   const join = rv.phase === 'open' || rv.phase === 'soon'
-  const words = RECRUIT[me.id]
   const verb = rv.phase === 'open' ? 'need you' : join ? 'are recruiting' : rv.winners?.length === 1 && rv.winners[0] === me.id ? 'won' : ''
   return `<header class="bp-nav"><a class="bp-brand" href="/">RECONNECT</a>${pill(rv)}</header>
     <p class="bp-kicker">MAMA Battle · ${esc(summary.roundLabel || 'Round 2')}</p>
     <h1 class="bp-${me.id}"><span class="bp-tname">${esc(me.label)}</span>${esc(verb)}</h1>
-    <p class="bp-lead">${esc(words.pitch)}${rv.phase === 'soon' ? ` Voting opens ${esc(rv.opens || 'soon')}.` : ''}</p>
+    <p class="bp-lead">${esc(rv.pitch)}${rv.phase === 'soon' ? ` Voting opens ${esc(rv.opens || 'soon')}.` : ''}</p>
     <section class="bp-card bp-recruit bp-${me.id}" aria-label="${esc(me.label)}">
       <div class="bp-r-big">${fmt(rv.phase === 'soon' ? me.agents : me.points)}<small>${rv.phase === 'soon' ? 'agents ready' : 'verified votes'}</small></div>
       <div class="bp-r-sub">${esc((rv.phase === 'soon' ? rv.recruitsLine : rv.standing || rv.status).toLowerCase())} · vs ${esc(rv.rival.label)} ${fmt(rv.phase === 'soon' ? rv.rival.agents : rv.rival.points)}</div>

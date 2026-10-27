@@ -22,30 +22,43 @@ export const STYLE_NAMES = { V1: 'Black', V2: 'Cream', V3: 'Purple' }
 export const LYRICS = { hooligans: 'Watch this.', aliens: 'Yeah, we aliens.' }
 
 // Recruiting, in each side's own voice. Modelled on how BTS voting
-// fanbases post on X during MAMA (Oct 2026): "START LOCKING IN", "WHERE ARE
-// YOU ARMY??", "PROTECT THE GAP", "daily voting is a MUST", "it only takes
-// a few minutes" — direct, urgent, practical, never a slogan. Round 2 is
-// Fans' Choice (Male, Female, and VISA Fans' Choice of the Year); the
-// Daesang is VISA Fans' Choice of the Year, which BTS won 2018–2023, so a
-// win now is their 7th as a group (the line fan accounts are using); votes
-// reset to zero for this round.
+// fanbases post on X during MAMA: "START LOCKING IN", "WHERE ARE YOU
+// ARMY??", "PROTECT THE GAP", "daily voting is a MUST" — direct, urgent,
+// practical, never a slogan. Round 2 is Fans' Choice (Male, Female, and
+// VISA Fans' Choice of the Year, the Daesang). No award history or win
+// counts here: the call is about this round, for OT7 ARMY.
 export const RECRUIT = {
   hooligans: {
     emoji: '🔥',
     shout: 'HOOLIGANS ARE RECRUITING',
-    hype: ['HOOLIGANS, START LOCKING IN.', 'LET’S GET BTS THEIR 7TH DAESANG.'],
+    hype: ['HOOLIGANS, START LOCKING IN.', 'LET’S GET BTS THAT DAESANG.'],
     behind: 'WE’RE BEHIND. HOOLIGANS, LOCK IN!',
     ahead: 'WE’RE AHEAD. PROTECT THE GAP!',
-    pitch: '🚨 HOOLIGANS, start locking in! BTS won Fans’ Choice of the Year 6 times in a row, so the VISA Fans’ Choice of the Year Daesang would be their 7th. Votes reset to zero, every day counts. Let’s make it happen 💜☝️',
   },
   aliens: {
     emoji: '👽',
     shout: 'ALIENS ARE RECRUITING',
-    hype: ['ALIENS, WHERE ARE YOU??', 'BTS’S 7TH DAESANG STARTS DAY ONE.'],
+    hype: ['ALIENS, WHERE ARE YOU??', 'EVERY VOTE COUNTS FROM DAY ONE.'],
     behind: 'WE’RE BEHIND. WHERE ARE YOU ALIENS??',
     ahead: 'WE’RE AHEAD. PROTECT THE GAP!',
-    pitch: '🔔 ALIENS, we need every vote! If BTS win VISA Fans’ Choice of the Year it’s their 7th Daesang. It only takes a few minutes a day, so vote with us 🥹🙏',
   },
+}
+
+const MONTHS_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+
+/** The recruiting call, one wording for both sides with that side's name.
+ *  Before voting opens it names the real opening day (KST, from the event's
+ *  own opens_at); once voting runs, "starts …" would be stale, so it says
+ *  the round is live. */
+export function recruitPitch(teamLabel, opensAt, now = new Date()) {
+  const opens = Date.parse(opensAt)
+  let when = 'is live'
+  if (!Number.isFinite(opens)) when = 'is coming'
+  else if (new Date(now).getTime() < opens) {
+    const k = new Date(opens + 9 * 3600_000)
+    when = `starts ${MONTHS_LONG[k.getUTCMonth()]} ${k.getUTCDate()}`
+  }
+  return `🚨 ${teamLabel}, start locking in! MAMA Round 2 ${when}. Votes reset to zero, so every day counts. Share your team link, bring more ARMYs in, and let's get BTS that Daesang! 💜✊`
 }
 
 const KST_MS = 9 * 3600_000
@@ -205,6 +218,7 @@ export function recruitView(summary, teamId, now = new Date()) {
     standing,
     hype: live ? [ahead ? words.ahead : words.behind, `DAILY VOTING UNTIL ${kstWhen(summary.closesAt).split(',')[0].toUpperCase()}. NO LAST-MINUTE.`] : words.hype,
     teamCta: [`JOIN ${me.label}.`, 'VOTE FOR BTS.'],
+    pitch: recruitPitch(me.label, summary.opensAt, now),
     bonusLine: bonusRule(v.recruitBonus, me.label),
     // The poster's short form of the same rule.
     bonusShort: v.recruitBonus?.per && v.recruitBonus?.points
@@ -256,7 +270,7 @@ export function shareText(view) {
 export function recruitText(rv) {
   const w = rv.words
   if (rv.phase === 'soon') {
-    return `${w.emoji} ${rv.team.label} ARE RECRUITING · MAMA Battle Round 2\n${w.pitch}\nRound 2 of Fans’ Choice opens ${rv.opens || 'soon'} · ${fmt(rv.team.agents)} agents ready${rv.team.recruits ? `, +${fmt(rv.team.recruits)} new this round` : ''}${rv.bonusLine ? `\n${rv.bonusLine}.` : ''}\n${rv.url}`
+    return `${w.emoji} ${rv.team.label} ARE RECRUITING · MAMA Battle Round 2\n${rv.pitch}\nVoting opens ${rv.opens || 'soon'} · ${fmt(rv.team.agents)} agents ready${rv.team.recruits ? `, +${fmt(rv.team.recruits)} new this round` : ''}${rv.bonusLine ? `\n${rv.bonusLine}.` : ''}\n${rv.url}`
   }
   if (rv.phase === 'open') {
     return `${w.emoji} ${rv.team.label} NEED YOU · MAMA Battle Round 2\n${rv.team.label} ${fmt(rv.team.points)} vs ${rv.rival.label} ${fmt(rv.rival.points)} (${rv.standing.toLowerCase()})\nEvery verified vote moves the score and goes to BTS. The Daesang is on the line.${rv.bonusLine ? `\n${rv.bonusLine}.` : ''}\n${rv.url}`
