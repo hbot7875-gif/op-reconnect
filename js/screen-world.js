@@ -35,6 +35,7 @@ import { openCityShare, openRedZoneShare } from './share.js'
 import { agentChargeSheet, boraMeterSheet } from './agent-charge.js'
 import { broadcastCards, legalNoticeCard } from './broadcasts.js'
 import { cityFeedCard } from './city-feed.js'
+import { raplineTrackerCard } from './rapline-tracker.js'
 import { openSuggestions } from './suggestions.js'
 import { openMagicShop } from './magic-shop.js'
 import { openHelpingZone } from './helping-zone.js'
@@ -83,6 +84,9 @@ export function renderWorld(container, state) {
     wrap.appendChild(entry)
     startCityClock()
   }
+  // Rap Line to 1B: informational Spotify totals, high enough to be seen
+  // without scrolling past the City map. Not part of any mission or reward.
+  wrap.appendChild(raplineTrackerCard())
   const goldenBanner = goldenCornerBanner(state)
   if (goldenBanner) wrap.appendChild(goldenBanner)
   maybeShowDefuseResult(state.bomb?.resolvedDefuse)

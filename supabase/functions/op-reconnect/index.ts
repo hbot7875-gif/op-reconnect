@@ -71,6 +71,7 @@ import {
 import { getDearDiary, getDearDiaryArchive, getDearDiaryPreference, keepDearDiaryMoment, saveDearDiaryDecorations, saveDearDiaryNote, saveDearDiaryTheme } from './lib/dear-diary.ts'
 import { runAmiState, runAmiCreateRoom, runAmiJoinRoom, runAmiWatchRoom, runAmiLeaveRoom, runAmiStart, runAmiAct, runAmiChat, cronRunAmiSweep, runAmiTesters, runAmiTesterAdd, runAmiTesterRemove } from './lib/run-ami.ts'
 import { albumState, albumGift } from './lib/album.ts'
+import { cronRaplineRefresh, getRaplineTracker } from './lib/rapline-tracker.ts'
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -103,6 +104,8 @@ const ROUTES: Record<string, Route> = {
   getPublicShareSnapshot: { auth: 'public', handler: (sb, p) => getPublicShareSnapshot(sb, p) },
   // MAMA Battle page + share poster: team totals only, from the shared cache.
   getPublicBattle: { auth: 'public', handler: (sb) => getPublicBattle(sb) },
+  // Rap Line to 1B card on City: three tracks' Spotify totals, no player data.
+  getRaplineTracker: { auth: 'public', handler: (sb) => getRaplineTracker(sb) },
   // Run before a session exists — issue or verify one, they don't need one yet.
   // Every one of these is rate-limited inside its own handler, since being
   // reachable without a token is exactly what makes them worth hammering.
@@ -378,6 +381,9 @@ const ROUTES: Record<string, Route> = {
   // RUN AMI: settle matches nobody is polling and close idle rooms (pg_cron
   // every minute, migration 20261018120500).
   cronRunAmiSweep: { auth: 'cron', handler: (sb) => cronRunAmiSweep(sb) },
+  // Rap Line to 1B: refresh the informational Spotify totals (pg_cron daily,
+  // fetches every 3 days; migration 20261027200500). Takes no params.
+  cronRaplineRefresh: { auth: 'cron', handler: (sb) => cronRaplineRefresh(sb) },
   adminGetEngagementReport: { auth: 'admin', handler: (sb, p) => adminGetEngagementReport(sb, p) },
 
   // Batch-assign a series of connect/invite missions for one reconnect goal

@@ -375,6 +375,14 @@
         else if (location.hash.includes('track')) STATE.bomb.defuse.targetTrack = 'Haegeum'
       }
     }
+    // #mama: the City voting entry card, so placement under it can be checked.
+    if (location.hash.includes('mama')) {
+      STATE.voting = {
+        title: 'MAMA 2026', phase: 'open', roundLabel: 'Round 2 · Fans’ Choice',
+        opensAt: new Date(Date.now() - 86400000).toISOString(), closesAt: new Date(Date.now() + 5 * 86400000).toISOString(),
+        battle: { teams: [{ id: 'hooligans', label: 'HOOLIGANS' }, { id: 'aliens', label: 'ALIENS' }] },
+      }
+    }
     // ARMY Comms preview thread — the same realistic sample messages at
     // every stage, so only the background glow changes between screenshots.
     // Mutable so posting in the sheet reflects back into the list without a
@@ -466,6 +474,22 @@
         if (body.action === 'getGameState') {
           const on = location.hash.includes('onboard')
           return { json: async () => JSON.parse(JSON.stringify(on ? ONBOARD : STATE)) }
+        }
+        // Rap Line to 1B card: the provider's real Oct 21–27 readings, dated
+        // to end today. #rapline-stale dates them a week earlier;
+        // #rapline-empty has no data. The card works out age itself.
+        if (body.action === 'getRaplineTracker') {
+          const r = await import('/supabase/functions/op-reconnect/lib/rapline-rules.js')
+          const end = Date.now() - (location.hash.includes('rapline-stale') ? 7 : 0) * 86400000
+          const days = [6, 5, 4, 3, 2, 1, 0].map((k) => new Date(end - k * 86400000).toISOString().slice(0, 10))
+          const s = (vals) => vals.map((streams, i) => ({ day: days[i], streams }))
+          const rows = location.hash.includes('rapline-empty') ? {} : {
+            '1AZjCZSGEjlxUufFQwSszF': s([456808628, 457044610, 457267900, 457490943, 457835007, 458160611, 458468618]),
+            '4bjN59DRXFRxBE1g5ne6B1': s([871906246, 872362986, 872797183, 873211465, 873518511, 873785880, 874058865]),
+            '2GzwtXPlI0gZEOS6xFOZ2j': s([363474572, 363722900, 363977743, 364578011, 364578011, 364908762, 365215555]),
+          }
+          const today = new Date().toISOString().slice(0, 10)
+          return { json: async () => ({ success: true, tracker: r.summariseTracker(rows, today, new Date(end).toISOString()) }) }
         }
         if (body.action === 'joinGame') {
           return { json: async () => ({ ...JSON.parse(JSON.stringify(STATE)), success: true, joined: true }) }
