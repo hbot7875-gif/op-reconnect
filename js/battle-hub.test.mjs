@@ -92,7 +92,7 @@ const TEAM = {
 test('Team: codename, opt-in Instagram link, votes today (4/6), and only counts at the top', () => {
   const html = teamPanel(TEAM, { labels: LABELS })
   assert.match(html, /Only HOOLIGANS can see this/)
-  assert.match(html, /<b>34<\/b> members<\/span><span><b>9<\/b> online now/)
+  assert.match(html, /<b>34<\/b> members<\/span><span class="vt-tm-online"><i aria-hidden="true"><\/i><b>9<\/b> online now<\/span><span><b>\d+<\/b> voted today/)
   assert.match(html, /Moonchild<span class="vt-mem-you">YOU<\/span>/)
   assert.match(html, /<a class="vt-mem-ig" href="https:\/\/instagram\.com\/goldenhour_jk" target="_blank" rel="noopener noreferrer">/)
   assert.equal((html.match(/vt-mem-ig/g) || []).length, 1, 'a link wherever the server sends a username')

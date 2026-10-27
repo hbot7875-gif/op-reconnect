@@ -8242,3 +8242,33 @@ select.rc-multi-native {
 .recruit-link b { grid-column: 1; margin-top: 3px; font-size: 14.5px; }
 .recruit-link small { grid-column: 1; margin-top: 2px; font-size: 12px; color: var(--muted); }
 .recruit-link > i { grid-column: 2; grid-row: 1 / span 3; font-style: normal; font-size: 18px; color: var(--purple-lt); }
+
+/* ── a compact shared header, per screen (compact-hud.js) ──
+   Same contract as Moon Station's: every rule sits under the body class a
+   screen adds on mount (today the MAMA hub) and main.js removes on the way
+   out, so no other screen's header changes. compact-hud.js gives the header
+   a bottom margin equal to the height it gives up, so compacting never moves
+   the page (no jump, no flicker). Every control stays tappable; the
+   ReConnect / leave status stays a button, just one slim line. */
+/* The MAMA hub is about the battle, not ReConnect: its header drops the
+   ReConnect status, as Candy Star and Settings do. (On leave still shows.) */
+#hud:has(~ #scene .vt-screen) #hudReconnectStatus { display: none; }
+.hud-compact-screen #hud.is-compact .hud-inner { padding-top: 5px; }
+.hud-compact-screen #hud.is-compact .hud-crest { --hud-crest-size: 30px; }
+.hud-compact-screen #hud.is-compact .hud-crest b { font-size: 11px; }
+.hud-compact-screen #hud.is-compact .hud-crest.has-badge b { font-size: 15px; }
+.hud-compact-screen #hud.is-compact .hud-crest.has-photo::after { display: none; }
+.hud-compact-screen #hud.is-compact .hud-code { font-size: 14px; }
+.hud-compact-screen #hud.is-compact .hud-meta { font-size: 9.5px; }
+.hud-compact-screen #hud.is-compact .hud-streak { padding: 3px 7px; font-size: 10px; }
+.hud-compact-screen #hud.is-compact .hud-bell,
+.hud-compact-screen #hud.is-compact .hud-sync { width: 32px; height: 32px; font-size: 13px; }
+.hud-compact-screen #hud.is-compact .hud-xp { padding-top: 4px; padding-bottom: 6px; }
+.hud-compact-screen #hud.is-compact .hud-xp-note { display: none; }
+.hud-compact-screen #hud.is-compact .hud-reconnect-status { margin: 0 auto 6px; padding: 5px 10px; }
+.hud-compact-screen #hud.is-compact .hud-reconnect-status b { font-size: 11px; }
+.hud-compact-screen #hud.is-compact > * { animation: hud-compact-in .22s ease-out; }
+@keyframes hud-compact-in { from { opacity: .5; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .hud-compact-screen #hud.is-compact > * { animation: none; }
+}

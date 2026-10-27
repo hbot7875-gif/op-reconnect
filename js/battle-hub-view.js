@@ -115,21 +115,25 @@ export function teamPanel(team, { labels, max = 6 } = {}) {
   const label = labels[team.team] || team.team.toUpperCase()
   const rows = team.members.map((m) => {
     const url = instagramUrl(m.ig)
-    return `<li class="vt-mem${m.me ? ' is-me' : ''}">
+    return `<li class="vt-mem${m.me ? ' is-me' : ''}" data-vt-mem="${esc(`${m.codename} ${m.ig || ''}`.toLowerCase())}">
       <span class="vt-mem-av" aria-hidden="true">${esc(([...m.codename][0] || '?').toUpperCase())}</span>
       <span class="vt-mem-id"><span class="vt-mem-name">${esc(m.codename)}${m.me ? '<span class="vt-mem-you">YOU</span>' : ''}</span>${url
         ? `<a class="vt-mem-ig" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${ic('instagram')}@${esc(m.ig)}<span class="vt-sr"> on Instagram</span></a>` : ''}</span>
       <span class="vt-mem-score${m.today ? (m.today >= max ? ' is-full' : '') : ' is-zero'}" aria-label="${m.today} of ${max} verified votes today">${m.today}<small>/${max}</small></span>
+      <i class="vt-mem-bar" aria-hidden="true" style="--p:${Math.min(1, m.today / Math.max(1, max)).toFixed(3)}"></i>
     </li>`
   }).join('')
+  const voted = team.members.filter((m) => m.today > 0).length
   return `<div class="vt-hub-team"${teamAttr(team.team)}>
     <div class="vt-tm-head">
       <span class="vt-tm-only">${ic('lock')}Only ${esc(label)} can see this</span>
       <h2 class="vt-tm-name">${esc(label)}</h2>
-      <p class="vt-tm-counts"><span><b>${fmt(team.count)}</b> ${team.count === 1 ? 'member' : 'members'}</span><span><b>${fmt(team.online)}</b> online now</span></p>
+      <p class="vt-tm-counts"><span><b>${fmt(team.count)}</b> ${team.count === 1 ? 'member' : 'members'}</span><span class="vt-tm-online"><i aria-hidden="true"></i><b>${fmt(team.online)}</b> online now</span><span><b>${fmt(voted)}</b> voted today</span></p>
     </div>
     ${team.members.length > 1 ? '' : `<p class="vt-empty vt-card">You're the first ${esc(label)} here. Teammates show up as they join.</p>`}
+    ${team.members.length > 6 ? `<label class="vt-tm-search">${ic('search')}<span class="vt-sr">Find a teammate</span><input type="search" class="vt-input" data-vt-team-search placeholder="Find a teammate" autocomplete="off" enterkeyhint="search"></label>` : ''}
     <ul class="vt-card vt-roster" aria-label="${esc(label)} members">${rows}</ul>
+    <p class="vt-empty vt-tm-none" data-vt-team-none hidden>No teammate by that name.</p>
   </div>`
 }
 

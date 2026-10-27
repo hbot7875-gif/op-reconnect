@@ -92,7 +92,8 @@ test('battle: tied, Hooligans leading, Aliens leading', () => {
 test('battle: next milestone almost reached, and reached', () => {
   const almost = section(render({ battle: 'almost' }), 'vt-h-bgifts')
   assert.match(almost, /Next Battle Gift at <b>500<\/b> · 3 to go/)
-  assert.match(almost, /class="vt-gp-steps"><li class="is-got">200 ✓<\/li><li class="is-next">500<\/li>/)
+  assert.match(almost, /class="vt-gt-node" data-state="claimed"[^>]*aria-label="Battle Gift 1, 200 votes, claimed"[\s\S]*data-state="next"[^>]*aria-label="Battle Gift 2, 500 votes, next"/)
+  assert.match(almost, /<b>497<\/b><small>community votes<\/small>/)
   const reached = section(render({ battle: 'reached' }), 'vt-h-bgifts')
   assert.match(reached, /data-vt-bgift="ready"[\s\S]*Battle Gift 2 · 500 votes[\s\S]*data-vt-act="battle-claim" data-vt-index="1"/)
   assert.equal(nextMilestone(votingStatus({ battle: 'reached' }).battle).target, 900)
@@ -119,7 +120,7 @@ test('battle gifts: locked, ready, claimed, non-contributor; unset shows TBA', (
 test("Today's voting: 0/6 through 6/6 with Mnet/X breakdown and KST reset", () => {
   for (const [o, n] of [[{}, 0], [{ mnetCount: 1 }, 1], [{ mnet: 'verified' }, 3], [{ mnet: 'verified', x: 'verified' }, 6]]) {
     const html = render(o)
-    assert.match(html, new RegExp(`vt-progress-val">${n} <small>/ 6`))
+    assert.match(html, new RegExp(`vt-progress-val${n === 6 ? ' is-full' : ''}">${n} <small>/ 6`))
     assert.equal((html.match(/class="vt-seg[ "]/g) || []).length, 6)
   }
   assert.match(render({ mnetCount: 2, xCount: 1 }), /Mnet 2\/3 · X 1\/3/)
@@ -210,10 +211,12 @@ test('Pulse: healthy, stale, provider unavailable — never a zero', () => {
 
 // ── Your voting ──────────────────────────────────────────────────────
 
-test('Your voting: four compact stats incl. voting days toward the badge', () => {
+test('Your voting: one compact panel — next reward first, three stats incl. voting days toward the badge', () => {
   const html = section(render({ badgeDays: 3 }), 'vt-h-stats')
   for (const k of ['Verified votes', 'Voting days', "Today's votes", 'Next reward']) assert.ok(html.includes(k), k)
-  assert.equal((html.match(/class="vt-card vt-stat"/g) || []).length, 4)
+  assert.equal((html.match(/class="vt-card vt-statpanel"/g) || []).length, 1, 'one card, not four')
+  assert.equal((html.match(/class="vt-stat"/g) || []).length, 3)
+  assert.ok(html.indexOf('Next reward') < html.indexOf('Verified votes'), 'the next reward leads')
   assert.match(html, /3 <small>\/ 5 for MAMA badge/)
   assert.match(section(render({ badgeDays: 5 }), 'vt-h-stats'), /MAMA badge earned/)
 })

@@ -14,6 +14,7 @@ import { posterFile, canShareFiles, sharePoster, shareLink, copyText, savePoster
 import { checkLyric, LYRIC_MAX, LYRIC_ERRORS } from './battle-lyric-filter.js'
 import { trackEngagement } from './engagement.js'
 import { readInvite, clearInvite } from './battle-invite.js'
+import { mountCompactHud } from './compact-hud.js'
 import { checkForVotingAlerts, showDuplicateCertificatePopup } from './voting-alerts.js'
 import { chatFeed, chatErrorText } from './battle-hub-view.js'
 import { checkChatText, CHAT_MAX } from '../supabase/functions/op-reconnect/lib/battle-text-filter.js'
@@ -66,10 +67,13 @@ export function renderVoting(container) {
   root.addEventListener('input', (e) => {
     if (e.target.matches?.('[data-vt-lyric]')) onLineInput(e.target)
     else if (e.target.matches?.('[data-vt-chat-input]')) onChatInput(e.target)
+    else if (e.target.matches?.('[data-vt-team-search]')) filterTeam(e.target.value)
   })
   local = freshLocal()
   openSheet = null
   hubData = { team: { loading: true }, chat: { loading: true } }
+  // The shared header compacts on scroll here (torn down by main.js).
+  mountCompactHud()
   load()
 }
 
@@ -205,7 +209,18 @@ function paint() {
   const input = root.querySelector('[data-vt-chat-input]')
   const caret = input && document.activeElement === input ? [input.selectionStart, input.selectionEnd] : null
   const pos = feedPosition()
+  // The Team search survives a repaint (a poll lands while typing).
+  const search = root.querySelector('[data-vt-team-search]')
+  const searchState = search ? { value: search.value, focused: document.activeElement === search } : null
   root.innerHTML = votingScreen({ status, local, now: new Date(), hub: hubData })
+  if (searchState?.value || searchState?.focused) {
+    const again = root.querySelector('[data-vt-team-search]')
+    if (again) {
+      again.value = searchState.value
+      filterTeam(searchState.value)
+      if (searchState.focused) again.focus()
+    }
+  }
   if (sheet) {
     // A message's options or the report form sit on top of the open Chat.
     if (sheet !== 'chat' && sheet.startsWith('chat') && local.hub.chatOpen) showSheet('chat', false)
@@ -790,6 +805,19 @@ function openChat() {
 }
 
 // ── Team ──
+
+/** Team search: hides roster rows in place (no repaint, no request). */
+function filterTeam(value) {
+  const q = String(value || '').trim().toLowerCase()
+  let shown = 0
+  for (const li of root.querySelectorAll('.vt-roster [data-vt-mem]')) {
+    const hit = !q || li.dataset.vtMem.includes(q)
+    li.hidden = !hit
+    if (hit) shown++
+  }
+  const none = root.querySelector('[data-vt-team-none]')
+  if (none) none.hidden = shown > 0
+}
 
 async function loadTeam() {
   const r = await call('getBattleTeam', { agentNo: getAgentNo() })

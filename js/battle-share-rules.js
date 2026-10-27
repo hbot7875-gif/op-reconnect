@@ -154,6 +154,14 @@ export function battleView(summary, now = new Date()) {
     shown: (t) => (soon ? t.agents || 0 : t.points),
     posterCta: soon ? ['PICK A SIDE.', 'VOTE FOR BTS DAILY.'] : phase === 'open' ? ['PICK A SIDE.', 'VOTE FOR BTS.'] : ['EVERY VOTE', 'WENT TO BTS.'],
     liveLine: `${summary.roundLabel ? `${String(summary.roundLabel).toUpperCase()} · ` : ''}${state} · ${kstClock(summary.updatedAt || now)} KST`,
+    // The poster's footer: no clock to the minute (a shared poster outlives
+    // it), only what stays true — the opening, or the day of the score.
+    posterFoot: `${summary.roundLabel ? `${String(summary.roundLabel).toUpperCase()} · ` : ''}${
+      soon ? `VOTING OPENS ${opens ? opens.split(',')[0].toUpperCase() : 'SOON'}`
+        : phase === 'final' ? 'FINAL SCORE'
+          : phase === 'verifying' ? 'VOTING CLOSED'
+            : `LIVE SCORE · ${kstWhen(summary.updatedAt || now).split(',')[0].toUpperCase()}`}`,
+    roundUpper: summary.roundLabel ? String(summary.roundLabel).toUpperCase() : null,
     leader: leader?.id || null,
     status,
     statusParts: soon ? ['OPENS', opens || 'SOON']

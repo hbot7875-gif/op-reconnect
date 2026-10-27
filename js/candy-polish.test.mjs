@@ -72,7 +72,7 @@ test('Candy shows no ReConnect notice; City and Pack keep theirs', () => {
   assert.match(block, /#hud:has\(~ #scene \.cs-screen\) #hudReconnectStatus \{ display: none; \}/)
   // one scoped rule per screen that drops it (Candy, Settings), never a global one
   const hides = [...css.matchAll(/([^{}\n]*)#hudReconnectStatus \{ display: none/g)].map((m) => m[1].trim())
-  assert.deepEqual(hides, ['#hud:has(~ #scene .cs-screen)', '#hud:has(~ #scene .set-screen)'])
+  assert.deepEqual(hides, ['#hud:has(~ #scene .cs-screen)', '#hud:has(~ #scene .set-screen)', '#hud:has(~ #scene .vt-screen)'], 'one scoped rule per screen: Candy, Settings, the MAMA hub')
   assert.match(world, /classList\.add\('city-reconnect-notice'\)/)
   assert.match(resources, /button\.classList\.add\('pack-reconnect-notice'\)/)
 })

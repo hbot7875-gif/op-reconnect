@@ -35,6 +35,7 @@ import { districtDisplayName } from './ward-tiles.js'
 import { lapseChoice } from './ui-district.js'
 import { trackEngagement } from './engagement.js'
 import { rememberInvite } from './battle-invite.js'
+import { teardownCompactHud, refreshCompactHud } from './compact-hud.js'
 
 const $ = (id) => document.getElementById(id)
 
@@ -85,6 +86,8 @@ function renderScreen(state) {
   // Moon Station condenses the shared header while it is open; this
   // puts it back for every other screen.
   if (scr.name !== 'moon') teardownMoonStation()
+  // The MAMA hub compacts the shared header the same way (compact-hud.js).
+  if (scr.name !== 'voting') teardownCompactHud()
   // RUN AMI owns a socket, a poll and a turn timer; stop them on the way out.
   if (scr.name !== 'runami') teardownRunAmi()
 
@@ -154,6 +157,7 @@ subscribe((state) => {
   window.__rcState = state
   show('game')
   renderHud($('hud'), state)
+  refreshCompactHud()
   renderTabbar($('tabbar'), state)
   renderScreen(state)
   // After the first paint, never before it: the Moon dot's one background
@@ -213,6 +217,7 @@ onScreenChange((scr) => {
   // The tab bar reflects which screen is current, so it repaints on
   // navigation too.
   renderHud($('hud'), state)
+  refreshCompactHud()
   renderTabbar($('tabbar'), state)
   renderScreen(state)
 })

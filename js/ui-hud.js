@@ -195,6 +195,12 @@ function wireHudScrollCollapse() {
     // than the automation browser's outer viewport, so also inspect the
     // actual document width. This keeps the preview faithful and prevents
     // the same compact/full oscillation there.
+    // A screen with its own compact header (compact-hud.js, the MAMA hub)
+    // owns the header's size while it is open.
+    if (document.body?.classList.contains('hud-compact-screen')) {
+      hud.classList.remove('is-collapsed')
+      return
+    }
     const renderedWidth = document.body?.getBoundingClientRect().width || window.innerWidth
     const narrowScreen = window.matchMedia('(max-width: 640px)').matches
       || renderedWidth <= 640

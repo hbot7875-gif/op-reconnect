@@ -160,7 +160,7 @@ function todayProgress(vm) {
     <div class="vt-card vt-progress">
       <div class="vt-progress-row">
         <h2 class="vt-progress-label" id="vt-h-today">Today's voting</h2>
-        <span class="vt-progress-val">${done} <small>/ ${total}</small></span>
+        <span class="vt-progress-val${done && done >= total ? ' is-full' : ''}">${done} <small>/ ${total}</small></span>
       </div>
       <div class="vt-segs" style="--n:${total}" role="progressbar" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${done}" aria-label="Today's verified votes">${segs}</div>
       <div class="vt-progress-foot"><span>${breakdown}</span><span>Resets in <span class="vt-mono" data-vt-reset>${reset}</span></span></div>
@@ -458,9 +458,44 @@ export function recruitBonusCard(b) {
   const mine = b.teams.find((t) => t.id === b.myTeam)
   const p = mine ? bonusProgress(mine, rb) : null
   return `<div class="vt-card vt-bonus" data-vt-bonus>
-      <div class="vt-gp-row"><span class="vt-gp-ico">${ic('users')}</span><span class="vt-gp-t"><b>Recruit bonus</b> · ${esc(bonusRule(rb))}</span></div>
-      <p class="vt-bonus-teams">${b.teams.map((t) => `<span data-team="${esc(t.id)}">${esc(t.label)} <b>+${fmtCount(t.bonus || 0)}</b> <small>${fmtCount(t.qualified || 0)} new voters</small></span>`).join('')}</p>
+      <div class="vt-bonus-h"><span class="vt-bonus-ico">${ic('users')}</span><span class="vt-gp-t"><b>Recruit bonus</b> · ${esc(bonusRule(rb))}</span></div>
+      <p class="vt-bonus-teams">${b.teams.map((t) => `<span data-team="${esc(t.id)}"><i aria-hidden="true"></i>${esc(t.label)} <b>+${fmtCount(t.bonus || 0)}</b> <small>${fmtCount(t.qualified || 0)} new voters</small></span>`).join('')}</p>
       ${p ? `<p class="vt-bonus-next">${esc(mine.label)} need ${p.toNext} more new ${p.toNext === 1 ? 'voter' : 'voters'} for the next +${rb.points}. Share your team link.</p>` : ''}
+    </div>`
+}
+
+/** The VS arena: both sides' big numbers over their team-colour glow, the
+ *  illuminated VS, a thin segmented bar, and a one-line key saying what the
+ *  numbers are (agents before voting, verified votes once it opens). */
+function arena(b, { mode, num, sub, bar, key }) {
+  const [x, y] = b.teams
+  const side = (t, end) => `<div class="vt-vs-t${end ? ' is-end' : ''}" data-team="${esc(t.id)}">
+      <span class="vt-team-chip"><i aria-hidden="true"></i>${esc(t.label)}</span>
+      <span class="vt-vs-pts">${fmtCount(num(t))}</span>
+      <span class="vt-vs-you">${sub(t)}</span>
+    </div>`
+  return `<div class="vt-arena" data-vt-arena="${mode}">
+      <div class="vt-vs">${side(x, false)}<span class="vt-vs-x" aria-hidden="true"><b>VS</b></span>${side(y, true)}</div>
+      ${bar}
+      <p class="vt-arena-key">${key}</p>
+    </div>`
+}
+
+/** A thin bar split between the sides by `value`, in team colours. */
+function splitBar(b, value, label) {
+  const [x, y] = b.teams
+  const vx = Math.max(0, value(x))
+  const vy = Math.max(0, value(y))
+  const sum = vx + vy || 1
+  const g = (v) => (sum === 1 && !vx && !vy ? 1 : v / sum).toFixed(4)
+  return `<div class="vt-split" role="img" aria-label="${esc(label)}"><span data-team="${esc(x.id)}" style="flex-grow:${g(vx)}"></span><span data-team="${esc(y.id)}" style="flex-grow:${g(vy)}"></span></div>`
+}
+
+/** Your side's two recruiting actions: the poster first, the link second. */
+function recruitActions(mine, { primary = 'recruit' } = {}) {
+  return `<div class="vt-recruit">
+      <button class="vt-btn vt-btn-primary vt-battle-share" type="button" data-vt-act="battle-share" data-vt-mode="${primary}" aria-haspopup="dialog">${ic('share')}${primary === 'recruit' ? `Recruit for ${esc(mine.label)}` : 'Share battle'}</button>
+      <button class="vt-btn vt-btn-outline vt-btn-fit vt-copy-link" type="button" data-vt-act="share-link" data-vt-team="${esc(mine.id)}" aria-label="Copy ${esc(mine.label)} invite link">${ic('link')}Copy link</button>
     </div>`
 }
 
@@ -470,22 +505,21 @@ function promoBattle(vm) {
   const c = vm.status.campaign
   const [x, y] = b.teams
   const mine = b.teams.find((t) => t.id === b.myTeam)
-  const side = (t, end) => `<div class="vt-vs-t${end ? ' is-end' : ''}" data-team="${esc(t.id)}">
-      <span class="vt-team-chip"><i aria-hidden="true"></i>${esc(t.label)}</span>
-      <span class="vt-vs-pts">${fmtCount(t.size)}</span>
-      <span class="vt-vs-you">${b.myTeam === t.id ? 'Your team' : t.recruits ? `+${fmtCount(t.recruits)} new` : 'agents'}</span>
-    </div>`
   const starts = untilText(c.opensAt, vm.now)
   return `<section class="vt-hero" aria-labelledby="vt-h-battle" data-vt-battle="soon">
     <h2 class="vt-sr" id="vt-h-battle">MAMA Battle · ${esc(c.roundLabel || '')} · recruiting</h2>
-    <p class="vt-hero-final">${esc(c.roundLabel || 'Round 2')} · agents on each side</p>
-    <div class="vt-vs">${side(x, false)}<span class="vt-vs-x" aria-hidden="true">VS</span>${side(y, true)}</div>
-    <p class="vt-battle-line">${starts ? `Voting opens in ${esc(starts)}` : 'Voting opens soon'} · ${esc(kstWhen(c.opensAt))}</p>
-    <p class="vt-battle-meta"><span>${mine ? `${esc(mine.label)}, start recruiting! Share your team link.` : 'Pick a side before the vote opens.'}</span></p>
+    <p class="vt-clock" data-vt-clock>${ic('clock')}<span>${starts ? `Voting opens in <b>${esc(starts)}</b>` : '<b>Voting opens soon</b>'}</span><span class="vt-clock-at">${esc(kstWhen(c.opensAt))}</span></p>
+    ${arena(b, {
+      mode: 'soon',
+      num: (t) => t.size,
+      sub: (t) => (b.myTeam === t.id ? 'Your team' : t.recruits ? `+${fmtCount(t.recruits)} new` : 'agents'),
+      bar: splitBar(b, (t) => t.size, `${x.label} ${fmtCount(x.size)} agents, ${y.label} ${fmtCount(y.size)} agents`),
+      key: 'Agents on each side · votes start at 0',
+    })}
     ${mine
-      ? `<button class="vt-btn vt-btn-primary vt-battle-share" type="button" data-vt-act="battle-share" data-vt-mode="recruit" aria-haspopup="dialog">${ic('share')}Recruit for ${esc(mine.label)}</button>
-    <button class="vt-btn vt-btn-outline vt-battle-share" type="button" data-vt-act="share-link" data-vt-team="${esc(mine.id)}">${ic('link')}Copy ${esc(mine.label)} invite link</button>`
-      : `<button class="vt-btn vt-btn-primary vt-battle-share" type="button" data-vt-act="team-choose">${ic('swords')}Choose your team</button>`}
+      ? `<p class="vt-battle-meta"><span>${esc(mine.label)}, start recruiting! Share your team link.</span></p>${recruitActions(mine)}`
+      : `<p class="vt-battle-meta"><span>Pick a side before the vote opens.</span></p>
+    <button class="vt-btn vt-btn-primary vt-battle-share" type="button" data-vt-act="team-choose">${ic('swords')}Choose your team</button>`}
     <p class="vt-battle-note">${esc(mine ? (RECRUIT[mine.id]?.pitch || '') : 'Friendly ReConnect battle — every verified vote still supports BTS.')}</p>
   </section>
   ${recruitBonusCard(b)}`
@@ -496,37 +530,56 @@ function battle(vm) {
   if (!b) return ''
   if (vm.status.campaign.promo) return promoBattle(vm)
   const [x, y] = b.teams
-  const total = Math.max(1, x.points + y.points)
   const leading = x.points === y.points ? null : x.points > y.points ? x.id : y.id
-  const side = (t, end) => `<div class="vt-vs-t${end ? ' is-end' : ''}" data-team="${esc(t.id)}">
-      <span class="vt-team-chip"><i aria-hidden="true"></i>${esc(t.label)}</span>
-      <span class="vt-vs-pts">${fmtCount(t.points)}</span>
-      <span class="vt-vs-you">${b.myTeam === t.id ? 'Your team' : '&nbsp;'}</span>
-    </div>`
+  const mine = b.teams.find((t) => t.id === b.myTeam)
+  const bonus = b.recruitBonus && (x.bonus || y.bonus)
   return `<section class="vt-hero" aria-labelledby="vt-h-battle" data-vt-battle="${leading || 'tied'}">
     <h2 class="vt-sr" id="vt-h-battle">MAMA Battle${b.frozen ? ' · Final score' : ''}</h2>
     ${b.frozen ? '<p class="vt-hero-final">Final score</p>' : ''}
-    <div class="vt-vs">${side(x, false)}<span class="vt-vs-x" aria-hidden="true">VS</span>${side(y, true)}</div>
-    <div class="vt-tug" aria-hidden="true"><span class="${leading === y.id ? 'is-behind' : 'is-ahead'}" style="flex-grow:${(x.points / total).toFixed(4)}"></span><span class="${leading === y.id ? 'is-ahead' : 'is-behind'}" style="flex-grow:${(y.points / total).toFixed(4)}"></span></div>
+    ${arena(b, {
+      mode: b.frozen ? 'final' : 'live',
+      num: (t) => t.points,
+      sub: (t) => (b.myTeam === t.id ? 'Your team' : '&nbsp;'),
+      bar: splitBar(b, (t) => t.points, `Score: ${x.label} ${fmtCount(x.points)}, ${y.label} ${fmtCount(y.points)}`),
+      key: `${bonus ? 'Votes + recruit bonus' : 'Verified votes'} · ${fmtCount(x.size || 0)} vs ${fmtCount(y.size || 0)} agents`,
+    })}
     <p class="vt-battle-line">${esc(battleLine(b))}</p>
     <p class="vt-battle-meta"><span>Your contribution <b>${fmtCount(b.myPoints)}</b></span><span>Community total <b>${fmtCount(b.total)}</b></span></p>
-    <button class="vt-btn vt-btn-outline vt-battle-share" type="button" data-vt-act="battle-share" aria-haspopup="dialog">${ic('share')}${b.myTeam && !b.frozen ? 'Share · recruit' : 'Share battle'}${b.myTeam ? `<i class="vt-share-dot" data-team="${esc(b.myTeam)}" aria-hidden="true"></i>` : ''}</button>
+    ${mine && !b.frozen
+      ? recruitActions(mine)
+      : `<button class="vt-btn vt-btn-outline vt-battle-share" type="button" data-vt-act="battle-share" aria-haspopup="dialog">${ic('share')}Share battle${b.myTeam ? `<i class="vt-share-dot" data-team="${esc(b.myTeam)}" aria-hidden="true"></i>` : ''}</button>`}
     <p class="vt-battle-note">Friendly ReConnect battle — every verified vote still supports BTS.${b.frozen ? '' : ` Final score ${esc(kstWhen(b.freezeAt))}.`}</p>
   </section>
   ${b.frozen ? '' : recruitBonusCard(b)}`
 }
 
-/** Gold: how close the next shared Battle Gift is, above the claim list. */
+/** 1800 → '1.8K'; under 1,000 as is. For the milestone track's labels. */
+export function shortCount(n) {
+  const v = Number(n) || 0
+  if (v < 1000) return String(v)
+  const k = v / 1000
+  return `${Number.isInteger(k) ? k : k.toFixed(1).replace(/\.0$/, '')}K`
+}
+
+/** Gold: the community total, the next Battle Gift, and every milestone as
+ *  one progression track (each segment fills toward its gift). */
 function giftProgress(b) {
   if (!b.milestones) return ''
   const next = nextMilestone(b)
-  const pct = next ? Math.min(100, Math.round((b.total / next.target) * 100)) : 100
+  let lo = 0
+  const nodes = b.milestones.map((m) => {
+    const fill = m.reached ? 1 : Math.max(0, Math.min(1, (b.total - lo) / Math.max(1, m.target - lo)))
+    lo = m.target
+    const state = m.claimed ? 'claimed' : m.claimable ? 'ready' : m.reached ? 'open' : next && m.target === next.target ? 'next' : 'locked'
+    const word = { claimed: 'claimed', ready: 'ready to claim', open: 'unlocked', next: 'next', locked: 'locked' }[state]
+    return `<li class="vt-gt-node" data-state="${state}" style="--fill:${fill.toFixed(3)}" aria-label="Battle Gift ${m.index + 1}, ${fmtCount(m.target)} votes, ${word}">
+        <span class="vt-gt-ico" aria-hidden="true">${ic(m.claimed ? 'check' : 'gift')}</span><span class="vt-gt-n" aria-hidden="true">${shortCount(m.target)}</span></li>`
+  }).join('')
   return `<div class="vt-gp">
       <div class="vt-gp-row"><span class="vt-gp-ico">${ic('gift')}</span><span class="vt-gp-t">${next
         ? `Next Battle Gift at <b>${fmtCount(next.target)}</b> · ${fmtCount(next.target - b.total)} to go`
-        : 'All Battle Gifts unlocked'}</span><span class="vt-aside vt-mono">${fmtCount(b.total)}</span></div>
-      ${next ? `<span class="vt-gift-bar" role="progressbar" aria-valuemin="0" aria-valuemax="${next.target}" aria-valuenow="${b.total}" aria-label="Community progress to the next Battle Gift"><span style="width:${pct}%"></span></span>` : ''}
-      <ol class="vt-gp-steps">${b.milestones.map((m) => `<li class="${m.reached ? 'is-got' : next && m.target === next.target ? 'is-next' : ''}">${fmtCount(m.target)}${m.reached ? ' ✓' : ''}</li>`).join('')}</ol>
+        : 'All Battle Gifts unlocked'}</span><span class="vt-gp-total"><b>${fmtCount(b.total)}</b><small>community votes</small></span></div>
+      <ol class="vt-gt" aria-label="Battle Gift milestones">${nodes}</ol>
     </div>`
 }
 
@@ -551,18 +604,24 @@ function stats(vm) {
   const days = bd?.earned
     ? `${s.votingDays} <small>· MAMA badge earned</small>`
     : bd?.verifiedDays ? `${bd.daysDone ?? s.votingDays} <small>/ ${bd.verifiedDays} for MAMA badge${bd.acrossRounds ? ' · both rounds' : ''}</small>` : `${s.votingDays}`
-  // This round's own badge (MAMA 2026 · Daesang): its own row under the stats.
-  const extra = (vm.status.extraBadges || []).map((x) => `<div class="vt-card vt-stat vt-stat-wide" data-vt-xbadge="${x.earned ? 'earned' : 'progress'}">
+  // This round's own badge (MAMA 2026 · Daesang): a slim row with a bar.
+  const extra = (vm.status.extraBadges || []).map((x) => {
+    const n = Math.min(x.daysDone, x.verifiedDays)
+    return `<div class="vt-xb" data-vt-xbadge="${x.earned ? 'earned' : 'progress'}">
         <span class="vt-stat-k">${ic('award')}${esc(x.name || 'Round badge')}</span>
-        <span class="vt-stat-v is-days">${x.earned ? '<small>Badge earned</small>' : `${Math.min(x.daysDone, x.verifiedDays)} <small>/ ${x.verifiedDays} voting days this round</small>`}</span>
-      </div>`).join('')
+        <span class="vt-stat-v is-days">${x.earned ? '<small>Badge earned</small>' : `${n} <small>/ ${x.verifiedDays} voting days this round</small>`}</span>
+        <span class="vt-xb-bar" aria-hidden="true"><span style="width:${x.earned ? 100 : Math.round((n / x.verifiedDays) * 100)}%"></span></span>
+      </div>`
+  }).join('')
   return `<section aria-labelledby="vt-h-stats">
     <div class="vt-sec-h"><h2 id="vt-h-stats">Your voting</h2></div>
-    <div class="vt-stats">
-      <div class="vt-card vt-stat"><span class="vt-stat-k">${ic('shield')}Verified votes</span><span class="vt-stat-v">${s.verifiedVotes}</span></div>
-      <div class="vt-card vt-stat" data-vt-badge="${bd?.earned ? 'earned' : 'progress'}"><span class="vt-stat-k">${ic('calendar')}Voting days</span><span class="vt-stat-v is-days">${days}</span></div>
-      <div class="vt-card vt-stat"><span class="vt-stat-k">${ic('target')}Today's votes</span><span class="vt-stat-v">${done} <small>/ ${total}</small></span></div>
-      <div class="vt-card vt-stat"><span class="vt-stat-k">${ic('award')}Next reward</span><span class="vt-stat-v is-sm">${nextReward(vm)}</span></div>
+    <div class="vt-card vt-statpanel">
+      <div class="vt-next"><span class="vt-next-ico">${ic('award')}</span><span class="vt-stat-k">Next reward</span><span class="vt-stat-v is-sm">${nextReward(vm)}</span></div>
+      <div class="vt-stats">
+        <div class="vt-stat"><span class="vt-stat-k">${ic('shield')}Verified votes</span><span class="vt-stat-v">${s.verifiedVotes}</span></div>
+        <div class="vt-stat" data-vt-badge="${bd?.earned ? 'earned' : 'progress'}"><span class="vt-stat-k">${ic('calendar')}Voting days</span><span class="vt-stat-v is-days">${days}</span></div>
+        <div class="vt-stat"><span class="vt-stat-k">${ic('target')}Today's votes</span><span class="vt-stat-v">${done} <small>/ ${total}</small></span></div>
+      </div>
       ${extra}
     </div>
   </section>`
@@ -678,12 +737,19 @@ function battleGifts(vm) {
       return `<li data-vt-bgift="${m.claimed ? 'claimed' : m.claimable ? 'ready' : m.reached ? 'not-contributor' : 'locked'}"><span class="vt-l-ico">${ic('flag')}</span><span class="vt-l-txt"><span class="vt-l-t">Battle Gift ${m.index + 1} · ${fmtCount(m.target)} votes</span><span class="vt-l-s">${esc(sub)}</span>${reveal ? rewardTiles(reveal) : ''}</span>${right}</li>`
     }).join('')
   }
-  body += winnerRow(vm, b)
+  // Every gift row lives under "View all gifts"; it opens by itself when one
+  // is ready to claim, so a claim is never hidden.
+  const ready = (b.milestones || []).some((m) => m.claimable && !m.claimed)
+  const winner = winnerRow(vm, b)
   return `<section aria-labelledby="vt-h-bgifts">
     <div class="vt-sec-h"><h2 id="vt-h-bgifts">Battle Gifts</h2><span class="vt-aside">Shared milestones</span></div>
     ${giftProgress(b)}
-    <ul class="vt-card vt-list">${body}</ul>
-    <p class="vt-foot-note">Everyone who verified at least one MAMA vote can claim — on either team.</p>
+    <details class="vt-gd"${ready || !b.milestones ? ' open' : ''}>
+      <summary>${ready ? `${ic('gift')}A Battle Gift is ready to claim` : 'View all gifts'}${ic('chevD')}</summary>
+      <ul class="vt-card vt-list">${body}</ul>
+      <p class="vt-foot-note">Everyone who verified at least one MAMA vote can claim — on either team.</p>
+    </details>
+    ${winner ? `<ul class="vt-card vt-list vt-winner">${winner}</ul>` : ''}
     ${vm.local.error?.mission === 'battle' ? note('is-err', 'xCircle', esc(vm.local.error.text)) : ''}
   </section>`
 }

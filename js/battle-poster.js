@@ -186,8 +186,8 @@ export function drawPoster(ctx, style, v, lines) {
   for (const [i, line] of v.posterCta.entries()) {
     text(ctx, line, CX, 1156 + i * 80, disp(fitSize(ctx, line, 78, MAX_W, disp, 48)), p.fg, { spacing: -2 })
   }
-  text(ctx, 'hopetrackers.org/battle', CX, 1288, sans(700, 30), p.soft)
-  text(ctx, v.liveLine, CX, 1324, sans(600, 20), p.faint, { spacing: 1.6 })
+  text(ctx, 'hopetrackers.org/battle', CX, 1290, sans(800, 34), p.fg)
+  text(ctx, v.posterFoot, CX, 1328, sans(700, 21), p.faint, { spacing: 1.6 })
 
   // One handmade touch, never more.
   if (key === 'V1' && v.leader && !v.winners?.length) {
@@ -213,50 +213,62 @@ export function drawRecruitPoster(ctx, style, rv, line) {
   ctx.fillStyle = p.bg
   ctx.fillRect(0, 0, W, H)
 
+  // Hierarchy, top to bottom: the side, the call (the message is the
+  // biggest words after the name), the numbers as supporting detail, when,
+  // what to do, and a link big enough to read off a phone story.
   const kicker = 'MAMA VOTING BATTLE · ROUND 2'
-  text(ctx, kicker, CX, 108, sans(800, fitSize(ctx, kicker, 32, MAX_W, (px) => sans(800, px), 20)), p.soft, { spacing: 4 })
+  text(ctx, kicker, CX, 96, sans(800, fitSize(ctx, kicker, 30, MAX_W, (px) => sans(800, px), 20)), p.soft, { spacing: 4 })
 
   // The side's name is the poster.
   const nameSize = fitSize(ctx, rv.team.label, 200, MAX_W, disp, 96)
-  const nameW = text(ctx, rv.team.label, CX, 300, disp(nameSize), tc, { spacing: -nameSize * 0.04 })
+  const nameW = text(ctx, rv.team.label, CX, 284, disp(nameSize), tc, { spacing: -nameSize * 0.04 })
   const rest = rv.shout.replace(rv.team.label, '').trim()
-  text(ctx, rest, CX, 390, disp(fitSize(ctx, rest, 76, MAX_W, disp, 44)), p.fg, { spacing: -1 })
-  teamLine(ctx, line, 450, tc, p)
+  text(ctx, rest, CX, 370, disp(fitSize(ctx, rest, 76, MAX_W, disp, 44)), p.fg, { spacing: -1 })
+  teamLine(ctx, line, 428, tc, p)
 
-  // Agents ready (and new this round), or once voting runs, the score.
-  const big = fmt(live ? rv.team.points : rv.team.agents)
-  const bigSize = fitSize(ctx, big, 170, MAX_W, disp, 90)
-  text(ctx, big, CX, 650, disp(bigSize), p.fg, { spacing: -bigSize * 0.05 })
-  const caption = live ? `${rv.team.label} VOTES · ${rv.standing}` : `${rv.team.agents === 1 ? 'AGENT' : 'AGENTS'} READY · ${rv.recruitsLine}`
-  text(ctx, caption, CX, 712, sans(800, fitSize(ctx, caption, 32, MAX_W, (px) => sans(800, px), 20)), tc, { spacing: 2 })
-
+  // The recruiting message: the loudest words after the name.
   for (const [i, h] of rv.hype.entries()) {
-    text(ctx, h, CX, 832 + i * 78, disp(fitSize(ctx, h, 70, MAX_W, disp, 40)), p.fg, { spacing: -2 })
+    text(ctx, h, CX, 562 + i * 94, disp(fitSize(ctx, h, 86, MAX_W, disp, 34)), p.fg, { spacing: -2 })
   }
+
+  // Supporting numbers: agents ready (and new this round), or the score.
+  const stat = live
+    ? `${fmt(rv.team.points)} ${rv.team.label} VOTES · ${rv.standing}`
+    : `${fmt(rv.team.agents)} ${rv.team.agents === 1 ? 'AGENT' : 'AGENTS'} READY · ${rv.recruitsLine}`
+  text(ctx, stat, CX, 766, sans(800, fitSize(ctx, stat, 34, MAX_W, (px) => sans(800, px), 20)), tc, { spacing: 1.5 })
 
   // When: the opening, or the time left.
   const when = live ? `${(rv.left || '').toUpperCase()} · EVERY VOTE COUNTS` : rv.opens ? `VOTING OPENS ${rv.opens.toUpperCase()}` : 'VOTING OPENS SOON'
   const whenSize = fitSize(ctx, when, 40, MAX_W - 68, (px) => sans(800, px), 24)
   ctx.font = sans(800, whenSize)
   const ww = ctx.measureText(when).width
-  roundRect(ctx, CX - ww / 2 - 30, 950, ww + 60, 74, 6)
+  roundRect(ctx, CX - ww / 2 - 30, 810, ww + 60, 74, 6)
   ctx.fillStyle = tc
   ctx.fill()
-  text(ctx, when, CX, 999, sans(800, whenSize), p.bg, { spacing: 1.5 })
+  text(ctx, when, CX, 859, sans(800, whenSize), p.bg, { spacing: 1.5 })
 
   // The recruit bonus, when this round has one.
   if (rv.bonusShort) {
     const b = `★ ${rv.bonusShort}`
-    text(ctx, b, CX, 1072, sans(800, fitSize(ctx, b, 30, MAX_W, (px) => sans(800, px), 20)), tc, { spacing: 1 })
+    text(ctx, b, CX, 952, sans(800, fitSize(ctx, b, 32, MAX_W, (px) => sans(800, px), 20)), tc, { spacing: 1 })
   }
   for (const [i, c] of rv.teamCta.entries()) {
-    text(ctx, c, CX, 1146 + i * 80, disp(fitSize(ctx, c, 78, MAX_W, disp, 48)), i === 0 ? tc : p.fg, { spacing: -2 })
+    text(ctx, c, CX, 1066 + i * 84, disp(fitSize(ctx, c, 82, MAX_W, disp, 48)), i === 0 ? tc : p.fg, { spacing: -2 })
   }
-  text(ctx, rv.hostPath, CX, 1288, sans(700, fitSize(ctx, rv.hostPath, 30, MAX_W, (px) => sans(700, px), 20)), p.soft)
-  text(ctx, `${rv.liveLine} · UNOFFICIAL ARMY FAN PROJECT`, CX, 1324, sans(600, 18), p.faint, { spacing: 1.4 })
+
+  // The link, framed and large: it has to survive a phone screenshot.
+  const linkSize = fitSize(ctx, rv.hostPath, 40, MAX_W - 60, (px) => sans(800, px), 24)
+  ctx.font = sans(800, linkSize)
+  const lw = ctx.measureText(rv.hostPath).width
+  roundRect(ctx, CX - lw / 2 - 28, 1196, lw + 56, 66, 33)
+  ctx.lineWidth = 3
+  ctx.strokeStyle = tc
+  ctx.stroke()
+  text(ctx, rv.hostPath, CX, 1243, sans(800, linkSize), p.fg)
+  text(ctx, `${rv.roundUpper ? `${rv.roundUpper} · ` : ''}UNOFFICIAL ARMY FAN PROJECT`, CX, 1316, sans(700, 20), p.faint, { spacing: 1.6 })
 
   // One handmade touch, never more.
-  if (key === 'V1') star(ctx, Math.min(W - 70, CX + nameW / 2 + 40), 300 - nameSize * 0.62, 84, tc)
-  if (key === 'V2') scribble(ctx, CX, 314, Math.min(MAX_W, nameW + 40), tc)
+  if (key === 'V1') star(ctx, Math.min(W - 70, CX + nameW / 2 + 40), 284 - nameSize * 0.62, 84, tc)
+  if (key === 'V2') scribble(ctx, CX, 300, Math.min(MAX_W, nameW + 40), tc)
   if (key === 'V3') liveSticker(ctx, p, live ? 'LIVE' : 'SOON')
 }

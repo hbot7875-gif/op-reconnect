@@ -114,7 +114,7 @@ test('every colourway carries exactly the approved structure — and no Battle G
       const ctx = draw(s, sum)
       const v = battleView(sum, NOW)
       const all = ctx.words.map((w) => w.s).join(' | ')
-      for (const need of ['MAMA VOTING BATTLE', 'HOOLIGANS', 'ALIENS', v.gapLine, 'PICK A SIDE.', 'VOTE FOR BTS.', 'hopetrackers.org/battle', 'LIVE · 21:40 KST',
+      for (const need of ['MAMA VOTING BATTLE', 'HOOLIGANS', 'ALIENS', v.gapLine, 'PICK A SIDE.', 'VOTE FOR BTS.', 'hopetrackers.org/battle', 'LIVE SCORE · OCT 14',
         LYRICS.hooligans, LYRICS.aliens]) assert.ok(all.includes(need), `${s}: ${need}`)
       assert.ok(all.includes(v.h.points.toLocaleString('en-US')) && all.includes(v.a.points.toLocaleString('en-US')), `${s}: scores`)
       assert.doesNotMatch(all, /Battle Gift|Next|Unofficial|agent|AGENT\d/i, `${s}: nothing extra on the poster`)
