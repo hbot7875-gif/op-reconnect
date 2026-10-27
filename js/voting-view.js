@@ -7,7 +7,7 @@ import { vIcon as ic } from './voting-icons.js'
 import {
   liveStrip, hubTabs, momentsCard, teamPanel, chatFab, chatSheet, chatMessageSheet, chatReportSheet, chatMutedSheet,
 } from './battle-hub-view.js'
-import { LYRICS, RECRUIT, recruitUrl, kstWhen, untilText, bonusRule, bonusProgress } from './battle-share-rules.js'
+import { LYRICS, recruitPitch, recruitUrl, kstWhen, untilText, bonusRule, bonusProgress } from './battle-share-rules.js'
 import { cityBannerState } from './voting-city-clock.js'
 import { LYRIC_MAX, LYRIC_ERRORS } from './battle-lyric-filter.js'
 import { daysLeft, nextKstMidnight, xComposeUrl } from '../supabase/functions/op-reconnect/lib/vote-campaign-rules.js'
@@ -529,7 +529,7 @@ function promoBattle(vm) {
       ? `<p class="vt-battle-meta"><span>${esc(mine.label)}, start recruiting! Share your team link.</span></p>${recruitActions(mine)}`
       : `<p class="vt-battle-meta"><span>Pick a side before the vote opens.</span></p>
     <button class="vt-btn vt-btn-primary vt-battle-share" type="button" data-vt-act="team-choose">${ic('swords')}Choose your team</button>`}
-    <p class="vt-battle-note">${esc(mine ? (RECRUIT[mine.id]?.pitch || '') : 'Friendly ReConnect battle — every verified vote still supports BTS.')}</p>
+    <p class="vt-battle-note">${esc(mine ? recruitPitch(mine.label, c.opensAt, vm.now) : 'Friendly ReConnect battle — every verified vote still supports BTS.')}</p>
   </section>
   ${recruitBonusCard(b)}`
 }
