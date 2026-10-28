@@ -3,6 +3,7 @@
 // pagination, same dedup, so the game counts exactly what BOTZ counts.
 
 import { isAdScrobble } from './text.ts'
+import { kstDateOf, todayKst } from './kst.ts'
 import { statsFmRowsToSkip, STATSFM_LOOKUP_LIMIT } from './stream-canonical.ts'
 import type { StatsFmCandidate } from './stream-canonical.ts'
 import type { SupabaseDB } from './config.ts'
@@ -194,7 +195,9 @@ async function fetchStatsFm(username: string): Promise<{ rows: StreamRow[]; ok: 
 // playedAt strings carry no timezone suffix; the API returns UTC, so a bare
 // 'Z' has to be appended before Date can parse it correctly.
 const MUSICAT_PAGE_SIZE = 50
-const MUSICAT_MAX_PAGES = 20
+// 40 pages = 2,000 plays: a trailing day of capture (see sync-all.ts's
+// MUSICAT_LATE_LOOKBACK_SEC) for the heaviest two-service streamers.
+const MUSICAT_MAX_PAGES = 40
 async function fetchMusicat(publicId: string, fromTs: number, toTs: number): Promise<{ rows: StreamRow[]; ok: boolean; complete: boolean; partialReason: StreamCoverageReason | null }> {
   const rows: StreamRow[] = []
   for (let page = 0; page < MUSICAT_MAX_PAGES; page++) {
@@ -298,7 +301,28 @@ async function persistScrobbles(supabase: SupabaseDB, agentNo: string, rows: Str
     ? await withoutStatsFmSecondRepresentation(supabase, agentNo, payload)
     : payload
   if (writable.length === 0) return
-  await supabase.from('rc_scrobbles').upsert(writable, { onConflict: 'agent_no,listened_at,track_name', ignoreDuplicates: true })
+  // ignoreDuplicates returns only the rows actually inserted.
+  const { data: inserted } = await supabase.from('rc_scrobbles')
+    .upsert(writable, { onConflict: 'agent_no,listened_at,track_name', ignoreDuplicates: true })
+    .select('listened_at')
+  await reopenDaysForLatePlays(supabase, agentNo, (inserted || []).map((r: any) => Number(r.listened_at)))
+}
+
+/** KST days that a newly stored play belongs to and that were already
+ *  closed, exported for regression tests. */
+export function closedDaysFor(listenedAts: number[], today: string): string[] {
+  return [...new Set(listenedAts.filter(Number.isFinite).map(kstDateOf))].filter((d) => d < today).sort()
+}
+
+/** A play that reaches the ledger after its KST day closed was never counted:
+ *  ensureDailyRollups (derive.ts) skips finalized days. Musicat delivers
+ *  Spotify plays hours late, so reopen those days for one recount. XP stays
+ *  correct: awardStreamsXp only pays for streams counted since its last run. */
+async function reopenDaysForLatePlays(supabase: SupabaseDB, agentNo: string, listenedAts: number[]) {
+  const days = closedDaysFor(listenedAts, todayKst())
+  if (!days.length) return
+  await supabase.from('rc_daily_activity').update({ finalized: false })
+    .eq('agent_no', agentNo).in('kst_date', days).eq('finalized', true)
 }
 
 /**

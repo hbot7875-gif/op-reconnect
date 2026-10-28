@@ -40,6 +40,24 @@ interface CoverageInput {
   result: Pick<StreamFetchResult, 'ok' | 'complete' | 'partialReason' | 'providerRowCount' | 'providerOldestAt' | 'providerNewestAt'>
 }
 
+// Musicat merges every service a player links. It stamps each play with when
+// it was really heard, but brings Spotify plays in late — sometimes hours
+// after an Apple Music play heard later already moved the checkpoint past
+// them. Reading only from the checkpoint dropped those Spotify plays for good
+// (AGENT107, 2026-10: 1,372 in 14 days; five agents with both services).
+// Re-reading a trailing day costs a few extra pages; plays already stored
+// are ignored on insert.
+export const MUSICAT_LATE_LOOKBACK_SEC = 24 * 3600
+
+/** Where a capture run starts reading, exported for regression tests. */
+export function captureFromTs(source: ScheduledSource, priorProviderAt: number, now: number, initialLookback: number): number {
+  // Five minutes of overlap protects same-second plays and clock skew;
+  // failed runs never advance the checkpoint, so the next run retries.
+  if (!(priorProviderAt > 0)) return now - initialLookback
+  const fromCheckpoint = Math.max(0, priorProviderAt - 300)
+  return source === 'musicat' ? Math.min(fromCheckpoint, now - MUSICAT_LATE_LOOKBACK_SEC) : fromCheckpoint
+}
+
 /** Pure coverage transition, exported for regression tests. A bounded source
  *  proves continuity by overlapping the newest play saved by the previous
  *  successful run. If 50 newer Stats.fm rows push that checkpoint out of the
@@ -105,9 +123,7 @@ async function captureStreamSource(supabase: SupabaseDB, source: ScheduledSource
       const state: any = stateByAgent.get(agent.agent_no)
       const priorProviderAt = state?.source === source && state?.last_provider_at
         ? Math.floor(new Date(state.last_provider_at).getTime() / 1000) : 0
-      // Five minutes of overlap protects same-second plays and clock skew;
-      // failed runs never advance the checkpoint, so the next run retries.
-      const fromTs = priorProviderAt > 0 ? Math.max(0, priorProviderAt - 300) : now - initialLookback
+      const fromTs = captureFromTs(source, priorProviderAt, now, initialLookback)
       try {
         // The collector itself must judge the fresh provider response. It
         // cannot use yesterday's stored coverage to certify today's fetch,
