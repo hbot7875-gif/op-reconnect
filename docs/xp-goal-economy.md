@@ -20,7 +20,7 @@ If a player has no active district, ordinary streams do not generate stream XP. 
 
 Home Base is a full first restoration with a seven-day deadline. Its base Easy-mode checklist is:
 
-- **Track Goals:** Don't Say You Love Me, Haegeum, DNA, Permission to Dance, Swim, Normal, and Come Over — 20 streams each.
+- **Track Goals:** Haegeum, DNA, Permission to Dance, Swim, Normal, and Come Over — 20 streams each. (Don't Say You Love Me was retired on 2026-10-28 after it passed 1B on Spotify.)
 - **Album Goals:** Arirang, Keep Swimming, Echo, and Indigo — 2 complete passes each.
 
 Medium and Hard scale these targets through the configured mode multiplier. Goal-progress daily caps scale by the same multiplier so consolidated multi-account activity can reach the larger weekly targets; the separate XP anti-farming cap remains flat.

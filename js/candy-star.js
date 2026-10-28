@@ -54,7 +54,7 @@ window._candyStar = window._candyStar || { songByLabel: {}, albums: [], remainin
 
 // Ported straight from the old site (see file header) with its goal names
 // hardcoded — "Wild Flower", "Killin' It Girl" — none of which are even in
-// THIS game's current Home Base goal set (DSYLM, Haegeum, DNA, Permission to
+// THIS game's current Home Base goal set (Haegeum, DNA, Permission to
 // Dance, Swim, Normal, Come Over, plus the Arirang/Keep Swimming/Echo/Indigo
 // album goals). Read live instead, off the same activeDistrict main.js
 // stashes on window.__rcState for every screen that needs the current run
