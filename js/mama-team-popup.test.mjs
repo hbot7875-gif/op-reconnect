@@ -76,3 +76,23 @@ test('a team choice seen during the promo does not hide the live one on opening 
   assert.equal(mamaPopupKind(soon, { agentNo: 'AGENT100', now: NOW, storage: s }), null)
   assert.equal(mamaPopupKind(voting(), { agentNo: 'AGENT100', now: NOW, storage: s }), 'team')
 })
+
+test('daily reset: "Votes have reset!" from day 2, the next 00:00 KST reset, never past the close', async () => {
+  const { roundDay, nextResetAt, resetNoticeCopy } = await import('./mama-team-popup-rules.js')
+  const r2 = (o = {}) => voting({ roundLabel: 'Round 2 · Fans’ Choice', opensAt: '2026-10-28T09:00:00Z', closesAt: '2026-11-08T14:59:59Z',
+    battle: { ...voting().battle, myTeam: 'hooligans' }, ...o })
+  assert.equal(roundDay(r2(), new Date('2026-10-28T10:00:00Z')), 1, 'opening evening')
+  assert.equal(roundDay(r2(), new Date('2026-10-28T15:00:00Z')), 2, '00:00 KST Oct 29')
+  assert.equal(roundDay(r2(), new Date('2026-11-08T14:00:00Z')), 12, 'last day')
+  const day1 = mamaTeamPopupCopy(r2(), null, 'live', new Date('2026-10-28T10:00:00Z'))
+  assert.equal(day1.title, 'The MAMA Battle is LIVE')
+  const day2 = mamaTeamPopupCopy(r2(), null, 'live', new Date('2026-10-29T01:00:00Z'))
+  assert.equal(day2.title, 'Votes have reset!')
+  assert.equal(day2.body, 'Day 2 of the MAMA Battle. HOOLIGANS vs ALIENS. Vote for BTS on Mnet and X again, then upload your proof. Every verified vote scores for HOOLIGANS.')
+  assert.equal(nextResetAt(r2(), new Date('2026-10-28T10:00:00Z')).toISOString(), '2026-10-28T15:00:00.000Z')
+  assert.equal(nextResetAt(r2(), new Date('2026-10-28T15:00:01Z')).toISOString(), '2026-10-29T15:00:00.000Z')
+  assert.equal(nextResetAt(r2(), new Date('2026-11-08T10:00:00Z')), null, 'no reset after the last day')
+  assert.equal(nextResetAt(r2({ phase: 'soon' })), null)
+  assert.deepEqual(resetNoticeCopy(r2()), { title: 'MAMA votes have reset 💜', body: 'New day, new votes. Vote for BTS on Mnet and X, then upload for HOOLIGANS.' })
+  assert.equal(resetNoticeCopy(voting()).body, 'New day, new votes. Vote for BTS on Mnet and X, then upload your proof.')
+})

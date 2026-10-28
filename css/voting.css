@@ -736,6 +736,9 @@
 .vt-pop-acts .vt-pop-btn.is-primary:hover { background: var(--vt-accent-hover); }
 .vt-pop-acts .vt-pop-btn.is-outline { background: transparent; color: var(--vt-text); border-color: var(--vt-line-2); }
 .vt-pop-acts .vt-pop-btn.is-quiet { background: transparent; color: var(--vt-text-2); min-height: 40px; }
+/* The opt-in for the daily-reset alert, under the score. */
+.vt-pop-acts.vt-pop-remind { margin-top: 14px; }
+.vt-pop-remind .vt-pop-btn.is-outline { min-height: 40px; font-size: 14px; font-weight: 500; }
 .vt-pop-acts .vt-pop-btn:focus-visible { outline: 2px solid var(--vt-violet-hi); outline-offset: 2px; }
 .vt-pop-acts .vt-pop-btn:disabled { opacity: .55; cursor: default; }
 .vt-sheet-h-end { justify-content: flex-end; }
