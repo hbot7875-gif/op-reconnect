@@ -42,7 +42,7 @@ export function bombNudgeCopy(stage, feedHealth) {
       tone: 'err',
       eyebrow: 'ARMY Bomb · last day',
       title: 'Charge your ARMY Bomb today',
-      body: `${days} days without charging. If it isn't charged by tomorrow, your agent file and everything on it is deleted. Voting doesn't count as charging.`,
+      body: `${days} days without charging. If it isn't charged by tomorrow, your agent file and everything on it is deleted. Use the Charge Cells you got as rewards to charge it.`,
       action: 'Charge my Bomb now',
     }
   }
@@ -50,7 +50,7 @@ export function bombNudgeCopy(stage, feedHealth) {
     tone: 'warn',
     eyebrow: 'ARMY Bomb',
     title: 'Your ARMY Bomb needs charging',
-    body: `It's been ${days} days since you last charged it. Charge it within ${left} day${left === 1 ? '' : 's'}: after 14 days without charging, your agent file is deleted.`,
+    body: `It's been ${days} days since you last charged it. Charge it within ${left} day${left === 1 ? '' : 's'}: after 14 days without charging, your agent file is deleted. Use the Charge Cells you got as rewards to charge it.`,
     action: 'Charge my Bomb',
   }
 }
