@@ -29,6 +29,7 @@ import { playLevelUp } from './celebrate.js'
 import { checkForBadgeUnlocks } from './badge-reveal.js'
 import { checkForExamModeAnnounce } from './exam-mode-announce.js'
 import { checkForMamaTeamPopup } from './mama-team-popup.js'
+import { checkForBombNudge } from './bomb-nudge-popup.js'
 import { checkForVotingAlerts } from './voting-alerts.js'
 import { playModeReview } from './mode-upgrade-announce.js'
 import { districtDisplayName } from './ward-tiles.js'
@@ -181,6 +182,8 @@ subscribe((state) => {
   checkForExamModeAnnounce(state)
   checkForBirthdayEraPopup(state)
   checkForRunAmiLaunch(state)
+  // The Bomb warning goes first: missing it can cost the whole agent file.
+  checkForBombNudge(state)
   checkForMamaTeamPopup(state)
   checkForVotingAlerts(state.voting?.alerts)
   for (const eraId of state.agentCharge?.newlyLitEraIds || []) {

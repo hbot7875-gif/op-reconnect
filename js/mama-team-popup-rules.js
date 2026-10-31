@@ -7,12 +7,18 @@ const kstDay = (now) => new Date(now.getTime() + 9 * 3600_000).toISOString().sli
 /** Pure: which popup is due now, if any. `voting` is state.voting (getVotingBanner).
  *  'team' — no team yet, while voting is open or the battle recruits before it.
  *  'live' — on a team, voting is open, and today's votes aren't all in yet.
- *  Each shows once per KST day, and the promo, open-voting and live popups
- *  are seen separately, so opening day still announces the live battle. */
+ *  'closing' — on a team, nothing verified today, and today's votes reset
+ *  (or voting closes) within CLOSING_MS.
+ *  Each shows once per KST day, and the promo, open-voting, live and closing
+ *  popups are seen separately, so opening day still announces the live
+ *  battle and the evening still gets its last call. */
 export function mamaPopupKind(voting, { agentNo, now = new Date(), storage, screen } = {}) {
   if (!agentNo || !voting || (voting.phase !== 'open' && voting.phase !== 'soon')) return null
   if (!voting.battle) return null
   if (screen === 'voting') return null // already where the popup would send them
+  if (voting.battle.myTeam && closingSoon(voting, now)) {
+    try { if (storage.getItem(seenKey(agentNo, voting, 'closing', now)) !== '1') return 'closing' } catch (_) { return null }
+  }
   let kind = null
   if (!voting.battle.myTeam) kind = 'team'
   else if (voting.phase === 'open' && !(voting.total > 0 && voting.done >= voting.total)) kind = 'live'
@@ -24,7 +30,32 @@ export function mamaPopupKind(voting, { agentNo, now = new Date(), storage, scre
 export const mamaTeamPopupDue = (voting, opts) => mamaPopupKind(voting, opts) === 'team'
 
 const seenKey = (agentNo, voting, kind, now) =>
-  `${SEEN_KEY}${agentNo}:${voting.campaignId}:${kstDay(now)}${kind === 'live' ? ':live' : voting.phase === 'open' ? ':open' : ''}`
+  `${SEEN_KEY}${agentNo}:${voting.campaignId}:${kstDay(now)}${kind === 'live' || kind === 'closing' ? `:${kind}` : voting.phase === 'open' ? ':open' : ''}`
+
+/** The last-call window before the daily reset: 3 hours (21:00 KST). */
+export const CLOSING_MS = 3 * 3600_000
+
+/** Pure: ms until today's votes stop counting — the 00:00 KST reset, or the
+ *  close on the last day. Null unless voting is open. */
+export function msToDeadline(voting, now = new Date()) {
+  if (voting?.phase !== 'open') return null
+  const reset = nextResetAt(voting, now)
+  const end = reset ? reset.getTime() : Date.parse(voting.closesAt)
+  return Number.isFinite(end) ? end - now.getTime() : null
+}
+
+/** Pure: nothing verified today and the deadline is close. */
+export function closingSoon(voting, now = new Date()) {
+  const left = msToDeadline(voting, now)
+  return left !== null && left > 0 && left <= CLOSING_MS && !(Number(voting.done) > 0)
+}
+
+/** "2h 15m" / "40m" — rounded down, never "0m". */
+export function leftLabel(ms) {
+  const mins = Math.max(1, Math.floor(ms / 60_000))
+  const h = Math.floor(mins / 60)
+  return h ? `${h}h ${mins % 60}m` : `${mins}m`
+}
 
 export function markMamaTeamPopupSeen(storage, agentNo, voting, kind = 'team', now = new Date()) {
   try { storage.setItem(seenKey(agentNo, voting, kind, now), '1') } catch (_) {}
@@ -64,6 +95,19 @@ export function mamaTeamPopupCopy(voting, invite = null, kind = 'team', now = ne
   const versus = pair.length ? `${pair[0].label} vs ${pair[1].label}. ` : ''
   const live = voting?.phase === 'open'
   const eyebrow = `${voting?.title || 'MAMA 2026'} · ${voting?.roundLabel || 'Battle'}`
+  if (kind === 'closing') {
+    const mine = teams.find((t) => t.id === voting.battle.myTeam)
+    const left = msToDeadline(voting, now)
+    const last = !nextResetAt(voting, now)
+    // No "Later" on this one: the only way forward is the upload.
+    return {
+      eyebrow,
+      title: `${last ? 'Voting closes' : 'Votes reset'} in ${leftLabel(left ?? 0)}`,
+      body: `You haven't uploaded a vote today. Vote for BTS on Mnet, then upload your certificate before ${last ? 'voting closes' : '00:00 KST'}, or today's vote for ${mine?.label || 'your team'} is lost.`,
+      teams: pair,
+      action: 'Upload my vote now',
+    }
+  }
   if (kind === 'live') {
     const mine = teams.find((t) => t.id === voting.battle.myTeam)
     const day = roundDay(voting, now)
