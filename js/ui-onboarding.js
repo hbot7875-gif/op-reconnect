@@ -1,12 +1,17 @@
-// Onboarding: transmission intro → codename + mode → identity assigned →
-// enter the network. All copy comes from the server payload (DB-driven).
+// Onboarding: codename + mode → enter the network. No story screen — the
+// lore intro was cut so a new agent is one screen from the game.
+//
+// Someone who came from a MAMA voting link skips even that: a codename is
+// picked for them (changeable in Settings), mode stays Easy, and they land
+// straight on the voting screen. See onboarding-path.js.
 
 import { call } from './api.js'
 import { el, esc, toast, setState, showOverlay } from './state.js'
 import { agentManualSheet } from './agent-manual.js'
-import { ambientToggle } from './ambient.js'
 import { openStreamSource, uplinkBroken } from './settings-streams.js'
 import { wardDisplayName, districtDisplayName } from './ward-tiles.js'
+import { fromVotingLink, suggestCodename } from './onboarding-path.js'
+import { readInvite } from './battle-invite.js'
 
 const ERRORS = {
   codename_invalid: 'Codenames are 3-24 letters or numbers — and can\'t be your agent number or Instagram handle.',
@@ -14,65 +19,43 @@ const ERRORS = {
   already_joined: 'You\'re already in — reloading…',
 }
 
-const MISSION_SOUNDTRACK = 'https://youtu.be/WyXcTOW8iPE'
-const DEFAULT_LORE = `After the old tracking network collapsed, HT lost contact with hundreds of agents worldwide.
-
-To ReConnect them, HT built a new intelligence network called BOTZ, powered by ARMY Bombs. But its signal is unstable.
-
-Every stream you log restores a piece of the network.
-
-When your ARMY Bomb loses power, parts of the city go dark again.
-
-Stream to earn Charge Cells.
-Use them to keep your ARMY Bomb glowing.
-
-Restore the city.
-Find the missing agents.
-ReConnect the network.
-
-Welcome to Operation ReConnect.`
-
 export function renderOnboarding(container, payload, agentNo, onJoined) {
-  const intro = payload.intro || {}
-  const modes = payload.modes || {}
   container.innerHTML = ''
   container.hidden = false
+  let voting = false
+  try { voting = fromVotingLink(location.search, readInvite(localStorage)) } catch { /* no storage */ }
+  if (voting) quickJoin(container, payload, agentNo, onJoined)
+  else renderIdentity(container, payload, agentNo, onJoined)
+}
 
-  // ── Step 1: the transmission ──
-  const step1 = el('div', 'ob-wrap')
-  // Minimal mystery instead of a narrator: same drifting-mist layer the
-  // auth screen uses (reconnect.css's .mist), just over the plain dark
-  // background here since this screen has no photo of its own.
-  step1.appendChild(el('div', 'mist'))
-  const soundtrack = ambientToggle(MISSION_SOUNDTRACK)
-  step1.appendChild(soundtrack)
-  const body = el('div', 'ob-body')
-  const signal = el('div', 'ob-signal', '<span class="ob-signal-ring"></span><span class="ob-signal-core"></span>')
-  signal.setAttribute('aria-hidden', 'true')
-  const lore = cinematicLore(intro.body || DEFAULT_LORE)
-  body.appendChild(signal)
-  body.appendChild(lore.node)
-  step1.append(
-    el('div', 'eyebrow', esc(intro.title || 'TRANSMISSION')),
-    el('h1', 'title-sm', esc(intro.chapter || 'Operation: ReConnect')),
-    body,
-  )
+/** Voting-link path: join with a picked codename and go straight in. Falls
+ *  back to the normal codename screen if joining keeps failing. */
+async function quickJoin(container, payload, agentNo, onJoined) {
+  const wrap = el('div', 'ob-wrap')
+  wrap.append(el('div', 'eyebrow', 'ALMOST THERE'), el('h1', 'title-sm', 'Opening MAMA voting…'))
+  container.appendChild(wrap)
+  for (let i = 0; i < 4; i++) {
+    const codename = suggestCodename()
+    const res = await call('joinGame', { agentNo, codename, mode: 'easy' }).catch(() => null)
+    if (res?.success || res?.error === 'already_joined') {
+      container.hidden = true
+      if (res.joined) setState(res)
+      onJoined()
+      if (res.success) toast(`Your codename is ${res.player?.codename || codename}. Change it any time in Settings.`)
+      return
+    }
+    if (res?.error !== 'codename_taken' && res?.error !== 'codename_invalid') break
+  }
+  container.innerHTML = ''
+  renderIdentity(container, payload, agentNo, onJoined)
+}
 
-  // Voice-over for the lore, when the chapter has one. No recording exists
-  // for any chapter yet, so intro.audioUrl is never set today and this stays
-  // out of the DOM entirely — the day a real narration lands, the server
-  // payload gains that one field and this appears with no other code change.
-  if (intro.audioUrl) step1.appendChild(voiceoverButton(intro.audioUrl))
+function renderIdentity(container, payload, agentNo, onJoined) {
+  const intro = payload.intro || {}
+  const modes = payload.modes || {}
 
-  const btn1 = el('button', 'btn btn-primary', "I'm in")
-  btn1.classList.add('ob-continue')
-  btn1.style.animationDelay = `${Math.min(lore.duration, 8).toFixed(2)}s`
-  step1.appendChild(btn1)
-  container.appendChild(step1)
-
-  // ── Step 2: codename + mode ──
+  // ── Codename + mode ──
   const step2 = el('div', 'ob-wrap')
-  step2.hidden = true
   step2.append(
     el('div', 'eyebrow', 'IDENTITY SETUP'),
     el('h1', 'title-sm', esc(intro.welcome || 'Welcome, Agent.')),
@@ -107,13 +90,7 @@ export function renderOnboarding(container, payload, agentNo, onJoined) {
   const btn2 = el('button', 'btn btn-primary', 'Lock it in')
   step2.appendChild(btn2)
   container.appendChild(step2)
-
-  // ── Step 3: identity assigned + infiltrator warning ──
-  const step3 = el('div', 'ob-wrap')
-  step3.hidden = true
-  container.appendChild(step3)
-
-  btn1.onclick = () => { step1.hidden = true; step2.hidden = false; input.focus() }
+  input.focus()
 
   btn2.onclick = async () => {
     const codename = input.value.trim()
@@ -127,27 +104,10 @@ export function renderOnboarding(container, payload, agentNo, onJoined) {
       toast(ERRORS[res.error] || res.error || 'Something went wrong')
       return
     }
-    // Hold the joined state back until the agent presses "Enter the Network".
-    // Calling setState() here publishes to main.js's subscriber, which flips
-    // straight to the game and hides this container — so step 3, and with it
-    // the agent number and the security notice, never got seen at all.
-    const joinedState = res.joined ? res : null
-    step2.hidden = true
-    step3.innerHTML = ''
-    // The agent number was already revealed when the account was created —
-    // no need to show it twice in the same minute.
-    step3.append(
-      el('div', 'eyebrow', 'IDENTITY ASSIGNED'),
-      el('h1', 'title-sm', `Codename: ${esc(res.player?.codename || codename)}`),
-      el('p', 'muted', 'This is the name other agents see. Your agent number stays private.'),
-    )
-    const btn3 = el('button', 'btn btn-primary', "Let's go")
-    btn3.onclick = () => {
-      soundtrack.stopPlayback?.()
-      showFirstRun(container, agentNo, joinedState, onJoined)
-    }
-    step3.appendChild(btn3)
-    step3.hidden = false
+    // Hold the joined state back until the first-run screens are done:
+    // setState() publishes to main.js's subscriber, which flips straight to
+    // the game and hides this container.
+    showFirstRun(container, agentNo, res.joined ? res : null, onJoined)
   }
 }
 
@@ -232,39 +192,4 @@ function renderFirstMove(mount, joinedState, proceed) {
   const manual = el('button', 'btn btn-ghost ob-manual-link', '📖 Read the Agent Manual first')
   manual.onclick = () => showOverlay(agentManualSheet())
   mount.appendChild(manual)
-}
-
-/* ── cinematic transmission ──────────────────────────────────────────── */
-
-/** Reveal the story in a few complete, readable beats. Each paragraph arrives
- *  together, so this feels like a game opening rather than a typing demo. */
-function cinematicLore(text) {
-  const node = el('div', 'ob-lore')
-  const paragraphs = String(text).trim().split(/\n\s*\n/).filter(Boolean)
-  paragraphs.forEach((paragraph, beat) => {
-    const line = el('p', `ob-beat ob-beat-${Math.min(beat + 1, 7)}`,
-      esc(paragraph.trim()).replace(/\n/g, '<br>'))
-    line.style.animationDelay = `${(0.35 + beat * 1.05).toFixed(2)}s`
-    node.appendChild(line)
-  })
-
-  if (!paragraphs.length) node.appendChild(el('p', 'ob-beat', 'TRANSMISSION LOST. STAND BY.'))
-  return { node, duration: 0.35 + Math.max(paragraphs.length, 1) * 1.05 }
-}
-
-/* ── voice-over ───────────────────────────────────────────────────────── */
-
-/** A play/pause toggle for the chapter's narration. Fails silent, not
- *  broken: if the URL 404s or the format won't play, the button removes
- *  itself rather than sitting there as a dead control. */
-function voiceoverButton(src) {
-  const audio = new Audio(src)
-  const btn = el('button', 'btn btn-ghost ob-voiceover', '▶ Play transmission')
-  audio.onerror = () => btn.remove()
-  audio.onended = () => { btn.textContent = '▶ Play transmission'; btn.classList.remove('is-playing') }
-  btn.onclick = () => {
-    if (audio.paused) { audio.play(); btn.textContent = '⏸ Playing…'; btn.classList.add('is-playing') }
-    else { audio.pause(); btn.textContent = '▶ Play transmission'; btn.classList.remove('is-playing') }
-  }
-  return btn
 }
