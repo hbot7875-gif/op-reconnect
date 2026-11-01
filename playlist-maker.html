@@ -31,7 +31,7 @@
   .dj-head { display: flex; align-items: center; gap: 14px; margin: 6px 0 16px; }
   .dj-record { flex: none; width: 58px; height: 58px; border-radius: 50%; position: relative;
     background: repeating-radial-gradient(circle, #121018 0 2px, #1d1a26 2px 3px);
-    box-shadow: 0 0 0 2px rgba(255, 79, 216, .35), 0 0 22px rgba(255, 79, 216, .35);
+    box-shadow: 0 0 0 2px rgba(255, 79, 216, .3), 0 0 10px rgba(255, 79, 216, .14);
     animation: dj-spin 3.2s linear infinite; }
   .dj-record::after { content: ''; position: absolute; inset: 36%; border-radius: 50%;
     background: radial-gradient(circle, #0b0a12 0 18%, var(--dj-pink) 19% 60%, var(--dj-violet) 61%); }
@@ -48,9 +48,9 @@
   @keyframes dj-eq { 0%, 100% { height: 30%; } 50% { height: 100%; } }
   @media (prefers-reduced-motion: reduce) { .dj-record, .dj-eq i { animation: none; } .dj-eq i { height: 70%; } }
   /* The deck */
-  .dj-deck { position: relative; border-radius: var(--r-lg); padding: 16px 14px; margin-bottom: 14px;
+  .dj-deck { position: relative; border-radius: var(--r-lg); padding: 16px 14px 12px; margin-bottom: 14px;
     background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.015)), var(--surface);
-    border: 1px solid rgba(255, 79, 216, .28); box-shadow: 0 0 0 1px rgba(139, 92, 246, .12), 0 10px 40px rgba(255, 79, 216, .08); }
+    border: 1px solid rgba(255, 79, 216, .14); }
   .pm-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
     padding: 16px 14px; margin-bottom: 14px; }
   .pm-h { font-family: var(--disp); font-size: 14px; letter-spacing: .5px; margin: 0 0 12px;
@@ -59,7 +59,8 @@
   .pm-field { display: block; margin-bottom: 12px; }
   .pm-field > span { display: block; margin-bottom: 6px; color: var(--dim); font-family: var(--mono);
     font-size: 9.5px; letter-spacing: 1.2px; text-transform: uppercase; }
-  .pm-msg { margin-top: 10px; font-size: 12.5px; line-height: 1.5; min-height: 18px; }
+  .pm-msg { margin-top: 10px; font-size: 12.5px; line-height: 1.5; }
+  .pm-msg:empty { display: none; }
   .pm-msg.ok { color: var(--gold); }
   .pm-msg.err { color: var(--crimson); }
   /* Goal songs: information, not controls. First few, then "+N more". */
@@ -85,7 +86,7 @@
     font-size: 11px; cursor: pointer; }
   .dj-go { width: 100%; border: none; border-radius: var(--r); padding: 14px; cursor: pointer;
     font-family: var(--disp); font-weight: 800; letter-spacing: 1px; color: #fff;
-    background: linear-gradient(90deg, var(--dj-violet), var(--dj-pink)); box-shadow: 0 6px 24px rgba(255, 79, 216, .25); }
+    background: linear-gradient(90deg, var(--dj-violet), var(--dj-pink)); }
   .dj-go:disabled { opacity: .6; cursor: default; }
   /* Districts that need a DJ: one scrollable row */
   .pm-need-wrap { margin-bottom: 14px; }
@@ -160,7 +161,7 @@
   </div>
 
   <div class="pm-need-wrap" id="needCard" hidden>
-    <span>Needs a DJ</span>
+    <span>Districts without playlists</span>
     <div class="pm-chips" id="need"></div>
   </div>
 
@@ -277,13 +278,14 @@ function paintDistrict() {
 
 $('district').addEventListener('change', () => { saveLast($('district').value); goalsOpen = false; paintDistrict() })
 
-/** "Needs a DJ": agents are there, few playlists yet. Tap to pick. */
+/** "Districts without playlists": agents are there, no playlist yet.
+ *  Tap to pick. */
 function paintNeed() {
-  const list = neededDistricts(districts, { limit: 6 })
+  const list = neededDistricts(districts, { limit: 6, enough: 1 })
   $('needCard').hidden = !list.length
   const on = $('district').value
   $('need').innerHTML = list.map((d) => `<button type="button" class="pm-chip${d.id === on ? ' is-on' : ''}" data-id="${esc(d.id)}">
-      <b>${esc(d.name)}</b> · <span class="${d.playlists ? '' : 'is-zero'}">${d.playlists} playlist${d.playlists === 1 ? '' : 's'}</span></button>`).join('')
+      <b>${esc(d.name)}</b> · ${d.agentsHere} agent${d.agentsHere === 1 ? '' : 's'}</button>`).join('')
 }
 $('need').addEventListener('click', (e) => {
   const b = e.target.closest('button[data-id]')
