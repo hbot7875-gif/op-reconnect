@@ -79,16 +79,29 @@ export async function getPlaylistMakerHub(supabase: SupabaseDB, params: any): Pr
       .eq('agent_no', agentNo).eq('source', 'shared')
       .order('created_at', { ascending: false }).limit(100),
     supabase.from('rc_player_districts').select('district_id').eq('status', 'active'),
-    supabase.from('generated_playlists').select('district_id')
-      .eq('source', 'shared').eq('status', 'active').not('district_id', 'is', null),
+    // Every maker's live Vault playlist: counts per district, and the shared
+    // library with an Uploader filter (same idea as the Badge Vault page,
+    // which shows every maker's art with who uploaded it).
+    supabase.from('generated_playlists')
+      .select('name, playlist_id, url, district_id, config, created_at, status, agent_no')
+      .eq('source', 'shared').eq('status', 'active').not('district_id', 'is', null)
+      .order('created_at', { ascending: false }),
   ])
   const failed = mineRes.error || agentsRes.error || sharedRes.error
   if (failed) return { success: false, error: failed.message }
+  const vault = sharedRes.data || []
   const districts = hubDistricts({
     districts: content.districts, wards: content.wards, goals: content.goals,
-    agentRows: agentsRes.data || [], playlistRows: sharedRes.data || [],
+    agentRows: agentsRes.data || [], playlistRows: vault,
   })
-  return { success: true, districts, playlists: mineRes.data || [] }
+  // Codenames are public in the game; agent numbers are already shown to
+  // makers on the Badge Vault page in the same way.
+  const uploaders = [...new Set(vault.map((r: any) => r.agent_no).filter(Boolean))]
+  const { data: players } = uploaders.length
+    ? await supabase.from('rc_players').select('agent_no, codename').in('agent_no', uploaders)
+    : { data: [] }
+  const makers = Object.fromEntries((players || []).map((p: any) => [p.agent_no, p.codename || '']))
+  return { success: true, districts, playlists: mineRes.data || [], vault, makers }
 }
 
 /** Which of a playlist's real focus songs/albums land on this district's

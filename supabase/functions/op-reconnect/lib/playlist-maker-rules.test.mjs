@@ -2,8 +2,24 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   hubDistricts, districtGroups, districtOptionLabel, initialDistrict, looksLikePlaylistLink, HERE_NOW, MORE,
-  playlistIdFromLink, neededDistricts, filterMine, mineDistricts,
+  playlistIdFromLink, neededDistricts, filterMine, mineDistricts, makerLabel, uploaderOptions,
 } from './playlist-maker-rules.js'
+
+test('uploader filter: options with you first, then by count; rows filtered by agent', () => {
+  const rows = [
+    { name: 'A', agent_no: 'AGENT061', created_at: '2026-11-01T10:00:00Z' },
+    { name: 'B', agent_no: 'AGENT050', created_at: '2026-11-01T09:00:00Z' },
+    { name: 'C', agent_no: 'AGENT050', created_at: '2026-10-01T09:00:00Z' },
+    { name: 'D', agent_no: 'AGENT004', created_at: '2026-10-02T09:00:00Z' },
+  ]
+  const makers = { AGENT061: 'Alpaca', AGENT050: 'Mochi' }
+  assert.deepEqual(uploaderOptions(rows, makers, 'agent004').map((o) => [o.id, o.label, o.count]), [
+    ['AGENT004', 'You (AGENT004)', 1], ['AGENT050', 'Mochi (AGENT050)', 2], ['AGENT061', 'Alpaca (AGENT061)', 1],
+  ])
+  assert.deepEqual(filterMine(rows, { uploader: 'AGENT050' }).map((r) => r.name), ['B', 'C'])
+  assert.equal(makerLabel('agent073', makers), 'AGENT073')
+  assert.equal(makerLabel('', makers), 'Unknown')
+})
 
 test('playlist id from a link', () => {
   assert.equal(playlistIdFromLink('https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M?si=1'), '37i9dQZF1DXcBWIGoYBM5M')

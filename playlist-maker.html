@@ -130,6 +130,12 @@
   .djb-search input { width: 100%; box-sizing: border-box; min-height: 44px; padding: 0 12px 0 36px; border-radius: var(--r-sm);
     background: var(--panel); border: 1px solid var(--line-2); color: var(--ink); font: inherit; font-size: 15px; }
   .djb-search input:focus { border-color: var(--vio); outline: none; }
+  .djb-uploader { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .djb-uploader label { flex: none; color: var(--ink-3); font-size: 13px; }
+  .djb-uploader > div, .djb-uploader select { flex: 1; min-width: 0; }
+  .djb-uploader .ob-input { width: 100%; box-sizing: border-box; min-height: 44px; border-radius: var(--r-sm); background: var(--panel);
+    border: 1px solid var(--line-2); color: var(--ink); font-family: var(--body); font-size: 15px; }
+  .djb-by { color: var(--ink-2); }
   .djb-filters { display: flex; gap: 6px; overflow-x: auto; margin: 0 -16px 8px; padding: 0 16px 2px; scrollbar-width: none; }
   .djb-filters::-webkit-scrollbar { display: none; }
   .djb-filter { flex: none; min-height: 34px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line-2); background: none;
@@ -229,11 +235,15 @@
     </div>
 
     <section class="djb-sec djb-right" aria-labelledby="mineH">
-      <div class="djb-h"><h2 id="mineH">Your playlists</h2><small id="mineCount"></small></div>
-      <p class="djb-lede">Everything you've added. Your playlist, their next discovery.</p>
+      <div class="djb-h"><h2 id="mineH">Vault playlists</h2><small id="mineCount"></small></div>
+      <p class="djb-lede">Every maker's playlists. Your playlist, their next discovery.</p>
+      <div class="djb-uploader">
+        <label for="uploader">Added by</label>
+        <select id="uploader" class="ob-input"><option value="">All makers</option></select>
+      </div>
       <div class="djb-tools">
         <label class="djb-search"><span id="searchIco"></span>
-          <input id="mineSearch" type="search" placeholder="Search your playlists" aria-label="Search your playlists"></label>
+          <input id="mineSearch" type="search" placeholder="Search playlists" aria-label="Search playlists"></label>
         <button class="djb-btn2" id="mineSort" type="button" aria-label="Change sort order"></button>
       </div>
       <div class="djb-filters" id="mineChips" role="group" aria-label="Filter by district"></div>
@@ -259,7 +269,7 @@ import { getAgentNo, getSession } from './js/session.js'
 import { enhanceSelect } from './js/rc-select.js'
 import {
   districtGroups, initialDistrict, looksLikePlaylistLink,
-  playlistIdFromLink, neededDistricts, filterMine, mineDistricts,
+  playlistIdFromLink, neededDistricts, filterMine, mineDistricts, makerLabel, uploaderOptions,
 } from './supabase/functions/op-reconnect/lib/playlist-maker-rules.js'
 
 // Lucide outlines (https://lucide.dev, ISC licence), drawn in currentColor.
@@ -296,9 +306,12 @@ const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`
 
 let districts = []
 let mine = []
+let vault = []
+let makers = {}
 let goalsOpen = false
 let confirming = ''
-const view = { q: '', district: '', sort: 'newest' }
+const view = { q: '', district: '', sort: 'newest', uploader: '' }
+const me = () => String(getAgentNo() || '').toUpperCase()
 
 $('back').insertAdjacentHTML('afterbegin', ic('back'))
 $('pasteBtn').innerHTML = `${ic('paste')}<span>Paste</span>`
@@ -359,6 +372,9 @@ async function load() {
   }
   districts = res.districts || []
   mine = res.playlists || []
+  // Every maker's live playlists (older servers send only your own).
+  vault = res.vault || mine.filter((r) => r.status === 'active').map((r) => ({ ...r, agent_no: me() }))
+  makers = res.makers || {}
   // Only districts with goal songs: agents-here first, then the rest A–Z
   // (playlist-maker-rules.js). Keep the current choice across reloads,
   // else the link's district, the last one used here, or the busiest.
@@ -476,10 +492,11 @@ function paintPreview(state) {
     return
   }
   const d = picked()
-  const dup = mine.find((r) => r.playlist_id === id && r.status === 'active')
-  const dupName = dup && (districts.find((x) => x.id === dup.district_id)?.name || 'a district')
+  const dup = vault.find((r) => r.playlist_id === id)
+  const dupWhere = dup && (districts.find((x) => x.id === dup.district_id)?.name || 'a district')
+  const dupName = dup && (String(dup.agent_no || '').toUpperCase() === me() ? dupWhere : `${dupWhere} by ${makerLabel(dup.agent_no, makers)}`)
   const title = preview?.error ? 'Spotify playlist' : (preview?.title || 'Spotify playlist')
-  const sub = dup ? `You already added this to ${esc(dupName)}.`
+  const sub = dup ? `Already in the Vault: ${esc(dupName)}.`
     : preview?.error ? `No preview available. You can still add it${d ? ` to ${esc(d.name)}` : ''}.`
     : `Spotify playlist${d ? ` · for ${esc(d.name)}` : ''}`
   box.className = `djb-preview${dup ? ' is-dup' : ''}`
@@ -489,35 +506,46 @@ function paintPreview(state) {
 /* ── your playlists ───────────────────────────────────────────────── */
 
 function paintMine() {
-  const active = mine.filter((r) => r.status !== 'hidden')
-  $('mineCount').textContent = active.length ? plural(active.length, 'playlist') : ''
-  $('mineSearch').closest('.djb-tools').hidden = mine.length < 2
+  // The library is every maker's live Vault playlist (res.vault); the
+  // "Added by" filter narrows it to one maker, like the Badge Vault page.
+  const opts = uploaderOptions(vault, makers, me())
+  if (view.uploader && !opts.some((o) => o.id === view.uploader)) view.uploader = ''
+  $('uploader').innerHTML = `<option value="">All makers (${vault.length})</option>${opts
+    .map((o) => `<option value="${esc(o.id)}">${esc(o.label)} · ${o.count}</option>`).join('')}`
+  $('uploader').value = view.uploader
+  const scoped = view.uploader ? vault.filter((r) => String(r.agent_no || '').toUpperCase() === view.uploader) : vault
+  $('mineCount').textContent = scoped.length ? plural(scoped.length, 'playlist') : ''
+  $('mineSearch').closest('.djb-tools').hidden = vault.length < 2
   $('mineSort').innerHTML = `${ic('sort')}<span>${view.sort === 'newest' ? 'Newest' : 'Oldest'}</span>`
-  const chips = mineDistricts(mine, districts)
+  const chips = mineDistricts(scoped, districts)
+  if (view.district && !chips.some((c) => c.id === view.district)) view.district = ''
   $('mineChips').hidden = chips.length < 2
   $('mineChips').innerHTML = chips.length < 2 ? '' : [{ id: '', name: 'All' }, ...chips]
     .map((c) => `<button type="button" class="djb-filter${view.district === c.id ? ' is-on' : ''}" data-id="${esc(c.id)}" aria-pressed="${view.district === c.id}">${esc(c.name)}</button>`).join('')
-  if (!mine.length) {
-    $('mine').innerHTML = '<div class="djb-empty">You haven’t added a playlist yet. Pick a district and paste a Spotify link to start.</div>'
+  if (!vault.length) {
+    $('mine').innerHTML = '<div class="djb-empty">No playlists in the Vault yet. Pick a district and paste a Spotify link to add the first one.</div>'
     return
   }
-  const rows = filterMine(mine, view)
-  if (!rows.length) { $('mine').innerHTML = '<div class="djb-empty">No playlists match that search.</div>'; return }
+  const rows = filterMine(vault, view)
+  if (!rows.length) { $('mine').innerHTML = '<div class="djb-empty">No playlists match.</div>'; return }
   $('mine').innerHTML = rows.map((row, i) => {
     const name = districts.find((d) => d.id === (row.district_id || row.config?.districtId))?.name
       || row.config?.districtName || 'District removed'
     const when = row.created_at ? new Date(row.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''
-    const removed = row.status === 'hidden'
+    const own = String(row.agent_no || '').toUpperCase() === me()
+    const by = own ? 'you' : makerLabel(row.agent_no, makers)
+    // Only the maker who added a playlist can remove it (deleteCandyPlaylist).
     const acts = confirming === row.playlist_id
       ? `<div class="djb-confirm"><button type="button" class="is-yes" data-yes="${esc(row.playlist_id)}">Remove</button><button type="button" data-no>Cancel</button></div>`
       : `<a class="djb-ico is-spotify" href="${esc(row.url)}" target="_blank" rel="noopener noreferrer" aria-label="Open ${esc(row.name || 'playlist')} in Spotify">${ic('external')}</a>
-         ${removed ? '' : `<button type="button" class="djb-ico is-remove" data-remove="${esc(row.playlist_id)}" aria-label="Remove ${esc(row.name || 'playlist')}">${ic('trash')}</button>`}`
-    return `<div class="djb-row${removed ? ' is-removed' : ''}">
+         ${own ? `<button type="button" class="djb-ico is-remove" data-remove="${esc(row.playlist_id)}" aria-label="Remove ${esc(row.name || 'playlist')}">${ic('trash')}</button>` : ''}`
+    return `<div class="djb-row">
       <span class="djb-tno">${pad(i + 1)}</span>
       <span data-art="${esc(row.playlist_id)}">${artImg(art[row.playlist_id]?.cover)}</span>
       <div style="min-width:0">
-        <div class="djb-row-t">${esc(row.name || 'Untitled playlist')}${removed ? '<span class="djb-pill">Removed</span>' : ''}</div>
+        <div class="djb-row-t">${esc(row.name || 'Untitled playlist')}</div>
         <div class="djb-row-m">${esc(name)} · ${esc(when)}</div>
+        <div class="djb-row-m djb-by">by ${esc(by)}</div>
         ${row.config?.note ? `<div class="djb-row-n">${esc(row.config.note)}</div>` : ''}
       </div>
       <div class="djb-row-acts">${acts}</div>
@@ -544,6 +572,7 @@ function loadArt() {
 }
 
 $('mineSearch').addEventListener('input', () => { view.q = $('mineSearch').value; paintMine() })
+$('uploader').addEventListener('change', () => { view.uploader = $('uploader').value; view.district = ''; paintMine() })
 $('mineSort').onclick = () => { view.sort = view.sort === 'newest' ? 'oldest' : 'newest'; paintMine() }
 $('mineChips').addEventListener('click', (e) => {
   const b = e.target.closest('button[data-id]')
@@ -602,6 +631,7 @@ $('addBtn').onclick = async () => {
 // submit still reads $('district').value, both untouched — rc-select watches
 // the option list and follows it.
 enhanceSelect($('district'), { title: 'DISTRICT', search: 'auto', variant: 'admin' })
+enhanceSelect($('uploader'), { title: 'ADDED BY', search: 'auto', variant: 'admin' })
 
 boot()
 </script>

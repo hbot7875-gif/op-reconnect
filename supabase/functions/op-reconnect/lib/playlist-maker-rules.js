@@ -106,16 +106,38 @@ export function neededDistricts(districts = [], { limit = 5, enough = 5 } = {}) 
 
 /** "Your playlists": search by title or note, filter by district, newest or
  *  oldest first. `rows` are getPlaylistMakerHub's playlists. */
-export function filterMine(rows = [], { q = '', district = '', sort = 'newest' } = {}) {
+export function filterMine(rows = [], { q = '', district = '', sort = 'newest', uploader = '' } = {}) {
   const needle = String(q).trim().toLowerCase()
   const districtOf = (r) => r.district_id || r.config?.districtId || ''
   const out = rows.filter((r) => (!district || districtOf(r) === district)
+    && (!uploader || String(r.agent_no || '').toUpperCase() === uploader)
     && (!needle || `${r.name || ''} ${r.config?.note || ''}`.toLowerCase().includes(needle)))
   const t = (r) => Date.parse(r.created_at) || 0
   return out.sort((a, b) => (sort === 'oldest' ? t(a) - t(b) : t(b) - t(a)))
 }
 
-/** The districts that appear in "Your playlists", most-used first, for the
+/** "Codename (AGENT061)", or just the agent number. */
+export function makerLabel(agentNo, makers = {}) {
+  const no = String(agentNo || '').toUpperCase()
+  const name = makers[no]
+  return name ? `${name} (${no})` : no || 'Unknown'
+}
+
+/** The Uploader filter's options: you first (as "You"), then every other
+ *  maker by how many playlists they added, then A–Z. */
+export function uploaderOptions(rows = [], makers = {}, me = '') {
+  const counts = new Map()
+  for (const r of rows) {
+    const no = String(r.agent_no || '').toUpperCase()
+    if (no) counts.set(no, (counts.get(no) || 0) + 1)
+  }
+  const mine = String(me || '').toUpperCase()
+  return [...counts.entries()]
+    .sort((a, b) => (a[0] === mine ? -1 : b[0] === mine ? 1 : b[1] - a[1] || a[0].localeCompare(b[0])))
+    .map(([id, count]) => ({ id, count, label: id === mine ? `You (${id})` : makerLabel(id, makers) }))
+}
+
+/** The districts that appear in the library, most-used first, for the
  *  filter chips. */
 export function mineDistricts(rows = [], districts = []) {
   const counts = new Map()
