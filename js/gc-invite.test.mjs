@@ -16,6 +16,18 @@ test('only agents onboarded on this device in the last 3 days', () => {
   assert.equal(gcInviteDue({ agentNo: 'A2', storage: s, now: at(1) }), false)
 })
 
+test('AGENT201 onwards and AGENT139 are asked without the device mark', () => {
+  for (const a of ['AGENT201', 'AGENT215', 'AGENT1000', 'AGENT139', 'agent139']) {
+    assert.equal(gcInviteDue({ agentNo: a, storage: mem(), now: T0 }), true, a)
+  }
+  for (const a of ['AGENT200', 'AGENT138', 'AGENT140', 'AGENT001']) {
+    assert.equal(gcInviteDue({ agentNo: a, storage: mem(), now: T0 }), false, a)
+  }
+  const s = mem()
+  markGcInviteDone(s, 'AGENT139')
+  assert.equal(gcInviteDue({ agentNo: 'AGENT139', storage: s, now: T0 }), false)
+})
+
 test('once per KST day until they join', () => {
   const s = mem()
   markNewAgent(s, 'A1', T0)

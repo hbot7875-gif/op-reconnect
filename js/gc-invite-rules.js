@@ -11,6 +11,19 @@ export const GC_LINKS = {
 }
 
 export const NEW_DAYS = 3
+
+// Also asked, with no time limit, of every agent from AGENT201 on and of
+// AGENT139 — the recent agents who joined before this popup existed.
+const FIRST_INVITED = 201
+const ALSO_INVITED = new Set(['AGENT139'])
+
+/** Is this agent on the invite list by number? */
+export function invitedByNumber(agentNo) {
+  const id = String(agentNo || '').toUpperCase()
+  if (ALSO_INVITED.has(id)) return true
+  const m = /^AGENT(\d+)$/.exec(id)
+  return !!m && Number(m[1]) >= FIRST_INVITED
+}
 const DAY_MS = 86_400_000
 const NEW_KEY = 'rc_new_agent_since:'
 const DONE_KEY = 'rc_gc_invite_done:'
@@ -40,7 +53,8 @@ export function gcInviteDue({ agentNo, storage, now = new Date(), screen, votedT
   if (screen === 'voting' && !votedToday) return false
   try {
     const since = Number(storage.getItem(NEW_KEY + agentNo))
-    if (!since || now.getTime() - since > NEW_DAYS * DAY_MS) return false
+    const isNew = since && now.getTime() - since <= NEW_DAYS * DAY_MS
+    if (!isNew && !invitedByNumber(agentNo)) return false
     if (storage.getItem(DONE_KEY + agentNo) === '1') return false
     return storage.getItem(`${SEEN_KEY}${agentNo}:${kstDay(now)}`) !== '1'
   } catch (_) {
