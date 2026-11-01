@@ -8174,6 +8174,8 @@ select.rc-multi-native {
 .rapline-done-list { border-top: 1px solid var(--v-gold-line); }
 .rapline-done-row { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: 11px;
   min-height: 56px; padding: 8px 0; border-bottom: 1px solid var(--v-line-1); color: inherit; text-decoration: none; }
+.rapline-done-figs { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; font-variant-numeric: tabular-nums; }
+.rapline-done-figs i { font-style: normal; font-size: 11px; color: var(--v-ink-3); white-space: nowrap; }
 .rapline-done-tag { padding: 3px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 700; white-space: nowrap;
   border: 1px solid var(--v-gold-line); background: var(--v-tint-gold); color: var(--v-gold); }
 

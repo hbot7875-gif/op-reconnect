@@ -23,10 +23,22 @@ export const RAPLINE_TRACKS = [
   { id: 'killin-it-girl', spotifyId: '2GzwtXPlI0gZEOS6xFOZ2j', name: "Killin' It Girl", artist: 'j-hope', feature: 'feat. GloRilla' },
 ]
 
-// Already past 1B. Shown apart from the Rap Line progress and never fetched.
+// Already past 1B. Shown apart from the Rap Line progress and never fetched:
+// each carries a one-time snapshot of its Spotify total, researched by hand
+// from Kworb's artist pages and dated to that page's "Last updated" day, so
+// the card can show the figure without spending the free API quota. The date
+// always goes on screen with it; it is not a live count.
 export const RAPLINE_MILESTONES = [
-  { id: 'dsylm', spotifyId: '27xkOIER6uDLKALIelHylZ', name: "Don't Say You Love Me", artist: 'Jin' },
-  { id: 'swim', spotifyId: '4g5eopb54XIaV2ciooY3St', name: 'SWIM', artist: 'BTS', group: true },
+  { id: 'seven', spotifyId: '2HRgqmZQC0MC7GeNuDIXHN', name: 'Seven', artist: 'Jung Kook', feature: 'feat. Latto',
+    snapshot: { streams: 3_133_318_051, asOf: '2026-10-31' } },
+  { id: 'who', spotifyId: '7tI8dRuH2Yc6RuoTjxo4dU', name: 'Who', artist: 'Jimin',
+    snapshot: { streams: 2_578_128_320, asOf: '2026-10-31' } },
+  { id: 'love-me-again', spotifyId: '0SftJDguUa1F5SsQwwkLw4', name: 'Love Me Again', artist: 'V',
+    snapshot: { streams: 1_157_122_265, asOf: '2026-10-31' } },
+  { id: 'dsylm', spotifyId: '27xkOIER6uDLKALIelHylZ', name: "Don't Say You Love Me", artist: 'Jin',
+    snapshot: { streams: 1_029_593_340, asOf: '2026-10-30' } },
+  { id: 'swim', spotifyId: '4g5eopb54XIaV2ciooY3St', name: 'SWIM', artist: 'BTS', group: true,
+    snapshot: { streams: 1_021_988_212, asOf: '2026-10-31' } },
 ]
 
 // A refresh is due every 3 days; a report older than this is marked stale.

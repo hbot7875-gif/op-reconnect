@@ -37,6 +37,9 @@ const COVERS = {
   '2GzwtXPlI0gZEOS6xFOZ2j': 'a4b6673a8dd10d67163dbfc1',
   '27xkOIER6uDLKALIelHylZ': '89228504f700641956e29f5d',
   '4g5eopb54XIaV2ciooY3St': 'ba4fa604f046ff824331f4f4',
+  '2HRgqmZQC0MC7GeNuDIXHN': '741fd4807f442af3f7359316',
+  '7tI8dRuH2Yc6RuoTjxo4dU': 'f02c451189a709b9a952aaec',
+  '0SftJDguUa1F5SsQwwkLw4': '8e504c5aedaae49a73ed4963',
 }
 
 let cache = { tracker: null, failed: false, at: 0, pending: null }
@@ -222,12 +225,15 @@ function overviewSheet(tracker) {
     <div class="rapline-list"></div>
     <div class="rapline-section-label is-gold">Completed</div>
     <div class="rapline-done-list">${(tracker.milestones || []).map((m) => `
-      <a class="rapline-done-row" href="https://open.spotify.com/track/${esc(m.spotifyId)}" target="_blank" rel="noopener">
+      <a class="rapline-done-row" href="https://open.spotify.com/track/${esc(m.spotifyId)}" target="_blank" rel="noopener"
+        aria-label="${esc(`${m.name} by ${m.artist}. Past 1 billion${m.snapshot ? `: ${num(m.snapshot.streams)} Spotify streams as of ${shortDate(m.snapshot.asOf)}` : ''}. Open in Spotify.`)}">
         ${cover(m.spotifyId, m.name)}
         <span class="rapline-copy"><b>${esc(m.name)}</b><i>${esc(m.artist)}${m.group ? ' &middot; group' : ''}</i></span>
-        <span class="rapline-done-tag">1B+ ✓</span>
+        <span class="rapline-done-figs">${m.snapshot
+          ? `<span class="rapline-done-tag" title="${esc(num(m.snapshot.streams))}">${abbreviate(m.snapshot.streams)} ✓</span><i>${esc(shortDate(m.snapshot.asOf))}</i>`
+          : '<span class="rapline-done-tag">1B+ ✓</span>'}</span>
       </a>`).join('')}</div>
-    <p class="rapline-fine">Unofficial Spotify totals, each shown with the date it was reported for, refreshed every 3 days. Informational only &middot; no XP.</p>
+    <p class="rapline-fine">Unofficial Spotify totals, each shown with the date it was reported for. The three songs above refresh every 3 days; completed totals are a one-time snapshot. Informational only &middot; no XP.</p>
     <div class="rapline-actions"></div>`
   const list = sheet.querySelector('.rapline-list')
   for (const track of tracker.tracks) {

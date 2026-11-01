@@ -22,9 +22,24 @@ test('tracks only the three Rap Line songs; Jin and SWIM are milestones only', (
   assert.deepEqual(RAPLINE_TRACKS.map((t) => t.spotifyId), [
     '1AZjCZSGEjlxUufFQwSszF', '4bjN59DRXFRxBE1g5ne6B1', '2GzwtXPlI0gZEOS6xFOZ2j',
   ])
-  assert.deepEqual(RAPLINE_MILESTONES.map((m) => m.spotifyId), ['27xkOIER6uDLKALIelHylZ', '4g5eopb54XIaV2ciooY3St'])
+  assert.deepEqual(RAPLINE_MILESTONES.map((m) => m.spotifyId), [
+    '2HRgqmZQC0MC7GeNuDIXHN', '7tI8dRuH2Yc6RuoTjxo4dU', '0SftJDguUa1F5SsQwwkLw4',
+    '27xkOIER6uDLKALIelHylZ', '4g5eopb54XIaV2ciooY3St',
+  ])
   const tracked = new Set(RAPLINE_TRACKS.map((t) => t.spotifyId))
   for (const m of RAPLINE_MILESTONES) assert.equal(tracked.has(m.spotifyId), false)
+})
+
+test('every completed milestone is a dated snapshot past 1B, biggest first', () => {
+  let previous = Infinity
+  for (const m of RAPLINE_MILESTONES) {
+    assert.ok(Number.isSafeInteger(m.snapshot.streams) && m.snapshot.streams >= 1_000_000_000, `${m.name} is not past 1B`)
+    assert.match(m.snapshot.asOf, /^\d{4}-\d{2}-\d{2}$/)
+    assert.ok(m.snapshot.streams <= previous, `${m.name} is out of order`)
+    previous = m.snapshot.streams
+  }
+  // Winter Ahead was 738.6M on 2026-10-31: not a completed milestone.
+  assert.equal(RAPLINE_MILESTONES.some((m) => /winter ahead/i.test(m.name)), false)
 })
 
 test('parseHistory accepts the provider shape and rejects anything else', () => {
@@ -114,7 +129,8 @@ test('summariseTracker reports per track and handles a track with no data yet', 
   assert.equal(t.tracks.find((x) => x.id === 'wild-flower').summary, null)
   assert.equal(t.asOf, '2026-10-27')
   assert.equal(t.ageDays, 1)
-  assert.equal(t.milestones.length, 2)
+  assert.equal(t.milestones.length, 5)
+  assert.deepEqual(t.milestones[0].snapshot, { streams: 3_133_318_051, asOf: '2026-10-31' })
   const empty = summariseTracker({}, '2026-10-28')
   assert.equal(empty.asOf, null)
   assert.equal(empty.stale, false)
