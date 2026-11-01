@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  hubDistricts, districtGroups, districtOptionLabel, initialDistrict, looksLikePlaylistLink, HERE_NOW,
+  hubDistricts, districtGroups, districtOptionLabel, initialDistrict, looksLikePlaylistLink, HERE_NOW, MORE,
   playlistIdFromLink, neededDistricts, filterMine, mineDistricts,
 } from './playlist-maker-rules.js'
 
@@ -12,10 +12,13 @@ test('playlist id from a link', () => {
 })
 
 test('districts needing playlists: agents there, fewest playlists first', () => {
+  const g = [{ kind: 'track', label: 'Dope' }]
   const list = [
-    { id: 'a', agentsHere: 13, playlists: 3 }, { id: 'b', agentsHere: 38, playlists: 2 },
-    { id: 'c', agentsHere: 4, playlists: 0 }, { id: 'd', agentsHere: 9, playlists: 21 }, { id: 'e', agentsHere: 0, playlists: 0 },
+    { id: 'a', agentsHere: 13, playlists: 3, goals: g }, { id: 'b', agentsHere: 38, playlists: 2, goals: g },
+    { id: 'c', agentsHere: 4, playlists: 0, goals: g }, { id: 'd', agentsHere: 9, playlists: 21, goals: g },
+    { id: 'e', agentsHere: 0, playlists: 0, goals: g }, { id: 'f', agentsHere: 20, playlists: 0, goals: [] },
   ]
+  // f has agents but no goal songs, so it isn't asked for
   assert.deepEqual(neededDistricts(list).map((d) => d.id), ['c', 'b', 'a'])
   assert.deepEqual(neededDistricts(list, { limit: 1 }).map((d) => d.id), ['c'])
 })
@@ -49,6 +52,10 @@ const hub = hubDistricts({
     { district_id: 'mono-urmi', kind: 'track', label: 'Dope' },
     { district_id: 'mono-urmi', kind: 'album', label: 'Dark & Wild' },
     { district_id: 'mono-urmi', kind: 'reconnect', label: 'Team' },
+    { district_id: 'relay-zero-hq', kind: 'track', label: 'Haegeum' },
+    { district_id: 'mono-tae', kind: 'track', label: 'Butter' },
+    { district_id: 'mono-angel', kind: 'album', label: 'BE' },
+    { district_id: 'happy-lido', kind: 'reconnect', label: 'Team only' },
     { district_id: null, kind: 'track', label: 'Loose' },
   ],
   agentRows: [{ district_id: 'mono-urmi' }, { district_id: 'mono-urmi' }, { district_id: 'relay-zero-hq' }],
@@ -67,18 +74,20 @@ test('server rows: game names, counts, goal songs only', () => {
   assert.equal(hub.find((d) => d.id === 'mono-tae').agentsHere, 0)
 })
 
-test('groups: agents-here first by count, then wards A–Z, each district once', () => {
+test('groups: only districts with goal songs; agents-here first, then the rest A–Z', () => {
   const groups = districtGroups(hub)
-  assert.deepEqual(groups.map((g) => g.label), [HERE_NOW, 'Happy Ward', 'Mono Ward'])
+  assert.deepEqual(groups.map((g) => g.label), [HERE_NOW, MORE])
   assert.deepEqual(groups[0].items.map((d) => d.id), ['mono-urmi', 'relay-zero-hq'])
-  assert.deepEqual(groups[2].items.map((d) => d.name), ['Angel 613 Bell Tower', 'Tae Pier'])
+  assert.deepEqual(groups[1].items.map((d) => d.name), ['Angel 613 Bell Tower', 'Tae Pier'])
   const ids = groups.flatMap((g) => g.items.map((d) => d.id))
-  assert.equal(new Set(ids).size, districts.length)
+  assert.equal(new Set(ids).size, ids.length)
+  // Keep Swimming Lido only has a team goal, no songs: left out
+  assert.ok(!ids.includes('happy-lido'))
 })
 
-test('Home Base ward leads when nobody is there', () => {
+test('nobody anywhere: one group', () => {
   const quiet = hub.map((d) => ({ ...d, agentsHere: 0 }))
-  assert.equal(districtGroups(quiet)[0].label, 'Home Base')
+  assert.deepEqual(districtGroups(quiet).map((g) => g.label), [MORE])
 })
 
 test('labels', () => {
@@ -88,8 +97,10 @@ test('labels', () => {
 })
 
 test('preselect: link, then last used, then busiest; unknown ids ignored', () => {
-  assert.equal(initialDistrict(hub, { requested: 'mono-tae', last: 'happy-lido' }), 'mono-tae')
-  assert.equal(initialDistrict(hub, { requested: 'nope', last: 'happy-lido' }), 'happy-lido')
+  assert.equal(initialDistrict(hub, { requested: 'mono-tae', last: 'mono-angel' }), 'mono-tae')
+  assert.equal(initialDistrict(hub, { requested: 'nope', last: 'mono-angel' }), 'mono-angel')
+  // a district with no goal songs isn't in the picker, so it isn't preselected
+  assert.equal(initialDistrict(hub, { requested: 'happy-lido', last: '' }), 'mono-urmi')
   assert.equal(initialDistrict(hub, { requested: '', last: 'gone' }), 'mono-urmi')
   assert.equal(initialDistrict([], {}), '')
 })

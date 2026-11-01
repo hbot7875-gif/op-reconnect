@@ -2,10 +2,10 @@
 // (getPlaylistMakerHub shapes the list) and the browser (playlist-maker.html
 // and the in-game Vault group it). Plain JS so Node tests and Deno both load it.
 //
-// ~250 districts exist but only a handful have agents on them at any time.
-// The picker leads with those ("Agents are here now", busiest first), then
-// every other district under its ward, A–Z, using the names agents see in
-// the game (Relay Zero is "Home Base" there).
+// ~250 districts exist but only a few have goal songs, and fewer still have
+// agents on them. The picker lists only districts with goals: "Agents are
+// here now" (busiest first), then "More districts" A–Z, using the names
+// agents see in the game (Relay Zero is "Home Base" there).
 
 export const HOME_BASE_WARD = 'relay-zero'
 export const HERE_NOW = 'Agents are here now'
@@ -50,30 +50,32 @@ export function districtOptionLabel(d) {
   return bits.join(' · ')
 }
 
-/** Browser: [{ label, items }] — "Agents are here now" first (busiest
- *  first), then each ward (Home Base first, then A–Z) with its districts
- *  A–Z. Every district appears exactly once. */
+export const MORE = 'More districts'
+
+/** Only districts that have goal songs — a playlist for a district with no
+ *  goals has nothing to help with, and listing all ~250 made the picker a
+ *  wall. */
+export const withGoals = (districts = []) => districts.filter((d) => Array.isArray(d.goals) && d.goals.length > 0)
+
+/** Browser: [{ label, items }] over the districts with goals — "Agents are
+ *  here now" first (busiest first), then "More districts" A–Z. Every
+ *  district appears exactly once. */
 export function districtGroups(districts = []) {
   const byName = (a, b) => String(a.name).localeCompare(String(b.name))
-  const here = districts.filter((d) => Number(d.agentsHere) > 0)
+  const list = withGoals(districts)
+  const here = list.filter((d) => Number(d.agentsHere) > 0)
     .sort((a, b) => b.agentsHere - a.agentsHere || byName(a, b))
-  const groups = here.length ? [{ label: HERE_NOW, items: here }] : []
-  const wards = new Map()
-  for (const d of districts) {
-    if (Number(d.agentsHere) > 0) continue
-    const key = d.wardName || 'Other'
-    if (!wards.has(key)) wards.set(key, [])
-    wards.get(key).push(d)
-  }
-  const wardOrder = [...wards.keys()].sort((a, b) =>
-    (a === 'Home Base' ? -1 : b === 'Home Base' ? 1 : a.localeCompare(b)))
-  for (const key of wardOrder) groups.push({ label: key, items: wards.get(key).sort(byName) })
-  return groups
+  const rest = list.filter((d) => !(Number(d.agentsHere) > 0)).sort(byName)
+  return [
+    ...(here.length ? [{ label: HERE_NOW, items: here }] : []),
+    ...(rest.length ? [{ label: MORE, items: rest }] : []),
+  ]
 }
 
 /** The district to preselect: the one asked for in the link, else the last
  *  one used on this device, else the busiest — each only if it exists. */
-export function initialDistrict(districts = [], { requested = '', last = '' } = {}) {
+export function initialDistrict(all = [], { requested = '', last = '' } = {}) {
+  const districts = withGoals(all)
   const has = (id) => id && districts.some((d) => d.id === id)
   if (has(requested)) return requested
   if (has(last)) return last
@@ -96,7 +98,7 @@ export function playlistIdFromLink(text) {
  *  playlists first (then the most agents). At most `limit`, and only
  *  districts under `enough` playlists. */
 export function neededDistricts(districts = [], { limit = 5, enough = 5 } = {}) {
-  return districts
+  return withGoals(districts)
     .filter((d) => Number(d.agentsHere) > 0 && Number(d.playlists || 0) < enough)
     .sort((a, b) => (a.playlists || 0) - (b.playlists || 0) || b.agentsHere - a.agentsHere)
     .slice(0, limit)
