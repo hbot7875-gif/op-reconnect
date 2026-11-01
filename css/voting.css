@@ -736,6 +736,8 @@
 .vt-pop-acts .vt-pop-btn.is-primary:hover { background: var(--vt-accent-hover); }
 .vt-pop-acts .vt-pop-btn.is-outline { background: transparent; color: var(--vt-text); border-color: var(--vt-line-2); }
 .vt-pop-acts .vt-pop-btn.is-quiet { background: transparent; color: var(--vt-text-2); min-height: 40px; }
+/* Link buttons (the group-chat invite's ig.me joins) look like the rest. */
+.vt-pop-acts a.vt-pop-btn { display: flex; align-items: center; justify-content: center; box-sizing: border-box; text-decoration: none; text-align: center; }
 /* The opt-in for the daily-reset alert, under the score. */
 .vt-pop-acts.vt-pop-remind { margin-top: 14px; }
 .vt-pop-remind .vt-pop-btn.is-outline { min-height: 40px; font-size: 14px; font-weight: 500; }

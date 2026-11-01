@@ -12,6 +12,11 @@ import { openStreamSource, uplinkBroken } from './settings-streams.js'
 import { wardDisplayName, districtDisplayName } from './ward-tiles.js'
 import { fromVotingLink, suggestCodename } from './onboarding-path.js'
 import { readInvite } from './battle-invite.js'
+import { markNewAgent } from './gc-invite-rules.js'
+
+// Only a brand-new agent gets here, so this is where the device learns it
+// for the group-chat invite (gc-invite-popup.js).
+const markNew = (agentNo) => { try { markNewAgent(localStorage, agentNo) } catch { /* no storage */ } }
 
 const ERRORS = {
   codename_invalid: 'Codenames are 3-24 letters or numbers — and can\'t be your agent number or Instagram handle.',
@@ -38,6 +43,7 @@ async function quickJoin(container, payload, agentNo, onJoined) {
     const codename = suggestCodename()
     const res = await call('joinGame', { agentNo, codename, mode: 'easy' }).catch(() => null)
     if (res?.success || res?.error === 'already_joined') {
+      if (res.success) markNew(agentNo)
       container.hidden = true
       if (res.joined) setState(res)
       onJoined()
@@ -104,6 +110,7 @@ function renderIdentity(container, payload, agentNo, onJoined) {
       toast(ERRORS[res.error] || res.error || 'Something went wrong')
       return
     }
+    if (res.success) markNew(agentNo)
     // Hold the joined state back until the first-run screens are done:
     // setState() publishes to main.js's subscriber, which flips straight to
     // the game and hides this container.
