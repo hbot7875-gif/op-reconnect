@@ -123,6 +123,12 @@ function candyReconnectGuideText(goal) {
   if (goal.checklist) {
     return `${agents} · each person streams all ${goal.checklist.tracks?.length || 0} tracks solo`;
   }
+  if (goal.sharedTracks) {
+    const st = goal.sharedTracks;
+    return st.hidden
+      ? `${agents} · ${st.total} ${st.noun || 'songs'}${st.clue ? ` ${st.clue}` : ''} (names hidden) · ${st.target} streams each together`
+      : `${agents} · ${st.tracks.map((t) => t.label).join(', ')} · ${st.target} streams each together`;
+  }
   if (goal.variant === 'connect' || goal.variant === 'invite') {
     return `${agents} · each person streams their own district goal`;
   }

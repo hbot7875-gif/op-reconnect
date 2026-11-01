@@ -2,6 +2,24 @@
 // screen-district.js owns the controls; this helper makes every important
 // mission state testable without a live account or production mutation.
 
+/** What a pooled multi-track quest (mission.sharedTracks or the pre-mission
+ *  config.sharedTracks) asks, in one plain sentence: the songs named by the
+ *  quest's own noun and clue ("the 6 surprise songs BTS sang in Brazil on
+ *  the ARIRANG tour"), and what to do with them. */
+export function sharedTracksPitch(st) {
+  const noun = st?.noun || 'songs'
+  const what = `the ${st.total} ${noun}${st.clue ? ` ${st.clue}` : ''}`
+  return st.hidden
+    ? `Find out ${what} and stream each one ${st.target} times as a team. A song's name appears here the first time one of you streams it.`
+    : `Stream ${what} ${st.target} times each as a team.`
+}
+
+/** "surprise song" / "surprise songs" — the quest's own word for its list. */
+export function sharedTracksNoun(st, count) {
+  const noun = st?.noun || 'songs'
+  return count === 1 ? noun.replace(/s$/, '') : noun
+}
+
 export function reconnectPlayerNext(input = {}) {
   const need = Math.max(0, Number(input.need) || 0)
   const pendingNames = input.pendingNames || []
@@ -10,6 +28,7 @@ export function reconnectPlayerNext(input = {}) {
   const cipher = input.cipher || null
   const sharedTrack = input.sharedTrack || null
   const checklist = input.checklist || null
+  const sharedTracks = input.sharedTracks || null
   const myChecklistDone = Math.max(0, Number(input.myChecklistDone) || 0)
   // A recruit joined from another district: inviting and dropping teammates
   // belong to the district's own agents, so never tell them to do either.
@@ -52,6 +71,25 @@ export function reconnectPlayerNext(input = {}) {
       title: `Stream ${sharedTrack.label} ${left} more time${left === 1 ? '' : 's'}`,
       body: 'Everyone’s qualifying plays count after they join.',
     }
+  }
+  if (input.variant === 'connect' && sharedTracks && sharedTracks.cleared < sharedTracks.total) {
+    const rows = sharedTracks.tracks || []
+    const hiddenLeft = sharedTracks.hidden ? rows.filter((t) => !t.quiz && !t.revealed).length : 0
+    const quizLeft = rows.filter((t) => t.quiz && !t.done).length
+    const left = Math.max(0, rows.filter((t) => !t.quiz).reduce((s, t) => s + (sharedTracks.target - (Number(t.progress) || 0)), 0))
+    if (hiddenLeft > 0) {
+      return {
+        title: `Find ${hiddenLeft} more ${sharedTracksNoun(sharedTracks, hiddenLeft)}`,
+        body: `A song's name appears once any teammate streams it. Up to ${sharedTracks.target} plays each count.${quizLeft ? ' The one that isn’t on Spotify is a quiz — guess it.' : ''}`,
+      }
+    }
+    if (left > 0) {
+      return {
+        title: `Stream ${left} more time${left === 1 ? '' : 's'} together`,
+        body: `Every song needs ${sharedTracks.target} plays between you.${quizLeft ? ' And guess the one that isn’t on Spotify.' : ''}`,
+      }
+    }
+    return { title: 'Guess the last song', body: 'It isn’t on Spotify — read the hint and type your guess.' }
   }
   if (input.variant === 'connect' && checklist && myChecklistDone < checklist.total) {
     const left = checklist.total - myChecklistDone

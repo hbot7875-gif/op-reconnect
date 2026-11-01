@@ -44,6 +44,7 @@ import {
   hasHeavyFocusConflict, isAllowedCustomCombo, mergeGoalAlbums,
   isOptionalTransitionTrack, preferFreshTracks, trackIdentityTokens, goalAlbumGaps,
 } from './candy-star-planner.js'
+import { publicSharedTracks } from './reconnect-shared-tracks.js'
 
 // Curated by the playlist team specifically for gaps that should contain
 // only two BTS/member fillers. Reading the source playlist keeps the pool in
@@ -532,6 +533,9 @@ function reconnectGuide(goal: any) {
       label: String(shared.label || goal.label),
       target: Number(shared.target) || null,
     } : null,
+    // Several pooled tracks: how many, and their names unless the quest
+    // hides them — a playlist maker must not be the one who spoils it.
+    sharedTracks: publicSharedTracks(cfg),
   }
 }
 

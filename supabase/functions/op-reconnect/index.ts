@@ -32,7 +32,7 @@ import { adminListGoals, adminAddGoal, adminUpdateGoal, adminDeleteGoal } from '
 import {
   getReconnectMission, getInviteCandidates, openReconnectMission,
   inviteReconnectMission, removeReconnectParticipant, respondReconnectInvite, adminAutoAssignMissions,
-  getMyInvites, sendReconnectMessage, leaveRecruitTeam, submitReconnectMissionCipherAnswer,
+  getMyInvites, sendReconnectMessage, leaveRecruitTeam, submitReconnectMissionCipherAnswer, answerReconnectSharedTrack,
   adminListStuckReconnects, adminPairReconnect, setReconnectMatchAlert,
   getTeamBoostStatus, pickTeamBoostGoals,
 } from './lib/reconnect-missions.ts'
@@ -225,6 +225,7 @@ const ROUTES: Record<string, Route> = {
   getTeamBoostStatus: { auth: 'agent', handler: (sb, p) => getTeamBoostStatus(sb, p) },
   pickTeamBoostGoals: { auth: 'agent', handler: (sb, p) => pickTeamBoostGoals(sb, p) },
   submitReconnectMissionCipherAnswer: { auth: 'agent', handler: async (sb, p) => submitReconnectMissionCipherAnswer(sb, p) },
+  answerReconnectSharedTrack: { auth: 'agent', handler: async (sb, p) => answerReconnectSharedTrack(sb, p) },
   getMyInvites: { auth: 'agent', handler: async (sb, p) => getMyInvites(sb, await loadContent(sb), String(p.agentNo || '').trim().toUpperCase()) },
   submitSuggestion: { auth: 'agent', handler: async (sb, p) => submitSuggestion(sb, p) },
   // MTV VMAs 2026 voting mission — see lib/vma-voting.ts and migration

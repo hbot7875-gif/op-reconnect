@@ -128,6 +128,10 @@ export function freezeGoals(content: GameContent, mode: string, district: Distri
       ? {
           requiredAgents: cfg.requiredAgents, sharedTrack: cfg.sharedTrack || null,
           checklist: cfg.checklist || null, ciphers: cfg.ciphers || null,
+          // sharedTracks (optional, 'connect' only): several tracks, pooled
+          // per track, names hidden until the team finds them — see
+          // reconnect-shared-tracks.js.
+          sharedTracks: cfg.sharedTracks || null,
           crossDistrictEligible: cfg.crossDistrictEligible || null,
           // crossDistrictSeats (optional) makes the mix mandatory: exactly
           // this many seats go to recruits from crossDistrictEligible

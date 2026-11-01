@@ -3149,6 +3149,30 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 .reconnect-checklist-list li > b { min-width: 0; font-family: var(--body); font-size: 11.5px; font-weight: 500; line-height: 1.3; white-space: normal; }
 .reconnect-checklist-list li.is-done { background: rgba(139,92,246,.07); color: var(--text); }
 .reconnect-checklist-list li.is-done > i { border-color: rgba(199,174,255,.5); background: rgba(139,92,246,.18); color: var(--purple-lt); }
+/* Pooled multi-track quest (config.sharedTracks): one row per song, pooled
+   plays toward the per-song target; a hidden song reads "???" until found. */
+.reconnect-setlist { display: grid; gap: 3px; margin: 12px 0 0; padding: 0; list-style: none; }
+.reconnect-setlist-day { margin: 8px 0 2px; color: var(--muted); font-size: 9px; letter-spacing: .9px; text-transform: uppercase; }
+.reconnect-setlist-day:first-child { margin-top: 0; }
+.reconnect-setlist-row { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 4px 8px;
+  padding: 7px 9px 8px; border-radius: 7px; background: rgba(255,255,255,.018); color: var(--text); }
+.reconnect-setlist-row > span:first-child { color: var(--dim); font-size: 8px; letter-spacing: .4px; }
+.reconnect-setlist-row > b { min-width: 0; font-family: var(--body); font-size: 12px; font-weight: 500; line-height: 1.3; }
+.reconnect-setlist-row.is-hidden > b { color: var(--dim); letter-spacing: 2px; }
+.reconnect-setlist-row > small { color: var(--muted); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.reconnect-setlist-row > i { grid-column: 2 / -1; display: block; height: 3px; overflow: hidden; border-radius: 999px; background: rgba(255,255,255,.07); }
+.reconnect-setlist-row > i > i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--purple), var(--purple-lt)); }
+.reconnect-setlist-row.is-done { background: rgba(139,92,246,.07); }
+.reconnect-setlist-row.is-done > small { color: var(--purple-lt); }
+/* A quiz song (not on Spotify): its hint and the team's guess box. */
+.reconnect-setlist-row.is-quiz:not(.is-done) { border: 1px dashed rgba(199,174,255,.28); }
+.reconnect-setlist-row.is-quiz:not(.is-done) > small { color: var(--purple-lt); font-size: 9px; letter-spacing: .8px; text-transform: uppercase; }
+.reconnect-setlist-hint { grid-column: 2 / -1; margin: 2px 0 0 !important; color: var(--muted); font-size: 11.5px; line-height: 1.45; }
+.reconnect-setlist-guess { grid-column: 2 / -1; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; margin-top: 6px; }
+.reconnect-setlist-guess .ob-input { min-width: 0; height: 40px; min-height: 40px; margin: 0; padding: 0 12px; font-size: 14px; }
+.reconnect-setlist-guess { align-items: center; }
+.reconnect-setlist-guess .btn { width: auto; height: 40px; min-height: 40px; margin: 0; padding: 0 14px; font-size: 12px; }
+.reconnect-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .reconnect-playlist-link { display: grid; grid-template-columns: 30px minmax(0,1fr) auto; align-items: center; gap: 10px;
   min-height: 48px; margin-top: 12px; padding: 8px 11px; border: 1px solid var(--border); border-radius: var(--r);
   background: rgba(30,215,96,.035); color: var(--text); text-decoration: none; }

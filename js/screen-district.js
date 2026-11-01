@@ -17,7 +17,7 @@ import { lastAttemptHtml } from './last-attempt.js'
 import { playRestoration } from './celebrate.js'
 import { itemTile, itemSheet, itemsAt, itemsInPack } from './items.js'
 import { trackEngagementOnce } from './engagement.js'
-import { reconnectPlayerNext } from './reconnect-player-ui.js'
+import { reconnectPlayerNext, sharedTracksPitch } from './reconnect-player-ui.js'
 import { openPlaylistVault } from './playlist-vault-sheet.js'
 import { renderHud } from './ui-hud.js'
 import { wardPopulation, knownDistrictPopulation } from './ward-population.js'
@@ -866,7 +866,9 @@ function paintMissionPanel(box, d, res) {
   }
   const sharedProgressRatio = m?.sharedTrack
     ? Number(m.sharedTrack.progress || 0) / Math.max(1, Number(m.sharedTrack.target || 0))
-    : 0
+    : m?.sharedTracks
+      ? Number(m.sharedTracks.progress || 0) / Math.max(1, Number(m.sharedTracks.goal || 0))
+      : 0
   box.classList.toggle('is-near-complete', m?.status === 'open' && sharedProgressRatio >= 0.8)
   box.classList.toggle('is-complete', m?.status === 'complete')
 
@@ -892,7 +894,9 @@ function paintMissionPanel(box, d, res) {
       ? `Team up and take ${esc(m.sharedTrack.label)} to ${m.sharedTrack.target} combined plays.`
       : m.checklist
         ? `Build a team of ${m.requiredAgents} agents. Each agent streams all ${m.checklist.total} tracks once.`
-        : 'Complete this district ReConnect Quest together.'
+        : m.sharedTracks
+          ? esc(sharedTracksPitch(m.sharedTracks))
+          : 'Complete this district ReConnect Quest together.'
     box.appendChild(reconnectMissionBlock(d.reconnect?.label || 'ReConnect Quest', missionBody))
     box.appendChild(reconnectTeamBlock(`${esc(m.participants.filter((p) => p.status === 'joined').map((p) => p.isMe ? 'You' : p.codename).join(' + ') || 'Team complete')}`))
     const completeScoreline = el('section', 'reconnect-coop-progress reconnect-complete-progress')
@@ -903,12 +907,16 @@ function paintMissionPanel(box, d, res) {
       completeScores.appendChild(el('div', 'reconnect-score', `<b>${m.sharedTrack.progress}<i>/ ${m.sharedTrack.target}</i></b><span>signal complete</span>`))
     } else if (m.checklist) {
       completeScores.appendChild(el('div', 'reconnect-score', `<b>${joinedCount}<i>/ ${joinedCount}</i></b><span>lists cleared</span>`))
+    } else if (m.sharedTracks) {
+      completeScores.appendChild(el('div', 'reconnect-score', `<b>${m.sharedTracks.cleared}<i>/ ${m.sharedTracks.total}</i></b><span>songs complete</span>`))
     }
     completeScoreline.appendChild(completeScores)
+    if (m.sharedTracks) completeScoreline.appendChild(sharedSetlist(m.sharedTracks))
     box.appendChild(completeScoreline)
     box.appendChild(reconnectNextBlock(res.recruit ? 'Quest complete — thanks for helping' : 'Quest complete — finish the district',
       m.sharedTrack ? `${esc(m.sharedTrack.label)} reached ${m.sharedTrack.target} combined plays${withWho}.`
         : m.checklist ? `Everyone cleared all ${m.checklist.total} tracks${withWho}.`
+        : m.sharedTracks ? `All ${m.sharedTracks.total} ${esc(m.sharedTracks.noun || 'songs')} reached ${m.sharedTracks.target}${withWho}.`
         : `You teamed up${withWho}.`))
     if (res.config.teamBoost) box.appendChild(teamBoostPicker(d))
     return
@@ -919,6 +927,7 @@ function paintMissionPanel(box, d, res) {
   if (!m || m.status !== 'open') {
     const st = res.config.sharedTrack
     const cl = res.config.checklist
+    const ms = res.config.sharedTracks
     // A mixed-district team (config.seats, from crossDistrictSeats): say who
     // the team is made of, not just how big it is.
     const seats = res.config.seats
@@ -931,6 +940,8 @@ function paintMissionPanel(box, d, res) {
         ? `${teamPhrase}, then stream ${esc(st.label)} to ${st.target} combined plays.`
         : cl
           ? `${seats ? teamPhrase : `Build a team of ${res.config.requiredAgents} agents`}. Each agent streams all ${cl.tracks.length} tracks once.`
+          : ms
+            ? `${teamPhrase}. ${esc(sharedTracksPitch(ms))}`
           : `${teamPhrase} and stream your active district goals.`
     box.appendChild(reconnectMissionBlock(d.reconnect?.label || 'ReConnect Quest', missionBody))
     box.appendChild(reconnectTeamBlock(seats
@@ -945,8 +956,11 @@ function paintMissionPanel(box, d, res) {
         ? `After everyone accepts, stream ${esc(st.label)}. Every team member's plays add up until the shared total reaches ${st.target}.`
         : cl
           ? `After everyone accepts, each team member streams every track on the list at least once — on their own, nothing pools between teammates.`
+          : ms
+            ? `After everyone accepts, stream the songs together: every teammate's plays add up per song, up to ${ms.target} each.${ms.hidden ? ` The list starts as ???: a song's name appears the first time any of you streams it${ms.tracks?.some((t) => t.quiz) ? ', and the one that isn’t on Spotify is a quiz you answer instead' : ''}.` : ''}`
           : 'After everyone accepts, each team member streams at least one of their own active district goals.'}</p>`
     moreBody.appendChild(how)
+    if (ms && res.variant !== 'invite') moreBody.appendChild(sharedSetlist(ms))
     // Who's already standing here, BEFORE committing to open anything. The
     // pickable list used to appear only after opening a mission, so this
     // screen — the one everybody sees first — could never say whether
@@ -1012,6 +1026,8 @@ function paintMissionPanel(box, d, res) {
       ? `Team up and take ${esc(m.sharedTrack.label)} to ${m.sharedTrack.target} combined plays.`
       : m.checklist
         ? `Build a team of ${m.requiredAgents} agents. Each agent streams all ${m.checklist.total} tracks once.`
+        : m.sharedTracks
+          ? esc(sharedTracksPitch(m.sharedTracks))
         : `Team up and stream active goals in ${esc(districtDisplayName(d))}.`
   box.appendChild(reconnectMissionBlock(d.reconnect?.label || 'ReConnect Quest', missionBody
     + (res.recruit ? ` You joined from ${esc(res.config.seats?.helperFrom || 'another district')} — your plays count toward this total.` : '')))
@@ -1033,7 +1049,7 @@ function paintMissionPanel(box, d, res) {
     variant: res.variant, myStatus: myRow?.status, need,
     pendingNames: pending.map((p) => p.codename), expiredCount: expired.length,
     idleCount: idlers.length, isCreator: m.isCreator, cipher: m.cipher,
-    sharedTrack: m.sharedTrack, checklist: m.checklist, myChecklistDone: myRow?.streams,
+    sharedTrack: m.sharedTrack, checklist: m.checklist, sharedTracks: m.sharedTracks, myChecklistDone: myRow?.streams,
     recruit: res.recruit ? { districtName: districtDisplayName(d) } : null,
   })
   const nextTitle = esc(next.title)
@@ -1056,6 +1072,27 @@ function paintMissionPanel(box, d, res) {
     progressHost.appendChild(labeledBar(`Combined ${esc(st.label)} streams`, `${st.progress}/${st.target}`,
       pct, st.progress >= st.target))
     progressHost.appendChild(el('p', 'muted reconnect-together-note', `Every teammate's qualifying ${esc(st.label)} plays join this total.`))
+  } else if (res.variant === 'connect' && m.sharedTracks) {
+    const ms = m.sharedTracks
+    scoreline.appendChild(el('div', 'reconnect-score', ms.hidden
+      ? `<b>${ms.found}<i>/ ${ms.total}</i></b><span>songs found</span>`
+      : `<b>${ms.cleared}<i>/ ${ms.total}</i></b><span>songs complete</span>`))
+    progressHost.appendChild(labeledBar('Streams together', `${ms.progress}/${ms.goal}`,
+      Math.min(100, Math.round((ms.progress / Math.max(1, ms.goal)) * 100)), ms.progress >= ms.goal))
+    // Only a joined teammate guesses; a pending invitee sees the hint.
+    progressHost.appendChild(sharedSetlist(ms, myRow?.status === 'joined' ? {
+      onGuess: async (n, answer) => {
+        const r = await call('answerReconnectSharedTrack', { agentNo: me, districtId: d.id, track: n, answer })
+        if (r?.success && r.solved) {
+          toast(r.complete ? '🎉 You got it — Quest complete!' : '🎉 You got it! The song is revealed for your team.', 4800)
+          refresh()
+        }
+        return r
+      },
+    } : {}))
+    progressHost.appendChild(el('p', 'muted reconnect-together-note', ms.hidden
+      ? `Every teammate's plays add up per song, up to ${ms.target} each. A ??? song shows its name the first time any of you streams it.`
+      : `Every teammate's plays add up per song, up to ${ms.target} each.`))
   } else if (res.variant === 'connect' && m.checklist) {
     const total = m.checklist.total
     const myDone = Math.min(total, Number(myRow?.streams) || 0)
@@ -1286,6 +1323,8 @@ function paintMissionPanel(box, d, res) {
         ? `You've been invited to team up here. Accept to join — once you do, stream ${esc(m.sharedTrack.label)} along with everyone else here until you've hit ${m.sharedTrack.target} between you.`
         : m.checklist
           ? `You've been invited to team up here. Accept to join — then stream every one of the ${m.checklist.total} playlist tracks once on your own.`
+          : m.sharedTracks
+            ? `You've been invited to team up here. Accept to join, then: ${esc(sharedTracksPitch(m.sharedTracks))}`
           : "You've been invited to team up here. Accept to join — once you do, stream toward your own goals here at least once.")
     box.appendChild(inviteNote)
     const row = el('div', 'reconnect-invite-actions')
@@ -1501,6 +1540,62 @@ function labeledBar(label, countText, pct, done) {
     <div class="pbar" role="progressbar" aria-label="${esc(label)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.max(0, Math.min(100, pct))}"><div class="pfill${done ? ' done' : ''}" style="width:${Math.max(0, Math.min(100, pct))}%"></div></div>
   `
   return wrap
+}
+
+/** A pooled multi-track quest's songs (mission.sharedTracks, or the
+ *  pre-mission config.sharedTracks), grouped by day. The server leaves a
+ *  hidden song's name out until the team streams it, so "???" here is all
+ *  the browser knows. A quiz song (not on Spotify) shows its hint and, when
+ *  `onGuess` is given, a guess box; onGuess(n, answer) resolves to the
+ *  server's reply. */
+export function sharedSetlist(st, { onGuess = null } = {}) {
+  const list = el('ul', 'reconnect-setlist')
+  let group = null
+  let html = ''
+  for (const t of st.tracks || []) {
+    if (t.group && t.group !== group) {
+      group = t.group
+      html += `<li class="reconnect-setlist-day" aria-hidden="true">${esc(group)}</li>`
+    }
+    const progress = Number(t.progress) || 0
+    const name = t.label ? esc(t.label) : '<span aria-hidden="true">???</span><span class="reconnect-sr">Not found yet</span>'
+    const count = t.quiz
+      ? (t.done ? `✓ ${t.solvedBy ? `Guessed by ${esc(t.solvedBy)}` : 'Guessed'}` : 'Quiz')
+      : `${t.done ? '✓ ' : ''}${progress}<span aria-hidden="true">/</span><span class="reconnect-sr"> of </span>${st.target}`
+    const quiz = t.quiz && !t.done
+      ? `<p class="reconnect-setlist-hint">${esc(t.hint || 'Guess this song.')}</p>${onGuess ? `
+        <form class="reconnect-setlist-guess" data-track="${t.n}">
+          <input class="ob-input" name="answer" maxlength="120" autocomplete="off" placeholder="Song title" aria-label="Your guess for song ${t.n}">
+          <button class="btn btn-primary" type="submit">Guess</button>
+        </form>` : ''}`
+      : ''
+    html += `<li class="reconnect-setlist-row${t.done ? ' is-done' : ''}${t.label ? '' : ' is-hidden'}${t.quiz ? ' is-quiz' : ''}">
+      <span>${String(t.n).padStart(2, '0')}</span><b>${name}</b><small>${count}</small>
+      ${t.quiz ? '' : `<i aria-hidden="true"><i style="width:${Math.round((Math.min(progress, st.target) / Math.max(1, st.target)) * 100)}%"></i></i>`}
+      ${quiz}
+    </li>`
+  }
+  list.innerHTML = html
+  if (onGuess) {
+    for (const form of list.querySelectorAll('.reconnect-setlist-guess')) {
+      form.onsubmit = async (e) => {
+        e.preventDefault()
+        const input = form.elements.answer
+        const button = form.querySelector('button')
+        const answer = input.value.trim()
+        if (!answer) { input.focus(); return }
+        button.disabled = true
+        const r = await onGuess(Number(form.dataset.track), answer)
+        button.disabled = false
+        if (!r?.success) { toast(reconnectError(r?.error)); return }
+        if (!r.solved) {
+          toast('Not quite — try again.')
+          input.select()
+        }
+      }
+    }
+  }
+  return list
 }
 
 /* ── The shelf ──────────────────────────────────────────────────────────

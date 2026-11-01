@@ -14,7 +14,15 @@ export async function resolveReconnectStatus(
 ) {
   if (!frozenReconnect) return null
   if (frozenReconnect.variant === 'connect' || frozenReconnect.variant === 'invite') {
-    return await getMissionStatus(supabase, agentNo, districtId, frozenReconnect)
+    const status = await getMissionStatus(supabase, agentNo, districtId, frozenReconnect)
+    // A secret-songs quest is named for its clue ("Surprise Songs for
+    // Brazil") — without the name the hidden list is unguessable. Other
+    // quests keep the generic title they have always shown.
+    if (frozenReconnect.config?.sharedTracks) {
+      const label = content.goals.find((g: any) => g.id === frozenReconnect.id)?.label
+      return label ? { ...status, label } : status
+    }
+    return status
   }
   return await getPuzzleStatus(supabase, agentNo, districtId, frozenReconnect)
 }

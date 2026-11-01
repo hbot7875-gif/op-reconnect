@@ -41,6 +41,10 @@ import { kstDateOf, todayKst, addDaysStr, kstDayBounds } from './kst.ts'
 import { ONLINE_WINDOW_MS } from './feed.ts'
 import { normKeyFull } from './text.ts'
 import { safeText, messageProblem, selectionProblem, publicQuest } from './quest-share-rules.js'
+import {
+  sharedTracksConfig, pooledTrackPlays, memberSharedPlays, sharedTracksView, sharedTracksDone, publicSharedTracks,
+  solvedSet, quizAnswerMatches,
+} from './reconnect-shared-tracks.js'
 import { logEngagementEvent } from './engagement.ts'
 import {
   reconnectHealthFlags, reconnectPrimaryStatus, reconnectRecommendedAction,
@@ -281,16 +285,26 @@ const CONTRIBUTION_PAGE_SIZE = 1_000
  *  scrobble read is, even though one agent's one day is never realistically
  *  going to need a second page. */
 async function contributionTotals(
-  supabase: SupabaseDB, agentNo: string, sinceIso: string, strict = false,
+  supabase: SupabaseDB, agentNo: string, sinceIso: string, strict = false, untilIso: string | null = null,
 ): Promise<Map<string, number>> {
   const totals = new Map<string, number>()
   const sinceDate = kstDateOfIso(sinceIso)
   const sinceSec = Math.ceil(new Date(sinceIso).getTime() / 1000)
   const today = todayKst()
+  // `untilIso` (optional) ends the window at an exact moment — a member who
+  // left a pooled quest keeps the plays they made while on it, and only
+  // those. The until-day is read from raw scrobbles, same precision rule as
+  // the since-day.
+  const untilDate = untilIso ? kstDateOfIso(untilIso) : null
+  const untilSec = untilIso ? Math.floor(new Date(untilIso).getTime() / 1000) : null
+  if (untilSec !== null && untilSec <= sinceSec) return totals
 
-  if (sinceDate < today) {
-    const { data, error } = await supabase.from('rc_daily_activity')
+  const lastFullDay = untilDate ?? today
+  if (sinceDate < lastFullDay) {
+    let q = supabase.from('rc_daily_activity')
       .select('track_counts').eq('agent_no', agentNo).gt('kst_date', sinceDate)
+    if (untilDate) q = q.lt('kst_date', untilDate)
+    const { data, error } = await q
     if (strict && error) throw new Error(`contribution_daily_unavailable:${error.message}`)
     for (const row of data || []) {
       const bucket = row.track_counts || {}
@@ -298,22 +312,27 @@ async function contributionTotals(
     }
   }
 
-  const { toTs } = kstDayBounds(sinceDate)
-  for (let offset = 0; ; offset += CONTRIBUTION_PAGE_SIZE) {
-    const { data, error } = await supabase.from('rc_scrobbles')
-      .select('track_name').eq('agent_no', agentNo)
-      .gte('listened_at', sinceSec).lt('listened_at', toTs)
-      .range(offset, offset + CONTRIBUTION_PAGE_SIZE - 1)
-    if (error) {
-      if (strict) throw new Error(`contribution_scrobbles_unavailable:${error.message}`)
-      break
+  const rawWindows: [number, number][] = []
+  const sinceEnd = kstDayBounds(sinceDate).toTs
+  rawWindows.push([sinceSec, untilSec !== null ? Math.min(sinceEnd, untilSec) : sinceEnd])
+  if (untilDate && untilSec !== null && untilDate > sinceDate) rawWindows.push([kstDayBounds(untilDate).fromTs, untilSec])
+  for (const [fromSec, toSec] of rawWindows) {
+    for (let offset = 0; ; offset += CONTRIBUTION_PAGE_SIZE) {
+      const { data, error } = await supabase.from('rc_scrobbles')
+        .select('track_name').eq('agent_no', agentNo)
+        .gte('listened_at', fromSec).lt('listened_at', toSec)
+        .range(offset, offset + CONTRIBUTION_PAGE_SIZE - 1)
+      if (error) {
+        if (strict) throw new Error(`contribution_scrobbles_unavailable:${error.message}`)
+        break
+      }
+      if (!data?.length) break
+      for (const row of data) {
+        const key = normKeyFull(row.track_name)
+        if (key) totals.set(key, (totals.get(key) || 0) + 1)
+      }
+      if (data.length < CONTRIBUTION_PAGE_SIZE) break
     }
-    if (!data?.length) break
-    for (const row of data) {
-      const key = normKeyFull(row.track_name)
-      if (key) totals.set(key, (totals.get(key) || 0) + 1)
-    }
-    if (data.length < CONTRIBUTION_PAGE_SIZE) break
   }
   return totals
 }
@@ -353,6 +372,28 @@ export async function checklistProgressSince(
   return { done: perTrack.filter(Boolean).length, perTrack }
 }
 
+/** Pooled per-track plays for a config.sharedTracks quest (see
+ *  reconnect-shared-tracks.js). Joined members count from when they joined;
+ *  a member who left counts the plays they made between joining and
+ *  leaving, so the rest of the team never loses ground. One
+ *  contributionTotals read per member for the whole list. */
+async function sharedTracksPlays(
+  supabase: SupabaseDB, participants: any[], st: { target: number; tracks: any[] }, solvedTracks: any = [], strict = false,
+): Promise<{ plays: number[]; byMember: Map<string, Map<string, number>> }> {
+  const totals: Map<string, number>[] = []
+  const byMember = new Map<string, Map<string, number>>()
+  for (const p of participants) {
+    if (p.status === 'joined' && p.joined_at) {
+      const t = await contributionTotals(supabase, p.agent_no, p.joined_at, strict)
+      totals.push(t)
+      byMember.set(p.agent_no, t)
+    } else if (p.status === 'left' && p.joined_at && p.left_at) {
+      totals.push(await contributionTotals(supabase, p.agent_no, p.joined_at, strict, p.left_at))
+    }
+  }
+  return { plays: pooledTrackPlays(st.tracks, totals, solvedSet(solvedTracks), st.target), byMember }
+}
+
 /** Fresh, fail-closed evidence for a Quest exit decision. This deliberately
  * reads the same raw scrobbles/daily buckets as mission progress instead of
  * trusting participants.streamed_at, which is only a display cache updated
@@ -373,6 +414,10 @@ export async function questExitContributionEvidence(
     if (variant !== 'connect') {
       // Invite-only missions have no streaming contribution requirement.
       evidence[p.agent_no] = 0
+    } else if (sharedTracksConfig(config)) {
+      const st = sharedTracksConfig(config)!
+      const totals = await contributionTotals(supabase, p.agent_no, p.joined_at, true)
+      evidence[p.agent_no] = memberSharedPlays(st.tracks, totals, st.target)
     } else if (config?.checklist?.tracks?.length) {
       evidence[p.agent_no] = (await checklistProgressSince(
         supabase, p.agent_no, p.joined_at, config.checklist.tracks, true,
@@ -597,13 +642,15 @@ export async function getQuestShareSource(supabase: SupabaseDB, params: any) {
   const reserved = participants.filter((p:any)=>p.status==='invited' && !inviteExpired(p)).length
   const complete = mission.status === 'complete'
   const checklist = mission.checklistProgress
-  const countingType = checklist ? 'checklist' : mission.sharedTrackProgress ? 'pooled' : goal.variant === 'invite' ? 'team' : 'signals'
+  const multi = mission.sharedTracksProgress
+  const countingType = checklist ? 'checklist' : mission.sharedTrackProgress || multi ? 'pooled' : goal.variant === 'invite' ? 'team' : 'signals'
   const progress = checklist ? joined.filter((p:any)=>p.contribution>=checklist.total).length
     : mission.sharedTrackProgress ? mission.sharedTrackProgress.progress
+    : multi ? multi.progress
     : goal.variant === 'invite' ? joined.length : joined.filter((p:any)=>p.streamed_at).length
   const {data: definition} = await supabase.from('rc_goals').select('label').eq('id',goal.id).maybeSingle()
   const title = mission.sharedTrackProgress?.label || definition?.label || 'ReConnect Quest'
-  const quest = publicQuest({title,countingType,progress,target:mission.sharedTrackProgress?.target || mission.required_agents,complete,
+  const quest = publicQuest({title,countingType,progress,target:mission.sharedTrackProgress?.target || multi?.goal || mission.required_agents,complete,
     joined:joined.length,capacity:mission.required_agents,availableSeats:complete?0:Math.max(0,mission.required_agents-joined.length-reserved),
     capturedAt:new Date().toISOString(),messages:[]})
   if(params.skipMessages===true)return {success:true,quest,messages:[]}
@@ -710,6 +757,10 @@ async function shape(
     // `streams` field below, same repurposed count refreshMission already
     // stamps as p.contribution for every other 'connect' shape.
     checklist: m.checklistProgress || null,
+    // Only present when the frozen goal carries sharedTracks — per-track
+    // pooled progress. While hidden, a track nobody has streamed has no
+    // label here at all (reconnect-shared-tracks.js's sharedTracksView).
+    sharedTracks: m.sharedTracksProgress || null,
     // Only present once the streaming target is hit and the goal actually
     // carries a cipher sequence — see refreshMission's phase transition.
     // Deliberately exposes only the CURRENT cipher's prompt, never the
@@ -831,6 +882,7 @@ async function refreshMission(
     requiredAgents?: number
     sharedTrack?: { label: string; keys: string[]; target: number } | null
     checklist?: { tracks: { label: string; keys: string[] }[]; playlistUrl?: string } | null
+    sharedTracks?: { target: number; hidden?: boolean; tracks: { label: string; keys: string[]; group?: string }[] } | null
     ciphers?: { prompt: string; answerKeys: string[] }[] | null
     // Other district ids whose active agents also count as legitimately
     // "on" this goal — see eligiblePoolForGoal's doc comment. Widens the
@@ -901,9 +953,33 @@ async function refreshMission(
     mission.checklistProgress = { total: checklist.tracks.length }
   }
 
+  // Several tracks, pooled per track, names optionally hidden until found
+  // (reconnect-shared-tracks.js). Exclusive with sharedTrack and checklist.
+  const multi = variant === 'connect' && !checklist?.tracks?.length ? sharedTracksConfig(config) : null
+  let multiDone = false
+  if (multi) {
+    const solvedTracks = mission.solved_tracks || []
+    const { plays, byMember } = await sharedTracksPlays(supabase, participants, multi, solvedTracks)
+    for (const p of joined) {
+      const own = byMember.get(p.agent_no) || new Map()
+      // Each roster row's "N streams": their plays across the list, capped
+      // per track — the same number a Quest exit would freeze.
+      p.contribution = memberSharedPlays(multi.tracks, own, multi.target)
+      if (p.contribution > 0 && !p.streamed_at) {
+        await supabase.from('rc_reconnect_participants')
+          .update({ streamed_at: new Date().toISOString() })
+          .eq('mission_id', mission.id).eq('agent_no', p.agent_no)
+        p.streamed_at = new Date().toISOString()
+      }
+    }
+    multiDone = sharedTracksDone(multi, plays)
+    mission._sharedTracksPlays = plays
+    mission.sharedTracksProgress = sharedTracksView(multi, plays, { complete: mission.status === 'complete', solvedTracks })
+  }
+
   const sharedTrack = config?.sharedTrack
   let sharedTotal = 0
-  if (checklist?.tracks?.length) {
+  if (checklist?.tracks?.length || multi) {
     // Mutually exclusive with sharedTrack — already handled above.
   } else if (variant === 'connect' && sharedTrack?.keys?.length && sharedTrack.target > 0) {
     for (const p of joined) {
@@ -954,6 +1030,8 @@ async function refreshMission(
       ? joined.length >= mission.required_agents
       : checklist?.tracks?.length
         ? joined.length >= mission.required_agents && checklistAllDone
+        : multi
+          ? joined.length >= mission.required_agents && multiDone
         : sharedTrack?.keys?.length
           ? joined.length >= mission.required_agents && sharedTotal >= sharedTrack.target
           : joined.length >= mission.required_agents && joined.every((p: any) => p.streamed_at)
@@ -969,6 +1047,10 @@ async function refreshMission(
         .eq('id', mission.id).eq('status', 'open')
       if (!error) mission.status = 'complete'
     }
+  }
+  // Completing in this same pass reveals every hidden name.
+  if (multi && mission.status === 'complete' && mission._sharedTracksPlays) {
+    mission.sharedTracksProgress = sharedTracksView(multi, mission._sharedTracksPlays, { complete: true, solvedTracks: mission.solved_tracks || [] })
   }
   return mission
 }
@@ -1012,7 +1094,9 @@ export async function getMissionStatus(supabase: SupabaseDB, agentNo: string, di
   const checklistTracks = frozenReconnect.config.checklist?.tracks?.length || 0
   const checklistRequired = Number(frozenReconnect.config.requiredAgents) || 0
   const checklistTarget = checklistTracks * checklistRequired
-  const reconnectTarget = sharedTarget || checklistTarget || 1
+  const multi = sharedTracksConfig(frozenReconnect.config)
+  const multiTarget = multi ? multi.target * multi.tracks.length : 0
+  const reconnectTarget = sharedTarget || checklistTarget || multiTarget || 1
 
   // A paid Skip waives this player's third district criterion for this
   // activation only. It is deliberately NOT a completed mission: no mission
@@ -1055,7 +1139,9 @@ export async function getMissionStatus(supabase: SupabaseDB, agentNo: string, di
       ? { progress: done ? sharedTarget : Math.min(sharedProgress, sharedTarget), target: sharedTarget }
       : checklistTarget > 0
         ? { progress: done ? checklistTarget : Math.min(checklistSum, checklistTarget), target: checklistTarget }
-        : { progress: done ? 1 : 0, target: 1 },
+        : multiTarget > 0
+          ? { progress: done ? multiTarget : Math.min(Number(mission?.sharedTracksProgress?.progress) || 0, multiTarget), target: multiTarget }
+          : { progress: done ? 1 : 0, target: 1 },
     mission: mission ? await shape(supabase, mission, participants, agentNo, IDLE_DAYS, frozenReconnect.config.ciphers) : null,
   }
 }
@@ -1118,6 +1204,7 @@ async function recruitMissionView(supabase: SupabaseDB, content: any, agentNo: s
       requiredAgents: config.requiredAgents,
       sharedTrack: config.sharedTrack || null,
       checklist: config.checklist || null,
+      sharedTracks: publicSharedTracks(config),
       teamBoost: null,
       seats: seatPanelInfo(config, content),
     },
@@ -1233,7 +1320,15 @@ export async function getReconnectMission(supabase: SupabaseDB, content: any, pa
   if (waiver) {
     return {
       success: true, available: true, variant: reconnect.variant,
-      config: reconnect.config, done: true, skipped: true,
+      // Not the raw frozen config: that carries cipher answers and, for a
+      // hidden sharedTracks quest, the very names the team is meant to find.
+      config: {
+        requiredAgents: reconnect.config.requiredAgents,
+        sharedTrack: reconnect.config.sharedTrack || null,
+        checklist: reconnect.config.checklist || null,
+        sharedTracks: publicSharedTracks(reconnect.config),
+      },
+      done: true, skipped: true,
       skipReason: waiver.free_reason || 'paid', mission: null,
     }
   }
@@ -1257,6 +1352,8 @@ export async function getReconnectMission(supabase: SupabaseDB, content: any, pa
       // what's left even before a mission exists to compute per-agent
       // progress against.
       checklist: reconnect.config.checklist || null,
+      // Slot count and day groups only while hidden — never a label or key.
+      sharedTracks: publicSharedTracks(reconnect.config),
       teamBoost: reconnect.config.teamBoost || null,
       // A mixed-district team: how many seats are reserved for recruits, and
       // where those come from, so the panel can say "2 from here + 1 from
@@ -1942,6 +2039,47 @@ export async function submitReconnectMissionCipherAnswer(supabase: SupabaseDB, p
     .eq('id', mission.id).eq('status', 'open').eq('phase', 'cipher')
   if (error) return { success: false, error: error.message }
   return { success: true, solved: true, allSolved: false, cipherIndex: nextIndex, ciphersTotal: ciphers.length, attemptsLeft: CIPHER_ATTEMPTS }
+}
+
+/** A teammate's guess at a quiz track in a sharedTracks quest — a song the
+ *  team can't stream (not on Spotify), so it's named instead. Any joined
+ *  member may guess, as often as they like; a right answer marks the track
+ *  solved for the whole team (rc_reconnect_missions.solved_tracks), which
+ *  counts it as the full per-track target and reveals its name. The answer
+ *  keys never leave the server; only right/wrong comes back. */
+export async function answerReconnectSharedTrack(supabase: SupabaseDB, params: any) {
+  const districtId = String(params.districtId || '')
+  const agentNo = String(params.agentNo || '').trim().toUpperCase()
+  const n = Number(params.track)
+  const answer = String(params.answer || '').trim().slice(0, 120)
+  if (!answer) return { success: false, error: 'answer_required' }
+
+  const pd = await myActivePd(supabase, agentNo, districtId)
+  if (pd?.status !== 'active') return { success: false, error: 'not_eligible' }
+  const reconnect = myReconnectGoal(pd)
+  const st = reconnect?.variant === 'connect' ? sharedTracksConfig(reconnect.config) : null
+  if (!st || !Number.isInteger(n) || !st.tracks[n - 1]?.quiz) return { success: false, error: 'not_available' }
+
+  if (await findMyCompletedMission(supabase, agentNo, districtId, reconnect!.id)) return { success: false, error: 'already_completed' }
+  let mission = await findMyMission(supabase, agentNo, districtId, { goalId: reconnect!.id })
+  if (!mission) return { success: false, error: 'not_in_mission' }
+  const { data: me } = await supabase.from('rc_reconnect_participants').select('status')
+    .eq('mission_id', mission.id).eq('agent_no', agentNo).maybeSingle()
+  if (me?.status !== 'joined') return { success: false, error: 'not_in_mission' }
+  if (mission.status !== 'open') return { success: false, error: 'mission_' + mission.status }
+
+  if (solvedSet(mission.solved_tracks).has(n)) return { success: true, solved: true, already: true }
+  if (!quizAnswerMatches(st, n, normKeyFull(answer))) return { success: true, solved: false }
+
+  const { data: player } = await supabase.from('rc_players').select('codename').eq('agent_no', agentNo).maybeSingle()
+  const solved = [...(Array.isArray(mission.solved_tracks) ? mission.solved_tracks : []),
+    { n, by: player?.codename || 'A teammate', at: new Date().toISOString() }]
+  const { error } = await supabase.from('rc_reconnect_missions')
+    .update({ solved_tracks: solved }).eq('id', mission.id).eq('status', 'open')
+  if (error) return { success: false, error: error.message }
+  // Settle now: the guess may have been the last thing the team needed.
+  mission = await refreshMission(supabase, { ...mission, solved_tracks: solved }, 'connect', reconnect!.config)
+  return { success: true, solved: true, complete: mission.status === 'complete' }
 }
 
 /** The mission creator frees up a slot occupied by someone who hasn't

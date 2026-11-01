@@ -100,6 +100,13 @@ function reconnectHudStatus(state) {
     const left = Math.max(0, mission.sharedTrack.target - mission.sharedTrack.progress)
     return { label: `${left} shared stream${left === 1 ? '' : 's'} left` }
   }
+  if (mission.sharedTracks) {
+    const st = mission.sharedTracks
+    const hiddenLeft = st.total - st.found
+    if (st.hidden && hiddenLeft > 0) return { label: `${hiddenLeft} ${hiddenLeft === 1 ? (st.noun || 'songs').replace(/s$/, '') : (st.noun || 'songs')} to find` }
+    const left = Math.max(0, st.goal - st.progress)
+    return { label: `${left} shared stream${left === 1 ? '' : 's'} left` }
+  }
   if (mission.checklist) {
     const me = joined.find((p) => p.isMe)
     const left = Math.max(0, mission.checklist.total - (Number(me?.streams) || 0))
