@@ -85,3 +85,42 @@ export function initialDistrict(districts = [], { requested = '', last = '' } = 
 export function looksLikePlaylistLink(text) {
   return /open\.spotify\.com\/(intl-[a-z]{2}\/)?playlist\/[A-Za-z0-9]{10,}|^spotify:playlist:[A-Za-z0-9]{10,}/.test(String(text || '').trim())
 }
+
+/** The playlist id inside a link, or ''. */
+export function playlistIdFromLink(text) {
+  const m = /playlist[/:]([A-Za-z0-9]{10,})/.exec(String(text || ''))
+  return m ? m[1] : ''
+}
+
+/** "Districts needing playlists": where agents are, with the fewest
+ *  playlists first (then the most agents). At most `limit`, and only
+ *  districts under `enough` playlists. */
+export function neededDistricts(districts = [], { limit = 5, enough = 5 } = {}) {
+  return districts
+    .filter((d) => Number(d.agentsHere) > 0 && Number(d.playlists || 0) < enough)
+    .sort((a, b) => (a.playlists || 0) - (b.playlists || 0) || b.agentsHere - a.agentsHere)
+    .slice(0, limit)
+}
+
+/** "Your playlists": search by title or note, filter by district, newest or
+ *  oldest first. `rows` are getPlaylistMakerHub's playlists. */
+export function filterMine(rows = [], { q = '', district = '', sort = 'newest' } = {}) {
+  const needle = String(q).trim().toLowerCase()
+  const districtOf = (r) => r.district_id || r.config?.districtId || ''
+  const out = rows.filter((r) => (!district || districtOf(r) === district)
+    && (!needle || `${r.name || ''} ${r.config?.note || ''}`.toLowerCase().includes(needle)))
+  const t = (r) => Date.parse(r.created_at) || 0
+  return out.sort((a, b) => (sort === 'oldest' ? t(a) - t(b) : t(b) - t(a)))
+}
+
+/** The districts that appear in "Your playlists", most-used first, for the
+ *  filter chips. */
+export function mineDistricts(rows = [], districts = []) {
+  const counts = new Map()
+  for (const r of rows) {
+    const id = r.district_id || r.config?.districtId
+    if (id) counts.set(id, (counts.get(id) || 0) + 1)
+  }
+  const name = (id) => districts.find((d) => d.id === id)?.name || rows.find((r) => (r.district_id || r.config?.districtId) === id)?.config?.districtName || 'District removed'
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([id, n]) => ({ id, name: name(id), count: n }))
+}

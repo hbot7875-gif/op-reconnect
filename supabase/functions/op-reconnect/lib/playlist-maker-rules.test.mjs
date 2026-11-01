@@ -2,7 +2,38 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   hubDistricts, districtGroups, districtOptionLabel, initialDistrict, looksLikePlaylistLink, HERE_NOW,
+  playlistIdFromLink, neededDistricts, filterMine, mineDistricts,
 } from './playlist-maker-rules.js'
+
+test('playlist id from a link', () => {
+  assert.equal(playlistIdFromLink('https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M?si=1'), '37i9dQZF1DXcBWIGoYBM5M')
+  assert.equal(playlistIdFromLink('spotify:playlist:37i9dQZF1DXcBWIGoYBM5M'), '37i9dQZF1DXcBWIGoYBM5M')
+  assert.equal(playlistIdFromLink('https://open.spotify.com/track/37i9dQZF1DXcBWIGoYBM5M'), '')
+})
+
+test('districts needing playlists: agents there, fewest playlists first', () => {
+  const list = [
+    { id: 'a', agentsHere: 13, playlists: 3 }, { id: 'b', agentsHere: 38, playlists: 2 },
+    { id: 'c', agentsHere: 4, playlists: 0 }, { id: 'd', agentsHere: 9, playlists: 21 }, { id: 'e', agentsHere: 0, playlists: 0 },
+  ]
+  assert.deepEqual(neededDistricts(list).map((d) => d.id), ['c', 'b', 'a'])
+  assert.deepEqual(neededDistricts(list, { limit: 1 }).map((d) => d.id), ['c'])
+})
+
+test('your playlists: search, district filter, sort, chips', () => {
+  const rows = [
+    { name: 'MIR × Golden', district_id: 'u', created_at: '2026-11-01T10:00:00Z', config: {} },
+    { name: 'Stay Alive', district_id: 'm', created_at: '2026-11-01T09:00:00Z', config: { note: 'golden hour' } },
+    { name: 'Winter Bear', district_id: 'n', created_at: '2026-09-30T09:00:00Z', config: {} },
+    { name: 'Second U', district_id: 'u', created_at: '2026-10-05T09:00:00Z', config: {} },
+  ]
+  assert.deepEqual(filterMine(rows).map((r) => r.name), ['MIR × Golden', 'Stay Alive', 'Second U', 'Winter Bear'])
+  assert.deepEqual(filterMine(rows, { sort: 'oldest' }).map((r) => r.name)[0], 'Winter Bear')
+  assert.deepEqual(filterMine(rows, { q: 'golden' }).map((r) => r.name), ['MIR × Golden', 'Stay Alive'])
+  assert.deepEqual(filterMine(rows, { district: 'u' }).map((r) => r.name), ['MIR × Golden', 'Second U'])
+  const chips = mineDistricts(rows, [{ id: 'u', name: 'Urmi Terrace' }, { id: 'm', name: 'Minimin Court' }])
+  assert.deepEqual(chips.map((c) => [c.name, c.count]), [['Urmi Terrace', 2], ['Minimin Court', 1], ['District removed', 1]])
+})
 
 const wards = [{ id: 'relay-zero', name: 'Relay Zero' }, { id: 'mono', name: 'Mono Ward' }, { id: 'happy', name: 'Happy Ward' }]
 const districts = [
