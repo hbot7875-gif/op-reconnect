@@ -4342,6 +4342,7 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .cs-vault-share-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
 .cs-vault-share-row .btn-red { width: auto; min-width: 132px; padding-inline: 16px; }
 .cs-vault-share-note, .cs-vault-share-message { margin-top: 7px; font-size: 10.5px; line-height: 1.4; color: var(--dim); }
+.cs-vault-share-page { display: inline-block; margin-top: 7px; font-size: 11px; color: var(--purple-lt); text-decoration: none; }
 .cs-vault-share-message { min-height: 1.4em; color: var(--gold); }
 
 .cs-vault-tools { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 14px 0 10px; }

@@ -48,6 +48,21 @@
   .pm-row a { color: var(--purple-lt); font-family: var(--mono); font-size: 10.5px;
     text-decoration: none; white-space: nowrap; }
   .pm-empty { color: var(--dim); font-size: 12.5px; }
+  /* The picked district's goal songs: what the playlist should cover. */
+  .pm-goals { margin: -4px 0 14px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r);
+    background: rgba(255,255,255,.02); font-size: 12.5px; line-height: 1.55; }
+  .pm-goals b { display: block; margin-bottom: 4px; color: var(--dim); font-family: var(--mono); font-size: 10.5px;
+    letter-spacing: .6px; text-transform: uppercase; font-weight: 400; }
+  .pm-goals .pm-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pm-goals .pm-chip { padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); font-size: 12px; }
+  .pm-goals .pm-chip.is-album { border-color: var(--purple-lt); }
+  .pm-url-row { display: flex; gap: 8px; }
+  .pm-url-row input { flex: 1; min-width: 0; }
+  .pm-paste { flex: none; padding: 0 14px; border-radius: var(--r); border: 1px solid var(--border);
+    background: rgba(255,255,255,.04); color: inherit; font: inherit; font-size: 13px; cursor: pointer; }
+  .pm-url-hint { margin-top: 6px; font-size: 11.5px; color: var(--dim); min-height: 15px; }
+  .pm-url-hint.ok { color: var(--gold); }
+  .pm-url-hint.err { color: var(--crimson); }
 </style>
 </head>
 <body>
@@ -77,9 +92,14 @@
       so it always matches what agents will open.</p>
     <div class="pm-field"><span>District</span>
       <select id="district" class="ob-input"></select></div>
-    <label class="pm-field"><span>Spotify playlist link</span>
-      <input id="url" class="ob-input" type="url" inputmode="url"
-        placeholder="https://open.spotify.com/playlist/..."></label>
+    <div class="pm-goals" id="goals" hidden></div>
+    <div class="pm-field"><span>Spotify playlist link</span>
+      <div class="pm-url-row">
+        <input id="url" class="ob-input" type="url" inputmode="url" autocomplete="off"
+          placeholder="https://open.spotify.com/playlist/..." aria-label="Spotify playlist link">
+        <button class="pm-paste" id="pasteBtn" type="button">Paste</button>
+      </div>
+      <div class="pm-url-hint" id="urlHint"></div></div>
     <label class="pm-field"><span>Note for agents (optional)</span>
       <input id="note" class="ob-input" type="text" maxlength="180"
         placeholder="e.g. Best for the Haegeum goal — 2 hours"></label>
@@ -98,6 +118,13 @@
 import { call } from './js/api.js'
 import { getAgentNo, getSession } from './js/session.js'
 import { enhanceSelect } from './js/rc-select.js'
+import { districtGroups, districtOptionLabel, initialDistrict, looksLikePlaylistLink } from './supabase/functions/op-reconnect/lib/playlist-maker-rules.js'
+
+const LAST_KEY = 'rc_pm_last_district'
+const readLast = () => { try { return localStorage.getItem(LAST_KEY) || '' } catch { return '' } }
+const saveLast = (id) => { try { localStorage.setItem(LAST_KEY, id) } catch { /* private mode */ } }
+// playlist-maker.html?district=<id> — the in-game Vault links here with its district.
+const requested = new URLSearchParams(location.search).get('district') || ''
 
 const $ = (id) => document.getElementById(id)
 const esc = (value) => String(value == null ? '' : value)
@@ -139,10 +166,51 @@ async function load() {
     return
   }
   districts = res.districts || []
+  // Busiest districts first, then every ward A–Z (playlist-maker-rules.js).
+  // Keep the current choice across reloads (after adding), else the link's
+  // district, the last one used here, or the busiest.
+  const keep = $('district').value
   $('district').innerHTML = districts.length
-    ? districts.map((d) => `<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('')
+    ? districtGroups(districts).map((g) => `<optgroup label="${esc(g.label)}">${g.items
+      .map((d) => `<option value="${esc(d.id)}">${esc(districtOptionLabel(d))}</option>`).join('')}</optgroup>`).join('')
     : '<option value="">No districts available</option>'
+  $('district').value = initialDistrict(districts, { requested: keep || requested, last: readLast() })
+  paintGoals()
   paintMine(res.playlists || [])
+}
+
+/** The picked district's goal songs, so the playlist covers what it needs. */
+function paintGoals() {
+  const d = districts.find((x) => x.id === $('district').value)
+  const box = $('goals')
+  if (!d || !d.goals?.length) { box.hidden = true; box.innerHTML = ''; return }
+  const chip = (g) => `<span class="pm-chip${g.kind === 'album' ? ' is-album' : ''}">${esc(g.kind === 'album' ? `Album · ${g.label}` : g.label)}</span>`
+  box.innerHTML = `<b>Goal songs in ${esc(d.name)}</b><div class="pm-chips">${d.goals.map(chip).join('')}</div>`
+  box.hidden = false
+}
+
+$('district').addEventListener('change', () => { saveLast($('district').value); paintGoals() })
+
+function checkUrl() {
+  const v = $('url').value.trim()
+  const hint = $('urlHint')
+  if (!v) { hint.className = 'pm-url-hint'; hint.textContent = ''; return }
+  const ok = looksLikePlaylistLink(v)
+  hint.className = `pm-url-hint ${ok ? 'ok' : 'err'}`
+  hint.textContent = ok ? '✓ Spotify playlist link' : 'That isn’t a Spotify playlist link — copy it from Share → Copy link to playlist.'
+}
+$('url').addEventListener('input', checkUrl)
+
+// Long-pressing a small field to paste is the fiddly part on a phone.
+$('pasteBtn').onclick = async () => {
+  try {
+    const text = (await navigator.clipboard.readText()).trim()
+    if (text) { $('url').value = text; checkUrl() }
+  } catch {
+    $('url').focus()
+    $('urlHint').className = 'pm-url-hint err'
+    $('urlHint').textContent = 'Your browser blocked Paste — long-press the box and paste instead.'
+  }
 }
 
 function paintMine(rows) {
@@ -185,12 +253,14 @@ $('addBtn').onclick = async () => {
     msg.textContent = res?.error || 'Could not add that playlist.'
     return
   }
+  saveLast(districtId)
   msg.className = 'pm-msg ok'
   msg.textContent = res.alreadyThere
     ? 'That playlist is already in the Vault.'
     : `${res.name} is now at the top of that district's Vault.`
   $('url').value = ''
   $('note').value = ''
+  checkUrl()
   await load()
 }
 
