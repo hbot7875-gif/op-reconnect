@@ -6,6 +6,8 @@
 // where the usual 7-second choice starts by itself (voting.js). Once voting
 // is open, an agent already on a team gets "The MAMA Battle is LIVE" once a
 // KST day instead (until today's votes are all in); "Upload now" opens Voting.
+// From 21:00 KST, an agent with nothing verified today gets a last call
+// ("Votes reset in 2h 15m") with one button and no "Later".
 //
 // Same localStorage-seen pattern as exam-mode-announce.js and
 // birthday-era-popup.js; storage failing reads as "seen" so nobody is nagged
@@ -76,7 +78,8 @@ export function checkForMamaTeamPopup(state) {
 
   const copy = mamaTeamPopupCopy(state.voting, readInvite(storage), kind)
   const sheet = el('div', 'sheet vt-pop', votePopupHtml({
-    tone: 'accent', icon: kind === 'live' ? 'upload' : 'swords', eyebrow: copy.eyebrow, title: copy.title, body: copy.body,
+    tone: kind === 'closing' ? 'warn' : 'accent', icon: { live: 'upload', closing: 'clock' }[kind] || 'swords',
+    eyebrow: copy.eyebrow, title: copy.title, body: copy.body,
     extra: teamTilesHtml(copy.teams) + (kind === 'live' ? remindHtml() : ''), primary: copy.action, secondary: copy.later,
   }))
   const remind = sheet.querySelector('[data-vp="remind"]')
@@ -91,6 +94,7 @@ export function checkForMamaTeamPopup(state) {
   }
   const go = sheet.querySelector('[data-vp="primary"]')
   go.onclick = () => { hideOverlay(); goVoting() }
-  sheet.querySelector('[data-vp="secondary"]').onclick = hideOverlay
+  const later = sheet.querySelector('[data-vp="secondary"]')
+  if (later) later.onclick = hideOverlay
   showOverlay(sheet)
 }

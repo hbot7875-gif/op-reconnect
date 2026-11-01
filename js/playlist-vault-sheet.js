@@ -20,6 +20,7 @@ import { call } from './api.js'
 import { getAgentNo } from './session.js'
 import { goCandyStar } from './router.js'
 import { csIcon } from './candy-icons.js'
+import { districtGroups, districtOptionLabel } from '../supabase/functions/op-reconnect/lib/playlist-maker-rules.js'
 
 const DISTRICT_VIEWS = [
   { id: 'relevant', label: 'Relevant' },
@@ -218,7 +219,8 @@ export function openPlaylistVault({ districtId = null, districtName = null } = {
       <input id="vs-share-url" class="input-field" type="url" inputmode="url" autocomplete="off" placeholder="https://open.spotify.com/playlist/…">
       <button type="button" class="btn-red">Add to Vault</button>
     </div>
-    <div class="cs-vault-share-note">Spotify checks the title and public link before it appears. It lands at the top of that district's list. Up to 5 shares a day.</div>
+    <div class="cs-vault-share-note">Spotify checks the title and public link before it appears. It lands at the top of that district's list.</div>
+    <a class="cs-vault-share-page" href="playlist-maker.html">Open the Playlist Maker page →</a>
     <div class="cs-vault-share-message" role="status"></div>`
   sheet.appendChild(shareForm)
   const shareDistrict = shareForm.querySelector('#vs-share-district')
@@ -237,9 +239,17 @@ export function openPlaylistVault({ districtId = null, districtName = null } = {
     if (!hub?.success) return
     const list = hub.districts || []
     if (!list.length) return
-    shareDistrict.innerHTML = list
-      .map((d) => `<option value="${esc(d.id)}"${d.id === districtId ? ' selected' : ''}>${esc(d.name)}</option>`)
+    // Same order as the Playlist Maker page: districts with agents first,
+    // then each ward A–Z; this Vault's own district stays preselected.
+    shareDistrict.innerHTML = districtGroups(list)
+      .map((g) => `<optgroup label="${esc(g.label)}">${g.items
+        .map((d) => `<option value="${esc(d.id)}"${d.id === districtId ? ' selected' : ''}>${esc(districtOptionLabel(d))}</option>`)
+        .join('')}</optgroup>`)
       .join('')
+    const page = shareForm.querySelector('.cs-vault-share-page')
+    const pageFor = () => { page.href = `playlist-maker.html?district=${encodeURIComponent(shareDistrict.value)}` }
+    shareDistrict.addEventListener('change', pageFor)
+    pageFor()
     shareToggle.hidden = false
   })()
 

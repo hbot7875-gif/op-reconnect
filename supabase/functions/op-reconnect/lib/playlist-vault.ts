@@ -13,6 +13,8 @@ import { getDistrictGoalCatalogMatch } from './candy-star.ts'
 // Reused rather than re-reading rc_config here, so the badge gate and the
 // playlist gate can never disagree about who is on the list.
 import { isBadgeEditor } from './badge-admin.ts'
+import { loadContent } from './config.ts'
+import { hubDistricts } from './playlist-maker-rules.js'
 
 const PAGE_SIZE = 24
 const MAX_PAGE_SIZE = 48
@@ -67,18 +69,39 @@ export async function amIPlaylistMaker(supabase: SupabaseDB, params: any): Promi
 export async function getPlaylistMakerHub(supabase: SupabaseDB, params: any): Promise<any> {
   const agentNo = agentNoOf(params)
   if (!(await isPlaylistMaker(supabase, agentNo))) return { success: false, error: 'not_playlist_maker' }
-  const [districtsRes, mineRes] = await Promise.all([
-    supabase.from('rc_districts').select('id, name, ward_id, sequence')
-      .eq('active', true).order('sequence'),
+  // Districts, wards and goals come from the shared content cache; the two
+  // counts are what lets the picker lead with where agents actually are and
+  // show which districts already have plenty of playlists.
+  const [content, mineRes, agentsRes, sharedRes] = await Promise.all([
+    loadContent(supabase),
     supabase.from('generated_playlists')
       .select('name, playlist_id, url, district_id, config, created_at, status')
       .eq('agent_no', agentNo).eq('source', 'shared')
       .order('created_at', { ascending: false }).limit(100),
+    supabase.from('rc_player_districts').select('district_id').eq('status', 'active'),
+    // Every maker's live Vault playlist: counts per district, and the shared
+    // library with an Uploader filter (same idea as the Badge Vault page,
+    // which shows every maker's art with who uploaded it).
+    supabase.from('generated_playlists')
+      .select('name, playlist_id, url, district_id, config, created_at, status, agent_no')
+      .eq('source', 'shared').eq('status', 'active').not('district_id', 'is', null)
+      .order('created_at', { ascending: false }),
   ])
-  if (districtsRes.error || mineRes.error) {
-    return { success: false, error: districtsRes.error?.message || mineRes.error?.message }
-  }
-  return { success: true, districts: districtsRes.data || [], playlists: mineRes.data || [] }
+  const failed = mineRes.error || agentsRes.error || sharedRes.error
+  if (failed) return { success: false, error: failed.message }
+  const vault = sharedRes.data || []
+  const districts = hubDistricts({
+    districts: content.districts, wards: content.wards, goals: content.goals,
+    agentRows: agentsRes.data || [], playlistRows: vault,
+  })
+  // Codenames are public in the game; agent numbers are already shown to
+  // makers on the Badge Vault page in the same way.
+  const uploaders = [...new Set(vault.map((r: any) => r.agent_no).filter(Boolean))]
+  const { data: players } = uploaders.length
+    ? await supabase.from('rc_players').select('agent_no, codename').in('agent_no', uploaders)
+    : { data: [] }
+  const makers = Object.fromEntries((players || []).map((p: any) => [p.agent_no, p.codename || '']))
+  return { success: true, districts, playlists: mineRes.data || [], vault, makers }
 }
 
 /** Which of a playlist's real focus songs/albums land on this district's

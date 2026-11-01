@@ -12,6 +12,7 @@
 import type { SupabaseDB } from './spotify-shared.ts'
 import { utcNow, isBTSArtists, parseSpotifyId, spotifyGetJson, spotifyGetJsonOrThrow, fetchAllPlaylistTracks } from './spotify-shared.ts'
 import { getUserAccessToken } from './spotify-oauth.ts'
+import { pickTitleMatch, trackTitleOwners, trackClaimedByOtherTitle } from './catalog-match.js'
 
 /**
  * Build BTS catalog from iTunes Search API — free, no auth, no rate limits,
@@ -119,6 +120,7 @@ export async function getBTSCatalog(supabase: SupabaseDB): Promise<any> {
   }
 
   const primaryKeys = new Set<string>(base.map((s: any) => s.key))
+  const titleOwners = trackTitleOwners(uriMap)
 
   const trackIdToIsrc = new Map<string, string>()
   for (const [, r] of Object.entries(uriMap)) {
@@ -137,7 +139,13 @@ export async function getBTSCatalog(supabase: SupabaseDB): Promise<any> {
     const rr = r as any
 
     let song = byKey.get(key)
-    if (!song && rr.name) song = byName.get(rr.name.toLowerCase())
+    if (!song && rr.name) {
+      // A by-name merge trusts the link. When the same Spotify track is also
+      // stored under another title, one of the two is a wrong link (RUN ->
+      // Run BTS), so leave it out rather than add another song as a version.
+      if (trackClaimedByOtherTitle(titleOwners, rr.id, rr.name)) continue
+      song = byName.get(rr.name.toLowerCase())
+    }
 
     if (song) {
       const primaryVer = rr.id && rr.uri ? [withIsrc({ id: rr.id, uri: rr.uri, album: '', durationMs: rr.durationMs }, rr.isrc)] : []
@@ -420,9 +428,11 @@ export async function resolveMoreCatalog(supabase: SupabaseDB, batchSize = 15): 
     reqs++
     if (d === null) { rateLimited = true; break }
     const items: any[] = d?.tracks?.items || []
+    // An ISRC search is exact. A name search must return the same title:
+    // "RUN BTS" (song + artist) matched the song Run BTS first.
     const match = isrc
       ? (items[0] || null)
-      : items.find((it: any) => isBTSArtists(it.artists || []))
+      : pickTitleMatch(items, s.name, isBTSArtists)
     if (match) {
       uriMap[s.key] = { id: match.id, uri: match.uri || `spotify:track:${match.id}`, name: s.name, artists: s.artists, isrc: match.external_ids?.isrc || null, durationMs: match.duration_ms || s.durationMs }
       resolved++

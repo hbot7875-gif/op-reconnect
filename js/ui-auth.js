@@ -12,6 +12,8 @@ import { call } from './api.js'
 import { el, esc, toast } from './state.js'
 import { setSession } from './session.js'
 import { ambientToggle } from './ambient.js'
+import { fromVotingLink } from './onboarding-path.js'
+import { readInvite } from './battle-invite.js'
 
 const ERRORS = {
   handle_taken: 'That handle is already registered. Sign in instead?',
@@ -47,14 +49,19 @@ export function renderAuth(container, onAuthed, opts = {}) {
     notice.setAttribute('role', 'status')
     wrap.appendChild(notice)
   }
-  wrap.appendChild(el('div', 'eyebrow', 'OP: ReConnect'))
-  wrap.appendChild(el('h1', 'title-sm', 'The network needs agents'))
-  wrap.appendChild(el('p', 'muted auth-lede',
-    'This is a new season with new agent files. Old numbers from the last mission don\'t work here — make a fresh one.'))
+  // Someone who tapped "Join" on a MAMA voting link came to vote, so the
+  // form says that — not the streaming game's pitch.
+  let voting = false
+  try { voting = fromVotingLink(location.search, readInvite(localStorage)) } catch { /* no storage */ }
+  wrap.appendChild(el('div', 'eyebrow', voting ? 'MAMA 2026 · Vote for BTS' : 'OP: ReConnect'))
+  wrap.appendChild(el('h1', 'title-sm', voting ? 'Make your account to start voting' : 'The network needs agents'))
+  wrap.appendChild(el('p', 'muted auth-lede', voting
+    ? 'Free, takes a minute. Then pick your side, vote on Mnet and upload your certificate here.'
+    : 'Make a free agent file to start streaming with ARMY.'))
 
   // The ask ("make an account") should come after the reason, not before it —
   // shown once, above the tabs, so it's read before anyone starts typing.
-  wrap.appendChild(authSteps())
+  wrap.appendChild(authSteps(voting))
 
   // The landing page's "I already have an agent file" link sends
   // ?mode=signin so it actually lands somewhere different from "Create your
@@ -116,16 +123,16 @@ export function renderAuth(container, onAuthed, opts = {}) {
   // No link out to the old site's Mission Control: that's a separate
   // deployment with separate accounts, and a relative path to it resolves to
   // nothing from here.
-  const foot = el('div', 'auth-foot')
-  foot.innerHTML = 'New season, new agent files. Nothing carries over from the last mission.'
-  wrap.appendChild(foot)
-
   container.appendChild(wrap)
 }
 
-function authSteps() {
+function authSteps(voting) {
   const wrap = el('div', 'auth-steps')
-  const steps = [
+  const steps = voting ? [
+    'Make your account',
+    'Pick HOOLIGANS or ALIENS',
+    'Vote on Mnet, upload the certificate',
+  ] : [
     'Create your private agent file',
     'Connect Spotify or Apple Music tracking',
     'Keep your ARMY Bomb charged and restore districts',
@@ -152,8 +159,6 @@ function buildRegister(onAuthed) {
   handle.autocomplete = 'username'
 
   const { wrap: pwWrap, input: pw } = pwToggleInput('Create a password', 'new-password')
-  const { wrap: pw2Wrap, input: pw2 } = pwToggleInput('Type it again', 'new-password')
-
   // Required, as of migration 023. The agent number is shown exactly once
   // and is what you sign in with — without an address on file, one forgotten
   // password ends the account permanently, with no recovery path for the
@@ -163,15 +168,13 @@ function buildRegister(onAuthed) {
   email.placeholder = 'you@example.com'
   email.autocomplete = 'email'
 
-  const handleField = field('Handle', 'Your account name. Other agents see your codename after identity setup.', handle)
+  const handleField = field('Handle', 'Your account name. It stays private — other agents see your codename instead.', handle)
   const emailField = field('Email', 'Only ever used to get you back in if you lose your number or password.', email)
+  // One password field: the eye toggle shows what was typed, which does the
+  // job a second "type it again" field did, with one less thing to fill in.
   const pwField = field('Password', 'At least 6 characters — a couple of words works well.', pwWrap, pw)
-  const pw2Field = field('', '', pw2Wrap, pw2)
-  const pwStatus = el('div', 'auth-status')
-  pwStatus.hidden = true
-  pw2Field.appendChild(pwStatus)
 
-  panel.append(handleField, emailField, pwField, pw2Field)
+  panel.append(handleField, emailField, pwField)
 
   // Streams aren't collected here anymore. Registering used to also ask for
   // stats.fm / Musicat / ListenBrainz up front — three tabs and a live
@@ -204,21 +207,6 @@ function buildRegister(onAuthed) {
     clearFieldError(pwField)
     pw.classList.toggle('is-good', pw.value.length >= 6)
     pw.classList.toggle('is-bad', pw.value.length > 0 && pw.value.length < 6)
-    updateMatch()
-  }
-  pw2.oninput = () => { clearFieldError(pw2Field); updateMatch() }
-  function updateMatch() {
-    if (!pw2.value) {
-      pwStatus.hidden = true
-      pw2.classList.remove('is-good', 'is-bad')
-      return
-    }
-    const match = pw.value === pw2.value
-    pwStatus.hidden = false
-    pwStatus.textContent = match ? '✓ Passwords match' : "✗ Doesn't match yet"
-    pwStatus.className = 'auth-status ' + (match ? 'ok' : 'bad')
-    pw2.classList.toggle('is-good', match)
-    pw2.classList.toggle('is-bad', !match)
   }
 
   const btn = el('button', 'btn btn-primary auth-go', 'Create my agent file')
@@ -230,7 +218,6 @@ function buildRegister(onAuthed) {
       setFieldError(emailField, 'Add an email so you can get back in later'); bad = bad || email
     }
     if (pw.value.length < 6) { setFieldError(pwField, 'Password needs at least 6 characters'); bad = bad || pw }
-    else if (pw.value !== pw2.value) { setFieldError(pw2Field, "Passwords don't match"); bad = bad || pw2 }
     if (bad) { bad.focus(); return }
 
     btn.disabled = true
@@ -420,12 +407,12 @@ function showNumber(agent, onAuthed) {
   wrap.append(
     el('div', 'eyebrow', 'AGENT FILE CREATED'),
     el('h1', 'title-sm', `Welcome, ${esc(agent.handle || 'Agent')}`),
-    el('p', 'muted', 'This is your agent number. You sign in with it — write it down somewhere safe.'),
+    el('p', 'muted', 'You\'re signed in. This is your agent number — screenshot it. You only need it to sign in on another phone or browser.'),
     el('div', 'agent-id-box', esc(agent.agentNo || agent.agent_no)),
     el('div', 'warn-box',
-      '⚠️ <strong>Keep it to yourself</strong><br>Your number is how HT knows it\'s you. Never post it — BOTZ has infiltrators, and not every signal on this grid is friendly.'),
+      '🔒 <strong>Keep it private</strong><br>Don\'t post your number. Lost it? Tap "Lost your number or password?" on the sign-in screen and we\'ll email it to you.'),
   )
-  const btn = el('button', 'btn btn-primary auth-go', "Got it — let's go")
+  const btn = el('button', 'btn btn-primary auth-go', 'Continue')
   btn.onclick = onAuthed
   wrap.appendChild(btn)
 }

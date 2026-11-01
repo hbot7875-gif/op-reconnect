@@ -56,6 +56,7 @@ import { eraSymbol } from './era-symbols.js'
 import { serendipityRoomArt } from './serendipity-room-scene.js'
 import { birthdayPopupCard, birthdayPopupCopy, birthdayPopupSeen, markBirthdayPopupSeen, birthdayGiftContents } from './birthday-era-popup.js'
 import { getAgentNo } from './session.js'
+import { playlistMakerKnown, isPlaylistMaker, openPlaylistMaker } from './maker-shortcut.js'
 
 export function renderWorld(container, state) {
   container.innerHTML = ''
@@ -450,6 +451,10 @@ function cityPlan(state) {
   // seam Candy Star normally holds (city-map.js's birthdayAtTop).
   const jiminRoom = golden ? null : state.agentCharge?.serendipityRoom
   const birthdayRoom = golden || jiminRoom
+  // Playlist makers' DJ Booth (maker-shortcut.js). The first draw of a tab
+  // doesn't know yet; once the check says yes, redraw so the marker appears.
+  const dj = playlistMakerKnown()
+  if (dj === null) isPlaylistMaker().then((yes) => { if (yes && getState()?.joined) setState({ ...getState() }) })
   const goldenProgress = birthdayRoom
     ? Math.min(1, (Number(birthdayRoom.communityLights) || 0) / Math.max(1, Number(birthdayRoom.target) || 1)) : 0
   box.appendChild(renderCityMap(wards, state.map?.districts || [],
@@ -479,7 +484,8 @@ function cityPlan(state) {
       arirangPartyIsComplete(),
       arirangPartyIsCounting(),
     ] : [null, false, null, false, false]),
-    { ...backupMapOpts(state), onRunArmy: () => openRunArmy(), runArmyNew: runArmyIsNew(), ...(jiminRoom ? { birthdayIcon: '🌙', birthdayLabel: 'Jimin Day Party', birthdayAtTop: true } : {}),
+    { ...backupMapOpts(state), onRunArmy: () => openRunArmy(), runArmyNew: runArmyIsNew(),
+      ...(dj ? { onDjBooth: () => openPlaylistMaker() } : {}), ...(jiminRoom ? { birthdayIcon: '🌙', birthdayLabel: 'Jimin Day Party', birthdayAtTop: true } : {}),
       // MAMA 2026: on the map exactly while the server sends its summary
       // (recruiting → voting → verification → 48h of final result), then
       // gone by itself. It pulses while the battle recruits or voting runs.

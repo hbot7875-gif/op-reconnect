@@ -582,17 +582,27 @@ export interface AgentChargeView {
  *  feed, auto-feed, or Lit Era use cannot be missed because a later activity
  *  feed insert failed (the bug that could falsely delete an active agent).
  *  The old bomb_fed event is retained only as a legacy fallback for rows that
- *  predate the atomic timestamp migration. */
+ *  predate the atomic timestamp migration.
+ *
+ *  A verified vote proof also resets the clock (migration
+ *  20261101090000): the days run from the later of the last charge and the
+ *  last verified vote. lastFedAt stays the real charge time — the Bora
+ *  meter's "FED 3D AGO" means fed. */
 async function bombFeedHealth(supabase: SupabaseDB, agentNo: string): Promise<{ daysSinceFeed: number; daysLeft: number; lastFedAt: string } | null> {
-  const [{ data: charge }, { data: legacyLastFed }, { data: agent }] = await Promise.all([
+  const [{ data: charge }, { data: legacyLastFed }, { data: agent }, { data: lastVote }] = await Promise.all([
     supabase.from('rc_agent_charge').select('last_fed_at').eq('agent_no', agentNo).maybeSingle(),
     supabase.from('rc_feed_events')
       .select('created_at').eq('agent_no', agentNo).eq('event_type', 'bomb_fed')
       .order('created_at', { ascending: false }).limit(1).maybeSingle(),
     supabase.from('rc_agents').select('created_at').eq('agent_no', agentNo).maybeSingle(),
+    supabase.from('rc_campaign_proofs')
+      .select('verified_at, submitted_at').eq('agent_no', agentNo).eq('status', 'verified')
+      .order('verified_at', { ascending: false, nullsFirst: false }).limit(1).maybeSingle(),
   ])
-  const sinceIso = charge?.last_fed_at || legacyLastFed?.created_at || agent?.created_at
-  if (!sinceIso) return null
+  const fedIso = charge?.last_fed_at || legacyLastFed?.created_at || agent?.created_at
+  if (!fedIso) return null
+  const voteIso = lastVote?.verified_at || lastVote?.submitted_at || null
+  const sinceIso = voteIso && new Date(voteIso).getTime() > new Date(fedIso).getTime() ? voteIso : fedIso
   // Time on leave doesn't count — same exclusion rc_inactive_agent_candidates
   // applies, so the meter and the actual deletion rule can't disagree.
   const sinceMs = new Date(sinceIso).getTime()
@@ -601,7 +611,7 @@ async function bombFeedHealth(supabase: SupabaseDB, agentNo: string): Promise<{ 
   return {
     daysSinceFeed: Math.floor(daysInactive),
     daysLeft: Math.max(0, Math.ceil(14 - daysInactive)),
-    lastFedAt: sinceIso,
+    lastFedAt: fedIso,
   }
 }
 

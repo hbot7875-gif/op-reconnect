@@ -141,7 +141,7 @@
   .arr-main { display: block; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .arr-sub { display: block; font-size: 11.5px; color: var(--muted); margin-top: 2px;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .arr-activity { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+  .arr-activity { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; }
   .arr-activity span { min-width: 0; }
   .arr-activity b { display: block; font-family: var(--mono); font-size: 9px; letter-spacing: .5px;
     text-transform: uppercase; color: var(--dim); font-weight: 400; }
@@ -710,7 +710,7 @@
       <h2>Agent command log</h2>
       <button class="btn btn-ghost" id="btnLoadRoster" type="button">↻ Refresh</button>
     </div>
-    <p class="muted adm-roster-intro">See who needs help without confusing Bomb feeding, streaming and opening the app. Tap an agent for their full file.</p>
+    <p class="muted adm-roster-intro">See who needs help without confusing Bomb feeding, streaming and opening the app. The cleanup clock resets on a Bomb charge or a verified vote. Tap an agent for their full file.</p>
     <div class="adm-roster-toolbar">
       <input id="rosterFilter" class="ob-input" type="search" placeholder="Search agent, handle, codename or district" autocomplete="off">
       <select id="rosterSort" class="ob-input" aria-label="Sort agents">
@@ -1735,10 +1735,20 @@ function feedDays(a) {
   return Number.isFinite(n) ? n : 0
 }
 
+// The cleanup clock: days since the later of the last charge and the last
+// verified vote (migration 20261101090000). Status and sorting follow this,
+// so a daily voter who never charged isn't shown as overdue.
+function inactiveDays(a) {
+  const n = Number(a.daysInactive ?? a.daysSinceFeed)
+  return Number.isFinite(n) ? n : 0
+}
+
+const votedMoreRecently = (a) => !!a.lastVoteAt && (!a.lastFedAt || new Date(a.lastVoteAt) > new Date(a.lastFedAt))
+
 function rosterStatus(a) {
   if (a.retiredAt) return { key: 'retired', label: 'Retired' }
   if (a.agentNo === 'AGENT001') return { key: 'protected', label: 'Protected' }
-  const days = feedDays(a)
+  const days = inactiveDays(a)
   if (days >= DELETE_AFTER_DAYS) return { key: 'overdue', label: 'Overdue' }
   if (days >= 9) return { key: 'risk', label: 'At risk' }
   if (days >= 7) return { key: 'due', label: 'Feed soon' }
@@ -1765,7 +1775,7 @@ function relativeTime(iso) {
 }
 
 function recentActivityTime(a) {
-  return Math.max(...[a.lastSeenAt, a.lastStreamAt, a.lastFedAt]
+  return Math.max(...[a.lastSeenAt, a.lastStreamAt, a.lastFedAt, a.lastVoteAt]
     .map((v) => v ? new Date(v).getTime() : 0))
 }
 
@@ -1819,7 +1829,7 @@ function sortRoster(list) {
       return aDeadline - bDeadline
     }
     const statusDiff = urgency[rosterStatus(b).key] - urgency[rosterStatus(a).key]
-    return statusDiff || feedDays(b) - feedDays(a)
+    return statusDiff || inactiveDays(b) - inactiveDays(a)
   })
 }
 
@@ -1851,9 +1861,9 @@ function paintRoster(list) {
         </span>
       </span>
       <span class="arr-cell arr-status-cell">
-        <span class="arr-label">Bomb</span>
+        <span class="arr-label">Bomb · cleanup clock</span>
         <span class="arr-status is-${status.key}">${esc(status.label)}</span>
-        <span class="arr-sub">${a.lastFedAt ? `${feedDays(a)}d since feed` : `${feedDays(a)}d since joining`}</span>
+        <span class="arr-sub">${votedMoreRecently(a) ? `${inactiveDays(a)}d since vote` : a.lastFedAt ? `${feedDays(a)}d since feed` : `${feedDays(a)}d since joining`}</span>
       </span>
       <span class="arr-cell arr-district">
         <span class="arr-label">Current district</span>
@@ -1864,6 +1874,7 @@ function paintRoster(list) {
         <span><b>App</b><i>${esc(relativeTime(a.lastSeenAt))}</i></span>
         <span><b>Stream</b><i>${esc(relativeTime(a.lastStreamAt))}</i></span>
         <span><b>Bomb</b><i>${esc(relativeTime(a.lastFedAt))}</i></span>
+        <span><b>Vote</b><i>${esc(relativeTime(a.lastVoteAt))}</i></span>
       </span>
       <span class="arr-go">›</span>
     `

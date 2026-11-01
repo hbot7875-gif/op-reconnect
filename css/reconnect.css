@@ -778,6 +778,13 @@ body {
 .cm-tool.is-backup-wanted .cm-tool-body { stroke: var(--gold); }
 .cm-tool.is-backup-wanted .cm-tool-halo { fill: rgba(217,173,95,0.18); animation: cmVmaPulse 1.9s ease-in-out infinite; }
 .cm-tool.is-backup-quiet .cm-tool-body { stroke: rgba(167,139,250,.38); }
+/* DJ Booth (playlist makers): the 🎧 glyph is dark on its own, so a lighter
+   body, a magenta ring and halo, and a brighter label keep it readable. */
+.cm-tool.is-dj-booth .cm-tool-body { fill: #2a1f33; stroke: #e2509f; stroke-width: .55; }
+.cm-tool.is-dj-booth .cm-tool-halo { fill: rgba(226, 80, 159, .2); }
+.cm-tool.is-dj-booth .cm-tool-icon { filter: brightness(1.6) saturate(1.2); }
+.cm-tool.is-dj-booth .cm-tool-label { fill: #f0c6de; }
+.cm-tool.is-dj-booth:hover .cm-tool-halo { fill: rgba(226, 80, 159, .3); }
 /* ARIRANG RE:CELEBRATE's map object — an actual small venue (see partyVenue
    in city-map.js), not a tool marker: a tall grey stone platform (a
    granite wall, the way Gwanghwamun's real base reads — not a coloured
@@ -4342,6 +4349,7 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .cs-vault-share-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
 .cs-vault-share-row .btn-red { width: auto; min-width: 132px; padding-inline: 16px; }
 .cs-vault-share-note, .cs-vault-share-message { margin-top: 7px; font-size: 10.5px; line-height: 1.4; color: var(--dim); }
+.cs-vault-share-page { display: inline-block; margin-top: 7px; font-size: 11px; color: var(--purple-lt); text-decoration: none; }
 .cs-vault-share-message { min-height: 1.4em; color: var(--gold); }
 
 .cs-vault-tools { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 14px 0 10px; }

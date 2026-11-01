@@ -34,7 +34,7 @@ const PAGES = ['admin.html', 'badge-admin.html', 'candy-star-admin.html', 'playl
 const CONVERTED_SINGLE = {
   'admin.html': ['goalDistrictFilter', 'goalReconnectVariant', 'rosterSort', 'reconnectDistrictFilter'],
   'badge-admin.html': ['tpl', 'pool', 'filterTemplate', 'filterRarity', 'filterMember', 'filterUploader', 'filterStatus', 'filterStyle'],
-  'playlist-maker.html': ['district'],
+  'playlist-maker.html': ['district', 'uploader'],
 }
 const CONVERTED_MULTI = { 'admin.html': ['rzTargetGoal'], 'candy-star-admin.html': ['genIndividual'] }
 
@@ -46,11 +46,11 @@ test('the tooling pages hold exactly the fifteen selects that were audited', () 
     'admin.html': 6,
     'badge-admin.html': 8,
     'candy-star-admin.html': 1,
-    'playlist-maker.html': 1,
+    'playlist-maker.html': 2,
   })
   // A new one appearing forces the same convert-or-document decision rather
   // than quietly shipping another platform chooser.
-  assert.equal(Object.values(counts).reduce((a, b) => a + b), 16)
+  assert.equal(Object.values(counts).reduce((a, b) => a + b), 17)
 })
 
 test('every single-choice tooling select is enhanced', () => {
