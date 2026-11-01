@@ -853,5 +853,10 @@ export function renderCityMap(wards, districts, onSelect, homeFraction, onCandyS
     svg.appendChild(marker)
   }
 
+  // DJ Booth — playlist makers only (maker-shortcut.js decides who): the
+  // way into the Playlist Maker page, on the south-east diagonal, the mirror
+  // of Run ARMY's seam and free of every other marker.
+  if (opts.onDjBooth) svg.appendChild(toolMarker(Math.PI / 4, '🎧', 'DJ Booth', opts.onDjBooth, 'is-dj-booth'))
+
   return svg
 }
