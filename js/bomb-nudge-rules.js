@@ -1,9 +1,10 @@
 // Pure rules for bomb-nudge-popup.js (testable in Node).
 //
-// Charging the ARMY Bomb is the only thing that resets the 14-day clock the
-// nightly cleanup deletes agent files by (feedHealth, agent-charge.ts) —
-// voting and streaming don't. So an agent who hasn't charged gets a popup on
-// day 6 (once per dark spell) and on day 13 (once per KST day, the last day).
+// Charging the ARMY Bomb (or, while a voting event runs, a verified vote)
+// resets the 14-day clock the nightly cleanup deletes agent files by
+// (feedHealth, agent-charge.ts); streaming doesn't. So an agent on that clock
+// gets a popup on day 6 (once per dark spell) and on day 13 (once per KST
+// day, the last day).
 
 const SEEN_KEY = 'rc_seen_bomb_nudge:'
 
@@ -35,14 +36,13 @@ export function markBombNudgeSeen(storage, agentNo, feedHealth, stage, now = new
 }
 
 export function bombNudgeCopy(stage, feedHealth) {
-  const days = Math.max(0, Math.floor(Number(feedHealth?.daysSinceFeed) || 0))
   const left = Math.max(1, Math.ceil(Number(feedHealth?.daysLeft) || 1))
   if (stage === 13) {
     return {
       tone: 'err',
       eyebrow: 'ARMY Bomb · last day',
       title: 'Charge your ARMY Bomb today',
-      body: `${days} days without charging. If it isn't charged by tomorrow, your agent file and everything on it is deleted. Use the Charge Cells you got as rewards to charge it.`,
+      body: `If it isn't charged by tomorrow, your agent file and everything on it is deleted. Use the Charge Cells you got as rewards to charge it.`,
       action: 'Charge my Bomb now',
     }
   }
@@ -50,7 +50,7 @@ export function bombNudgeCopy(stage, feedHealth) {
     tone: 'warn',
     eyebrow: 'ARMY Bomb',
     title: 'Your ARMY Bomb needs charging',
-    body: `It's been ${days} days since you last charged it. Charge it within ${left} day${left === 1 ? '' : 's'}: after 14 days without charging, your agent file is deleted. Use the Charge Cells you got as rewards to charge it.`,
+    body: `Charge it within ${left} day${left === 1 ? '' : 's'}, or your agent file is deleted. Use the Charge Cells you got as rewards to charge it.`,
     action: 'Charge my Bomb',
   }
 }

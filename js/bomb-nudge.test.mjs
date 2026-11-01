@@ -38,7 +38,6 @@ test('broken storage never nags', () => {
 
 test('copy has no later button and names the deadline', () => {
   const six = bombNudgeCopy(6, { daysSinceFeed: 6, daysLeft: 8 })
-  assert.match(six.body, /6 days/)
   assert.match(six.body, /within 8 days/)
   assert.equal(six.later, undefined)
   const last = bombNudgeCopy(13, { daysSinceFeed: 13, daysLeft: 1 })

@@ -82,6 +82,8 @@ export async function adminListAgents(supabase: SupabaseDB, _params: any) {
         agentNo: r.agent_no, handle: r.handle, email: maskEmail(r.email),
         codename: r.codename, mode: r.mode, joinedAt: r.joined_at,
         lastFedAt: r.last_fed_at, daysSinceFeed: r.days_since_feed,
+        // Verified votes reset the cleanup clock too (migration 20261101090000).
+        lastVoteAt: r.last_vote_at || null, daysInactive: r.days_inactive ?? r.days_since_feed,
         retiredAt: r.retired_at, lastSeenAt: r.last_seen_at,
         appearOffline: !!r.appear_offline, lastStreamAt: r.last_stream_at,
         currentDistrictId: r.current_district_id,
@@ -352,7 +354,9 @@ export async function adminDeleteAgent(supabase: SupabaseDB, params: any) {
 
 /** Automatic cleanup for agents who haven't fed the ARMY Bomb in
  *  p_inactive_days days straight (default 14) — "not charged" specifically,
- *  not general streaming/app activity, per the site owner. The candidate
+ *  not general streaming/app activity, per the site owner. Since migration
+ *  20261101090000 a verified vote proof counts as well, so active voters in
+ *  a voting event aren't deleted. The candidate
  *  list itself lives in Postgres (migrations/053_rc_inactive_agent_cleanup
  *  .sql's rc_inactive_agent_candidates — already excludes AGENT001 and
  *  retired agents); this just loops it through the SAME adminDeleteAgent
