@@ -11,117 +11,156 @@
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/reconnect.css">
 <style>
-  /* DJ Booth (Playlist Makers) — its own page, authorised per agent number
-     (not the admin key). A DJ booth look on reconnect.css's tokens: a deck
-     with a spinning record and level meters, neon pink/purple light. One
-     deck to add a playlist, one row of districts that need one, then the
-     maker's own playlists. */
-  :root { --dj-pink: #ff4fd8; --dj-violet: #8b5cf6; --dj-cyan: #3be7ff; }
-  body { background: var(--bg); color: var(--text); font-family: var(--body);
-    background-image: radial-gradient(120% 60% at 50% -10%, rgba(255, 79, 216, .16), transparent 60%),
-      radial-gradient(90% 50% at 100% 0%, rgba(139, 92, 246, .18), transparent 60%);
-    background-attachment: fixed; }
-  .pm-wrap { max-width: 720px; margin: 0 auto; padding: 18px 16px 80px; }
-  .pm-gate { max-width: 560px; margin: 18vh auto 0; padding: 26px 20px; text-align: center;
-    color: var(--muted); line-height: 1.65; }
-  .pm-top { display: flex; justify-content: flex-end; }
-  .pm-back { color: var(--dim); font-family: var(--mono); font-size: 11px; text-decoration: none; white-space: nowrap; }
-  .pm-back:hover { color: var(--dj-pink); }
-  /* Header: record + title + level meter */
-  .dj-head { display: flex; align-items: center; gap: 14px; margin: 6px 0 16px; }
-  .dj-record { flex: none; width: 58px; height: 58px; border-radius: 50%; position: relative;
-    background: repeating-radial-gradient(circle, #121018 0 2px, #1d1a26 2px 3px);
-    box-shadow: 0 0 0 2px rgba(255, 79, 216, .3), 0 0 10px rgba(255, 79, 216, .14);
-    animation: dj-spin 3.2s linear infinite; }
-  .dj-record::after { content: ''; position: absolute; inset: 36%; border-radius: 50%;
-    background: radial-gradient(circle, #0b0a12 0 18%, var(--dj-pink) 19% 60%, var(--dj-violet) 61%); }
-  @keyframes dj-spin { to { transform: rotate(360deg); } }
-  .dj-title { font-family: var(--disp); font-size: 26px; font-weight: 900; letter-spacing: 1px; line-height: 1;
-    background: linear-gradient(90deg, #fff, var(--dj-pink) 60%, var(--dj-violet)); -webkit-background-clip: text;
-    background-clip: text; color: transparent; }
-  .dj-sub { color: var(--muted); font-size: 13px; margin-top: 6px; }
-  .dj-eq { display: inline-flex; gap: 2px; align-items: flex-end; height: 14px; margin-left: 8px; vertical-align: middle; }
-  .dj-eq i { width: 3px; background: var(--dj-cyan); border-radius: 1px; animation: dj-eq 1s ease-in-out infinite; }
-  .dj-eq i:nth-child(2) { animation-delay: -.3s; background: var(--dj-pink); }
-  .dj-eq i:nth-child(3) { animation-delay: -.6s; }
-  .dj-eq i:nth-child(4) { animation-delay: -.15s; background: var(--dj-violet); }
-  @keyframes dj-eq { 0%, 100% { height: 30%; } 50% { height: 100%; } }
-  @media (prefers-reduced-motion: reduce) { .dj-record, .dj-eq i { animation: none; } .dj-eq i { height: 70%; } }
-  /* The deck */
-  .dj-deck { position: relative; border-radius: var(--r-lg); padding: 16px 14px 12px; margin-bottom: 14px;
-    background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.015)), var(--surface);
-    border: 1px solid rgba(255, 79, 216, .14); }
-  .pm-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
-    padding: 16px 14px; margin-bottom: 14px; }
-  .pm-h { font-family: var(--disp); font-size: 14px; letter-spacing: .5px; margin: 0 0 12px;
-    display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
-  .pm-h small { color: var(--dim); font-family: var(--mono); font-size: 11px; font-weight: 400; letter-spacing: 0; }
-  .pm-field { display: block; margin-bottom: 12px; }
-  .pm-field > span { display: block; margin-bottom: 6px; color: var(--dim); font-family: var(--mono);
-    font-size: 9.5px; letter-spacing: 1.2px; text-transform: uppercase; }
-  .pm-msg { margin-top: 10px; font-size: 12.5px; line-height: 1.5; }
-  .pm-msg:empty { display: none; }
-  .pm-msg.ok { color: var(--gold); }
-  .pm-msg.err { color: var(--crimson); }
-  /* Goal songs: information, not controls. First few, then "+N more". */
-  .pm-goals { margin: -2px 0 12px; font-size: 12px; line-height: 1.5; color: var(--muted); }
-  .pm-goals b { color: var(--dim); font-family: var(--mono); font-size: 9.5px; letter-spacing: 1.2px;
-    text-transform: uppercase; font-weight: 400; margin-right: 4px; }
-  .pm-goals .pm-more { background: none; border: none; padding: 0; color: var(--dj-cyan); font: inherit; cursor: pointer; }
-  .pm-url-row { display: flex; gap: 8px; }
-  .pm-url-row input { flex: 1; min-width: 0; }
-  .pm-paste { flex: none; padding: 0 14px; border-radius: var(--r); border: 1px solid rgba(59, 231, 255, .35);
-    background: rgba(59, 231, 255, .06); color: var(--dj-cyan); font: inherit; font-size: 13px; cursor: pointer; }
-  .pm-url-hint { margin-top: 6px; font-size: 11.5px; color: var(--crimson); min-height: 0; }
-  .pm-url-hint:empty { display: none; }
-  .pm-preview { display: flex; gap: 12px; align-items: center; padding: 10px; margin: -2px 0 12px;
-    border: 1px solid var(--border); border-radius: var(--r); background: rgba(0,0,0,.25); }
-  .pm-preview img { width: 52px; height: 52px; border-radius: 6px; object-fit: cover; flex: none; background: rgba(255,255,255,.05); }
-  .pm-preview-main { min-width: 0; }
-  .pm-preview-t { font-weight: 700; font-size: 14px; overflow-wrap: anywhere; }
-  .pm-preview-s { color: var(--muted); font-size: 12px; margin-top: 2px; }
-  .pm-preview.is-dup { border-color: var(--crimson); }
-  .pm-preview.is-dup .pm-preview-s { color: var(--crimson); }
-  .pm-note-toggle { background: none; border: none; padding: 0 0 12px; color: var(--dim); font-family: var(--mono);
-    font-size: 11px; cursor: pointer; }
-  .dj-go { width: 100%; border: none; border-radius: var(--r); padding: 14px; cursor: pointer;
-    font-family: var(--disp); font-weight: 800; letter-spacing: 1px; color: #fff;
-    background: linear-gradient(90deg, var(--dj-violet), var(--dj-pink)); }
-  .dj-go:disabled { opacity: .6; cursor: default; }
-  /* Districts that need a DJ: one scrollable row */
-  .pm-need-wrap { margin-bottom: 14px; }
-  .pm-need-wrap > span { display: block; margin-bottom: 7px; color: var(--dim); font-family: var(--mono);
-    font-size: 9.5px; letter-spacing: 1.2px; text-transform: uppercase; }
-  .pm-chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
-  .pm-chips::-webkit-scrollbar { display: none; }
-  .pm-chip { flex: none; padding: 7px 12px; border-radius: 999px; border: 1px solid var(--border); background: rgba(255,255,255,.02);
-    color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
-  .pm-chip b { color: var(--text); font-weight: 700; }
-  .pm-chip.is-on { border-color: var(--dj-pink); color: var(--text); background: rgba(255, 79, 216, .12); }
-  .pm-chip .is-zero { color: var(--dj-pink); }
-  /* Your playlists */
-  .pm-search { width: 100%; margin-bottom: 10px; }
-  .pm-filter { margin-bottom: 6px; }
-  .pm-tools { display: flex; justify-content: flex-end; }
-  .pm-sort { background: none; border: none; color: var(--dim); font-family: var(--mono); font-size: 11px; cursor: pointer; padding: 4px 0; }
-  .pm-list { display: flex; flex-direction: column; }
-  .pm-row { display: flex; align-items: center; gap: 10px; padding: 10px 2px; border-top: 1px solid var(--border); }
-  .pm-row:first-child { border-top: none; }
-  .pm-row-main { min-width: 0; flex: 1; }
-  .pm-row-name { font-size: 13.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .pm-row-meta { margin-top: 2px; color: var(--dim); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .pm-row-note { margin-top: 2px; color: var(--muted); font-size: 11.5px; overflow-wrap: anywhere; }
-  .pm-row-acts { display: flex; gap: 12px; flex: none; }
-  .pm-row-acts a, .pm-row-acts button { color: var(--dj-cyan); font-family: var(--mono); font-size: 11px;
-    text-decoration: none; white-space: nowrap; background: none; border: none; padding: 4px 0; cursor: pointer; }
-  .pm-row-acts button { color: var(--dim); }
-  .pm-row-acts button:hover { color: var(--crimson); }
-  .pm-badge { margin-left: 6px; color: var(--crimson); font-family: var(--mono); font-size: 10px; }
-  .pm-empty { color: var(--dim); font-size: 12.5px; padding: 6px 0; }
-  .pm-how { margin: 4px 0 0; color: var(--muted); font-size: 12.5px; line-height: 1.6; }
-  .pm-how summary { cursor: pointer; color: var(--dim); font-family: var(--mono); font-size: 11px; letter-spacing: .6px; }
-  .pm-how p { margin: 8px 0 0; }
-  .pm-who { color: var(--dim); font-family: var(--mono); font-size: 11px; text-align: center; margin-top: 18px; }
+  /* DJ Booth (Playlist Makers). Every ARMY is a DJ; every district has a
+     soundtrack. Art direction: concert backstage × an editorial music
+     library — near-black, flat surfaces, thin rules, restrained magenta and
+     violet, a little cyan, vinyl grooves and track numbers used sparingly.
+     Orbitron only for the DJ Booth mark; everything you read or type is the
+     system UI font. Authorised per agent number (never the admin key). */
+  .djb {
+    --bg: #0a090d; --panel: #121017; --panel-2: #17141d; --line: rgba(255,255,255,.07); --line-2: rgba(255,255,255,.12);
+    --ink: #f4f1f8; --ink-2: #b9b2c6; --ink-3: #7d768b;
+    --mag: #e2509f; --mag-ink: #fff; --vio: #9b7cf4; --cyan: #5fd3e3; --ok: #7ddc9a; --bad: #ff6b7d;
+    --r: 8px; --r-sm: 6px;
+  }
+  body { margin: 0; background: #0a090d; color: #f4f1f8; font-family: var(--body); -webkit-font-smoothing: antialiased; }
+  .pm-gate { max-width: 560px; margin: 18vh auto 0; padding: 26px 20px; text-align: center; color: var(--muted); line-height: 1.65; }
+  .djb { min-height: 100vh; background:
+      radial-gradient(70% 38% at 50% -6%, rgba(155, 124, 244, .10), transparent 70%), var(--bg); }
+  .djb-wrap { max-width: 1040px; margin: 0 auto; padding: 8px 16px 64px; }
+  .djb :focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+  .djb [hidden] { display: none !important; }
+  .djb button { font: inherit; color: inherit; }
+  .djb svg.i { width: 16px; height: 16px; flex: none; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ── header ── */
+  .djb-top { display: flex; align-items: center; min-height: 44px; }
+  .djb-back { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 4px; margin-left: -4px;
+    color: var(--ink-3); font-size: 13px; text-decoration: none; }
+  .djb-back:hover { color: var(--ink); }
+  .djb-head { display: flex; align-items: center; gap: 16px; padding: 8px 0 22px; border-bottom: 1px solid var(--line); }
+  .djb-vinyl { flex: none; width: 64px; height: 64px; border-radius: 50%; position: relative;
+    background: repeating-radial-gradient(circle at 50% 50%, #0d0b11 0 1.4px, #1a1720 1.4px 2.6px);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); }
+  .djb-vinyl::before { content: ''; position: absolute; inset: 0; border-radius: 50%;
+    background: conic-gradient(from 210deg, transparent 0 20%, rgba(255,255,255,.07) 26%, transparent 32% 70%, rgba(255,255,255,.05) 76%, transparent 82%); }
+  .djb-vinyl::after { content: ''; position: absolute; inset: 34%; border-radius: 50%;
+    background: radial-gradient(circle, var(--bg) 0 12%, var(--mag) 13% 100%); box-shadow: 0 0 0 2px #0d0b11; }
+  .djb-kicker { font-family: var(--mono); font-size: 11px; letter-spacing: 1.6px; text-transform: uppercase; color: var(--cyan); }
+  .djb-title { font-family: var(--disp); font-weight: 900; font-size: 28px; letter-spacing: .5px; line-height: 1.05; margin: 4px 0 6px; }
+  .djb-tag { color: var(--ink-2); font-size: 14px; line-height: 1.45; margin: 0; }
+
+  /* ── layout ── */
+  .djb-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; padding-top: 22px; }
+  .djb-left, .djb-right { min-width: 0; }
+  @media (min-width: 960px) {
+    .djb-grid { grid-template-columns: minmax(0, 420px) minmax(0, 1fr); gap: 40px; align-items: start; }
+    .djb-left { position: sticky; top: 16px; }
+  }
+  .djb-sec + .djb-sec { margin-top: 28px; }
+  .djb-h { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 0 4px; }
+  .djb-h h2 { font-size: 15px; font-weight: 700; letter-spacing: .1px; margin: 0; }
+  .djb-h small { color: var(--ink-3); font-size: 12.5px; }
+  .djb-lede { color: var(--ink-3); font-size: 13px; line-height: 1.45; margin: 0 0 12px; }
+
+  /* ── submission ── */
+  .djb-form { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 14px 14px; }
+  .djb-step { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 0 8px; }
+  .djb-step + .djb-step { margin-top: 16px; }
+  .djb-num { font-family: var(--mono); font-size: 12px; color: var(--ink-3); padding-top: 2px; }
+  .djb-label { font-size: 13px; font-weight: 600; color: var(--ink); margin: 0 0 8px; display: block; }
+  .djb-label em { font-style: normal; color: var(--ink-3); font-weight: 400; }
+  .djb-form .ob-input { width: 100%; box-sizing: border-box; min-height: 44px; border-radius: var(--r-sm); background: var(--panel-2);
+    border: 1px solid var(--line-2); color: var(--ink); font-family: var(--body); font-size: 15px; }
+  .djb-form .ob-input:focus { border-color: var(--vio); }
+  .djb-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; color: var(--ink-2); font-size: 12.5px; }
+  .djb-meta span { display: inline-flex; align-items: center; gap: 5px; }
+  .djb-meta svg.i { width: 14px; height: 14px; color: var(--ink-3); }
+  .djb-goals { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line-2); font-size: 13px; line-height: 1.5; color: var(--ink-2); }
+  .djb-goals-k { color: var(--ink-3); font-size: 12px; margin-right: 6px; }
+  .djb-goals ol { margin: 8px 0 0; padding: 0; list-style: none; columns: 2; column-gap: 16px; }
+  .djb-goals li { break-inside: avoid; padding: 2px 0; display: flex; gap: 8px; min-width: 0; }
+  .djb-goals li b { font-family: var(--mono); font-weight: 400; color: var(--ink-3); font-size: 11.5px; flex: none; width: 18px; }
+  .djb-goals li span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .djb-goals li.is-album span { color: var(--vio); }
+  .djb-link { background: none; border: none; padding: 0; color: var(--cyan); cursor: pointer; font-size: 13px; }
+  .djb-url { display: flex; gap: 8px; }
+  .djb-url .ob-input { flex: 1; min-width: 0; }
+  .djb-btn2 { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 14px; border-radius: var(--r-sm);
+    border: 1px solid var(--line-2); background: transparent; color: var(--ink); cursor: pointer; font-size: 14px; }
+  .djb-btn2:hover { border-color: var(--ink-3); }
+  .djb-hint { margin-top: 6px; font-size: 12.5px; color: var(--bad); }
+  .djb-hint:empty { display: none; }
+  .djb-preview { display: flex; gap: 12px; align-items: center; margin-top: 10px; padding: 8px; border-radius: var(--r-sm); background: var(--panel-2); border: 1px solid var(--line); }
+  .djb-preview.is-dup { border-color: rgba(255, 107, 125, .45); }
+  .djb-art { width: 48px; height: 48px; flex: none; border-radius: 4px; object-fit: cover; background: #1d1a24; display: block; }
+  .djb-art.is-fallback { background: repeating-radial-gradient(circle, #121017 0 1.2px, #1f1b27 1.2px 2.4px); position: relative; }
+  .djb-art.is-fallback::after { content: ''; position: absolute; inset: 38%; border-radius: 50%; background: var(--vio); opacity: .7; }
+  .djb-preview-t { font-weight: 600; font-size: 14px; line-height: 1.3; overflow-wrap: anywhere; }
+  .djb-preview-s { color: var(--ink-3); font-size: 12.5px; margin-top: 2px; }
+  .djb-preview.is-dup .djb-preview-s { color: var(--bad); }
+  .djb-skel { background: linear-gradient(90deg, #1b1822, #24202c, #1b1822); background-size: 200% 100%; animation: djb-shim 1.2s linear infinite; border-radius: 4px; }
+  @keyframes djb-shim { to { background-position: -200% 0; } }
+  .djb-add { margin-top: 18px; width: 100%; min-height: 48px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    border: none; border-radius: var(--r-sm); background: var(--mag); color: var(--mag-ink); font-weight: 700; font-size: 15px; cursor: pointer; }
+  .djb-add:hover { background: #d7428f; }
+  .djb-add:disabled { opacity: .6; cursor: default; }
+  .djb-msg { margin-top: 10px; font-size: 13px; line-height: 1.45; display: flex; gap: 6px; align-items: flex-start; }
+  .djb-msg:empty { display: none; }
+  .djb-msg.ok { color: var(--ok); }
+  .djb-msg.err { color: var(--bad); }
+  .djb-spin { animation: djb-rot .8s linear infinite; }
+  @keyframes djb-rot { to { transform: rotate(360deg); } }
+
+  /* ── needs a DJ ── */
+  .djb-needs { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+  .djb-need { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; align-items: center; width: 100%; min-height: 52px;
+    padding: 8px 2px; border: none; border-bottom: 1px solid var(--line); background: none; text-align: left; cursor: pointer; }
+  .djb-need:hover b { color: var(--ink); }
+  .djb-need b { font-weight: 600; font-size: 14px; color: var(--ink); }
+  .djb-need small { grid-column: 1; color: var(--ink-3); font-size: 12.5px; }
+  .djb-need i { grid-row: 1 / span 2; grid-column: 2; font-style: normal; font-size: 12.5px; color: var(--ink-3); display: inline-flex; align-items: center; gap: 6px; }
+  .djb-need.is-on i { color: var(--mag); }
+  .djb-zero { color: var(--mag); }
+
+  /* ── library ── */
+  .djb-tools { display: flex; gap: 8px; margin-bottom: 10px; }
+  .djb-search { position: relative; flex: 1; min-width: 0; }
+  .djb-search svg.i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--ink-3); }
+  .djb-search input { width: 100%; box-sizing: border-box; min-height: 44px; padding: 0 12px 0 36px; border-radius: var(--r-sm);
+    background: var(--panel); border: 1px solid var(--line-2); color: var(--ink); font: inherit; font-size: 15px; }
+  .djb-search input:focus { border-color: var(--vio); outline: none; }
+  .djb-filters { display: flex; gap: 6px; overflow-x: auto; margin: 0 -16px 8px; padding: 0 16px 2px; scrollbar-width: none; }
+  .djb-filters::-webkit-scrollbar { display: none; }
+  .djb-filter { flex: none; min-height: 34px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line-2); background: none;
+    color: var(--ink-2); font-size: 13px; cursor: pointer; white-space: nowrap; }
+  .djb-filter.is-on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .djb-list { border-top: 1px solid var(--line); }
+  .djb-row { display: grid; grid-template-columns: 22px 44px minmax(0, 1fr) auto; gap: 0 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .djb-row .djb-art { width: 44px; height: 44px; }
+  .djb-tno { font-family: var(--mono); font-size: 12px; color: var(--ink-3); text-align: right; }
+  .djb-row-t { font-size: 14px; font-weight: 600; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .djb-row-m { color: var(--ink-3); font-size: 12.5px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .djb-row-n { color: var(--ink-2); font-size: 12.5px; margin-top: 3px; overflow-wrap: anywhere; }
+  .djb-row.is-removed { opacity: .5; }
+  .djb-row-acts { display: flex; align-items: center; }
+  .djb-ico { width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--r-sm);
+    color: var(--ink-3); background: none; border: none; cursor: pointer; text-decoration: none; }
+  .djb-ico:hover { color: var(--ink); background: rgba(255,255,255,.04); }
+  .djb-ico.is-spotify:hover { color: var(--cyan); }
+  .djb-ico.is-remove:hover { color: var(--bad); }
+  .djb-confirm { display: flex; gap: 6px; align-items: center; }
+  .djb-confirm button { min-height: 36px; padding: 0 10px; border-radius: var(--r-sm); border: 1px solid var(--line-2); background: none; cursor: pointer; font-size: 13px; }
+  .djb-confirm .is-yes { border-color: rgba(255, 107, 125, .5); color: var(--bad); }
+  .djb-pill { margin-left: 6px; font-size: 11px; color: var(--ink-3); border: 1px solid var(--line-2); border-radius: 4px; padding: 0 5px; }
+  .djb-empty { padding: 22px 0; color: var(--ink-3); font-size: 13.5px; text-align: center; border-bottom: 1px solid var(--line); }
+  .djb-how { margin-top: 28px; color: var(--ink-3); font-size: 13px; line-height: 1.55; }
+  .djb-how summary { cursor: pointer; min-height: 32px; display: inline-flex; align-items: center; }
+  .djb-how p { margin: 6px 0 0; max-width: 60ch; }
+  .djb-foot { margin-top: 26px; padding-top: 14px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; gap: 12px;
+    color: var(--ink-3); font-size: 12px; }
+  .djb-foot q { font-style: italic; quotes: none; }
+  @media (prefers-reduced-motion: reduce) { .djb-skel, .djb-spin { animation: none; } }
 </style>
 </head>
 <body>
@@ -130,57 +169,88 @@
   <div id="gateMsg"><span class="adm-spin"></span> Checking your access…</div>
 </div>
 
-<div class="pm-wrap" id="app" hidden>
-  <div class="pm-top"><a class="pm-back" href="game.html">← Game</a></div>
-  <div class="dj-head">
-    <div class="dj-record" aria-hidden="true"></div>
+<div class="djb" id="app" hidden>
+<div class="djb-wrap">
+  <div class="djb-top"><a class="djb-back" href="game.html" id="back">Back to game</a></div>
+
+  <header class="djb-head">
+    <div class="djb-vinyl" aria-hidden="true"></div>
     <div>
-      <div class="dj-title">DJ Booth<span class="dj-eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span></div>
-      <div class="dj-sub">Playlists you add here are for everyone in that district.</div>
+      <div class="djb-kicker">DJ, spin that!</div>
+      <h1 class="djb-title">DJ Booth</h1>
+      <p class="djb-tag">Every district needs a soundtrack. Drop yours.</p>
     </div>
-  </div>
+  </header>
 
-  <div class="dj-deck" id="addCard">
-    <div class="pm-field"><span>District</span>
-      <select id="district" class="ob-input"></select></div>
-    <div class="pm-goals" id="goals" hidden></div>
-    <div class="pm-field"><span>Spotify playlist link</span>
-      <div class="pm-url-row">
-        <input id="url" class="ob-input" type="url" inputmode="url" autocomplete="off"
-          placeholder="Paste a Spotify playlist link…" aria-label="Spotify playlist link">
-        <button class="pm-paste" id="pasteBtn" type="button">Paste</button>
+  <div class="djb-grid">
+    <div class="djb-left">
+      <section class="djb-sec" aria-labelledby="addH">
+        <div class="djb-h"><h2 id="addH">Add a playlist</h2></div>
+        <p class="djb-lede">It goes to the top of that district's Vault, for every agent there.</p>
+        <div class="djb-form" id="addCard">
+          <div class="djb-step">
+            <span class="djb-num">01</span>
+            <div>
+              <label class="djb-label" for="district">District</label>
+              <select id="district" class="ob-input"></select>
+              <div class="djb-meta" id="meta"></div>
+              <div class="djb-goals" id="goals" hidden></div>
+            </div>
+          </div>
+          <div class="djb-step">
+            <span class="djb-num">02</span>
+            <div>
+              <label class="djb-label" for="url">Spotify playlist link</label>
+              <div class="djb-url">
+                <input id="url" class="ob-input" type="url" inputmode="url" autocomplete="off" placeholder="open.spotify.com/playlist/…">
+                <button class="djb-btn2" id="pasteBtn" type="button"></button>
+              </div>
+              <div class="djb-hint" id="urlHint" role="alert"></div>
+              <div class="djb-preview" id="preview" hidden aria-live="polite"></div>
+            </div>
+          </div>
+          <div class="djb-step">
+            <span class="djb-num">03</span>
+            <div>
+              <label class="djb-label" for="note">Note for agents <em>(optional)</em></label>
+              <input id="note" class="ob-input" type="text" maxlength="180" placeholder="e.g. Best for the Haegeum goal, 2 hours">
+            </div>
+          </div>
+          <button class="djb-add" id="addBtn" type="button"></button>
+          <div class="djb-msg" id="addMsg" role="status"></div>
+        </div>
+      </section>
+
+      <section class="djb-sec" id="needCard" hidden aria-labelledby="needH">
+        <div class="djb-h"><h2 id="needH">Needs a DJ</h2></div>
+        <p class="djb-lede">Agents are streaming here, but the Vault has few or no playlists yet. Tap one to pick it.</p>
+        <div class="djb-needs" id="need"></div>
+      </section>
+    </div>
+
+    <section class="djb-sec djb-right" aria-labelledby="mineH">
+      <div class="djb-h"><h2 id="mineH">Your playlists</h2><small id="mineCount"></small></div>
+      <p class="djb-lede">Everything you've added. Your playlist, their next discovery.</p>
+      <div class="djb-tools">
+        <label class="djb-search"><span id="searchIco"></span>
+          <input id="mineSearch" type="search" placeholder="Search your playlists" aria-label="Search your playlists"></label>
+        <button class="djb-btn2" id="mineSort" type="button" aria-label="Change sort order"></button>
       </div>
-      <div class="pm-url-hint" id="urlHint"></div></div>
-    <div class="pm-preview" id="preview" hidden></div>
-    <button class="pm-note-toggle" id="noteToggle" type="button">+ Add a note for agents</button>
-    <label class="pm-field" id="noteField" hidden><span>Note for agents (optional)</span>
-      <input id="note" class="ob-input" type="text" maxlength="180"
-        placeholder="e.g. Best for the Haegeum goal — 2 hours"></label>
-    <button class="dj-go" id="addBtn" type="button">Add to the Vault</button>
-    <div class="pm-msg" id="addMsg"></div>
-  </div>
+      <div class="djb-filters" id="mineChips" role="group" aria-label="Filter by district"></div>
+      <div class="djb-msg err" id="mineMsg" role="alert" style="margin:0 0 8px"></div>
+      <div class="djb-list" id="mine"><div class="djb-empty">Loading your playlists…</div></div>
 
-  <div class="pm-need-wrap" id="needCard" hidden>
-    <span>Districts without playlists</span>
-    <div class="pm-chips" id="need"></div>
+      <details class="djb-how">
+        <summary>How it works</summary>
+        <p>Playlists you add sit at the top of that district's Vault, above the automatically matched ones.
+          Agents see the list and open playlists in Spotify themselves; nothing here plays music.
+          The title and artwork come from Spotify. Each playlist can only be in the Vault once, and only
+          districts with goal songs are listed.</p>
+      </details>
+      <div class="djb-foot"><span id="whoami"></span><span>Playlist Makers</span></div>
+    </section>
   </div>
-
-  <div class="pm-card">
-    <div class="pm-h">Your playlists <small id="mineCount"></small></div>
-    <input id="mineSearch" class="ob-input pm-search" type="search" placeholder="Search your playlists…" aria-label="Search your playlists" hidden>
-    <div class="pm-chips pm-filter" id="mineChips" role="group" aria-label="Filter by district"></div>
-    <div class="pm-tools"><button class="pm-sort" id="mineSort" type="button" hidden>Newest first ↓</button></div>
-    <div class="pm-list" id="mine"><span class="pm-empty">Loading…</span></div>
-  </div>
-
-  <details class="pm-how">
-    <summary>How it works</summary>
-    <p>Playlists you add sit at the top of that district's Vault, above the automatically matched ones.
-      Agents just see the list — nothing tells them how a playlist was made, so add the one you would
-      want them to use. The title comes from Spotify itself. The same playlist can only be in the Vault once.
-      Only districts with goal songs are listed.</p>
-  </details>
-  <div class="pm-who" id="whoami"></div>
+</div>
 </div>
 
 <script type="module">
@@ -188,25 +258,71 @@ import { call } from './js/api.js'
 import { getAgentNo, getSession } from './js/session.js'
 import { enhanceSelect } from './js/rc-select.js'
 import {
-  districtGroups, districtOptionLabel, initialDistrict, looksLikePlaylistLink,
+  districtGroups, initialDistrict, looksLikePlaylistLink,
   playlistIdFromLink, neededDistricts, filterMine, mineDistricts,
 } from './supabase/functions/op-reconnect/lib/playlist-maker-rules.js'
 
+// Lucide outlines (https://lucide.dev, ISC licence), drawn in currentColor.
+const ICON = {
+  back: '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>',
+  paste: '<rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>',
+  plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+  loader: '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  alert: '<circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/>',
+  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  list: '<path d="M21 15V6"/><path d="M18.5 18a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/><path d="M12 12H3"/><path d="M16 6H3"/><path d="M12 18H3"/>',
+  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  sort: '<path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/>',
+  external: '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+  trash: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>',
+  chevron: '<path d="m9 18 6-6-6-6"/>',
+}
+const ic = (name, cls = '') => `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICON[name]}</svg>`
+
 const LAST_KEY = 'rc_pm_last_district'
+const ART_KEY = 'rc_pm_art'
 const readLast = () => { try { return localStorage.getItem(LAST_KEY) || '' } catch { return '' } }
 const saveLast = (id) => { try { localStorage.setItem(LAST_KEY, id) } catch { /* private mode */ } }
 // playlist-maker.html?district=<id> — the in-game Vault links here with its district.
 const requested = new URLSearchParams(location.search).get('district') || ''
-const GOALS_SHOWN = 5
+const GOALS_SHOWN = 4
 
 const $ = (id) => document.getElementById(id)
 const esc = (value) => String(value == null ? '' : value)
   .replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+const pad = (n) => String(n).padStart(2, '0')
+const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`
 
 let districts = []
 let mine = []
 let goalsOpen = false
+let confirming = ''
 const view = { q: '', district: '', sort: 'newest' }
+
+$('back').insertAdjacentHTML('afterbegin', ic('back'))
+$('pasteBtn').innerHTML = `${ic('paste')}<span>Paste</span>`
+$('addBtn').innerHTML = `${ic('plus')}<span>Add to the Vault</span>`
+$('searchIco').innerHTML = ic('search')
+
+/* ── Spotify artwork & title ──────────────────────────────────────────
+   Spotify's public oEmbed (CORS-open, no key) returns the real title and
+   cover. It has no creator field, so none is shown rather than guessed.
+   Covers are cached per tab so the library doesn't refetch on redraw. */
+const art = (() => { try { return JSON.parse(sessionStorage.getItem(ART_KEY) || '{}') } catch { return {} } })()
+const saveArt = () => { try { sessionStorage.setItem(ART_KEY, JSON.stringify(art)) } catch { /* fine */ } }
+async function oembed(id) {
+  if (art[id]) return art[id]
+  try {
+    const r = await fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(`https://open.spotify.com/playlist/${id}`)}`)
+    if (!r.ok) return null
+    const j = await r.json()
+    art[id] = { title: j.title || '', cover: j.thumbnail_url || '' }
+    saveArt()
+    return art[id]
+  } catch { return null }
+}
+const artImg = (cover) => (cover ? `<img class="djb-art" src="${esc(cover)}" alt="" loading="lazy">` : '<span class="djb-art is-fallback" aria-hidden="true"></span>')
 
 /* ── gate ─────────────────────────────────────────────────────────────
    Same two-step check the Badge Vault page uses: a real session first,
@@ -238,7 +354,7 @@ async function boot() {
 async function load() {
   const res = await call('getPlaylistMakerHub', { agentNo: getAgentNo() })
   if (!res?.success) {
-    $('mine').innerHTML = `<span class="pm-empty">${esc(res?.error || "Couldn't load your playlists.")}</span>`
+    $('mine').innerHTML = `<div class="djb-empty">${esc(res?.error || "Couldn't load your playlists.")}</div>`
     return
   }
   districts = res.districts || []
@@ -250,42 +366,53 @@ async function load() {
   const groups = districtGroups(districts)
   $('district').innerHTML = groups.length
     ? groups.map((g) => `<optgroup label="${esc(g.label)}">${g.items
-      .map((d) => `<option value="${esc(d.id)}">${esc(districtOptionLabel(d))}</option>`).join('')}</optgroup>`).join('')
-    : '<option value="">No districts with goals yet</option>'
+      .map((d) => `<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('')}</optgroup>`).join('')
+    : '<option value="">No districts with goal songs yet</option>'
   $('district').value = initialDistrict(districts, { requested: keep || requested, last: readLast() })
   paintDistrict()
-  paintNeed()
   paintMine()
 }
 
 const picked = () => districts.find((x) => x.id === $('district').value)
 
-/** The picked district's goal songs: the first few, then "+N more". */
+/** Counts and goal songs for the picked district. */
 function paintDistrict() {
   const d = picked()
+  $('meta').innerHTML = d
+    ? `<span>${ic('users')}${plural(d.agentsHere, 'agent')} here</span><span>${ic('list')}${d.playlists ? plural(d.playlists, 'playlist') : '<span class="djb-zero">No playlists yet</span>'}</span>`
+    : ''
   const box = $('goals')
-  if (!d || !d.goals?.length) { box.hidden = true; box.innerHTML = '' } else {
-    const names = d.goals.map((g) => (g.kind === 'album' ? `${g.label} (album)` : g.label))
-    const shown = goalsOpen ? names : names.slice(0, GOALS_SHOWN)
-    const more = names.length - shown.length
-    box.innerHTML = `<b>Goal songs</b>${esc(shown.join(' · '))}${more > 0 ? ` <button type="button" class="pm-more" id="goalsMore">+${more} more</button>` : ''}`
+  if (!d || !d.goals?.length) { box.hidden = true; box.innerHTML = '' } else if (!goalsOpen) {
+    const names = d.goals.map((g) => g.label)
+    const more = names.length - GOALS_SHOWN
+    box.innerHTML = `<span class="djb-goals-k">${plural(names.length, 'goal song')}</span>${esc(names.slice(0, GOALS_SHOWN).join(', '))}${more > 0
+      ? ` <button type="button" class="djb-link" id="goalsMore">+${more} more</button>` : ''}`
     box.hidden = false
-    $('goalsMore')?.addEventListener('click', () => { goalsOpen = true; paintDistrict() })
+  } else {
+    box.innerHTML = `<span class="djb-goals-k">${plural(d.goals.length, 'goal song')}</span>
+      <ol>${d.goals.map((g, i) => `<li class="${g.kind === 'album' ? 'is-album' : ''}"><b>${pad(i + 1)}</b><span>${esc(g.label)}${g.kind === 'album' ? ' · album' : ''}</span></li>`).join('')}</ol>
+      <button type="button" class="djb-link" id="goalsLess">Show less</button>`
+    box.hidden = false
   }
   paintNeed()
   paintPreview()
 }
-
+$('goals').addEventListener('click', (e) => {
+  if (e.target.id === 'goalsMore') { goalsOpen = true; paintDistrict() }
+  if (e.target.id === 'goalsLess') { goalsOpen = false; paintDistrict() }
+})
 $('district').addEventListener('change', () => { saveLast($('district').value); goalsOpen = false; paintDistrict() })
 
-/** "Districts without playlists": agents are there, no playlist yet.
- *  Tap to pick. */
+/** "Needs a DJ": agents are there, fewer than 3 playlists. */
 function paintNeed() {
-  const list = neededDistricts(districts, { limit: 6, enough: 1 })
+  const list = neededDistricts(districts, { limit: 5, enough: 3 })
   $('needCard').hidden = !list.length
   const on = $('district').value
-  $('need').innerHTML = list.map((d) => `<button type="button" class="pm-chip${d.id === on ? ' is-on' : ''}" data-id="${esc(d.id)}">
-      <b>${esc(d.name)}</b> · ${d.agentsHere} agent${d.agentsHere === 1 ? '' : 's'}</button>`).join('')
+  $('need').innerHTML = list.map((d) => `<button type="button" class="djb-need${d.id === on ? ' is-on' : ''}" data-id="${esc(d.id)}" aria-pressed="${d.id === on}">
+      <b>${esc(d.name)}</b>
+      <small>${plural(d.agentsHere, 'agent')} · ${d.playlists ? plural(d.playlists, 'playlist') : '<span class="djb-zero">no playlists</span>'}</small>
+      <i>${d.id === on ? `${ic('check')}Selected` : `Pick ${ic('chevron')}`}</i>
+    </button>`).join('')
 }
 $('need').addEventListener('click', (e) => {
   const b = e.target.closest('button[data-id]')
@@ -294,16 +421,15 @@ $('need').addEventListener('click', (e) => {
   saveLast(b.dataset.id)
   goalsOpen = false
   paintDistrict()
+  if (window.matchMedia('(max-width: 959px)').matches) $('addCard').scrollIntoView({ behavior: 'smooth', block: 'start' })
 })
-
-$('noteToggle').onclick = () => { $('noteToggle').hidden = true; $('noteField').hidden = false; $('note').focus() }
 
 /* ── link: check, paste, preview ──────────────────────────────────── */
 
 function checkUrl() {
   const v = $('url').value.trim()
   $('urlHint').textContent = v && !looksLikePlaylistLink(v)
-    ? 'That isn’t a Spotify playlist link — in Spotify tap Share → Copy link to playlist.' : ''
+    ? 'That isn’t a playlist link. In Spotify, tap Share → Copy link to playlist.' : ''
   schedulePreview()
 }
 $('url').addEventListener('input', checkUrl)
@@ -315,18 +441,16 @@ $('pasteBtn').onclick = async () => {
     if (text) { $('url').value = text; checkUrl() }
   } catch {
     $('url').focus()
-    $('urlHint').textContent = 'Your browser blocked Paste — long-press the box and paste instead.'
+    $('urlHint').textContent = 'Your browser blocked Paste. Long-press the box and paste instead.'
   }
 }
 
-// Spotify's public oEmbed (CORS-open, no key) gives the real title and cover,
-// so the maker sees what will be added before adding it.
 let previewFor = ''
 let preview = null
 let previewTimer = null
 function schedulePreview() {
   clearTimeout(previewTimer)
-  previewTimer = setTimeout(fetchPreview, 350)
+  previewTimer = setTimeout(fetchPreview, 300)
 }
 async function fetchPreview() {
   const url = $('url').value.trim()
@@ -336,69 +460,87 @@ async function fetchPreview() {
   preview = null
   if (!id) return paintPreview()
   paintPreview('loading')
-  try {
-    const r = await fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(`https://open.spotify.com/playlist/${id}`)}`)
-    const j = r.ok ? await r.json() : null
-    if (previewFor !== id) return
-    preview = j ? { title: j.title || 'Spotify playlist', cover: j.thumbnail_url || '' } : { error: true }
-  } catch {
-    if (previewFor !== id) return
-    preview = { error: true }
-  }
+  const got = await oembed(id)
+  if (previewFor !== id) return
+  preview = got || { error: true }
   paintPreview()
 }
 function paintPreview(state) {
   const box = $('preview')
   const id = previewFor
-  if (!id) { box.hidden = true; box.innerHTML = ''; box.className = 'pm-preview'; return }
+  if (!id) { box.hidden = true; box.innerHTML = ''; box.className = 'djb-preview'; return }
+  box.hidden = false
+  if (state === 'loading') {
+    box.className = 'djb-preview'
+    box.innerHTML = '<span class="djb-art djb-skel"></span><div style="flex:1"><div class="djb-skel" style="height:12px;width:70%"></div><div class="djb-skel" style="height:10px;width:45%;margin-top:8px"></div></div>'
+    return
+  }
   const d = picked()
   const dup = mine.find((r) => r.playlist_id === id && r.status === 'active')
   const dupName = dup && (districts.find((x) => x.id === dup.district_id)?.name || 'a district')
-  const cover = preview?.cover ? `<img src="${esc(preview.cover)}" alt="" loading="lazy">` : '<img alt="">'
-  const title = state === 'loading' ? 'Looking it up…' : preview?.error ? 'Spotify playlist' : esc(preview?.title || 'Spotify playlist')
+  const title = preview?.error ? 'Spotify playlist' : (preview?.title || 'Spotify playlist')
   const sub = dup ? `You already added this to ${esc(dupName)}.`
-    : preview?.error ? `Couldn't load a preview — you can still add it${d ? ` to ${esc(d.name)}` : ''}.`
-    : d ? `Ready for ${esc(d.name)}` : 'Pick a district above'
-  box.className = `pm-preview${dup ? ' is-dup' : ''}`
-  box.innerHTML = `${cover}<div class="pm-preview-main"><div class="pm-preview-t">${title}</div><div class="pm-preview-s">${sub}</div></div>`
-  box.hidden = false
+    : preview?.error ? `No preview available. You can still add it${d ? ` to ${esc(d.name)}` : ''}.`
+    : `Spotify playlist${d ? ` · for ${esc(d.name)}` : ''}`
+  box.className = `djb-preview${dup ? ' is-dup' : ''}`
+  box.innerHTML = `${artImg(preview?.cover)}<div style="min-width:0"><div class="djb-preview-t">${esc(title)}</div><div class="djb-preview-s">${sub}</div></div>`
 }
 
 /* ── your playlists ───────────────────────────────────────────────── */
 
 function paintMine() {
   const active = mine.filter((r) => r.status !== 'hidden')
-  $('mineCount').textContent = active.length ? `${active.length} added` : ''
-  $('mineSearch').hidden = mine.length <= 4
-  $('mineSort').hidden = mine.length < 2
-  $('mineSort').textContent = view.sort === 'newest' ? 'Newest first ↓' : 'Oldest first ↑'
+  $('mineCount').textContent = active.length ? plural(active.length, 'playlist') : ''
+  $('mineSearch').closest('.djb-tools').hidden = mine.length < 2
+  $('mineSort').innerHTML = `${ic('sort')}<span>${view.sort === 'newest' ? 'Newest' : 'Oldest'}</span>`
   const chips = mineDistricts(mine, districts)
   $('mineChips').hidden = chips.length < 2
   $('mineChips').innerHTML = chips.length < 2 ? '' : [{ id: '', name: 'All' }, ...chips]
-    .map((c) => `<button type="button" class="pm-chip${view.district === c.id ? ' is-on' : ''}" data-id="${esc(c.id)}" aria-pressed="${view.district === c.id}">${esc(c.name)}</button>`).join('')
+    .map((c) => `<button type="button" class="djb-filter${view.district === c.id ? ' is-on' : ''}" data-id="${esc(c.id)}" aria-pressed="${view.district === c.id}">${esc(c.name)}</button>`).join('')
   if (!mine.length) {
-    $('mine').innerHTML = '<span class="pm-empty">Nothing yet — add your first playlist above.</span>'
+    $('mine').innerHTML = '<div class="djb-empty">You haven’t added a playlist yet. Pick a district and paste a Spotify link to start.</div>'
     return
   }
   const rows = filterMine(mine, view)
-  if (!rows.length) { $('mine').innerHTML = '<span class="pm-empty">No playlists match.</span>'; return }
-  $('mine').innerHTML = rows.map((row) => {
+  if (!rows.length) { $('mine').innerHTML = '<div class="djb-empty">No playlists match that search.</div>'; return }
+  $('mine').innerHTML = rows.map((row, i) => {
     const name = districts.find((d) => d.id === (row.district_id || row.config?.districtId))?.name
       || row.config?.districtName || 'District removed'
-    const when = row.created_at ? new Date(row.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : ''
-    const hidden = row.status === 'hidden'
-    return `<div class="pm-row">
-      <div class="pm-row-main">
-        <div class="pm-row-name">${esc(row.name || 'Untitled playlist')}${hidden ? '<span class="pm-badge">REMOVED</span>' : ''}</div>
-        <div class="pm-row-meta">${esc(name)} · ${esc(when)}</div>
-        ${row.config?.note ? `<div class="pm-row-note">${esc(row.config.note)}</div>` : ''}
+    const when = row.created_at ? new Date(row.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''
+    const removed = row.status === 'hidden'
+    const acts = confirming === row.playlist_id
+      ? `<div class="djb-confirm"><button type="button" class="is-yes" data-yes="${esc(row.playlist_id)}">Remove</button><button type="button" data-no>Cancel</button></div>`
+      : `<a class="djb-ico is-spotify" href="${esc(row.url)}" target="_blank" rel="noopener noreferrer" aria-label="Open ${esc(row.name || 'playlist')} in Spotify">${ic('external')}</a>
+         ${removed ? '' : `<button type="button" class="djb-ico is-remove" data-remove="${esc(row.playlist_id)}" aria-label="Remove ${esc(row.name || 'playlist')}">${ic('trash')}</button>`}`
+    return `<div class="djb-row${removed ? ' is-removed' : ''}">
+      <span class="djb-tno">${pad(i + 1)}</span>
+      <span data-art="${esc(row.playlist_id)}">${artImg(art[row.playlist_id]?.cover)}</span>
+      <div style="min-width:0">
+        <div class="djb-row-t">${esc(row.name || 'Untitled playlist')}${removed ? '<span class="djb-pill">Removed</span>' : ''}</div>
+        <div class="djb-row-m">${esc(name)} · ${esc(when)}</div>
+        ${row.config?.note ? `<div class="djb-row-n">${esc(row.config.note)}</div>` : ''}
       </div>
-      <div class="pm-row-acts">
-        <a href="${esc(row.url)}" target="_blank" rel="noopener noreferrer">Open ↗</a>
-        ${hidden ? '' : `<button type="button" data-remove="${esc(row.playlist_id)}" data-name="${esc(row.name || '')}">Remove</button>`}
-      </div>
+      <div class="djb-row-acts">${acts}</div>
     </div>`
   }).join('')
+  loadArt()
+}
+
+// Covers for visible rows, a few at a time.
+let artObserver = null
+function loadArt() {
+  artObserver?.disconnect()
+  const slots = [...$('mine').querySelectorAll('[data-art]')].filter((s) => !art[s.dataset.art])
+  if (!slots.length || !('IntersectionObserver' in window)) return
+  artObserver = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (!e.isIntersecting) continue
+      artObserver.unobserve(e.target)
+      const id = e.target.dataset.art
+      oembed(id).then((got) => { if (got?.cover && e.target.isConnected) e.target.innerHTML = artImg(got.cover) })
+    }
+  }, { rootMargin: '200px' })
+  slots.forEach((s) => artObserver.observe(s))
 }
 
 $('mineSearch').addEventListener('input', () => { view.q = $('mineSearch').value; paintMine() })
@@ -410,42 +552,44 @@ $('mineChips').addEventListener('click', (e) => {
   paintMine()
 })
 // Remove = hide your own entry from the Vault (deleteCandyPlaylist only
-// accepts the agent who added it).
+// accepts the agent who added it), after an inline confirm.
 $('mine').addEventListener('click', async (e) => {
-  const b = e.target.closest('button[data-remove]')
-  if (!b) return
-  if (!confirm(`Remove "${b.dataset.name || 'this playlist'}" from the Vault?`)) return
-  b.disabled = true
-  const res = await call('deleteCandyPlaylist', { agentNo: getAgentNo(), playlistId: b.dataset.remove })
-  if (!res?.success) { b.disabled = false; alert(res?.error || 'Could not remove that playlist.'); return }
+  const ask = e.target.closest('button[data-remove]')
+  if (ask) { confirming = ask.dataset.remove; paintMine(); return }
+  if (e.target.closest('button[data-no]')) { confirming = ''; paintMine(); return }
+  const yes = e.target.closest('button[data-yes]')
+  if (!yes) return
+  yes.disabled = true
+  yes.textContent = 'Removing…'
+  const res = await call('deleteCandyPlaylist', { agentNo: getAgentNo(), playlistId: yes.dataset.yes })
+  confirming = ''
+  $('mineMsg').innerHTML = res?.success ? '' : `${ic('alert')}<span>${esc(res?.error || 'Could not remove that playlist.')}</span>`
+  if (!res?.success) { paintMine(); return }
   await load()
 })
+
+function setMsg(kind, text) {
+  $('addMsg').className = `djb-msg ${kind}`
+  $('addMsg').innerHTML = text ? `${ic(kind === 'ok' ? 'check' : 'alert')}<span>${esc(text)}</span>` : ''
+}
 
 $('addBtn').onclick = async () => {
   const url = $('url').value.trim()
   const districtId = $('district').value
-  const msg = $('addMsg')
-  msg.className = 'pm-msg'
-  if (!districtId) { msg.className = 'pm-msg err'; msg.textContent = 'Choose a district first.'; return }
-  if (!url) { msg.className = 'pm-msg err'; msg.textContent = 'Paste a Spotify playlist link first.'; return }
+  setMsg('', '')
+  if (!districtId) { setMsg('err', 'Choose a district first.'); return }
+  if (!url) { setMsg('err', 'Paste a Spotify playlist link first.'); $('url').focus(); return }
   const btn = $('addBtn')
   btn.disabled = true
-  btn.textContent = 'Checking Spotify…'
+  btn.innerHTML = `${ic('loader', 'djb-spin')}<span>Checking with Spotify…</span>`
   const res = await call('shareCandyPlaylist', {
     agentNo: getAgentNo(), url, districtId, note: $('note').value.trim(),
   })
   btn.disabled = false
-  btn.textContent = 'Add to the Vault'
-  if (!res?.success) {
-    msg.className = 'pm-msg err'
-    msg.textContent = res?.error || 'Could not add that playlist.'
-    return
-  }
+  btn.innerHTML = `${ic('plus')}<span>Add to the Vault</span>`
+  if (!res?.success) { setMsg('err', res?.error || 'Could not add that playlist.'); return }
   saveLast(districtId)
-  msg.className = 'pm-msg ok'
-  msg.textContent = res.alreadyThere
-    ? 'That playlist is already in the Vault.'
-    : `${res.name} is now at the top of that district's Vault.`
+  setMsg('ok', res.alreadyThere ? 'That playlist is already in the Vault.' : `${res.name} is now at the top of ${picked()?.name || 'that district'}'s Vault.`)
   $('url').value = ''
   $('note').value = ''
   previewFor = ''
