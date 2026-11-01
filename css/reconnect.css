@@ -665,6 +665,15 @@ body {
   padding: 6px 13px; color: var(--muted); font-family: var(--mono); font-size: 11px;
   letter-spacing: 0.5px; cursor: pointer; transition: border-color 0.2s, color 0.2s; }
 .find-btn:hover { border-color: var(--border-str); color: var(--text); }
+/* Playlist makers' shortcut (maker-shortcut.js): a link styled as a map tool,
+   tinted so it stands out from Share and Find. */
+.map-maker-btn { display: inline-flex; align-items: center; text-decoration: none;
+  color: var(--purple-lt); border-color: rgba(167, 139, 250, .45); white-space: nowrap; }
+.map-maker-btn[hidden] { display: none; }
+/* Three tools on a 375px phone: keep "City map" on one line and tighten the
+   pills only when the maker button is showing. */
+.map-head .world-eyebrow { white-space: nowrap; }
+.map-tools:has(.map-maker-btn:not([hidden])) .find-btn { padding: 6px 10px; }
 
 /* ── search + filters ── */
 .finder { display: flex; flex-direction: column; }

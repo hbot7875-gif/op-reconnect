@@ -56,6 +56,7 @@ import { eraSymbol } from './era-symbols.js'
 import { serendipityRoomArt } from './serendipity-room-scene.js'
 import { birthdayPopupCard, birthdayPopupCopy, birthdayPopupSeen, markBirthdayPopupSeen, birthdayGiftContents } from './birthday-era-popup.js'
 import { getAgentNo } from './session.js'
+import { playlistMakerButton } from './maker-shortcut.js'
 
 export function renderWorld(container, state) {
   container.innerHTML = ''
@@ -389,7 +390,8 @@ function mapHead(state) {
   share.onclick = () => showOverlay(openCityShare())
   const find = el('button', 'find-btn', '🔍 Find')
   find.onclick = () => openFinder(state)
-  tools.append(share, find)
+  // Makers only: straight to the Playlist Maker page (maker-shortcut.js).
+  tools.append(playlistMakerButton(el), share, find)
   row.appendChild(tools)
   wrap.appendChild(row)
   // Persistent, not a one-time tip — a stranger's first instinct is to tap
