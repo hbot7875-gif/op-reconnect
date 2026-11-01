@@ -5,11 +5,8 @@
 // password" are the same person in the same trouble. Enter the email on file,
 // get one message carrying the number AND a reset code.
 //
-// Two rules this flow doesn't bend:
-//   · No account enumeration. requestReset returns the same success shape
-//     whether or not that email exists — otherwise the endpoint becomes a
-//     free "is this person registered" oracle.
-//   · The code is never stored, only its SHA-256, and it's single-use.
+// The rule this flow doesn't bend: the code is never stored, only its
+// SHA-256, and it's single-use.
 
 import type { SupabaseDB } from './config.ts'
 import { getRcAgent, setPasswordAndRotate, normalizeEmail, throttle } from './auth.ts'
@@ -33,11 +30,16 @@ async function sha256(input: string): Promise<string> {
 }
 
 /**
- * Send a recovery code to the address on file. Always reports success when
- * the request itself was well-formed — see the enumeration rule above. The
- * one honest exception is a missing mail key: that's our fault, not the
- * caller's, and pretending to send would strand them waiting for an email
- * that was never going to arrive.
+ * Send a recovery code to the address on file. Says email_not_found when no
+ * agent file uses that address, and mail_not_configured when the mail key is
+ * missing: either way, answering "sent" would strand the player waiting for
+ * an email that was never going to arrive.
+ *
+ * Unknown addresses used to get the same "sent" as real ones, so nobody could
+ * use this to check who's registered. Players kept typing an email they never
+ * signed up with and waiting for nothing (AGENT087, 2026-11-01), and sign-up
+ * already answers email_taken for a registered address, so the uniform answer
+ * was hiding nothing.
  */
 export async function requestPasswordReset(supabase: SupabaseDB, params: Record<string, unknown>) {
   const email = normalizeEmail(params.email)
@@ -48,8 +50,13 @@ export async function requestPasswordReset(supabase: SupabaseDB, params: Record<
     return { success: false, error: 'rate_limited' }
   }
 
-  const { data: agent } = await supabase.from('rc_agents')
+  const { data: agent, error: lookupErr } = await supabase.from('rc_agents')
     .select('agent_no, handle, email').ilike('email', email).maybeSingle()
+
+  // A failed lookup is not proof the address is unknown, so it keeps the old
+  // "sent" answer rather than telling a real player they have no file.
+  if (lookupErr) console.error('recovery lookup failed:', lookupErr.message)
+  else if (!agent) return { success: false, error: 'email_not_found' }
 
   if (agent) {
     const code = newCode()
@@ -60,9 +67,9 @@ export async function requestPasswordReset(supabase: SupabaseDB, params: Record<
     })
     const mail = recoveryEmail(agent.agent_no, agent.handle, code, CODE_TTL_MINUTES)
     const sent = await sendMail(agent.email, mail.subject, mail.html, mail.text)
-    // A send failure is logged but not surfaced — reporting "couldn't send"
-    // for a real address and "sent" for a fake one would leak exactly what
-    // the uniform response exists to hide.
+    // A send failure is logged but not surfaced: a 2xx from Resend is no
+    // proof of delivery either, so the code step still says to check the
+    // inbox and ask again.
     if (!sent.ok) console.error('recovery mail failed for', agent.agent_no, sent.error)
   }
 

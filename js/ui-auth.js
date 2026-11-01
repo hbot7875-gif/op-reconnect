@@ -25,6 +25,7 @@ const ERRORS = {
   rate_limited: 'Too many tries. Wait a minute and go again.',
   email_invalid: "That email doesn't look right.",
   email_taken: 'That email already has an agent file. Sign in, or recover it.',
+  email_not_found: "No agent file uses this email. Try the email you signed up with.",
   code_invalid: "That code isn't right. Check the email again.",
   code_expired: 'That code has expired. Ask for a new one.',
   mail_not_configured: "Recovery email isn't switched on yet — ask HT to set it up.",
@@ -326,7 +327,10 @@ function showRecovery(onAuthed) {
     send.disabled = false
     send.textContent = 'Send my code'
     if (!res.success) {
-      if (res.error === 'email_invalid') setFieldError(emailField, friendly(res.error))
+      if (res.error === 'email_invalid' || res.error === 'email_not_found') {
+        setFieldError(emailField, friendly(res.error))
+        email.focus()
+      }
       else toast(friendly(res.error))
       return
     }
@@ -345,11 +349,10 @@ function showCodeStep(addr, minutes, onAuthed) {
   wrap.append(
     el('div', 'eyebrow', 'CODE SENT'),
     el('h1', 'title-sm', 'Check your email'),
-    // Deliberately says "if that address is on file" — the server answers
-    // identically for unknown addresses so this endpoint can't be used to
-    // find out who's registered, and the wording shouldn't promise more.
+    // The server only gets here for an address that's on file, but a sent
+    // email can still land in spam or bounce, so this doesn't promise more.
     el('p', 'muted auth-lede',
-      `If ${esc(addr)} is on an agent file, a code is on its way. It expires in ${minutes} minutes, and the email has your agent number in it too.`),
+      `A code is on its way to ${esc(addr)}. It expires in ${minutes} minutes, and the email has your agent number in it too. Check spam if it's not there in a minute or two.`),
   )
 
   const code = el('input', 'ob-input')
