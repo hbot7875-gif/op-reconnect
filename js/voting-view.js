@@ -408,6 +408,67 @@ export function fmtCount(n) {
   return Number(n).toLocaleString('en-US')
 }
 
+/** The last day's hourly ranks as a small line (rank 1 at the top). */
+function rankSpark(series, rank) {
+  const pts = [...series.map((s) => s.rank), rank].filter((n) => Number.isInteger(n))
+  if (pts.length < 2) return ''
+  const lo = Math.min(...pts)
+  const hi = Math.max(...pts)
+  const w = 240
+  const h = 36
+  const x = (i) => Math.round((i / (pts.length - 1)) * w)
+  const y = (r) => (hi === lo ? h / 2 : 4 + ((r - lo) / (hi - lo)) * (h - 8))
+  const line = pts.map((r, i) => `${x(i)},${y(r).toFixed(1)}`).join(' ')
+  return `<svg class="vt-rank-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+      <polyline points="${line}" fill="none" stroke="currentColor" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/>
+      <circle cx="${x(pts.length - 1)}" cy="${y(rank).toFixed(1)}" r="3" fill="currentColor"/>
+    </svg>`
+}
+
+/** Every artist's rank in one category, BTS marked — folded away so the
+ *  card stays short. Names come from Mnet; escaped here. */
+function standingsList(c) {
+  if (!c.standings?.length) return ''
+  const items = c.standings.map((s) => {
+    const me = s.title.trim().toUpperCase() === 'BTS'
+    return `<li class="vt-stand${me ? ' is-me' : ''}"${me ? ' aria-current="true"' : ''}><span class="vt-stand-n">${s.rank}</span><span class="vt-stand-t">${esc(s.title)}</span></li>`
+  }).join('')
+  return `<details class="vt-stand-wrap">
+      <summary class="vt-stand-sum">See all ${c.standings.length} ranks</summary>
+      <ol class="vt-stand-list" aria-label="${esc(c.label)} ranks">${items}</ol>
+    </details>`
+}
+
+/** BTS's live MAMA ranks from Mnet Plus (mama-rank-rules.js mamaRankView),
+ *  read every 15 minutes. Ranks only — Mnet publishes no vote counts or
+ *  percentages, so the card shows none. Nothing until the first read. */
+export function mamaRankCard(r) {
+  if (!r?.categories?.length) return ''
+  const row = (c) => {
+    const pts = c.series.map((s) => s.rank)
+    const best = Math.min(c.rank, ...pts)
+    const worst = Math.max(c.rank, ...pts)
+    const move = c.move > 0 ? `<span class="vt-rank-move is-up">▲ ${c.move} since last hour</span>`
+      : c.move < 0 ? `<span class="vt-rank-move is-down">▼ ${-c.move} since last hour</span>` : ''
+    return `<div class="vt-rank" data-vt-rank-cat="${esc(c.id)}">
+        <div class="vt-rank-top">
+          <span class="vt-rank-k">${esc(c.label)}</span>
+          <span class="vt-rank-v${c.rank === 1 ? ' is-first' : ''}">#${c.rank}<small> of ${c.of}</small></span>
+        </div>
+        ${rankSpark(c.series, c.rank)}
+        <div class="vt-rank-foot">${move}<span>Last 24 h: ${best === worst ? `#${best} throughout` : `best #${best} · lowest #${worst}`}</span></div>
+        ${standingsList(c)}
+      </div>`
+  }
+  return `<section aria-labelledby="vt-h-rank">
+    <div class="vt-sec-h"><h2 id="vt-h-rank">BTS on Mnet right now</h2></div>
+    <div class="vt-card vt-ranks" data-vt-rank="${r.stale ? 'stale' : 'fresh'}">
+      ${r.categories.map(row).join('')}
+      <div class="vt-pulse-foot"><span class="vt-pulse-time${r.stale ? ' is-stale' : ''}">${ic('clock')}Last updated <span class="vt-mono">${esc(kstStamp(r.checkedAt))}</span></span><span class="vt-pulse-note">${r.stale ? 'No new reading from Mnet since then' : 'Mnet Plus ranks · checked every 15 min'}</span></div>
+    </div>
+  </section>`
+}
+
 function pulse(vm) {
   const p = vm.status.pulse
   if (!p) return ''
@@ -1065,6 +1126,7 @@ function votingContent(vm) {
         <div class="vt-sec-h"><h2 id="vt-h-missions">Today's missions</h2><span class="vt-aside vt-mono">${esc(dayLabel(vm.status.today))} KST</span></div>
         <div class="vt-missions">${ms.map((m) => (m.kind === 'x_post' ? xCard(vm, m) : mnetCard(vm, m))).join('')}</div>
       </section>
+      <div class="vt-rank-slot" data-vt-rank-slot>${mamaRankCard(vm.hub?.rank)}</div>
       ${votingGift(vm)}
       ${stats(vm)}
       ${activity(vm)}

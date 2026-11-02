@@ -6,8 +6,9 @@ import { call } from './api.js'
 import { getAgentNo } from './session.js'
 import { goWorld } from './router.js'
 import { setState, toast } from './state.js'
-import { votingScreen, errorText, countdown, MNET_FAST_MS, MNET_CHECKING_MS, dayFlagActive } from './voting-view.js'
+import { votingScreen, errorText, countdown, MNET_FAST_MS, MNET_CHECKING_MS, dayFlagActive, mamaRankCard } from './voting-view.js'
 import { nextKstMidnight } from '../supabase/functions/op-reconnect/lib/vote-campaign-rules.js'
+import { canSeeMamaRank } from '../supabase/functions/op-reconnect/lib/mama-rank-rules.js'
 import { sha256OfBlob, reencodeImage, blobToBase64, ocrCertificate } from './voting-proof.js'
 import { battleView, recruitView, pickStyle, nextStyle, shareText, recruitText, recruitUrl, STYLES, STYLE_NAMES, BATTLE_URL } from './battle-share-rules.js'
 import { posterFile, canShareFiles, sharePoster, shareLink, copyText, savePoster } from './battle-share-flow.js'
@@ -36,6 +37,10 @@ let proofPoll = null
 let hubData = { team: { loading: true }, chat: { loading: true } }
 let hubTimer = null
 let hubTicks = 0
+// BTS's Mnet ranks (getMamaRanking): the server reads Mnet every 15 min, so
+// this screen asks every 5 and swaps only that card.
+const RANK_POLL_MS = 5 * 60_000
+let rankTimer = null
 
 function freshLocal() {
   return {
@@ -80,7 +85,7 @@ export function renderVoting(container) {
   watchChatFab()
   local = freshLocal()
   openSheet = null
-  hubData = { team: { loading: true }, chat: { loading: true } }
+  hubData = { team: { loading: true }, chat: { loading: true }, rank: hubData?.rank || null }
   // The shared header compacts on scroll here (torn down by main.js).
   mountCompactHud()
   load()
@@ -99,6 +104,7 @@ async function load() {
   local.x.composed = dayFlagActive(readFlag(composedKey()), status.activity, missionIdOf('x_post'), status.today)
   if (status.battle && !local.tab) local.tab = firstTab()
   paint()
+  loadRank()
   if (status.battle) startHub()
   // First visit once the battle is on and this agent has no side yet: the
   // 7-second choice. The server holds the clock and makes the timeout pick.
@@ -203,7 +209,7 @@ function finishChooser(team, via) {
   local.chooser = { result: team, via }
   if (status.battle) status.battle.myTeam = team
   // Team and Chat open up now that there's a side.
-  hubData = { team: { loading: true }, chat: { loading: true } }
+  hubData = { team: { loading: true }, chat: { loading: true }, rank: hubData.rank }
   loadTeam()
   loadChat()
   paint()
@@ -794,6 +800,22 @@ function firstTab() {
     if (HUB_TAB_IDS.includes(t)) return t
   } catch { /* none saved */ }
   return 'battle'
+}
+
+async function loadRank() {
+  clearTimeout(rankTimer)
+  if (!root?.isConnected || !canSeeMamaRank(getAgentNo())) return
+  if (!document.hidden) {
+    const r = await call('getMamaRanking', { agentNo: getAgentNo() })
+    if (!root?.isConnected) return
+    // A failed read keeps the last card (its own "Last updated" says how old).
+    if (r?.success) {
+      hubData.rank = r.ranking
+      const slot = root.querySelector('[data-vt-rank-slot]')
+      if (slot) slot.innerHTML = mamaRankCard(hubData.rank)
+    }
+  }
+  rankTimer = setTimeout(loadRank, RANK_POLL_MS)
 }
 
 function startHub() {

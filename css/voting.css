@@ -341,6 +341,33 @@
 .vt-pulse-time { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
 .vt-pulse-time .vt-i { width: 12px; height: 12px; }
 .vt-pulse-time.is-stale { color: var(--vt-text-2); }
+
+/* ── BTS on Mnet right now (display only, ranks from Mnet Plus) ── */
+.vt-rank-slot { display: contents; }
+.vt-ranks { padding: 14px; display: grid; gap: 12px; }
+.vt-rank { display: grid; gap: 6px; }
+.vt-rank + .vt-rank { padding-top: 12px; border-top: 1px solid var(--vt-line); }
+.vt-rank-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.vt-rank-k { font-size: 13px; color: var(--vt-text-2); min-width: 0; }
+.vt-rank-v { font-size: 24px; font-weight: 700; letter-spacing: -.3px; line-height: 1.1; color: var(--vt-score); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.vt-rank-v.is-first { color: var(--vt-gold); }
+.vt-rank-v small { font-size: 13px; font-weight: 500; color: var(--vt-text-3); }
+.vt-rank-spark { display: block; width: 100%; height: 36px; color: var(--vt-violet-hi); }
+.vt-rank-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 10px; font-size: 12px; color: var(--vt-text-3); }
+.vt-rank-move { font-weight: 600; white-space: nowrap; }
+.vt-rank-move.is-up { color: var(--vt-ok); }
+.vt-rank-move.is-down { color: var(--vt-warn); }
+.vt-ranks[data-vt-rank="stale"] .vt-rank-v { color: var(--vt-text-2); }
+.vt-stand-wrap { margin-top: 2px; }
+.vt-stand-sum { display: inline-flex; align-items: center; min-height: 32px; font-size: 12.5px; font-weight: 600; color: var(--vt-violet-hi); cursor: pointer; }
+.vt-stand-sum:focus-visible { outline: 2px solid var(--vt-violet-hi); outline-offset: 2px; border-radius: 4px; }
+.vt-stand-list { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 2px; }
+.vt-stand { display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: center; gap: 8px; min-height: 30px; padding: 4px 8px; border-radius: var(--vt-r-sm); font-size: 13px; color: var(--vt-text-2); }
+.vt-stand:nth-child(odd) { background: var(--vt-surface-2); }
+.vt-stand-n { font-variant-numeric: tabular-nums; color: var(--vt-text-3); text-align: right; }
+.vt-stand-t { min-width: 0; overflow-wrap: anywhere; }
+.vt-stand.is-me { background: var(--vt-gold-tint); color: var(--vt-score); font-weight: 600; }
+.vt-stand.is-me .vt-stand-n { color: var(--vt-gold); }
 .vt-reward[data-vt-badge="earned"] .vt-l-ico { background: var(--vt-ok-soft); color: var(--vt-ok); }
 .vt-milestones { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 2px; }
 .vt-milestone { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--vt-text-3); }

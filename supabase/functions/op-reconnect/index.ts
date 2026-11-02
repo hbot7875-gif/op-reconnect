@@ -72,6 +72,7 @@ import { getDearDiary, getDearDiaryArchive, getDearDiaryPreference, keepDearDiar
 import { runAmiState, runAmiCreateRoom, runAmiJoinRoom, runAmiWatchRoom, runAmiLeaveRoom, runAmiStart, runAmiAct, runAmiChat, cronRunAmiSweep, runAmiTesters, runAmiTesterAdd, runAmiTesterRemove } from './lib/run-ami.ts'
 import { albumState, albumGift } from './lib/album.ts'
 import { cronRaplineRefresh, getRaplineTracker } from './lib/rapline-tracker.ts'
+import { cronMamaRankCheck, getMamaRanking } from './lib/mama-rank.ts'
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -119,6 +120,7 @@ const ROUTES: Record<string, Route> = {
   // Settings screen
   getAccount: { auth: 'agent', handler: (sb, p) => getAccount(sb, p) },
   setAppearOffline: { auth: 'agent', handler: (sb, p) => setAppearOffline(sb, p) },
+  getMamaRanking: { auth: 'agent', handler: (sb, p) => getMamaRanking(sb, p) },
   updateEmail: { auth: 'agent', handler: (sb, p) => updateEmail(sb, p) },
   changePassword: { auth: 'agent', handler: (sb, p) => changePassword(sb, p) },
   retireAccount: { auth: 'agent', handler: (sb, p) => retireAccount(sb, p) },
@@ -385,6 +387,7 @@ const ROUTES: Record<string, Route> = {
   // Rap Line to 1B: refresh the informational Spotify totals (pg_cron daily,
   // fetches every 3 days; migration 20261027200500). Takes no params.
   cronRaplineRefresh: { auth: 'cron', handler: (sb) => cronRaplineRefresh(sb) },
+  cronMamaRankCheck: { auth: 'cron', handler: (sb) => cronMamaRankCheck(sb) },
   adminGetEngagementReport: { auth: 'admin', handler: (sb, p) => adminGetEngagementReport(sb, p) },
 
   // Batch-assign a series of connect/invite missions for one reconnect goal
