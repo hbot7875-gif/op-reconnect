@@ -812,7 +812,12 @@ async function loadRank() {
     if (r?.success) {
       hubData.rank = r.ranking
       const slot = root.querySelector('[data-vt-rank-slot]')
-      if (slot) slot.innerHTML = mamaRankCard(hubData.rank)
+      if (slot) {
+        // A refresh must not fold a list that's being read.
+        const open = [...slot.querySelectorAll('details[open]')].map((d) => d.dataset.vtRankFold)
+        slot.innerHTML = mamaRankCard(hubData.rank)
+        for (const d of slot.querySelectorAll('details')) d.open = open.includes(d.dataset.vtRankFold)
+      }
     }
   }
   rankTimer = setTimeout(loadRank, RANK_POLL_MS)

@@ -3,8 +3,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { parseMamaRanks, mamaRankUrl, mamaRankView, hourStart, canSeeMamaRank, MAMA_RANK_STALE_MS } from './mama-rank-rules.js'
-import { mamaRankCard } from '../../../../js/voting-view.js'
+import { parseMamaRanks, mamaRankUrl, mamaRankView, mamaRankMoves, hourStart, canSeeMamaRank, MAMA_RANK_STALE_MS } from './mama-rank-rules.js'
+import { mamaRankCard, istStamp } from '../../../../js/voting-view.js'
 
 const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8')
 const opt = (rank, title) => ({ rank, title, artistId: `a${rank}${title}`, optionId: `o${rank}`, isEnabled: true, order: rank })
@@ -114,4 +114,32 @@ test('only AGENT000 sees the ranks for now, checked on the server', () => {
   const srv = read('./mama-rank.ts')
   assert.match(srv, /if \(!canSeeMamaRank\(params\.agentNo\)\) return \{ success: true, ranking: null \}/)
   assert.match(read('../../../../js/voting.js'), /if \(!root\?\.isConnected \|\| !canSeeMamaRank\(getAgentNo\(\)\)\) return/, 'no request from anyone else')
+})
+
+test('latest moves: rank-number changes, newest first, in IST', () => {
+  const at = (h, visa) => ({ checkedAt: `2026-11-05T${h}:00:00Z`, standings: { visa, male: [{ rank: 1, title: 'BTS' }] } })
+  const checks = [
+    at('09', [{ rank: 7, title: 'SEVENTEEN' }, { rank: 8, title: 'BIGBANG' }, { rank: 37, title: 'Lee Young Ji' }]),
+    at('10', [{ rank: 7, title: 'SEVENTEEN' }, { rank: 8, title: 'BIGBANG' }, { rank: 37, title: 'LEE YOUNGJI' }]),
+    { checkedAt: '2026-11-05T10:15:00Z', standings: null },
+    at('11', [{ rank: 7, title: 'BIGBANG' }, { rank: 7, title: 'SEVENTEEN' }, { rank: 37, title: 'LEE YOUNGJI' }]),
+    at('12', [{ rank: 6, title: 'BIGBANG' }, { rank: 8, title: 'SEVENTEEN' }, { rank: 37, title: 'LEE YOUNGJI' }]),
+  ]
+  assert.deepEqual(mamaRankMoves(checks, 'visa'), [
+    { at: '2026-11-05T12:00:00Z', moves: [{ title: 'BIGBANG', from: 7, to: 6 }, { title: 'SEVENTEEN', from: 7, to: 8 }] },
+    { at: '2026-11-05T11:00:00Z', moves: [{ title: 'BIGBANG', from: 8, to: 7 }] },
+  ], 'a respelled name or a missing check is not a move')
+  assert.deepEqual(mamaRankMoves(checks, 'male'), [], 'nothing moved')
+  assert.equal(mamaRankMoves(checks, 'visa', 1).length, 1)
+  assert.deepEqual(mamaRankMoves([], 'visa'), [])
+  assert.equal(istStamp('2026-11-05T09:15:00Z'), 'Nov 5 · 14:45 IST')
+  assert.equal(istStamp('2026-11-05T19:00:00Z'), 'Nov 6 · 00:30 IST', 'rolls over at IST midnight')
+
+  const html = mamaRankCard(mamaRankView(latest, history, NOW, checks))
+  assert.match(html, /Latest moves \(IST\)/)
+  assert.match(html, /Nov 5 · 17:30 IST/)
+  assert.match(html, /BIGBANG #7/)
+  assert.doesNotMatch(mamaRankCard(mamaRankView(latest, history, NOW)), /Latest moves/, 'no list without moves')
+  assert.match(read('../../../../js/voting.js'), /d\.open = open\.includes\(d\.dataset\.vtRankFold\)/, 'a refresh keeps an open list open')
+  assert.match(read('./mama-rank.ts'), /if \(!canSeeMamaRank\(params\.agentNo\)\) return \{ success: true, ranking: null \}/, 'still AGENT000 only')
 })

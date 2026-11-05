@@ -433,9 +433,28 @@ function standingsList(c) {
     const me = s.title.trim().toUpperCase() === 'BTS'
     return `<li class="vt-stand${me ? ' is-me' : ''}"${me ? ' aria-current="true"' : ''}><span class="vt-stand-n">${s.rank}</span><span class="vt-stand-t">${esc(s.title)}</span></li>`
   }).join('')
-  return `<details class="vt-stand-wrap">
+  return `<details class="vt-stand-wrap" data-vt-rank-fold="${esc(c.id)}-all">
       <summary class="vt-stand-sum">See all ${c.standings.length} ranks</summary>
       <ol class="vt-stand-list" aria-label="${esc(c.label)} ranks">${items}</ol>
+    </details>`
+}
+
+/** An instant → 'Nov 5 · 12:45 IST'. */
+export function istStamp(iso) {
+  const t = new Date(new Date(iso).getTime() + 5.5 * 3600_000).toISOString()
+  return `${dayLabel(t.slice(0, 10))} · ${t.slice(11, 16)} IST`
+}
+
+/** Who moved in one category lately, newest first, in IST. */
+function movesList(c) {
+  if (!c.moves?.length) return ''
+  const items = c.moves.map((m) => {
+    const who = m.moves.map((x) => `<span class="vt-mv-item${x.title.trim().toUpperCase() === 'BTS' ? ' is-me' : ''}">${esc(x.title)} #${x.from} <span aria-hidden="true">→</span><span class="vt-sr"> to </span> #${x.to}</span>`).join('')
+    return `<li class="vt-mv"><span class="vt-mv-at vt-mono">${esc(istStamp(m.at))}</span><span class="vt-mv-who">${who}</span></li>`
+  }).join('')
+  return `<details class="vt-stand-wrap" data-vt-rank-fold="${esc(c.id)}-moves">
+      <summary class="vt-stand-sum">Latest moves (IST)</summary>
+      <ol class="vt-mv-list" aria-label="${esc(c.label)} latest moves">${items}</ol>
     </details>`
 }
 
@@ -457,6 +476,7 @@ export function mamaRankCard(r) {
         </div>
         ${rankSpark(c.series, c.rank)}
         <div class="vt-rank-foot">${move}<span>Last 24 h: ${best === worst ? `#${best} throughout` : `best #${best} · lowest #${worst}`}</span></div>
+        ${movesList(c)}
         ${standingsList(c)}
       </div>`
   }

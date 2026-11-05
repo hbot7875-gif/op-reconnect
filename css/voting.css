@@ -359,6 +359,12 @@
 .vt-rank-move.is-down { color: var(--vt-warn); }
 .vt-ranks[data-vt-rank="stale"] .vt-rank-v { color: var(--vt-text-2); }
 .vt-stand-wrap { margin-top: 2px; }
+.vt-mv-list { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 6px; }
+.vt-mv { display: grid; gap: 2px; padding: 6px 8px; border-radius: var(--vt-r-sm); background: var(--vt-surface-2); font-size: 13px; color: var(--vt-text-2); }
+.vt-mv-at { font-size: 11.5px; color: var(--vt-text-3); }
+.vt-mv-who { display: flex; flex-wrap: wrap; gap: 2px 12px; min-width: 0; }
+.vt-mv-item { overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.vt-mv-item.is-me { color: var(--vt-gold); font-weight: 600; }
 .vt-stand-sum { display: inline-flex; align-items: center; min-height: 32px; font-size: 12.5px; font-weight: 600; color: var(--vt-violet-hi); cursor: pointer; }
 .vt-stand-sum:focus-visible { outline: 2px solid var(--vt-violet-hi); outline-offset: 2px; border-radius: 4px; }
 .vt-stand-list { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 2px; }

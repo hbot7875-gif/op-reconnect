@@ -9,7 +9,7 @@
 // Ranks only. The endpoint has no vote counts or percentages, and nothing
 // here derives any. Not part of gameplay: no XP, rewards or scores.
 
-import { mamaRankUrl, parseMamaRanks, mamaRankView, canSeeMamaRank, MAMA_RANK_HISTORY_HOURS } from './mama-rank-rules.js'
+import { mamaRankUrl, parseMamaRanks, mamaRankView, canSeeMamaRank, MAMA_RANK_HISTORY_HOURS, MAMA_RANK_MOVES_HOURS } from './mama-rank-rules.js'
 
 const FETCH_TIMEOUT_MS = 10_000
 
@@ -77,8 +77,14 @@ export async function getMamaRanking(sb: Sb, params: any = {}) {
   const { data: hours } = await sb.from('rc_mama_rank_hourly')
     .select('category, hour, last_rank, best_rank, worst_rank')
     .eq('campaign_id', latest.campaign_id).gte('hour', since).order('hour', { ascending: true })
+  // Only the moves leave here, not these rows; at most 96 checks a day.
+  const movesSince = new Date(Date.now() - MAMA_RANK_MOVES_HOURS * 3_600_000).toISOString()
+  const { data: recent } = await sb.from('rc_mama_rank_checks')
+    .select('checked_at, standings').eq('ok', true).eq('campaign_id', latest.campaign_id)
+    .gte('checked_at', movesSince).order('checked_at', { ascending: true })
+  const checks = (recent || []).map((c: any) => ({ checkedAt: c.checked_at, standings: c.standings }))
   return {
     success: true,
-    ranking: mamaRankView({ checkedAt: latest.checked_at, ranks: latest.ranks, standings: latest.standings }, hours || [], new Date()),
+    ranking: mamaRankView({ checkedAt: latest.checked_at, ranks: latest.ranks, standings: latest.standings }, hours || [], new Date(), checks),
   }
 }

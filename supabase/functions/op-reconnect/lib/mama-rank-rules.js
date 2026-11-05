@@ -18,6 +18,10 @@ export const MAMA_RANK_STALE_MS = 50 * 60_000
 
 export const MAMA_RANK_HISTORY_HOURS = 24
 
+/** How far back the "Latest moves" list looks, and how many it shows. */
+export const MAMA_RANK_MOVES_HOURS = 48
+export const MAMA_RANK_MOVES_SHOWN = 8
+
 /** Who may see the ranks for now (the site owner, while it's tried out).
  *  Collection runs regardless; only the read is gated. */
 export const MAMA_RANK_VIEWERS = ['AGENT000']
@@ -60,6 +64,30 @@ export function parseMamaRanks(json, artist = 'BTS') {
   return { ok: true, ranks, standings }
 }
 
+/** Who moved in one category, newest first: each check whose rank numbers
+ *  differ from the check before, with every artist who changed. `checks`
+ *  run oldest first: { checkedAt, standings }. Names are matched without
+ *  case or spaces, because Mnet has respelled one mid-vote (Lee Young Ji /
+ *  LEE YOUNGJI); an artist seen in only one of the two checks is skipped. */
+export function mamaRankMoves(checks, category, limit = MAMA_RANK_MOVES_SHOWN) {
+  const key = (t) => String(t).toUpperCase().replace(/\s+/g, '')
+  const out = []
+  let prev = null
+  for (const c of checks || []) {
+    const list = c?.standings?.[category]
+    if (!Array.isArray(list) || !list.length) continue
+    const cur = new Map(list.map((s) => [key(s.title), s]))
+    if (prev) {
+      const moves = [...cur].filter(([k, s]) => prev.has(k) && prev.get(k).rank !== s.rank)
+        .map(([k, s]) => ({ title: s.title, from: prev.get(k).rank, to: s.rank }))
+        .sort((a, b) => a.to - b.to || a.title.localeCompare(b.title))
+      if (moves.length) out.push({ at: c.checkedAt, moves })
+    }
+    prev = cur
+  }
+  return out.reverse().slice(0, limit)
+}
+
 /** The start of the hour a check belongs to (UTC; KST is a whole-hour
  *  offset, so the same instant starts the KST hour too). */
 export function hourStart(at) {
@@ -73,7 +101,7 @@ export function hourStart(at) {
  *  previous hour, and an hourly series (last rank of each hour) for the
  *  chart. `history` rows: { category, hour, last_rank, best_rank,
  *  worst_rank }. */
-export function mamaRankView(latest, history = [], now = new Date()) {
+export function mamaRankView(latest, history = [], now = new Date(), checks = []) {
   if (!latest?.ranks || !latest.checkedAt) return null
   const nowMs = new Date(now).getTime()
   const since = nowMs - MAMA_RANK_HISTORY_HOURS * 3_600_000
@@ -89,7 +117,7 @@ export function mamaRankView(latest, history = [], now = new Date()) {
     const prev = [...series].reverse().find((s) => s.hour < thisHour)
     const move = prev ? prev.rank - r.rank : 0
     const standings = Array.isArray(latest.standings?.[cat.id]) ? latest.standings[cat.id] : []
-    return { id: cat.id, label: cat.label, short: cat.short, rank: r.rank, of: r.of, move, series, standings }
+    return { id: cat.id, label: cat.label, short: cat.short, rank: r.rank, of: r.of, move, series, standings, moves: mamaRankMoves(checks, cat.id) }
   }).filter(Boolean)
   return {
     checkedAt: latest.checkedAt,
