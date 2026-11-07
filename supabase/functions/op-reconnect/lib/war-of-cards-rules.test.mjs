@@ -45,6 +45,8 @@ test('unlock pop-up: full album, not a tester, not seen yet', () => {
   assert.equal(warUnlockDue({ albumComplete: true, tester: true, seen: false }), false)
   assert.equal(warUnlockDue({ albumComplete: true, tester: false, seen: true }), false)
   assert.equal(warUnlockDue({ albumComplete: false, tester: false, seen: false }), false)
+  assert.equal(warUnlockDue({ albumComplete: false, tester: true, seen: false, owner: true }), true, 'the owner, once')
+  assert.equal(warUnlockDue({ albumComplete: true, tester: true, seen: true, owner: true }), false, 'and only once')
 })
 
 test('leaderboard table: names escaped, champion mark, your row, empty states', () => {

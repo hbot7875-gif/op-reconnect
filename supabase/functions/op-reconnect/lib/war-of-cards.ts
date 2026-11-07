@@ -4,7 +4,7 @@
 // war-of-cards-rules.js. No XP, levels or currency are involved.
 
 import {
-  WAR_CHAMPION_BADGE, rankWar, boardWithMe, warUnlockDue, weekStartKst,
+  WAR_CHAMPION_BADGE, WAR_UNLOCK_OWNER, rankWar, boardWithMe, warUnlockDue, weekStartKst,
 } from './war-of-cards-rules.js'
 
 // deno-lint-ignore no-explicit-any
@@ -14,10 +14,11 @@ type Sb = any
  *  small read, and only once their album is complete. Fails closed: if the
  *  read breaks, the pop-up simply waits for a later poll. */
 export async function warUnlockForState(sb: Sb, agentNo: string, album: any, tester: boolean) {
-  if (!album?.complete || tester) return false
+  const owner = agentNo === WAR_UNLOCK_OWNER
+  if (!owner && (!album?.complete || tester)) return false
   const { data, error } = await sb.from('rc_war_unlock_notices').select('agent_no').eq('agent_no', agentNo).maybeSingle()
   if (error) return false
-  return warUnlockDue({ albumComplete: true, tester, seen: !!data })
+  return warUnlockDue({ albumComplete: !!album?.complete, tester, seen: !!data, owner })
 }
 
 /** The pop-up was shown: remember it for every device. */

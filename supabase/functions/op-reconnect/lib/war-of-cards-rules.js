@@ -54,6 +54,12 @@ export function boardWithMe(ranked, agentNo, size = WAR_BOARD_SIZE) {
   return { top, me: mine && !top.includes(mine) ? mine : null, mineShown: !!mine && top.includes(mine) }
 }
 
-/** Show the War of Cards unlock pop-up? Only for an agent who holds the
- *  whole album, isn't a tester, and hasn't been shown it on any device. */
-export const warUnlockDue = ({ albumComplete, tester, seen }) => !!albumComplete && !tester && !seen
+/** The site owner sees the unlock pop-up once too, though AGENT000 is
+ *  always a tester and may not hold the whole album. */
+export const WAR_UNLOCK_OWNER = 'AGENT000'
+
+/** Show the War of Cards unlock pop-up? For an agent who holds the whole
+ *  album and isn't a tester — or the owner — and hasn't been shown it on
+ *  any device. */
+export const warUnlockDue = ({ albumComplete, tester, seen, owner = false }) =>
+  !seen && (!!owner || (!!albumComplete && !tester))
