@@ -78,7 +78,7 @@ export async function getBadgeVault(supabase: SupabaseDB, params: any) {
   const viewer = String(params.agentNo || '').trim().toUpperCase()
   const [tplRes, artRes, usedRes] = await Promise.all([
     supabase.from('rc_badge_catalog')
-      .select('id, section, rarity, name, unlock_hint, sort_order, active')
+      .select('id, section, rarity, name, unlock_hint, sort_order, active, art_frame')
       .order('section').order('sort_order'),
     supabase.from('rc_badge_art')
       .select('id, template_id, storage_path, member, members, pool, active, uploaded_by, created_at, image_hash')

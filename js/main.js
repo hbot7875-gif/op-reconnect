@@ -13,6 +13,7 @@ import { renderHud, renderTabbar } from './ui-hud.js'
 import { startMoonReviewCheck } from './moon-review-dot.js'
 import { renderWorld, renderGoldenCorner, renderSerendipityRoom, checkForBirthdayEraPopup } from './screen-world.js'
 import { checkForRunAmiLaunch } from './run-army.js'
+import { checkForWarUnlock } from './war-unlock.js'
 import { birthdayCompleteMessage } from './birthday-era-popup.js'
 import { renderRecelebrateParty } from './screen-recelebrate.js'
 import { renderWard, teardownWard } from './screen-ward.js'
@@ -183,6 +184,7 @@ subscribe((state) => {
   checkForExamModeAnnounce(state)
   checkForBirthdayEraPopup(state)
   checkForRunAmiLaunch(state)
+  checkForWarUnlock(state)
   // The Bomb warning goes first: missing it can cost the whole agent file.
   checkForBombNudge(state)
   checkForMamaTeamPopup(state)

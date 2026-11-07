@@ -680,7 +680,141 @@
   border-radius: 12px; border: 1px dashed var(--v-line-2); color: var(--v-ink-3); font-size: 18px; }
 .rarmy-sheet > .btn { width: 100%; margin-top: 14px; }
 .rarmy-album-icon { justify-self: center; font-size: 30px; line-height: 1; }
-.rarmy-album .rarmy-album-open { background: var(--v-surface-2); border: 1px solid var(--v-line-2); color: var(--v-ink-1); }
+.rarmy-album .rarmy-album-open, .rarmy-board .rarmy-album-open { background: var(--v-surface-2); border: 1px solid var(--v-line-2); color: var(--v-ink-1); }
+
+/* ── War of Cards leaderboard (js/war-leaderboard.js) ─────────────── */
+.wl-controls { margin: 10px 0 12px; }
+.wl-seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 3px; border-radius: 12px; background: var(--v-surface-1); border: 1px solid var(--v-line-1); }
+.wl-seg button { min-height: 36px; border: 0; border-radius: 9px; background: none; color: var(--v-ink-2); font-size: 13px; font-weight: 600; cursor: pointer; }
+.wl-seg button[aria-pressed="true"] { background: var(--v-surface-2); color: var(--v-ink-1); outline: 1px solid var(--v-violet-line); }
+.wl-seg button:focus-visible { outline: 2px solid var(--v-violet-hi); outline-offset: 1px; }
+.wl-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.wl-row { display: grid; grid-template-columns: 30px minmax(0, 1fr) 46px 46px; align-items: center; gap: 8px; padding: 9px 10px;
+  border-radius: 10px; background: var(--v-surface-1); border: 1px solid var(--v-line-1); }
+.wl-row.is-me { border-color: var(--v-violet-line); }
+.wl-pos { font-family: var(--disp); font-size: 15px; color: var(--v-ink-3); text-align: center; }
+.wl-pos span { font-size: 19px; line-height: 1; }
+.wl-name { display: flex; align-items: center; gap: 5px; min-width: 0; font-size: 14px; color: var(--v-ink-1); overflow-wrap: anywhere; }
+.wl-name small { font-weight: 400; color: var(--v-ink-3); }
+/* Top three: soft gold, lavender, peach; everyone else a plain dark row. */
+.wl-row.is-top-1 { background: rgba(242, 197, 108, .10); border-color: rgba(242, 197, 108, .38); }
+.wl-row.is-top-2 { background: rgba(196, 181, 253, .09); border-color: rgba(196, 181, 253, .34); }
+.wl-row.is-top-3 { background: rgba(253, 186, 140, .09); border-color: rgba(253, 186, 140, .34); }
+.wl-row.is-top-1 .wl-num b { color: #f5d38e; }
+.wl-row.is-top-2 .wl-num b { color: #d8ccff; }
+.wl-row.is-top-3 .wl-num b { color: #fcc9a3; }
+.wl-row.is-me { background: var(--v-tint-violet); border-color: var(--v-violet-line); }
+.wl-row.is-me.is-top-1, .wl-row.is-me.is-top-2, .wl-row.is-me.is-top-3 { box-shadow: inset 3px 0 0 var(--v-violet-hi); }
+.wl-champ { flex: none; width: 18px; height: 18px; border-radius: 50%; object-fit: cover; border: 1px solid var(--v-gold); }
+.wl-champ.is-mark { width: auto; height: auto; border: 0; font-size: 13px; line-height: 1; }
+.wl-num { display: grid; justify-items: center; line-height: 1.1; }
+.wl-num b { font-family: var(--disp); font-size: 15px; color: var(--v-ink-1); font-variant-numeric: tabular-nums; }
+.wl-num small { font-size: 9.5px; letter-spacing: .4px; text-transform: uppercase; color: var(--v-ink-3); }
+.wl-gap { margin: 2px 0; text-align: center; color: var(--v-ink-3); letter-spacing: 3px; }
+.wl-empty { margin: 18px 0; text-align: center; font-size: 13px; line-height: 1.45; color: var(--v-ink-2); }
+
+/* ── War of Cards unlocked: the 15/15 reveal (js/war-unlock.js) ───────
+   A Run BTS-style mission card: the stamp lands, the count, a beat, a big
+   card turns over and album covers flash past before the last one lands,
+   then the unlock. About 3.5 seconds, CSS only. */
+#overlay:has(> .wu-sheet) { background: rgba(4, 3, 8, .58); backdrop-filter: blur(2px); }
+.wu-sheet { text-align: center; overflow: hidden; background: var(--v-surface-1); border-color: var(--v-violet-line); padding-top: 18px; }
+.wu-stage { display: grid; justify-items: center; gap: 6px; padding: 2px 0 0; }
+.wu-stamp { display: inline-grid; margin: 4px 0 2px; padding: 8px 16px 6px; border: 3px solid var(--v-gold); border-radius: 10px;
+  color: var(--v-gold); font-family: var(--disp); font-size: 26px; line-height: 1.02; letter-spacing: 2px; transform: rotate(-7deg);
+  animation: wu-stamp .55s cubic-bezier(.2, 1.6, .4, 1) both; }
+.wu-count { display: grid; margin: 4px 0 0; line-height: 1.05; animation: wu-rise .35s ease-out .7s both; }
+.wu-count b { font-family: var(--disp); font-size: 26px; letter-spacing: 1px; color: var(--v-gold); }
+.wu-count span { font-family: var(--disp); font-size: 12.5px; letter-spacing: 2.5px; color: var(--v-ink-2); }
+.wu-flip { --ra-cw: 116px; --ra-ch: 165px; width: var(--ra-cw); height: var(--ra-ch); margin: 8px 0 4px; perspective: 800px;
+  animation: wu-rise .3s ease-out 1.4s both; }
+.wu-flip-inner { position: relative; width: 100%; height: 100%; transform-style: preserve-3d;
+  animation: wu-turn .55s cubic-bezier(.3, .1, .2, 1) 1.75s both; }
+.wu-face { position: absolute; inset: 0; backface-visibility: hidden; }
+.wu-face .ra-card { --ra-cw: 116px; --ra-ch: 165px; border-radius: 12px; }
+.wu-face-front { transform: rotateY(180deg); }
+/* Each flashed cover sits on top of the last card, then drops away in turn. */
+.wu-flash { position: absolute; inset: 0; animation: wu-gone 1ms linear calc(2.35s + var(--i) * .13s) forwards; }
+.wu-title { display: grid; margin: 6px 0 0; font-family: var(--disp); font-size: 25px; line-height: 1.05; letter-spacing: 1.5px;
+  color: var(--v-ink-1); outline: none; animation: wu-pop .4s cubic-bezier(.2, 1.4, .4, 1) 2.95s both; }
+.wu-title-hi { color: var(--v-gold); font-size: 31px; }
+.wu-sheet > .btn { width: 100%; margin-top: 14px; animation: wu-rise .3s ease-out 3.25s both; }
+.wu-sheet > .btn + .btn { margin-top: 8px; }
+@keyframes wu-stamp { from { opacity: 0; transform: scale(2.3) rotate(-16deg); } to { opacity: 1; transform: scale(1) rotate(-7deg); } }
+@keyframes wu-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes wu-pop { from { opacity: 0; transform: scale(.7); } to { opacity: 1; transform: none; } }
+@keyframes wu-turn { from { transform: rotateY(0); } to { transform: rotateY(180deg); } }
+@keyframes wu-gone { to { opacity: 0; visibility: hidden; } }
+@media (prefers-reduced-motion: reduce) {
+  .wu-stamp, .wu-count, .wu-flip, .wu-title, .wu-sheet > .btn { animation: none; }
+  .wu-flip-inner { animation: none; transform: rotateY(180deg); }
+  .wu-flash { display: none; }
+}
+
+/* ── War of Cards leaderboard (js/war-leaderboard.js) ─────────────── */
+.wl-controls { margin: 10px 0 12px; }
+.wl-seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 3px; border-radius: 12px; background: var(--v-surface-1); border: 1px solid var(--v-line-1); }
+.wl-seg button { min-height: 36px; border: 0; border-radius: 9px; background: none; color: var(--v-ink-2); font-size: 13px; font-weight: 600; cursor: pointer; }
+.wl-seg button[aria-pressed="true"] { background: var(--v-surface-2); color: var(--v-ink-1); outline: 1px solid var(--v-violet-line); }
+.wl-seg button:focus-visible { outline: 2px solid var(--v-violet-hi); outline-offset: 1px; }
+.wl-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.wl-row { display: grid; grid-template-columns: 30px minmax(0, 1fr) 46px 46px; align-items: center; gap: 8px; padding: 9px 10px;
+  border-radius: 10px; background: var(--v-surface-1); border: 1px solid var(--v-line-1); }
+.wl-row.is-me { border-color: var(--v-violet-line); }
+.wl-pos { font-family: var(--disp); font-size: 15px; color: var(--v-ink-3); text-align: center; }
+.wl-pos span { font-size: 19px; line-height: 1; }
+.wl-name { display: flex; align-items: center; gap: 5px; min-width: 0; font-size: 14px; color: var(--v-ink-1); overflow-wrap: anywhere; }
+.wl-name small { font-weight: 400; color: var(--v-ink-3); }
+/* Top three: soft gold, lavender, peach; everyone else a plain dark row. */
+.wl-row.is-top-1 { background: rgba(242, 197, 108, .10); border-color: rgba(242, 197, 108, .38); }
+.wl-row.is-top-2 { background: rgba(196, 181, 253, .09); border-color: rgba(196, 181, 253, .34); }
+.wl-row.is-top-3 { background: rgba(253, 186, 140, .09); border-color: rgba(253, 186, 140, .34); }
+.wl-row.is-top-1 .wl-num b { color: #f5d38e; }
+.wl-row.is-top-2 .wl-num b { color: #d8ccff; }
+.wl-row.is-top-3 .wl-num b { color: #fcc9a3; }
+.wl-row.is-me { background: var(--v-tint-violet); border-color: var(--v-violet-line); }
+.wl-row.is-me.is-top-1, .wl-row.is-me.is-top-2, .wl-row.is-me.is-top-3 { box-shadow: inset 3px 0 0 var(--v-violet-hi); }
+.wl-champ { flex: none; width: 18px; height: 18px; border-radius: 50%; object-fit: cover; border: 1px solid var(--v-gold); }
+.wl-champ.is-mark { width: auto; height: auto; border: 0; font-size: 13px; line-height: 1; }
+.wl-num { display: grid; justify-items: center; line-height: 1.1; }
+.wl-num b { font-family: var(--disp); font-size: 15px; color: var(--v-ink-1); font-variant-numeric: tabular-nums; }
+.wl-num small { font-size: 9.5px; letter-spacing: .4px; text-transform: uppercase; color: var(--v-ink-3); }
+.wl-gap { margin: 2px 0; text-align: center; color: var(--v-ink-3); letter-spacing: 3px; }
+.wl-empty { margin: 18px 0; text-align: center; font-size: 13px; line-height: 1.45; color: var(--v-ink-2); }
+
+/* ── War of Cards unlocked: the 15/15 reveal (js/war-unlock.js) ───────
+   A Run BTS-style mission card: a stamp lands, the count, a beat, a card
+   turns over, then the unlock. About 3.5 seconds, CSS only. */
+#overlay:has(> .wu-sheet) { background: rgba(4, 3, 8, .58); backdrop-filter: blur(2px); }
+.wu-sheet { text-align: center; overflow: hidden; background: var(--v-surface-1); border-color: var(--v-violet-line); }
+.wu-stage { display: grid; justify-items: center; gap: 10px; padding: 6px 0 4px; }
+.wu-stamp { display: inline-grid; margin: 4px 0 2px; padding: 8px 16px 6px; border: 3px solid var(--v-gold); border-radius: 10px;
+  color: var(--v-gold); font-family: var(--disp); font-size: 26px; line-height: 1.02; letter-spacing: 2px; transform: rotate(-7deg);
+  animation: wu-stamp .55s cubic-bezier(.2, 1.6, .4, 1) both; }
+.wu-count { margin: 0; font-family: var(--disp); font-size: 15px; letter-spacing: 1.5px; color: var(--v-ink-1);
+  animation: wu-rise .35s ease-out .7s both; }
+.wu-count b { color: var(--v-gold); font-size: 22px; letter-spacing: 1px; }
+.wu-flip { --ra-cw: 74px; --ra-ch: 105px; width: var(--ra-cw); height: var(--ra-ch); margin: 6px 0 2px; perspective: 600px;
+  animation: wu-rise .3s ease-out 1.45s both; }
+.wu-flip-inner { position: relative; width: 100%; height: 100%; transform-style: preserve-3d;
+  animation: wu-turn .6s cubic-bezier(.3, .1, .2, 1) 1.8s both; }
+.wu-face { position: absolute; inset: 0; backface-visibility: hidden; }
+.wu-face .ra-card { --ra-cw: 74px; --ra-ch: 105px; }
+.wu-face-front { transform: rotateY(180deg); }
+.wu-title { margin: 6px 0 0; font-family: var(--disp); font-size: 21px; letter-spacing: 1.5px; color: var(--v-ink-1); outline: none;
+  animation: wu-pop .4s cubic-bezier(.2, 1.4, .4, 1) 2.45s both; }
+.wu-cheer { margin: 0; font-family: var(--mono); font-size: 12.5px; letter-spacing: 2px; color: var(--v-violet-hi);
+  animation: wu-rise .35s ease-out 2.95s both; }
+.wu-sheet > .btn { width: 100%; margin-top: 12px; animation: wu-rise .3s ease-out 3.2s both; }
+.wu-sheet > .btn + .btn { margin-top: 8px; }
+@keyframes wu-stamp { from { opacity: 0; transform: scale(2.3) rotate(-16deg); } to { opacity: 1; transform: scale(1) rotate(-7deg); } }
+@keyframes wu-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes wu-pop { from { opacity: 0; transform: scale(.7); } to { opacity: 1; transform: none; } }
+@keyframes wu-turn { from { transform: rotateY(0); } to { transform: rotateY(180deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .wu-stamp, .wu-count, .wu-flip, .wu-title, .wu-cheer, .wu-sheet > .btn { animation: none; }
+  .wu-flip-inner { animation: none; transform: rotateY(180deg); }
+}
 
 /* ── Album (js/album.js) ─────────────────────────────────────────── */
 .al-sheet { text-align: left; }

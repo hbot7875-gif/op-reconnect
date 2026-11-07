@@ -18,6 +18,7 @@ import { goRunAmi } from './router.js'
 import { getAgentNo } from './session.js'
 import { cardHtml } from './run-ami-cards.js'
 import { openAlbum } from './album.js'
+import { openWarLeaderboard } from './war-leaderboard.js'
 import { ALBUM_SIZE } from '../supabase/functions/op-reconnect/lib/album-rules.js'
 
 // Three cards from three different eras (the artwork follows the card's
@@ -58,6 +59,13 @@ export function openRunArmy() {
         ${open ? '' : `<p class="rarmy-lock">🔒 Unlocks once you collect all ${ALBUM_SIZE} BTS album covers: one for each daily Signal Sweep, or as a gift from a friend.</p>`}
       </div>
     </article>
+    <article class="rarmy-game rarmy-board">
+      <span class="rarmy-album-icon" aria-hidden="true">🏆</span>
+      <div class="rarmy-game-text">
+        <b>Leaderboard</b>
+        <span>War of Cards · weekly and all time</span>
+      </div>
+    </article>
     <article class="rarmy-game rarmy-album">
       <span class="rarmy-album-icon" aria-hidden="true">💿</span>
       <div class="rarmy-game-text">
@@ -76,6 +84,10 @@ export function openRunArmy() {
     play.onclick = () => { hideOverlay(); goRunAmi() }
     sheet.querySelector('.rarmy-game.is-open').appendChild(play)
   }
+  const boardBtn = el('button', 'btn rarmy-play rarmy-album-open', 'View rankings')
+  boardBtn.type = 'button'
+  boardBtn.onclick = () => { hideOverlay(); openWarLeaderboard() }
+  sheet.querySelector('.rarmy-board').appendChild(boardBtn)
   const albumBtn = el('button', 'btn rarmy-play rarmy-album-open', 'Open album')
   albumBtn.type = 'button'
   albumBtn.onclick = () => { hideOverlay(); openAlbum() }

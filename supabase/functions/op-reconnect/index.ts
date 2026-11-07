@@ -73,6 +73,7 @@ import { runAmiState, runAmiCreateRoom, runAmiJoinRoom, runAmiWatchRoom, runAmiL
 import { albumState, albumGift } from './lib/album.ts'
 import { cronRaplineRefresh, getRaplineTracker } from './lib/rapline-tracker.ts'
 import { cronMamaRankCheck, getMamaRanking } from './lib/mama-rank.ts'
+import { getWarLeaderboard, markWarUnlockSeen } from './lib/war-of-cards.ts'
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -120,6 +121,8 @@ const ROUTES: Record<string, Route> = {
   // Settings screen
   getAccount: { auth: 'agent', handler: (sb, p) => getAccount(sb, p) },
   setAppearOffline: { auth: 'agent', handler: (sb, p) => setAppearOffline(sb, p) },
+  getWarLeaderboard: { auth: 'agent', handler: (sb, p) => getWarLeaderboard(sb, p) },
+  markWarUnlockSeen: { auth: 'agent', handler: (sb, p) => markWarUnlockSeen(sb, p) },
   getMamaRanking: { auth: 'agent', handler: (sb, p) => getMamaRanking(sb, p) },
   updateEmail: { auth: 'agent', handler: (sb, p) => updateEmail(sb, p) },
   changePassword: { auth: 'agent', handler: (sb, p) => changePassword(sb, p) },

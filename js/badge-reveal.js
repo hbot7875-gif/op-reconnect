@@ -63,7 +63,9 @@ export async function checkForBadgeUnlocks(state) {
 function pumpRevealQueue() {
   if (showing || !queue.length) return
   const overlay = document.getElementById('overlay')
-  if (overlay && !overlay.hidden) {
+  // Wait for any open sheet, and for a War of Cards match to end (the 10th
+  // win's Card Champion badge can land while the next round is on).
+  if ((overlay && !overlay.hidden) || document.body.classList.contains('ra-playing')) {
     clearTimeout(pumpTimer)
     pumpTimer = setTimeout(pumpRevealQueue, 650)
     return

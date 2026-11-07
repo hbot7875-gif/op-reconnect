@@ -381,6 +381,7 @@
 import { call } from './js/api.js'
 import { getAgentNo, getSession } from './js/session.js'
 import { enhanceSelect } from './js/rc-select.js'
+import { drawPolaroid, frameOf } from './js/badge-frames.js'
 import {
   artMembers,
   badgeArtMatches,
@@ -665,10 +666,32 @@ function clearMiniPreviews() {
   }
 }
 
+/** The cropped photo drawn into a `side` px square at (x, y): the same
+ *  numbers as the crop frame, scaled. */
+function drawCroppedPhoto(ctx, x, y, side) {
+  const k = side / frameW()
+  ctx.drawImage(img, x + ox * k, y + oy * k, natW * baseScale * zoom * k, natH * baseScale * zoom * k)
+}
+
+/** A template with a frame (badge-frames.js): the preview shows the framed
+ *  square, cropped the way each in-game slot crops it. */
+function drawFramedPreview(canvas) {
+  const ctx = canvas.getContext('2d')
+  const side = canvas.height
+  const square = document.createElement('canvas')
+  square.width = side; square.height = side
+  const sctx = square.getContext('2d')
+  sctx.imageSmoothingEnabled = true
+  sctx.imageSmoothingQuality = 'high'
+  drawPolaroid(sctx, side, drawCroppedPhoto)
+  ctx.drawImage(square, (canvas.width - side) / 2, 0)
+}
+
 function drawPreview(canvas, visibleRatio = 1) {
   const ctx = canvas.getContext('2d')
   ctx.clearRect(0, 0, canvas.width, canvas.height)
   if (!img) return
+  if (frameOf(selectedTemplate())) { drawFramedPreview(canvas); return }
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
   const F = frameW()
@@ -691,13 +714,14 @@ function paintMiniPreviews() {
 }
 
 function paintTemplateGuidance() {
+  paintMiniPreviews() // a framed template previews with its frame
   const template = selectedTemplate()
   const rarity = template?.rarity || 'common'
   const preferred = preferredPoolForRarity(rarity)
   $('previewCommonWrap').classList.toggle('is-match', !!template && rarity !== 'rare')
   $('previewRareWrap').classList.toggle('is-match', !!template && rarity === 'rare')
   $('poolHint').textContent = template
-    ? `${template.name} is ${rarity}. ${rarity === 'rare' ? 'Hot' : 'Cute'} photos are preferred; the other style is only a fallback.`
+    ? `${template.name} is ${rarity}. ${rarity === 'rare' ? 'Hot' : 'Cute'} photos are preferred; the other style is only a fallback.${frameOf(template) === 'polaroid' ? ' This badge uses the Polaroid frame: frame the photo square, and it goes into the Polaroid automatically.' : ''}`
     : 'Common badges prefer Cute photos. Rare badges prefer Hot photos.'
   if (template && !$('pool').value) $('pool').value = preferred
   updateReviewEnabled()
@@ -815,7 +839,9 @@ async function buildCroppedImage() {
   const ctx = canvas.getContext('2d')
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
-  ctx.drawImage(img, ox * k, oy * k, natW * baseScale * zoom * k, natH * baseScale * zoom * k)
+  // A framed template (e.g. Polaroid) gets its frame baked into the file.
+  if (frameOf(selectedTemplate())) drawPolaroid(ctx, OUT, drawCroppedPhoto)
+  else ctx.drawImage(img, ox * k, oy * k, natW * baseScale * zoom * k, natH * baseScale * zoom * k)
 
   const blob = await new Promise((r) => canvas.toBlob(r, TYPE, 0.9))
   if (!blob) return null
