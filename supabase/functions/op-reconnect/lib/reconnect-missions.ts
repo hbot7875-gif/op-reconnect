@@ -50,6 +50,9 @@ import {
   reconnectHealthFlags, reconnectPrimaryStatus, reconnectRecommendedAction,
   suggestedReconnectRoster,
 } from './reconnect-health.js'
+import {
+  INVITE_ACTIVE_DAYS, isActiveForInvite, rankInviteCandidates, streamedDaysAgo,
+} from './reconnect-active.js'
 import { seatRule, countSeats, hasSeatFor, overSeats, seatError, composeTeams } from './reconnect-seats.ts'
 import type { SeatCounts } from './reconnect-seats.ts'
 
@@ -1651,6 +1654,34 @@ async function quietDaysByAgent(supabase: SupabaseDB, agentNos: string[]): Promi
  *  instead of typing a number they can't know. agentNo still rides along
  *  per candidate (the invite call needs it) but is never meant to be
  *  displayed — same as shape()'s participants. */
+/** Who has opened the app and streamed recently, for the invite list (see
+ *  reconnect-active.js). Fails open: if this read breaks, nobody is hidden,
+ *  because an empty list would block teams outright. */
+async function inviteActivity(supabase: SupabaseDB, agentNos: string[]) {
+  const today = todayKst()
+  const { data: players, error: seenError } = await supabase.from('rc_players')
+    .select('agent_no, last_seen_at').in('agent_no', agentNos)
+  const { data: days, error: streamError } = await supabase.from('rc_daily_activity')
+    .select('agent_no, kst_date').in('agent_no', agentNos).gt('raw_streams', 0)
+    .gte('kst_date', addDaysStr(today, -INVITE_ACTIVE_DAYS))
+  if (seenError || streamError) return null
+  const lastStreamDay = new Map<string, string>()
+  for (const r of days || []) {
+    const prev = lastStreamDay.get(r.agent_no)
+    if (!prev || r.kst_date > prev) lastStreamDay.set(r.agent_no, r.kst_date)
+  }
+  const out = new Map<string, { active: boolean; streamedDaysAgo: number | null }>()
+  const nowMs = Date.now()
+  for (const p of players || []) {
+    const day = lastStreamDay.get(p.agent_no) || null
+    out.set(p.agent_no, {
+      active: isActiveForInvite({ lastSeenAt: p.last_seen_at, lastStreamDay: day }, nowMs, today),
+      streamedDaysAgo: day ? streamedDaysAgo(day, today) : null,
+    })
+  }
+  return out
+}
+
 export async function getInviteCandidates(supabase: SupabaseDB, content: GameContent, params: any) {
   const districtId = String(params.districtId || '')
   const agentNo = String(params.agentNo || '').trim().toUpperCase()
@@ -1699,6 +1730,14 @@ export async function getInviteCandidates(supabase: SupabaseDB, content: GameCon
     emptyReason: eligible.every((candidate: string) => done.has(candidate)) ? 'everyone_completed' : 'everyone_busy',
   }
 
+  // Only agents who have both opened the app and streamed lately. The count
+  // of who was left out goes back so the panel can say why the list is short.
+  const activity = await inviteActivity(supabase, free.map((f) => f.agentNo))
+  const beforeActive = free.length
+  if (activity) free = free.filter((f) => activity.get(f.agentNo)?.active)
+  const hiddenInactive = beforeActive - free.length
+  if (!free.length) return { success: true, candidates: [], stillOnHomeBase, alertActive, hiddenInactive, emptyReason: 'nobody_active' }
+
   // A mixed-district team (crossDistrictSeats): only offer people who fit a
   // seat that is still open. Before the caller has opened a mission they are
   // its first local member, so the team they are about to build already has
@@ -1712,6 +1751,7 @@ export async function getInviteCandidates(supabase: SupabaseDB, content: GameCon
     free = free.filter((f) => hasSeatFor(rule, counts, !!helperOf.get(f.agentNo)))
     if (!free.length) return {
       success: true, candidates: [], stillOnHomeBase, alertActive,
+      hiddenInactive,
       emptyReason: hasSeatFor(rule, counts, true) ? 'no_free_helper' : 'no_free_local',
     }
   }
@@ -1729,23 +1769,18 @@ export async function getInviteCandidates(supabase: SupabaseDB, content: GameCon
     .eq('appear_offline', false).gte('last_seen_at', since)
   const online = new Set<string>((onlineRows || []).map((r: any) => r.agent_no as string))
 
-  // Online first — that's the whole point — then longest-waiting within each
-  // group, not alphabetical: this is a queue of real people to help, not a
-  // menu to pick from.
-  const candidates = free
+  // Online first — that's the whole point — then whoever streamed most
+  // recently, then longest-waiting: this is a queue of real people to help,
+  // not a menu to pick from.
+  const candidates = rankInviteCandidates(free
     .map((f) => ({
       agentNo: f.agentNo, codename: names.get(f.agentNo) || f.agentNo, waitingSince: f.waitingSince, online: online.has(f.agentNo),
+      // Null only when the activity read failed above and nobody was filtered.
+      streamedDaysAgo: activity?.get(f.agentNo)?.streamedDaysAgo ?? null,
       // Only meaningful for a mixed-district team: this one would fill the helper seat.
       ...(rule ? { helper: !!helperOf.get(f.agentNo) } : {}),
-    }))
-    .sort((a, b) => {
-      if (a.online !== b.online) return a.online ? -1 : 1
-      if (a.waitingSince && b.waitingSince) return a.waitingSince.localeCompare(b.waitingSince)
-      if (a.waitingSince) return -1
-      if (b.waitingSince) return 1
-      return a.codename.localeCompare(b.codename)
-    })
-  return { success: true, candidates, stillOnHomeBase, alertActive, emptyReason: null }
+    })))
+  return { success: true, candidates, stillOnHomeBase, alertActive, hiddenInactive, emptyReason: null }
 }
 
 /** Opt-in only: remember that this agent wants a bell alert when someone

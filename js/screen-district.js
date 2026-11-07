@@ -18,6 +18,7 @@ import { playRestoration } from './celebrate.js'
 import { itemTile, itemSheet, itemsAt, itemsInPack } from './items.js'
 import { trackEngagementOnce } from './engagement.js'
 import { reconnectPlayerNext, sharedTracksPitch } from './reconnect-player-ui.js'
+import { streamedLabel, INVITE_ACTIVE_DAYS } from '../supabase/functions/op-reconnect/lib/reconnect-active.js'
 import { openPlaylistVault } from './playlist-vault-sheet.js'
 import { renderHud } from './ui-hud.js'
 import { wardPopulation, knownDistrictPopulation } from './ward-population.js'
@@ -1380,6 +1381,7 @@ function paintMissionPanel(box, d, res) {
             no_matching_agents: 'Nobody else has this ReConnect goal here yet.',
             everyone_completed: 'Everyone else with this goal has already completed it.',
             everyone_busy: 'Compatible agents are already teamed up or answering another invite.',
+            nobody_active: `Nobody free here has opened ReConnect and streamed in the last ${INVITE_ACTIVE_DAYS} days.`,
             // Mixed-district team: every free agent belongs to a seat type the team has already filled.
             no_free_helper: `Your team still needs its recruit from ${res.config?.seats?.helperFrom || 'Home Base'}, and nobody there is free right now.`,
             no_free_local: `Your ${res.config?.seats?.helperFrom || 'Home Base'} seat is filled. You still need another agent from this district, and nobody here is free yet.`,
@@ -1412,6 +1414,13 @@ function paintMissionPanel(box, d, res) {
           ? '1 agent is waiting for a partner here.'
           : `${n} agents are waiting for a partner here.`)
           + onlineNote + ' Invite one and they get a notification to accept.'
+        // Why the list may be shorter than the district's head count.
+        if (res2.hiddenInactive) {
+          waitList.appendChild(el('p', 'muted reconnect-empty-reason',
+            `${res2.hiddenInactive} more ${res2.hiddenInactive === 1 ? 'agent isn’t' : 'agents aren’t'} shown because they haven’t opened ReConnect and streamed in the last ${INVITE_ACTIVE_DAYS} days.`))
+        }
+        // How recently they streamed: the best sign an invite gets answered.
+        const activeLabel = (c) => (c.streamedDaysAgo == null ? esc(waitedLabel(c.waitingSince)) : esc(streamedLabel(c.streamedDaysAgo)))
         const sendInvite = async (candidate) => {
           for (const b of box.querySelectorAll('.rw-invite, .reconnect-best-invite')) b.disabled = true
           inviteMsg.textContent = ''
@@ -1428,7 +1437,7 @@ function paintMissionPanel(box, d, res) {
         // can see which seat each person would fill.
         const fromTag = (c) => (c.helper ? ` &middot; ${esc(res.config?.seats?.helperFrom || 'Home Base')}` : '')
         const bestMeta = el('div', 'reconnect-best-meta',
-          `Best available${fromTag(best)} &middot; ${best.online ? 'Online' : esc(waitedLabel(best.waitingSince))}`)
+          `Best available${fromTag(best)} &middot; ${best.online ? 'Online &middot; ' : ''}${activeLabel(best)}`)
         const bestBtn = el('button', 'btn btn-primary reconnect-best-invite',
           `Invite ${best.codename}`)
         bestBtn.onclick = () => sendInvite(best)
@@ -1443,7 +1452,7 @@ function paintMissionPanel(box, d, res) {
           const row = el('div', 'reconnect-wait-row' + (c.online ? ' is-online' : ''))
           row.innerHTML = (c.online ? '<i class="rw-online-dot" title="Online now"></i>' : '')
             + `<span class="rw-name">${esc(c.codename)}</span>`
-            + `<span class="rw-since">${c.online ? 'Online now' : esc(waitedLabel(c.waitingSince))}${fromTag(c)}</span>`
+            + `<span class="rw-since">${c.online ? 'Online &middot; ' : ''}${activeLabel(c)}${fromTag(c)}</span>`
           const btn = el('button', 'btn btn-ghost rw-invite', 'Invite')
           // Agent numbers ride along as data and are never rendered.
           btn.onclick = () => sendInvite(c)
