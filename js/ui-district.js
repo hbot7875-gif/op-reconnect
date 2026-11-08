@@ -4,6 +4,7 @@
 // its own full screen there.
 
 import { el, esc, showOverlay, hideOverlay, getState, setState, toast } from './state.js'
+import { rcIcon } from './reconnect-icons.js'
 import { openPlaylist, remaining, dailyPace, formatLocalDateTime } from './playlist.js'
 import { call } from './api.js'
 import { getAgentNo } from './session.js'
@@ -67,39 +68,69 @@ function goalRow(label, sub, progress, target, done, unit, backup = null) {
  *  in the one place a player is actually looking. */
 function missionSection(icon, label, done, total) {
   const head = el('div', 'board-head mission-section')
+  // `icon` is a Lucide icon key (reconnect-icons.js), drawn as a line icon.
   head.innerHTML = `
-    <span class="board-title">${icon} ${esc(label)}</span>
+    <span class="board-title">${rcIcon(icon)}${esc(label)}</span>
     <span class="board-count${total > 0 && done === total ? ' all' : ''}">${done}/${total} done</span>
   `
   return head
 }
 
-/** A track/album group, laid out so unfinished work is what you actually
- *  see: once every item in the group is done it collapses into one closed
- *  <details> line ("Album Mission — 4/4 complete ✓ — tap to expand")
- *  instead of four already-finished bars nobody needs to scroll past.
- *  Partially-done groups stay open with the header still showing the count,
- *  unfinished items first — done ones sink to the bottom, already quiet
- *  (goalRow drops their bar). rowFn builds each item's own row so this stays
- *  usable for both the plain track rows and the clickable album ones. */
-function renderMissionGroup(card, icon, label, items, rowFn) {
-  if (!items.length) return
-  const done = items.filter((x) => x.done).length
-  const total = items.length
-  if (done === total) {
-    const fold = el('details', 'mission-fold')
-    const summary = el('summary', '', `
-      <span class="board-title">${icon} ${esc(label)}</span>
-      <span class="board-count all">${done}/${total} complete ✓</span>
-    `)
-    fold.appendChild(summary)
-    for (const it of items) fold.appendChild(rowFn(it))
-    card.appendChild(fold)
-    return
+/** Unfinished first, finished last — the order both missions use. */
+const unfinishedFirst = (items) => [...items].sort((a, b) => (a.done === b.done ? 0 : a.done ? 1 : -1))
+
+/** One song in the Track Mission grid: its name (wrapping freely), plays so
+ *  far over plays needed, and a thin bar. No card, border or background —
+ *  spacing and type separate the songs. */
+function trackCell(g) {
+  const pct = Math.min(100, Math.round((g.progress / Math.max(1, g.target)) * 100))
+  const cell = el('div', 'track-cell' + (g.done ? ' done' : '') + (g.backup ? ' has-backup' : ''))
+  cell.innerHTML = `
+    <span class="tc-name">${esc(g.label)}</span>
+    <span class="tc-count">${g.done ? '✓ done' : `${g.progress}<i>/${g.target}</i>`}</span>
+    ${g.done ? '' : `<div class="tc-bar" role="progressbar" aria-label="${esc(g.label)} progress" aria-valuemin="0" aria-valuemax="${g.target}" aria-valuenow="${Math.min(g.target, g.progress)}"><i style="width:${pct}%"></i></div>`}
+    ${g.backup ? backupLine(g.backup, g.target) : ''}
+  `
+  return cell
+}
+
+/** One album in the Album Mission list: a compact row (name, passes, bar)
+ *  that opens underneath to show the songs still needed for the next pass.
+ *  The full per-song checklist stays one more tap away. */
+function albumRow(a) {
+  const pct = Math.min(100, Math.round((a.passesDone / Math.max(1, a.target)) * 100))
+  const need = a.done ? [] : (a.nextPassTracks || [])
+  const row = el('div', 'album-row' + (a.done ? ' done' : '') + (a.backup ? ' has-backup' : ''))
+  const head = el('button', 'ar-head')
+  head.type = 'button'
+  head.innerHTML = `
+    <span class="ar-name">${esc(a.label)}</span>
+    <span class="ar-count">${a.done ? '✓ done' : `${a.passesDone}<i>/${a.target} passes</i>`}</span>
+    <span class="ar-chev" aria-hidden="true">›</span>
+    ${a.done ? '' : `<div class="ar-bar" role="progressbar" aria-label="${esc(a.label)} passes" aria-valuemin="0" aria-valuemax="${a.target}" aria-valuenow="${Math.min(a.target, a.passesDone)}"><i style="width:${pct}%"></i></div>`}
+  `
+  head.setAttribute('aria-expanded', 'false')
+  row.appendChild(head)
+  if (a.backup) row.insertAdjacentHTML('beforeend', backupLine(a.backup, a.target))
+  const more = el('div', 'ar-more')
+  more.hidden = true
+  more.innerHTML = need.length
+    ? `<span class="ar-more-label">For the next pass</span>
+       <ul class="ar-need">${need.map((t) => `<li><span>${esc(t.label)}</span><b>×${t.need}</b></li>`).join('')}</ul>`
+    : `<span class="ar-more-label">${a.done ? 'Every pass is complete.' : 'Every song has enough plays for the next pass — it counts on the next sync.'}</span>`
+  if (a.tracks?.length) {
+    const all = el('button', 'ar-all', 'See every song ›')
+    all.type = 'button'
+    all.onclick = (e) => { e.stopPropagation(); showOverlay(albumDetailSheet(a)) }
+    more.appendChild(all)
   }
-  card.appendChild(missionSection(icon, label, done, total))
-  const ordered = [...items].sort((a, b) => (a.done === b.done ? 0 : a.done ? 1 : -1))
-  for (const it of ordered) card.appendChild(rowFn(it))
+  row.appendChild(more)
+  head.onclick = () => {
+    more.hidden = !more.hidden
+    head.setAttribute('aria-expanded', String(!more.hidden))
+    row.classList.toggle('is-open', !more.hidden)
+  }
+  return row
 }
 
 /** The "extend or reset" choice for an attempt whose deadline has passed
@@ -208,7 +239,7 @@ export function renderBoard(board, d, opts = {}) {
     }
     const urgent = typeof pace.daysLeft === 'number' && pace.daysLeft <= 2
     const q = el('button', 'queue-btn' + (urgent ? ' is-urgent' : ''), `
-      <span class="qb-title">🧠 Build today's queue</span>
+      <span class="qb-title">${rcIcon('listMusic')}Build today's queue</span>
       <span class="qb-meta">${bits.join(' &middot; ')}</span>
     `)
     q.onclick = () => {
@@ -279,26 +310,24 @@ export function renderBoard(board, d, opts = {}) {
 
   if (opts.vaultBox && !d.lapsed) board.appendChild(opts.vaultBox)
 
+  // Track Mission: every song visible at once, in a flat two-column grid.
   if (goals.length) {
-    const trackCard = el('div', 'card goal-card')
-    renderMissionGroup(trackCard, '🎵', 'Track Mission', goals,
-      (g) => goalRow(g.label, '', g.progress, g.target, g.done, 'plays', g.backup))
+    const trackCard = el('div', 'card goal-card is-tracks')
+    trackCard.appendChild(missionSection('music', 'Track Mission', goals.filter((g) => g.done).length, goals.length))
+    const grid = el('div', 'track-grid')
+    for (const g of unfinishedFirst(goals)) grid.appendChild(trackCell(g))
+    trackCard.appendChild(grid)
     board.appendChild(trackCard)
   }
 
   if (albums.length) {
-    const albumCard = el('div', 'card goal-card')
-    renderMissionGroup(albumCard, '💿', 'Album Mission', albums, (a) => {
-      const sub = a.done || !a.nextPassTracks?.length ? ''
-        : `Still need ${a.nextPassTracks.slice(0, 3).map((t) => `${esc(t.label)} ×${t.need}`).join(' · ')}`
-      const row = goalRow(`💿 ${a.label}`, sub, a.passesDone, a.target, a.done, 'passes', a.backup)
-      // Tap to see every track in the album, not just the couple flagged above.
-      if (a.tracks?.length) {
-        row.classList.add('clickable')
-        row.onclick = () => showOverlay(albumDetailSheet(a))
-      }
-      return row
-    })
+    // Album Mission: every album as a compact row; tap one to see the songs
+    // it still needs, right underneath.
+    const albumCard = el('div', 'card goal-card is-albums')
+    albumCard.appendChild(missionSection('disc', 'Album Mission', albums.filter((a) => a.done).length, albums.length))
+    const list = el('div', 'album-list')
+    for (const a of unfinishedFirst(albums)) list.appendChild(albumRow(a))
+    albumCard.appendChild(list)
     if (d.chargeCellProgress) {
       const c = d.chargeCellProgress
       const pct = Math.min(100, Math.round((c.streams / Math.max(1, c.required)) * 100))
@@ -320,7 +349,7 @@ export function renderBoard(board, d, opts = {}) {
   if (reconnect) {
     if (reconnect.skipped) {
       const skippedCard = el('div', 'card goal-card')
-      skippedCard.appendChild(missionSection('↗', 'ReConnect Quest', 1, 1))
+      skippedCard.appendChild(missionSection('skip', 'ReConnect Quest', 1, 1))
       skippedCard.appendChild(goalRow(
         'ReConnect Quest · Skipped',
         'Not completed · finish Track and Album to restore this district',
@@ -344,11 +373,10 @@ export function renderBoard(board, d, opts = {}) {
       const others = (reconnect.mission?.participants || []).filter((p) => !p.isMe && p.status === 'joined')
       const withWho = others.length ? `With ${others.map((p) => esc(p.codename)).join(' and ')}` : ''
       const doneCard = el('div', 'card goal-card')
-      doneCard.appendChild(missionSection('🤝', 'ReConnect Quest', 1, 1))
+      doneCard.appendChild(missionSection('handshake', 'ReConnect Quest', 1, 1))
       doneCard.appendChild(goalRow('🤝 ReConnect Quest', withWho, 1, 1, true))
       board.appendChild(doneCard)
     } else if (opts.reconnectBox) {
-      board.appendChild(missionSection('🤝', 'ReConnect Quest', 0, 1))
       board.appendChild(opts.reconnectBox)
     }
   }
