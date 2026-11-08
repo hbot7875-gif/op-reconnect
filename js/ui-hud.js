@@ -25,6 +25,7 @@ import { districtDisplayName } from './ward-tiles.js'
 import { redZonePercent } from './red-zone-ui.js'
 import { getReconnectChatSeen, reconnectChatUnreadCount } from './reconnect-chat-unread.js'
 import { navIcon, hudIcon } from './nav-icons.js'
+import { isFramedArt } from './badge-frames.js'
 import { hasMoonReview } from './moon-review-dot.js'
 
 /** { multiplier, minsLeft } while state.player.boost is live, else null. */
@@ -204,7 +205,9 @@ export function renderHud(container, state) {
   // badge payload (badge-profile.ts's resolveEquippedBadges) — an
   // equipped RARE badge is the one thing the crest halo now reports.
   const streakCold = p.streak.current > 0 ? '' : ' is-cold'
-  const crestRare = collectionBadge?.rarity === 'rare' ? ' is-rare' : ''
+  // A Polaroid badge is shown as itself: no rare glow ring, no circle.
+  const crestFramed = isFramedArt(collectionBadge?.artFrame) && badgeArt ? ' is-polaroid' : ''
+  const crestRare = collectionBadge?.rarity === 'rare' && !crestFramed ? ' is-rare' : ''
 
   const invites = state.invites || []
   const reconnectAlerts = state.reconnectAlerts || []
@@ -234,7 +237,7 @@ export function renderHud(container, state) {
     <div class="hud-inner">
       <div class="hud-row">
         <div class="hud-identity" id="levelPill" role="button" tabindex="0" title="Open Agent Dossier">
-          <span class="hud-crest${agentBadge || collectionBadge ? ' has-badge' : ''}${badgeArt ? ' has-photo' : ''}${crestRare}" aria-hidden="true"><i></i>${
+          <span class="hud-crest${agentBadge || collectionBadge ? ' has-badge' : ''}${badgeArt ? ' has-photo' : ''}${crestRare}${crestFramed}" aria-hidden="true"><i></i>${
             badgeArt ? `<img class="hud-crest-photo" src="${esc(badgeThumb(badgeArt))}" data-badge-full="${esc(badgeArt)}" alt="">` : `<b>${collectionBadge ? '🎖️' : agentBadge ? agentBadge.icon : '⟭⟬'}</b>`
           }</span>
           <span class="hud-who">

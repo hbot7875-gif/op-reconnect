@@ -4579,6 +4579,33 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
   box-shadow: 0 0 6px #34d17c; flex-shrink: 0; animation: activeNowPulse 2.2s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .rw-online-dot { animation: none; } }
 
+/* Polaroid badges (rc_badge_catalog.art_frame): the lavender frame is part
+   of the badge art, so it is shown whole and as designed everywhere — never
+   cropped to a circle or square, never given a second frame, ring,
+   background or glow. The ID prefixes outrank the later polish layers. */
+#overlay .bdr-tile.got.is-polaroid { aspect-ratio: 3 / 4; border: 0; border-radius: 0; background: none;
+  box-shadow: none; animation: none; overflow: visible; }
+#overlay .bdr-tile.is-polaroid::after { display: none; }
+#overlay .bdr-tile.is-polaroid .bdr-photo { object-fit: contain; object-position: center; border-radius: 0; transform: none; }
+#overlay .bdr-tile.locked.is-polaroid { aspect-ratio: 3 / 4; }
+#overlay .bdr-story.is-polaroid .bdr-detail-photo { width: 150px; height: auto; max-height: 190px; object-fit: contain;
+  border: 0; border-radius: 0; box-shadow: none; }
+#overlay .badge-unlock.is-polaroid .bgu-art { width: 150px; height: 190px; border: 0; border-radius: 0; background: none;
+  box-shadow: none; overflow: visible; }
+#overlay .badge-unlock.is-polaroid .bgu-art img { object-fit: contain; object-position: center; }
+#overlay .badge-unlock.is-polaroid .bgu-scan { display: none; }
+#hud .hud-crest.has-photo.is-polaroid { border-color: transparent; background: none; box-shadow: none; }
+#hud .hud-crest.is-polaroid::before, #hud .hud-crest.is-polaroid::after, #hud .hud-crest.is-polaroid > i { display: none; }
+#hud .hud-crest.is-polaroid .hud-crest-photo { width: 100%; height: 100%; min-width: 0; min-height: 0;
+  max-width: none; max-height: none; aspect-ratio: auto; border: 0; border-radius: 0; clip-path: none;
+  object-fit: contain; object-position: center; box-shadow: none; }
+#scene .rank-agent-icon.is-polaroid, #scene .rank-row .rank-agent-icon.is-polaroid { border: 0; border-radius: 0;
+  background: none; box-shadow: none; padding: 0; overflow: visible; }
+#scene .rank-agent-icon.is-polaroid .rank-agent-photo { object-fit: contain; border-radius: 0; }
+#scene .aid-photo.is-polaroid { border: 0; border-radius: 0; background: none; overflow: visible; }
+#scene .aid-photo.is-polaroid::after { display: none; }
+#scene .aid-photo.is-polaroid img { object-fit: contain; }
+
 /* ReConnect quest lobby (an open mission): the goal, two numbers, the team
    as seats, one status line and one action. Invites happen in the teammate
    picker sheet; leaving and the details sit under More options. */

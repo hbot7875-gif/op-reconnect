@@ -936,3 +936,7 @@ body.ra-playing .ra-screen { padding-top: calc(8px + env(safe-area-inset-top)); 
   body.ra-playing .ra-hand { padding-top: 12px; }
   body.ra-playing .ra-btn { min-height: 38px; padding-top: 8px; padding-bottom: 8px; }
 }
+
+/* The champion mark is the Card Champion Polaroid itself: shown whole, no
+   circle crop or extra ring (the frame is part of the art). */
+.wl-row .wl-champ:not(.is-mark) { width: 16px; height: 20px; border: 0; border-radius: 0; object-fit: contain; }

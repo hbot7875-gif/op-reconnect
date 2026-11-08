@@ -29,6 +29,7 @@
 // screen, so it stays here as Quick Access.
 
 import { el, esc, showOverlay, hideOverlay, getState, setState, toast } from './state.js'
+import { isFramedArt } from './badge-frames.js'
 import { getAgentNo } from './session.js'
 import { call } from './api.js'
 import { badgeDrawerSheet } from './badge-drawer.js'
@@ -48,7 +49,11 @@ function agentIdCard(state) {
   const top = el('div', 'aid-top')
   const photo = el('div', 'aid-photo')
   const artworkUrl = p.equippedBadgeArtwork?.artworkUrl
-  if (artworkUrl) {
+  if (artworkUrl && isFramedArt(p.equippedBadgeArtwork?.artFrame)) {
+    // A Polaroid badge is shown whole, as designed — no crop, so no framing tool.
+    photo.classList.add('is-polaroid')
+    photo.innerHTML = `<img src="${esc(artworkUrl)}" alt="">`
+  } else if (artworkUrl) {
     const crop = p.avatarCrop || { x: 50, y: 50, zoom: 1 }
     photo.innerHTML = `<img src="${esc(artworkUrl)}" alt="" style="object-position:${crop.x}% ${crop.y}%; transform:scale(${crop.zoom})">`
     // A photo the player equipped themselves is worth letting them frame

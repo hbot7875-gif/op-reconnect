@@ -7,6 +7,7 @@
 // bragging rights only and says so.
 
 import { badgeThumb } from './badge-art.js'
+import { isFramedArt } from './badge-frames.js'
 import { call } from './api.js'
 import { el, esc } from './state.js'
 import { getAgentNo } from './session.js'
@@ -93,7 +94,7 @@ function paintList(body, agents, state) {
       : `<span class="rank-name">${esc(a.codename)}</span>`
     row.innerHTML = `
       <span class="rank-place" aria-label="Rank ${place}">${place}</span>
-      <span class="rank-agent-icon${hasEquippedBadge ? ' has-equipped-badge' : ''}">${badgeArt ? `<img class="rank-agent-photo" src="${esc(badgeThumb(badgeArt))}" data-badge-full="${esc(badgeArt)}" alt="" loading="lazy" decoding="async" width="60" height="60">` : (collectionBadge ? '🎖️' : badge ? badge.icon : '⟭⟬')}</span>
+      <span class="rank-agent-icon${hasEquippedBadge ? ' has-equipped-badge' : ''}${badgeArt && isFramedArt(collectionBadge?.artFrame) ? ' is-polaroid' : ''}">${badgeArt ? `<img class="rank-agent-photo" src="${esc(badgeThumb(badgeArt))}" data-badge-full="${esc(badgeArt)}" alt="" loading="lazy" decoding="async" width="60" height="60">` : (collectionBadge ? '🎖️' : badge ? badge.icon : '⟭⟬')}</span>
       <span class="rank-main">
         ${name}
         <span class="rank-sub">Level ${a.level}${activeTab === 'all' ? ` · ${esc(MODE_LABEL[a.mode] || a.mode)}` : ''}</span>

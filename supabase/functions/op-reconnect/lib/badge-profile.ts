@@ -169,6 +169,8 @@ export async function getBadgeCollection(supabase: SupabaseDB, params: Record<st
         rarity: template.rarity,
         section: template.section,
         unlockHint: template.unlock_hint,
+        // A frame baked into the art (Polaroid): shown as-is, never cropped.
+        artFrame: template.art_frame || null,
         artworkUrl: publicArtUrl(artById.get(a.artwork_id) || null),
         earnedAt: a.earned_at,
         equipped: a.badge_id === equippedBadgeId,
@@ -181,6 +183,7 @@ export async function getBadgeCollection(supabase: SupabaseDB, params: Record<st
     equippedBadgeId,
     templates: (templates || []).map((t: any) => ({
       id: t.id, section: t.section, rarity: t.rarity, name: t.name, unlockHint: t.unlock_hint,
+      artFrame: t.art_frame || null,
     })),
     earned,
   }
@@ -229,8 +232,8 @@ async function fetchEquippedAwards(
  *  changes. */
 export async function resolveEquippedBadges(
   supabase: SupabaseDB, pairs: { agentNo: string; badgeId: string | null }[],
-): Promise<Map<string, { badgeId: string; name: string; rarity: string; artworkUrl: string | null } | null>> {
-  const out = new Map<string, { badgeId: string; name: string; rarity: string; artworkUrl: string | null } | null>()
+): Promise<Map<string, { badgeId: string; name: string; rarity: string; artworkUrl: string | null; artFrame: string | null } | null>> {
+  const out = new Map<string, { badgeId: string; name: string; rarity: string; artworkUrl: string | null; artFrame: string | null } | null>()
   const withBadge = pairs.filter((p) => p.badgeId)
   if (withBadge.length === 0) return out
 
@@ -240,7 +243,7 @@ export async function resolveEquippedBadges(
 
   const [{ rows: awardRows, error: awardsErr }, { data: templates, error: templatesErr }] = await Promise.all([
     fetchEquippedAwards(supabase, agentNos, badgeIds),
-    supabase.from('rc_badge_catalog').select('id, name, rarity').in('id', templateIds),
+    supabase.from('rc_badge_catalog').select('id, name, rarity, art_frame').in('id', templateIds),
   ])
   if (awardsErr || templatesErr) {
     console.error(`resolveEquippedBadges failed: ${awardsErr?.message || templatesErr?.message}`)
@@ -266,6 +269,7 @@ export async function resolveEquippedBadges(
     out.set(p.agentNo, {
       badgeId: p.badgeId as string, name: template.name, rarity: template.rarity,
       artworkUrl: publicArtUrl(artById.get(award.artwork_id) || null),
+      artFrame: template.art_frame || null,
     })
   }
   return out

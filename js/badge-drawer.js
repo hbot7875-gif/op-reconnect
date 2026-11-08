@@ -13,11 +13,13 @@ import { el, esc, getState, hideOverlay, setState, showOverlay, toast } from './
 import { getAgentNo } from './session.js'
 import { badgeShareControls } from './badge-share.js'
 import { BADGE_MILESTONES } from '../supabase/functions/op-reconnect/lib/badge-share-layout.js'
+import { isFramedArt, RUN_ARMY_BADGES } from './badge-frames.js'
 
 const BADGE_SECTIONS = [
   { id: 'district', icon: '◇', title: 'Current District', note: 'Progress from the district you are restoring now' },
   { id: 'ward', icon: '⌂', title: 'Ward Collection', note: 'Earned by bringing a whole ward back online' },
   { id: 'achievement', icon: '✦', title: 'Achievements', note: 'Special moments from missions and challenges' },
+  { id: 'run_army', icon: '♠', title: 'RUN ARMY', note: 'Badges from Run ARMY games' },
   { id: 'event', icon: '◉', title: 'Special Events', note: 'Limited badges from live events' },
 ]
 
@@ -67,9 +69,12 @@ async function loadAndPaint(sheet, state) {
 
   grid.innerHTML = ''
 
+  // Run ARMY game badges live in their own section (the catalog still files
+  // them under achievement; only the collection's grouping changes).
+  const sectionOf = (templateId, section) => (RUN_ARMY_BADGES.includes(templateId) ? 'run_army' : section)
   for (const sectionMeta of BADGE_SECTIONS) {
-    const earned = collection.earned.filter((e) => e.section === sectionMeta.id)
-    const locked = lockedTemplates.filter((t) => t.section === sectionMeta.id)
+    const earned = collection.earned.filter((e) => sectionOf(e.templateId, e.section) === sectionMeta.id)
+    const locked = lockedTemplates.filter((t) => sectionOf(t.id, t.section) === sectionMeta.id)
     if (earned.length === 0 && locked.length === 0) continue
 
     const section = el('section', 'bdr-section')
@@ -82,19 +87,19 @@ async function loadAndPaint(sheet, state) {
     for (const e of earned) {
       const wearing = liveState.player?.equippedBadgeId === e.badgeId
       shelf.appendChild(badgeSlot(
-        collectionTile(e, wearing, liveState), e.name, e.rarity, true,
+        collectionTile(e, wearing, liveState), e.name, e.rarity, true, isFramedArt(e.artFrame),
       ))
     }
     for (const t of locked) {
-      shelf.appendChild(badgeSlot(lockedTile(t, liveState), t.name, t.rarity, false))
+      shelf.appendChild(badgeSlot(lockedTile(t, liveState), t.name, t.rarity, false, isFramedArt(t.artFrame)))
     }
     section.appendChild(shelf)
     grid.appendChild(section)
   }
 }
 
-function badgeSlot(tile, name, rarity, earned) {
-  const slot = el('div', 'bdr-slot ' + (earned ? 'earned' : 'locked') + (rarity === 'rare' ? ' rare' : ''))
+function badgeSlot(tile, name, rarity, earned, framed = false) {
+  const slot = el('div', 'bdr-slot ' + (earned ? 'earned' : 'locked') + (rarity === 'rare' ? ' rare' : '') + (framed ? ' is-polaroid' : ''))
   slot.appendChild(tile)
   slot.appendChild(el('span', 'bdr-label', esc(name)))
   slot.appendChild(el('small', 'bdr-state', earned ? (rarity === 'rare' ? 'RARE · UNLOCKED' : 'UNLOCKED') : 'LOCKED'))
@@ -103,19 +108,21 @@ function badgeSlot(tile, name, rarity, earned) {
 
 function collectionTile(e, wearing, state) {
   const art = e.artworkUrl ? `<img class="bdr-photo" src="${esc(badgeThumb(e.artworkUrl))}" data-badge-full="${esc(e.artworkUrl)}" alt="" loading="lazy" decoding="async">` : `<span class="bdr-icon">${e.rarity === 'rare' ? '🎖️' : '🔹'}</span>`
-  const tile = el('button', 'bdr-tile got' + (wearing ? ' equipped' : '') + (e.rarity === 'rare' ? ' rare' : ''),
+  // A Polaroid badge carries its own frame: no gold rare border or glow on top.
+  const framed = isFramedArt(e.artFrame)
+  const tile = el('button', 'bdr-tile got' + (wearing ? ' equipped' : '') + (e.rarity === 'rare' ? ' rare' : '') + (framed ? ' is-polaroid' : ''),
     `${art}${e.rarity === 'rare' ? '<span class="bdr-rarity">RARE</span>' : ''}${wearing ? '<i>WORN</i>' : ''}`)
   tile.setAttribute('aria-label', e.name)
   tile.onclick = () => showOverlay(badgeStorySheet({
     got: true, collection: true, rarity: e.rarity, photo: e.artworkUrl,
     name: e.name, desc: badgeStory(e, state), badgeId: e.badgeId,
-    templateId: e.templateId, wearing,
+    templateId: e.templateId, wearing, artFrame: e.artFrame || null,
   }, state))
   return tile
 }
 
 function lockedTile(t, state) {
-  const tile = el('button', 'bdr-tile locked' + (t.rarity === 'rare' ? ' rare' : ''), '<span class="bdr-lock-core">◇</span>')
+  const tile = el('button', 'bdr-tile locked' + (t.rarity === 'rare' ? ' rare' : '') + (isFramedArt(t.artFrame) ? ' is-polaroid' : ''), '<span class="bdr-lock-core">◇</span>')
   tile.setAttribute('aria-label', `${t.name}, locked. ${t.unlockHint}`)
   tile.onclick = () => showOverlay(badgeStorySheet({
     got: false, rarity: t.rarity, name: t.name, desc: t.unlockHint,
@@ -156,7 +163,7 @@ export function badgeStory(e, state) {
 }
 
 export function badgeStorySheet(info, state) {
-  const detail = el('div', 'sheet bdr-story' + (info.rarity === 'rare' ? ' is-rare' : ''))
+  const detail = el('div', 'sheet bdr-story' + (info.rarity === 'rare' ? ' is-rare' : '') + (isFramedArt(info.artFrame) ? ' is-polaroid' : ''))
   const iconHtml = info.photo ? `<img class="bdr-detail-photo" src="${esc(info.photo)}" alt="">`
     : `<span class="bdr-detail-icon">${info.got ? (info.icon || (info.rarity === 'rare' ? '🎖️' : '◇')) : '🔒'}</span>`
   detail.innerHTML = `
@@ -183,7 +190,7 @@ export function badgeStorySheet(info, state) {
           ...current.player,
           equippedBadgeId: badgeId || null,
           equippedBadgeArtwork: badgeId && info.collection
-            ? { badgeId, name: info.name, rarity: info.rarity, artworkUrl: info.photo || null }
+            ? { badgeId, name: info.name, rarity: info.rarity, artworkUrl: info.photo || null, artFrame: info.artFrame || null }
             : null,
         },
       })

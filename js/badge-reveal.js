@@ -4,6 +4,7 @@
 // a district restoration never turns into several blocking popups.
 
 import { call } from './api.js'
+import { isFramedArt } from './badge-frames.js'
 import { badgeDrawerSheet, badgeStory } from './badge-drawer.js'
 import { collectionBadgeIds } from './badges.js'
 import { keepInDiaryControl } from './diary-keep.js'
@@ -94,7 +95,7 @@ export function unlockSheet(badge, additional, state) {
   const earnedMs = Date.parse(badge.earnedAt || '')
   const late = Number.isFinite(earnedMs) && Date.now() - earnedMs > LATE_REVEAL_MS
   const earnedOn = late ? new Date(earnedMs).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''
-  const sheet = el('div', 'sheet badge-unlock' + (rare ? ' is-rare' : ''))
+  const sheet = el('div', 'sheet badge-unlock' + (rare ? ' is-rare' : '') + (isFramedArt(badge.artFrame) ? ' is-polaroid' : ''))
   const art = badge.artworkUrl
     ? `<img src="${esc(badge.artworkUrl)}" alt="" decoding="async">`
     : `<span>${rare ? '🎖️' : '◇'}</span>`

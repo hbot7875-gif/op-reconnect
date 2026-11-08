@@ -97,5 +97,13 @@ export function drawPolaroid(ctx, size, drawPhoto, frame = 'polaroid') {
   ctx.restore()
 }
 
+/** True for badge art with a frame baked in (a Polaroid): it is shown
+ *  as-is everywhere — never cropped to a circle, never given a second frame.
+ *  `artFrame` comes from the server (rc_badge_catalog.art_frame). */
+export const isFramedArt = (artFrame) => BADGE_FRAMES.includes(artFrame)
+
+/** Run ARMY game badges get their own Badge Collection section. */
+export const RUN_ARMY_BADGES = Object.freeze(['achievement_card_champion', 'achievement_card_champion_pro'])
+
 /** The frame a template asks for, or null. */
 export const frameOf = (template) => (BADGE_FRAMES.includes(template?.art_frame) ? template.art_frame : null)
