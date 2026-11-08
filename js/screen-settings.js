@@ -22,6 +22,7 @@ import { agentManualSheet } from './agent-manual.js'
 import { setIcon } from './settings-icons.js'
 import { goRunAmi } from './router.js'
 import { openTesterManager } from './run-ami-testers.js'
+import { openHelp, openHelpInbox } from './help.js'
 
 let account = null
 
@@ -220,6 +221,11 @@ function paintSections(body, state) {
   // place here. Privacy before Terms: it is the one people come looking for.
   body.appendChild(section('Help & legal', [
     {
+      icon: 'messages', name: 'Get help', value: state?.help?.replyUnread ? `${state.help.replyUnread} new` : '',
+      body: 'Tell the team about a problem. We reply right here.',
+      onClick: () => openHelp(),
+    },
+    {
       icon: 'bookOpen', name: 'How to Play', value: '',
       body: 'The game loop, XP, and protecting your progress.',
       onClick: () => showOverlay(agentManualSheet()),
@@ -299,6 +305,11 @@ function paintSections(body, state) {
         onClick: () => { window.location.href = 'playlist-maker.html' },
       },
       ...(runAmiTester ? [runAmiRow] : []),
+      {
+        icon: 'mail', name: 'Help inbox', value: state?.help?.inboxOpen ? `${state.help.inboxOpen} open` : '',
+        body: 'Problems agents reported, with their stream details.',
+        onClick: () => openHelpInbox(),
+      },
       {
         icon: 'users', name: 'War of Cards testers', value: '',
         body: 'Add or remove who can play before collecting all 15 covers.',

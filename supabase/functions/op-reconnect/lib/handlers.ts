@@ -24,6 +24,7 @@ import { getActiveBroadcasts, legalInfoNoticeDue, LEGAL_INFO_NOTICE_ID } from '.
 import { logFeedEvent, getCityFeed, markOnline, getOnlineNow } from './feed.ts'
 import { logEngagementEvent } from './engagement.ts'
 import { awardBadge, resolveEquippedBadges } from './badge-profile.ts'
+import { helpStateFor } from './help.ts'
 import { districtBadgeProgress } from './badge-rules.js'
 import { getBackupOverlay, districtBackupPassChance } from './backup-pass.ts'
 import { getVmaBanner } from './vma-voting.ts'
@@ -549,6 +550,9 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
   // matters is that they all run AFTER awardStreakBadges / the district
   // block's awardBadge calls above (badgeRows must see those inserts), which
   // the await on this batch preserves. Twelve round trips become one.
+  // Help portal: unread team replies (bell), and AGENT000's open requests.
+  // Started alongside the batch below and awaited after it.
+  const helpPending = timed('help', helpStateFor(supabase, player.agent_no).catch(() => ({ replyUnread: 0, inboxOpen: 0 })))
   const [
     modeReview, { data: badgeRows }, { data: itemRows }, broadcasts, cityFeed,
     waitingAgents, onlineNow, districtMessages, equippedMap, isBadgeVaultEditor, leaveInfo, vma,
@@ -611,6 +615,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     // Last, for the same reason as above.
     timed('badgeCatalog', supabase.from('rc_badge_catalog').select('id').eq('active', true)),
   ])
+  const help = await helpPending
   const equippedBadgeArtwork = equippedMap.get(player.agent_no) || null
   // One extra read only when someone is actually helping — the codename is
   // what makes the bell read as a person rather than a status change.
@@ -724,6 +729,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     album,
     runAmiTester,
     warUnlockDue,
+    help,
     today: {
       kstDate: today,
       countedStreams: counted,

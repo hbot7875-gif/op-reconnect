@@ -4579,6 +4579,52 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
   box-shadow: 0 0 6px #34d17c; flex-shrink: 0; animation: activeNowPulse 2.2s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .rw-online-dot { animation: none; } }
 
+/* Help portal (js/help.js): Get help for agents, Help inbox for AGENT000. */
+.help-eyebrow { color: var(--purple-lt); font-family: var(--mono); font-size: 10px; font-weight: 800; letter-spacing: .8px; text-transform: uppercase; }
+.help-sheet h3 { margin: 4px 0 6px; }
+.help-sheet h3[tabindex="-1"]:focus { outline: none; box-shadow: none; }
+.help-lede { margin: 0 0 12px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.help-topics { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; padding: 0; border: 0; }
+.help-topics legend { margin-bottom: 6px; color: var(--dim); font-family: var(--mono); font-size: 10px; letter-spacing: .6px; text-transform: uppercase; }
+.help-chip input { position: absolute; opacity: 0; pointer-events: none; }
+.help-chip span { display: inline-block; padding: 7px 12px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted);
+  font-size: 12.5px; cursor: pointer; }
+.help-chip input:checked + span { border-color: var(--purple-lt); background: rgba(139,92,246,.14); color: var(--text); }
+.help-chip input:focus-visible + span { outline: 2px solid var(--purple-lt); outline-offset: 2px; }
+.help-field { display: block; }
+.help-field > span { display: block; margin-bottom: 6px; color: var(--dim); font-family: var(--mono); font-size: 10px; letter-spacing: .6px; text-transform: uppercase; }
+.help-sheet textarea { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px;
+  background: rgba(255,255,255,.03); color: var(--text); font: 14px var(--body, sans-serif); resize: vertical; }
+.help-err { margin: 8px 0 0; color: var(--crimson); font-size: 12.5px; }
+.help-send { width: 100%; margin-top: 10px; }
+.help-mine { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
+.help-mine h4 { margin: 0 0 8px; font-size: 13px; }
+.help-list { display: flex; flex-direction: column; gap: 8px; }
+.help-item { padding: 11px 12px; border: 1px solid var(--border); border-radius: 12px; background: rgba(255,255,255,.02); }
+.help-item.is-new { border-color: rgba(139,92,246,.55); }
+.help-item.is-resolved { opacity: .7; }
+.help-item header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 13px; }
+.help-item header small { color: var(--dim); font-weight: 400; }
+.help-status { flex: none; padding: 2px 8px; border-radius: 999px; background: rgba(255,255,255,.06); color: var(--muted);
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: .4px; text-transform: uppercase; }
+.help-status.is-open { color: var(--gold); }
+.help-status.is-resolved { color: #34d17c; }
+.help-meta { margin-top: 3px; color: var(--dim); font-size: 11.5px; }
+.help-msg { margin: 6px 0 4px; color: var(--text); font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.help-item > small { color: var(--dim); font-size: 11px; }
+.help-diag { margin: 4px 0 8px; color: var(--muted); font-family: var(--mono); font-size: 10.5px; line-height: 1.5; overflow-wrap: anywhere; }
+.help-reply { margin-top: 8px; padding: 9px 11px; border-left: 2px solid var(--purple); border-radius: 0 10px 10px 0; background: rgba(139,92,246,.10); }
+.help-reply b { font-size: 11.5px; color: var(--purple-lt); }
+.help-reply p { margin: 3px 0 2px; font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.help-reply small { color: var(--dim); font-size: 11px; }
+.help-inbox textarea { margin-top: 4px; }
+.help-actions { display: flex; gap: 8px; margin-top: 8px; }
+.help-actions .btn { flex: 1; min-height: 38px; margin: 0; }
+.help-tabs { display: flex; gap: 6px; margin: 4px 0 12px; }
+.help-tabs button { padding: 6px 14px; border: 1px solid var(--border); border-radius: 999px; background: none; color: var(--muted);
+  font: 600 12px var(--body, sans-serif); cursor: pointer; }
+.help-tabs button[aria-selected="true"] { border-color: var(--purple-lt); background: rgba(139,92,246,.14); color: var(--text); }
+
 /* Polaroid badges (rc_badge_catalog.art_frame): the lavender frame is part
    of the badge art, so it is shown whole and as designed everywhere — never
    cropped to a circle or square, never given a second frame, ring,

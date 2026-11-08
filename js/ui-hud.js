@@ -26,6 +26,7 @@ import { redZonePercent } from './red-zone-ui.js'
 import { getReconnectChatSeen, reconnectChatUnreadCount } from './reconnect-chat-unread.js'
 import { navIcon, hudIcon } from './nav-icons.js'
 import { isFramedArt } from './badge-frames.js'
+import { openHelp, openHelpInbox } from './help.js'
 import { photoOnly, photoOnlyCached } from './badge-photo-only.js'
 import { hasMoonReview } from './moon-review-dot.js'
 
@@ -231,7 +232,8 @@ export function renderHud(container, state) {
   // anyone can still collect — worth a personal nudge, once.
   const chestSignal = hasUnseenGroupChests(state?.vma) ? 1 : 0
   const teamChat = reconnectTeamChat(state)
-  const signalCount = invites.length + reconnectAlerts.length + unreadTotal + backupSignal + chestSignal + (teamChat?.unread || 0)
+  const helpSignal = (state?.help?.replyUnread || 0) + (state?.help?.inboxOpen || 0)
+  const signalCount = invites.length + reconnectAlerts.length + unreadTotal + backupSignal + chestSignal + (teamChat?.unread || 0) + helpSignal
   // The sticky ReConnect banner was removed everywhere (2026-11-08): the
   // quest card carries the status, and unread Team Chat messages count on
   // the bell (reconnectTeamChat) as well as the card's Team Chat button.
@@ -409,8 +411,38 @@ function invitesSheet(state) {
   const chestCount = unclaimedGroupChests(state?.vma)
 
   const teamChat = reconnectTeamChat(state)
-  if (!invites.length && !alerts.length && !unreadSignals.length && !backupNew && !chestsNew && !teamChat) {
+  const helpReplies = state?.help?.replyUnread || 0
+  const helpOpen = state?.help?.inboxOpen || 0
+  if (!invites.length && !alerts.length && !unreadSignals.length && !backupNew && !chestsNew && !teamChat && !helpReplies && !helpOpen) {
     sheet.appendChild(el('p', 'muted', "No messages, invites or partner alerts. If another agent signals you, it shows up here."))
+  }
+
+  // Help portal: the team answered this agent (or, for AGENT000, open requests).
+  if (helpReplies) {
+    const block = el('div', 'bd-block')
+    block.innerHTML = `
+      <div class="bd-block-head">💬 The ReConnect team replied</div>
+      <p class="muted invite-body">${helpReplies === 1 ? 'There is a reply' : `There are ${helpReplies} replies`} to your help request.</p>
+    `
+    const actions = el('div', 'invite-actions')
+    const read = el('button', 'btn btn-primary', 'Read reply')
+    read.onclick = () => { hideOverlay(); openHelp() }
+    actions.appendChild(read)
+    block.appendChild(actions)
+    sheet.appendChild(block)
+  }
+  if (helpOpen) {
+    const block = el('div', 'bd-block')
+    block.innerHTML = `
+      <div class="bd-block-head">📨 ${helpOpen} open help request${helpOpen === 1 ? '' : 's'}</div>
+      <p class="muted invite-body">Agents are waiting for an answer.</p>
+    `
+    const actions = el('div', 'invite-actions')
+    const open = el('button', 'btn btn-primary', 'Open inbox')
+    open.onclick = () => { hideOverlay(); openHelpInbox() }
+    actions.appendChild(open)
+    block.appendChild(actions)
+    sheet.appendChild(block)
   }
 
   if (teamChat) {

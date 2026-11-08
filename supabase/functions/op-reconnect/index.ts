@@ -74,6 +74,7 @@ import { albumState, albumGift } from './lib/album.ts'
 import { cronRaplineRefresh, getRaplineTracker } from './lib/rapline-tracker.ts'
 import { cronMamaRankCheck, getMamaRanking } from './lib/mama-rank.ts'
 import { getWarLeaderboard, markWarUnlockSeen, markWarUnlockAction } from './lib/war-of-cards.ts'
+import { submitHelpRequest, getMyHelpRequests, helpInbox, helpReply } from './lib/help.ts'
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -175,6 +176,11 @@ const ROUTES: Record<string, Route> = {
   albumGift: { auth: 'agent', handler: (sb, p) => albumGift(sb, p) },
   // War of Cards testers (lib/run-ami-testers.js): AGENT000 only, checked there.
   runAmiTesters: { auth: 'agent', handler: (sb, p) => runAmiTesters(sb, p) },
+  // Help portal (lib/help.ts): agents send and read; AGENT000 answers.
+  submitHelpRequest: { auth: 'agent', handler: (sb, p) => submitHelpRequest(sb, p) },
+  getMyHelpRequests: { auth: 'agent', handler: (sb, p) => getMyHelpRequests(sb, p) },
+  helpInbox: { auth: 'agent', handler: (sb, p) => helpInbox(sb, p) },
+  helpReply: { auth: 'agent', handler: (sb, p) => helpReply(sb, p) },
   runAmiTesterAdd: { auth: 'agent', handler: (sb, p) => runAmiTesterAdd(sb, p) },
   runAmiTesterRemove: { auth: 'agent', handler: (sb, p) => runAmiTesterRemove(sb, p) },
   startDistrict: { auth: 'agent', handler: (sb, p) => startDistrict(sb, p) },
