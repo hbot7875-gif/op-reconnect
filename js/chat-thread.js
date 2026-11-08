@@ -8,6 +8,7 @@
 import { el, esc, toast } from './state.js'
 
 const mountedMessages = new WeakMap()
+const SEND_ICON = '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.7 3.3a.5.5 0 0 0-.7.6L5.9 12l-2.9 8.1a.5.5 0 0 0 .7.6l17-8.2a.5.5 0 0 0 0-.9z"/><path d="M6 12h15"/></svg>'
 
 function sameMessage(a, b) {
   return !!a && !!b && a.isMe === b.isMe && a.isSystem === b.isSystem
@@ -66,6 +67,8 @@ export function updateChatThread(wrap, messages, opts = {}) {
  *   readOnlyNote?: string,
  *   errorText?: (code: string) => string,
  *   variant?: string,
+ *   quickReplies?: string[],
+ *   sendIcon?: boolean,
  * }} opts
  */
 export function chatThread(messages, opts) {
@@ -92,19 +95,35 @@ export function chatThread(messages, opts) {
   input.setAttribute('aria-label', opts.placeholder || 'Message')
   input.placeholder = opts.placeholder || 'Message…'
   input.maxLength = 240
-  const sendBtn = el('button', 'btn btn-ghost', 'Send')
-  const send = async () => {
-    const body = input.value.trim()
+  // Opt-in (ReConnect Team Chat): an arrow instead of the word Send.
+  const sendBtn = el('button', 'btn btn-ghost' + (opts.sendIcon ? ' chat-send-icon' : ''),
+    opts.sendIcon ? SEND_ICON : 'Send')
+  if (opts.sendIcon) sendBtn.setAttribute('aria-label', 'Send')
+  // `preset` is a quick reply: sent as-is, leaving any typed draft alone.
+  const send = async (preset) => {
+    const body = (typeof preset === 'string' ? preset : input.value).trim()
     if (!body) return
     input.disabled = true
     sendBtn.disabled = true
+    for (const chip of wrap.querySelectorAll('.chat-quick-chip')) chip.disabled = true
     const r = await opts.onSend(body)
     input.disabled = false
     sendBtn.disabled = false
-    if (r?.success) { input.value = ''; opts.onSent?.() }
+    for (const chip of wrap.querySelectorAll('.chat-quick-chip')) chip.disabled = false
+    if (r?.success) { if (typeof preset !== 'string') input.value = ''; opts.onSent?.() }
     else toast((opts.errorText ? opts.errorText(r?.error) : r?.error) || "Couldn't send — try again.")
   }
-  sendBtn.onclick = send
+  sendBtn.onclick = () => send()
+  if (opts.quickReplies?.length) {
+    const quick = el('div', 'chat-quick')
+    for (const text of opts.quickReplies) {
+      const chip = el('button', 'chat-quick-chip', esc(text))
+      chip.type = 'button'
+      chip.onclick = () => send(text)
+      quick.appendChild(chip)
+    }
+    wrap.appendChild(quick)
+  }
   input.onkeydown = (e) => { if (e.key === 'Enter') send() }
   composer.append(input, sendBtn)
   wrap.appendChild(composer)

@@ -4578,6 +4578,128 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .rw-online-dot { width: 6px; height: 6px; border-radius: 50%; background: #34d17c;
   box-shadow: 0 0 6px #34d17c; flex-shrink: 0; animation: activeNowPulse 2.2s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .rw-online-dot { animation: none; } }
+
+/* ReConnect quest lobby (an open mission): the goal, two numbers, the team
+   as seats, one status line and one action. Invites happen in the teammate
+   picker sheet; leaving and the details sit under More options. */
+.reconnect-card { position: relative; }
+.reconnect-card > .reconnect-quest-share { position: absolute; top: 12px; right: 14px; margin: 0; padding: 5px 12px;
+  border: 1px solid var(--border); border-radius: 999px; font-size: 12px; }
+.reconnect-card.is-lobby .reconnect-mission-core { padding: 6px 0 2px; border-bottom: 0; }
+.reconnect-card.is-lobby .reconnect-mission-core > b { font-family: var(--disp); font-size: 20px; line-height: 1.25; }
+.reconnect-card.is-lobby .reconnect-mission-core > p { font-size: 13.5px; color: var(--text); opacity: .86; }
+.reconnect-card.is-lobby .reconnect-coop-progress { margin-top: 8px; padding: 12px 0 4px; border-bottom: 0; }
+.reconnect-seats { margin-top: 14px; }
+.rl-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.rl-head span { color: var(--dim); font-family: var(--mono); font-size: 9.5px; font-weight: 800; letter-spacing: .7px; text-transform: uppercase; }
+.rl-head b { color: var(--purple-lt); font-size: 12.5px; }
+.rl-seats { display: grid; grid-template-columns: repeat(auto-fit, minmax(86px, 1fr)); gap: 8px; }
+.rl-seat { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 0;
+  padding: 12px 6px 10px; border: 1px solid var(--border); border-radius: 14px; background: rgba(255,255,255,.03);
+  color: var(--text); font: inherit; }
+.rl-seat b { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.rl-seat small { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+.rl-avatar { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--purple);
+  color: #fff; font-family: var(--disp); font-size: 17px; }
+.rl-seat.is-me { border-color: rgba(139,92,246,.45); }
+.rl-seat.is-ready small { color: #34d17c; }
+.rl-seat.is-quiet small, .rl-seat.is-invited small { color: var(--gold); }
+.rl-seat.is-invited .rl-avatar { border: 2px dashed var(--purple-lt); background: transparent; color: var(--purple-lt); }
+.rl-seat.is-empty { border-style: dashed; background: none; }
+.rl-seat.is-empty .rl-avatar { background: rgba(255,255,255,.06); color: var(--muted); font-size: 22px; }
+button.rl-seat.is-empty { cursor: pointer; }
+button.rl-seat.is-empty b { color: var(--purple-lt); }
+button.rl-seat:focus-visible, .rl-cancel:focus-visible { outline: 2px solid var(--purple-lt); outline-offset: 2px; }
+.rl-cancel { position: absolute; top: 4px; right: 4px; width: 26px; height: 26px; border: 0; border-radius: 50%;
+  background: rgba(255,255,255,.08); color: var(--muted); font-size: 16px; line-height: 1; cursor: pointer; }
+.reconnect-card.is-lobby .reconnect-status { margin: 14px 0 4px; padding: 11px 13px; border: 0; border-radius: 12px;
+  background: rgba(139,92,246,.12); }
+.reconnect-card.is-lobby .reconnect-status > b { font-size: 16px; }
+.reconnect-find-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; width: 100%; }
+.reconnect-find-btn small { font: 600 11px var(--body, sans-serif); letter-spacing: 0; text-transform: none; opacity: .8; }
+/* The sticky ReConnect banner only repeats what this card already shows. */
+#hud:has(~ #scene .reconnect-card) #hudReconnectStatus { display: none; }
+.reconnect-picker .rl-eyebrow { color: var(--purple-lt); font-family: var(--mono); font-size: 10px; font-weight: 800; letter-spacing: .8px; text-transform: uppercase; }
+.reconnect-picker h3 { margin: 4px 0 2px; }
+.reconnect-picker .rl-sub { margin: 0 0 10px; color: var(--muted); font-size: 13px; }
+.reconnect-picker .rl-note { width: 100%; margin: 4px 0 10px; }
+.reconnect-picker .rl-list { max-height: 52vh; overflow-y: auto; }
+.reconnect-picker .reconnect-wait-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-rows: auto auto;
+  column-gap: 10px; row-gap: 2px; }
+.reconnect-picker .rw-online-dot { grid-row: 1 / 3; align-self: center; }
+.reconnect-picker .rw-name { grid-column: 2; grid-row: 1; }
+.reconnect-picker .rw-since { grid-column: 2; grid-row: 2; }
+.reconnect-picker .rw-invite { display: inline-flex; grid-column: 3; grid-row: 1 / 3; align-self: center; width: auto; min-height: 38px; margin: 0; }
+.reconnect-card.is-lobby .reconnect-decline { display: block; width: 100%; min-height: 40px; margin-top: 8px; font-size: 12px; }
+.reconnect-picker .rl-active-note { margin: 0 0 8px; color: var(--dim); font-family: var(--mono); font-size: 10.5px; letter-spacing: .3px; }
+.reconnect-tools { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.reconnect-card .reconnect-tools .reconnect-tool { display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  width: 100%; min-height: 42px; margin: 0; padding: 8px 10px; font-size: 12px; }
+.reconnect-tool .reconnect-chat-badge { margin-left: 2px; }
+.reconnect-chat-sheet h3, .reconnect-options-sheet h3 { margin: 4px 0 10px; }
+.rl-eyebrow { color: var(--purple-lt); font-family: var(--mono); font-size: 10px;
+  font-weight: 800; letter-spacing: .8px; text-transform: uppercase; }
+.reconnect-options-body { max-height: 62vh; overflow-y: auto; }
+
+/* ReConnect lobby, round two: milestones, joins, quick replies, the win,
+   and bottom sheets for the three ReConnect popups only (other sheets keep
+   the centred dialog — see the mobile overlay note above). */
+.pbar.has-ticks { position: relative; }
+.pbar-tick { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: rgba(255,255,255,.16); }
+.pbar-tick.is-hit { background: rgba(255,255,255,.55); }
+.pbar-tick.is-new { animation: rl-tick-pulse 1.1s ease-out 1; }
+@keyframes rl-tick-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(217,173,95,.9); background: var(--gold); }
+  100% { box-shadow: 0 0 0 7px rgba(217,173,95,0); }
+}
+.rl-seat.is-new { animation: rl-seat-join .6s cubic-bezier(.2,1.4,.4,1) 1; border-color: rgba(52,209,124,.55); }
+.rl-seat.is-new .rl-avatar { animation: rl-avatar-join .7s ease-out 1; }
+@keyframes rl-seat-join { 0% { transform: scale(.82); opacity: .4; } 60% { transform: scale(1.06); opacity: 1; } 100% { transform: scale(1); } }
+@keyframes rl-avatar-join { 0% { box-shadow: 0 0 0 0 rgba(139,92,246,.8); } 100% { box-shadow: 0 0 0 12px rgba(139,92,246,0); } }
+
+.reconnect-chat-sheet .chat-quick { display: flex; gap: 6px; margin: 10px 0 0; overflow-x: auto; scrollbar-width: none; }
+.reconnect-chat-sheet .chat-quick::-webkit-scrollbar { display: none; }
+.chat-quick-chip { flex: 0 0 auto; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px;
+  background: transparent; color: var(--muted); font: 500 12px var(--body, sans-serif); cursor: pointer; white-space: nowrap; }
+.chat-quick-chip:hover { color: var(--text); border-color: var(--purple-lt); }
+.chat-quick-chip:focus-visible { outline: 2px solid var(--purple-lt); outline-offset: 2px; }
+.reconnect-chat-sheet .reconnect-chat-composer { display: flex; gap: 8px; align-items: center; }
+.reconnect-chat-sheet .reconnect-chat-composer .ob-input { flex: 1; min-width: 0; margin: 0; }
+.reconnect-chat-sheet .chat-send-icon { flex: 0 0 auto; display: inline-grid; place-items: center; width: 42px; min-width: 42px;
+  height: 42px; min-height: 42px; margin: 0; padding: 0; border-radius: 12px; background: var(--purple); border-color: transparent;
+  color: #fff; }
+
+.rl-options { display: flex; flex-direction: column; gap: 8px; }
+.rl-opt { border: 1px solid var(--border); border-radius: 12px; background: rgba(255,255,255,.02); }
+.rl-opt > summary { list-style: none; display: flex; align-items: center; justify-content: space-between; min-height: 46px;
+  padding: 0 14px; font-weight: 600; font-size: 14px; cursor: pointer; }
+.rl-opt > summary::-webkit-details-marker { display: none; }
+.rl-opt > summary::after { content: '›'; color: var(--muted); font-size: 18px; transition: transform .15s; }
+.rl-opt[open] > summary::after { transform: rotate(90deg); }
+.rl-opt-body { padding: 0 14px 12px; }
+.rl-opt-body .reconnect-roster { margin-top: 0; }
+.rl-opt-leave > * { margin: 0; }
+
+.rl-win { position: relative; overflow: hidden; text-align: center; }
+.rl-win h3 { font-size: 20px; }
+/* Focus moves to a sheet's heading for screen readers; the heading isn't a
+   control, so it doesn't draw a focus box. */
+.rl-bottom h3[tabindex="-1"]:focus, .rl-win h3[tabindex="-1"]:focus { outline: none; box-shadow: none; }
+.rl-win-seats { margin: 12px 0 10px; }
+.rl-win-line { margin: 0 0 14px; color: var(--text); opacity: .86; font-size: 14px; }
+.rl-win-share { width: 100%; }
+.rl-grab { display: none; }
+@media screen and (max-width: 640px) {
+  #overlay:has(> .sheet.rl-bottom) { align-items: flex-end; padding: 0; }
+  #overlay > .sheet.rl-bottom { width: 100%; max-width: none; max-height: 86vh; padding: 8px 16px calc(18px + env(safe-area-inset-bottom));
+    border-bottom: 0; border-radius: 22px 22px 0 0; animation: rl-sheet-up .26s cubic-bezier(.2,.8,.2,1) both; }
+  .rl-grab { display: block; width: 40px; height: 4px; margin: 4px auto 10px; border-radius: 4px; background: rgba(255,255,255,.24); }
+}
+@keyframes rl-sheet-up { from { transform: translateY(100%); } to { transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .pbar-tick.is-new, .rl-seat.is-new, .rl-seat.is-new .rl-avatar, #overlay > .sheet.rl-bottom { animation: none; }
+  .rl-opt > summary::after { transition: none; }
+}
 .reconnect-waiting-now { margin-bottom: 10px; }
 .reconnect-waiting-now b { color: var(--purple-lt); }
 

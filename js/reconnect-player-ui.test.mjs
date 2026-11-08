@@ -9,7 +9,11 @@ for (const teamSize of [2, 3]) {
   assert.equal(next.title, 'Stream SWIM 12 more times')
 }
 
-assert.equal(reconnectPlayerNext({ need: 1, pendingNames: ['moonchild7'] }).title, 'Waiting for an invited agent')
+assert.equal(reconnectPlayerNext({ need: 1, pendingNames: ['moonchild7'] }).title, 'Waiting for moonchild7')
+// One invite out, two spots open: the next step is the other spot.
+assert.deepEqual(reconnectPlayerNext({ need: 2, pendingNames: ['Rey'] }), { title: 'Invite one more teammate', body: 'Rey has 24 hours to accept your invite.' })
+assert.equal(reconnectPlayerNext({ need: 2, pendingNames: ['Rey'], recruit: { districtName: 'X' } }).title, 'Waiting for Rey')
+assert.equal(reconnectPlayerNext({ need: 2 }).title, 'Invite 2 teammates')
 assert.equal(reconnectPlayerNext({ need: 1, expiredCount: 1 }).title, 'Invite expired — choose another teammate')
 assert.equal(reconnectPlayerNext({ need: 1 }).title, 'Invite one teammate')
 assert.equal(reconnectPlayerNext({ need: 0, cipher: { index: 0, total: 3, attemptsLeft: 0 } }).title, 'No attempts left — ask for help')

@@ -46,5 +46,6 @@ test('wiring: filtered on the server, fails open, and the panel explains a short
   assert.doesNotMatch(fn.slice(fn.indexOf('const candidates = ')), /last_seen_at|lastSeenAt/, 'no last-seen time reaches the browser')
   const ui = read('../../../../js/screen-district.js')
   assert.match(ui, /nobody_active: /)
-  assert.match(ui, /res2\.hiddenInactive/)
+  assert.match(ui, /'Showing recently active ARMYs'/)
+  assert.doesNotMatch(ui, /res2\.hiddenInactive/, 'no count of inactive agents')
 })

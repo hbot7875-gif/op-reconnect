@@ -55,15 +55,22 @@ export function reconnectPlayerNext(input = {}) {
     }
   }
   if (need > 0 && pendingNames.length) {
-    return {
-      title: 'Waiting for an invited agent',
-      body: `${pendingNames.join(' and ')} ${pendingNames.length === 1 ? 'has' : 'have'} 24 hours to respond.`,
+    const who = pendingNames.join(' and ')
+    const uncovered = need - pendingNames.length
+    // A spot nobody's been invited to yet: say so, or "waiting" next to a
+    // Find teammates button reads as two contradicting instructions.
+    if (uncovered > 0 && !recruit) {
+      return {
+        title: `Invite ${uncovered === 1 ? 'one more teammate' : `${uncovered} more teammates`}`,
+        body: `${who} ${pendingNames.length === 1 ? 'has' : 'have'} 24 hours to accept your invite.`,
+      }
     }
+    return { title: `Waiting for ${who}`, body: 'They have 24 hours to accept your invite.' }
   }
   if (need > 0 && recruit) {
     return { title: 'Your team is filling its last seat', body: `${recruit.from} agents send the invites. Every play you stream now already counts.` }
   }
-  if (need > 0) return { title: 'Invite one teammate', body: 'Choose the best available match or see other agents.' }
+  if (need > 0) return { title: need === 1 ? 'Invite one teammate' : `Invite ${need} teammates`, body: 'Tap Find teammates to pick who to invite.' }
   if (cipher) return { title: `Solve cipher ${cipher.index + 1} of ${cipher.total}`, body: 'Discuss it in Team Chat, then submit one shared answer.' }
   if (input.variant === 'connect' && sharedTrack && sharedTrack.progress < sharedTrack.target) {
     const left = Math.max(0, sharedTrack.target - sharedTrack.progress)
