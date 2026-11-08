@@ -16,6 +16,7 @@ const RUN_AMI = migration('20261018120000_rc_run_ami.sql')
 const AWARD = migration('20260828120000_rc_badge_pool_preferences.sql')
 const TEMPLATE = migration('20261107115000_rc_card_champion_badge_template.sql')
 const STATS = migration('20261107120000_rc_war_of_cards_stats.sql')
+const DAILY = migration('20261108140000_rc_card_champion_daily.sql')
 const modulePath = process.env.PGLITE_MODULE
 const skip = modulePath ? false : 'set PGLITE_MODULE to run the SQL suite'
 
@@ -29,7 +30,7 @@ const STUBS = `
   insert into rc_agents values ${AGENTS.map((a) => `('${a}')`).join(', ')};
   create schema realtime;
   create function realtime.send(payload jsonb, event text, topic text, private boolean) returns void language sql as $$ select $$;
-  create table rc_badge_catalog (id text primary key, section text, rarity text, name text, unlock_hint text, sort_order int, active boolean default true, created_at timestamptz default now());
+  create table rc_badge_catalog (id text primary key, section text, rarity text, name text, unlock_hint text, sort_order int, active boolean default true, created_at timestamptz default now(), photo_style text);
   create table rc_badge_art (id bigint generated always as identity primary key, template_id text references rc_badge_catalog (id), storage_path text, member text, pool text, active boolean default true);
   create table rc_badges (agent_no text, badge_id text, artwork_id bigint, earned_at timestamptz default now(), primary key (agent_no, badge_id));
 `
@@ -48,6 +49,8 @@ async function setup(t) {
     await engine.exec(TEMPLATE) // re-runnable
     await engine.exec(STATS)
     await engine.exec(STATS)
+    await engine.exec(DAILY)
+    await engine.exec(DAILY) // re-runnable
   }
   await engine.exec('begin')
   t.after(() => engine.exec('rollback'))
@@ -126,28 +129,43 @@ test('weekly view only counts from the week start; streaks stay lifetime', { ski
   assert.deepEqual((await board(db)).AGENT000, [2, 2, 2, 2])
 })
 
-test('Card Champion: a new badge every 10 counted wins, each once, all kept', { skip }, async (t) => {
+test('Card Champion: one badge a day for a counted win, however many games', { skip }, async (t) => {
   const db = await setup(t)
-  const mine = async () => (await db.query("select badge_id, artwork_id from rc_badges where agent_no = 'AGENT000' order by badge_id")).rows
+  const mine = async () => (await db.query("select badge_id, artwork_id from rc_badges where agent_no = 'AGENT000' order by badge_id")).rows.map((r) => r.badge_id)
+  // Inside the test transaction now() stands still, so the trigger sees every
+  // match end "today" (KST).
+  const today = (await db.query("select ((now() at time zone 'Asia/Seoul')::date)::text d")).rows[0].d
+  await playMatch(db, ['AGENT000', 'AGENT001'], ['last_standing', 'forfeited'], { endReason: 'last_standing' })
+  await playMatch(db, ['AGENT000', 'AGENT001'], ['won', 'played'], { turns: 6 })
+  assert.deepEqual(await mine(), [], 'a walkover or a 6-turn game is not a win')
+  await playMatch(db, ['AGENT000', 'AGENT001'], ['won', 'played'])
+  assert.deepEqual(await mine(), [`achievement_card_champion:${today}`], 'first counted win of the day')
+  for (let i = 0; i < 4; i++) await playMatch(db, ['AGENT000', ['AGENT002', 'AGENT003'][i % 2]], ['won', 'played'])
+  assert.equal((await mine()).length, 1, 'more wins the same day: still one badge')
+  // Another day: the win is recorded on Oct 1 KST, then its result is written.
+  const m = await playMatch(db, ['AGENT000', 'AGENT001'], ['played', 'won'], { endedAt: '2026-09-30T20:00:00Z' })
+  await db.query("update rc_run_ami_match_players set result = 'played' where match_id = $1 and agent_no = 'AGENT001'", [m])
+  await db.query("update rc_run_ami_match_players set result = 'won' where match_id = $1 and agent_no = 'AGENT000'", [m])
+  assert.deepEqual(await mine(), ['achievement_card_champion:2026-10-01', `achievement_card_champion:${today}`], 'a new day, a new badge')
+  const hint = (await db.query("select unlock_hint from rc_badge_catalog where id = 'achievement_card_champion'")).rows[0].unlock_hint
+  assert.match(hint, /One new badge a day/)
+})
+
+test('Champion Pro: a new badge every 10 counted wins, each once, all kept', { skip }, async (t) => {
+  const db = await setup(t)
+  const pro = async () => (await db.query("select badge_id from rc_badges where agent_no = 'AGENT000' and badge_id like 'achievement_card_champion_pro:%' order by badge_id")).rows.map((r) => r.badge_id)
   const opponents = ['AGENT001', 'AGENT002', 'AGENT003']
-  // Earlier days, so the 3-a-day cap per opponent never bites here.
   const win = (i) => playMatch(db, ['AGENT000', opponents[i % 3]], ['won', 'played'], { endedAt: `2026-10-${String(i + 1).padStart(2, '0')}T12:00:00Z` })
   for (let i = 0; i < 9; i++) await win(i)
-  assert.deepEqual(await mine(), [], '9 wins: not yet')
-  await playMatch(db, ['AGENT000', 'AGENT001'], ['last_standing', 'forfeited'], { endReason: 'last_standing' })
-  assert.deepEqual(await mine(), [], 'a walkover is not the 10th win')
+  assert.deepEqual(await pro(), [], '9 wins: not yet')
   await win(9)
-  assert.deepEqual((await mine()).map((r) => r.badge_id), ['achievement_card_champion:10'], '10th counted win')
+  assert.deepEqual(await pro(), ['achievement_card_champion_pro:10'], '10th counted win')
   for (let i = 10; i < 19; i++) await win(i)
-  assert.equal((await mine()).length, 1, '19 wins: still one, never a duplicate')
-  // Art uploaded after the first award fills in on a later win; badges stay.
-  await db.query("insert into rc_badge_art (template_id, storage_path, member, pool) values ('achievement_card_champion', 'vault/x.webp', 'BTS', 'hot')")
+  assert.equal((await pro()).length, 1, '19 wins: still one')
   await win(19)
-  const rows = await mine()
-  assert.deepEqual(rows.map((r) => r.badge_id), ['achievement_card_champion:10', 'achievement_card_champion:20'], '20 wins: a second badge')
-  assert.ok(rows.every((r) => r.artwork_id != null), 'both have their photo')
-  for (let i = 20; i < 25; i++) await win(i)
-  assert.equal((await mine()).length, 2, '25 wins: still two')
+  assert.deepEqual(await pro(), ['achievement_card_champion_pro:10', 'achievement_card_champion_pro:20'])
+  const tpl = (await db.query("select name, rarity, art_frame, photo_style, active from rc_badge_catalog where id = 'achievement_card_champion_pro'")).rows[0]
+  assert.deepEqual(tpl, { name: 'War of Cards — Champion Pro', rarity: 'rare', art_frame: 'polaroid_pro', photo_style: 'fun', active: true })
 })
 
 test('a broken badge check never blocks a match result', { skip }, async (t) => {

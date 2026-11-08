@@ -687,7 +687,7 @@ function drawFramedPreview(canvas) {
   const sctx = square.getContext('2d')
   sctx.imageSmoothingEnabled = true
   sctx.imageSmoothingQuality = 'high'
-  drawPolaroid(sctx, side, drawCroppedPhoto)
+  drawPolaroid(sctx, side, drawCroppedPhoto, frameOf(selectedTemplate()))
   ctx.drawImage(square, (canvas.width - side) / 2, 0)
 }
 
@@ -733,7 +733,7 @@ function paintTemplateGuidance() {
     pool.innerHTML = '<option value="">Choose a style…</option>' + choices.map((c) => `<option value="${c}">${STYLE_NAME[c]}</option>`).join('')
     pool.value = keep
   }
-  const frameNote = frameOf(template) === 'polaroid' ? ' This badge uses the Polaroid frame: frame the photo square, and it goes into the Polaroid automatically.' : ''
+  const frameNote = frameOf(template) ? ' This badge uses the Polaroid frame: frame the photo square, and it goes into the Polaroid automatically.' : ''
   $('poolHint').textContent = !template
     ? 'Common badges prefer Cute photos. Rare badges prefer Hot photos.'
     : choices.length === 1
@@ -856,7 +856,7 @@ async function buildCroppedImage() {
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
   // A framed template (e.g. Polaroid) gets its frame baked into the file.
-  if (frameOf(selectedTemplate())) drawPolaroid(ctx, OUT, drawCroppedPhoto)
+  if (frameOf(selectedTemplate())) drawPolaroid(ctx, OUT, drawCroppedPhoto, frameOf(selectedTemplate()))
   else ctx.drawImage(img, ox * k, oy * k, natW * baseScale * zoom * k, natH * baseScale * zoom * k)
 
   const blob = await new Promise((r) => canvas.toBlob(r, TYPE, 0.9))

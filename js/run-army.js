@@ -56,6 +56,8 @@ export function openRunArmy() {
       <div class="rarmy-game-text">
         <b>WAR OF CARDS</b>
         <span>Last-card game · 2–4 agents</span>
+        <span>🏅 Win a game for today's Card Champion badge · one a day</span>
+        <span>🏆 Every 10 wins: a Champion Pro badge</span>
         ${open ? '' : `<p class="rarmy-lock">🔒 Unlocks once you collect all ${ALBUM_SIZE} BTS album covers: one for each daily Signal Sweep, or as a gift from a friend.</p>`}
       </div>
     </article>

@@ -48,7 +48,7 @@ function giftHtml(album) {
       <label class="al-field"><span>Agent number</span><input name="to" inputmode="numeric" autocomplete="off" placeholder="050" maxlength="12"></label>
       <button class="btn btn-primary al-send" type="submit">Share a copy</button>
     </form>
-    <p class="al-gift-note">You keep your cover. One gift a day, to an agent who doesn't have it yet.</p>
+    <p class="al-gift-note">Gifting shares a copy, so you keep yours and need no duplicates. One gift a day, to an agent who doesn't have that cover yet.</p>
     <p class="al-gift-err" role="status" hidden></p>`
 }
 

@@ -4,7 +4,6 @@
 // those numbers and decides when to show things.
 
 /** Every this many counted wins earns a Card Champion badge (the SQL trigger uses 10 too). */
-export const WAR_CHAMPION_WINS = 10
 /** Completed games needed before an agent is ranked by win percentage. */
 export const WAR_PCT_MIN_GAMES = 10
 /** Rows shown on the board; the viewer's own row is added when lower. */

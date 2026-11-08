@@ -3,12 +3,14 @@
 // into the frame before upload, so the frame is part of the image and every
 // place badges show (collection, reveal, Agent ID, HUD) needs no change.
 //
-// One frame so far: 'polaroid' — a pastel instant-film print. A lavender
-// frame with rounded corners and a chunky bottom, a soft shadow and a
-// playful 4° tilt, on a transparent square. No captions or decoration: the
-// photo is the badge.
+// 'polaroid' — a pastel instant-film print. A lavender frame with rounded
+// corners and a chunky bottom, a soft shadow and a playful 4° tilt, on a
+// transparent square. No captions: the photo is the badge.
+// 'polaroid_pro' — the same print for War of Cards — Champion Pro, a little
+// fancier: warm gold paper, tilted the other way, and a small star on the
+// bottom border.
 
-export const BADGE_FRAMES = Object.freeze(['polaroid'])
+export const BADGE_FRAMES = Object.freeze(['polaroid', 'polaroid_pro'])
 
 const POLAROID = Object.freeze({
   width: 0.742,       // card width, share of the square
@@ -20,14 +22,19 @@ const POLAROID = Object.freeze({
   paper: '#cdb6ff',   // pastel lavender
 })
 
+const LOOKS = Object.freeze({
+  polaroid: { tilt: POLAROID.tilt, paper: [POLAROID.paper, POLAROID.paper], star: null },
+  polaroid_pro: { tilt: 4, paper: ['#ffe39a', '#f7b267'], star: '#fffaf0' }, // gold, a cream star
+})
+
 /** Where everything goes for a `size` px square: the card (centred, before
  *  the tilt) and the square photo window inside it. Pure, for tests. */
-export function polaroidLayout(size) {
+export function polaroidLayout(size, frame = 'polaroid') {
   const w = size * POLAROID.width
   const side = w * POLAROID.side
   const photo = w - 2 * side
   const h = side + photo + w * POLAROID.bottom
-  return { w, h, side, photo, x: (size - w) / 2, y: (size - h) / 2, tilt: POLAROID.tilt }
+  return { w, h, side, photo, x: (size - w) / 2, y: (size - h) / 2, tilt: (LOOKS[frame] || LOOKS.polaroid).tilt }
 }
 
 /** A rounded rectangle path (plain rectangle where roundRect is missing). */
@@ -37,10 +44,23 @@ function roundedPath(ctx, x, y, w, h, r) {
   else ctx.rect(x, y, w, h)
 }
 
+/** A five-point star centred on (cx, cy). */
+function starPath(ctx, cx, cy, r) {
+  ctx.beginPath()
+  for (let i = 0; i < 10; i++) {
+    const a = -Math.PI / 2 + (i * Math.PI) / 5
+    const d = i % 2 ? r * 0.45 : r
+    ctx.lineTo(cx + d * Math.cos(a), cy + d * Math.sin(a))
+  }
+  ctx.closePath()
+}
+
 /** Draw the frame for a `size` px square into `ctx`. `drawPhoto(ctx, x, y,
- *  side)` paints the photo into its window; it is clipped to the window. */
-export function drawPolaroid(ctx, size, drawPhoto) {
-  const L = polaroidLayout(size)
+ *  side)` paints the photo into its window; it is clipped to the window.
+ *  `frame` is 'polaroid' (default) or 'polaroid_pro'. */
+export function drawPolaroid(ctx, size, drawPhoto, frame = 'polaroid') {
+  const look = LOOKS[frame] || LOOKS.polaroid
+  const L = polaroidLayout(size, frame)
   const px = L.x + L.side
   const py = L.y + L.side
   ctx.save()
@@ -53,9 +73,19 @@ export function drawPolaroid(ctx, size, drawPhoto) {
   ctx.shadowBlur = size * 0.035
   ctx.shadowOffsetY = size * 0.016
   roundedPath(ctx, L.x, L.y, L.w, L.h, L.w * POLAROID.corner)
-  ctx.fillStyle = POLAROID.paper
+  const paper = ctx.createLinearGradient ? ctx.createLinearGradient(L.x, L.y, L.x + L.w, L.y + L.h) : null
+  if (paper) { paper.addColorStop(0, look.paper[0]); paper.addColorStop(1, look.paper[1]) }
+  ctx.fillStyle = paper || look.paper[0]
   ctx.fill()
   ctx.restore()
+
+  if (look.star) {
+    const bottomTop = py + L.photo
+    const r = (L.h - (bottomTop - L.y)) * 0.26
+    starPath(ctx, L.x + L.w - L.side - r * 1.2, bottomTop + (L.y + L.h - bottomTop) / 2, r)
+    ctx.fillStyle = look.star
+    ctx.fill()
+  }
 
   ctx.save()
   roundedPath(ctx, px, py, L.photo, L.photo, L.w * POLAROID.photoCorner)

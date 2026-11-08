@@ -20,7 +20,10 @@ test('polaroid: square photo window, thicker bottom, fits the rare-card crop', (
 })
 
 test('only templates that ask for it get a frame', () => {
-  assert.deepEqual(BADGE_FRAMES, ['polaroid'])
+  assert.deepEqual(BADGE_FRAMES, ['polaroid', 'polaroid_pro'])
+  assert.equal(frameOf({ art_frame: 'polaroid_pro' }), 'polaroid_pro')
+  assert.equal(polaroidLayout(512, 'polaroid_pro').tilt, 4, 'Pro tilts the other way')
+  assert.equal(polaroidLayout(512).tilt, -4)
   assert.equal(frameOf({ art_frame: 'polaroid' }), 'polaroid')
   assert.equal(frameOf({ art_frame: null }), null)
   assert.equal(frameOf({ art_frame: 'neon' }), null)
@@ -29,7 +32,7 @@ test('only templates that ask for it get a frame', () => {
 
 test('wiring: Badge Maker bakes the frame into the upload and the previews', () => {
   const html = read('../../../../badge-admin.html')
-  assert.match(html, /if \(frameOf\(selectedTemplate\(\)\)\) drawPolaroid\(ctx, OUT, drawCroppedPhoto\)/)
+  assert.match(html, /if \(frameOf\(selectedTemplate\(\)\)\) drawPolaroid\(ctx, OUT, drawCroppedPhoto, frameOf\(selectedTemplate\(\)\)\)/)
   assert.match(html, /if \(frameOf\(selectedTemplate\(\)\)\) \{ drawFramedPreview\(canvas\); return \}/)
   assert.match(read('./badge-admin.ts'), /select\('id, section, rarity, name, unlock_hint, sort_order, active, art_frame, photo_style'\)/)
   const sql = read('../../../migrations/20261107115000_rc_card_champion_badge_template.sql')
