@@ -4710,6 +4710,10 @@ button.rl-seat:focus-visible, .rl-cancel:focus-visible { outline: 2px solid var(
 .rl-win-badge .rl-i { width: 26px; height: 26px; }
 .rl-win-share { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
 .rl-win-share .rl-i { width: 17px; height: 17px; }
+/* Mixed-district team: where each seat comes from. */
+.rl-from { max-width: 100%; margin-top: 2px; overflow: hidden; color: var(--dim); font: 600 9.5px var(--body, sans-serif);
+  font-style: normal; letter-spacing: .2px; text-overflow: ellipsis; white-space: nowrap; }
+.rl-from.is-helper { color: var(--gold); }
 .rl-grab { display: none; }
 @media screen and (max-width: 640px) {
   #overlay:has(> .sheet.rl-bottom) { align-items: flex-end; padding: 0; }

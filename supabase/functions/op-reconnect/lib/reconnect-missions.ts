@@ -1212,7 +1212,7 @@ async function recruitMissionView(supabase: SupabaseDB, content: any, agentNo: s
       seats: seatPanelInfo(config, content),
     },
     idleThreshold: IDLE_DAYS,
-    mission: await shapeWithMessages(supabase, mission, participants || [], agentNo, IDLE_DAYS, config.ciphers),
+    mission: await markSeats(supabase, await shapeWithMessages(supabase, mission, participants || [], agentNo, IDLE_DAYS, config.ciphers), config),
   }
 }
 
@@ -1364,7 +1364,7 @@ export async function getReconnectMission(supabase: SupabaseDB, content: any, pa
       seats: seatPanelInfo(reconnect.config, content),
     },
     idleThreshold,
-    mission: mission ? await shapeWithMessages(supabase, mission, participants || [], agentNo, idleThreshold, reconnect.config.ciphers) : null,
+    mission: mission ? await markSeats(supabase, await shapeWithMessages(supabase, mission, participants || [], agentNo, idleThreshold, reconnect.config.ciphers), reconnect.config) : null,
   }
 }
 
@@ -1448,6 +1448,17 @@ async function helperFlags(supabase: SupabaseDB, districtId: string, agentNos: s
     .select('agent_no').eq('district_id', districtId).eq('status', 'active').in('agent_no', unique)
   const local = new Set<string>((data || []).map((r: any) => r.agent_no as string))
   return new Map(unique.map((a) => [a, !local.has(a)]))
+}
+
+/** A mixed-district team (crossDistrictSeats): tag each participant with the
+ *  seat they fill — helper (a recruit from outside, e.g. Home Base) or local
+ *  — so the lobby can label the seats and say who is still needed. The same
+ *  lookup getInviteCandidates uses. No-op for an ordinary team. */
+async function markSeats(supabase: SupabaseDB, shaped: any, config: Record<string, any>) {
+  if (!shaped || !seatRule(config)) return shaped
+  const flags = await helperFlags(supabase, shaped.districtId, shaped.participants.map((p: any) => p.agentNo))
+  for (const p of shaped.participants) p.helper = !!flags.get(p.agentNo)
+  return shaped
 }
 
 /** What the quest panel needs to describe a mixed-district team, or null for an

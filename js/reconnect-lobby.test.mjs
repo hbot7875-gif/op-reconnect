@@ -2,7 +2,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { lobbySeats, lobbySeatsHtml, spotsLeftLabel, newlyJoined, milestoneState, celebrateOnce, noteMissionOpen } from './reconnect-lobby.js'
+import { lobbySeats, lobbySeatsHtml, spotsLeftLabel, seatNeeds, seatNeedsPhrase, newlyJoined, milestoneState, celebrateOnce, noteMissionOpen } from './reconnect-lobby.js'
 import { reconnectPlayerNext } from './reconnect-player-ui.js'
 
 const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8')
@@ -105,4 +105,32 @@ test('effects respect reduced motion; bottom sheets only for ReConnect popups', 
   assert.doesNotMatch(css + read('./screen-district.js'), /rl-confetti/, 'no confetti')
   assert.match(css, /#overlay:has\(> \.sheet\.rl-bottom\) \{ align-items: flex-end; padding: 0; \}/)
   assert.match(read('./chat-thread.js'), /opts\.sendIcon \? SEND_ICON : 'Send'/, 'ARMY Comms keeps its Send button')
+})
+
+test('Urmi Terrace: two seats from here, one from Home Base, labelled and counted', () => {
+  const seats = { local: 2, helper: 1, helperFrom: 'Home Base' }
+  const me2 = { ...me, helper: false }
+  // You (local) + one invited Home Base agent: the open spot is local.
+  let list = lobbySeats([me2, { agentNo: 'A3', codename: 'Rey', status: 'invited', helper: true }], 3, seats)
+  assert.deepEqual(list.map((s) => [s.name, s.kind, s.helper]), [['You', 'ready', false], ['Rey', 'invited', true], ['Empty', 'empty', false]])
+  // Only you: one local spot and the Home Base spot are open.
+  list = lobbySeats([me2], 3, seats)
+  assert.deepEqual(list.map((s) => s.helper), [false, false, true])
+  const html = lobbySeatsHtml(list, { canInvite: true, localName: 'Urmi Terrace', helperFrom: 'Home Base' })
+  assert.match(html, /<em class="rl-from">Urmi Terrace<\/em>/)
+  assert.match(html, /<em class="rl-from is-helper">Home Base<\/em>/)
+  // Who is still needed counts joined teammates only.
+  assert.deepEqual(seatNeeds([me2], seats), { local: 1, helper: 1 })
+  assert.equal(seatNeedsPhrase({ local: 1, helper: 1 }, 'Urmi Terrace', 'Home Base'), '1 more ARMY from Urmi Terrace and 1 from Home Base')
+  assert.equal(seatNeedsPhrase({ local: 0, helper: 1 }, 'Urmi Terrace', 'Home Base'), '1 more ARMY from Home Base')
+  assert.equal(seatNeeds([me], seats), null, 'an older server that sends no seat flags: plain wording')
+  assert.equal(lobbySeats([me], 3, seats).some((s) => 'helper' in s), false)
+})
+
+test('wiring: the server tags seats on mixed teams; the sticky banner is gone', () => {
+  const rm = read('../supabase/functions/op-reconnect/lib/reconnect-missions.ts')
+  assert.match(rm, /async function markSeats\(supabase: SupabaseDB, shaped: any, config: Record<string, any>\) \{\s+if \(!shaped \|\| !seatRule\(config\)\) return shaped/)
+  assert.equal((rm.match(/await markSeats\(supabase, await shapeWithMessages\(/g) || []).length, 2, 'the quest panel and the recruit view')
+  const hud = read('./ui-hud.js')
+  assert.doesNotMatch(hud, /id="hudReconnectStatus"|reconnectHudStatus/, 'no ReConnect banner in the HUD')
 })

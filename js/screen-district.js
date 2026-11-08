@@ -19,7 +19,7 @@ import { itemTile, itemSheet, itemsAt, itemsInPack } from './items.js'
 import { trackEngagementOnce } from './engagement.js'
 import { reconnectPlayerNext, sharedTracksPitch } from './reconnect-player-ui.js'
 import { rcIcon } from './reconnect-icons.js'
-import { lobbySeats, lobbySeatsHtml, spotsLeftLabel, newlyJoined, milestoneState, MILESTONES,
+import { lobbySeats, lobbySeatsHtml, spotsLeftLabel, seatNeeds, seatNeedsPhrase, newlyJoined, milestoneState, MILESTONES,
   noteMissionOpen, celebrateOnce, QUICK_REPLIES, asBottomSheet } from './reconnect-lobby.js'
 import { streamedLabel, INVITE_ACTIVE_DAYS } from '../supabase/functions/op-reconnect/lib/reconnect-active.js'
 import { openPlaylistVault } from './playlist-vault-sheet.js'
@@ -769,7 +769,8 @@ function teammatePicker(d, res, res2, { open, pendingNames = [], onInvited }) {
   // How recently they streamed: the best sign an invite gets answered.
   const activeLabel = (c) => (c.streamedDaysAgo == null ? esc(waitedLabel(c.waitingSince)) : esc(streamedLabel(c.streamedDaysAgo)))
   // Mixed-district team: name where a recruit comes from.
-  const fromTag = (c) => (c.helper ? ` &middot; ${esc(res.config?.seats?.helperFrom || 'Home Base')}` : '')
+  const fromTag = (c) => (!res.config?.seats ? ''
+    : ` &middot; ${esc(c.helper ? res.config.seats.helperFrom || 'Home Base' : districtDisplayName(d))}`)
   for (const c of res2.candidates) {
     const row = el('div', 'reconnect-wait-row' + (c.online ? ' is-online' : ''))
     row.innerHTML = (c.online ? '<i class="rw-online-dot" title="Online now"></i>' : '')
@@ -1141,11 +1142,19 @@ function paintMissionPanel(box, d, res) {
   const expired = m.participants.filter((p) => p.status === 'invited' && p.inviteExpired)
   const need = Math.max(0, m.requiredAgents - joined.length)
   const idlers = m.participants.filter((p) => p.status === 'joined' && p.idle && !p.isMe && !p.leftDistrict)
+  // A mixed-district team (Urmi Terrace: two from here + one from Home Base)
+  // says exactly who is still needed.
+  const seatInfo = res.config?.seats || null
+  const needs = seatNeeds(m.participants, seatInfo)
+  const localName = districtDisplayName(d)
+  const findWho = needs && need > 0
+    ? seatNeedsPhrase(needs, esc(localName), esc(seatInfo.helperFrom))
+    : `${need} more ARMY${need === 1 ? '' : 's'}`
   const missionBody = res.variant === 'invite'
     ? `Build a ${m.requiredAgents}-agent team in ${esc(districtDisplayName(d))}.`
     : m.sharedTrack
       ? (need > 0
-        ? `Find ${need} more ARMY${need === 1 ? '' : 's'} and stream ${esc(m.sharedTrack.label)} ${m.sharedTrack.target} times together!`
+        ? `Find ${findWho} and stream ${esc(m.sharedTrack.label)} ${m.sharedTrack.target} times together!`
         : `Stream ${esc(m.sharedTrack.label)} ${m.sharedTrack.target} times together!`)
       : m.checklist
         ? `Build a team of ${m.requiredAgents} agents. Each agent streams all ${m.checklist.total} tracks once.`
@@ -1254,7 +1263,8 @@ function paintMissionPanel(box, d, res) {
   const canInvite = myRow?.status === 'joined' && !res.recruit && need > pending.length
   const seatsHost = el('section', 'reconnect-seats')
   seatsHost.innerHTML = `<div class="rl-head"><span>${rcIcon('users')}Your team</span><b>${spotsLeftLabel(need, pending.length)}</b></div>
-    <div class="rl-seats">${lobbySeatsHtml(lobbySeats(m.participants, m.requiredAgents), { canInvite, canCancel: !!m.isCreator })}</div>`
+    <div class="rl-seats">${lobbySeatsHtml(lobbySeats(m.participants, m.requiredAgents, seatInfo), {
+      canInvite, canCancel: !!m.isCreator, localName, helperFrom: seatInfo?.helperFrom || '' })}</div>`
   for (const b of seatsHost.querySelectorAll('[data-seat-invite]')) {
     b.onclick = () => (openPicker ? openPicker() : primaryHost.querySelector('button')?.focus())
   }
@@ -1274,7 +1284,7 @@ function paintMissionPanel(box, d, res) {
   const joinedOthers = m.participants.filter((p) => p.status === 'joined' && !p.isMe && !p.leftDistrict)
   const fresh = newlyJoined(m.id, joinedOthers.map((p) => p.agentNo))
   if (fresh.length) {
-    const seatOrder = lobbySeats(m.participants, m.requiredAgents)
+    const seatOrder = lobbySeats(m.participants, m.requiredAgents, seatInfo)
     const tiles = seatsHost.querySelectorAll('.rl-seat')
     seatOrder.forEach((seat, i) => { if (fresh.includes(seat.agentNo)) tiles[i]?.classList.add('is-new') })
     const names = joinedOthers.filter((p) => fresh.includes(p.agentNo)).map((p) => p.codename)

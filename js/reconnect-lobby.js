@@ -8,38 +8,71 @@ const escHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;
 
 /** One entry per seat, in order: you, teammates, invited agents, then empty
  *  spots up to the team size. Expired invites and teammates whose own
- *  district ran out don't hold a seat. */
-export function lobbySeats(participants = [], requiredAgents = 0) {
+ *  district ran out don't hold a seat. For a mixed-district team (`seats`,
+ *  from config.seats) each seat also says whether it is the recruit seat
+ *  (helper) or a local one, and open spots say which kind they are. */
+export function lobbySeats(participants = [], requiredAgents = 0, seats = null) {
+  const mixed = !!seats && participants.some((p) => typeof p.helper === 'boolean')
   const live = participants.filter((p) => !(p.status === 'invited' && p.inviteExpired) && !p.leftDistrict)
   const rank = (p) => (p.isMe ? 0 : p.status === 'joined' ? 1 : 2)
-  const seats = [...live].sort((a, b) => rank(a) - rank(b)).map((p) => ({
+  const out = [...live].sort((a, b) => rank(a) - rank(b)).map((p) => ({
     kind: p.status === 'invited' ? 'invited' : p.idle ? 'quiet' : 'ready',
     name: p.isMe ? 'You' : String(p.codename || 'Agent'),
     isMe: !!p.isMe,
     agentNo: p.agentNo || null,
     removable: !!p.removable,
+    ...(mixed ? { helper: !!p.helper } : {}),
   }))
-  for (let i = seats.length; i < requiredAgents; i++) seats.push({ kind: 'empty', name: 'Empty' })
-  return seats
+  const empties = Math.max(0, requiredAgents - out.length)
+  // Open recruit seats = recruit seats not yet taken by anyone on the team.
+  const helperOpen = mixed ? Math.min(empties, Math.max(0, seats.helper - out.filter((s) => s.helper).length)) : 0
+  for (let i = 0; i < empties; i++) {
+    out.push({ kind: 'empty', name: 'Empty', ...(mixed ? { helper: i >= empties - helperOpen } : {}) })
+  }
+  return out
+}
+
+/** Who a mixed-district team still needs, counting joined teammates only:
+ *  { local, helper }, or null when the team has no seat rule or the server
+ *  didn't say who sits where. */
+export function seatNeeds(participants = [], seats = null) {
+  if (!seats || !participants.some((p) => typeof p.helper === 'boolean')) return null
+  const joined = participants.filter((p) => p.status === 'joined' && !p.leftDistrict)
+  return {
+    local: Math.max(0, seats.local - joined.filter((p) => !p.helper).length),
+    helper: Math.max(0, seats.helper - joined.filter((p) => p.helper).length),
+  }
+}
+
+/** "1 more ARMY from Urmi Terrace and 1 from Home Base" (or one side only). */
+export function seatNeedsPhrase(needs, localName, helperFrom) {
+  const parts = []
+  if (needs.local) parts.push(`${needs.local} more ARMY${needs.local === 1 ? '' : 's'} from ${localName}`)
+  if (needs.helper) parts.push(`${needs.helper}${parts.length ? '' : ` more ARMY${needs.helper === 1 ? '' : 's'}`} from ${helperFrom}`)
+  return parts.join(' and ')
 }
 
 const SEAT_STATE = { ready: 'Ready', quiet: 'Quiet', invited: 'Invited', empty: '' }
 
 /** The seats as buttons/tiles. `canInvite` turns empty seats into an Invite
  *  button; `canCancel` shows a cancel control on pending invites the viewer
- *  may withdraw. Agent numbers ride along as data attributes only. */
-export function lobbySeatsHtml(seats, { canInvite = false, canCancel = false } = {}) {
+ *  may withdraw. On a mixed-district team (`localName`/`helperFrom` given and
+ *  seats carrying `helper`) each seat names where it comes from. Agent
+ *  numbers ride along as data attributes only. */
+export function lobbySeatsHtml(seats, { canInvite = false, canCancel = false, localName = '', helperFrom = '' } = {}) {
+  const from = (s) => (typeof s.helper === 'boolean' && localName && helperFrom
+    ? `<em class="rl-from${s.helper ? ' is-helper' : ''}">${escHtml(s.helper ? helperFrom : localName)}</em>` : '')
   return seats.map((s, i) => {
     if (s.kind === 'empty') {
       return canInvite
-        ? `<button class="rl-seat is-empty" type="button" data-seat-invite="${i}"><span class="rl-avatar" aria-hidden="true">${rcIcon('userPlus')}</span><b>Invite</b><small>Open spot</small></button>`
-        : `<div class="rl-seat is-empty"><span class="rl-avatar" aria-hidden="true">${rcIcon('users')}</span><b>Open</b><small>spot</small></div>`
+        ? `<button class="rl-seat is-empty" type="button" data-seat-invite="${i}"><span class="rl-avatar" aria-hidden="true">${rcIcon('userPlus')}</span><b>Invite</b><small>Open spot</small>${from(s)}</button>`
+        : `<div class="rl-seat is-empty"><span class="rl-avatar" aria-hidden="true">${rcIcon('users')}</span><b>Open</b><small>spot</small>${from(s)}</div>`
     }
     const initial = escHtml(s.isMe ? 'You'.charAt(0) : [...s.name][0] || '?').toUpperCase()
     const cancel = canCancel && s.kind === 'invited' && s.removable && s.agentNo
       ? `<button class="rl-cancel" type="button" data-seat-cancel="${escHtml(s.agentNo)}" aria-label="Cancel invite to ${escHtml(s.name)}">×</button>`
       : ''
-    return `<div class="rl-seat is-${s.kind}${s.isMe ? ' is-me' : ''}"><span class="rl-avatar" aria-hidden="true">${initial}</span><b>${escHtml(s.name)}</b><small>${SEAT_STATE[s.kind]}</small>${cancel}</div>`
+    return `<div class="rl-seat is-${s.kind}${s.isMe ? ' is-me' : ''}"><span class="rl-avatar" aria-hidden="true">${initial}</span><b>${escHtml(s.name)}</b><small>${SEAT_STATE[s.kind]}</small>${from(s)}${cancel}</div>`
   }).join('')
 }
 

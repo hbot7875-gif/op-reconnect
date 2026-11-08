@@ -23,8 +23,6 @@ import { getAgentNo } from './session.js'
 import { earnedBadgeCount, equippedBadge } from './badges.js'
 import { districtDisplayName } from './ward-tiles.js'
 import { redZonePercent } from './red-zone-ui.js'
-import { getReconnectChatSeen, reconnectChatUnreadCount,
-  reconnectChatBadgeText } from './reconnect-chat-unread.js'
 import { navIcon, hudIcon } from './nav-icons.js'
 import { hasMoonReview } from './moon-review-dot.js'
 
@@ -72,47 +70,6 @@ function countedTotal(state) {
   const t = (d.trackGoals || []).reduce((s, g) => s + Math.min(g.progress, g.target), 0)
   const a = (d.albums || []).reduce((s, x) => s + Math.min(x.passesDone, x.target), 0)
   return t + a
-}
-
-function reconnectHudStatus(state) {
-  const district = state?.activeDistrict
-  const reconnect = district?.reconnect
-  if (!district || !reconnect || reconnect.done) return null
-  const mission = reconnect.mission
-  const availableAlert = (state.reconnectAlerts || []).some((alert) => alert.districtId === district.id)
-  const districtHours = district.expiresAt ? (new Date(district.expiresAt).getTime() - Date.now()) / 3600000 : Infinity
-  if (districtHours > 0 && districtHours <= 24) return { label: 'District deadline is today', urgent: true }
-  if (!mission) return { label: availableAlert ? 'Partner available' : 'Find your team', urgent: availableAlert }
-
-  const joined = (mission.participants || []).filter((p) => p.status === 'joined' && !p.leftDistrict)
-  const pending = (mission.participants || []).filter((p) => p.status === 'invited' && !p.inviteExpired)
-  const need = Math.max(0, Number(mission.requiredAgents || 0) - joined.length)
-  if (need > 0) {
-    if (availableAlert) return { label: 'Partner available', urgent: true }
-    if (pending.length) return { label: `${pending.length} invite${pending.length === 1 ? '' : 's'} pending` }
-    return { label: `Need ${need} more agent${need === 1 ? '' : 's'}`, urgent: true }
-  }
-  if (joined.some((participant) => participant.idle)) return { label: 'A teammate has gone quiet', urgent: true }
-  const missionHours = mission.expiresAt ? (new Date(mission.expiresAt).getTime() - Date.now()) / 3600000 : Infinity
-  if (missionHours > 0 && missionHours <= 24) return { label: 'Mission ends today', urgent: true }
-  if (mission.cipher) return { label: `Cipher ${mission.cipher.index + 1}/${mission.cipher.total}` }
-  if (mission.sharedTrack) {
-    const left = Math.max(0, mission.sharedTrack.target - mission.sharedTrack.progress)
-    return { label: `${left} shared stream${left === 1 ? '' : 's'} left` }
-  }
-  if (mission.sharedTracks) {
-    const st = mission.sharedTracks
-    const hiddenLeft = st.total - st.found
-    if (st.hidden && hiddenLeft > 0) return { label: `${hiddenLeft} ${hiddenLeft === 1 ? (st.noun || 'songs').replace(/s$/, '') : (st.noun || 'songs')} to find` }
-    const left = Math.max(0, st.goal - st.progress)
-    return { label: `${left} shared stream${left === 1 ? '' : 's'} left` }
-  }
-  if (mission.checklist) {
-    const me = joined.find((p) => p.isMe)
-    const left = Math.max(0, mission.checklist.total - (Number(me?.streams) || 0))
-    return left > 0 ? { label: `${left} track${left === 1 ? '' : 's'} left on your list` } : { label: 'Waiting on your team' }
-  }
-  return { label: 'Team ready · stream now' }
 }
 
 /** Real "you just did something" Red Zone feedback — see this session's own
@@ -265,12 +222,8 @@ export function renderHud(container, state) {
   // anyone can still collect — worth a personal nudge, once.
   const chestSignal = hasUnseenGroupChests(state?.vma) ? 1 : 0
   const signalCount = invites.length + reconnectAlerts.length + unreadTotal + backupSignal + chestSignal
-  const reconnectStatus = reconnectHudStatus(state)
-  const reconnectMission = state.activeDistrict?.reconnect?.mission
-  const reconnectUnread = reconnectMission
-    ? reconnectChatUnreadCount(reconnectMission.messageCount, getReconnectChatSeen(reconnectMission.id))
-    : 0
-  const reconnectBadge = reconnectChatBadgeText(reconnectUnread)
+  // The sticky ReConnect banner was removed everywhere (2026-11-08): the
+  // quest card itself carries the status and the Team Chat "N new" badge.
   const codenameHidden = isCodenameHidden()
   const displayCode = codenameHidden ? 'Agent' : esc(p.codename)
 
@@ -302,7 +255,6 @@ export function renderHud(container, state) {
       <div class="xp-bar" role="progressbar" aria-label="Level ${lvl.level} XP progress" aria-valuemin="0" aria-valuemax="${lvl.xpForNextLevel}" aria-valuenow="${lvl.xpIntoLevel}"><div class="xp-fill" style="width:${pct}%"></div></div>
       ${boost ? `<span class="hud-boost">${boost.multiplier}&times; BOOST &middot; ${boost.minsLeft}m</span>` : ''}
     </div>
-    ${reconnectStatus ? `<button class="hud-reconnect-status${reconnectStatus.urgent ? ' is-urgent' : ''}" id="hudReconnectStatus" type="button"><span>🤝 ReConnect</span><b>${esc(reconnectStatus.label)}</b>${reconnectBadge ? `<em class="hud-reconnect-chat-badge">💬 ${esc(reconnectBadge)}</em>` : ''}<i>›</i></button>` : ''}
     ${state.player?.leave ? `<button class="hud-reconnect-status hud-leave-status" id="hudLeaveStatus" type="button"><span>⏸ On leave</span><b>Clocks paused until ${esc(leaveEndLabel(state.player.leave.endsAt))}</b><i>›</i></button>` : ''}
   `
   const levelPill = container.querySelector('#levelPill')
@@ -318,13 +270,6 @@ export function renderHud(container, state) {
   container.querySelector('#bellBtn').onclick = () => showOverlay(invitesSheet(state))
   const leaveButton = container.querySelector('#hudLeaveStatus')
   if (leaveButton) leaveButton.onclick = (e) => goSettings({ x: e.clientX, y: e.clientY })
-  const reconnectButton = container.querySelector('#hudReconnectStatus')
-  if (reconnectButton) reconnectButton.onclick = () => {
-    const d = state.activeDistrict
-    goDistrict(d.wardId, d.id)
-  }
-  if (reconnectButton && reconnectUnread) reconnectButton.setAttribute('aria-label',
-    `ReConnect. ${reconnectUnread} new team message${reconnectUnread === 1 ? '' : 's'}. ${reconnectStatus.label}`)
   container.querySelector('#syncBtn').onclick = () => syncNow(state)
   paintSyncButton()
   wireHudScrollCollapse()
