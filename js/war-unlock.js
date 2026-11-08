@@ -24,6 +24,11 @@ import { openRunArmy } from './run-army.js'
 const FLASH = [{ c: 'r', k: '1' }, { c: 'b', k: '3' }, { c: 'g', k: '8' }, { c: 'y', k: '9' }]
 
 const SEEN_KEY = 'rc_seen_war_unlock:'
+// The server record is what keeps the reveal to once. This device's note
+// only covers the moment between showing it and the server saving that, so
+// it expires: a reveal the server has been told to show again (by an admin
+// reset, say) isn't silently swallowed on a device that showed it before.
+const LOCAL_HOLD_MS = 10 * 60_000
 let showing = false
 
 /** A match is on, or the agent is on War of Cards' own screen. */
@@ -32,16 +37,18 @@ const inGame = () => document.body.classList.contains('ra-playing') || getScreen
 export function checkForWarUnlock(state) {
   const agentNo = getAgentNo()
   if (!agentNo || !state?.joined || !state.warUnlockDue || showing) return
-  // This device already showed it: the server hears again, and stays quiet.
+  // Shown on this device moments ago and the server hasn't caught up: tell
+  // it again and stay quiet.
   try {
-    if (localStorage.getItem(`${SEEN_KEY}${agentNo}`) === '1') { call('markWarUnlockSeen', { agentNo }); return }
+    const shownAt = Number(localStorage.getItem(`${SEEN_KEY}${agentNo}`))
+    if (shownAt && Date.now() - shownAt < LOCAL_HOLD_MS) { call('markWarUnlockSeen', { agentNo }); return }
   } catch (_) { /* no storage: the server record alone keeps it to once */ }
   if (inGame()) return
   const overlay = document.getElementById('overlay')
   if (overlay && !overlay.hidden) return
 
   showing = true
-  try { localStorage.setItem(`${SEEN_KEY}${agentNo}`, '1') } catch (_) {}
+  try { localStorage.setItem(`${SEEN_KEY}${agentNo}`, String(Date.now())) } catch (_) {}
   call('markWarUnlockSeen', { agentNo }).finally(() => { showing = false })
   showOverlay(unlockSheet())
 }

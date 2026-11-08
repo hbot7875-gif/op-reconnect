@@ -76,6 +76,9 @@ test('wiring: routes, state flag, Run ARMY entry, pop-up guards, badge template 
   assert.match(pop, /document\.body\.classList\.contains\('ra-playing'\) \|\| getScreen\(\)\?\.name === 'runami'/, 'never interrupts a game')
   assert.match(pop, /if \(overlay && !overlay\.hidden\) return/)
   assert.match(pop, /call\('markWarUnlockSeen'/)
+  // The device note only bridges the save; the server record is what keeps it to once.
+  assert.match(pop, /const LOCAL_HOLD_MS = 10 \* 60_000/)
+  assert.match(pop, /if \(shownAt && Date\.now\(\) - shownAt < LOCAL_HOLD_MS\)/)
   for (const line of ['MISSION', 'SUCCESS!', '15/15', 'ALBUM COMPLETE', 'WAR OF CARDS', 'UNLOCKED!', "LET'S GO!", 'Later']) assert.ok(pop.includes(line), line)
   assert.equal((pop.match(/LET'S GO!/g) || []).length, 1, "LET'S GO! only on the button")
   assert.match(pop, /const FLASH = \[/, 'covers flash past before the last card')
