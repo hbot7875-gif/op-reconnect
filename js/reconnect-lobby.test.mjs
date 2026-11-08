@@ -53,7 +53,11 @@ test('wiring: picker sheet, one Find teammates action, More options, banner hidd
   assert.match(sd, /function openMissionChat\(box\) \{[\s\S]{0,600}markReconnectChatSeen\(m\.id, m\.messageCount\)/)
   assert.match(sd, /reconnect-chat-badge/)
   // Options: How to play, Manage invites (only when there is something to manage), Leave Quest as a plain row.
-  assert.match(sd, /optionSection\('How to play', howNodes\)/)
+  assert.match(sd, /optionSection\('How to play', howNodes, 'book'\)/)
+  // Lucide line icons, decorative only, never emoji in labels.
+  assert.match(sd, /import \{ rcIcon \} from '\.\/reconnect-icons\.js'/)
+  assert.match(read('./reconnect-icons.js'), /aria-hidden="true"/)
+  assert.doesNotMatch(sd.slice(sd.indexOf('function teammatePicker'), sd.indexOf('function refreshMountedMissionDeadline')), /[\u{1F300}-\u{1FAFF}]/u, 'no emoji in the sheets')
   assert.match(sd, /canManage \? 'Manage invites' : 'Team checklists'/)
   assert.match(sd, /const leave = el\('div', 'rl-opt-leave'\)/)
   // Quick replies, arrow send, bottom sheets, once-only effects.

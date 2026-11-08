@@ -2,6 +2,8 @@
 // empty spots) for an open mission, instead of a roster table. Pure, so
 // every seat state is testable; screen-district.js wires the buttons.
 
+import { rcIcon } from './reconnect-icons.js'
+
 const escHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
 
 /** One entry per seat, in order: you, teammates, invited agents, then empty
@@ -30,8 +32,8 @@ export function lobbySeatsHtml(seats, { canInvite = false, canCancel = false } =
   return seats.map((s, i) => {
     if (s.kind === 'empty') {
       return canInvite
-        ? `<button class="rl-seat is-empty" type="button" data-seat-invite="${i}"><span class="rl-avatar" aria-hidden="true">+</span><b>Invite</b><small>Open spot</small></button>`
-        : `<div class="rl-seat is-empty"><span class="rl-avatar" aria-hidden="true">+</span><b>Open</b><small>spot</small></div>`
+        ? `<button class="rl-seat is-empty" type="button" data-seat-invite="${i}"><span class="rl-avatar" aria-hidden="true">${rcIcon('userPlus')}</span><b>Invite</b><small>Open spot</small></button>`
+        : `<div class="rl-seat is-empty"><span class="rl-avatar" aria-hidden="true">${rcIcon('users')}</span><b>Open</b><small>spot</small></div>`
     }
     const initial = escHtml(s.isMe ? 'You'.charAt(0) : [...s.name][0] || '?').toUpperCase()
     const cancel = canCancel && s.kind === 'invited' && s.removable && s.agentNo
@@ -95,7 +97,12 @@ export function celebrateOnce(missionId, store = safeStore()) {
   return true
 }
 
-export const QUICK_REPLIES = Object.freeze(['Streaming now', 'Done for today', "Let's go"])
+// Each sends its text; the icon is decoration beside it.
+export const QUICK_REPLIES = Object.freeze([
+  { text: 'Streaming now', icon: rcIcon('headphones') },
+  { text: 'Done for today', icon: rcIcon('checkCircle') },
+  { text: "Let's go", icon: rcIcon('heart') },
+])
 
 /** A ReConnect sheet that rises from the bottom on phones, with a grab
  *  handle you can swipe down to close. Desktop keeps the centred dialog

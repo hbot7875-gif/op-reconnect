@@ -18,6 +18,7 @@ import { playRestoration } from './celebrate.js'
 import { itemTile, itemSheet, itemsAt, itemsInPack } from './items.js'
 import { trackEngagementOnce } from './engagement.js'
 import { reconnectPlayerNext, sharedTracksPitch } from './reconnect-player-ui.js'
+import { rcIcon } from './reconnect-icons.js'
 import { lobbySeats, lobbySeatsHtml, spotsLeftLabel, newlyJoined, milestoneState, MILESTONES,
   noteMissionOpen, celebrateOnce, QUICK_REPLIES, asBottomSheet } from './reconnect-lobby.js'
 import { streamedLabel, INVITE_ACTIVE_DAYS } from '../supabase/functions/op-reconnect/lib/reconnect-active.js'
@@ -752,7 +753,7 @@ function teammatePicker(d, res, res2, { open, pendingNames = [], onInvited }) {
   const sheet = el('div', 'sheet reconnect-picker')
   const waiting = pendingNames.length ? ` · waiting for ${pendingNames.map(esc).join(' and ')}` : ''
   sheet.innerHTML = `
-    <span class="rl-eyebrow">ReConnect</span>
+    <span class="rl-eyebrow">${rcIcon('handshake')}ReConnect</span>
     <h3 tabindex="-1" data-autofocus="true">Find teammates</h3>
     <p class="rl-sub">${spotsLeftLabel(open)}${waiting}. Invite someone and they get a notification to accept.</p>`
   // Only agents who opened ReConnect and streamed lately are listed
@@ -832,7 +833,7 @@ function paintChatButton(box) {
   const m = box._mission
   if (!box._chatBtn || !m) return
   const badge = reconnectChatBadgeText(reconnectChatUnreadCount(m.messageCount, getReconnectChatSeen(m.id)))
-  box._chatBtn.innerHTML = `<span aria-hidden="true">💬</span> Team Chat${badge ? ` <span class="reconnect-chat-badge">${esc(badge)} new</span>` : ''}`
+  box._chatBtn.innerHTML = `${rcIcon('chat')}Team Chat${badge ? ` <span class="reconnect-chat-badge">${esc(badge)} new</span>` : ''}`
 }
 
 /** Team Chat in its own sheet: the same thread and message box as before. */
@@ -840,7 +841,7 @@ function openMissionChat(box) {
   const m = box._mission
   if (!m || !box._chat) return
   const sheet = el('div', 'sheet reconnect-chat-sheet', `
-    <span class="rl-eyebrow">ReConnect</span>
+    <span class="rl-eyebrow">${rcIcon('handshake')}ReConnect</span>
     <h3 tabindex="-1" data-autofocus="true">Team Chat</h3>`)
   sheet.appendChild(box._chat.node)
   showOverlay(asBottomSheet(sheet, hideOverlay))
@@ -851,7 +852,7 @@ function openMissionChat(box) {
 /** Options in its own sheet: How to play, Manage invites, Leave Quest. */
 function openMissionOptions(box, body) {
   const sheet = el('div', 'sheet reconnect-options-sheet', `
-    <span class="rl-eyebrow">ReConnect</span>
+    <span class="rl-eyebrow">${rcIcon('handshake')}ReConnect</span>
     <h3 tabindex="-1" data-autofocus="true">Options</h3>`)
   const holder = el('div', 'reconnect-options-body')
   holder.appendChild(body)
@@ -861,9 +862,9 @@ function openMissionOptions(box, body) {
 }
 
 /** One row of the Options sheet that opens only when tapped. */
-function optionSection(label, nodes) {
+function optionSection(label, nodes, icon) {
   const details = el('details', 'rl-opt')
-  details.appendChild(el('summary', '', label))
+  details.appendChild(el('summary', '', `<span>${icon ? rcIcon(icon) : ''}${label}</span>`))
   const body = el('div', 'rl-opt-body')
   body.append(...nodes)
   details.appendChild(body)
@@ -897,11 +898,12 @@ export function maybeCelebrateQuest(d) {
   const others = team.filter((p) => !p.isMe).map((p) => esc(p.codename))
   const what = m.sharedTrack ? `${esc(m.sharedTrack.label)} to ${m.sharedTrack.target} streams` : 'the ReConnect Quest'
   const sheet = el('div', 'sheet rl-win', `
-    <span class="rl-eyebrow">ReConnect</span>
+    <span class="rl-eyebrow">${rcIcon('handshake')}ReConnect</span>
+    <span class="rl-win-badge">${rcIcon('trophy')}</span>
     <h3 tabindex="-1" data-autofocus="true">Quest complete</h3>
     <div class="rl-seats rl-win-seats">${lobbySeatsHtml(seats)}</div>
     <p class="rl-win-line">${others.length ? `You, ${others.join(' and ')}` : 'Your team'} took ${what} together.</p>`)
-  const share = el('button', 'btn btn-primary rl-win-share', 'Share our win')
+  const share = el('button', 'btn btn-primary rl-win-share', `${rcIcon('share')}Share our win`)
   share.type = 'button'
   share.onclick = () => showOverlay(questShareSheet(d.id))
   sheet.appendChild(share)
@@ -982,7 +984,7 @@ function paintMissionPanel(box, d, res) {
   const m = res.mission
   const me = getAgentNo()
   if (!res.recruit && ['open', 'complete'].includes(m?.status) && m.participants?.some(p => p.isMe && p.status === 'joined')) {
-    const shareQuest = el('button', 'reconnect-quest-share', '↗ Share Quest')
+    const shareQuest = el('button', 'reconnect-quest-share', `${rcIcon('share')}Share Quest`)
     shareQuest.onclick = () => showOverlay(questShareSheet(d.id))
     box.appendChild(shareQuest)
   }
@@ -1251,7 +1253,7 @@ function paintMissionPanel(box, d, res) {
   let openPicker = null
   const canInvite = myRow?.status === 'joined' && !res.recruit && need > pending.length
   const seatsHost = el('section', 'reconnect-seats')
-  seatsHost.innerHTML = `<div class="rl-head"><span>Your team</span><b>${spotsLeftLabel(need, pending.length)}</b></div>
+  seatsHost.innerHTML = `<div class="rl-head"><span>${rcIcon('users')}Your team</span><b>${spotsLeftLabel(need, pending.length)}</b></div>
     <div class="rl-seats">${lobbySeatsHtml(lobbySeats(m.participants, m.requiredAgents), { canInvite, canCancel: !!m.isCreator })}</div>`
   for (const b of seatsHost.querySelectorAll('[data-seat-invite]')) {
     b.onclick = () => (openPicker ? openPicker() : primaryHost.querySelector('button')?.focus())
@@ -1562,7 +1564,7 @@ function paintMissionPanel(box, d, res) {
         const n = res2.candidates.length
         const onlineCount = res2.candidates.filter((c) => c.online).length
         findBtn.disabled = false
-        findBtn.innerHTML = `Find teammates<small>${n} free here${onlineCount ? ` · ${onlineCount} online` : ''}</small>`
+        findBtn.innerHTML = `<span class="rl-find-label">${rcIcon('userPlus')}Find teammates</span><small>${n} free here${onlineCount ? ` · ${onlineCount} online` : ''}</small>`
         openPicker = () => showOverlay(teammatePicker(d, res, res2, {
           open: need - pending.length, pendingNames: pending.map((p) => p.codename), onInvited: refresh,
         }))
@@ -1597,12 +1599,12 @@ function paintMissionPanel(box, d, res) {
   for (const child of leftovers) child.remove()
   const roster = leftovers.find((c) => c.classList.contains('reconnect-roster'))
   const howNodes = leftovers.filter((c) => c !== roster && c.childNodes.length)
-  if (howNodes.length) detailsBody.appendChild(optionSection('How to play', howNodes))
+  if (howNodes.length) detailsBody.appendChild(optionSection('How to play', howNodes, 'book'))
   // The team list only where it does something: cancelling or removing
   // (the creator), or each teammate's own checklist.
   const canManage = m.isCreator && m.participants.some((p) => p.removable)
   if (roster && (canManage || m.checklist)) {
-    detailsBody.appendChild(optionSection(canManage ? 'Manage invites' : 'Team checklists', [roster]))
+    detailsBody.appendChild(optionSection(canManage ? 'Manage invites' : 'Team checklists', [roster], canManage ? 'mail' : 'listChecks'))
   }
   // Leave Quest: a plain row, never inside another section.
   if (exitRow || leaveRow) {
@@ -1624,7 +1626,7 @@ function paintMissionPanel(box, d, res) {
   box._chatBtn = chatBtn
   tools.appendChild(chatBtn)
   if (detailsBody.childElementCount) {
-    const optionsBtn = el('button', 'btn btn-ghost reconnect-tool reconnect-options-open', '<span aria-hidden="true">⋯</span> Options')
+    const optionsBtn = el('button', 'btn btn-ghost reconnect-tool reconnect-options-open', `${rcIcon('more')}Options`)
     optionsBtn.type = 'button'
     optionsBtn.onclick = () => openMissionOptions(box, detailsBody)
     tools.appendChild(optionsBtn)

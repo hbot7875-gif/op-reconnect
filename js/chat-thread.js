@@ -67,7 +67,7 @@ export function updateChatThread(wrap, messages, opts = {}) {
  *   readOnlyNote?: string,
  *   errorText?: (code: string) => string,
  *   variant?: string,
- *   quickReplies?: string[],
+ *   quickReplies?: (string | {text: string, icon?: string})[],
  *   sendIcon?: boolean,
  * }} opts
  */
@@ -116,8 +116,10 @@ export function chatThread(messages, opts) {
   sendBtn.onclick = () => send()
   if (opts.quickReplies?.length) {
     const quick = el('div', 'chat-quick')
-    for (const text of opts.quickReplies) {
-      const chip = el('button', 'chat-quick-chip', esc(text))
+    for (const reply of opts.quickReplies) {
+      // `icon` is the caller's own trusted SVG markup; the text is escaped.
+      const text = typeof reply === 'string' ? reply : reply.text
+      const chip = el('button', 'chat-quick-chip', `${typeof reply === 'string' ? '' : reply.icon || ''}${esc(text)}`)
       chip.type = 'button'
       chip.onclick = () => send(text)
       quick.appendChild(chip)

@@ -4688,6 +4688,28 @@ button.rl-seat:focus-visible, .rl-cancel:focus-visible { outline: 2px solid var(
 .rl-win-seats { margin: 12px 0 10px; }
 .rl-win-line { margin: 0 0 14px; color: var(--text); opacity: .86; font-size: 14px; }
 .rl-win-share { width: 100%; }
+/* Lucide line icons (reconnect-icons.js), same stroke as Candy Star's. */
+.rl-i { display: inline-block; flex: none; width: 1.15em; height: 1.15em; vertical-align: -0.2em; fill: none;
+  stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.rl-eyebrow { display: inline-flex; align-items: center; gap: 6px; }
+.rl-eyebrow .rl-i { width: 14px; height: 14px; }
+.reconnect-quest-share { display: inline-flex; align-items: center; gap: 6px; }
+.reconnect-quest-share .rl-i { width: 14px; height: 14px; }
+.rl-head span { display: inline-flex; align-items: center; gap: 6px; }
+.rl-head .rl-i { width: 13px; height: 13px; }
+.rl-find-label { display: inline-flex; align-items: center; gap: 8px; }
+.rl-find-label .rl-i { width: 17px; height: 17px; }
+.reconnect-card .reconnect-tools .reconnect-tool .rl-i { width: 16px; height: 16px; }
+.rl-seat.is-empty .rl-avatar .rl-i { width: 19px; height: 19px; }
+.rl-opt > summary > span { display: inline-flex; align-items: center; gap: 10px; }
+.rl-opt > summary .rl-i { width: 17px; height: 17px; color: var(--purple-lt); }
+.chat-quick-chip { display: inline-flex; align-items: center; gap: 6px; }
+.chat-quick-chip .rl-i { width: 14px; height: 14px; color: var(--purple-lt); }
+.rl-win-badge { display: grid; place-items: center; width: 52px; height: 52px; margin: 10px auto 2px; border-radius: 50%;
+  background: rgba(217,173,95,.12); color: var(--gold); }
+.rl-win-badge .rl-i { width: 26px; height: 26px; }
+.rl-win-share { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.rl-win-share .rl-i { width: 17px; height: 17px; }
 .rl-grab { display: none; }
 @media screen and (max-width: 640px) {
   #overlay:has(> .sheet.rl-bottom) { align-items: flex-end; padding: 0; }
