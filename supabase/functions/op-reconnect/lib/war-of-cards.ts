@@ -29,6 +29,20 @@ export async function markWarUnlockSeen(sb: Sb, params: any) {
   return error ? { success: false, error: 'save_failed' } : { success: true }
 }
 
+const UNLOCK_ACTIONS = new Set(['go', 'later', 'closed'])
+
+/** What the agent did with the reveal: LET'S GO!, Later, or closed it. Only
+ *  the first answer is kept; anything after it changes nothing. */
+export async function markWarUnlockAction(sb: Sb, params: any) {
+  const agentNo = String(params.agentNo || '').trim().toUpperCase()
+  const action = String(params.action || '')
+  if (!UNLOCK_ACTIONS.has(action)) return { success: false, error: 'bad_action' }
+  const { error } = await sb.from('rc_war_unlock_notices')
+    .update({ action, acted_at: new Date().toISOString() })
+    .eq('agent_no', agentNo).is('action', null)
+  return error ? { success: false, error: 'save_failed' } : { success: true }
+}
+
 /** The leaderboard: weekly (since Monday 00:00 KST) or all time, ranked by
  *  wins or by win percentage, with the viewer's own row when they're lower. */
 export async function getWarLeaderboard(sb: Sb, params: any) {

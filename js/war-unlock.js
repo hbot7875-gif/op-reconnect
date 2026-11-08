@@ -49,11 +49,17 @@ export function checkForWarUnlock(state) {
 
   showing = true
   try { localStorage.setItem(`${SEEN_KEY}${agentNo}`, String(Date.now())) } catch (_) {}
-  call('markWarUnlockSeen', { agentNo }).finally(() => { showing = false })
-  showOverlay(unlockSheet())
+  // The answer is saved after the "seen" record exists, so it has a row to land on.
+  const seen = call('markWarUnlockSeen', { agentNo }).finally(() => { showing = false })
+  const answer = (action) => { seen.then(() => call('markWarUnlockAction', { agentNo, action })) }
+  showOverlay(unlockSheet(answer))
 }
 
-export function unlockSheet() {
+/** `onAnswer(action)` hears what the agent did: 'go', 'later', or 'closed'
+ *  (the X, a backdrop tap or Escape). Called once at most. */
+export function unlockSheet(onAnswer = () => {}) {
+  let answered = false
+  const answer = (action) => { if (!answered) { answered = true; onAnswer(action) } }
   const sheet = el('div', 'sheet ra-sheet wu-sheet')
   sheet.setAttribute('aria-labelledby', 'wu-title')
   sheet.innerHTML = `
@@ -74,10 +80,17 @@ export function unlockSheet() {
   const go = el('button', 'btn btn-primary wu-go', "LET'S GO!")
   go.type = 'button'
   go.dataset.autofocus = 'true'
-  go.onclick = () => { hideOverlay(); openRunArmy() }
+  go.onclick = () => { answer('go'); hideOverlay(); openRunArmy() }
   const later = el('button', 'btn btn-ghost wu-later', 'Later')
   later.type = 'button'
-  later.onclick = hideOverlay
+  later.onclick = () => { answer('later'); hideOverlay() }
   sheet.append(go, later)
+  // Closed some other way: the sheet leaves the overlay without an answer.
+  const watch = new MutationObserver(() => {
+    if (sheet.isConnected) return
+    watch.disconnect()
+    answer('closed')
+  })
+  requestAnimationFrame(() => { if (sheet.parentNode) watch.observe(sheet.parentNode, { childList: true }) })
   return sheet
 }
