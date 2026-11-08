@@ -4580,6 +4580,19 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 @media (prefers-reduced-motion: reduce) { .rw-online-dot { animation: none; } }
 
 /* Help portal (js/help.js): Get help for agents, Help inbox for AGENT000. */
+/* The floating help button (js/help-fab.js): bottom right, just above the
+   tab bar dock; under sheets (the overlay is z-index 50); never on the War
+   of Cards table. */
+.help-fab { position: fixed; right: 16px; bottom: calc(96px + env(safe-area-inset-bottom)); z-index: 6;
+  display: grid; place-items: center; width: 46px; height: 46px; padding: 0; border: 1px solid rgba(255,255,255,.14);
+  border-radius: 50%; background: var(--purple); color: #fff; cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0,0,0,.45); }
+.help-fab:hover { filter: brightness(1.08); }
+.help-fab:focus-visible { outline: 2px solid var(--purple-lt); outline-offset: 3px; }
+.help-fab-i { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.help-fab-dot { position: absolute; top: 2px; right: 2px; width: 10px; height: 10px; border: 2px solid #15121f; border-radius: 50%; background: var(--gold); }
+.help-fab-dot[hidden] { display: none; }
+#game:has(#scene .ra-screen) .help-fab, body.ra-playing .help-fab, #game[hidden] .help-fab { display: none; }
 .help-eyebrow { color: var(--purple-lt); font-family: var(--mono); font-size: 10px; font-weight: 800; letter-spacing: .8px; text-transform: uppercase; }
 .help-sheet h3 { margin: 4px 0 6px; }
 .help-sheet h3[tabindex="-1"]:focus { outline: none; box-shadow: none; }

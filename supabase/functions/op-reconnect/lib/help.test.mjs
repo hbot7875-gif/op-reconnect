@@ -72,3 +72,13 @@ test('the table: browser roles locked out, statuses and topics checked', { skip:
     assert.equal((await db.query(`select has_table_privilege('${role}', 'public.rc_help_requests', 'select') ok`)).rows[0].ok, false)
   }
 })
+
+test('a floating help button on every game screen opens Get help', () => {
+  const fab = read('../../../../js/help-fab.js')
+  assert.match(fab, /btn\.onclick = \(\) => openHelp\(\)/)
+  assert.match(fab, /btn\.querySelector\('\.help-fab-dot'\)\.hidden = !replies/, 'a dot when the team replied')
+  assert.match(read('../../../../js/ui-hud.js'), /paintHelpFab\(state\)/)
+  const css = read('../../../../css/reconnect.css')
+  assert.match(css, /\.help-fab \{ position: fixed; right: 16px; bottom: calc\(96px \+ env\(safe-area-inset-bottom\)\); z-index: 6;/)
+  assert.match(css, /#game:has\(#scene \.ra-screen\) \.help-fab, body\.ra-playing \.help-fab/, 'never on the War of Cards table')
+})

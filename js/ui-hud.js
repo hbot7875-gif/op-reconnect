@@ -27,6 +27,7 @@ import { getReconnectChatSeen, reconnectChatUnreadCount } from './reconnect-chat
 import { navIcon, hudIcon } from './nav-icons.js'
 import { isFramedArt } from './badge-frames.js'
 import { openHelp, openHelpInbox } from './help.js'
+import { paintHelpFab } from './help-fab.js'
 import { photoOnly, photoOnlyCached } from './badge-photo-only.js'
 import { hasMoonReview } from './moon-review-dot.js'
 
@@ -285,6 +286,7 @@ export function renderHud(container, state) {
   const leaveButton = container.querySelector('#hudLeaveStatus')
   if (leaveButton) leaveButton.onclick = (e) => goSettings({ x: e.clientX, y: e.clientY })
   container.querySelector('#syncBtn').onclick = () => syncNow(state)
+  paintHelpFab(state)
   if (framedArt && !photoOnlySrc) {
     photoOnly(badgeArt, framedArt).then((src) => { if (src && container.isConnected) renderHud(container, state) })
   }
