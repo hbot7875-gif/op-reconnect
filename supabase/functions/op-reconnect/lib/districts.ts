@@ -268,6 +268,38 @@ function todayCountFor(
   return today
 }
 
+/** The agent's OWN counted plays for a district attempt — the very same
+ *  windowedPlays counting districtProgress uses (activation-day baseline,
+ *  per-day cap, leave days skipped, album double days), but uncapped by the
+ *  goal target and without any Backup Pass helper bonus. Album passes use
+ *  the same bottleneck rule (fewest plays of any song, up to the target).
+ *  Used for a restored district's "Your Contributions"; `rollups` must
+ *  already end at the moment the district was restored. */
+export function ownGoalTotals(
+  frozen: FrozenGoals,
+  baseline: Record<string, number>,
+  rollups: RollupRow[],
+  activatedAt: string,
+  frozenDates: Set<string> = new Set(),
+) {
+  const cap = PERSONAL_COUNT_CAP
+  const activationDate = kstDateOf(Math.floor(new Date(activatedAt).getTime() / 1000))
+  const inWindow = rollups.filter((r) => r.kst_date >= activationDate && !frozenDates.has(String(r.kst_date)))
+  const tracks = (frozen.trackGoals || []).map((g) => ({
+    id: g.id, label: g.label, target: g.target,
+    plays: windowedPlays(g.keys, inWindow, activationDate, baseline[`t:${g.id}`] || 0, cap, false),
+  }))
+  const albums = (frozen.albumGoals || []).map((a) => {
+    const songs = a.tracks.map((t) => ({
+      label: t.label,
+      plays: windowedPlays(t.keys, inWindow, activationDate, baseline[`a:${a.id}:${t.label}`] || 0, cap, true),
+    }))
+    const fewest = songs.reduce((m, t) => Math.min(m, t.plays), Infinity)
+    return { id: a.id, label: a.label, target: a.target, passes: Math.min(Number.isFinite(fewest) ? fewest : 0, a.target), songs }
+  })
+  return { tracks, albums }
+}
+
 export function districtProgress(
   frozen: FrozenGoals,
   baseline: Record<string, number>,

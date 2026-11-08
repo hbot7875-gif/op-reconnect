@@ -75,6 +75,7 @@ import { cronRaplineRefresh, getRaplineTracker } from './lib/rapline-tracker.ts'
 import { cronMamaRankCheck, getMamaRanking } from './lib/mama-rank.ts'
 import { getWarLeaderboard, markWarUnlockSeen, markWarUnlockAction } from './lib/war-of-cards.ts'
 import { submitHelpRequest, getMyHelpRequests, helpInbox, helpReply } from './lib/help.ts'
+import { getDistrictContributions } from './lib/district-contributions.ts'
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -181,6 +182,8 @@ const ROUTES: Record<string, Route> = {
   getMyHelpRequests: { auth: 'agent', handler: (sb, p) => getMyHelpRequests(sb, p) },
   helpInbox: { auth: 'agent', handler: (sb, p) => helpInbox(sb, p) },
   helpReply: { auth: 'agent', handler: (sb, p) => helpReply(sb, p) },
+  // A restored district's "Your Contributions" (read-only, own data only).
+  getDistrictContributions: { auth: 'agent', handler: (sb, p) => getDistrictContributions(sb, p) },
   runAmiTesterAdd: { auth: 'agent', handler: (sb, p) => runAmiTesterAdd(sb, p) },
   runAmiTesterRemove: { auth: 'agent', handler: (sb, p) => runAmiTesterRemove(sb, p) },
   startDistrict: { auth: 'agent', handler: (sb, p) => startDistrict(sb, p) },

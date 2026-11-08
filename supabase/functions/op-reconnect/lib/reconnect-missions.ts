@@ -287,7 +287,7 @@ const CONTRIBUTION_PAGE_SIZE = 1_000
  *  computeBaseline). Paginated the same defensive way bomb.ts's Red Zone
  *  scrobble read is, even though one agent's one day is never realistically
  *  going to need a second page. */
-async function contributionTotals(
+export async function contributionTotals(
   supabase: SupabaseDB, agentNo: string, sinceIso: string, strict = false, untilIso: string | null = null,
 ): Promise<Map<string, number>> {
   const totals = new Map<string, number>()

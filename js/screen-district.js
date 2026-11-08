@@ -19,6 +19,7 @@ import { itemTile, itemSheet, itemsAt, itemsInPack } from './items.js'
 import { trackEngagementOnce } from './engagement.js'
 import { reconnectPlayerNext, sharedTracksPitch } from './reconnect-player-ui.js'
 import { rcIcon } from './reconnect-icons.js'
+import { contributionsSection } from './district-contributions.js'
 import { lobbySeats, lobbySeatsHtml, spotsLeftLabel, seatNeeds, seatNeedsPhrase, newlyJoined, milestoneState, MILESTONES,
   noteMissionOpen, celebrateOnce, QUICK_REPLIES, asBottomSheet } from './reconnect-lobby.js'
 import { streamedLabel, INVITE_ACTIVE_DAYS } from '../supabase/functions/op-reconnect/lib/reconnect-active.js'
@@ -258,7 +259,9 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
   } else if (mapD.status === 'centerpiece_lit') {
     card.appendChild(el('p', 'muted', 'The ward is whole. It watches over every agent who came before you.'))
   } else if (mapD.status === 'restored') {
-    board.appendChild(card)
+    // Restored: the agent's own record here, then what they keep here.
+    // No missions come back.
+    board.appendChild(contributionsSection(districtId, districtDisplayName(mapD)))
     board.appendChild(shelf(state, mapD))
     return
   } else {
