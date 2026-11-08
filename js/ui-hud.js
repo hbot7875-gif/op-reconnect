@@ -23,6 +23,7 @@ import { getAgentNo } from './session.js'
 import { earnedBadgeCount, equippedBadge } from './badges.js'
 import { districtDisplayName } from './ward-tiles.js'
 import { redZonePercent } from './red-zone-ui.js'
+import { getReconnectChatSeen, reconnectChatUnreadCount } from './reconnect-chat-unread.js'
 import { navIcon, hudIcon } from './nav-icons.js'
 import { hasMoonReview } from './moon-review-dot.js'
 
@@ -221,9 +222,11 @@ export function renderHud(container, state) {
   // The VMA event is over, so unclaimed Group Chests are the last rewards
   // anyone can still collect — worth a personal nudge, once.
   const chestSignal = hasUnseenGroupChests(state?.vma) ? 1 : 0
-  const signalCount = invites.length + reconnectAlerts.length + unreadTotal + backupSignal + chestSignal
+  const teamChat = reconnectTeamChat(state)
+  const signalCount = invites.length + reconnectAlerts.length + unreadTotal + backupSignal + chestSignal + (teamChat?.unread || 0)
   // The sticky ReConnect banner was removed everywhere (2026-11-08): the
-  // quest card itself carries the status and the Team Chat "N new" badge.
+  // quest card carries the status, and unread Team Chat messages count on
+  // the bell (reconnectTeamChat) as well as the card's Team Chat button.
   const codenameHidden = isCodenameHidden()
   const displayCode = codenameHidden ? 'Agent' : esc(p.codename)
 
@@ -370,6 +373,18 @@ function unreadDistrictSignals(state) {
     .sort((a, b) => b.unread - a.unread || a.name.localeCompare(b.name))
 }
 
+/** Unread ReConnect Team Chat messages on the agent's current district
+ *  quest: { unread, district }, or null. Same per-device "seen" count the
+ *  quest card's Team Chat badge uses (reconnect-chat-unread.js), so opening
+ *  the chat clears both. */
+function reconnectTeamChat(state) {
+  const district = state?.activeDistrict
+  const mission = district?.reconnect?.mission
+  if (!mission?.id) return null
+  const unread = reconnectChatUnreadCount(mission.messageCount, getReconnectChatSeen(mission.id))
+  return unread > 0 ? { unread, district } : null
+}
+
 function invitesSheet(state) {
   const sheet = el('div', 'sheet')
   sheet.appendChild(el('div', 'eyebrow', '🔔 SIGNALS'))
@@ -381,8 +396,24 @@ function invitesSheet(state) {
   const chestsNew = hasUnseenGroupChests(state?.vma)
   const chestCount = unclaimedGroupChests(state?.vma)
 
-  if (!invites.length && !alerts.length && !unreadSignals.length && !backupNew && !chestsNew) {
+  const teamChat = reconnectTeamChat(state)
+  if (!invites.length && !alerts.length && !unreadSignals.length && !backupNew && !chestsNew && !teamChat) {
     sheet.appendChild(el('p', 'muted', "No messages, invites or partner alerts. If another agent signals you, it shows up here."))
+  }
+
+  if (teamChat) {
+    const block = el('div', 'bd-block')
+    block.innerHTML = `
+      <div class="bd-block-head">💬 ReConnect Team Chat</div>
+      <p class="muted invite-body">${teamChat.unread} new message${teamChat.unread === 1 ? '' : 's'} from your team.</p>
+    `
+    const actions = el('div', 'invite-actions')
+    // Opens the quest; the messages count as read once Team Chat is opened.
+    const open = el('button', 'btn btn-primary', 'Open quest')
+    open.onclick = () => { hideOverlay(); goDistrict(teamChat.district.wardId, teamChat.district.id) }
+    actions.appendChild(open)
+    block.appendChild(actions)
+    sheet.appendChild(block)
   }
 
   if (chestsNew) {

@@ -4,7 +4,7 @@
 // frozen at the fraction that status implies, so the place still feels real
 // even before you've started restoring it.
 
-import { el, esc, setState, toast, unlockAfter, showOverlay, hideOverlay } from './state.js'
+import { el, esc, setState, getState, toast, unlockAfter, showOverlay, hideOverlay } from './state.js'
 import { call } from './api.js'
 import { questExitRow } from './quest-skip.js'
 import { getAgentNo } from './session.js'
@@ -848,6 +848,9 @@ function openMissionChat(box) {
   showOverlay(asBottomSheet(sheet, hideOverlay))
   markReconnectChatSeen(m.id, m.messageCount)
   paintChatButton(box)
+  // The bell counts unread Team Chat too; repaint it so it drops now.
+  const hud = document.getElementById('hud')
+  if (hud && getState()) renderHud(hud, getState())
 }
 
 /** Options in its own sheet: How to play, Manage invites, Leave Quest. */

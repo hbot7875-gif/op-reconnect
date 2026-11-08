@@ -134,3 +134,12 @@ test('wiring: the server tags seats on mixed teams; the sticky banner is gone', 
   const hud = read('./ui-hud.js')
   assert.doesNotMatch(hud, /id="hudReconnectStatus"|reconnectHudStatus/, 'no ReConnect banner in the HUD')
 })
+
+test('unread Team Chat counts on the bell and opens the quest; reading it clears both', () => {
+  const hud = read('./ui-hud.js')
+  assert.match(hud, /const signalCount = invites\.length \+ reconnectAlerts\.length \+ unreadTotal \+ backupSignal \+ chestSignal \+ \(teamChat\?\.unread \|\| 0\)/)
+  assert.match(hud, /reconnectChatUnreadCount\(mission\.messageCount, getReconnectChatSeen\(mission\.id\)\)/, 'same seen count as the Team Chat badge')
+  assert.match(hud, /open\.onclick = \(\) => \{ hideOverlay\(\); goDistrict\(teamChat\.district\.wardId, teamChat\.district\.id\) \}/)
+  const sd = read('./screen-district.js')
+  assert.match(sd, /markReconnectChatSeen\(m\.id, m\.messageCount\)\s+paintChatButton\(box\)\s+\/\/ The bell counts unread Team Chat too; repaint it so it drops now\.\s+const hud = document\.getElementById\('hud'\)\s+if \(hud && getState\(\)\) renderHud\(hud, getState\(\)\)/)
+})
