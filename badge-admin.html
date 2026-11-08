@@ -301,7 +301,7 @@
       <div class="bv-field">
         <span>Photo style</span>
         <select class="input-field" id="pool" required>
-          <option value="">Choose Cute or Hot…</option>
+          <option value="">Choose a style…</option>
           <option value="cute">Cute</option>
           <option value="hot">Hot</option>
         </select>
@@ -343,6 +343,7 @@
       <button class="bv-chip" data-quick="active" aria-pressed="false">Active only</button>
       <button class="bv-chip" data-quick="cute" aria-pressed="false">Cute</button>
       <button class="bv-chip" data-quick="hot" aria-pressed="false">Hot</button>
+      <button class="bv-chip" data-quick="fun" aria-pressed="false">Fun</button>
     </div>
     <details class="bv-more-filters" id="moreFilters">
       <summary id="moreFilterSummary">More filters</summary>
@@ -353,7 +354,7 @@
           <div class="bv-filter-field"><span>Member</span><select class="input-field" id="filterMember"><option value="">All members</option></select></div>
           <div class="bv-filter-field"><span>Uploader</span><select class="input-field" id="filterUploader"><option value="">All makers</option></select></div>
           <div class="bv-filter-field"><span>Status</span><select class="input-field" id="filterStatus"><option value="">Active + inactive</option><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
-          <div class="bv-filter-field"><span>Style</span><select class="input-field" id="filterStyle"><option value="">Cute + Hot</option><option value="cute">Cute</option><option value="hot">Hot</option><option value="untagged">Legacy/untagged</option></select></div>
+          <div class="bv-filter-field"><span>Style</span><select class="input-field" id="filterStyle"><option value="">All styles</option><option value="cute">Cute</option><option value="hot">Hot</option><option value="fun">Fun</option><option value="untagged">Legacy/untagged</option></select></div>
         </div>
         <button class="bv-clear-filters" id="clearFilters" type="button">Clear all filters</button>
       </div>
@@ -390,6 +391,9 @@ import {
   escapeBadgeText,
   imageQuality,
   preferredPoolForRarity,
+  preferredPoolFor,
+  poolChoicesFor,
+  STYLE_NAME,
 } from './js/badge-vault.js'
 
 const $ = (id) => document.getElementById(id)
@@ -475,7 +479,7 @@ function paintTemplates() {
   paintTemplateGuidance()
 }
 
-const STYLE_TAG = { cute: '🌸 Cute', hot: '🔥 Hot' }
+const STYLE_TAG = { cute: '🌸 Cute', hot: '🔥 Hot', fun: '🎉 Fun' }
 const templateMap = () => new Map(templates.map((template) => [template.id, template]))
 const selectedTemplate = () => templates.find((template) => template.id === $('tpl').value) || null
 
@@ -717,12 +721,24 @@ function paintTemplateGuidance() {
   paintMiniPreviews() // a framed template previews with its frame
   const template = selectedTemplate()
   const rarity = template?.rarity || 'common'
-  const preferred = preferredPoolForRarity(rarity)
+  const preferred = preferredPoolFor(template)
   $('previewCommonWrap').classList.toggle('is-match', !!template && rarity !== 'rare')
   $('previewRareWrap').classList.toggle('is-match', !!template && rarity === 'rare')
-  $('poolHint').textContent = template
-    ? `${template.name} is ${rarity}. ${rarity === 'rare' ? 'Hot' : 'Cute'} photos are preferred; the other style is only a fallback.${frameOf(template) === 'polaroid' ? ' This badge uses the Polaroid frame: frame the photo square, and it goes into the Polaroid automatically.' : ''}`
-    : 'Common badges prefer Cute photos. Rare badges prefer Hot photos.'
+  // Only the styles that suit this badge: Fun alone for a Fun badge (Run BTS
+  // reactions), Cute and Hot for everything else.
+  const choices = poolChoicesFor(template)
+  const pool = $('pool')
+  if ([...pool.options].slice(1).map((o) => o.value).join() !== choices.join()) {
+    const keep = choices.includes(pool.value) ? pool.value : ''
+    pool.innerHTML = '<option value="">Choose a style…</option>' + choices.map((c) => `<option value="${c}">${STYLE_NAME[c]}</option>`).join('')
+    pool.value = keep
+  }
+  const frameNote = frameOf(template) === 'polaroid' ? ' This badge uses the Polaroid frame: frame the photo square, and it goes into the Polaroid automatically.' : ''
+  $('poolHint').textContent = !template
+    ? 'Common badges prefer Cute photos. Rare badges prefer Hot photos.'
+    : choices.length === 1
+      ? `${template.name} uses ${STYLE_NAME[preferred]} photos: expressive, playful reaction shots.${frameNote}`
+      : `${template.name} is ${rarity}. ${STYLE_NAME[preferred]} photos are preferred; the other style is only a fallback.${frameNote}`
   if (template && !$('pool').value) $('pool').value = preferred
   updateReviewEnabled()
 }

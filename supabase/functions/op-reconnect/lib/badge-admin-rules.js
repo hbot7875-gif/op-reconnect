@@ -13,7 +13,7 @@ const MEMBER_BY_KEY = new Map([
   ['jhope', 'j-hope'], ['hoseok', 'j-hope'], ['taehyung', 'V'],
   ['jungkook', 'Jung Kook'],
 ])
-const BADGE_POOLS = new Set(['cute', 'hot'])
+const BADGE_POOLS = new Set(['cute', 'hot', 'fun'])
 
 export function canonicalBadgeMember(value) {
   return MEMBER_BY_KEY.get(String(value || '').trim().toLowerCase()) || null

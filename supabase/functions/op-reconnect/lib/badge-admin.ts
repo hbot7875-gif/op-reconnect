@@ -42,7 +42,7 @@ const ALLOWED_TYPES: Record<string, string> = {
 // real style tag the Vault page filters the art grid by. Older rows
 // (set1/set2, from before this existed) just show up as untagged; the
 // fixed vocabulary is enforced here only for anything uploaded from now on.
-const POOL_TAGS = new Set(['cute', 'hot'])
+const POOL_TAGS = new Set(['cute', 'hot', 'fun'])
 
 /** Always allowed regardless of config — the account that can already reach
  *  every other admin surface. Prevents a bad rc_config edit locking the
@@ -78,7 +78,7 @@ export async function getBadgeVault(supabase: SupabaseDB, params: any) {
   const viewer = String(params.agentNo || '').trim().toUpperCase()
   const [tplRes, artRes, usedRes] = await Promise.all([
     supabase.from('rc_badge_catalog')
-      .select('id, section, rarity, name, unlock_hint, sort_order, active, art_frame')
+      .select('id, section, rarity, name, unlock_hint, sort_order, active, art_frame, photo_style')
       .order('section').order('sort_order'),
     supabase.from('rc_badge_art')
       .select('id, template_id, storage_path, member, members, pool, active, uploaded_by, created_at, image_hash')
@@ -154,7 +154,7 @@ export async function addBadgeArt(supabase: SupabaseDB, params: any) {
 
   if (!templateId) return { success: false, error: 'Pick a badge template first.' }
   if (!members?.length || !member) return { success: false, error: 'Choose BTS or everyone visible in the photo.' }
-  if (!pool || !POOL_TAGS.has(pool)) return { success: false, error: 'Choose Cute or Hot.' }
+  if (!pool || !POOL_TAGS.has(pool)) return { success: false, error: 'Choose a photo style.' }
   const ext = ALLOWED_TYPES[contentType]
   if (!ext) return { success: false, error: 'Image must be WebP, JPEG or PNG.' }
   if (!params.imageBase64) return { success: false, error: 'No image data received.' }

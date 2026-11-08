@@ -10,6 +10,20 @@ export function preferredPoolForRarity(rarity) {
   return rarity === 'rare' ? 'hot' : 'cute'
 }
 
+/** The style a template's photos should be: its own photo_style when it
+ *  names one (Card Champion: 'fun'), else Hot for rare and Cute for common. */
+export function preferredPoolFor(template) {
+  return template?.photo_style || preferredPoolForRarity(template?.rarity)
+}
+
+/** The styles a maker may pick for this template: just Fun for a Fun badge,
+ *  Cute and Hot for everything else. */
+export function poolChoicesFor(template) {
+  return template?.photo_style === 'fun' ? ['fun'] : ['cute', 'hot']
+}
+
+export const STYLE_NAME = Object.freeze({ cute: 'Cute', hot: 'Hot', fun: 'Fun' })
+
 export function artMembers(art) {
   if (Array.isArray(art?.members) && art.members.length) return [...new Set(art.members)]
   return String(art?.member || '').split(/\s*(?:\+|,)\s*/).filter(Boolean)
@@ -29,7 +43,7 @@ export function imageQuality(width, height) {
 
 export function badgeArtMatches(art, filters, templateById) {
   const template = templateById.get(art.templateId)
-  if (filters.style === 'untagged' && (art.pool === 'cute' || art.pool === 'hot')) return false
+  if (filters.style === 'untagged' && (art.pool === 'cute' || art.pool === 'hot' || art.pool === 'fun')) return false
   if (filters.style && filters.style !== 'untagged' && art.pool !== filters.style) return false
   if (filters.templateId && art.templateId !== filters.templateId) return false
   if (filters.member && !artMembers(art).includes(filters.member)) return false
@@ -45,7 +59,7 @@ export function badgeArtMatches(art, filters, templateById) {
 export function badgeCoverage(templates, art) {
   return templates.filter((template) => template.active !== false).map((template) => {
     const rows = art.filter((item) => item.templateId === template.id && item.active)
-    const preferredPool = preferredPoolForRarity(template.rarity)
+    const preferredPool = preferredPoolFor(template)
     return {
       id: template.id,
       name: template.name,
