@@ -26,6 +26,7 @@ import { redZonePercent } from './red-zone-ui.js'
 import { getReconnectChatSeen, reconnectChatUnreadCount } from './reconnect-chat-unread.js'
 import { navIcon, hudIcon } from './nav-icons.js'
 import { isFramedArt } from './badge-frames.js'
+import { photoOnly, photoOnlyCached } from './badge-photo-only.js'
 import { hasMoonReview } from './moon-review-dot.js'
 
 /** { multiplier, minsLeft } while state.player.boost is live, else null. */
@@ -205,8 +206,12 @@ export function renderHud(container, state) {
   // badge payload (badge-profile.ts's resolveEquippedBadges) — an
   // equipped RARE badge is the one thing the crest halo now reports.
   const streakCold = p.streak.current > 0 ? '' : ' is-cold'
-  // A Polaroid badge is shown as itself: no rare glow ring, no circle.
-  const crestFramed = isFramedArt(collectionBadge?.artFrame) && badgeArt ? ' is-polaroid' : ''
+  // A Polaroid badge shows just the photo inside its frame here, like any
+  // other badge (badge-photo-only.js). Until that cut is ready the whole
+  // Polaroid is shown, with no ring or glow, and the HUD repaints once.
+  const framedArt = isFramedArt(collectionBadge?.artFrame) && badgeArt ? collectionBadge.artFrame : null
+  const photoOnlySrc = framedArt ? photoOnlyCached(badgeArt, framedArt) : null
+  const crestFramed = framedArt && !photoOnlySrc ? ' is-polaroid' : ''
   const crestRare = collectionBadge?.rarity === 'rare' && !crestFramed ? ' is-rare' : ''
 
   const invites = state.invites || []
@@ -238,7 +243,8 @@ export function renderHud(container, state) {
       <div class="hud-row">
         <div class="hud-identity" id="levelPill" role="button" tabindex="0" title="Open Agent Dossier">
           <span class="hud-crest${agentBadge || collectionBadge ? ' has-badge' : ''}${badgeArt ? ' has-photo' : ''}${crestRare}${crestFramed}" aria-hidden="true"><i></i>${
-            badgeArt ? `<img class="hud-crest-photo" src="${esc(badgeThumb(badgeArt))}" data-badge-full="${esc(badgeArt)}" alt="">` : `<b>${collectionBadge ? '🎖️' : agentBadge ? agentBadge.icon : '⟭⟬'}</b>`
+            photoOnlySrc ? `<img class="hud-crest-photo" src="${photoOnlySrc}" alt="">`
+            : badgeArt ? `<img class="hud-crest-photo" src="${esc(badgeThumb(badgeArt))}" data-badge-full="${esc(badgeArt)}" alt="">` : `<b>${collectionBadge ? '🎖️' : agentBadge ? agentBadge.icon : '⟭⟬'}</b>`
           }</span>
           <span class="hud-who">
             <span class="hud-code-row">
@@ -277,6 +283,9 @@ export function renderHud(container, state) {
   const leaveButton = container.querySelector('#hudLeaveStatus')
   if (leaveButton) leaveButton.onclick = (e) => goSettings({ x: e.clientX, y: e.clientY })
   container.querySelector('#syncBtn').onclick = () => syncNow(state)
+  if (framedArt && !photoOnlySrc) {
+    photoOnly(badgeArt, framedArt).then((src) => { if (src && container.isConnected) renderHud(container, state) })
+  }
   paintSyncButton()
   wireHudScrollCollapse()
 }

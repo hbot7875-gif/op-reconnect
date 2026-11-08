@@ -33,9 +33,9 @@ test('Badge Collection: a RUN ARMY section; Polaroids without the rare frame', (
 })
 
 test('every place the badge shows marks a Polaroid, and the CSS shows it whole', () => {
-  assert.match(read('./ui-hud.js'), /const crestRare = collectionBadge\?\.rarity === 'rare' && !crestFramed \? ' is-rare' : ''/, 'no rare glow on the avatar')
+  assert.match(read('./ui-hud.js'), /const crestFramed = framedArt && !photoOnlySrc \? ' is-polaroid' : ''/, 'the whole Polaroid only until the photo cut is ready')
   assert.match(read('./screen-resources.js'), /photo\.classList\.add\('is-polaroid'\)/)
-  assert.match(read('./screen-ranking.js'), /isFramedArt\(collectionBadge\?\.artFrame\) \? ' is-polaroid' : ''/)
+  assert.match(read('./screen-ranking.js'), /\$\{frame && !photoOnlySrc \? ' is-polaroid' : ''\}/)
   assert.match(read('./badge-reveal.js'), /isFramedArt\(badge\.artFrame\) \? ' is-polaroid' : ''/)
   const css = read('../css/reconnect.css')
   for (const rule of [
@@ -47,4 +47,21 @@ test('every place the badge shows marks a Polaroid, and the CSS shows it whole',
     /#overlay \.badge-unlock\.is-polaroid \.bgu-art img \{ object-fit: contain;/,
   ]) assert.match(css, rule)
   assert.match(read('../css/run-ami.css'), /\.wl-row \.wl-champ:not\(\.is-mark\) \{[^}]*border-radius: 0; object-fit: contain; \}/)
+})
+
+test('avatar spots show only the photo inside the frame', async () => {
+  const { photoWindow } = await import('./badge-photo-only.js')
+  const a = photoWindow('polaroid'), b = photoWindow('polaroid_pro')
+  assert.equal(a.tilt, -4); assert.equal(b.tilt, 4)
+  assert.ok(a.side > 0.6 && a.side < 0.7, 'the photo window is about two-thirds of the art')
+  assert.ok(a.cy > 0.4 && a.cy < 0.45, 'and sits above the chunky bottom')
+  const hud = read('./ui-hud.js')
+  assert.match(hud, /const photoOnlySrc = framedArt \? photoOnlyCached\(badgeArt, framedArt\) : null/)
+  assert.match(hud, /photoOnly\(badgeArt, framedArt\)\.then\(\(src\) => \{ if \(src && container\.isConnected\) renderHud\(container, state\) \}\)/)
+  const res = read('./screen-resources.js')
+  assert.match(res, /photoOnly\(artworkUrl, frame\)\.then\(\(src\) => \{ if \(src && photo\.isConnected\) paintPhoto\(src\) \}\)/, 'the photo comes in with its pencil')
+  assert.match(res, /const adjust = el\('button', 'aid-photo-adjust', '✎'\)/)
+  assert.match(read('./screen-ranking.js'), /swapToPhotoOnly\(row\.querySelector\('\.rank-agent-photo'\), row\.querySelector\('\.rank-agent-icon'\), fullArt, frame\)/)
+  // The collection, story, reveal and leaderboard keep the whole Polaroid.
+  for (const f of ['./badge-drawer.js', './badge-reveal.js', './war-leaderboard-view.js']) assert.doesNotMatch(read(f), /badge-photo-only/, f)
 })

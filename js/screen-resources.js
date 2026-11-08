@@ -30,6 +30,7 @@
 
 import { el, esc, showOverlay, hideOverlay, getState, setState, toast } from './state.js'
 import { isFramedArt } from './badge-frames.js'
+import { photoOnly, photoOnlyCached } from './badge-photo-only.js'
 import { getAgentNo } from './session.js'
 import { call } from './api.js'
 import { badgeDrawerSheet } from './badge-drawer.js'
@@ -48,22 +49,34 @@ function agentIdCard(state) {
   card.appendChild(el('div', 'aid-scanline'))
   const top = el('div', 'aid-top')
   const photo = el('div', 'aid-photo')
-  const artworkUrl = p.equippedBadgeArtwork?.artworkUrl
-  if (artworkUrl && isFramedArt(p.equippedBadgeArtwork?.artFrame)) {
-    // A Polaroid badge is shown whole, as designed — no crop, so no framing tool.
-    photo.classList.add('is-polaroid')
-    photo.innerHTML = `<img src="${esc(artworkUrl)}" alt="">`
-  } else if (artworkUrl) {
+  // A Polaroid badge shows just the photo inside its frame, like any other
+  // badge (badge-photo-only.js). Until that cut is ready, the whole Polaroid.
+  const frame = isFramedArt(p.equippedBadgeArtwork?.artFrame) ? p.equippedBadgeArtwork.artFrame : null
+  const photoOnlySrc = frame && p.equippedBadgeArtwork?.artworkUrl ? photoOnlyCached(p.equippedBadgeArtwork.artworkUrl, frame) : null
+  const artworkUrl = photoOnlySrc || p.equippedBadgeArtwork?.artworkUrl
+  // The photo with its ✎ framing tool — any badge photo, including the
+  // photo cut out of a Polaroid.
+  const paintPhoto = (url) => {
     const crop = p.avatarCrop || { x: 50, y: 50, zoom: 1 }
-    photo.innerHTML = `<img src="${esc(artworkUrl)}" alt="" style="object-position:${crop.x}% ${crop.y}%; transform:scale(${crop.zoom})">`
+    photo.classList.remove('is-polaroid')
+    photo.innerHTML = `<img src="${esc(url)}" alt="" style="object-position:${crop.x}% ${crop.y}%; transform:scale(${crop.zoom})">`
     // A photo the player equipped themselves is worth letting them frame
     // themselves — object-fit:cover on a 52x52 square can otherwise crop
     // an arbitrary badge photo's interesting part right out of view.
     const adjust = el('button', 'aid-photo-adjust', '✎')
     adjust.type = 'button'
     adjust.setAttribute('aria-label', 'Adjust photo framing')
-    adjust.onclick = (e) => { e.stopPropagation(); showOverlay(avatarAdjustSheet(artworkUrl, crop)) }
+    adjust.onclick = (e) => { e.stopPropagation(); showOverlay(avatarAdjustSheet(url, crop)) }
     photo.appendChild(adjust)
+  }
+  if (artworkUrl && frame && !photoOnlySrc) {
+    // The cut isn't ready yet: the whole Polaroid for a moment, then the
+    // photo with its ✎ as soon as the cut is made.
+    photo.classList.add('is-polaroid')
+    photo.innerHTML = `<img src="${esc(artworkUrl)}" alt="">`
+    photoOnly(artworkUrl, frame).then((src) => { if (src && photo.isConnected) paintPhoto(src) })
+  } else if (artworkUrl) {
+    paintPhoto(artworkUrl)
   } else {
     photo.innerHTML = `<span class="aid-photo-fallback">${packIcon('agent')}</span>`
   }

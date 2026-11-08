@@ -8,6 +8,7 @@
 
 import { badgeThumb } from './badge-art.js'
 import { isFramedArt } from './badge-frames.js'
+import { photoOnlyCached, swapToPhotoOnly } from './badge-photo-only.js'
 import { call } from './api.js'
 import { el, esc } from './state.js'
 import { getAgentNo } from './session.js'
@@ -78,7 +79,12 @@ function paintList(body, agents, state) {
     const place = i + 1
     const badge = badgeById(a.equippedBadgeId)
     const collectionBadge = a.equippedBadgeArtwork || null
-    const badgeArt = a.equippedBadgeArtwork?.artworkUrl || null
+    const fullArt = a.equippedBadgeArtwork?.artworkUrl || null
+    // A Polaroid badge shows just the photo inside its frame, like any other
+    // badge (badge-photo-only.js); the whole Polaroid until that cut is ready.
+    const frame = fullArt && isFramedArt(collectionBadge?.artFrame) ? collectionBadge.artFrame : null
+    const photoOnlySrc = frame ? photoOnlyCached(fullArt, frame) : null
+    const badgeArt = fullArt
     const hasEquippedBadge = !!(badgeArt || collectionBadge || badge)
     const isMe = a.codename === mine
     // Places 1-3 keep their prestige through a solid gold, silver or bronze
@@ -94,13 +100,14 @@ function paintList(body, agents, state) {
       : `<span class="rank-name">${esc(a.codename)}</span>`
     row.innerHTML = `
       <span class="rank-place" aria-label="Rank ${place}">${place}</span>
-      <span class="rank-agent-icon${hasEquippedBadge ? ' has-equipped-badge' : ''}${badgeArt && isFramedArt(collectionBadge?.artFrame) ? ' is-polaroid' : ''}">${badgeArt ? `<img class="rank-agent-photo" src="${esc(badgeThumb(badgeArt))}" data-badge-full="${esc(badgeArt)}" alt="" loading="lazy" decoding="async" width="60" height="60">` : (collectionBadge ? '🎖️' : badge ? badge.icon : '⟭⟬')}</span>
+      <span class="rank-agent-icon${hasEquippedBadge ? ' has-equipped-badge' : ''}${frame && !photoOnlySrc ? ' is-polaroid' : ''}">${photoOnlySrc ? `<img class="rank-agent-photo" src="${photoOnlySrc}" alt="" decoding="async" width="60" height="60">` : badgeArt ? `<img class="rank-agent-photo" src="${esc(badgeThumb(badgeArt))}" data-badge-full="${esc(badgeArt)}" alt="" loading="lazy" decoding="async" width="60" height="60">` : (collectionBadge ? '🎖️' : badge ? badge.icon : '⟭⟬')}</span>
       <span class="rank-main">
         ${name}
         <span class="rank-sub">Level ${a.level}${activeTab === 'all' ? ` · ${esc(MODE_LABEL[a.mode] || a.mode)}` : ''}</span>
       </span>
       <span class="rank-xp">${a.xp.toLocaleString()} <span class="rank-xp-unit">total XP</span></span>
     `
+    if (frame && !photoOnlySrc) swapToPhotoOnly(row.querySelector('.rank-agent-photo'), row.querySelector('.rank-agent-icon'), fullArt, frame)
     list.appendChild(row)
   })
   body.appendChild(list)
