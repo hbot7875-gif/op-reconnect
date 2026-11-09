@@ -111,6 +111,10 @@ export default defineConfig({
         // holding the admin key. Registered here for the same reason those
         // two comments spell out — omit it and it 404s on every deploy.
         badgeAdmin: resolve(__dirname, 'badge-admin.html'),
+        // PC Giveaway — admin review page and its 9:16 recording view. Both are
+        // SYNC_ADMIN_KEY-gated server-side and not linked from the game.
+        giveawayAdmin: resolve(__dirname, 'giveaway-admin.html'),
+        giveawayWheel: resolve(__dirname, 'giveaway-wheel.html'),
         // Playlist Makers — add a district playlist to the Vault. Authorised
         // per agent number against rc_config.playlist_makers, exactly like
         // badgeAdmin above, and registered here for the same reason all

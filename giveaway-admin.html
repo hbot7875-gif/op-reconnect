@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PC Giveaway — Admin</title>
+<meta name="robots" content="noindex, nofollow">
+<style>
+  /* Site-owner-only. Not linked from anywhere in the game. */
+  :root { color-scheme: dark; --bg: #120D1F; --panel: #1b1430; --line: #3a2d5c; --ink: #efeaff; --dim: #a99dcc; --ok: #9be3b4; --bad: #f2a3b3; --acc: #b9a3ec; }
+  * { box-sizing: border-box; }
+  body { margin: 0 auto; max-width: 1040px; padding: 24px 16px 60px; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, sans-serif; }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  h2 { font-size: 17px; margin: 0 0 10px; }
+  .sub { color: var(--dim); margin: 0 0 20px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin: 0 0 16px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  input, select, button { font: inherit; color: var(--ink); background: #241a3d; border: 1px solid var(--line); border-radius: 9px; padding: 8px 12px; }
+  input[type=password] { flex: 1; min-width: 200px; }
+  input[type=checkbox] { width: 16px; height: 16px; padding: 0; vertical-align: -2px; margin-right: 6px; }
+  button { cursor: pointer; }
+  button.primary { background: #5d4b8c; border-color: #7a63b6; }
+  button.danger { background: #6b2a45; border-color: #a2496d; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .stat { background: #241a3d; border-radius: 10px; padding: 10px 12px; }
+  .stat b { display: block; font-size: 20px; }
+  .stat.wide { grid-column: 1 / -1; }
+  .stat.small b { font-size: 15px; font-weight: 600; }
+  .stat span { color: var(--dim); font-size: 13px; }
+  .msg { min-height: 1.5em; margin-top: 8px; font-size: 14px; }
+  .msg.ok { color: var(--ok); } .msg.bad { color: var(--bad); }
+  .tablewrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { color: var(--dim); font-weight: 600; }
+  td.reason { white-space: normal; color: var(--dim); }
+  tr.yes td:first-child::before { content: '✓ '; color: var(--ok); }
+  tr.no { opacity: .62; }
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+  .pill.draft { background: #3a2d5c; } .pill.frozen { background: #2d4d5c; } .pill.drawn { background: #5c2d4d; }
+  code { font-size: 12.5px; color: var(--acc); word-break: break-all; }
+  .filter { margin: 0 0 10px; }
+</style>
+</head>
+<body>
+  <h1>PC Giveaway</h1>
+  <p class="sub">Admin only. Review the list, freeze it, then run the one official draw. Test spins are never saved.</p>
+
+  <div class="panel">
+    <div class="row">
+      <input id="adminKey" type="password" placeholder="Admin key" autocomplete="off">
+      <button id="btnLoad" type="button">Load</button>
+    </div>
+    <div class="msg" id="keyMsg"></div>
+  </div>
+
+  <div class="panel" id="secSetup" hidden>
+    <h2>1 · Review list</h2>
+    <div class="row">
+      <label for="team">Winning team</label>
+      <select id="team"></select>
+      <button id="btnPrepare" type="button" class="primary">Prepare / refresh list</button>
+      <span id="status"></span>
+    </div>
+    <div class="msg" id="prepMsg"></div>
+    <div class="stats" id="stats" hidden></div>
+  </div>
+
+  <div class="panel" id="secList" hidden>
+    <div class="row filter">
+      <label><input type="checkbox" id="onlyEligible"> Show eligible only</label>
+    </div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Name on wheel</th><th>Agent</th><th>On team from</th><th>Mnet voting days</th><th>Streaming days</th><th>Reason</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table></div>
+  </div>
+
+  <div class="panel" id="secFreeze" hidden>
+    <h2>2 · Freeze</h2>
+    <p class="sub" id="freezeText"></p>
+    <div class="row"><button id="btnFreeze" type="button" class="primary">Approve &amp; freeze this list</button></div>
+    <div class="msg" id="freezeMsg"></div>
+  </div>
+
+  <div class="panel" id="secDraw" hidden>
+    <h2>3 · Wheel</h2>
+    <p class="sub">Test spin works any time and saves nothing. The official draw view needs a frozen list; its SPIN picks and stores the one winner.</p>
+    <div class="row">
+      <button id="btnTest" type="button">Open test spin</button>
+      <button id="btnOfficial" type="button" class="danger">Open official draw view</button>
+    </div>
+    <div class="msg" id="drawMsg"></div>
+  </div>
+
+  <div class="panel" id="secRecord" hidden>
+    <h2>Draw record</h2>
+    <div id="record"></div>
+  </div>
+
+<script type="module" src="./js/giveaway-admin.js"></script>
+</body>
+</html>

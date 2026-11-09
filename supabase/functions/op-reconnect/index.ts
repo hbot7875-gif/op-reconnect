@@ -23,6 +23,7 @@ import { generatePlaylist, validatePlaylist, validatePlaylistFromTracks, getAlpa
 import { amIPlaylistMaker, deleteCandyPlaylist, getCandyPlaylistLibrary, getPlaylistMakerHub, setCandyPlaylistSaved, shareCandyPlaylist, reportCandyPlaylist } from './lib/playlist-vault.ts'
 import { adminGetActiveDefuse, getDefuseMessages, sendDefuseMessage } from './lib/bomb.ts'
 import { adminCreateBroadcast, adminListBroadcasts, adminDeleteBroadcast } from './lib/broadcasts.ts'
+import { adminGiveawayGet, adminGiveawayPrepare, adminGiveawayFreeze, adminGiveawayWheel, adminGiveawayDraw } from './lib/giveaway.ts'
 import { adminDeleteAgent, adminGetAgent, adminGetAgentTracks, adminScanAltAccounts, adminResetAgentXp, adminDeleteInactiveAgents, sendInactiveReminders, adminListAgents } from './lib/admin-agent.ts'
 import { adminCaptureStreamSources, adminSyncAllStreams } from './lib/sync-all.ts'
 import { sweepStorageDeletions } from './lib/proof-retention.ts'
@@ -283,6 +284,13 @@ const ROUTES: Record<string, Route> = {
   adminReviewCampaignProof: { auth: 'admin', handler: (sb, p) => adminReviewCampaignProof(sb, p) },
   adminListXReplacements: { auth: 'admin', handler: (sb, p) => adminListXReplacements(sb, p) },
   adminDecideXReplacement: { auth: 'admin', handler: (sb, p) => adminDecideXReplacement(sb, p) },
+  // PC Giveaway (giveaway-admin.html, giveaway-wheel.html). Admin key only.
+  // The database refuses list edits after the freeze and any second draw.
+  adminGiveawayGet: { auth: 'admin', handler: (sb, p) => adminGiveawayGet(sb, p) },
+  adminGiveawayPrepare: { auth: 'admin', handler: (sb, p) => adminGiveawayPrepare(sb, p) },
+  adminGiveawayFreeze: { auth: 'admin', handler: (sb, p) => adminGiveawayFreeze(sb, p) },
+  adminGiveawayWheel: { auth: 'admin', handler: (sb, p) => adminGiveawayWheel(sb, p) },
+  adminGiveawayDraw: { auth: 'admin', handler: (sb, p) => adminGiveawayDraw(sb, p) },
   // BTS X Vote Pulse refresh — Supabase Cron, about 4 times a day during
   // voting (migration 20261013150500). Takes no params, like cronStorageSweep.
   cronVotePulse: { auth: 'cron', handler: (sb) => cronVotePulse(sb) },
