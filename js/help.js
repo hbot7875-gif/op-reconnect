@@ -28,14 +28,15 @@ export function openHelp() {
   sheet.innerHTML = `
     <span class="help-eyebrow">ReConnect team</span>
     <h3 tabindex="-1" data-autofocus="true">Get help</h3>
-    <p class="help-lede">Tell us what's wrong and we'll reply here. We attach your stream source and last sync so we can check faster — never your password or PIN.</p>
+    <p class="help-lede">Tell us what's wrong, or ask anything you're unsure about, and we'll reply here. We attach your stream source and last sync so we can check faster — never your password or PIN.</p>
     <form class="help-form">
       <fieldset class="help-topics"><legend>What is it about?</legend>
         ${HELP_TOPICS.map((t, i) => `<label class="help-chip"><input type="radio" name="topic" value="${t.id}"${i === 0 ? ' checked' : ''}><span>${esc(t.label)}</span></label>`).join('')}
       </fieldset>
-      <label class="help-field"><span>What happened?</span>
-        <textarea name="message" rows="4" maxlength="${HELP_MESSAGE_MAX}" placeholder="For example: I streamed 20 songs today but my district didn't move."></textarea>
+      <label class="help-field"><span>Your message</span>
+        <textarea name="message" rows="4" maxlength="${HELP_MESSAGE_MAX}" placeholder="For example: I streamed 20 songs today but my district didn't move — or: how do album passes work?"></textarea>
       </label>
+      <p class="help-respect">Please keep it kind and respectful — the team and other agents are fans too.</p>
       <p class="help-err" role="status" hidden></p>
       <button class="btn btn-primary help-send" type="submit">Send to the team</button>
     </form>

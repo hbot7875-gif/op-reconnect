@@ -31,6 +31,9 @@ export function questRuleNotes(config = {}) {
       notes.push('Plays of either song add to the same total.')
     }
   }
+  if (config.sharedTracks?.tracks?.some((t) => t.quiz)) {
+    notes.push("One of them isn't on Spotify — guess its name from the hint instead of streaming it.")
+  }
   if (!st && !config.checklist && !config.sharedTracks) {
     notes.push('Each teammate streams at least one of their own district goals after joining.'
       + (config.teamBoost ? ' Finishing unlocks a Team Boost for the team.' : ''))

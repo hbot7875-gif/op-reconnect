@@ -5,6 +5,7 @@ export const HELP_OWNER = 'AGENT000'
 
 export const HELP_TOPICS = Object.freeze([
   { id: 'streams', label: 'Streams not counting' },
+  { id: 'doubt', label: 'Doubt / question' },
   { id: 'reconnect', label: 'ReConnect quest' },
   { id: 'badges', label: 'Badges & album' },
   { id: 'voting', label: 'Voting' },

@@ -4694,6 +4694,7 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
 .help-sheet textarea { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px;
   background: rgba(255,255,255,.03); color: var(--text); font: 14px var(--body, sans-serif); resize: vertical; }
 .help-err { margin: 8px 0 0; color: var(--crimson); font-size: 12.5px; }
+.help-respect { margin: 8px 0 0; color: var(--dim); font-size: 12px; line-height: 1.45; }
 .help-send { width: 100%; margin-top: 10px; }
 .help-mine { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
 .help-mine h4 { margin: 0 0 8px; font-size: 13px; }

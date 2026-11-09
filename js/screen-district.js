@@ -1166,7 +1166,7 @@ function paintMissionPanel(box, d, res) {
       : m.checklist
         ? `Build a team of ${m.requiredAgents} agents. Each agent streams all ${m.checklist.total} tracks once.`
         : m.sharedTracks
-          ? esc(sharedTracksPitch(m.sharedTracks))
+          ? `${need > 0 ? `Find ${findWho}. ` : ''}${esc(sharedTracksPitch(m.sharedTracks))}`
         : `Find ${need > 0 ? `${need} more ARMY${need === 1 ? '' : 's'}` : 'your team'} for ${esc(districtDisplayName(d))}.`
   box.classList.add('is-lobby')
   const ruleNotes = questRuleNotes(res.config)
