@@ -143,3 +143,22 @@ test('unread Team Chat counts on the bell and opens the quest; reading it clears
   const sd = read('./screen-district.js')
   assert.match(sd, /markReconnectChatSeen\(m\.id, m\.messageCount\)\s+paintChatButton\(box\)\s+\/\/ The bell counts unread Team Chat too; repaint it so it drops now\.\s+const hud = document\.getElementById\('hud'\)\s+if \(hud && getState\(\)\) renderHud\(hud, getState\(\)\)/)
 })
+
+test('every quest says the rules players need to finish it', async () => {
+  const { questRuleNotes } = await import('./reconnect-player-ui.js')
+  const album = { sharedTrack: { label: 'Indigo', target: 200, keys: ['yun', 'still life', 'all day', 'forgtful', 'closer', 'change pt2'] }, cipherCount: 3 }
+  assert.equal(questRuleNotes(album), 'Any song from the Indigo album counts. Then crack 3 codes together in Team Chat.')
+  assert.equal(questRuleNotes({ sharedTrack: { label: 'D-DAY album', keys: ['d day', 'haegeum'] } }), 'Any song from the D-DAY album counts.')
+  assert.equal(questRuleNotes({ sharedTrack: { label: "I'm Fine + Come Over", keys: ['im fine', 'come over'] } }), 'Plays of either song add to the same total.')
+  assert.equal(questRuleNotes({ sharedTrack: { label: 'My You / Still With You', keys: ['my you', 'still with you'] } }), 'Plays of either song add to the same total.')
+  assert.equal(questRuleNotes({ sharedTrack: { label: 'Haegeum', keys: ['haegeum', '해금', '해금 haegeum'] }, openTo: 'any district' }), 'Agents from any district can join your team too.', 'aliases of one song are not "either song"')
+  assert.equal(questRuleNotes({ teamBoost: { maxPicks: 3 } }), 'Each teammate streams at least one of their own district goals after joining. Finishing unlocks a Team Boost for the team.')
+  assert.equal(questRuleNotes({ checklist: { tracks: [] } }), '', 'checklist and surprise-song quests already explain themselves')
+  const rm = read('../supabase/functions/op-reconnect/lib/reconnect-missions.ts')
+  assert.equal((rm.match(/cipherCount: Array\.isArray\(/g) || []).length, 2, 'the quest panel and the recruit view send the code count')
+  assert.match(rm, /function openToInfo\(config: Record<string, any>, content: any\): string \| null \{\s+if \(seatRule\(config\)\) return null/)
+  assert.doesNotMatch(rm, /cipherCount: [^,\n]*answerKeys|ciphers: config\.ciphers,/, 'only the count leaves the server, never the codes')
+  const sd = read('./screen-district.js')
+  assert.match(sd, /const preNotes = questRuleNotes\(res\.config\)/)
+  assert.match(sd, /const ruleNotes = questRuleNotes\(res\.config\)/)
+})

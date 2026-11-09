@@ -1210,6 +1210,8 @@ async function recruitMissionView(supabase: SupabaseDB, content: any, agentNo: s
       sharedTracks: publicSharedTracks(config),
       teamBoost: null,
       seats: seatPanelInfo(config, content),
+      openTo: openToInfo(config, content),
+      cipherCount: Array.isArray(config.ciphers) ? config.ciphers.length : 0,
     },
     idleThreshold: IDLE_DAYS,
     mission: await markSeats(supabase, await shapeWithMessages(supabase, mission, participants || [], agentNo, IDLE_DAYS, config.ciphers), config),
@@ -1362,6 +1364,11 @@ export async function getReconnectMission(supabase: SupabaseDB, content: any, pa
       // where those come from, so the panel can say "2 from here + 1 from
       // Home Base" instead of just "3 agents".
       seats: seatPanelInfo(reconnect.config, content),
+      // Agents from other districts who MAY join (no reserved seat), and how
+      // many team codes follow the streaming — so the quest can say so.
+      // Only the count: the codes themselves stay on the server.
+      openTo: openToInfo(reconnect.config, content),
+      cipherCount: Array.isArray(reconnect.config.ciphers) ? reconnect.config.ciphers.length : 0,
     },
     idleThreshold,
     mission: mission ? await markSeats(supabase, await shapeWithMessages(supabase, mission, participants || [], agentNo, idleThreshold, reconnect.config.ciphers), reconnect.config) : null,
@@ -1472,6 +1479,21 @@ function seatPanelInfo(config: Record<string, any>, content: any) {
     return d?.is_tutorial ? 'Home Base' : (d?.name || id)
   })
   return { local: rule.localSeats, helper: rule.helperSeats, helperFrom: names.join(' or ') || 'another district' }
+}
+
+/** Who else may join an ordinary team (crossDistrictEligible without
+ *  reserved seats): "any district", or the district names ("Home Base" for
+ *  the starter district). Null when only this district's agents can join,
+ *  or when seats are reserved (seatPanelInfo says it instead). */
+function openToInfo(config: Record<string, any>, content: any): string | null {
+  if (seatRule(config)) return null
+  const eligible: string[] = config.crossDistrictEligible || []
+  if (!eligible.length) return null
+  if (eligible.includes('*')) return 'any district'
+  return eligible.map((id) => {
+    const d = (content?.districts || []).find((x: any) => x.id === id)
+    return d?.is_tutorial ? 'Home Base' : (d?.name || id)
+  }).join(' or ')
 }
 
 /** Helper/local seats already taken by JOINED members of a mission. Pending

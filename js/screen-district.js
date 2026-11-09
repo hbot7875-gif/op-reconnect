@@ -17,7 +17,7 @@ import { lastAttemptHtml } from './last-attempt.js'
 import { playRestoration } from './celebrate.js'
 import { itemTile, itemSheet, itemsAt, itemsInPack } from './items.js'
 import { trackEngagementOnce } from './engagement.js'
-import { reconnectPlayerNext, sharedTracksPitch } from './reconnect-player-ui.js'
+import { reconnectPlayerNext, sharedTracksPitch, questRuleNotes } from './reconnect-player-ui.js'
 import { rcIcon } from './reconnect-icons.js'
 import { contributionsSection } from './district-contributions.js'
 import { lobbySeats, lobbySeatsHtml, spotsLeftLabel, seatNeeds, seatNeedsPhrase, newlyJoined, milestoneState, MILESTONES,
@@ -1073,8 +1073,9 @@ function paintMissionPanel(box, d, res) {
           ? `${seats ? teamPhrase : `Build a team of ${res.config.requiredAgents} agents`}. Each agent streams all ${cl.tracks.length} tracks once.`
           : ms
             ? `${teamPhrase}. ${esc(sharedTracksPitch(ms))}`
-          : `${teamPhrase} and stream your active district goals.`
-    box.appendChild(reconnectMissionBlock(d.reconnect?.label || 'ReConnect Quest', missionBody))
+          : `${teamPhrase}.`
+    const preNotes = questRuleNotes(res.config)
+    box.appendChild(reconnectMissionBlock(d.reconnect?.label || 'ReConnect Quest', missionBody + (preNotes ? ` ${esc(preNotes)}` : '')))
     box.appendChild(reconnectTeamBlock(seats
       ? `You · ${seats.local - 1} seat${seats.local - 1 === 1 ? '' : 's'} for this district · ${seats.helper} for ${esc(seats.helperFrom)}`
       : `You · ${Math.max(0, res.config.requiredAgents - 1)} open seat${res.config.requiredAgents - 1 === 1 ? '' : 's'}`))
@@ -1166,9 +1167,11 @@ function paintMissionPanel(box, d, res) {
         ? `Build a team of ${m.requiredAgents} agents. Each agent streams all ${m.checklist.total} tracks once.`
         : m.sharedTracks
           ? esc(sharedTracksPitch(m.sharedTracks))
-        : `Team up and stream active goals in ${esc(districtDisplayName(d))}.`
+        : `Find ${need > 0 ? `${need} more ARMY${need === 1 ? '' : 's'}` : 'your team'} for ${esc(districtDisplayName(d))}.`
   box.classList.add('is-lobby')
+  const ruleNotes = questRuleNotes(res.config)
   box.appendChild(reconnectMissionBlock(d.reconnect?.label || 'ReConnect Quest', missionBody
+    + (ruleNotes ? ` ${esc(ruleNotes)}` : '')
     + (res.recruit ? ` You joined from ${esc(res.config.seats?.helperFrom || 'another district')} — your plays count toward this total.` : ''), ''))
   // How-it-works notes go under More options, not in the way of the lobby.
   const howNotes = el('div', 'reconnect-how-notes')
@@ -1257,7 +1260,7 @@ function paintMissionPanel(box, d, res) {
   } else if (res.variant === 'connect') {
     const streamedCount = joined.filter((p) => p.streamed).length
     scoreline.appendChild(el('div', 'reconnect-score', `
-      <b>${streamedCount}<i>/ ${joined.length}</i></b><span>signals sent</span>
+      <b>${streamedCount}<i>/ ${joined.length}</i></b><span>Streamed</span>
     `))
     progressHost.appendChild(el('p', 'muted reconnect-together-note', `${streamedCount}/${joined.length} have streamed toward their own goals here since joining.`))
   }

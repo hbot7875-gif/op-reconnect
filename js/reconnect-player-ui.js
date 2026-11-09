@@ -14,6 +14,34 @@ export function sharedTracksPitch(st) {
     : `Stream ${what} ${st.target} times each as a team.`
 }
 
+/** The quest rules the one-line goal can't carry on its own, as short
+ *  sentences: which songs count for a pooled goal (any song on an album,
+ *  either of two songs), team codes that follow the streaming, who else may
+ *  join, and what a goal-less team quest asks. `config` is the quest config
+ *  the server sends (getReconnectMission's config). */
+export function questRuleNotes(config = {}) {
+  const notes = []
+  const st = config.sharedTrack
+  if (st) {
+    const label = String(st.label || '')
+    const keys = (st.keys || []).length
+    if (/\balbum\b/i.test(label) || keys >= 5) {
+      notes.push(`Any song from the ${label.replace(/\s*album\s*$/i, '')} album counts.`)
+    } else if (/\s(\+|&|\/|and)\s/i.test(label)) {
+      notes.push('Plays of either song add to the same total.')
+    }
+  }
+  if (!st && !config.checklist && !config.sharedTracks) {
+    notes.push('Each teammate streams at least one of their own district goals after joining.'
+      + (config.teamBoost ? ' Finishing unlocks a Team Boost for the team.' : ''))
+  }
+  if (config.cipherCount > 0) {
+    notes.push(`Then crack ${config.cipherCount} code${config.cipherCount === 1 ? '' : 's'} together in Team Chat.`)
+  }
+  if (config.openTo) notes.push(`Agents from ${config.openTo} can join your team too.`)
+  return notes.join(' ')
+}
+
 /** "surprise song" / "surprise songs" — the quest's own word for its list. */
 export function sharedTracksNoun(st, count) {
   const noun = st?.noun || 'songs'
