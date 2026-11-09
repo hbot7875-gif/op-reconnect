@@ -5,6 +5,7 @@
 // overlay sits above it).
 
 import { openHelp } from './help.js'
+import { getState } from './state.js'
 
 // Lucide "circle-help" (ISC), drawn in currentColor.
 const ICON = '<svg class="help-fab-i" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>'
@@ -21,7 +22,8 @@ export function paintHelpFab(state) {
     btn.type = 'button'
     btn.className = 'help-fab'
     btn.innerHTML = `${ICON}<span class="help-fab-dot" hidden></span>`
-    btn.onclick = () => openHelp()
+    // A reply waiting? Open straight onto My requests.
+    btn.onclick = () => openHelp({ tab: Number(getState()?.help?.replyUnread) ? 'mine' : 'new' })
     game.appendChild(btn)
   }
   const replies = Number(state?.help?.replyUnread) || 0

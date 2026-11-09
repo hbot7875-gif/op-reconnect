@@ -8,6 +8,7 @@
 
 import {
   HELP_OWNER, HELP_OPEN_LIMIT, HELP_DAILY_LIMIT, HELP_REPLY_MAX, validateHelpRequest, helpDiagnostics,
+  HELP_SCREENSHOT_MAX, HELP_SCREENSHOT_BYTES, HELP_SCREENSHOT_KEEP_DAYS, HELP_SCREENSHOT_TYPES,
 } from './help-rules.js'
 import { resolvedAgentStreamSource } from './streams.ts'
 
@@ -15,6 +16,35 @@ import { resolvedAgentStreamSource } from './streams.ts'
 type Sb = any
 
 const agentOf = (p: any) => String(p?.agentNo || '').trim().toUpperCase()
+const SHOT_BUCKET = 'help-shots'
+const SIGNED_TTL_SEC = 15 * 60
+
+/** Short-lived links to screenshots in the private bucket (the bucket itself
+ *  is never public). Empty when there are none or signing fails. */
+async function signShots(sb: Sb, paths: string[] | null | undefined): Promise<string[]> {
+  if (!paths?.length) return []
+  const { data, error } = await sb.storage.from(SHOT_BUCKET).createSignedUrls(paths, SIGNED_TTL_SEC)
+  if (error || !data) return []
+  return data.map((d: any) => d.signedUrl).filter(Boolean)
+}
+
+/** Checks and decodes up to HELP_SCREENSHOT_MAX images sent as base64. */
+function decodeShots(images: any): { ok: true; shots: { bytes: Uint8Array; mime: string }[] } | { ok: false; error: string } {
+  if (images == null) return { ok: true, shots: [] }
+  if (!Array.isArray(images)) return { ok: false, error: 'bad_image' }
+  if (images.length > HELP_SCREENSHOT_MAX) return { ok: false, error: 'too_many_images' }
+  const shots: { bytes: Uint8Array; mime: string }[] = []
+  for (const img of images) {
+    const mime = String(img?.mime || '').toLowerCase()
+    if (!HELP_SCREENSHOT_TYPES.includes(mime)) return { ok: false, error: 'bad_image' }
+    let bytes: Uint8Array
+    try { bytes = Uint8Array.from(atob(String(img?.base64 || '')), (c) => c.charCodeAt(0)) } catch { return { ok: false, error: 'bad_image' } }
+    if (!bytes.length) return { ok: false, error: 'bad_image' }
+    if (bytes.length > HELP_SCREENSHOT_BYTES) return { ok: false, error: 'image_too_large' }
+    shots.push({ bytes, mime })
+  }
+  return { ok: true, shots }
+}
 const iso = (v: any) => (v ? new Date(v).toISOString() : null)
 
 async function diagnosticsFor(sb: Sb, agentNo: string) {
@@ -50,9 +80,30 @@ export async function submitHelpRequest(sb: Sb, params: any) {
   ])
   if ((open || 0) >= HELP_OPEN_LIMIT) return { success: false, error: 'too_many_open' }
   if ((today || 0) >= HELP_DAILY_LIMIT) return { success: false, error: 'daily_limit' }
-  const diagnostics = await diagnosticsFor(sb, agentNo).catch(() => ({}))
-  const { error } = await sb.from('rc_help_requests').insert({ agent_no: agentNo, topic: v.topic, message: v.message, diagnostics })
-  if (error) return { success: false, error: 'server_error' }
+  const decoded = decodeShots(params.images)
+  if (!decoded.ok) return { success: false, error: decoded.error }
+  // Only streaming problems carry the stream details — what the form tells them.
+  const diagnostics = v.topic === 'streams' ? await diagnosticsFor(sb, agentNo).catch(() => ({})) : {}
+  // Files first, then the row that points at them; if the row fails, the
+  // files are removed again so nothing is left orphaned.
+  const id = crypto.randomUUID()
+  const paths: string[] = []
+  for (const [i, shot] of decoded.shots.entries()) {
+    const ext = shot.mime === 'image/png' ? 'png' : shot.mime === 'image/webp' ? 'webp' : 'jpg'
+    const path = `${agentNo}/${id}-${i + 1}.${ext}`
+    const { error: upErr } = await sb.storage.from(SHOT_BUCKET).upload(path, shot.bytes, { contentType: shot.mime, upsert: false })
+    if (upErr) {
+      if (paths.length) await sb.storage.from(SHOT_BUCKET).remove(paths)
+      return { success: false, error: 'upload_failed' }
+    }
+    paths.push(path)
+  }
+  const { error } = await sb.from('rc_help_requests')
+    .insert({ id, agent_no: agentNo, topic: v.topic, message: v.message, diagnostics, screenshot_paths: paths })
+  if (error) {
+    if (paths.length) await sb.storage.from(SHOT_BUCKET).remove(paths)
+    return { success: false, error: 'server_error' }
+  }
   return { success: true }
 }
 
@@ -61,17 +112,18 @@ export async function submitHelpRequest(sb: Sb, params: any) {
 export async function getMyHelpRequests(sb: Sb, params: any) {
   const agentNo = agentOf(params)
   const { data, error } = await sb.from('rc_help_requests')
-    .select('id, topic, message, status, reply, replied_at, reply_seen_at, created_at')
+    .select('id, topic, message, status, reply, replied_at, reply_seen_at, created_at, screenshot_paths')
     .eq('agent_no', agentNo).order('created_at', { ascending: false }).limit(10)
   if (error) return { success: false, error: 'server_error' }
   const unseen = (data || []).filter((r: any) => r.reply && !r.reply_seen_at).map((r: any) => r.id)
   if (unseen.length) await sb.from('rc_help_requests').update({ reply_seen_at: new Date().toISOString() }).in('id', unseen)
   return {
     success: true,
-    requests: (data || []).map((r: any) => ({
+    requests: await Promise.all((data || []).map(async (r: any) => ({
       id: r.id, topic: r.topic, message: r.message, status: r.status, reply: r.reply || null,
       repliedAt: r.replied_at, createdAt: r.created_at, isNewReply: unseen.includes(r.id),
-    })),
+      screenshots: await signShots(sb, r.screenshot_paths),
+    }))),
   }
 }
 
@@ -79,7 +131,7 @@ export async function getMyHelpRequests(sb: Sb, params: any) {
 export async function helpInbox(sb: Sb, params: any) {
   if (agentOf(params) !== HELP_OWNER) return { success: false, error: 'not_owner' }
   let q = sb.from('rc_help_requests')
-    .select('id, agent_no, topic, message, diagnostics, status, reply, replied_at, created_at')
+    .select('id, agent_no, topic, message, diagnostics, status, reply, replied_at, created_at, screenshot_paths')
     .order('created_at', { ascending: false }).limit(50)
   if (params.status !== 'all') q = q.eq('status', 'open')
   const { data, error } = await q
@@ -95,11 +147,12 @@ export async function helpInbox(sb: Sb, params: any) {
   const handle = new Map((agents || []).map((a: any) => [a.agent_no, a.handle]))
   return {
     success: true,
-    requests: (data || []).map((r: any) => ({
+    requests: await Promise.all((data || []).map(async (r: any) => ({
       id: r.id, agentNo: r.agent_no, codename: name.get(r.agent_no) || r.agent_no, handle: handle.get(r.agent_no) || null,
       topic: r.topic, message: r.message, diagnostics: r.diagnostics || {}, status: r.status,
       reply: r.reply || null, repliedAt: r.replied_at, createdAt: r.created_at,
-    })),
+      screenshots: await signShots(sb, r.screenshot_paths),
+    }))),
   }
 }
 
@@ -130,4 +183,26 @@ export async function helpStateFor(sb: Sb, agentNo: string) {
       : Promise.resolve({ count: 0 }),
   ])
   return { replyUnread: replyUnread || 0, inboxOpen: open?.count || 0 }
+}
+
+/** Removes screenshots 30 days after their request was resolved. Files
+ *  first, then the references; a crash in between leaves references to
+ *  files that are already gone (their links simply stop working) and the
+ *  next run clears them. Rides the hourly sync, so it never throws. */
+export async function sweepHelpScreenshots(sb: Sb): Promise<{ cleared: number; error?: string }> {
+  try {
+    const before = new Date(Date.now() - HELP_SCREENSHOT_KEEP_DAYS * 86400_000).toISOString()
+    const { data, error } = await sb.from('rc_help_requests').select('id, screenshot_paths')
+      .eq('status', 'resolved').lt('updated_at', before).neq('screenshot_paths', '{}').limit(100)
+    if (error || !data?.length) return { cleared: 0, ...(error ? { error: error.message } : {}) }
+    const paths = data.flatMap((r: any) => r.screenshot_paths || [])
+    if (paths.length) {
+      const { error: rmErr } = await sb.storage.from(SHOT_BUCKET).remove(paths)
+      if (rmErr) return { cleared: 0, error: rmErr.message }
+    }
+    const { error: upErr } = await sb.from('rc_help_requests').update({ screenshot_paths: [] }).in('id', data.map((r: any) => r.id))
+    return { cleared: upErr ? 0 : data.length, ...(upErr ? { error: upErr.message } : {}) }
+  } catch (e) {
+    return { cleared: 0, error: e instanceof Error ? e.message : String(e) }
+  }
 }

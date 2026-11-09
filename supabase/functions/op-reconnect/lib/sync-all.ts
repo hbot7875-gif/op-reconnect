@@ -13,6 +13,7 @@
 
 import type { SupabaseDB } from './config.ts'
 import { sweepStorageDeletions } from './proof-retention.ts'
+import { sweepHelpScreenshots } from './help.ts'
 import { loadContent, limits } from './config.ts'
 import { ensureDailyRollups } from './derive.ts'
 import type { GoalXpScope } from './derive.ts'
@@ -200,6 +201,8 @@ export async function adminSyncAllStreams(supabase: SupabaseDB, _params: Record<
   // why the order is the whole design. Until an event is 30 days finished
   // the usual cost is one indexed query and an empty queue.
   const proofSweep = await sweepStorageDeletions(supabase)
+  // Help screenshots, 30 days after their request was resolved.
+  await sweepHelpScreenshots(supabase)
 
   const content = await loadContent(supabase)
 

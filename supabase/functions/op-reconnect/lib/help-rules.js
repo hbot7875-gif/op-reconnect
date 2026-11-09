@@ -5,9 +5,9 @@ export const HELP_OWNER = 'AGENT000'
 
 export const HELP_TOPICS = Object.freeze([
   { id: 'streams', label: 'Streams not counting' },
-  { id: 'doubt', label: 'Doubt / question' },
+  { id: 'doubt', label: 'General question' },
   { id: 'reconnect', label: 'ReConnect quest' },
-  { id: 'badges', label: 'Badges & album' },
+  { id: 'badges', label: 'Badges & albums' },
   { id: 'voting', label: 'Voting' },
   { id: 'account', label: 'Account & sign-in' },
   { id: 'other', label: 'Something else' },
@@ -19,6 +19,12 @@ export const HELP_REPLY_MAX = 1000
 /** At most this many unanswered requests per agent, and this many a day. */
 export const HELP_OPEN_LIMIT = 3
 export const HELP_DAILY_LIMIT = 5
+/** Screenshots: up to 2 per request, each at most this size after the
+ *  browser has shrunk it, and kept 30 days after the request is resolved. */
+export const HELP_SCREENSHOT_MAX = 2
+export const HELP_SCREENSHOT_BYTES = 1_500_000
+export const HELP_SCREENSHOT_KEEP_DAYS = 30
+export const HELP_SCREENSHOT_TYPES = Object.freeze(['image/jpeg', 'image/png', 'image/webp'])
 
 export const HELP_ERRORS = Object.freeze({
   bad_topic: 'Choose what the problem is about.',
@@ -29,6 +35,10 @@ export const HELP_ERRORS = Object.freeze({
   not_owner: 'Only the ReConnect team can do that.',
   not_found: 'That request no longer exists.',
   empty_reply: 'Write a reply first.',
+  too_many_images: `Attach up to ${2} screenshots.`,
+  bad_image: 'That screenshot could not be read — try another image.',
+  image_too_large: 'That screenshot is too large — try a smaller one.',
+  upload_failed: "Couldn't upload the screenshot — try again in a moment.",
   server_error: "Couldn't send that — try again in a moment.",
 })
 

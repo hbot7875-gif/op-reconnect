@@ -4695,6 +4695,35 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
   background: rgba(255,255,255,.03); color: var(--text); font: 14px var(--body, sans-serif); resize: vertical; }
 .help-err { margin: 8px 0 0; color: var(--crimson); font-size: 12.5px; }
 .help-respect { margin: 8px 0 0; color: var(--dim); font-size: 12px; line-height: 1.45; }
+/* The agent's sheet, compact: two tabs, a two-column topic grid, a 3-line
+   message box that grows, tighter spacing and a slightly shorter button. */
+.help-agent h3 { margin: 2px 0 8px; }
+.help-agent .help-tabs { margin: 0 0 10px; }
+.help-agent .help-tabs button { position: relative; }
+.help-tab-dot { position: absolute; top: 3px; right: 3px; width: 8px; height: 8px; border-radius: 50%; background: var(--gold); }
+.help-agent .help-lede { margin: 0 0 10px; font-size: 13px; }
+.help-agent .help-topics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin: 0 0 10px; }
+.help-agent .help-topics legend { grid-column: 1 / -1; margin-bottom: 6px; }
+.help-agent .help-chip span { display: block; padding: 8px 10px; border-radius: 10px; font-size: 12.5px; text-align: center; }
+.help-agent textarea { min-height: 0; resize: none; }
+.help-agent .help-shots { margin-top: 8px; }
+.help-fine { margin: 8px 0 0; color: var(--dim); font-size: 11.5px; line-height: 1.45; }
+.help-agent .help-respect { margin-top: 4px; }
+.help-agent .help-send { min-height: 42px; margin-top: 10px; padding-block: 8px; }
+.help-shots { margin-top: 10px; }
+.help-thumbs { display: flex; gap: 8px; flex-wrap: wrap; }
+.help-thumbs:empty { display: none; }
+.help-thumb { position: relative; width: 64px; height: 64px; }
+.help-thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 10px; border: 1px solid var(--border); }
+.help-thumb button { position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%;
+  background: #2a2438; color: var(--text); font-size: 14px; line-height: 1; cursor: pointer; }
+.help-thumbs:not(:empty) + .help-add-shot { margin-top: 8px; }
+.help-add-shot { display: inline-flex; align-items: center; min-height: 36px; padding: 0 12px; border: 1px dashed var(--border);
+  border-radius: 10px; color: var(--purple-lt); font: 600 13px var(--body, sans-serif); cursor: pointer; }
+.help-add-shot[hidden] { display: none; }
+.help-shots-note { display: block; margin-top: 6px; color: var(--dim); font-size: 11.5px; line-height: 1.4; }
+.help-shot-row { display: flex; gap: 8px; margin: 6px 0; }
+.help-shot-row img { width: 72px; height: 72px; object-fit: cover; border-radius: 10px; border: 1px solid var(--border); }
 .help-send { width: 100%; margin-top: 10px; }
 .help-mine { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
 .help-mine h4 { margin: 0 0 8px; font-size: 13px; }
@@ -8075,6 +8104,52 @@ select.rc-multi-native {
   .set-screen .sr-name { font-size: 14px; }
   .set-screen .sr-chip { padding-inline: 7px; font-size: 11.5px; }
 }
+
+/* Get help, round three: an unread badge, one short note with an info
+   toggle, My requests as a conversation list, and slightly larger small
+   text for phones. */
+.help-tab-badge { display: inline-grid; place-items: center; min-width: 18px; height: 18px; margin-left: 6px; padding: 0 5px;
+  border-radius: 999px; background: var(--gold); color: #1b1400; font: 800 11px var(--body, sans-serif); vertical-align: 1px; }
+.help-note { display: flex; align-items: center; gap: 8px; margin-top: 8px; color: var(--dim); font-size: 12.5px; line-height: 1.4; }
+.help-note span { flex: 1; }
+.help-info { flex: none; width: 22px; height: 22px; padding: 0; border: 1px solid var(--border); border-radius: 50%; background: none;
+  color: var(--purple-lt); font: italic 700 12px Georgia, serif; cursor: pointer; }
+.help-info:focus-visible { outline: 2px solid var(--purple-lt); outline-offset: 2px; }
+.help-info-more { margin: 6px 0 0; padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,.04); color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+.help-info-more[hidden] { display: none; }
+.help-agent .help-chip span { padding: 9px 4px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.help-conv { border-bottom: 1px solid var(--border); }
+.help-conv:last-child { border-bottom: 0; }
+.help-conv-head { display: grid; grid-template-columns: minmax(0, 1fr) auto 12px; align-items: center; column-gap: 10px; width: 100%;
+  min-height: 52px; padding: 10px 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.help-conv-head:focus-visible { outline: 2px solid var(--purple-lt); outline-offset: 2px; border-radius: 8px; }
+.help-conv-topic { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 14.5px; font-weight: 700; color: var(--text); }
+.help-new { flex: none; padding: 2px 8px; border-radius: 999px; background: var(--gold); color: #1b1400; font: 800 11px var(--body, sans-serif); font-style: normal; }
+.help-conv-meta { display: flex; align-items: center; gap: 8px; color: var(--dim); font-size: 12.5px; white-space: nowrap; }
+.help-conv-chev { color: var(--dim); transition: transform .15s ease; }
+.help-conv.is-open .help-conv-chev { transform: rotate(90deg); }
+.help-conv-body { display: flex; flex-direction: column; gap: 8px; padding: 0 0 14px; }
+.help-conv-body[hidden] { display: none; }
+.help-bubble { max-width: 88%; padding: 10px 12px; border-radius: 14px; }
+.help-bubble p { margin: 0; font-size: 14.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.help-bubble small { display: block; margin-top: 5px; color: var(--dim); font-size: 12px; }
+.help-bubble.is-me { align-self: flex-end; border-bottom-right-radius: 4px; background: rgba(139,92,246,.22); }
+.help-bubble.is-team { align-self: flex-start; border-bottom-left-radius: 4px; background: rgba(255,255,255,.06); }
+.help-bubble.is-team b { display: block; margin-bottom: 3px; color: var(--purple-lt); font-size: 12.5px; }
+.help-bubble .help-shot-row { margin: 8px 0 0; }
+.help-wait { margin: 0; color: var(--muted); font-size: 13px; }
+@media (prefers-reduced-motion: reduce) { .help-conv-chev { transition: none; } }
+
+/* The one-time Get help introduction (js/help-intro.js). */
+.help-intro-steps { display: flex; flex-direction: column; gap: 10px; margin: 4px 0 14px; padding: 0; list-style: none; }
+.help-intro-steps li { display: grid; grid-template-columns: 34px minmax(0, 1fr); align-items: center; gap: 10px; }
+.help-intro-ico { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: rgba(139,92,246,.14); color: var(--purple-lt); }
+.help-intro-ico .rl-i { width: 18px; height: 18px; }
+.help-intro-steps p { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.45; }
+.help-intro-steps b { color: var(--text); }
+.help-intro .help-send { width: 100%; min-height: 44px; }
+.help-intro .help-intro-later { width: 100%; margin-top: 6px; }
+.help-intro h3[tabindex="-1"]:focus { outline: none; }
 
 /* ── Moon Station screen ────────────────────────────────────────────────
    Mission control, read on a phone. Everything here is the existing

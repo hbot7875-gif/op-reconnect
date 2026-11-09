@@ -428,7 +428,7 @@ function invitesSheet(state) {
     `
     const actions = el('div', 'invite-actions')
     const read = el('button', 'btn btn-primary', 'Read reply')
-    read.onclick = () => { hideOverlay(); openHelp() }
+    read.onclick = () => { hideOverlay(); openHelp({ tab: 'mine' }) }
     actions.appendChild(read)
     block.appendChild(actions)
     sheet.appendChild(block)
