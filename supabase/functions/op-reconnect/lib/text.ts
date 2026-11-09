@@ -27,9 +27,21 @@ export function stripVersionSuffix(s: string): string {
   return result
 }
 
-/** Canonical bucket key for a raw track name. */
+/** Canonical bucket key for a raw track name.
+ *
+ *  A few real songs are named with symbols alone, so the usual cleanup left
+ *  nothing and every play was silently skipped: j-hope's "= (Equal Sign)"
+ *  and RM's "? (Interlude)" / "?" (about 4,500 plays by 2026-11-09). When the
+ *  cleaned title is empty, the symbols themselves become the key ("=", "?"),
+ *  so both RM spellings meet and no word can collide with them; a title that
+ *  is only a bracket ("(Online Love)") falls back to its words. Every title
+ *  that already had a key keeps exactly the same one. */
 export function normKeyFull(s: string): string {
-  return normalizeKey(stripVersionSuffix(s))
+  const base = stripVersionSuffix(s)
+  const key = normalizeKey(base)
+  if (key || !s) return key
+  const symbols = String(base || '').normalize('NFKC').replace(/[\s​-‍⁠︀-️]/gu, '')
+  return symbols || normalizeKey(s)
 }
 
 /** Spotify free-tier ad fingerprint — never store or count these. */

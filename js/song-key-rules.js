@@ -47,9 +47,15 @@ export function stripVersionSuffix(s) {
   return result
 }
 
-/** Canonical bucket key for a raw track name. */
+/** Canonical bucket key for a raw track name. A title of symbols alone
+ *  ("= (Equal Sign)", "? (Interlude)") keys on those symbols; a title that
+ *  is only a bracket falls back to its words — see text.ts. */
 export function normKeyFull(s) {
-  return normalizeKey(stripVersionSuffix(s))
+  const base = stripVersionSuffix(s)
+  const key = normalizeKey(base)
+  if (key || !s) return key
+  const symbols = String(base || '').normalize('NFKC').replace(/[\s​-‍⁠︀-️]/gu, '')
+  return symbols || normalizeKey(s)
 }
 
 /**

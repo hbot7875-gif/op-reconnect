@@ -58,6 +58,12 @@ const CORPUS = [
   'ㅠㅠ (Credit Roll)',
   'SWIM with Jimin (Slow Jam R&B Remix)',
   '2.0',
+  '= (Equal Sign)',
+  'Equal Sign (Lollapalooza ver.)',
+  '? (Interlude)',
+  '?',
+  '(Online Love)',
+  '️',
   '',
   '   ',
 ]
@@ -68,6 +74,20 @@ test('the client normalizer agrees with the backend on every corpus string', () 
     assert.equal(stripVersionSuffix(s), beStripVersionSuffix(s), `stripVersionSuffix disagreed on "${s}"`)
     assert.equal(normKeyFull(s), beNormKeyFull(s), `normKeyFull disagreed on "${s}"`)
   }
+})
+
+test('a song titled with symbols alone gets a key instead of being skipped', () => {
+  // Every play of these was dropped from song counts until 2026-11-09.
+  assert.equal(beNormKeyFull('= (Equal Sign)'), '=')
+  assert.equal(beNormKeyFull('? (Interlude)'), '?')
+  assert.equal(beNormKeyFull('?'), '?', 'both RM spellings share one key')
+  assert.equal(beNormKeyFull('(Online Love)'), 'online love', 'a bracket-only title keeps its words')
+  // Never a word key, so no other song can collide with them, and an
+  // invisible character alone is still nothing.
+  assert.notEqual(beNormKeyFull('? (Interlude)'), beNormKeyFull('Interlude : Showtime'))
+  assert.equal(beNormKeyFull('️'), '')
+  // Titles that already had a key keep exactly the same one.
+  for (const s of CORPUS) if (beNormalizeKey(beStripVersionSuffix(s))) assert.equal(beNormKeyFull(s), beNormalizeKey(beStripVersionSuffix(s)), s)
 })
 
 test('the mismatches that were losing goal songs now resolve together', () => {
