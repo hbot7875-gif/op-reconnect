@@ -5,7 +5,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0'
 import { getGameState, joinGame, startDistrict, setMode, updateCodename, adminLaunchDefuse, extendDistrictDeadline, resetLapsedDistrict } from './lib/handlers.ts'
 import { registerAgent, loginAgent, logoutAgent, checkHandle, checkSessionState } from './lib/auth.ts'
-import { getAccount, updateEmail, changePassword, generateScrobblePin, getWebhookPin, setStreamSource, setAppearOffline, retireAccount } from './lib/settings.ts'
+import { getAccount, updateEmail, updateXHandle, changePassword, generateScrobblePin, getWebhookPin, setStreamSource, setAppearOffline, retireAccount } from './lib/settings.ts'
 import { requestPasswordReset, resetPassword } from './lib/recovery.ts'
 import { handleWebScrobblerWebhook, handleListenBrainzLike } from './lib/scrobble-inbound.ts'
 import { placeItem, useItem } from './lib/items.ts'
@@ -129,6 +129,7 @@ const ROUTES: Record<string, Route> = {
   markWarUnlockAction: { auth: 'agent', handler: (sb, p) => markWarUnlockAction(sb, p) },
   getMamaRanking: { auth: 'agent', handler: (sb, p) => getMamaRanking(sb, p) },
   updateEmail: { auth: 'agent', handler: (sb, p) => updateEmail(sb, p) },
+  updateXHandle: { auth: 'agent', handler: (sb, p) => updateXHandle(sb, p) },
   changePassword: { auth: 'agent', handler: (sb, p) => changePassword(sb, p) },
   retireAccount: { auth: 'agent', handler: (sb, p) => retireAccount(sb, p) },
   getGameState: { auth: 'agent', handler: (sb, p) => getGameState(sb, p) },

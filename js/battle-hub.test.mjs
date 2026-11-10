@@ -89,6 +89,16 @@ const TEAM = {
   ],
 }
 
+test('Team: a teammate’s optional X username links to x.com, searchable, never an unsafe URL', () => {
+  const html = teamPanel({ ...TEAM, members: [
+    { codename: 'Koya', ig: 'koya.nav', x: 'koya_x', today: 1, me: false },
+    { codename: 'Bad', ig: null, x: 'javascript:alert(1)', today: 0, me: false },
+  ] }, { labels: LABELS })
+  assert.match(html, /href="https:\/\/x\.com\/koya_x"[^>]*>.*@koya_x<span class="vt-sr"> on X<\/span>/)
+  assert.match(html, /data-vt-mem="koya koya\.nav koya_x"/)
+  assert.doesNotMatch(html, /javascript:/)
+})
+
 test('Team: codename, opt-in Instagram link, votes today (4/6), and only counts at the top', () => {
   const html = teamPanel(TEAM, { labels: LABELS })
   assert.match(html, /Only HOOLIGANS can see this/)
@@ -228,7 +238,7 @@ test('getBattleTeam passes on only codename, Instagram, voted-today and me', asy
   const db = fakeDb({ rpc: { rc_battle_team_roster: { team: 'aliens', showIg: true, count: 2, online: 1,
     members: [{ codename: 'Koya', ig: 'koya.nav', today: 3, me: true, agent_no: 'AGENT001', member_key: 'k', score: 9 }] } } })
   const r = await getBattleTeam(db, { agentNo: 'agent001' }, NOW_OPEN)
-  assert.deepEqual(r.members, [{ codename: 'Koya', ig: 'koya.nav', today: 3, me: true }])
+  assert.deepEqual(r.members, [{ codename: 'Koya', ig: 'koya.nav', x: null, today: 3, me: true }])
   assert.deepEqual(db.calls[0], ['rc_battle_team_roster', { p_campaign_id: 'mama_2026', p_agent_no: 'AGENT001', p_day: '2026-10-16' }])
   assert.equal((await getBattleTeam(fakeDb({ rpc: { rc_battle_team_roster: { team: null } } }), { agentNo: 'AGENT9' }, NOW_OPEN)).error, 'team_required')
 })

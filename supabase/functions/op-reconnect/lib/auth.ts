@@ -11,6 +11,7 @@
 import bcrypt from 'bcryptjs'
 import type { SupabaseDB } from './config.ts'
 import { sessionCheck } from './session-check.js'
+import { pickAccountHandle } from './x-handle-rules.js'
 
 export interface RcAgentRow {
   agent_no: string
@@ -26,6 +27,10 @@ export interface RcAgentRow {
   stream_source_preference: string | null
   statsfm_username: string | null
   musicat_public_id: string | null
+  // Optional X (Twitter) username, lowercase, no @ (migration 20261110120000).
+  x_handle?: string | null
+  // 'instagram' (default) or 'x': where the account name came from.
+  handle_source?: string | null
   created_at: string
   last_login_at: string | null
   // Retirement Protocol (migration 038) — a soft delete. Set once an agent
@@ -125,12 +130,15 @@ export async function checkHandle(supabase: SupabaseDB, params: Record<string, u
 }
 
 export async function registerAgent(supabase: SupabaseDB, params: Record<string, unknown>) {
-  const handle = String(params.handle || '').trim()
+  // Instagram or X, at least one (x-handle-rules.js). The Instagram username
+  // stays the account name when given; with only X, the X username is.
+  const picked = pickAccountHandle({ handle: params.handle, xHandle: params.xHandle })
+  if (!picked.ok) return { success: false, error: picked.error }
+  const { handle, handleSource } = picked
+  const x = { value: picked.xHandle }
   const password = String(params.password || '')
   const email = normalizeEmail(params.email)
   const lbUsername = params.lbUsername ? String(params.lbUsername).trim() : null
-
-  if (!HANDLE_RE.test(handle)) return { success: false, error: 'handle_invalid' }
   // Required as of migration 023: it's the only way back into an account
   // whose number or password gets lost, and the number is shown exactly once.
   if (!EMAIL_RE.test(email)) return { success: false, error: 'email_invalid' }
@@ -142,11 +150,17 @@ export async function registerAgent(supabase: SupabaseDB, params: Record<string,
 
   const { data: existing } = await supabase.from('rc_agents').select('agent_no')
     .ilike('handle', handle).maybeSingle()
-  if (existing) return { success: false, error: 'handle_taken' }
+  if (existing) return { success: false, error: handleSource === 'x' ? 'x_handle_taken' : 'handle_taken' }
 
   const { data: emailTaken } = await supabase.from('rc_agents').select('agent_no')
     .ilike('email', email).maybeSingle()
   if (emailTaken) return { success: false, error: 'email_taken' }
+
+  if (x.value) {
+    const { data: xTaken } = await supabase.from('rc_agents').select('agent_no')
+      .eq('x_handle', x.value).maybeSingle()
+    if (xTaken) return { success: false, error: 'x_handle_taken' }
+  }
 
   const { data: agentNo, error: numErr } = await supabase.rpc('rc_next_agent_no')
   if (numErr || !agentNo) return { success: false, error: 'Could not issue an agent number' }
@@ -157,21 +171,24 @@ export async function registerAgent(supabase: SupabaseDB, params: Record<string,
   const { error: insErr } = await supabase.from('rc_agents').insert({
     agent_no: agentNo,
     handle,
+    handle_source: handleSource,
     email,
     password_hash: passwordHash,
     lb_username: lbUsername,
+    x_handle: x.value,
     session_token: sessionToken,
     session_expires_at: sessionExpiry(),
     last_login_at: new Date().toISOString(),
   })
   if (insErr) {
     if (String(insErr.code) === '23505') {
-      return { success: false, error: /email/i.test(insErr.message || '') ? 'email_taken' : 'handle_taken' }
+      const msg = insErr.message || ''
+      return { success: false, error: /x_handle/i.test(msg) ? 'x_handle_taken' : /email/i.test(msg) ? 'email_taken' : handleSource === 'x' ? 'x_handle_taken' : 'handle_taken' }
     }
     return { success: false, error: insErr.message }
   }
 
-  return { success: true, agent: { agentNo, handle, email, sessionToken } }
+  return { success: true, agent: { agentNo, handle, email, xHandle: x.value, sessionToken } }
 }
 
 export async function loginAgent(supabase: SupabaseDB, params: Record<string, unknown>) {

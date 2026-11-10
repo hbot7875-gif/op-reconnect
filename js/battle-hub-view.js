@@ -7,6 +7,7 @@
 // thin rails, chat identity. Tabs, switches, buttons and focus stay neutral.
 import { vIcon as ic } from './voting-icons.js'
 import { CHAT_EMOJI, collapseMoments, instagramUrl } from '../supabase/functions/op-reconnect/lib/battle-hub-rules.js'
+import { xProfileUrl } from '../supabase/functions/op-reconnect/lib/x-handle-rules.js'
 import { CHAT_MAX, CHAT_ERRORS } from '../supabase/functions/op-reconnect/lib/battle-text-filter.js'
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
@@ -121,10 +122,13 @@ export function teamPanel(team, { labels, max = 6 } = {}) {
   const label = labels[team.team] || team.team.toUpperCase()
   const rows = team.members.map((m) => {
     const url = instagramUrl(m.ig)
-    return `<li class="vt-mem${m.me ? ' is-me' : ''}" data-vt-mem="${esc(`${m.codename} ${m.ig || ''}`.toLowerCase())}">
+    const xUrl = xProfileUrl(m.x)
+    const x = xUrl ? xUrl.slice('https://x.com/'.length) : ''
+    return `<li class="vt-mem${m.me ? ' is-me' : ''}" data-vt-mem="${esc(`${m.codename} ${m.ig || ''}${x ? ` ${x}` : ''}`.toLowerCase())}">
       <span class="vt-mem-av" aria-hidden="true">${esc(([...m.codename][0] || '?').toUpperCase())}</span>
       <span class="vt-mem-id"><span class="vt-mem-name">${esc(m.codename)}${m.me ? '<span class="vt-mem-you">YOU</span>' : ''}</span>${url
-        ? `<a class="vt-mem-ig" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${ic('instagram')}@${esc(m.ig)}<span class="vt-sr"> on Instagram</span></a>` : ''}</span>
+        ? `<a class="vt-mem-ig" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${ic('instagram')}@${esc(m.ig)}<span class="vt-sr"> on Instagram</span></a>` : ''}${xUrl
+        ? `<a class="vt-mem-ig vt-mem-x" href="${esc(xUrl)}" target="_blank" rel="noopener noreferrer">${ic('xLogo')}@${esc(x)}<span class="vt-sr"> on X</span></a>` : ''}</span>
       <span class="vt-mem-score${m.today ? (m.today >= max ? ' is-full' : '') : ' is-zero'}" aria-label="${m.today} of ${max} verified votes today">${m.today}<small>/${max}</small></span>
       <i class="vt-mem-bar" aria-hidden="true" style="--p:${Math.min(1, m.today / Math.max(1, max)).toFixed(3)}"></i>
     </li>`

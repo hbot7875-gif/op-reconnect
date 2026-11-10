@@ -214,6 +214,26 @@ export async function adminScanAltAccounts(supabase: SupabaseDB, _params: any) {
     }
   }
 
+  // X (Twitter): a profile X username (rc_agents.x_handle, unique) that a
+  // different agent linked as an event voting account. See
+  // police-check.ts's xHandleCrossMatches.
+  const { data: xProfiles } = await supabase.from('rc_agents')
+    .select('agent_no, handle, x_handle').not('x_handle', 'is', null)
+  if (xProfiles?.length) {
+    const { data: xVoting } = await supabase.from('rc_agent_x_handles')
+      .select('agent_no, x_handle').in('x_handle', xProfiles.map((a: any) => a.x_handle))
+    const handleOf = new Map((agents || []).map((a: any) => [a.agent_no, a.handle]))
+    for (const p of xProfiles) {
+      const list = [{ agentNo: p.agent_no, handle: p.handle }]
+      for (const v of xVoting || []) {
+        if (v.x_handle === p.x_handle && v.agent_no !== p.agent_no && !list.some((a) => a.agentNo === v.agent_no)) {
+          list.push({ agentNo: v.agent_no, handle: handleOf.get(v.agent_no) || '' })
+        }
+      }
+      if (list.length > 1) groups.push({ via: 'X', value: p.x_handle, agents: list })
+    }
+  }
+
   // Same corroborating-evidence use as findPossibleAlts's mode — one query
   // for every agent across every group instead of one per group.
   const allAgentNos = [...new Set(groups.flatMap((g) => g.agents.map((a) => a.agentNo)))]
@@ -266,7 +286,7 @@ export async function adminGetAgentTracks(supabase: SupabaseDB, params: any) {
       statsfm_username: agent.statsfm_username,
       musicat_public_id: agent.musicat_public_id,
     }, fromTs, toTs, lim.lbMaxPages),
-    findPossibleAlts(supabase, agent),
+    findPossibleAlts(supabase, agent, { includeX: true }),
     // This agent's own mode, so a reviewer can compare it against each
     // alt's mode inline instead of cross-referencing two separate lookups.
     supabase.from('rc_players').select('mode').eq('agent_no', agent.agent_no).maybeSingle(),

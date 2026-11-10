@@ -255,6 +255,35 @@ export const IDENTITY_FIELDS: { col: 'lb_username' | 'statsfm_username' | 'music
   { col: 'musicat_public_id', label: 'Musicat' },
 ]
 
+/** X (Twitter). rc_agents.x_handle is unique, so two agent files can never
+ *  share a profile X username; the signal is a cross-match instead: this
+ *  agent's profile X username linked as an event voting account
+ *  (rc_agent_x_handles) by someone else, or one of this agent's voting
+ *  accounts set as someone else's profile X username. Deduplicated per
+ *  other agent. */
+export async function xHandleCrossMatches(supabase: SupabaseDB, agent: any): Promise<{ agentNo: string; handle: string; via: string }[]> {
+  const others = new Map<string, string>()
+  if (agent.x_handle) {
+    const { data } = await supabase.from('rc_agent_x_handles')
+      .select('agent_no').eq('x_handle', agent.x_handle).neq('agent_no', agent.agent_no)
+    for (const row of data || []) others.set(row.agent_no, '')
+  }
+  const { data: mine } = await supabase.from('rc_agent_x_handles')
+    .select('x_handle').eq('agent_no', agent.agent_no)
+  const voting = [...new Set((mine || []).map((r: any) => r.x_handle).filter(Boolean))]
+  if (voting.length) {
+    const { data } = await supabase.from('rc_agents')
+      .select('agent_no, handle').in('x_handle', voting).neq('agent_no', agent.agent_no)
+    for (const row of data || []) others.set(row.agent_no, row.handle || '')
+  }
+  const missing = [...others].filter(([, h]) => !h).map(([no]) => no)
+  if (missing.length) {
+    const { data } = await supabase.from('rc_agents').select('agent_no, handle').in('agent_no', missing)
+    for (const row of data || []) others.set(row.agent_no, row.handle || '')
+  }
+  return [...others].map(([agentNo, handle]) => ({ agentNo, handle, via: 'X' }))
+}
+
 /** mode lives on rc_players (joined-in-game state), not rc_agents (the
  *  account row alt-detection actually keys off) — a small second query to
  *  attach it. An agent who registered but never finished onboarding has no
@@ -279,7 +308,7 @@ export async function modesByAgentNo(supabase: SupabaseDB, agentNos: string[]): 
  *  way, never go look up anyone else's — see getMySelfCheck's own comment
  *  on why that's a bounded, acceptable exposure rather than a general
  *  lookup tool. */
-export async function findPossibleAlts(supabase: SupabaseDB, agent: any): Promise<{ agentNo: string; handle: string; via: string; mode: string | null }[]> {
+export async function findPossibleAlts(supabase: SupabaseDB, agent: any, opts: { includeX?: boolean } = {}): Promise<{ agentNo: string; handle: string; via: string; mode: string | null }[]> {
   const alts: { agentNo: string; handle: string; via: string }[] = []
   for (const f of IDENTITY_FIELDS) {
     const value = agent[f.col]
@@ -290,6 +319,9 @@ export async function findPossibleAlts(supabase: SupabaseDB, agent: any): Promis
       .neq('agent_no', agent.agent_no)
     for (const row of data || []) alts.push({ agentNo: row.agent_no, handle: row.handle, via: f.label })
   }
+  // Admin only. In the player's own self-check this would let anyone type
+  // an X username into Settings and learn who linked it for voting.
+  if (opts.includeX) for (const m of await xHandleCrossMatches(supabase, agent)) alts.push(m)
   const modes = await modesByAgentNo(supabase, alts.map((a) => a.agentNo))
   return alts.map((a) => ({ ...a, mode: modes.get(a.agentNo) || null }))
 }

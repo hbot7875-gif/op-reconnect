@@ -23,6 +23,7 @@ import { setIcon } from './settings-icons.js'
 import { goRunAmi } from './router.js'
 import { openTesterManager } from './run-ami-testers.js'
 import { openHelp, openHelpInbox } from './help.js'
+import { normalizeXHandle, X_HANDLE_HINT } from '../supabase/functions/op-reconnect/lib/x-handle-rules.js'
 
 let account = null
 
@@ -143,6 +144,11 @@ function paintSections(body, state) {
       icon: 'tag', name: 'Codename', value: state?.player?.codename || '',
       body: 'What other agents see.',
       onClick: () => showOverlay(codenameSheet(state, refresh)),
+    },
+    {
+      icon: 'xLogo', name: 'X (Twitter)', value: account.xHandle ? `@${account.xHandle}` : 'Not set',
+      body: 'Your team sees it in fan battles. Keep DMs open.',
+      onClick: () => showOverlay(xHandleSheet(account, refresh)),
     },
     {
       icon: 'mail', name: 'Recovery email', value: account.email || 'Not set',
@@ -548,6 +554,46 @@ function emailSheet(acct, onSaved) {
   return sheet
 }
 
+/** Optional X (Twitter) username. Blank clears it. */
+function xHandleSheet(acct, onSaved) {
+  const sheet = el('div', 'sheet set-sheet')
+  sheet.append(
+    el('div', 'eyebrow', 'X (TWITTER)'),
+    el('h3', '', acct.xHandle ? 'Change your X username' : 'Add your X username'),
+    el('p', 'muted', 'Your own team sees it during fan battles, so keep your DMs open. Leave it blank to remove it.'),
+  )
+  const input = el('input', 'ob-input')
+  input.placeholder = 'Your X username'
+  input.maxLength = 16
+  input.value = acct.xHandle ? `@${acct.xHandle}` : ''
+  input.autocomplete = 'off'
+  input.autocapitalize = 'none'
+  input.spellcheck = false
+  sheet.appendChild(field('X username', X_HANDLE_HINT, input))
+
+  const save = el('button', 'btn btn-primary', 'Save X username')
+  save.onclick = async () => {
+    const x = normalizeXHandle(input.value)
+    if (!x.ok) { toast(errText(x.error)); input.focus(); return }
+    if (x.value === (acct.xHandle || null)) { hideOverlay(); return }
+    save.disabled = true
+    save.textContent = 'SAVING…'
+    const res = await call('updateXHandle', { agentNo: getAgentNo(), xHandle: x.value })
+    save.disabled = false
+    save.textContent = 'Save X username'
+    if (!res.success) { toast(errText(res.error)); return }
+    acct.xHandle = res.xHandle
+    hideOverlay()
+    toast(res.xHandle ? 'X username saved' : 'X username removed')
+    onSaved?.()
+  }
+  sheet.appendChild(save)
+  const close = el('button', 'btn btn-ghost', 'Cancel')
+  close.onclick = hideOverlay
+  sheet.appendChild(close)
+  return sheet
+}
+
 /** Same rule joinGame enforces at onboarding (see handlers.ts's shared
  *  validateCodename) — can't be blank-ish, agent-number-shaped, or match the
  *  agent number/Instagram handle on file. This sheet just gives a way back
@@ -741,6 +787,8 @@ export function errText(code) {
     bad_credentials: "That password doesn't match.",
     email_invalid: 'That email doesn\'t look right.',
     email_taken: 'Another agent file already uses that email.',
+    x_handle_invalid: `That doesn't look like an X username. ${X_HANDLE_HINT}`,
+    x_handle_taken: 'That X username is already on another agent file.',
     password_short: 'Passwords need at least 6 characters.',
     rate_limited: 'Too many tries. Wait a minute and go again.',
     agent_not_found: 'Agent file not found.',

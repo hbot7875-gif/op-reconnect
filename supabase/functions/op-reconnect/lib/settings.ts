@@ -10,6 +10,7 @@
 import bcrypt from 'bcryptjs'
 import type { SupabaseDB } from './config.ts'
 import { getRcAgent, setPasswordAndRotate, normalizeEmail, EMAIL_RE, throttle } from './auth.ts'
+import { normalizeXHandle } from './x-handle-rules.js'
 
 const SOURCES = ['lb', 'direct', 'statsfm', 'musicat']
 
@@ -34,6 +35,7 @@ export async function getAccount(supabase: SupabaseDB, params: Record<string, un
       lbUsername: agent.lb_username,
       statsfmUsername: agent.statsfm_username ?? null,
       musicatPublicId: agent.musicat_public_id ?? null,
+      xHandle: agent.x_handle ?? null,
       hasPin: !!agent.scrobble_pin,
       appearOffline: !!player?.appear_offline,
     },
@@ -50,6 +52,29 @@ export async function setAppearOffline(supabase: SupabaseDB, params: Record<stri
     .update({ appear_offline: appearOffline }).eq('agent_no', agentNo)
   if (error) return { success: false, error: error.message }
   return { success: true, appearOffline }
+}
+
+/** Add, change or clear the optional X (Twitter) username. No password:
+ *  it's a profile detail (teammates see it in a fan battle), not a way into
+ *  the account. One agent per X username. */
+export async function updateXHandle(supabase: SupabaseDB, params: Record<string, unknown>) {
+  const agentNo = String(params.agentNo || '').trim().toUpperCase()
+  const x = normalizeXHandle(params.xHandle)
+  if (!x.ok) return { success: false, error: 'x_handle_invalid' }
+
+  if (!await throttle(supabase, `xhandle:${agentNo}`, 10, 3600)) {
+    return { success: false, error: 'rate_limited' }
+  }
+
+  if (x.value) {
+    const { data: taken } = await supabase.from('rc_agents').select('agent_no')
+      .eq('x_handle', x.value).neq('agent_no', agentNo).maybeSingle()
+    if (taken) return { success: false, error: 'x_handle_taken' }
+  }
+
+  const { error } = await supabase.from('rc_agents').update({ x_handle: x.value }).eq('agent_no', agentNo)
+  if (error) return { success: false, error: String(error.code) === '23505' ? 'x_handle_taken' : error.message }
+  return { success: true, xHandle: x.value }
 }
 
 /** Add or change the recovery address. Password-gated: whoever controls the

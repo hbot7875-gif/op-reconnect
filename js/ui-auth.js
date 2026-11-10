@@ -14,14 +14,19 @@ import { setSession } from './session.js'
 import { ambientToggle } from './ambient.js'
 import { fromVotingLink } from './onboarding-path.js'
 import { readInvite } from './battle-invite.js'
+import { normalizeXHandle, pickAccountHandle } from '../supabase/functions/op-reconnect/lib/x-handle-rules.js'
 
 const ERRORS = {
-  handle_taken: 'That handle is already registered. Sign in instead?',
-  handle_invalid: 'Handles are 3-30 characters — letters, numbers, dots and underscores.',
+  handle_taken: 'That Instagram username is already registered. Sign in instead?',
+  handle_invalid: 'Instagram usernames are 3-30 characters — letters, numbers, dots and underscores.',
+  handle_required: 'Add your Instagram or X username.',
   password_short: 'Passwords need at least 6 characters.',
   bad_credentials: "That agent number and password don't match.",
   agent_not_found: "No agent with that number. Check it, or create a new file.",
   agent_retired: 'This agent file was retired. It can\'t be reactivated.',
+  x_handle_invalid: "That doesn't look like an X username.",
+  x_handle_taken: 'That X username is already on another agent file. Sign in instead?',
+  x_handle_short: 'An X username this short can’t be your account name. Add your Instagram too.',
   rate_limited: 'Too many tries. Wait a minute and go again.',
   email_invalid: "That email doesn't look right.",
   email_taken: 'That email already has an agent file. Sign in, or recover it.',
@@ -155,9 +160,18 @@ function buildRegister(onAuthed) {
   const panel = el('div', 'auth-panel')
 
   const handle = el('input', 'ob-input')
-  handle.placeholder = 'Your Instagram handle'
+  handle.placeholder = 'Your Instagram username'
   handle.maxLength = 30
   handle.autocomplete = 'username'
+
+  // Instagram or X, at least one (x-handle-rules.js pickAccountHandle, which
+  // the server runs again). Same input styling; a leading @ is stripped.
+  const xHandle = el('input', 'ob-input')
+  xHandle.placeholder = 'Your X username'
+  xHandle.maxLength = 16
+  xHandle.autocomplete = 'off'
+  xHandle.autocapitalize = 'none'
+  xHandle.spellcheck = false
 
   const { wrap: pwWrap, input: pw } = pwToggleInput('Create a password', 'new-password')
   // Required, as of migration 023. The agent number is shown exactly once
@@ -169,13 +183,14 @@ function buildRegister(onAuthed) {
   email.placeholder = 'you@example.com'
   email.autocomplete = 'email'
 
-  const handleField = field('Handle', 'Your account name. It stays private — other agents see your codename instead.', handle)
+  const handleField = field('Instagram username', '', handle)
+  const xField = field('X (Twitter) username', 'Add at least one: Instagram, X, or both. Your teammates see them in fan battles, so keep your DMs open. Everyone else sees your codename.', xHandle)
   const emailField = field('Email', 'Only ever used to get you back in if you lose your number or password.', email)
   // One password field: the eye toggle shows what was typed, which does the
   // job a second "type it again" field did, with one less thing to fill in.
   const pwField = field('Password', 'At least 6 characters — a couple of words works well.', pwWrap, pw)
 
-  panel.append(handleField, emailField, pwField)
+  panel.append(handleField, xField, emailField, pwField)
 
   // Streams aren't collected here anymore. Registering used to also ask for
   // stats.fm / Musicat / ListenBrainz up front — three tabs and a live
@@ -192,17 +207,25 @@ function buildRegister(onAuthed) {
   handle.oninput = () => {
     clearTimeout(handleTimer)
     clearFieldError(handleField)
-    const h = handle.value.trim()
+    clearFieldError(xField)
+    const h = handle.value.trim().replace(/^@/, '')
     handle.classList.remove('is-bad', 'is-good')
     if (h.length < 3) return
     handleTimer = setTimeout(async () => {
       const res = await call('checkHandle', { handle: h })
-      if (handle.value.trim() !== h) return
+      if (handle.value.trim().replace(/^@/, '') !== h) return
       handle.classList.toggle('is-good', !!res.available)
       handle.classList.toggle('is-bad', !res.available)
     }, 400)
   }
   email.oninput = () => clearFieldError(emailField)
+  xHandle.oninput = () => {
+    clearFieldError(xField)
+    if (!handle.value.trim()) { clearFieldError(handleField); handle.classList.remove('is-bad') }
+    const v = xHandle.value.trim()
+    xHandle.classList.toggle('is-good', !!v && normalizeXHandle(v).ok)
+    xHandle.classList.toggle('is-bad', !!v && !normalizeXHandle(v).ok)
+  }
 
   pw.oninput = () => {
     clearFieldError(pwField)
@@ -212,9 +235,12 @@ function buildRegister(onAuthed) {
 
   const btn = el('button', 'btn btn-primary auth-go', 'Create my agent file')
   btn.onclick = async () => {
-    const h = handle.value.trim()
+    const picked = pickAccountHandle({ handle: handle.value, xHandle: xHandle.value })
     let bad = null
-    if (h.length < 3) { setFieldError(handleField, 'Handle needs at least 3 characters'); bad = bad || handle }
+    if (!picked.ok) {
+      const onX = picked.field === 'x'
+      setFieldError(onX ? xField : handleField, friendly(picked.error)); bad = onX ? xHandle : handle
+    }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim())) {
       setFieldError(emailField, 'Add an email so you can get back in later'); bad = bad || email
     }
@@ -224,17 +250,19 @@ function buildRegister(onAuthed) {
     btn.disabled = true
     btn.textContent = 'CREATING…'
     const res = await call('registerAgent', {
-      handle: h,
+      handle: picked.handleSource === 'instagram' ? picked.handle : '',
       email: email.value.trim(),
       password: pw.value,
       lbUsername: null,
+      xHandle: picked.xHandle,
     })
     btn.disabled = false
     btn.textContent = 'Create my agent file'
 
     if (!res.success) {
-      if (res.error === 'handle_taken' || res.error === 'handle_invalid') setFieldError(handleField, friendly(res.error))
+      if (res.error === 'handle_taken' || res.error === 'handle_invalid' || res.error === 'handle_required') setFieldError(handleField, friendly(res.error))
       else if (res.error === 'email_invalid' || res.error === 'email_taken') setFieldError(emailField, friendly(res.error))
+      else if (res.error === 'x_handle_invalid' || res.error === 'x_handle_taken' || res.error === 'x_handle_short') setFieldError(xField, friendly(res.error))
       else if (res.error === 'password_short') setFieldError(pwField, friendly(res.error))
       else toast(friendly(res.error))
       return

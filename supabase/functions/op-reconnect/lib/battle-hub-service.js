@@ -44,10 +44,11 @@ export async function getBattleTeam(db, params, now = new Date()) {
     showIg: !!data.showIg,
     count: Number(data.count) || 0,
     online: Number(data.online) || 0,
-    // Only these four fields, whatever the query returns. `today` is the
+    // Only these five fields, whatever the query returns. `x` is the
+    // teammate's optional X username (rc_agents.x_handle). `today` is the
     // teammate's verified votes today (pending or in-review never count).
     members: (data.members || []).map((m) => ({
-      codename: String(m.codename || 'Agent'), ig: m.ig ? String(m.ig) : null, today: Math.max(0, Number(m.today) || 0), me: !!m.me,
+      codename: String(m.codename || 'Agent'), ig: m.ig ? String(m.ig) : null, x: m.x ? String(m.x) : null, today: Math.max(0, Number(m.today) || 0), me: !!m.me,
     })),
   }
 }
