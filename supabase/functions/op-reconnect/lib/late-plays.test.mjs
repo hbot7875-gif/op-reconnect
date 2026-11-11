@@ -498,9 +498,13 @@ test('property: nothing ingest stores is a copy in the eyes of counting (randomi
     try {
       await fetchStreamRows(db, { agent_no: 'AGENT900', lb_username: 'x', stream_source_preference: 'lb', statsfm_username: null, musicat_public_id: null }, start - 600, now, 100, { useStoredCoverage: false })
     } finally { globalThis.fetch = realFetch }
-    // counting's view: stored rows (apps learnt from the provider, as ingest does) + what was stored now
-    const appOf = new Map(reports.map((r) => [`${r.listened_at}|${r.name}`, r.app]))
-    const after = [...stored.map((r) => ({ ...r, source_client: appOf.get(`${r.listened_at}|${r.track_name}`) || null, kept: true })), ...db.upserts.map((r) => ({ ...r, kept: false }))]
+    // counting's view: stored rows with their apps recorded the way the
+    // database holds them after the app backfills (one app -> source_client,
+    // 2+ apps at that second -> source_clients), + what was stored now
+    const appsAt = new Map()
+    for (const r of reports) { const k = `${r.listened_at}|${r.name}`; if (!appsAt.has(k)) appsAt.set(k, new Set()); appsAt.get(k).add(r.app) }
+    const recorded = (r) => { const set = [...(appsAt.get(`${r.listened_at}|${r.track_name}`) || [])].sort(); return set.length >= 2 ? { source_client: null, source_clients: set } : { source_client: set[0] || null } }
+    const after = [...stored.map((r) => ({ ...r, ...recorded(r), kept: true })), ...db.upserts.map((r) => ({ ...r, kept: false }))]
     const idx = copyIndexes(after, (r) => r.kept)
     const bad = db.upserts.filter((_, i) => idx.has(stored.length + i)).length
     assert.equal(bad, 0, `trial ${trial}: ${bad} stored rows are copies`)
