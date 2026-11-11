@@ -38,6 +38,9 @@ export function questRuleNotes(config = {}) {
     notes.push('Each teammate streams at least one of their own district goals after joining.'
       + (config.teamBoost ? ' Finishing unlocks a Team Boost for the team.' : ''))
   }
+  if (config.warOfCards) {
+    notes.push('Reaching it opens War of Cards for every teammate for this quest — no album needed. Then each of you finishes one game; winning isn’t needed, and one game together counts for everyone.')
+  }
   if (config.cipherCount > 0) {
     notes.push(`Then crack ${config.cipherCount} code${config.cipherCount === 1 ? '' : 's'} together in Team Chat.`)
   }
@@ -61,6 +64,11 @@ export function reconnectPlayerNext(input = {}) {
   const checklist = input.checklist || null
   const sharedTracks = input.sharedTracks || null
   const myChecklistDone = Math.max(0, Number(input.myChecklistDone) || 0)
+  // Stage two of a War of Cards quest (reconnect-war-stage.js): the view
+  // from the mission, whether I've played, and whether my Bomb is charged.
+  const war = input.warOfCards || null
+  const myWarPlayed = !!input.myWarPlayed
+  const bombActive = input.bombActive !== false
   // A recruit joined from another district: inviting and dropping teammates
   // belong to the district's own agents, so never tell them to do either.
   const recruit = input.recruit ? { from: input.recruit.districtName || 'this district' } : null
@@ -108,6 +116,18 @@ export function reconnectPlayerNext(input = {}) {
     return {
       title: `Stream ${sharedTrack.label} ${left} more time${left === 1 ? '' : 's'}`,
       body: 'Everyone’s qualifying plays count after they join.',
+    }
+  }
+  if (input.variant === 'connect' && war?.unlocked) {
+    if (!myWarPlayed && !bombActive) {
+      return { title: 'Charge your ARMY Bomb to play', body: 'War of Cards needs a charged Bomb. Charge it, then finish one game — winning isn’t needed.' }
+    }
+    if (!myWarPlayed) {
+      return { title: 'Play one game of War of Cards', body: 'Winning isn’t needed. Play together and one game counts for everyone at the table.' }
+    }
+    const waiting = Math.max(0, (Number(war.total) || 0) - (Number(war.done) || 0))
+    if (waiting > 0) {
+      return { title: `Waiting for ${waiting} teammate${waiting === 1 ? '' : 's'} to play`, body: 'Your game counts. The quest completes when everyone has played one.' }
     }
   }
   if (input.variant === 'connect' && sharedTracks && sharedTracks.cleared < sharedTracks.total) {

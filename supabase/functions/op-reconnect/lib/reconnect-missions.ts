@@ -55,6 +55,8 @@ import {
 } from './reconnect-active.js'
 import { seatRule, countSeats, hasSeatFor, overSeats, seatError, composeTeams } from './reconnect-seats.ts'
 import type { SeatCounts } from './reconnect-seats.ts'
+import { hasWarStage, warStageStep, warStageView } from './reconnect-war-stage.js'
+import { warPlayedAgents } from './war-quest-pass.ts'
 
 /** Wrong-guess budget for a mission's cipher phase (see submitReconnect
  *  MissionCipherAnswer) — one shared pool per cipher, not per agent, so the
@@ -764,6 +766,10 @@ async function shape(
     // pooled progress. While hidden, a track nobody has streamed has no
     // label here at all (reconnect-shared-tracks.js's sharedTracksView).
     sharedTracks: m.sharedTracksProgress || null,
+    // Only present when the frozen goal carries warOfCards — stage two of a
+    // two-stage quest (reconnect-war-stage.js): who has finished a game.
+    warOfCards: m.warOfCardsProgress || null,
+    phase: m.phase || 'streaming',
     // Only present once the streaming target is hit and the goal actually
     // carries a cipher sequence — see refreshMission's phase transition.
     // Deliberately exposes only the CURRENT cipher's prompt, never the
@@ -811,6 +817,8 @@ async function shape(
       // (streams, above) is already fully visible to the whole team today,
       // this is just the same information broken out per track.
       checklistTracks: Array.isArray(p._checklistTracks) ? p._checklistTracks : null,
+      // War of Cards stage only: finished a counted game since stage two opened.
+      warPlayed: p._warPlayed === true,
       // Only meaningful alongside mission.isCreator — a participant who
       // hasn't contributed anything yet (still invited, or joined but never
       // streamed) can be removed to free their slot; one who's already
@@ -1019,6 +1027,45 @@ async function refreshMission(
     }
   }
 
+  // War of Cards stage (config.warOfCards, Bangtan Seven Bridge): hitting the
+  // pooled target opens stage two instead of completing, and the quest
+  // completes once every joined teammate has finished one game since then.
+  // See reconnect-war-stage.js for the rules and the quest pass.
+  if (variant === 'connect' && hasWarStage(config)) {
+    const step0 = warStageStep({
+      phase: mission.phase, status: mission.status, joinedCount: joined.length,
+      requiredAgents: mission.required_agents, pooled: sharedTotal, target: sharedTrack!.target, playedCount: 0,
+    })
+    if (step0 === 'unlock') {
+      const unlockedAt = new Date().toISOString()
+      const { data: moved } = await supabase.from('rc_reconnect_missions')
+        .update({ phase: 'cards', cards_unlocked_at: unlockedAt })
+        .eq('id', mission.id).eq('status', 'open').eq('phase', 'streaming')
+        .select('cards_unlocked_at').maybeSingle()
+      if (moved) { mission.phase = 'cards'; mission.cards_unlocked_at = moved.cards_unlocked_at }
+    }
+    const playedAgents = mission.phase === 'cards' && mission.cards_unlocked_at
+      ? await warPlayedAgents(supabase, joined.map((p: any) => p.agent_no), mission.cards_unlocked_at)
+      : []
+    for (const p of joined) p._warPlayed = playedAgents.includes(p.agent_no)
+    mission.warOfCardsProgress = warStageView({
+      phase: mission.phase, cardsUnlockedAt: mission.cards_unlocked_at || null,
+      joined: joined.map((p: any) => p.agent_no), playedAgents, requiredAgents: mission.required_agents,
+    })
+    const step = warStageStep({
+      phase: mission.phase, status: mission.status, joinedCount: joined.length,
+      requiredAgents: mission.required_agents, pooled: sharedTotal, target: sharedTrack!.target,
+      playedCount: playedAgents.length,
+    })
+    if (step === 'complete') {
+      const { error } = await supabase.from('rc_reconnect_missions')
+        .update({ status: 'complete', completed_at: new Date().toISOString() })
+        .eq('id', mission.id).eq('status', 'open').eq('phase', 'cards')
+      if (!error) mission.status = 'complete'
+    }
+    return mission
+  }
+
   // The cipher phase (see module const CIPHER_ATTEMPTS) only ever exists for
   // 'connect' missions whose goal carries config.ciphers — everything else
   // (including every mission created before this feature) has phase stuck at
@@ -1212,6 +1259,7 @@ async function recruitMissionView(supabase: SupabaseDB, content: any, agentNo: s
       seats: seatPanelInfo(config, content),
       openTo: openToInfo(config, content),
       cipherCount: Array.isArray(config.ciphers) ? config.ciphers.length : 0,
+      warOfCards: hasWarStage(config),
     },
     idleThreshold: IDLE_DAYS,
     mission: await markSeats(supabase, await shapeWithMessages(supabase, mission, participants || [], agentNo, IDLE_DAYS, config.ciphers), config),
@@ -1369,6 +1417,7 @@ export async function getReconnectMission(supabase: SupabaseDB, content: any, pa
       // Only the count: the codes themselves stay on the server.
       openTo: openToInfo(reconnect.config, content),
       cipherCount: Array.isArray(reconnect.config.ciphers) ? reconnect.config.ciphers.length : 0,
+      warOfCards: hasWarStage(reconnect.config),
     },
     idleThreshold,
     mission: mission ? await markSeats(supabase, await shapeWithMessages(supabase, mission, participants || [], agentNo, idleThreshold, reconnect.config.ciphers), reconnect.config) : null,

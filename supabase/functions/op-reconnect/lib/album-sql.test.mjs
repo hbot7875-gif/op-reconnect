@@ -55,7 +55,7 @@ test('routes are agent-only; the poll awards and never fails on the Album', () =
   assert.match(adapter, /export async function albumForState[\s\S]*?try \{[\s\S]*?catch \(_\) \{\s*return null/)
 })
 
-test('RUN AMI lets in testers or a full album, nobody else', () => {
-  assert.match(runAmi, /const allowAgent = async \(agentNo: string\) =>\s+\(await testers\(supabase\)\.isTester\(agentNo\)\.catch\(\(\) => false\)\) \|\| albumService\(supabase\)\.isComplete\(agentNo\)\.catch\(\(\) => false\)/)
+test('RUN AMI lets in testers, a full album, or a quest pass for that route — nobody else', () => {
+  assert.match(runAmi, /const allowAgent = async \(agentNo: string, route = 'getState'\) =>\s+\(await testers\(supabase\)\.isTester\(agentNo\)\.catch\(\(\) => false\)\)\s+\|\| \(await albumService\(supabase\)\.isComplete\(agentNo\)\.catch\(\(\) => false\)\)\s+\|\| warQuestPassAllows\(supabase, agentNo, route\)/)
   assert.match(runAmi, /createRunAmiService\(\{[^}]*allowAgent \}\)/)
 })

@@ -65,8 +65,11 @@ test('City reaches RUN AMI only through Run ARMY: testers get Play, everyone els
   assert.doesNotMatch(world, /goRunAmi|runami|RUN AMI/i)
   assert.match(world, /onRunArmy: \(\) => openRunArmy\(\)/)
   const zone = readFileSync(new URL('./run-army.js', import.meta.url), 'utf8')
-  // Same rule as the server (run-ami.ts allowAgent): testers, or a full album.
-  assert.match(zone, /const open = !!getState\(\)\?\.runAmiTester \|\| !!album\?\.complete/)
+  // Same rule as the server (run-ami.ts allowAgent): testers, a full album,
+  // or a temporary War of Cards quest pass (Bangtan Seven Bridge).
+  assert.match(zone, /const fullAccess = !!getState\(\)\?\.runAmiTester \|\| !!album\?\.complete/)
+  assert.match(zone, /const questPass = !fullAccess && !!getState\(\)\?\.warQuestPass\?\.active/)
+  assert.match(zone, /const open = fullAccess \|\| questPass/)
   // The only way in is the Play button, and it exists only for testers.
   assert.match(zone, /if \(open\) \{\s*const play = el\('button', 'btn btn-primary rarmy-play', 'Play War of Cards'\)/)
   assert.equal(zone.match(/goRunAmi\(/g).length, 1)

@@ -355,6 +355,13 @@ export function createRunAmiService({ store, now = () => Date.now(), rng, random
     if (room.status !== 'waiting') return { success: false, error: 'already_started' }
     const agents = [...await store.listSeats(room.id)].sort((a, b) => a.seat - b.seat).map((s) => s.agentNo)
     if (agents.length < 2) return { success: false, error: 'need_players' }
+    // Everyone dealt in must still be allowed to play. Access is checked when
+    // a player sits down, but a temporary quest pass can end while they are
+    // still seated (their counted game is done), and the host must not be
+    // able to deal them into a rematch they could never act in.
+    for (const seatAgent of agents) {
+      if (seatAgent !== agentNo && !(await allowAgent(seatAgent, 'seat'))) return { success: false, error: 'seat_not_allowed', view: (await getState(agentNo)).view }
+    }
 
     const state = newMatch({ seatCount: agents.length, rng, now: now(), config: await store.config() })
     const res = await store.startMatch({
@@ -437,18 +444,21 @@ export function createRunAmiService({ store, now = () => Date.now(), rng, random
   // Every player route checks the agent first. Internal calls between these
   // functions (createRoom → getState) use the ungated versions.
   // allowAgent may answer now or later (run-ami.ts asks the Album).
-  const gate = (fn) => async (agentNo, ...rest) =>
-    ((await allowAgent(agentNo)) ? fn(agentNo, ...rest) : { success: false, error: 'not_invited' })
+  // allowAgent is told which route is asking: a Bangtan Seven Bridge quest
+  // pass (reconnect-war-stage.js) lets a member who has already finished
+  // their quest game look at the table and leave it, but not play again.
+  const gate = (route, fn) => async (agentNo, ...rest) =>
+    ((await allowAgent(agentNo, route)) ? fn(agentNo, ...rest) : { success: false, error: 'not_invited' })
 
   return {
-    getState: gate(getState),
-    createRoom: gate(createRoom),
-    joinRoom: gate(joinRoom),
-    watchRoom: gate(watchRoom),
-    leaveRoom: gate(leaveRoom),
-    startMatch: gate(startMatch),
-    act: gate(act),
-    sendChat: gate(sendChat),
+    getState: gate('getState', getState),
+    createRoom: gate('createRoom', createRoom),
+    joinRoom: gate('joinRoom', joinRoom),
+    watchRoom: gate('watchRoom', watchRoom),
+    leaveRoom: gate('leaveRoom', leaveRoom),
+    startMatch: gate('startMatch', startMatch),
+    act: gate('act', act),
+    sendChat: gate('sendChat', sendChat),
     sweep,
   }
 }

@@ -139,6 +139,11 @@ export function freezeGoals(content: GameContent, mode: string, district: Distri
           // reconnect-seats.ts).
           crossDistrictSeats: cfg.crossDistrictSeats || null,
           teamBoost: cfg.teamBoost || null,
+          // warOfCards (optional, 'connect' + sharedTrack only): a second
+          // stage after the pooled target — every teammate finishes one War
+          // of Cards game, with a temporary quest pass to play it (see
+          // reconnect-war-stage.js).
+          warOfCards: cfg.warOfCards || null,
         }
       : variant === 'sotd'
       // A YouTube-link guess, not a text guess — frozen verbatim so an

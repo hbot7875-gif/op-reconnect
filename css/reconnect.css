@@ -3191,6 +3191,20 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 /* A progress bar with its own label above it — see labeledBar() in
    screen-district.js. */
 .reconnect-coop-progress .lbar { margin: 11px 0 0; }
+/* Stage two of a War of Cards quest (Bangtan Seven Bridge). */
+.reconnect-war-stage { margin-top: 12px; padding: 11px 12px; border: 1px solid var(--border); border-radius: var(--r); }
+.reconnect-war-stage.is-locked { opacity: .78; }
+.reconnect-war-stage .rws-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; }
+.reconnect-war-stage .rws-head b { font-size: 15px; letter-spacing: 0; }
+.reconnect-war-stage > p { margin: 6px 0 0; font-size: 12px; line-height: 1.45; }
+.reconnect-war-stage .rws-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }
+.reconnect-war-stage .rws-list li { display: grid; grid-template-columns: 18px 1fr auto; align-items: center; gap: 6px; font-size: 13px; }
+.reconnect-war-stage .rws-list li b { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reconnect-war-stage .rws-list li i { font-style: normal; font-size: 11.5px; opacity: .7; }
+.reconnect-war-stage .rws-list li.is-done span, .reconnect-war-stage .rws-list li.is-done i { color: var(--ok, #6fcf97); opacity: 1; }
+.reconnect-war-stage .rws-actions { display: grid; gap: 8px; margin-top: 10px; }
+.reconnect-war-stage .rws-actions p { margin: 0; font-size: 11.5px; line-height: 1.45; }
+.reconnect-war-stage .rws-bomb { color: var(--warn, #f2c94c); }
 .lbar-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
   margin-bottom: 5px; font-size: 11.5px; color: var(--muted); }
 .lbar-head b { font-family: var(--mono); font-size: 11.5px; color: var(--text); font-weight: 700; }

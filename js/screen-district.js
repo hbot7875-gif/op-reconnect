@@ -8,7 +8,8 @@ import { el, esc, setState, getState, toast, unlockAfter, showOverlay, hideOverl
 import { call } from './api.js'
 import { questExitRow } from './quest-skip.js'
 import { getAgentNo } from './session.js'
-import { goWard, goDistrict, goWorld } from './router.js'
+import { goWard, goDistrict, goWorld, goRunAmi } from './router.js'
+import { openAgentCharge } from './agent-charge.js'
 import { wardDisplayName, districtDisplayName } from './ward-tiles.js'
 import { mountScene } from './scene.js'
 import { districtFraction, renderBoard } from './ui-district.js'
@@ -521,6 +522,48 @@ const RECONNECT_ERRORS = {
 }
 function reconnectError(code) { return RECONNECT_ERRORS[code] || code || 'Something went wrong' }
 
+/** Is this agent's own ARMY Bomb charged right now? War of Cards needs it. */
+function bombIsCharged() {
+  return Number(getState()?.agentCharge?.hoursRemaining) > 0
+}
+
+/** Stage two of a War of Cards quest (reconnect-war-stage.js): locked until
+ *  the team reaches its streaming target, then one row per teammate showing
+ *  who has finished a game, and — for me — what I still need to do. */
+function warStageBlock(war, m, myRow) {
+  const block = el('section', 'reconnect-war-stage' + (war.unlocked ? '' : ' is-locked'))
+  block.appendChild(el('div', 'rws-head', `<span>Stage 2 · War of Cards</span><b>${war.unlocked ? `${war.done}/${war.total}` : '🔒'}</b>`))
+  if (!war.unlocked) {
+    block.appendChild(el('p', 'muted', `Unlocks when your team reaches ${m.sharedTrack?.target || ''} ${esc(m.sharedTrack?.label || '')} streams. Then all ${war.total} of you can play War of Cards for this quest — no album needed.`))
+    return block
+  }
+  const names = new Map(m.participants.map((p) => [p.agentNo, p]))
+  const list = el('ul', 'rws-list')
+  for (const member of war.members) {
+    const p = names.get(member.agentNo)
+    const who = p?.isMe ? 'You' : esc(p?.codename || 'Teammate')
+    list.appendChild(el('li', member.played ? 'is-done' : '', `<span aria-hidden="true">${member.played ? '✓' : '○'}</span><b>${who}</b><i>${member.played ? 'Played' : 'Not yet'}</i>`))
+  }
+  block.appendChild(list)
+  if (myRow?.status === 'joined' && !myRow?.warPlayed && m.status !== 'complete') {
+    const actions = el('div', 'rws-actions')
+    if (!bombIsCharged()) {
+      actions.appendChild(el('p', 'rws-bomb', '⚡ Your ARMY Bomb isn’t charged. War of Cards needs a charged Bomb to play.'))
+      const charge = el('button', 'btn', 'Charge my Bomb')
+      charge.type = 'button'
+      charge.onclick = () => openAgentCharge()
+      actions.appendChild(charge)
+    }
+    const play = el('button', 'btn btn-primary', 'Play War of Cards')
+    play.type = 'button'
+    play.onclick = () => goRunAmi()
+    actions.appendChild(play)
+    actions.appendChild(el('p', 'muted', 'Winning isn’t needed. One game with your team counts for everyone at the table.'))
+    block.appendChild(actions)
+  }
+  return block
+}
+
 function reconnectPanel(d) {
   const box = el('div', 'card reconnect-card')
   trackEngagementOnce(`reconnect:${d.id}`, 'reconnect_opened', { screen: 'district', districtId: d.id })
@@ -1022,7 +1065,7 @@ function paintMissionPanel(box, d, res) {
     const others = (m.participants || []).filter((p) => !p.isMe && p.status === 'joined')
     const withWho = others.length ? ` with ${others.map((p) => esc(p.codename)).join(' and ')}` : ''
     const missionBody = m.sharedTrack
-      ? `Team up and take ${esc(m.sharedTrack.label)} to ${m.sharedTrack.target} combined plays.`
+      ? `Team up and take ${esc(m.sharedTrack.label)} to ${m.sharedTrack.target} combined plays.${m.warOfCards ? ' Then everyone plays one game of War of Cards.' : ''}`
       : m.checklist
         ? `Build a team of ${m.requiredAgents} agents. Each agent streams all ${m.checklist.total} tracks once.`
         : m.sharedTracks
@@ -1036,6 +1079,7 @@ function paintMissionPanel(box, d, res) {
     completeScores.appendChild(el('div', 'reconnect-score', `<b>${joinedCount}<i>/ ${m.requiredAgents}</i></b><span>ARMY together</span>`))
     if (m.sharedTrack) {
       completeScores.appendChild(el('div', 'reconnect-score', `<b>${m.sharedTrack.progress}<i>/ ${m.sharedTrack.target}</i></b><span>signal complete</span>`))
+      if (m.warOfCards) completeScores.appendChild(el('div', 'reconnect-score', `<b>${m.warOfCards.done}<i>/ ${m.warOfCards.total}</i></b><span>War of Cards</span>`))
     } else if (m.checklist) {
       completeScores.appendChild(el('div', 'reconnect-score', `<b>${joinedCount}<i>/ ${joinedCount}</i></b><span>lists cleared</span>`))
     } else if (m.sharedTracks) {
@@ -1045,7 +1089,8 @@ function paintMissionPanel(box, d, res) {
     if (m.sharedTracks) completeScoreline.appendChild(sharedSetlist(m.sharedTracks))
     box.appendChild(completeScoreline)
     box.appendChild(reconnectNextBlock(res.recruit ? 'Quest complete — thanks for helping' : 'Quest complete — finish the district',
-      m.sharedTrack ? `${esc(m.sharedTrack.label)} reached ${m.sharedTrack.target} combined plays${withWho}.`
+      m.sharedTrack && m.warOfCards ? `${esc(m.sharedTrack.label)} reached ${m.sharedTrack.target} combined plays and everyone played War of Cards${withWho}.`
+        : m.sharedTrack ? `${esc(m.sharedTrack.label)} reached ${m.sharedTrack.target} combined plays${withWho}.`
         : m.checklist ? `Everyone cleared all ${m.checklist.total} tracks${withWho}.`
         : m.sharedTracks ? `All ${m.sharedTracks.total} ${esc(m.sharedTracks.noun || 'songs')} reached ${m.sharedTracks.target}${withWho}.`
         : `You teamed up${withWho}.`))
@@ -1195,6 +1240,7 @@ function paintMissionPanel(box, d, res) {
     idleCount: idlers.length, isCreator: m.isCreator, cipher: m.cipher,
     sharedTrack: m.sharedTrack, checklist: m.checklist, sharedTracks: m.sharedTracks, myChecklistDone: myRow?.streams,
     recruit: res.recruit ? { districtName: districtDisplayName(d) } : null,
+    warOfCards: m.warOfCards, myWarPlayed: !!myRow?.warPlayed, bombActive: bombIsCharged(),
   })
   const nextTitle = esc(next.title)
   const nextBody = esc(next.body)
@@ -1211,11 +1257,19 @@ function paintMissionPanel(box, d, res) {
     scoreline.appendChild(el('div', 'reconnect-score', `
       <b>${st.progress}<i>/ ${st.target}</i></b><span>Streams</span>
     `))
-    const stBar = labeledBar(`${st.label} streams`, `${st.progress}/${st.target}`, pct, st.progress >= st.target)
+    const war = m.warOfCards || null
+    const stBar = labeledBar(war ? `Stage 1 · ${st.label} streams` : `${st.label} streams`, `${st.progress}/${st.target}`, pct, st.progress >= st.target)
     addMilestones(stBar, pct, m.id)
     progressHost.appendChild(stBar)
-    howNotes.appendChild(el('p', 'muted reconnect-together-note',
-      `Build a team of ${m.requiredAgents}. Once everyone accepts, all your ${esc(st.label)} streams add up. Reach ${st.target} together to complete the quest.`))
+    if (war) {
+      scoreline.appendChild(el('div', 'reconnect-score', war.unlocked
+        ? `<b>${war.done}<i>/ ${war.total}</i></b><span>Played</span>`
+        : `<b>🔒</b><span>War of Cards</span>`))
+      progressHost.appendChild(warStageBlock(war, m, myRow))
+    }
+    howNotes.appendChild(el('p', 'muted reconnect-together-note', war
+      ? `Build a team of ${m.requiredAgents}. Once everyone accepts, all your ${esc(st.label)} streams add up. Reaching ${st.target} opens War of Cards for all ${m.requiredAgents} of you for this quest; the quest completes once everyone has finished one game.`
+      : `Build a team of ${m.requiredAgents}. Once everyone accepts, all your ${esc(st.label)} streams add up. Reach ${st.target} together to complete the quest.`))
   } else if (res.variant === 'connect' && m.sharedTracks) {
     const ms = m.sharedTracks
     scoreline.appendChild(el('div', 'reconnect-score', ms.hidden

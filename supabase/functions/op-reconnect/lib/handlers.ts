@@ -8,6 +8,7 @@ import { ensureDailyRollups, computeStreak, awardStreakBadges, totalXp, spendabl
 import { awardDailySideMissionXp, awardWeeklySideMissionXp, buildSideMissions } from './side-missions.ts'
 import { albumForState } from './album.ts'
 import { runAmiTesterForState } from './run-ami.ts'
+import { warQuestPassForState } from './war-quest-pass.ts'
 import { warUnlockForState } from './war-of-cards.ts'
 import { freezeGoals, computeBaseline, districtProgress, districtDeadline, districtDeadlineExtraDays, filesRevealedCount, albumGoalStreamTotal, lapseChoiceOpen, LAPSE_CHOICE_DAYS } from './districts.ts'
 import { recordDistrictLapse } from './district-lapse-store.ts'
@@ -205,6 +206,8 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
   const album = await albumForState(supabase, player.agent_no, today, !!sideMissions.todayDone)
   // Whether the app shows War of Cards' way in (the server gate is run-ami.ts).
   const runAmiTester = await runAmiTesterForState(supabase, player.agent_no)
+  // A temporary War of Cards quest pass (Bangtan Seven Bridge), if any.
+  const warQuestPass = await warQuestPassForState(supabase, player.agent_no)
   // The one-time "War of Cards unlocked" pop-up (war-of-cards.ts), for a
   // full album, never a tester, until it has been shown on any device.
   const warUnlockDue = await warUnlockForState(supabase, player.agent_no, album, runAmiTester)
@@ -728,6 +731,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     sideMissions,
     album,
     runAmiTester,
+    warQuestPass,
     warUnlockDue,
     help,
     today: {

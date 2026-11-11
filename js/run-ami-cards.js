@@ -102,6 +102,7 @@ export const ERRORS = {
   already_seated: 'You are already in a room.',
   rate_limited: 'Too many tries. Wait a few minutes.',
   need_players: 'You need at least 2 agents to start.',
+  seat_not_allowed: 'Someone at the table has already played their quest game. Ask them to leave the table, then start again.',
   not_host: 'Only the host can start.',
   not_your_turn: 'Not your turn.',
   illegal_card: "That card can't be played now.",

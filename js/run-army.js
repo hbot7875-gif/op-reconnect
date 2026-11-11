@@ -45,7 +45,11 @@ export function openRunArmy() {
   markRunArmyOpened()
   const album = getState()?.album || null
   const count = Math.min(ALBUM_SIZE, Number(album?.count) || 0)
-  const open = !!getState()?.runAmiTester || !!album?.complete
+  const fullAccess = !!getState()?.runAmiTester || !!album?.complete
+  // A Bangtan Seven Bridge quest pass opens War of Cards for that quest's
+  // game only — the album and its covers stay exactly as they are.
+  const questPass = !fullAccess && !!getState()?.warQuestPass?.active
+  const open = fullAccess || questPass
   const sheet = el('div', 'sheet ra-sheet rarmy-sheet')
   sheet.innerHTML = `
     <span class="rarmy-eyebrow">🎮 ARMY games</span>
@@ -58,6 +62,7 @@ export function openRunArmy() {
         <span>Last-card game · 2–4 agents</span>
         <span>🏅 Win a game for today's Card Champion badge · one a day</span>
         <span>🏆 Every 10 wins: a Champion Pro badge</span>
+        ${questPass ? '<p class="rarmy-pass">🎟️ Quest pass: open for your ReConnect Quest game. Finish one game to clear your team’s War of Cards stage.</p>' : ''}
         ${open ? '' : `<p class="rarmy-lock">🔒 Unlocks once you collect all ${ALBUM_SIZE} BTS album covers: one for each daily Signal Sweep, or as a gift from a friend.</p>`}
       </div>
     </article>

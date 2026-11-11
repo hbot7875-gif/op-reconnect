@@ -40,6 +40,7 @@ const TEAM_STEPS = [
   ['Open the mission', 'A ReConnect quest does not pair you automatically.'],
   ['Invite or accept', 'Choose one waiting agent, or accept an invite you received. Accepting is enough—you do not also need to invite someone.'],
   ['Follow the mission card', 'Some missions complete when the invite is accepted; others combine both agents’ streams toward one shared target. Either way, completion counts for both.'],
+  ['Two-stage quests', 'Some quests have a second stage. In a War of Cards quest, reaching the team’s streaming target opens War of Cards for every teammate for that quest—no album needed—and each of you finishes one game. Winning isn’t needed, and one game together counts for everyone. Your own ARMY Bomb must be charged to play.'],
   ['Need to move on?', 'After 24 hours, Skip Quest can remove the ReConnect requirement from this district attempt. You must still finish its Track and Album goals.'],
   ['Skipped is not completed', 'It will not count as a completed ReConnect Quest. Mission Bond is only earned by completing one. Streams you already added stay counted for your teammates.'],
 ]

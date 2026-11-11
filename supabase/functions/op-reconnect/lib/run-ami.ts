@@ -15,6 +15,7 @@ import { resolveEquippedBadges } from './badge-profile.ts'
 import { RULES_VERSION } from './run-ami-rules.js'
 import { createRunAmiService, ROOM_CODE_ALPHABET } from './run-ami-service.js'
 import { createTesterService } from './run-ami-testers.js'
+import { warQuestPassAllows } from './war-quest-pass.ts'
 import { albumService } from './album.ts'
 
 function cryptoRng(): number {
@@ -259,8 +260,12 @@ const testers = (supabase: SupabaseDB) => createTesterService({ store: testerSto
 function service(supabase: SupabaseDB) {
   // In: a tester (AGENT000 or the rc_run_ami_testers list), or anyone
   // holding all 15 album covers.
-  const allowAgent = async (agentNo: string) =>
-    (await testers(supabase).isTester(agentNo).catch(() => false)) || albumService(supabase).isComplete(agentNo).catch(() => false)
+  // Or, for a quest pass only (war-quest-pass.ts): a teammate on a quest in
+  // its War of Cards stage, for that quest's game. The album is not touched.
+  const allowAgent = async (agentNo: string, route = 'getState') =>
+    (await testers(supabase).isTester(agentNo).catch(() => false))
+    || (await albumService(supabase).isComplete(agentNo).catch(() => false))
+    || warQuestPassAllows(supabase, agentNo, route)
   return createRunAmiService({ store: makeStore(supabase), rng: cryptoRng, randomCode, randomTopic, allowAgent })
 }
 

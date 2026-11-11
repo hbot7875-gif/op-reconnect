@@ -73,7 +73,7 @@ test('routes, gate and game state use the live list', () => {
   const runAmi = read('./run-ami.ts')
   const handlers = read('./handlers.ts')
   for (const r of ['runAmiTesters', 'runAmiTesterAdd', 'runAmiTesterRemove']) assert.match(index, new RegExp(`${r}: \\{ auth: 'agent'`))
-  assert.match(runAmi, /\(await testers\(supabase\)\.isTester\(agentNo\)\.catch\(\(\) => false\)\) \|\| albumService\(supabase\)\.isComplete\(agentNo\)/)
+  assert.match(runAmi, /\(await testers\(supabase\)\.isTester\(agentNo\)\.catch\(\(\) => false\)\)\s+\|\| \(await albumService\(supabase\)\.isComplete\(agentNo\)/)
   assert.doesNotMatch(runAmi, /isRunAmiTester/)
   assert.match(handlers, /const runAmiTester = await runAmiTesterForState\(supabase, player\.agent_no\)/)
 })

@@ -669,6 +669,7 @@
 .rarmy-game-text b { display: block; font-family: var(--disp); font-size: 14px; letter-spacing: 1.5px; color: var(--v-ink-1); }
 .rarmy-game-text span { display: block; margin-top: 2px; font-size: 12px; color: var(--v-ink-3); }
 .rarmy-lock { margin: 8px 0 0; font-size: 12.5px; line-height: 1.4; color: var(--v-ink-2); }
+.rarmy-pass { margin: 8px 0 0; font-size: 12.5px; line-height: 1.4; color: var(--v-ink-1, inherit); }
 .rarmy-fan { display: flex; justify-content: center; padding: 4px 0 6px; }
 .rarmy-fan .ra-card { --ra-cw: 40px; --ra-ch: 57px; margin-left: -16px; border-radius: 6px; transform-origin: 50% 120%; box-shadow: 0 4px 10px rgba(0,0,0,.45); }
 .rarmy-fan .ra-card:first-child { margin-left: 0; transform: rotate(-12deg) translateY(3px); }
