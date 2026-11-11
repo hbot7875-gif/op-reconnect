@@ -340,6 +340,13 @@ async function withoutStoredListens(supabase: SupabaseDB, agentNo: string, rows:
     .gte('listened_at', Math.min(...times) - COPY_WINDOW_SEC).lte('listened_at', Math.max(...times) + COPY_WINDOW_SEC)
     .limit(STORED_LOOKUP_LIMIT)
   const stored = (error || !data || data.length >= STORED_LOOKUP_LIMIT) ? [] : (data as StreamRow[])
+  // A stored LB row from before source_client was recorded: the provider's
+  // own response says which app sent it (same second, same title), so judge
+  // copies with that rather than with an unknown app (listen-copies.ts).
+  const appOf = new Map(rows.filter((r) => r.source_client).map((r) => [`${r.listened_at}|${r.track_name}`, r.source_client]))
+  for (const r of stored) {
+    if (r.source === 'listenbrainz' && !r.source_client) r.source_client = appOf.get(`${r.listened_at}|${r.track_name}`) || null
+  }
   const storedKeys = new Set(stored.map((r) => `${r.listened_at}|${r.track_name}`))
   const fresh = rows.filter((r) => !storedKeys.has(`${r.listened_at}|${r.track_name}`))
   if (!fresh.length) return fresh

@@ -24,9 +24,13 @@
 //    and are kept — two devices that happen to play the same song;
 //  - one report per feed per listen, so a song played twice is reported
 //    twice by each mirror and still counts twice.
-// Within ONE feed nothing ever collapses except exact duplicates (same
-// second, same title; fetchStreamRows): same-song gaps of 10-29 s are as
-// common there as gaps of 30-120 s, so a gap alone proves nothing.
+// The same song reported again at most SAME_LISTEN_GAP_SEC later is one
+// listen, from any feed (the same one included): nothing can be played twice
+// a second apart. Measured over a week: Web Scrobbler 183 same-song pairs at
+// exactly 1 s vs 8 at 2 s for one agent, the LB Last.fm importer 88 at 1 s
+// (it re-imports listens with a 1 s jitter). Beyond that gap, within ONE feed
+// nothing collapses: same-song gaps of 2-29 s are as common there as gaps of
+// 30-120 s, so a gap alone proves nothing.
 //
 // Musicat and Stats.fm are one feed each: Musicat merges Apple Music and
 // Spotify, and two services playing at once are two real plays.
@@ -43,6 +47,7 @@ export const MIRROR_MIN_CONSISTENT = 0.5
 export const OFFSET_TOLERANCE_SEC = 15
 export const MIRROR_MIN_PAIRS = 4
 export const TINY_DAY_GAP_SEC = 5
+export const SAME_LISTEN_GAP_SEC = 1
 
 /** Whether two feeds' paired reports that day are copies of each other. */
 export function feedsMirror(pairs: { key: string; offset: number }[], smallerFeed: number): boolean {
@@ -64,8 +69,8 @@ export function feedsMirror(pairs: { key: string; offset: number }[], smallerFee
 }
 
 /** The feed a row was reported through. ListenBrainz rows are split by the
- *  app that submitted them; a row stored before that was recorded falls back
- *  to one shared ListenBrainz feed. */
+ *  app that submitted them. A ListenBrainz row whose app is unknown (stored
+ *  before 2026-11-10 and not backfilled) gets UNKNOWN_FEED — see below. */
 export function feedOf(row: { source?: string | null; source_client?: string | null }): string {
   const source = row.source || 'live'
   if (source === 'listenbrainz') return `listenbrainz:${row.source_client || ''}`
@@ -78,6 +83,14 @@ export interface CopyCandidate {
   source?: string | null
   source_client?: string | null
 }
+
+/** ListenBrainz rows with no recorded app. These are NOT one feed: they mix
+ *  every app that wrote to the account, so treating them as one broke both
+ *  "one report per feed" and the mirror share (v402, 2026-11-11: copies
+ *  stored, genuine late listens dropped). They take no part in the mirror
+ *  test; a report from a known feed within TINY_DAY_GAP_SEC of one is the
+ *  same listen, and two unknown rows never collapse. */
+export const UNKNOWN_FEED = 'listenbrainz:'
 
 interface Item { index: number; ts: number; key: string; feed: string; keep: boolean }
 
@@ -125,7 +138,22 @@ export function copyIndexes<T extends CopyCandidate>(rows: T[], keepFirst?: (row
     else byDay.set(day, [item])
   })
   for (const items of byDay.values()) {
-    const live = items
+    // Same song again within SAME_LISTEN_GAP_SEC: one listen, any feed.
+    const lastBySong = new Map<string, Item>()
+    const live: Item[] = []
+    for (const item of items.slice().sort((x, y) => x.ts - y.ts || Number(y.keep) - Number(x.keep) || x.index - y.index)) {
+      const prev = lastBySong.get(item.key)
+      if (prev && item.ts - prev.ts <= SAME_LISTEN_GAP_SEC) {
+        if (item.keep && !prev.keep) {
+          copies.add(prev.index)
+          live[live.indexOf(prev)] = item
+          lastBySong.set(item.key, item)
+        } else copies.add(item.index)
+        continue
+      }
+      lastBySong.set(item.key, item)
+      live.push(item)
+    }
     // Copies across mirrored feeds.
     const byFeed = new Map<string, Item[]>()
     for (const item of live) {
@@ -133,7 +161,7 @@ export function copyIndexes<T extends CopyCandidate>(rows: T[], keepFirst?: (row
       if (list) list.push(item)
       else byFeed.set(item.feed, [item])
     }
-    const feeds = [...byFeed.keys()].sort()
+    const feeds = [...byFeed.keys()].filter((f) => f !== UNKNOWN_FEED).sort()
     // Largest feed first, so each listen keeps the report of the fullest feed
     // unless keepFirst says otherwise.
     feeds.sort((x, y) => byFeed.get(y)!.length - byFeed.get(x)!.length || (x < y ? -1 : 1))
@@ -150,6 +178,18 @@ export function copyIndexes<T extends CopyCandidate>(rows: T[], keepFirst?: (row
           dropped.add(drop)
           copies.add(drop.index)
         }
+      }
+    }
+    // Rows whose app is unknown: only a near-simultaneous report from a known
+    // feed is the same listen (one-to-one, nearest first).
+    const unknown = (byFeed.get(UNKNOWN_FEED) || []).filter((x) => !dropped.has(x))
+    if (unknown.length) {
+      const known = live.filter((x) => x.feed !== UNKNOWN_FEED && !dropped.has(x))
+      const near = pairUp(unknown, known).filter(([u, k]) => Math.abs(k.ts - u.ts) <= TINY_DAY_GAP_SEC)
+      for (const [u, k] of near) {
+        const drop = u.keep && !k.keep ? k : k.keep && !u.keep ? u : k
+        dropped.add(drop)
+        copies.add(drop.index)
       }
     }
   }

@@ -14,10 +14,17 @@ test('two apps reporting one ListenBrainz listen count once; a back-to-back repe
   assert.equal(withoutCopies([...reader, ...importer]).length, 5)
 })
 
-test('within one feed every play counts, however close (only exact duplicates collapse elsewhere)', () => {
+test('within one feed only a report 1 s after the last one is a resubmission; every other play counts', () => {
   const at = (t) => ({ track_name: 'Butter', listened_at: t, source: 'webhook' })
-  assert.equal(withoutCopies([at(100), at(101)]).length, 2)
+  assert.equal(withoutCopies([at(100), at(101)]).length, 1)
+  assert.equal(withoutCopies([at(100), at(102)]).length, 2)
   assert.equal(withoutCopies([at(100), at(115), at(264)]).length, 3)
+  // a 1 s jitter from another app is the same listen too
+  assert.equal(withoutCopies([at(100), { ...at(101), source: 'listenbrainz', source_client: 'ListenBrainz lastfm importer v2' }]).length, 1)
+  // a chain T, T+1, T+2: T+1 is T's resubmission; T+2 is 2 s after the kept one
+  assert.equal(withoutCopies([at(100), at(101), at(102)]).length, 2)
+  // the stored one is kept
+  assert.deepEqual([...copyIndexes([{ ...at(100), s: false }, { ...at(101), s: true }], (r) => r.s)], [0])
 })
 
 test('two devices looping one song with drifting offsets are two plays each time', () => {
@@ -255,4 +262,105 @@ test('late plays heard before an active district started go into its baseline, n
   assert.deepEqual(activationDayBaselineBump(new Map([['butter', 2], ['dynamite', 1]]), rows, goals, act), { 't:g1': 2, 'xp:goal-streams': 2 })
   // Only 1 added: at most 1 into the baseline.
   assert.deepEqual(activationDayBaselineBump(new Map([['butter', 1]]), rows, goals, act), { 't:g1': 1, 'xp:goal-streams': 1 })
+})
+
+test('rows with no recorded app are not one feed: copies of them need a near-simultaneous report', async () => {
+  const { UNKNOWN_FEED } = await import('./listen-copies.ts')
+  assert.equal(UNKNOWN_FEED, 'listenbrainz:')
+  // Historic rows of three apps, stored before the app was recorded.
+  const songs = ['Dynamite', 'Butter', 'Idol', 'Run', 'Fire', 'Spring Day']
+  const old = songs.map((n, i) => ({ track_name: n, listened_at: i * 400, source: 'listenbrainz', source_client: null, kept: true }))
+  // The importer re-reports four of them 1 s later, plus two genuinely new listens.
+  const fresh = [
+    ...old.slice(0, 4).map((r) => ({ ...r, listened_at: r.listened_at + 1, source_client: 'ListenBrainz lastfm importer v2', kept: false })),
+    { track_name: 'Butter', listened_at: 400 + 200, source: 'listenbrainz', source_client: 'listenbrainz', kept: false },
+    { track_name: 'Euphoria', listened_at: 3000, source: 'listenbrainz', source_client: 'listenbrainz', kept: false },
+  ]
+  const all = [...old, ...fresh]
+  const idx = copyIndexes(all, (r) => r.kept)
+  // The four 1-second copies go; the Butter played again 200 s later and Euphoria stay.
+  assert.deepEqual([...idx].sort((a, b) => a - b), [6, 7, 8, 9])
+  // Two unknown-app rows never collapse with each other.
+  assert.equal(withoutCopies([old[0], { ...old[0], listened_at: 2 }]).length, 2)
+})
+
+test('ingest learns the app of older stored ListenBrainz rows from the provider response', async () => {
+  const { fetchStreamRows } = await import('./streams.ts')
+  const now = Math.floor(Date.now() / 1000)
+  const t0 = now - 7200
+  const names = ['Dynamite', 'Butter', 'Idol', 'Run', 'Fire', 'Spring Day', 'Euphoria', 'Mic Drop', 'DNA', 'Fake Love', 'Life Goes On', 'Permission to Dance']
+  // Stored before the app was recorded: a mix of the reader's and Pano's reports.
+  const stored = names.map((name, i) => ({ listened_at: t0 + i * 400, track_name: name, source: 'listenbrainz', source_client: null }))
+  const upserts = []
+  const db = {
+    from(table) {
+      const state = { op: 'select' }
+      const chain = {
+        select() { return chain }, eq() { return chain }, gte() { return chain }, lte() { return chain },
+        in() { return chain }, order() { return chain }, limit() { return chain }, range() { return chain },
+        upsert(rows) { state.op = 'upsert'; upserts.push(...rows); return chain },
+        update() { state.op = 'update'; return chain },
+        maybeSingle: async () => ({ data: table === 'rc_agents' ? { retired_at: null } : null, error: null }),
+        then(resolve) {
+          if (state.op === 'upsert') return resolve({ data: [] })
+          if (table === 'rc_scrobbles') return resolve({ data: stored.map((r) => ({ ...r })), error: null })
+          return resolve({ data: null, error: null })
+        },
+      }
+      return chain
+    },
+  }
+  const md = (name, client) => ({ track_name: name, artist_name: 'BTS', additional_info: { submission_client: client } })
+  const listens = [
+    // the stored ones, as the provider reports them (reader for even, Pano for odd)
+    ...stored.map((r, i) => ({ listened_at: r.listened_at, track_metadata: md(r.track_name, i % 2 ? 'Pano Scrobbler' : 'listenbrainz') })),
+    // the importer's end-stamped copies of every one, 170 s later
+    ...stored.map((r) => ({ listened_at: r.listened_at + 170, track_metadata: md(r.track_name, 'ListenBrainz lastfm importer v2') })),
+    // one listen nobody stored yet
+    { listened_at: t0 + 5000, track_metadata: md('Spring Day', 'listenbrainz') },
+  ]
+  const realFetch = globalThis.fetch
+  globalThis.fetch = async () => new Response(JSON.stringify({ payload: { listens } }))
+  try {
+    await fetchStreamRows(db, { agent_no: 'AGENT900', lb_username: 'x', stream_source_preference: 'lb', statsfm_username: null, musicat_public_id: null }, t0 - 600, now, 1, { useStoredCoverage: false })
+  } finally { globalThis.fetch = realFetch }
+  assert.deepEqual(upserts.map((r) => r.track_name), ['Spring Day'])
+})
+
+test('a genuine late listen next to an older stored listen of the same app is stored, not taken for a copy', async () => {
+  const { fetchStreamRows } = await import('./streams.ts')
+  const now = Math.floor(Date.now() / 1000)
+  const t0 = now - 14400
+  // The LB reader's plays of Butter on loop, every 340 s; the ones at even
+  // slots were stored long ago (before the app was recorded), the ones in
+  // between arrived late and were never stored.
+  const storedRows = Array.from({ length: 10 }, (_, i) => ({ listened_at: t0 + i * 340, track_name: 'Butter', source: 'listenbrainz', source_client: null }))
+  const lateRows = Array.from({ length: 10 }, (_, i) => ({ listened_at: t0 + i * 340 + 170, track_name: 'Butter' }))
+  const upserts = []
+  const db = {
+    from(table) {
+      const state = { op: 'select' }
+      const chain = {
+        select() { return chain }, eq() { return chain }, gte() { return chain }, lte() { return chain },
+        in() { return chain }, order() { return chain }, limit() { return chain }, range() { return chain },
+        upsert(rows) { state.op = 'upsert'; upserts.push(...rows); return chain },
+        update() { state.op = 'update'; return chain },
+        maybeSingle: async () => ({ data: table === 'rc_agents' ? { retired_at: null } : null, error: null }),
+        then(resolve) {
+          if (state.op === 'upsert') return resolve({ data: [] })
+          if (table === 'rc_scrobbles') return resolve({ data: storedRows.map((r) => ({ ...r })), error: null })
+          return resolve({ data: null, error: null })
+        },
+      }
+      return chain
+    },
+  }
+  const md = (name) => ({ track_name: name, artist_name: 'BTS', additional_info: { submission_client: 'listenbrainz' } })
+  const listens = [...storedRows, ...lateRows].map((r) => ({ listened_at: r.listened_at, track_metadata: md(r.track_name) }))
+  const realFetch = globalThis.fetch
+  globalThis.fetch = async () => new Response(JSON.stringify({ payload: { listens } }))
+  try {
+    await fetchStreamRows(db, { agent_no: 'AGENT900', lb_username: 'x', stream_source_preference: 'lb', statsfm_username: null, musicat_public_id: null }, t0 - 600, now, 1, { useStoredCoverage: false })
+  } finally { globalThis.fetch = realFetch }
+  assert.equal(upserts.length, 10)
 })
