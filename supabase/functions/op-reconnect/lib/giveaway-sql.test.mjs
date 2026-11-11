@@ -1,5 +1,6 @@
-// PC Giveaway — migration 20261109180000 against a real Postgres engine
-// (PGlite): the review list's rules, the freeze lock and the one-time draw.
+// PC Giveaway — migrations 20261109180000 + 20261111120000 against a real
+// Postgres engine (PGlite): the review list's rules, the freeze lock, the
+// one-time draw, and that the faster review-list query matches the original.
 //
 //   PGLITE_MODULE=/path/to/node_modules/@electric-sql/pglite/dist/index.js node --test <this file>
 // Without PGLITE_MODULE the suite is skipped (and says so).
@@ -8,7 +9,8 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 
-const MIGRATION = readFileSync(new URL('../../../migrations/20261109180000_rc_pc_giveaway.sql', import.meta.url), 'utf8')
+const BASE = readFileSync(new URL('../../../migrations/20261109180000_rc_pc_giveaway.sql', import.meta.url), 'utf8')
+const FAST = readFileSync(new URL('../../../migrations/20261111120000_rc_giveaway_candidates_fast.sql', import.meta.url), 'utf8')
 const modulePath = process.env.PGLITE_MODULE
 const skip = modulePath ? false : 'set PGLITE_MODULE to run the SQL suite'
 const C = 'mama_r2'
@@ -17,7 +19,7 @@ const RULES = { vote_mission: 'mnet', vote_num: 8, vote_den: 12, stream_num: 6, 
 const DAYS = Array.from({ length: 12 }, (_, i) => new Date(Date.UTC(2026, 9, 28 + i)).toISOString().slice(0, 10))
 const kstNoon = (day) => Math.floor(Date.parse(`${day}T12:00:00+09:00`) / 1000)
 
-async function setup() {
+async function setup({ fast = true } = {}) {
   const { PGlite } = await import(pathToFileURL(modulePath).href)
   const db = new PGlite()
   await db.exec(`
@@ -35,7 +37,8 @@ async function setup() {
     insert into rc_vote_campaigns values ('${C}', '2026-10-28T18:00:00+09:00', '2026-11-08T23:59:59+09:00',
       '{"teams":[{"id":"aliens","label":"ALIENS"},{"id":"hooligans","label":"HOOLIGANS"}]}');
   `)
-  await db.exec(MIGRATION)
+  await db.exec(BASE)
+  if (fast) await db.exec(FAST)
   return db
 }
 
@@ -120,4 +123,39 @@ test('freeze locks the reviewed list; one official draw only', { skip }, async (
   await assert.rejects(db.query(`update rc_giveaway_draws set winner_index = 0 where giveaway_id = 'pc1'`), /giveaway_draw_is_final/)
   await assert.rejects(db.query(`delete from rc_giveaway_draws where giveaway_id = 'pc1'`), /giveaway_draw_is_final/)
   assert.equal((await db.query(`select status from rc_giveaways where id = 'pc1'`)).rows[0].status, 'drawn')
+})
+
+test('the faster review list gives exactly the original answer', { skip }, async () => {
+  // Original query first, then the same data through the replacement.
+  const db = await setup({ fast: false })
+  let seed = 20261111
+  const rnd = (n) => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed % n }
+  const sources = ['webhook', 'lb-like', 'listenbrainz', 'musicat']
+  const songs = ['Butter', 'butter', 'Dynamite', 'SWIM', 'Aliens']
+  for (let a = 0; a < 14; a++) {
+    const agent = `R${a}`
+    const joinedDay = a % 4 === 0 ? DAYS[rnd(12)] : null
+    await member(db, agent, joinedDay ? { via: 'choice', joined: joinedDay } : {})
+    await votes(db, agent, DAYS.filter(() => rnd(3) > 0))
+    // Sparse days, so some members miss the streaming threshold.
+    for (const d of DAYS.filter(() => rnd(4) === 0)) {
+      // Plays near midnight KST, copies a few seconds to ~12 minutes later
+      // from other sources, same-second ties, and real repeats.
+      let t = kstNoon(d) + 12 * 3600 - 1800 + rnd(3600)
+      for (let k = 0; k < 6; k++) {
+        const song = songs[rnd(songs.length)]
+        const src = sources[rnd(sources.length)]
+        await db.query('insert into rc_scrobbles (agent_no, source, track_name, listened_at) values ($1, $2, $3, $4)', [agent, src, song, t])
+        if (rnd(2)) await db.query('insert into rc_scrobbles (agent_no, source, track_name, listened_at) values ($1, $2, $3, $4)',
+          [agent, sources[rnd(sources.length)], song, t + [0, 0, 3, 90, 200, 599, 600, 601, 720][rnd(9)]])
+        t += [0, 30, 180, 240, 700][rnd(5)]
+      }
+    }
+    if (rnd(3) === 0) await db.query('insert into rc_daily_activity values ($1, $2, 12) on conflict do nothing', [agent, DAYS[rnd(12)]])
+  }
+  const before = await candidates(db)
+  await db.exec(FAST)
+  const after = await candidates(db)
+  assert.ok(before.some((c) => c.eligible) && before.some((c) => !c.eligible), 'fixture covers both outcomes')
+  assert.deepEqual(after, before)
 })
