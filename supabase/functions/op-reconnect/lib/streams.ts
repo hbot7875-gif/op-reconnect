@@ -326,20 +326,34 @@ async function persistScrobbles(supabase: SupabaseDB, agentNo: string, rows: Str
  *  Copies are dropped HERE, not only when counting, because Red Zone,
  *  ReCelebrate battles, ReConnect's since-join counts and district
  *  contributions all read rc_scrobbles rows directly.
- *  Fails open on the stored-row lookup (sends everything new, still minus
- *  copies within the batch): the upsert ignores exact duplicates. */
-// Two days of the heaviest ListenBrainz account, every app's copy included, is ~5k.
-const STORED_LOOKUP_LIMIT = 20000
+ *
+ *  The stored rows are read in pages: the API returns at most 1000 rows per
+ *  request whatever the query asks for, and a heavy listener has several
+ *  thousand in a week. FAILS CLOSED: if the stored rows cannot all be read
+ *  (an error, or more than STORED_LOOKUP_LIMIT), nothing new is stored this
+ *  run — judging copies against a partial set would store them. Nothing is
+ *  lost: the capture re-reads the same window on its next run. */
+const STORED_LOOKUP_PAGE = 1000
+const STORED_LOOKUP_LIMIT = 50000
 async function withoutStoredListens(supabase: SupabaseDB, agentNo: string, rows: StreamRow[]): Promise<StreamRow[]> {
   const times = rows.map((r) => Number(r.listened_at)).filter(Number.isFinite)
   if (!times.length) return rows
   // A copy sits at most COPY_WINDOW_SEC from its listen; read that far past
   // the batch so a copy at the edge still finds it.
-  const { data, error } = await supabase.from('rc_scrobbles')
-    .select('listened_at, track_name, source, source_client').eq('agent_no', agentNo)
-    .gte('listened_at', Math.min(...times) - COPY_WINDOW_SEC).lte('listened_at', Math.max(...times) + COPY_WINDOW_SEC)
-    .limit(STORED_LOOKUP_LIMIT)
-  const stored = (error || !data || data.length >= STORED_LOOKUP_LIMIT) ? [] : (data as StreamRow[])
+  const from = Math.min(...times) - COPY_WINDOW_SEC
+  const to = Math.max(...times) + COPY_WINDOW_SEC
+  const stored: StreamRow[] = []
+  for (let offset = 0; ; offset += STORED_LOOKUP_PAGE) {
+    if (offset >= STORED_LOOKUP_LIMIT) return []
+    const { data, error } = await supabase.from('rc_scrobbles')
+      .select('listened_at, track_name, source, source_client').eq('agent_no', agentNo)
+      .gte('listened_at', from).lte('listened_at', to)
+      .order('listened_at', { ascending: true }).order('id', { ascending: true })
+      .range(offset, offset + STORED_LOOKUP_PAGE - 1)
+    if (error || !data) return []
+    stored.push(...(data as StreamRow[]))
+    if (data.length < STORED_LOOKUP_PAGE) break
+  }
   // A stored LB row from before source_client was recorded: the provider's
   // own response says which app sent it (same second, same title), so judge
   // copies with that rather than with an unknown app (listen-copies.ts).
@@ -351,8 +365,24 @@ async function withoutStoredListens(supabase: SupabaseDB, agentNo: string, rows:
   const fresh = rows.filter((r) => !storedKeys.has(`${r.listened_at}|${r.track_name}`))
   if (!fresh.length) return fresh
   const all = [...stored.map((r) => ({ ...r, kept: true })), ...fresh.map((r) => ({ ...r, kept: false }))]
-  const copies = copyIndexes(all, (r) => r.kept)
-  return fresh.filter((_, i) => !copies.has(stored.length + i))
+  // acrossDays: a day at the edge of the capture window has too few pairs to
+  // judge on its own (copies dropped on earlier runs are not stored).
+  const copies = copyIndexes(all, (r) => r.kept, { acrossDays: true })
+  let chosen = fresh.filter((_, i) => !copies.has(stored.length + i))
+  // Finish with the judgment counting will make of what is actually stored
+  // (no acrossDays, no copies that were about to be dropped): nothing is
+  // stored that counting would not count, so features that read rows
+  // directly (district contributions, ReConnect since-join counts, Red Zone)
+  // always agree with the counted plays. Dropping one copy can change the
+  // pairing evidence, so repeat until nothing more is dropped.
+  for (let round = 0; round < 10 && chosen.length; round++) {
+    const after = [...stored.map((r) => ({ ...r, kept: true })), ...chosen.map((r) => ({ ...r, kept: false }))]
+    const again = copyIndexes(after, (r) => r.kept)
+    const next = chosen.filter((_, i) => !again.has(stored.length + i))
+    if (next.length === chosen.length) break
+    chosen = next
+  }
+  return chosen
 }
 
 /** KST days that a newly stored play belongs to and that were already

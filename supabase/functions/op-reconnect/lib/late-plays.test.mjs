@@ -364,3 +364,141 @@ test('a genuine late listen next to an older stored listen of the same app is st
   } finally { globalThis.fetch = realFetch }
   assert.equal(upserts.length, 10)
 })
+
+function pagedDb(storedRows, { failAt = -1 } = {}) {
+  const upserts = []
+  let reads = 0
+  const db = {
+    upserts,
+    get reads() { return reads },
+    from(table) {
+      const q = { op: 'select', range: null }
+      const chain = {
+        select() { return chain }, eq() { return chain }, gte() { return chain }, lte() { return chain },
+        in() { return chain }, order() { return chain }, limit() { return chain },
+        range(a, b) { q.range = [a, b]; return chain },
+        upsert(rows) { q.op = 'upsert'; upserts.push(...rows); return chain },
+        update() { q.op = 'update'; return chain },
+        maybeSingle: async () => ({ data: table === 'rc_agents' ? { retired_at: null } : null, error: null }),
+        then(resolve) {
+          if (q.op === 'upsert') return resolve({ data: [] })
+          if (table === 'rc_scrobbles') {
+            reads++
+            if (reads - 1 === failAt) return resolve({ data: null, error: { message: 'boom' } })
+            // the API never returns more than 1000 rows per request
+            const [a, b] = q.range || [0, 999]
+            return resolve({ data: storedRows.slice(a, Math.min(b + 1, a + 1000)).map((r) => ({ ...r })), error: null })
+          }
+          return resolve({ data: null, error: null })
+        },
+      }
+      return chain
+    },
+  }
+  return db
+}
+
+test('the stored-row lookup reads every page, so a heavy listener\'s copies are still caught', async () => {
+  const { fetchStreamRows } = await import('./streams.ts')
+  const { kstDayBounds, todayKst, addDaysStr } = await import('./kst.ts')
+  const now = Math.floor(Date.now() / 1000)
+  const t0 = kstDayBounds(addDaysStr(todayKst(), -6)).fromTs
+  // 2,500 stored listens (reader), one every 200 s
+  const stored = Array.from({ length: 2500 }, (_, i) => ({ listened_at: t0 + i * 200, track_name: `Song ${i % 40}`, source: 'listenbrainz', source_client: 'listenbrainz' }))
+  const md = (name, client) => ({ track_name: name, artist_name: 'BTS', additional_info: { submission_client: client } })
+  // the provider has them, the importer's end-stamped copies of all of them, and one new listen
+  const listens = [
+    ...stored.map((r) => ({ listened_at: r.listened_at, track_metadata: md(r.track_name, 'listenbrainz') })),
+    ...stored.map((r) => ({ listened_at: r.listened_at + 170, track_metadata: md(r.track_name, 'ListenBrainz lastfm importer v2') })),
+    { listened_at: t0 + 2500 * 200 + 50, track_metadata: md('Song 0', 'listenbrainz') },
+  ].sort((a, b) => b.listened_at - a.listened_at)
+  const db = pagedDb(stored)
+  const realFetch = globalThis.fetch
+  globalThis.fetch = async (url) => { const max = Number(/max_ts=(\d+)/.exec(String(url))[1]); return new Response(JSON.stringify({ payload: { listens: listens.filter((l) => l.listened_at <= max).slice(0, 1000) } })) }
+  try {
+    await fetchStreamRows(db, { agent_no: 'AGENT900', lb_username: 'x', stream_source_preference: 'lb', statsfm_username: null, musicat_public_id: null }, t0 - 600, now, 100, { useStoredCoverage: false })
+  } finally { globalThis.fetch = realFetch }
+  assert.ok(db.reads >= 3, `read ${db.reads} pages`)
+  assert.equal(db.upserts.length, 1)
+})
+
+test('if the stored rows cannot all be read, nothing new is stored this run', async () => {
+  const { fetchStreamRows } = await import('./streams.ts')
+  const now = Math.floor(Date.now() / 1000)
+  const stored = Array.from({ length: 1500 }, (_, i) => ({ listened_at: now - 86400 + i * 50, track_name: 'Butter', source: 'listenbrainz', source_client: 'listenbrainz' }))
+  const db = pagedDb(stored, { failAt: 1 })
+  const realFetch = globalThis.fetch
+  globalThis.fetch = async () => new Response(JSON.stringify({ payload: { listens: [{ listened_at: now - 100, track_metadata: { track_name: 'Idol', artist_name: 'BTS', additional_info: { submission_client: 'listenbrainz' } } }] } }))
+  try {
+    await fetchStreamRows(db, { agent_no: 'AGENT900', lb_username: 'x', stream_source_preference: 'lb', statsfm_username: null, musicat_public_id: null }, now - 86400 - 600, now, 1, { useStoredCoverage: false })
+  } finally { globalThis.fetch = realFetch }
+  assert.equal(db.upserts.length, 0)
+})
+
+test('a thin day at the edge of a capture borrows the mirror verdict of the whole batch (ingest only)', async () => {
+  const { kstDayBounds } = await import('./kst.ts')
+  const d1 = kstDayBounds('2026-11-05').fromTs, d2 = kstDayBounds('2026-11-06').fromTs
+  const songs = ['Dynamite', 'Butter', 'Idol', 'Run', 'Fire', 'DNA', 'Euphoria', 'Mic Drop']
+  const reader = (t, n) => ({ track_name: n, listened_at: t, source: 'listenbrainz', source_client: 'listenbrainz' })
+  const importer = (t, n) => ({ track_name: n, listened_at: t, source: 'listenbrainz', source_client: 'ListenBrainz lastfm importer v2' })
+  // Day 1: the importer copies every listen 170 s later (plenty of evidence).
+  const day1 = songs.flatMap((n, i) => [reader(d1 + 3600 + i * 600, n), importer(d1 + 3600 + i * 600 + 170, n)])
+  // Day 2, at the edge of the window: two listens and their copies.
+  const day2 = [reader(d2 + 82000, 'Dynamite'), importer(d2 + 82170, 'Dynamite'), reader(d2 + 82600, 'Butter'), importer(d2 + 82770, 'Butter')]
+  const rows = [...day1, ...day2]
+  const thin = (idx) => [...idx].filter((i) => i >= day1.length).length
+  // Counting (one day's own evidence): too few pairs on day 2, so nothing is taken for a copy there.
+  assert.equal(thin(copyIndexes(rows)), 0)
+  // Ingest: the two 170 s copies on day 2 are recognised from day 1's pattern.
+  assert.equal(thin(copyIndexes(rows, undefined, { acrossDays: true })), 2)
+  // A genuine replay on day 2 at an unusual offset is kept.
+  const replay = [...rows, reader(d2 + 83500, 'Idol'), importer(d2 + 83500 + 400, 'Idol')]
+  const idx = copyIndexes(replay, undefined, { acrossDays: true })
+  assert.equal(idx.has(replay.length - 1), false)
+})
+
+test('property: nothing ingest stores is a copy in the eyes of counting (randomised multi-app histories)', async () => {
+  const { fetchStreamRows } = await import('./streams.ts')
+  const { kstDayBounds, todayKst, addDaysStr } = await import('./kst.ts')
+  let seed = 20261111
+  const rand = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648
+  const songs = ['Butter', 'Dynamite', 'Idol', 'Run', 'Fire', 'DNA', 'Euphoria', 'Mic Drop', 'Danger', 'Spring Day']
+  const apps = ['listenbrainz', 'ListenBrainz lastfm importer v2', 'Pano Scrobbler']
+  for (let trial = 0; trial < 12; trial++) {
+    const now = Math.floor(Date.now() / 1000)
+    const start = kstDayBounds(addDaysStr(todayKst(), -3)).fromTs + Math.floor(rand() * 80000)
+    // real listens, some repeated back to back
+    const listens = []
+    let t = start
+    while (t < now - 3600) { const song = songs[Math.floor(rand() * songs.length)]; listens.push({ t, song }); t += 150 + Math.floor(rand() * 900); if (rand() < 0.2) { listens.push({ t, song }); t += 200 } }
+    // each app reports a share of them with its own steady offset (start/end stamps), sometimes a 1 s jitter repeat
+    const reports = []
+    apps.forEach((app, k) => {
+      const share = [1, 0.9 * rand() + 0.1, rand()][k]
+      for (const l of listens) if (rand() < share) {
+        const ts = l.t + [0, 170, 2][k]
+        reports.push({ listened_at: ts, name: l.song, app })
+        if (k === 1 && rand() < 0.05) reports.push({ listened_at: ts + 1, name: l.song, app })
+      }
+    })
+    // half of what existed before the window was already stored (apps unknown)
+    const cut = start + 86400
+    const seen = new Set()
+    const stored = reports.filter((r) => r.listened_at < cut && rand() < 0.5).filter((r) => { const k = `${r.listened_at}|${r.name}`; if (seen.has(k)) return false; seen.add(k); return true })
+      .map((r) => ({ listened_at: r.listened_at, track_name: r.name, source: 'listenbrainz', source_client: null }))
+      .sort((a, b) => a.listened_at - b.listened_at)
+    const db = pagedDb(stored)
+    const api = reports.map((r) => ({ listened_at: r.listened_at, track_metadata: { track_name: r.name, artist_name: 'BTS', additional_info: { submission_client: r.app } } })).sort((a, b) => b.listened_at - a.listened_at)
+    const realFetch = globalThis.fetch
+    globalThis.fetch = async (url) => { const max = Number(/max_ts=(\d+)/.exec(String(url))[1]); return new Response(JSON.stringify({ payload: { listens: api.filter((l) => l.listened_at <= max).slice(0, 1000) } })) }
+    try {
+      await fetchStreamRows(db, { agent_no: 'AGENT900', lb_username: 'x', stream_source_preference: 'lb', statsfm_username: null, musicat_public_id: null }, start - 600, now, 100, { useStoredCoverage: false })
+    } finally { globalThis.fetch = realFetch }
+    // counting's view: stored rows (apps learnt from the provider, as ingest does) + what was stored now
+    const appOf = new Map(reports.map((r) => [`${r.listened_at}|${r.name}`, r.app]))
+    const after = [...stored.map((r) => ({ ...r, source_client: appOf.get(`${r.listened_at}|${r.track_name}`) || null, kept: true })), ...db.upserts.map((r) => ({ ...r, kept: false }))]
+    const idx = copyIndexes(after, (r) => r.kept)
+    const bad = db.upserts.filter((_, i) => idx.has(stored.length + i)).length
+    assert.equal(bad, 0, `trial ${trial}: ${bad} stored rows are copies`)
+  }
+})

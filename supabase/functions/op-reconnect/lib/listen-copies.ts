@@ -124,8 +124,17 @@ function pairUp(a: Item[], b: Item[]): [Item, Item][] {
  *  `keepFirst` marks rows that must be the kept report (already stored or
  *  already counted), the copy dropped is always the other one. */
 /** `loose` (audits only, never live counting): treat ANY two feeds as
- *  mirrors, i.e. the lower bound of how many listens the rows can be. */
-export function copyIndexes<T extends CopyCandidate>(rows: T[], keepFirst?: (row: T) => boolean, opts: { loose?: boolean } = {}): Set<number> {
+ *  mirrors, i.e. the lower bound of how many listens the rows can be.
+ *
+ *  `acrossDays` (ingest): whether two apps mirror each other is a property of
+ *  the account's setup, not of one day. A capture window starts mid-day, and
+ *  copies dropped on earlier runs are not stored, so a day can hold too few
+ *  pairs to judge on its own (fewer than MIRROR_MIN_PAIRS). On such a day,
+ *  if the two feeds mirror across the whole input, a pair is a copy when its
+ *  offset matches that song's usual offset across the input (or is at most
+ *  TINY_DAY_GAP_SEC). Counting never passes it, so a counted day is always
+ *  judged on its own evidence. */
+export function copyIndexes<T extends CopyCandidate>(rows: T[], keepFirst?: (row: T) => boolean, opts: { loose?: boolean; acrossDays?: boolean } = {}): Set<number> {
   const copies = new Set<number>()
   const byDay = new Map<string, Item[]>()
   rows.forEach((row, index) => {
@@ -137,6 +146,38 @@ export function copyIndexes<T extends CopyCandidate>(rows: T[], keepFirst?: (row
     if (list) list.push(item)
     else byDay.set(day, [item])
   })
+  // acrossDays: each feed pair's pairs over the whole input, in a fixed
+  // orientation (alphabetical feed first), and that pair's verdict.
+  const across = new Map<string, { mirror: boolean; songOffset: Map<string, number> }>()
+  if (opts.acrossDays && byDay.size > 1) {
+    const acc = new Map<string, { pairs: { key: string; offset: number }[]; smaller: number }>()
+    for (const items of byDay.values()) {
+      const byFeedAll = new Map<string, Item[]>()
+      for (const item of items) if (item.feed !== UNKNOWN_FEED) {
+        const list = byFeedAll.get(item.feed)
+        if (list) list.push(item)
+        else byFeedAll.set(item.feed, [item])
+      }
+      const names = [...byFeedAll.keys()].sort()
+      for (let i = 0; i < names.length; i++) for (let j = i + 1; j < names.length; j++) {
+        const a = byFeedAll.get(names[i])!, b = byFeedAll.get(names[j])!
+        const k = `${names[i]}\u0000${names[j]}`
+        const e = acc.get(k) || { pairs: [], smaller: 0 }
+        for (const [x, y] of pairUp(a, b)) e.pairs.push({ key: x.key, offset: y.ts - x.ts })
+        e.smaller += Math.min(a.length, b.length)
+        acc.set(k, e)
+      }
+    }
+    for (const [k, e] of acc) {
+      const mirror = e.pairs.length >= MIRROR_MIN_PAIRS && feedsMirror(e.pairs, e.smaller)
+      const bySong = new Map<string, number[]>()
+      for (const p of e.pairs) { const l = bySong.get(p.key); if (l) l.push(p.offset); else bySong.set(p.key, [p.offset]) }
+      const songOffset = new Map<string, number>()
+      for (const [key, offs] of bySong) { const sorted = offs.slice().sort((x, y) => x - y); songOffset.set(key, sorted[Math.floor(sorted.length / 2)]) }
+      across.set(k, { mirror, songOffset })
+    }
+  }
+
   for (const items of byDay.values()) {
     // Same song again within SAME_LISTEN_GAP_SEC: one listen, any feed.
     const lastBySong = new Map<string, Item>()
@@ -171,8 +212,18 @@ export function copyIndexes<T extends CopyCandidate>(rows: T[], keepFirst?: (row
         const a = byFeed.get(feeds[i])!.filter((x) => !dropped.has(x))
         const b = byFeed.get(feeds[j])!.filter((x) => !dropped.has(x))
         if (!a.length || !b.length) continue
-        const pairs = pairUp(a, b)
-        if (!opts.loose && !feedsMirror(pairs.map(([x, y]) => ({ key: x.key, offset: y.ts - x.ts })), Math.min(a.length, b.length))) continue
+        let pairs = pairUp(a, b)
+        if (!opts.loose && !feedsMirror(pairs.map(([x, y]) => ({ key: x.key, offset: y.ts - x.ts })), Math.min(a.length, b.length))) {
+          // A thin day borrows the verdict of the whole input (acrossDays).
+          const flip = feeds[i] > feeds[j]
+          const g = pairs.length < MIRROR_MIN_PAIRS ? across.get(flip ? `${feeds[j]}\u0000${feeds[i]}` : `${feeds[i]}\u0000${feeds[j]}`) : undefined
+          if (!g?.mirror) continue
+          pairs = pairs.filter(([x, y]) => {
+            const offset = flip ? x.ts - y.ts : y.ts - x.ts
+            const usual = g.songOffset.get(x.key)
+            return Math.abs(offset) <= TINY_DAY_GAP_SEC || (usual !== undefined && Math.abs(offset - usual) <= OFFSET_TOLERANCE_SEC)
+          })
+        }
         for (const [x, y] of pairs) {
           const drop = y.keep && !x.keep ? x : y
           dropped.add(drop)
@@ -197,7 +248,7 @@ export function copyIndexes<T extends CopyCandidate>(rows: T[], keepFirst?: (row
 }
 
 /** The rows with every second report of a listen removed. */
-export function withoutCopies<T extends CopyCandidate>(rows: T[], keepFirst?: (row: T) => boolean, opts: { loose?: boolean } = {}): T[] {
+export function withoutCopies<T extends CopyCandidate>(rows: T[], keepFirst?: (row: T) => boolean, opts: { loose?: boolean; acrossDays?: boolean } = {}): T[] {
   const copies = copyIndexes(rows, keepFirst, opts)
   return copies.size ? rows.filter((_, index) => !copies.has(index)) : rows
 }
