@@ -386,6 +386,10 @@ const ROUTES: Record<string, Route> = {
   cronInactiveReminders: { auth: 'cron', handler: (sb, p) => sendInactiveReminders(sb, p) },
   adminResetAgentXp: { auth: 'admin', handler: (sb, p) => adminResetAgentXp(sb, p) },
   adminSyncAllStreams: { auth: 'admin', handler: (sb, p) => adminSyncAllStreams(sb, p) },
+  // The same sync from pg_cron, one slice of agents per call (migration
+  // 20261110150500). GitHub's hourly schedule fired every 4-8 hours and a
+  // whole-fleet call often ran out of worker resources.
+  cronSyncAllStreams: { auth: 'cron', handler: (sb, p) => adminSyncAllStreams(sb, p) },
   // Called by Supabase Cron with a dedicated token generated in database
   // Vault by the scheduler migration.
   // This captures provider rows only; hourly adminSyncAllStreams still owns

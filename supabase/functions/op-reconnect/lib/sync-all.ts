@@ -50,13 +50,26 @@ interface CoverageInput {
 // are ignored on insert.
 export const MUSICAT_LATE_LOOKBACK_SEC = 24 * 3600
 
+// ListenBrainz takes listens from every app that writes to the account, and
+// the Last.fm importer and LB's Spotify reader deliver in batches hours
+// late, behind listens already captured. Reading only from the checkpoint
+// skipped them (AGENT110: 226 listens in two weeks). Measured over Oct 7 -
+// Nov 10, of the listens that landed behind a newer one: 87.5% within 3 h,
+// 98.4% within 24 h, 99.8% within 48 h, all within 7 days. Every run re-reads
+// two days; one run a day re-reads a week. Copies the apps make of each
+// other's listens are stored but counted once (listen-copies.ts).
+export const LISTENBRAINZ_LATE_LOOKBACK_SEC = 48 * 3600
+export const LISTENBRAINZ_DEEP_LOOKBACK_SEC = 7 * 86400
+
 /** Where a capture run starts reading, exported for regression tests. */
-export function captureFromTs(source: ScheduledSource, priorProviderAt: number, now: number, initialLookback: number): number {
+export function captureFromTs(source: ScheduledSource, priorProviderAt: number, now: number, initialLookback: number, deep = false): number {
   // Five minutes of overlap protects same-second plays and clock skew;
   // failed runs never advance the checkpoint, so the next run retries.
   if (!(priorProviderAt > 0)) return now - initialLookback
   const fromCheckpoint = Math.max(0, priorProviderAt - 300)
-  return source === 'musicat' ? Math.min(fromCheckpoint, now - MUSICAT_LATE_LOOKBACK_SEC) : fromCheckpoint
+  if (source === 'musicat') return Math.min(fromCheckpoint, now - MUSICAT_LATE_LOOKBACK_SEC)
+  if (source === 'listenbrainz') return Math.min(fromCheckpoint, now - (deep ? LISTENBRAINZ_DEEP_LOOKBACK_SEC : LISTENBRAINZ_LATE_LOOKBACK_SEC))
+  return fromCheckpoint
 }
 
 /** Pure coverage transition, exported for regression tests. A bounded source
@@ -92,7 +105,7 @@ export function nextStreamCoverage(input: CoverageInput) {
  *  shared rc_scrobbles ledger and advances a per-agent checkpoint; the hourly
  *  job remains responsible for rollups/XP. Direct Pano/Web Scrobbler events
  *  are intentionally absent because they already arrive one-by-one. */
-async function captureStreamSource(supabase: SupabaseDB, source: ScheduledSource) {
+async function captureStreamSource(supabase: SupabaseDB, source: ScheduledSource, deep = false) {
   const content = await loadContent(supabase)
   const maxPages = limits(content).lbMaxPages
   const now = Math.floor(Date.now() / 1000)
@@ -124,7 +137,7 @@ async function captureStreamSource(supabase: SupabaseDB, source: ScheduledSource
       const state: any = stateByAgent.get(agent.agent_no)
       const priorProviderAt = state?.source === source && state?.last_provider_at
         ? Math.floor(new Date(state.last_provider_at).getTime() / 1000) : 0
-      const fromTs = captureFromTs(source, priorProviderAt, now, initialLookback)
+      const fromTs = captureFromTs(source, priorProviderAt, now, initialLookback, deep)
       try {
         // The collector itself must judge the fresh provider response. It
         // cannot use yesterday's stored coverage to certify today's fetch,
@@ -179,13 +192,40 @@ export async function adminCaptureStreamSources(supabase: SupabaseDB, params: Re
   if (lockError) return { success: false, error: lockError.message }
   if (!locked) return { success: true, source, skipped: true, reason: 'sync_already_running' }
   try {
-    return await captureStreamSource(supabase, source)
+    // The once-a-day ListenBrainz run (params.deep, see the scheduler
+    // migration) re-reads a week instead of two days.
+    return await captureStreamSource(supabase, source, params.deep === true && source === 'listenbrainz')
   } finally {
     await supabase.rpc('rc_stream_sync_release_lock', { p_source: source })
   }
 }
 
-export async function adminSyncAllStreams(supabase: SupabaseDB, _params: Record<string, unknown>) {
+/** Which slice of the fleet one sync invocation handles (see sliceOf). One invocation for all 142
+ *  agents ran out of Edge Function resources (WORKER_RESOURCE_LIMIT) on 9 of
+ *  30 runs; pg_cron now calls six slices an hour (migration 20261110150500).
+ *  No slice params = the whole fleet, as before. Pure, exported for tests. */
+/** The slice an agent always belongs to: a stable hash of agent_no, so an
+ *  agent joining or retiring never moves anyone else to another slice (by
+ *  position, one sign-up mid-hour could skip an agent or sync it twice). */
+export function sliceOf(agentNo: string, slices: number): number {
+  let h = 2166136261
+  for (let i = 0; i < agentNo.length; i++) { h ^= agentNo.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0 }
+  return h % slices
+}
+
+export function fleetSlice(params: Record<string, unknown>): { slice: number; slices: number } | null {
+  const slices = Number(params.slices)
+  const slice = Number(params.slice)
+  if (!Number.isInteger(slices) || slices < 1 || slices > 24) return null
+  if (!Number.isInteger(slice) || slice < 0 || slice >= slices) return null
+  return { slice, slices }
+}
+
+export async function adminSyncAllStreams(supabase: SupabaseDB, params: Record<string, unknown>) {
+  const part = fleetSlice(params || {})
+  // The sweeps are fleet-wide and idempotent: run them once an hour, on the
+  // first slice (or on an unsliced manual run), not six times.
+  if (part && part.slice !== 0) return syncPlayers(supabase, part)
   // Backup Passes whose request expired without ever finding a helper: the
   // pass goes back to its owner. A read-time refresh can't do this on its own
   // — it only ever runs for the owner's CURRENT district, so an owner who
@@ -204,6 +244,11 @@ export async function adminSyncAllStreams(supabase: SupabaseDB, _params: Record<
   // Help screenshots, 30 days after their request was resolved.
   await sweepHelpScreenshots(supabase)
 
+  const result = await syncPlayers(supabase, part)
+  return result.success ? { ...result, backupSweep: swept || null, proofSweep } : result
+}
+
+async function syncPlayers(supabase: SupabaseDB, part: { slice: number; slices: number } | null) {
   const content = await loadContent(supabase)
 
   const { data: allPlayers, error: playersErr } = await supabase
@@ -224,8 +269,10 @@ export async function adminSyncAllStreams(supabase: SupabaseDB, _params: Record<
   if (retiredErr) return { success: false, error: retiredErr.message }
   const retired = new Set((retiredRows || []).map((a: any) => String(a.agent_no)))
 
-  const players = (allPlayers || []).filter((p: any) => !retired.has(String(p.agent_no)))
-  if (players.length === 0) return { success: true, total: 0, synced: 0, failed: 0, errors: [], backupSweep: swept || null, proofSweep, skippedRetired: retired.size }
+  const players = (allPlayers || [])
+    .filter((p: any) => !retired.has(String(p.agent_no)))
+    .filter((p: any) => !part || sliceOf(String(p.agent_no), part.slices) === part.slice)
+  if (players.length === 0) return { success: true, total: 0, synced: 0, failed: 0, errors: [], skippedRetired: retired.size, slice: part }
 
   const agentNos = players.map((p: any) => p.agent_no)
   const [{ data: agentRows, error: agentsErr }, { data: activeDistricts, error: pdErr }] = await Promise.all([
@@ -279,5 +326,5 @@ export async function adminSyncAllStreams(supabase: SupabaseDB, _params: Record<
   // Capped, not truncated silently — a scheduled job's log is the only
   // place anyone will ever see this, so the first failures (usually the
   // same handful of broken sources) matter more than an exhaustive list.
-  return { success: true, total: players.length, synced, failed: errors.length, errors: errors.slice(0, 20), backupSweep: swept || null, proofSweep, skippedRetired: retired.size }
+  return { success: true, total: players.length, synced, failed: errors.length, errors: errors.slice(0, 20), skippedRetired: retired.size, slice: part }
 }

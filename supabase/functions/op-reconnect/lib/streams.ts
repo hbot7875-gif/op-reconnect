@@ -7,6 +7,7 @@ import { kstDateOf, todayKst } from './kst.ts'
 import { statsFmRowsToSkip, STATSFM_LOOKUP_LIMIT } from './stream-canonical.ts'
 import type { StatsFmCandidate } from './stream-canonical.ts'
 import type { SupabaseDB } from './config.ts'
+import { withoutCopies, copyIndexes, COPY_WINDOW_SEC } from './listen-copies.ts'
 
 export interface StreamRow {
   track_name: string
@@ -26,6 +27,12 @@ export interface StreamRow {
    *  live provider fetch leave it undefined, which simply means nothing
    *  collapses — the conservative direction. */
   source?: string | null
+  /** ListenBrainz only: the app that submitted the listen (Last.fm importer,
+   *  LB's Spotify reader, Pano, Web Scrobbler...). Several apps often feed
+   *  one account, so this is what tells a second report of one listen from
+   *  a real repeat — see listen-copies.ts. Null for every other source and
+   *  for LB rows stored before 2026-11-10. */
+  source_client?: string | null
 }
 
 export type StreamCoverageReason = 'recent_limit' | 'page_limit' | 'provider_error' | 'database_limit' | 'database_error'
@@ -83,13 +90,16 @@ const delay = (ms: number) => new Promise((r) => setTimeout(r, ms))
 // bug: a transient failure produced the same empty bucket as a real zero,
 // silently overwriting and erasing whatever real streams that day already
 // had recorded from an earlier, successful poll.
+const LB_PAGE_SIZE = 1000
 async function fetchListenBrainz(lbUser: string, fromTs: number, toTs: number, maxPages: number): Promise<{ rows: StreamRow[]; ok: boolean; complete: boolean; partialReason: StreamCoverageReason | null }> {
   const rows: StreamRow[] = []
   let cursor = toTs
   let complete = false
   for (let page = 0; page < maxPages; page++) {
     if (page > 0) await delay(150)
-    const url = `https://api.listenbrainz.org/1/user/${encodeURIComponent(lbUser)}/listens?count=100&max_ts=${cursor}`
+    // 1000 is the API's maximum page; the capture re-reads two days on every
+    // run, which at 100 a page was dozens of requests for heavy listeners.
+    const url = `https://api.listenbrainz.org/1/user/${encodeURIComponent(lbUser)}/listens?count=${LB_PAGE_SIZE}&max_ts=${cursor}`
     let res = await fetch(url, { headers: { 'User-Agent': 'HopeTracker/1.0' } }).catch(() => null)
     if (res && res.status === 429) {
       await delay(2000)
@@ -107,9 +117,11 @@ async function fetchListenBrainz(lbUser: string, fromTs: number, toTs: number, m
       if (!ts || !md.track_name) continue
       if (ts < oldest) oldest = ts
       if (ts < fromTs || ts > toTs) continue
-      rows.push({ track_name: md.track_name, artist_name: md.artist_name || '', album_name: md.release_name || '', listened_at: ts })
+      const info = md.additional_info || {}
+      const client = String(info.submission_client || info.media_player || '').trim() || null
+      rows.push({ track_name: md.track_name, artist_name: md.artist_name || '', album_name: md.release_name || '', listened_at: ts, source: 'listenbrainz', source_client: client })
     }
-    if (listens.length < 100) { complete = true; break }
+    if (listens.length < LB_PAGE_SIZE) { complete = true; break }
     cursor = oldest - 1
     if (cursor < fromTs) { complete = true; break }
   }
@@ -127,7 +139,7 @@ async function fetchDirectScrobbles(supabase: SupabaseDB, agentNo: string, fromT
   while (offset < MAX_ROWS) {
     const { data, error } = await supabase
       .from('rc_scrobbles')
-      .select('track_name, artist_name, album_name, listened_at, source')
+      .select('track_name, artist_name, album_name, listened_at, source, source_client')
       .eq('agent_no', agentNo)
       .gte('listened_at', fromTs)
       .lte('listened_at', toTs)
@@ -136,7 +148,7 @@ async function fetchDirectScrobbles(supabase: SupabaseDB, agentNo: string, fromT
     if (error) return { rows, ok: false, complete: false, partialReason: 'database_error' }
     if (!data || data.length === 0) return { rows, ok: true, complete: true, partialReason: null }
     for (const r of data) {
-      rows.push({ track_name: r.track_name || '', artist_name: r.artist_name || '', album_name: r.album_name || '', listened_at: r.listened_at, source: r.source || null })
+      rows.push({ track_name: r.track_name || '', artist_name: r.artist_name || '', album_name: r.album_name || '', listened_at: r.listened_at, source: r.source || null, source_client: r.source_client || null })
     }
     if (data.length < PAGE) return { rows, ok: true, complete: true, partialReason: null }
     offset += PAGE
@@ -274,13 +286,11 @@ async function persistScrobbles(supabase: SupabaseDB, agentNo: string, rows: Str
   let candidates = rows
   if (source === 'listenbrainz') {
     // LB can return the whole current day on every 90-second player poll.
-    // Avoid re-sending hundreds of already-stored rows each time; keep the
-    // last second inclusive so two tracks sharing one timestamp are not lost.
-    const { data: latest } = await supabase.from('rc_scrobbles')
-      .select('listened_at').eq('agent_no', agentNo).eq('source', source)
-      .order('listened_at', { ascending: false }).limit(1).maybeSingle()
-    const latestTs = Number(latest?.listened_at) || 0
-    if (latestTs > 0) candidates = rows.filter((row) => row.listened_at >= latestTs)
+    // Avoid re-sending hundreds of already-stored rows each time by dropping
+    // the ones already stored. This used to keep only rows at or after the
+    // newest stored listen, which silently threw away every listen another
+    // device submitted behind it — those were then never counted.
+    candidates = await withoutStoredListens(supabase, agentNo, rows)
   }
   const payload = candidates
     .filter((r) => r.track_name && r.listened_at && !isAdScrobble(r.track_name, r.artist_name))
@@ -295,6 +305,8 @@ async function persistScrobbles(supabase: SupabaseDB, agentNo: string, rows: Str
       // them but Stats.fm today. onConflict below is byte-identical, so
       // this column cannot add, suppress or merge a single row.
       source_event_id: r.source_event_id || null,
+      // Which ListenBrainz app sent it; listen-copies.ts reads it back.
+      source_client: source === 'listenbrainz' ? (r.source_client || null) : null,
     }))
   if (payload.length === 0) return
   const writable = source === 'statsfm'
@@ -308,6 +320,34 @@ async function persistScrobbles(supabase: SupabaseDB, agentNo: string, rows: Str
   await reopenDaysForLatePlays(supabase, agentNo, (inserted || []).map((r: any) => Number(r.listened_at)))
 }
 
+/** ListenBrainz rows worth storing: not stored yet (the table's unique key),
+ *  and not a second report of a listen that is — another app on the same LB
+ *  account, or Pano/Web Scrobbler posting to us as well (listen-copies.ts).
+ *  Copies are dropped HERE, not only when counting, because Red Zone,
+ *  ReCelebrate battles, ReConnect's since-join counts and district
+ *  contributions all read rc_scrobbles rows directly.
+ *  Fails open on the stored-row lookup (sends everything new, still minus
+ *  copies within the batch): the upsert ignores exact duplicates. */
+// Two days of the heaviest ListenBrainz account, every app's copy included, is ~5k.
+const STORED_LOOKUP_LIMIT = 20000
+async function withoutStoredListens(supabase: SupabaseDB, agentNo: string, rows: StreamRow[]): Promise<StreamRow[]> {
+  const times = rows.map((r) => Number(r.listened_at)).filter(Number.isFinite)
+  if (!times.length) return rows
+  // A copy sits at most COPY_WINDOW_SEC from its listen; read that far past
+  // the batch so a copy at the edge still finds it.
+  const { data, error } = await supabase.from('rc_scrobbles')
+    .select('listened_at, track_name, source, source_client').eq('agent_no', agentNo)
+    .gte('listened_at', Math.min(...times) - COPY_WINDOW_SEC).lte('listened_at', Math.max(...times) + COPY_WINDOW_SEC)
+    .limit(STORED_LOOKUP_LIMIT)
+  const stored = (error || !data || data.length >= STORED_LOOKUP_LIMIT) ? [] : (data as StreamRow[])
+  const storedKeys = new Set(stored.map((r) => `${r.listened_at}|${r.track_name}`))
+  const fresh = rows.filter((r) => !storedKeys.has(`${r.listened_at}|${r.track_name}`))
+  if (!fresh.length) return fresh
+  const all = [...stored.map((r) => ({ ...r, kept: true })), ...fresh.map((r) => ({ ...r, kept: false }))]
+  const copies = copyIndexes(all, (r) => r.kept)
+  return fresh.filter((_, i) => !copies.has(stored.length + i))
+}
+
 /** KST days that a newly stored play belongs to and that were already
  *  closed, exported for regression tests. */
 export function closedDaysFor(listenedAts: number[], today: string): string[] {
@@ -316,13 +356,21 @@ export function closedDaysFor(listenedAts: number[], today: string): string[] {
 
 /** A play that reaches the ledger after its KST day closed was never counted:
  *  ensureDailyRollups (derive.ts) skips finalized days. Musicat delivers
- *  Spotify plays hours late, so reopen those days for one recount. XP stays
- *  correct: awardStreamsXp only pays for streams counted since its last run. */
-async function reopenDaysForLatePlays(supabase: SupabaseDB, agentNo: string, listenedAts: number[]) {
+ *  Spotify plays hours late, and Pano Scrobbler / Web Scrobbler post a phone's
+ *  offline cache whenever it reconnects, so reopen those days for one recount.
+ *  XP stays correct: awardStreamsXp only pays for streams counted since its
+ *  last run. Every writer of rc_scrobbles must call this with the listened_at
+ *  of the rows it actually inserted (scrobble-inbound.ts went without it until
+ *  2026-11-09, and 542 Pano plays in the first week of November were never
+ *  counted). */
+export async function reopenDaysForLatePlays(supabase: SupabaseDB, agentNo: string, listenedAts: number[]) {
   const days = closedDaysFor(listenedAts, todayKst())
   if (!days.length) return
-  await supabase.from('rc_daily_activity').update({ finalized: false })
-    .eq('agent_no', agentNo).in('kst_date', days).eq('finalized', true)
+  // updated_at moves too, even on a day that is already open: a recount that
+  // read the day before this play landed then fails its optimistic check
+  // (derive.ts recountClosedDay) instead of closing the day without it.
+  await supabase.from('rc_daily_activity').update({ finalized: false, updated_at: new Date().toISOString() })
+    .eq('agent_no', agentNo).in('kst_date', days)
 }
 
 /**
@@ -609,15 +657,18 @@ export async function fetchStreamRows(
   }
 
   const seen = new Set<string>()
-  const out: StreamRow[] = []
+  const unique: StreamRow[] = []
   for (const r of rows) {
     if (!r.track_name || !r.listened_at) continue
     if (isAdScrobble(r.track_name, r.artist_name)) continue
     const key = `${r.listened_at}|${r.track_name.toLowerCase()}`
     if (seen.has(key)) continue
     seen.add(key)
-    out.push(r)
+    unique.push(r)
   }
+  // One listen reported by two feeds (webhook + Pano, Musicat + ListenBrainz,
+  // two apps on one ListenBrainz account) is one play — listen-copies.ts.
+  const out = withoutCopies(unique)
 
   // A recent-window source can be trustworthy once the server-side collector
   // has maintained an unbroken overlap for the whole requested window. The

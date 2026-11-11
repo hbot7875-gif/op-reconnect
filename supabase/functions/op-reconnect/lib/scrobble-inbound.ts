@@ -7,6 +7,7 @@
 // them; see docs/op-reconnect-backend-audit.md.
 
 import { isAdScrobble } from './text.ts'
+import { reopenDaysForLatePlays } from './streams.ts'
 import type { SupabaseDB } from './config.ts'
 
 const HEADERS = { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
@@ -29,12 +30,15 @@ async function agentForPin(supabase: SupabaseDB, pin: string) {
   return data
 }
 
-async function storeScrobble(supabase: SupabaseDB, agentNo: string, track: string, artist: string | null, album: string | null, listenedAt: number, source: string) {
-  if (!track || isAdScrobble(track, artist)) return
-  await supabase.from('rc_scrobbles').upsert(
+/** Returns the play's listened_at when this call stored it, null when it was
+ *  skipped or already stored (ignoreDuplicates returns only inserted rows). */
+async function storeScrobble(supabase: SupabaseDB, agentNo: string, track: string, artist: string | null, album: string | null, listenedAt: number, source: string): Promise<number | null> {
+  if (!track || isAdScrobble(track, artist)) return null
+  const { data } = await supabase.from('rc_scrobbles').upsert(
     { agent_no: agentNo, track_name: track, artist_name: artist, album_name: album, listened_at: listenedAt, source },
     { onConflict: 'agent_no,listened_at,track_name', ignoreDuplicates: true },
-  )
+  ).select('listened_at')
+  return data && data.length > 0 ? Number(data[0].listened_at) : null
 }
 
 /** Web Scrobbler's native JSON webhook. URL: .../op-reconnect?pin=AGENT_PIN */
@@ -56,7 +60,9 @@ export async function handleWebScrobblerWebhook(supabase: SupabaseDB, payload: a
   const agent = await agentForPin(supabase, pin)
   if (!agent) return ok({ success: false, error: 'Invalid PIN — check your webhook URL' }, 401)
 
-  await storeScrobble(supabase, agent.agent_no, trackName, artistName, albumName, timestamp, 'webhook')
+  const stored = await storeScrobble(supabase, agent.agent_no, trackName, artistName, albumName, timestamp, 'webhook')
+  // A play posted after its KST day closed would otherwise never be counted.
+  if (stored !== null) await reopenDaysForLatePlays(supabase, agent.agent_no, [stored])
   return ok({ success: true, agent: agent.agent_no, track: trackName, timestamp })
 }
 
@@ -109,15 +115,21 @@ export async function handleListenBrainzLike(supabase: SupabaseDB, req: Request,
   if (!agent) return ok({ code: 401, error: 'Invalid token — generate a PIN in your agent profile' }, 401)
 
   const payload: any[] = body.payload || []
+  const inserted: number[] = []
   for (const p of payload) {
     const track = (p.track_metadata?.track_name || '').trim()
     if (!track || !p.listened_at) continue
-    await storeScrobble(
+    const stored = await storeScrobble(
       supabase, agent.agent_no, track,
       (p.track_metadata.artist_name || '').trim() || null,
       (p.track_metadata.release_name || '').trim() || null,
       p.listened_at, 'lb-like',
     )
+    if (stored !== null) inserted.push(stored)
   }
+  // Pano Scrobbler posts a phone's offline cache in one batch when it
+  // reconnects, often after the plays' KST day has closed. Reopen those days
+  // once per batch so the next rollup counts them.
+  await reopenDaysForLatePlays(supabase, agent.agent_no, inserted)
   return ok({ status: 'ok' })
 }
