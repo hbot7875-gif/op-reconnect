@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { securePick, GIVEAWAY_RULES } from './giveaway-rules.js'
+import { securePick, GIVEAWAY_RULES, retryOnTimeout } from './giveaway-rules.js'
 
 test('approved thresholds', () => {
   assert.deepEqual([GIVEAWAY_RULES.vote_mission, GIVEAWAY_RULES.vote_num, GIVEAWAY_RULES.vote_den, GIVEAWAY_RULES.stream_num, GIVEAWAY_RULES.stream_den],
@@ -33,4 +33,25 @@ test('every entry is reachable with equal weight', () => {
 test('bad sizes are refused', () => {
   assert.throws(() => securePick(0), /bad_entry_count/)
   assert.throws(() => securePick(2.5), /bad_entry_count/)
+})
+
+const TIMEOUT = { code: '57014', message: 'canceling statement due to statement timeout' }
+const runs = (results) => { let i = 0; const f = async () => results[i++]; f.count = () => i; return f }
+
+test('prepare is retried after a statement timeout, then succeeds', async () => {
+  const f = runs([{ data: null, error: TIMEOUT }, { data: { ok: 1 }, error: null }])
+  assert.deepEqual(await retryOnTimeout(f), { data: { ok: 1 }, error: null })
+  assert.equal(f.count(), 2)
+})
+
+test('other errors are returned at once, not retried', async () => {
+  const f = runs([{ data: null, error: { code: 'P0001', message: 'giveaway_locked' } }])
+  assert.equal((await retryOnTimeout(f)).error.message, 'giveaway_locked')
+  assert.equal(f.count(), 1)
+})
+
+test('gives up after four timeouts with list_timeout', async () => {
+  const f = runs(Array(9).fill({ data: null, error: TIMEOUT }))
+  assert.equal((await retryOnTimeout(f)).error.message, 'list_timeout')
+  assert.equal(f.count(), 4)
 })

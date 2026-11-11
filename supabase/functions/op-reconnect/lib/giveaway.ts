@@ -4,12 +4,12 @@
 // official draw can ever be stored. Nothing here writes votes, streams,
 // teams, XP or rewards.
 import type { SupabaseDB } from './config.ts'
-import { GIVEAWAY_ID, GIVEAWAY_CAMPAIGN, GIVEAWAY_RULES, securePick } from './giveaway-rules.js'
+import { GIVEAWAY_ID, GIVEAWAY_CAMPAIGN, GIVEAWAY_RULES, securePick, retryOnTimeout } from './giveaway-rules.js'
 
 type P = Record<string, any>
 
 const KNOWN = ['giveaway_locked', 'list_changed_review_again', 'count_mismatch', 'no_eligible_members',
-  'already_drawn', 'not_frozen', 'bad_index', 'unknown_giveaway', 'unknown_campaign']
+  'already_drawn', 'not_frozen', 'bad_index', 'unknown_giveaway', 'unknown_campaign', 'list_timeout']
 
 function fail(error: any) {
   const msg = String(error?.message || error || '')
@@ -57,9 +57,10 @@ export async function adminGiveawayGet(sb: SupabaseDB, p: P) {
 export async function adminGiveawayPrepare(sb: SupabaseDB, p: P) {
   const team = String(p.team || '')
   if (!/^[a-z0-9_]{1,24}$/.test(team)) return { success: false, error: 'team_required' }
-  const { error } = await sb.rpc('rc_giveaway_prepare', {
+  // A cold first read of the plays can pass the 8 s API limit; see retryOnTimeout.
+  const { error } = await retryOnTimeout(() => sb.rpc('rc_giveaway_prepare', {
     p_id: idOf(p), p_campaign_id: GIVEAWAY_CAMPAIGN, p_team: team, p_rules: GIVEAWAY_RULES,
-  })
+  }))
   if (error) return fail(error)
   return adminGiveawayGet(sb, p)
 }

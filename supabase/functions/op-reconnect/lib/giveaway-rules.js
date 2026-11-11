@@ -17,6 +17,26 @@ export const GIVEAWAY_RULES = Object.freeze({
   exclude_agents: ['AGENT000'],
 })
 
+/** Postgres "canceling statement due to statement timeout". */
+export const isStatementTimeout = (error) =>
+  error?.code === '57014' || /statement timeout/i.test(String(error?.message || ''))
+
+/**
+ * Runs `attempt` (a supabase-js call returning { data, error }) again while it
+ * fails with a statement timeout, up to `tries` times. Building the review
+ * list reads ~190k play rows; when they aren't cached it can pass the API's
+ * 8 s limit. A cancelled try rolls back and writes nothing, but leaves those
+ * pages cached, so the next try takes ~2 s. Any other error returns at once.
+ */
+export async function retryOnTimeout(attempt, tries = 4) {
+  let last = { data: null, error: null }
+  for (let i = 0; i < tries; i++) {
+    last = await attempt()
+    if (!last.error || !isStatementTimeout(last.error)) return last
+  }
+  return { data: null, error: { code: '57014', message: 'list_timeout' } }
+}
+
 const RANGE = 2 ** 32
 
 /**

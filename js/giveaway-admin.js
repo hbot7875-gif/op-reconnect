@@ -16,6 +16,7 @@ const ERRORS = {
   no_eligible_members: 'Nobody is eligible yet.',
   already_drawn: 'The official winner has already been drawn.',
   not_frozen: 'Freeze the list first.',
+  list_timeout: 'Reading the records took too long. Nothing was saved. Wait a minute and press Prepare again.',
 }
 const say = (id, text, kind = '') => { $(id).textContent = text; $(id).className = `msg ${kind}` }
 const errText = (r) => ERRORS[r?.error] || `Something went wrong (${r?.error || 'network error'}).`
