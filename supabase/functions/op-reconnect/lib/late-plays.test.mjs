@@ -287,7 +287,11 @@ test('rows with no recorded app are not one feed: copies of them need a near-sim
 test('ingest learns the app of older stored ListenBrainz rows from the provider response', async () => {
   const { fetchStreamRows } = await import('./streams.ts')
   const now = Math.floor(Date.now() / 1000)
-  const t0 = now - 7200
+  // Keep the whole history on one KST day: a copy and its listen on opposite
+  // sides of midnight are judged on different days (a known edge, both v405
+  // and v406), which made this test fail at four times of day.
+  const midnight = Math.floor((now - 7800 + 9 * 3600) / 86400) * 86400 + 86400 - 9 * 3600
+  const t0 = midnight <= now - 7200 + 5600 ? midnight - 6000 : now - 7200
   const names = ['Dynamite', 'Butter', 'Idol', 'Run', 'Fire', 'Spring Day', 'Euphoria', 'Mic Drop', 'DNA', 'Fake Love', 'Life Goes On', 'Permission to Dance']
   // Stored before the app was recorded: a mix of the reader's and Pano's reports.
   const stored = names.map((name, i) => ({ listened_at: t0 + i * 400, track_name: name, source: 'listenbrainz', source_client: null }))

@@ -82,6 +82,35 @@ export interface CopyCandidate {
   listened_at: number
   source?: string | null
   source_client?: string | null
+  source_clients?: string[] | null
+}
+
+/** Every feed a row was reported through. A ListenBrainz row can be ONE
+ *  listen that two or more apps submitted at the same second with the same
+ *  title (the Last.fm importer and Pano both carry Pano's scrobble; the
+ *  importer and LB's Spotify reader both carry a Spotify play): the table
+ *  keeps one row per second and title, and `source_clients` lists every app
+ *  ListenBrainz says reported it. Such a row belongs to all those feeds, so
+ *  a third app's later report of the same listen is judged against each of
+ *  them. Recorded only where ListenBrainz itself shows the apps at that
+ *  exact second — never guessed. */
+export function feedsOf(row: { source?: string | null; source_client?: string | null; source_clients?: string[] | null }): string[] {
+  const list = row.source === 'listenbrainz' && Array.isArray(row.source_clients) ? row.source_clients.filter((c) => typeof c === 'string' && c.trim()) : []
+  if (!list.length) return [feedOf(row)]
+  const apps = new Set(list.map((c) => c.trim()))
+  if (row.source_client) apps.add(row.source_client)
+  return [...apps].sort().map((c) => `listenbrainz:${c}`)
+}
+
+/** Apps of two rows that the table (or counting's same-second, same-title
+ *  dedupe) merged into one: the union, sorted, or null when fewer than two. */
+export function mergedClients(a: { source_client?: string | null; source_clients?: string[] | null }, b: { source_client?: string | null; source_clients?: string[] | null }): string[] | null {
+  const apps = new Set<string>()
+  for (const r of [a, b]) {
+    if (r.source_client) apps.add(r.source_client)
+    for (const c of r.source_clients || []) if (c) apps.add(c)
+  }
+  return apps.size >= 2 ? [...apps].sort() : null
 }
 
 /** ListenBrainz rows with no recorded app. These are NOT one feed: they mix
@@ -92,7 +121,10 @@ export interface CopyCandidate {
  *  same listen, and two unknown rows never collapse. */
 export const UNKNOWN_FEED = 'listenbrainz:'
 
-interface Item { index: number; ts: number; key: string; feed: string; keep: boolean }
+interface Item { index: number; ts: number; key: string; feeds: string[]; keep: boolean }
+
+const inFeed = (item: Item, feed: string) => item.feeds.includes(feed)
+const isUnknown = (item: Item) => item.feeds.length === 1 && item.feeds[0] === UNKNOWN_FEED
 
 /** One-to-one pairing of two feeds' reports of the same song within the
  *  window, nearest first. Returns the pairs as [a, b] items. */
@@ -140,7 +172,7 @@ export function copyIndexes<T extends CopyCandidate>(rows: T[], keepFirst?: (row
   rows.forEach((row, index) => {
     const key = normKeyFull(row.track_name || '')
     if (!key || !Number.isFinite(row.listened_at)) return
-    const item = { index, ts: row.listened_at, key, feed: feedOf(row), keep: !!keepFirst?.(row) }
+    const item = { index, ts: row.listened_at, key, feeds: feedsOf(row), keep: !!keepFirst?.(row) }
     const day = kstDateOf(row.listened_at)
     const list = byDay.get(day)
     if (list) list.push(item)
@@ -153,14 +185,17 @@ export function copyIndexes<T extends CopyCandidate>(rows: T[], keepFirst?: (row
     const acc = new Map<string, { pairs: { key: string; offset: number }[]; smaller: number }>()
     for (const items of byDay.values()) {
       const byFeedAll = new Map<string, Item[]>()
-      for (const item of items) if (item.feed !== UNKNOWN_FEED) {
-        const list = byFeedAll.get(item.feed)
+      for (const item of items) if (!isUnknown(item)) for (const feed of item.feeds) {
+        const list = byFeedAll.get(feed)
         if (list) list.push(item)
-        else byFeedAll.set(item.feed, [item])
+        else byFeedAll.set(feed, [item])
       }
       const names = [...byFeedAll.keys()].sort()
       for (let i = 0; i < names.length; i++) for (let j = i + 1; j < names.length; j++) {
-        const a = byFeedAll.get(names[i])!, b = byFeedAll.get(names[j])!
+        // A row both feeds reported is one listen they already agree on: it
+        // is neither evidence nor a candidate for this pair.
+        const a = byFeedAll.get(names[i])!.filter((x) => !inFeed(x, names[j]))
+        const b = byFeedAll.get(names[j])!.filter((x) => !inFeed(x, names[i]))
         const k = `${names[i]}\u0000${names[j]}`
         const e = acc.get(k) || { pairs: [], smaller: 0 }
         for (const [x, y] of pairUp(a, b)) e.pairs.push({ key: x.key, offset: y.ts - x.ts })
@@ -197,10 +232,10 @@ export function copyIndexes<T extends CopyCandidate>(rows: T[], keepFirst?: (row
     }
     // Copies across mirrored feeds.
     const byFeed = new Map<string, Item[]>()
-    for (const item of live) {
-      const list = byFeed.get(item.feed)
+    for (const item of live) for (const feed of item.feeds) {
+      const list = byFeed.get(feed)
       if (list) list.push(item)
-      else byFeed.set(item.feed, [item])
+      else byFeed.set(feed, [item])
     }
     const feeds = [...byFeed.keys()].filter((f) => f !== UNKNOWN_FEED).sort()
     // Largest feed first, so each listen keeps the report of the fullest feed
@@ -209,8 +244,10 @@ export function copyIndexes<T extends CopyCandidate>(rows: T[], keepFirst?: (row
     const dropped = new Set<Item>()
     for (let i = 0; i < feeds.length; i++) {
       for (let j = i + 1; j < feeds.length; j++) {
-        const a = byFeed.get(feeds[i])!.filter((x) => !dropped.has(x))
-        const b = byFeed.get(feeds[j])!.filter((x) => !dropped.has(x))
+        // Rows both feeds reported (same second) are one listen already;
+        // they never pair with each other's feed.
+        const a = byFeed.get(feeds[i])!.filter((x) => !dropped.has(x) && !inFeed(x, feeds[j]))
+        const b = byFeed.get(feeds[j])!.filter((x) => !dropped.has(x) && !inFeed(x, feeds[i]))
         if (!a.length || !b.length) continue
         let pairs = pairUp(a, b)
         if (!opts.loose && !feedsMirror(pairs.map(([x, y]) => ({ key: x.key, offset: y.ts - x.ts })), Math.min(a.length, b.length))) {
@@ -235,7 +272,7 @@ export function copyIndexes<T extends CopyCandidate>(rows: T[], keepFirst?: (row
     // feed is the same listen (one-to-one, nearest first).
     const unknown = (byFeed.get(UNKNOWN_FEED) || []).filter((x) => !dropped.has(x))
     if (unknown.length) {
-      const known = live.filter((x) => x.feed !== UNKNOWN_FEED && !dropped.has(x))
+      const known = live.filter((x) => !isUnknown(x) && !dropped.has(x))
       const near = pairUp(unknown, known).filter(([u, k]) => Math.abs(k.ts - u.ts) <= TINY_DAY_GAP_SEC)
       for (const [u, k] of near) {
         const drop = u.keep && !k.keep ? k : k.keep && !u.keep ? u : k

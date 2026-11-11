@@ -7,7 +7,7 @@ import { kstDateOf, todayKst } from './kst.ts'
 import { statsFmRowsToSkip, STATSFM_LOOKUP_LIMIT } from './stream-canonical.ts'
 import type { StatsFmCandidate } from './stream-canonical.ts'
 import type { SupabaseDB } from './config.ts'
-import { withoutCopies, copyIndexes, COPY_WINDOW_SEC } from './listen-copies.ts'
+import { withoutCopies, copyIndexes, mergedClients, COPY_WINDOW_SEC } from './listen-copies.ts'
 
 export interface StreamRow {
   track_name: string
@@ -33,6 +33,11 @@ export interface StreamRow {
    *  a real repeat — see listen-copies.ts. Null for every other source and
    *  for LB rows stored before 2026-11-10. */
   source_client?: string | null
+  /** ListenBrainz only: every app ListenBrainz shows reporting this exact
+   *  second and title, when two or more did (one listen, several apps — the
+   *  table keeps one row). Null otherwise. listen-copies.ts treats the row as
+   *  belonging to all of them. */
+  source_clients?: string[] | null
 }
 
 export type StreamCoverageReason = 'recent_limit' | 'page_limit' | 'provider_error' | 'database_limit' | 'database_error'
@@ -125,7 +130,22 @@ async function fetchListenBrainz(lbUser: string, fromTs: number, toTs: number, m
     cursor = oldest - 1
     if (cursor < fromTs) { complete = true; break }
   }
-  return { rows, ok: true, complete, partialReason: complete ? null : 'page_limit' }
+  return { rows: withSameSecondApps(rows), ok: true, complete, partialReason: complete ? null : 'page_limit' }
+}
+
+/** One row per second and exact title, as the table stores it, carrying every
+ *  app that reported it (source_clients, when two or more). Exported for
+ *  tests. */
+export function withSameSecondApps(rows: StreamRow[]): StreamRow[] {
+  const byKey = new Map<string, StreamRow>()
+  const out: StreamRow[] = []
+  for (const r of rows) {
+    const key = `${r.listened_at}|${r.track_name}`
+    const first = byKey.get(key)
+    if (!first) { const copy = { ...r }; byKey.set(key, copy); out.push(copy); continue }
+    first.source_clients = mergedClients(first, r)
+  }
+  return out
 }
 
 // Both direct-scrobble protocols (Web Scrobbler's webhook, the
@@ -139,7 +159,7 @@ async function fetchDirectScrobbles(supabase: SupabaseDB, agentNo: string, fromT
   while (offset < MAX_ROWS) {
     const { data, error } = await supabase
       .from('rc_scrobbles')
-      .select('track_name, artist_name, album_name, listened_at, source, source_client')
+      .select('track_name, artist_name, album_name, listened_at, source, source_client, source_clients')
       .eq('agent_no', agentNo)
       .gte('listened_at', fromTs)
       .lte('listened_at', toTs)
@@ -148,7 +168,7 @@ async function fetchDirectScrobbles(supabase: SupabaseDB, agentNo: string, fromT
     if (error) return { rows, ok: false, complete: false, partialReason: 'database_error' }
     if (!data || data.length === 0) return { rows, ok: true, complete: true, partialReason: null }
     for (const r of data) {
-      rows.push({ track_name: r.track_name || '', artist_name: r.artist_name || '', album_name: r.album_name || '', listened_at: r.listened_at, source: r.source || null, source_client: r.source_client || null })
+      rows.push({ track_name: r.track_name || '', artist_name: r.artist_name || '', album_name: r.album_name || '', listened_at: r.listened_at, source: r.source || null, source_client: r.source_client || null, source_clients: r.source_clients || null })
     }
     if (data.length < PAGE) return { rows, ok: true, complete: true, partialReason: null }
     offset += PAGE
@@ -307,6 +327,7 @@ async function persistScrobbles(supabase: SupabaseDB, agentNo: string, rows: Str
       source_event_id: r.source_event_id || null,
       // Which ListenBrainz app sent it; listen-copies.ts reads it back.
       source_client: source === 'listenbrainz' ? (r.source_client || null) : null,
+      source_clients: source === 'listenbrainz' && r.source_clients?.length ? r.source_clients : null,
     }))
   if (payload.length === 0) return
   const writable = source === 'statsfm'
@@ -346,7 +367,7 @@ async function withoutStoredListens(supabase: SupabaseDB, agentNo: string, rows:
   for (let offset = 0; ; offset += STORED_LOOKUP_PAGE) {
     if (offset >= STORED_LOOKUP_LIMIT) return []
     const { data, error } = await supabase.from('rc_scrobbles')
-      .select('listened_at, track_name, source, source_client').eq('agent_no', agentNo)
+      .select('listened_at, track_name, source, source_client, source_clients').eq('agent_no', agentNo)
       .gte('listened_at', from).lte('listened_at', to)
       .order('listened_at', { ascending: true }).order('id', { ascending: true })
       .range(offset, offset + STORED_LOOKUP_PAGE - 1)
@@ -354,12 +375,23 @@ async function withoutStoredListens(supabase: SupabaseDB, agentNo: string, rows:
     stored.push(...(data as StreamRow[]))
     if (data.length < STORED_LOOKUP_PAGE) break
   }
-  // A stored LB row from before source_client was recorded: the provider's
-  // own response says which app sent it (same second, same title), so judge
-  // copies with that rather than with an unknown app (listen-copies.ts).
-  const appOf = new Map(rows.filter((r) => r.source_client).map((r) => [`${r.listened_at}|${r.track_name}`, r.source_client]))
+  // Which apps reported a stored LB row: the provider's own response says
+  // (same second, same title), so judge copies with that rather than with an
+  // unknown app or only one of several (listen-copies.ts). In memory only —
+  // nothing stored is rewritten.
+  const apiAt = new Map<string, StreamRow>()
+  for (const r of rows) if (r.source_client || r.source_clients?.length) {
+    const key = `${r.listened_at}|${r.track_name}`
+    const prev = apiAt.get(key)
+    apiAt.set(key, prev ? { ...prev, source_clients: mergedClients(prev, r) } : r)
+  }
   for (const r of stored) {
-    if (r.source === 'listenbrainz' && !r.source_client) r.source_client = appOf.get(`${r.listened_at}|${r.track_name}`) || null
+    if (r.source !== 'listenbrainz') continue
+    const api = apiAt.get(`${r.listened_at}|${r.track_name}`)
+    if (!api) continue
+    const apps = mergedClients(r, api)
+    if (apps) r.source_clients = apps
+    else if (!r.source_client) r.source_client = api.source_client || null
   }
   const storedKeys = new Set(stored.map((r) => `${r.listened_at}|${r.track_name}`))
   const fresh = rows.filter((r) => !storedKeys.has(`${r.listened_at}|${r.track_name}`))
@@ -693,14 +725,24 @@ export async function fetchStreamRows(
     }
   }
 
-  const seen = new Set<string>()
+  const seen = new Map<string, number>()
   const unique: StreamRow[] = []
   for (const r of rows) {
     if (!r.track_name || !r.listened_at) continue
     if (isAdScrobble(r.track_name, r.artist_name)) continue
     const key = `${r.listened_at}|${r.track_name.toLowerCase()}`
-    if (seen.has(key)) continue
-    seen.add(key)
+    const at = seen.get(key)
+    if (at !== undefined) {
+      // Two LB apps sent one listen with titles differing only in case: the
+      // kept row stands for both apps.
+      const first = unique[at]
+      if (first.source === 'listenbrainz' && r.source === 'listenbrainz') {
+        const apps = mergedClients(first, r)
+        if (apps) unique[at] = { ...first, source_clients: apps }
+      }
+      continue
+    }
+    seen.set(key, unique.length)
     unique.push(r)
   }
   // One listen reported by two feeds (webhook + Pano, Musicat + ListenBrainz,
