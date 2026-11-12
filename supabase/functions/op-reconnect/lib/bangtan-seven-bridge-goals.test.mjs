@@ -1,4 +1,4 @@
-// Bangtan Seven Bridge — migration 20261112120000 on a real Postgres engine
+// Bangtan Seven Bridge — migration 20261112140000 on a real Postgres engine
 // (PGlite), then the rows through the game's own freezeGoals: 13 track goals,
 // 7 album goals and a two-stage quest whose War of Cards stage survives the
 // freeze.
@@ -12,7 +12,7 @@ import { freezeGoals } from './districts.ts'
 import { hasWarStage } from './reconnect-war-stage.js'
 import { normKeyFull } from './text.ts'
 
-const MIGRATION = readFileSync(new URL('../../../migrations/20261112120000_rc_bangtan_seven_bridge_goals.sql', import.meta.url), 'utf8')
+const MIGRATION = readFileSync(new URL('../../../migrations/20261112140000_rc_bangtan_seven_bridge_goals.sql', import.meta.url), 'utf8')
 const modulePath = process.env.PGLITE_MODULE
 const skip = modulePath ? false : 'set PGLITE_MODULE to run the SQL suite'
 const D = 'mono-bangtan-seven-bridge'
