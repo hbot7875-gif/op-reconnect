@@ -127,6 +127,16 @@ body.landing {
   .scroll-cue { display: none; }
 }
 
+/* The platform name above the game's badge, styled like the sign-up
+   card's brand label (reconnect.css .auth-brand): mono, lilac, exact
+   "HopeTrackers" casing. The shadow only keeps it legible on the photo. */
+.hero-brand {
+  margin-bottom: 10px;
+  font-family: var(--mono); font-size: 15px; line-height: 1.2; letter-spacing: -0.6px;
+  color: var(--purple-lt); text-transform: none;
+  text-shadow: 0 2px 12px rgba(7,6,13,0.9);
+}
+
 .badge {
   display: inline-flex; align-items: center; gap: 8px;
   font-family: var(--mono); font-size: 10.5px; letter-spacing: 2.5px;

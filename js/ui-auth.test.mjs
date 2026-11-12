@@ -52,3 +52,11 @@ test('card, segmented tabs and inputs are styled on the auth screen only', () =>
   assert.match(css, /\.auth-wrap \.ob-input:focus \{/)
   assert.match(css, /@media \(max-width: 520px\) \{\s*#auth:not\(\[hidden\]\)/)
 })
+
+test('landing hero carries the same HopeTrackers label, above the OP: ReConnect badge', () => {
+  const index = read('../index.html')
+  const landing = read('../css/landing.css')
+  assert.match(index, /<div class="hero-brand">HopeTrackers<\/div>\s*<div class="badge">/)
+  assert.match(index, /<h1 class="title">The city<br>went dark\.<\/h1>/)
+  assert.match(landing, /\.hero-brand \{[^}]*font-family: var\(--mono\); font-size: 15px;[^}]*letter-spacing: -0\.6px;[^}]*text-transform: none;/)
+})
