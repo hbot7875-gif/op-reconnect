@@ -2,7 +2,7 @@ name: Fleet stream sync (manual)
 
 # Calls adminSyncAllStreams (supabase/functions/op-reconnect/lib/sync-all.ts)
 # for every agent, one slice at a time — the same thing pg_cron now does every
-# hour (migration 20261110150500_rc_fleet_sync_schedule.sql). The schedule
+# hour (migration 20261112120000_rc_fleet_sync_only.sql). The schedule
 # that used to live here ('0 * * * *') fired only every 4-8 hours, and a
 # single whole-fleet call often died with WORKER_RESOURCE_LIMIT, so this is a
 # manual "Run workflow" button now, for an immediate recount.
