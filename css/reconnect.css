@@ -3728,8 +3728,8 @@ body.overlay-open { overflow: hidden; }
 }
 .auth-wrap .auth-lede, .auth-lede { margin: 0 0 24px; font-size: 14.5px; line-height: 1.55; }
 .auth-head { margin-bottom: 4px; text-align: center; }
-.auth-head .auth-brand { text-transform: none; font-size: 12px; letter-spacing: 1px; }
-.auth-wrap .auth-head .title-sm { font-size: 24px; margin: 8px 0 10px; }
+.auth-head .auth-brand { text-transform: none; font-size: 15px; letter-spacing: -0.6px; line-height: 1.2; }
+.auth-wrap .auth-head .title-sm { font-size: 24px; margin: 2px 0 10px; }
 .auth-tagline { margin: 0 0 4px; font-size: 15.5px; font-weight: 600; line-height: 1.4; color: var(--text); }
 .auth-wrap .auth-head .auth-lede { margin: 0 0 24px; font-size: 14px; color: var(--muted); }
 
