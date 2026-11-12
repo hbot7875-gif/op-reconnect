@@ -28,6 +28,7 @@ import { adminDeleteAgent, adminGetAgent, adminGetAgentTracks, adminScanAltAccou
 import { adminCaptureStreamSources, adminSyncAllStreams } from './lib/sync-all.ts'
 import { sweepStorageDeletions } from './lib/proof-retention.ts'
 import { startLeave, endLeave } from './lib/leave.ts'
+import { adminListLeaves, adminCleanupPreview, adminListReconnectQuests, adminGetReconnectQuest } from './lib/admin-readonly.ts'
 import { getQuestSkipQuote, skipQuest } from './lib/quest-skip.ts'
 import { adminListGoals, adminAddGoal, adminUpdateGoal, adminDeleteGoal } from './lib/goals.ts'
 import {
@@ -424,6 +425,11 @@ const ROUTES: Record<string, Route> = {
   // pair two of them by hand instead of adminAutoAssignMissions's shuffle.
   adminListStuckReconnects: { auth: 'admin', handler: async (sb) => adminListStuckReconnects(sb, await loadContent(sb)) },
   adminPairReconnect: { auth: 'admin', handler: (sb, p) => adminPairReconnect(sb, p) },
+  // Read-only dashboard views (lib/admin-readonly.ts): SELECT only.
+  adminListLeaves: { auth: 'admin', handler: (sb, p) => adminListLeaves(sb, p) },
+  adminCleanupPreview: { auth: 'admin', handler: (sb, p) => adminCleanupPreview(sb, p) },
+  adminListReconnectQuests: { auth: 'admin', handler: async (sb, p) => adminListReconnectQuests(sb, await loadContent(sb), p) },
+  adminGetReconnectQuest: { auth: 'admin', handler: async (sb, p) => adminGetReconnectQuest(sb, await loadContent(sb), p) },
 
   // ── Admin panel (admin.html) — Goals ── rc_goals is per-district (track,
   // album, and reconnect kinds) — see goals.ts's module comment and

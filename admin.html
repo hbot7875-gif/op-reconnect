@@ -123,8 +123,7 @@
   </div>
   <div class="adm-chips" id="questStatusChips" aria-label="Status"></div>
   <div class="adm-chips" id="questSortChips" aria-label="Sort"></div>
-  <div class="adm-note">Open quests only, as the backend reports them.
-    <span class="is-gap">Completed and cancelled quests, quest stages and per-agent stream counts aren't available yet.</span></div>
+  <div class="adm-note" id="questDataNote"></div>
   <div id="questDistricts"><div class="adm-empty">Not loaded yet.</div></div>
 </section>
 
@@ -138,7 +137,7 @@
   <details class="adm-card adm-details" id="leaveRules" open>
     <summary>How leave works</summary>
     <dl class="adm-rules">
-      <div><dt>Length</dt><dd>3 to 14 days, starting the moment the agent takes it. Leave can't be scheduled ahead.</dd></div>
+      <div><dt>Length</dt><dd>3 to 14 days, starting the moment the agent takes it. Leave can't be scheduled ahead, so there are no upcoming leaves.</dd></div>
       <div><dt>Frequency</dt><dd>One at a time. The next can start 14 days after the previous one ends.</dd></div>
       <div><dt>Cleanup clock</dt><dd>Leave time is subtracted from the 14 days since the last Bomb charge or verified vote.</dd></div>
       <div><dt>Deletion</dt><dd>Still 14+ days after leave, and for agents with an email, a warning delivered 2 to 45 days earlier.</dd></div>
@@ -435,9 +434,9 @@ import {
 } from './js/reconnect-admin-ui.js'
 import { redZoneTarget } from './js/red-zone-ui.js'
 import {
-  CLEANUP, fetchDeletionPreview, nextUtcHour, cleanupRows, agentGroup, agentGroupCounts, CLEANUP_LABELS,
-  QUEST_STATUSES, QUEST_UNAVAILABLE_STATUSES, questStatus, questNeedsAdmin, questDeadline, questDistricts,
-  questStatusCounts, questProgress,
+  CLEANUP, fetchCleanupPreview, nextUtcHour, cleanupRows, agentGroup, agentGroupCounts, CLEANUP_LABELS, WARNING_LABELS,
+  QUEST_STATUSES, QUEST_LIST_ACTION, QUEST_DETAIL_ACTION, buildQuestItems, questStatus, questNeedsAdmin, questDeadline,
+  questDistricts, questStatusCounts, questProgress, questReason, questCurrentStage,
   LEAVES_ACTION, leavesUnavailable, leaveRows, leaveCounts, leaveStatus, leaveDurationDays, LEAVE_STATUS_LABELS,
 } from './js/admin-dashboard.js'
 
@@ -726,13 +725,13 @@ function paintOverview() {
   const nextRemind = nextUtcHour(CLEANUP.reminderHourUtc)
   const rows = ov.rows
   const counts = rows && ov.preview ? agentGroupCounts(rows) : null
-  const rc = ov.reconnect ? reconnectBucketCounts(ov.reconnect) : null
+  const rc = ov.reconnectCases ? reconnectBucketCounts(ov.reconnectCases) : null
   const live = ov.broadcasts ? ov.broadcasts.filter((b) => b.active).length : null
   const rz = ov.rz
   const tiles = [
     tile('reconnect', 'ReConnect', rc ? rc.action : '—', rc ? `need action · ${rc.watch} to watch · ${rc.fine} fine` : 'Loading', rc?.action ? 'bad' : ''),
     tile('agents', 'Deletes next run', counts ? counts.delete : '—', ov.previewError ? 'Preview unavailable' : `no email · ${relativeTime(nextDelete.toISOString())}`, counts?.delete ? 'bad' : ''),
-    tile('agents', 'Past 14 days, has email', counts ? counts.warning : '—', 'warning status unavailable', counts?.warning ? 'warn' : ''),
+    tile('agents', 'Waiting on warning', counts ? counts.warning : '—', '14+ days · notice or reminder due', counts?.warning ? 'warn' : ''),
     tile('agents', 'At risk', rows ? agentGroup(rows, 'risk').length : '—', 'cleanup clock 9–13 days', rows && agentGroup(rows, 'risk').length ? 'warn' : ''),
     tile('reviews', 'Reviews', ov.vma == null && !ov.voting ? '—' : reviewTotal(),
       `${ov.vma ?? '—'} VMA · ${ov.voting ? (Number(ov.voting.review) || 0) : '—'} in review`, reviewTotal() ? 'warn' : ''),
@@ -745,10 +744,10 @@ function paintOverview() {
   if (rz?.active) items.push(['bad', 'Red Zone', esc(rz.defuse.title || 'Red Zone active'), `Ends ${esc(fmtDate(rz.defuse.activeUntil))}`, 'redzone'])
   for (const item of (ov.reconnect || []).filter(questNeedsAdmin).slice(0, 4)) {
     const st = questStatus(item)
-    items.push([st === 'expired' ? 'bad' : 'wait', st === 'expired' ? 'Expired' : 'Quest', `${esc(item.districtName)} · ${esc(reconnectTeamLabel(item))}`, esc(reconnectPlainReason(item)), `quest:${item.missionId || item.goalId + ':' + (item.agents?.[0]?.agentNo || '')}`])
+    items.push([st === 'expired' ? 'bad' : 'wait', st === 'expired' ? 'Expired' : 'Quest', `${esc(item.districtName)} · ${esc(reconnectTeamLabel(item))}`, esc(questReason(item)), `quest:${item.missionId || item.goalId + ':' + (item.agents?.[0]?.agentNo || '')}`])
   }
   for (const r of (rows && ov.preview ? agentGroup(rows, 'delete') : []).slice(0, 3)) {
-    items.push(['bad', 'Delete', `${esc(r.agent.agentNo)} · ${esc(r.agent.codename || r.agent.handle || '')}`, `No email · deleted at the 18:00 UTC run`, `agent:${r.agent.agentNo}`])
+    items.push(['bad', 'Delete', `${esc(r.agent.agentNo)} · ${esc(r.agent.codename || r.agent.handle || '')}`, esc(cleanupSub(r)), `agent:${r.agent.agentNo}`])
   }
   if (reviewTotal()) items.push(['wait', 'Review', `${reviewTotal()} proofs waiting`, `${ov.vma ?? 0} VMA · ${ov.voting ? Number(ov.voting.review) || 0 : 0} in review · ${ov.voting ? Number(ov.voting.verifying) || 0 : 0} verifying`, 'reviews'])
   const loading = !rows || !ov.reconnect
@@ -758,7 +757,7 @@ function paintOverview() {
         <button class="btn btn-ghost btn-sm" type="button" data-open="${esc(target)}">Open</button></div>`).join('')
     : `<div class="adm-empty">${loading ? '<span class="adm-spin"></span>Loading…' : 'Nothing needs you right now.'}</div>`
 
-  const openQuests = (ov.reconnect || []).filter((i) => i.kind === 'mission')
+  const openQuests = (ov.reconnect || []).filter((i) => i.kind === 'mission' && ['waiting', 'active'].includes(questStatus(i)))
   const leaveNow = Array.isArray(ov.leaves) ? leaveCounts(ov.leaves).active : null
   const kv = [
     ['Agents', rows ? rows.length : '—'],
@@ -1415,19 +1414,27 @@ function renderCleanupPanel(agentNo) {
     html += `<div class="adm-agent-grid">
       <div class="adm-agent-stat"><div class="k">Status</div><div class="v">${badge(cleanupTone(row), cleanupLabel(row))}</div></div>
       <div class="adm-agent-stat"><div class="k">Cleanup clock (before leave)</div><div class="v">${row.rawDays.toFixed(1)} days</div></div>
-      <div class="adm-agent-stat"><div class="k">After leave</div><div class="v">${row.adjustedDays != null ? `${row.adjustedDays.toFixed(1)} days` : row.state === 'leave_paused' ? 'Under 14 days' : 'Under 14 days or not checked'}</div></div>
+      <div class="adm-agent-stat"><div class="k">After leave</div><div class="v">${row.adjustedDays != null ? `${row.adjustedDays.toFixed(1)} days` : ov.preview ? 'Under 9 days' : 'Not checked'}</div></div>
       <div class="adm-agent-stat"><div class="k">Email on file</div><div class="v">${row.hasEmail ? 'Yes' : 'No'}</div></div>
       <div class="adm-agent-stat"><div class="k">Last Bomb charge</div><div class="v">${esc(relativeTime(a.lastFedAt))}</div></div>
       <div class="adm-agent-stat"><div class="k">Last verified vote</div><div class="v">${esc(relativeTime(a.lastVoteAt))}</div></div>
     </div>`
-    if (row.state === 'warning_unknown') html += '<p class="muted" style="margin-top:8px;">Deleted only 2–45 days after a delivered warning email. Delivery isn\'t visible here.</p>'
+    if (row.preview && row.hasEmail) {
+      const p = row.preview
+      html += `<div class="adm-agent-section"><h3>Warning email</h3><div class="adm-agent-grid">
+        <div class="adm-agent-stat"><div class="k">Status</div><div class="v">${esc(WARNING_LABELS[row.warning] || '—')}</div></div>
+        <div class="adm-agent-stat"><div class="k">Last delivered</div><div class="v">${esc(p.lastWarnedAt ? fmtDate(p.lastWarnedAt) : 'Never')}</div></div>
+        <div class="adm-agent-stat"><div class="k">Last attempt</div><div class="v">${esc(p.lastAttemptAt ? `${fmtDate(p.lastAttemptAt)}${p.lastDeliveryOk === false ? ' · failed' : ''}` : 'None')}</div></div>
+        <div class="adm-agent-stat"><div class="k">Deletable from</div><div class="v">${esc(p.eligible ? 'Now (next 18:00 UTC run)' : p.eligibleFrom && row.warning === 'notice_period' ? fmtDate(p.eligibleFrom) : 'Not until a warning is delivered')}</div></div>
+      </div></div>`
+    }
   }
   html += '</div><div class="adm-agent-section"><h3>Leave history</h3>'
   if (ov.leaves === false) html += '<div class="adm-empty">Leave records aren\'t available to the admin panel yet.</div>'
   else if (!Array.isArray(ov.leaves)) html += '<div class="adm-empty">Not loaded.</div>'
   else {
     const mine = leaveRows(ov.leaves.filter((l) => l.agentNo === agentNo))
-    html += mine.length ? mine.map((l) => `<div class="adm-leave-row"><span>${esc(fmtDay(l.startsAt))} – ${esc(fmtDay(l.endedAt || l.endsAt))} · ${l.days} d</span>${badge(leaveTone(l.status), LEAVE_STATUS_LABELS[l.status])}</div>`).join('')
+    html += mine.length ? mine.map((l) => `<div class="adm-leave-row"><span>${esc(fmtDay(l.startsAt))} – ${esc(fmtDay(l.endedAt || l.endsAt))} · ${l.days < 1 ? '<1' : l.days} d</span>${badge(leaveTone(l.status), LEAVE_STATUS_LABELS[l.status])}</div>`).join('')
       : '<div class="adm-empty">No leave taken.</div>'
   }
   return html + '</div>'
@@ -1587,9 +1594,9 @@ $('btnLookup').onclick = async () => {
 $('lkQuery').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btnLookup').click() })
 
 /* ── Agents: roster + cleanup groups ──
-   Eligibility comes from the dry run of the real cleanup (leave and verified
-   votes already applied) plus the email/warning gate. Nothing here can
-   delete: fetchDeletionPreview always sends dryRun: true. */
+   Eligibility comes from adminCleanupPreview: the scheduled job's own rule
+   (charge or verified vote, minus leave, plus the email/warning gate) run as
+   a read-only SQL preview. The dashboard never calls the deletion endpoint. */
 let rosterCache = []
 let rosterLoadedOnce = false
 let rosterScope = 'delete'
@@ -1600,21 +1607,23 @@ function cleanupLabel(row) {
   return CLEANUP_LABELS[row.state]
 }
 function cleanupTone(row) {
-  return { delete_next_run: 'bad', warning_unknown: 'wait', unconfirmed: 'muted', leave_paused: 'active', at_risk: 'wait',
+  return { delete_next_run: 'bad', notice_period: 'wait', needs_warning: 'wait', unconfirmed: 'muted', leave_paused: 'active', at_risk: 'wait',
     ok: row.rawDays >= 7 ? 'wait' : 'done', protected: 'active', retired: 'muted' }[row.state] || ''
 }
 function cleanupSub(row) {
-  if (row.state === 'delete_next_run') return `No email · ${relativeTime(nextUtcHour(CLEANUP.deleteHourUtc).toISOString())}`
-  if (row.state === 'warning_unknown') return 'Has email · warning gate'
-  if (row.state === 'leave_paused') return 'Leave keeps it under 14 days'
-  if (row.state === 'unconfirmed') return 'Dry run unavailable'
-  if (row.state === 'at_risk') return `${Math.max(0, CLEANUP.inactiveDays - row.rawDays).toFixed(1)} days to 14`
+  const next = relativeTime(nextUtcHour(CLEANUP.deleteHourUtc).toISOString())
+  if (row.state === 'delete_next_run') return row.hasEmail ? `Warned ${relativeTime(row.preview.lastWarnedAt)} · run ${next}` : `No email · run ${next}`
+  if (row.state === 'notice_period') return `Deletable ${relativeTime(row.preview.eligibleFrom)}`
+  if (row.state === 'needs_warning') return WARNING_LABELS[row.warning] || ''
+  if (row.state === 'leave_paused') return 'Leave keeps it under 9 days'
+  if (row.state === 'unconfirmed') return 'Cleanup preview unavailable'
+  if (row.state === 'at_risk') return `${Math.max(0, CLEANUP.inactiveDays - row.adjustedDays).toFixed(1)} days to 14 after leave`
   return ''
 }
 
 const SCOPES = {
   delete: { label: 'Eligible for deletion', tone: 'bad' },
-  warning: { label: 'Past 14 days, has email', tone: '' },
+  warning: { label: 'Past 14 days, warning gate', tone: '' },
   charge: { label: 'Not charged 14+ days', tone: '' },
   risk: { label: 'At risk · 9–13 days', tone: '' },
 }
@@ -1642,11 +1651,11 @@ function paintRosterSummary() {
   }
   const gap = ov.previewError ? `<span class="is-gap">Cleanup preview unavailable (${esc(ov.previewError)}). No one is shown as eligible.</span>` : ''
   const rules = {
-    delete: `<b>Deleted at the next 18:00 UTC run</b> (${esc(relativeTime(deleteNext.toISOString()))}): inactive 14+ days after leave, counting Bomb charges and verified votes, with no email on file.`,
-    warning: `<b>Inactive 14+ days after leave, with an email.</b> Deleted only 2–45 days after a warning email is delivered (reminders run at 09:00 UTC).
-      <span class="is-gap">Warning delivery isn't available to the admin panel, so these agents are not marked eligible.</span>`,
+    delete: `<b>Deleted at the next 18:00 UTC run</b> (${esc(relativeTime(deleteNext.toISOString()))}): inactive 14+ days after leave, counting Bomb charges and verified votes, and either no email on file or a warning delivered 2–45 days ago.`,
+    warning: `<b>Inactive 14+ days after leave, with an email, not yet deletable.</b> The job deletes them once a delivered warning is 2–45 days old.
+      Reminders go out at 09:00 UTC; Status shows each agent's actual warning state.`,
     charge: `<b>No Bomb charge for 14+ days.</b> A verified vote or leave can still keep the account safe; Status shows the real cleanup position.`,
-    risk: `<b>Cleanup clock at 9–13 days</b>, before leave is subtracted. Reminder emails go out at 09:00 UTC.`,
+    risk: `<b>Cleanup clock at 9–13 days after leave</b>, counting Bomb charges and verified votes. Reminder emails go out at 09:00 UTC.`,
   }
   $('agentRule').innerHTML = (rules[rosterScope] || 'The cleanup clock resets on a Bomb charge or a verified vote. Leave pauses it.') + gap
   const deletable = ov.preview ? agentGroup(ov.rows || [], 'delete').length : 0
@@ -1655,7 +1664,7 @@ function paintRosterSummary() {
 
 function sortRoster(list) {
   const sort = $('rosterSort').value
-  const urgency = { delete_next_run: 8, warning_unknown: 7, unconfirmed: 6, at_risk: 5, leave_paused: 3, ok: 1, protected: 1, retired: 0 }
+  const urgency = { delete_next_run: 8, notice_period: 7, needs_warning: 7, unconfirmed: 6, at_risk: 5, leave_paused: 3, ok: 1, protected: 1, retired: 0 }
   const recent = (a) => Math.max(...[a.lastSeenAt, a.lastStreamAt, a.lastFedAt, a.lastVoteAt].map((v) => v ? new Date(v).getTime() : 0))
   return [...list].sort((ra, rb) => {
     const a = ra.agent, b = rb.agent
@@ -1738,7 +1747,7 @@ function applyRosterFilter() {
 async function loadRosterData() {
   $('rosterCount').textContent = 'Loading…'
   $('rosterList').innerHTML = `<div class="adm-empty" style="padding:14px;"><span class="adm-spin"></span>Reading agent signals…</div>`
-  const [res, preview] = await Promise.all([call('adminListAgents', {}), fetchDeletionPreview(call)])
+  const [res, preview] = await Promise.all([call('adminListAgents', {}), fetchCleanupPreview(call)])
   if (!res || !res.success) {
     $('rosterCount').textContent = res?.error || 'Load failed'
     $('rosterList').innerHTML = `<div class="adm-empty" style="padding:14px;">Could not load the agent log. Select Refresh to try again.</div>`
@@ -1969,11 +1978,15 @@ $('btnRecheckAllVma').onclick = () => recheckAllVmaPending()
 $('btnVmaPrev').onclick = () => { vmaOffset = Math.max(0, vmaOffset - VMA_PAGE_SIZE); loadVmaPage() }
 $('btnVmaNext').onclick = () => { vmaOffset += VMA_PAGE_SIZE; loadVmaPage() }
 
-/* ── ReConnect Quests ── district accordions over adminListStuckReconnects.
-   Statuses come from the backend's flags (questStatus); nothing is
-   estimated. Every action is the existing one: auto-fill and the manual
-   roster both go through "Confirm this team?" → adminPairReconnect. */
+/* ── ReConnect Quests ── district accordions over adminListReconnectQuests
+   (every quest, its stored stage) merged with adminListStuckReconnects (the
+   health flags and team-fill suggestions for open ones). Both are read-only.
+   Contributions come from adminGetReconnectQuest when a quest is opened.
+   Every action is the existing one: auto-fill and the manual roster both go
+   through "Confirm this team?" → adminPairReconnect, open quests only. */
 let reconnectCases = []
+let reconnectItems = []
+let questListError = ''
 let questFilterKey = 'all'
 let questSortKey = 'deadline'
 const openDistricts = new Set()
@@ -2002,7 +2015,7 @@ function shortDeadline(iso) {
 
 function populateReconnectDistricts() {
   const current = $('reconnectDistrictFilter').value
-  const districts = [...new Map(reconnectCases.map((item) => [item.districtId, item.districtName])).entries()]
+  const districts = [...new Map(reconnectItems.map((item) => [item.districtId, item.districtName])).entries()]
     .sort((a, b) => a[1].localeCompare(b[1]))
   $('reconnectDistrictFilter').innerHTML = '<option value="">All districts</option>'
     + districts.map(([id, name]) => `<option value="${esc(id)}">${esc(name)}</option>`).join('')
@@ -2037,7 +2050,7 @@ function previewReconnectRoster(btn, item, agentNos) {
   const current = (item.agents || []).map((agent) => agent.codename)
   const additions = agentNos.filter((agentNo) => !currentNos.has(agentNo)).map(nameOf)
   body.innerHTML = `
-    <span class="rh-context">${esc(item.districtName)} · ${esc(item.goalLabel)}</span>
+    <span class="rh-context">${esc(item.districtName)} · ${esc(plainLabel(item.goalLabel))}</span>
     <h3>Confirm this team?</h3>
     <p>The suggested match is available and restoring the same district.</p>
     <div class="rh-match-line"><span>Current team</span><b>${esc(current.join(' + ') || 'No one yet')}</b></div>
@@ -2060,27 +2073,31 @@ function openReconnectAgent(item) {
   openAgentFile(agentNo)
 }
 
-const QUEST_TONE = { waiting: 'wait', active: 'active', completed: 'done', cancelled: 'muted', expired: 'bad' }
+const QUEST_TONE = { waiting: 'wait', active: 'active', completed: 'done', cancelled: 'muted', expired: 'muted' }
+// Saved goal labels can start with an emoji (older ReConnect goals were
+// named that way); the view shows the words only. Stored data is untouched.
+const plainLabel = (s) => String(s || '').replace(/^[\p{Extended_Pictographic}️‍\s]+/u, '') || String(s || '')
 const questBadge = (item) => { const s = questStatus(item); return badge(QUEST_TONE[s], QUEST_STATUSES[s]) }
 const questKey = (item) => item.missionId || `${item.goalId}:${item.agents?.[0]?.agentNo || ''}`
+const questOpen = (item) => ['waiting', 'active'].includes(questStatus(item))
+const STAGE_MARK = { done: 'is-done', current: 'is-current', stopped: 'is-stopped', todo: '' }
 
 function seatsBar(item) {
   const p = questProgress(item)
   return bar(p.joined, p.required, `${p.joined}/${p.required} joined${p.invited ? ` · ${p.invited} invited` : ''}`)
 }
-function streamedBar(item) {
-  const p = questProgress(item)
-  if (!p.streamKnown) return '<span class="adm-sub">Not reported</span>'
-  return bar(p.streamed, Math.max(1, p.joined), `${p.streamed}/${p.joined} streamed`)
+function whenCell(item) {
+  if (questOpen(item)) return esc(shortDeadline(questDeadline(item)))
+  return esc(item.closedAt ? fmtDay(item.closedAt) : '—')
 }
 
 function paintQuestChips() {
-  const counts = questStatusCounts(reconnectCases)
-  const chips = [['all', 'All', counts.all], ['attention', 'Needs attention', counts.attention], ['waiting', 'Waiting', counts.waiting],
-    ['active', 'Active', counts.active], ['expired', 'Expired', counts.expired]]
+  const counts = questStatusCounts(reconnectItems)
+  const chips = [['all', 'All', counts.all], ['attention', 'Needs attention', counts.attention], ['open', 'Open', counts.open],
+    ['waiting', 'Waiting', counts.waiting], ['active', 'Active', counts.active], ['completed', 'Completed', counts.completed],
+    ['cancelled', 'Cancelled', counts.cancelled], ['expired', 'Expired', counts.expired]]
   $('questStatusChips').innerHTML = chips.map(([k, l, n]) =>
     `<button type="button" class="adm-chip${questFilterKey === k ? ' is-active' : ''}" data-qfilter="${k}" aria-pressed="${questFilterKey === k}">${esc(l)} ${n}</button>`).join('')
-    + QUEST_UNAVAILABLE_STATUSES.map((k) => `<button type="button" class="adm-chip" disabled title="Not available from the backend yet">${esc(QUEST_STATUSES[k])}</button>`).join('')
   const sorts = [['deadline', 'Deadline'], ['waiting', 'Waiting longest'], ['attention', 'Needs attention'], ['district', 'District A–Z']]
   $('questSortChips').innerHTML = '<span class="adm-chip-label">Sort</span>' + sorts.map(([k, l]) =>
     `<button type="button" class="adm-chip${questSortKey === k ? ' is-active' : ''}" data-qsort="${k}" aria-pressed="${questSortKey === k}">${esc(l)}</button>`).join('')
@@ -2090,51 +2107,57 @@ function paintQuestChips() {
 
 function paintReconnectList() {
   const counts = reconnectBucketCounts(reconnectCases)
-  $('reconnectSummary').textContent = `${counts.action} need action · ${counts.watch} to watch · ${counts.fine} fine`
+  const all = questStatusCounts(reconnectItems)
+  $('reconnectSummary').textContent = `${counts.action} need action · ${all.open} open · ${all.completed} completed in ${questDays} days`
   setCount('reconnect', counts.action, counts.action ? 'bad' : '')
+  $('questDataNote').innerHTML = questListError
+    ? `<span class="is-gap">Quest history unavailable (${esc(questListError)}). Showing open cases from the health check only.</span>`
+    : `Open quests, plus every quest created or completed in the last ${questDays} days. Stages are the stored quest phase.`
   paintQuestChips()
   const district = $('reconnectDistrictFilter').value
-  const scoped = district ? reconnectCases.filter((i) => i.districtId === district) : reconnectCases
+  const scoped = district ? reconnectItems.filter((i) => i.districtId === district) : reconnectItems
   const districts = questDistricts(scoped, { query: $('reconnectFilter').value, filter: questFilterKey, sort: questSortKey })
   if (!districtsTouched) for (const d of districts) if (d.counts.attention) openDistricts.add(d.districtId)
   const searching = !!$('reconnectFilter').value.trim() || !!district
   const box = $('questDistricts')
   if (!districts.length) {
-    box.innerHTML = `<div class="adm-empty">${reconnectCases.length ? 'No quests match this view.' : 'No open ReConnect quests right now.'}</div>`
+    box.innerHTML = `<div class="adm-empty">${reconnectItems.length ? 'No quests match this view.' : 'No ReConnect quests in this window.'}</div>`
     return
   }
   box.innerHTML = districts.map((d) => {
     const open = searching || openDistricts.has(d.districtId)
     const c = d.counts
     const sum = [c.attention ? badge('bad', `${c.attention} need action`) : '', c.waiting ? badge('wait', `${c.waiting} waiting`) : '',
-      c.active ? badge('active', `${c.active} active`) : '', c.expired ? badge('bad', `${c.expired} expired`) : ''].join('')
+      c.active ? badge('active', `${c.active} active`) : '', c.completed ? badge('done', `${c.completed} completed`) : '',
+      c.expired ? badge('muted', `${c.expired} expired`) : '', c.cancelled ? badge('muted', `${c.cancelled} cancelled`) : ''].join('')
+    const openCount = c.waiting + c.active
     return `<div class="adm-acc${open ? ' is-open' : ''}" data-district="${esc(d.districtId)}">
       <button class="adm-acc-h" type="button" aria-expanded="${open}">
         <svg class="adm-chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 2l4 4-4 4"/></svg>
-        <span class="adm-acc-name"><b>${esc(d.districtName)}</b><span>${plural(d.items.length, 'quest')} · earliest deadline ${esc(shortDeadline(Number.isFinite(d.earliestDeadline) ? new Date(d.earliestDeadline).toISOString() : null))}</span></span>
+        <span class="adm-acc-name"><b>${esc(d.districtName)}</b><span>${plural(d.items.length, 'quest')}${openCount ? ` · ${openCount} open · earliest deadline ${esc(shortDeadline(Number.isFinite(d.earliestDeadline) ? new Date(d.earliestDeadline).toISOString() : null))}` : ' · none open'}</span></span>
         <span class="adm-acc-sum">${sum}</span>
       </button>
       <div class="adm-acc-b">
         <div class="adm-table-wrap has-rows" style="border:0;padding:0;background:none;">
           <table class="adm-table">
-            <colgroup><col style="width:28px"><col style="width:27%"><col style="width:15%"><col style="width:17%"><col style="width:16%"><col style="width:9%"><col style="width:15%"></colgroup>
-            <thead><tr><th></th><th>Team</th><th>Quest</th><th>Seats</th><th>Streamed</th><th>Deadline</th><th>Status</th></tr></thead>
+            <colgroup><col style="width:28px"><col style="width:27%"><col style="width:15%"><col style="width:17%"><col style="width:14%"><col style="width:11%"><col style="width:15%"></colgroup>
+            <thead><tr><th></th><th>Team</th><th>Quest</th><th>Seats</th><th>Stage</th><th>Deadline / closed</th><th>Status</th></tr></thead>
             <tbody>${d.items.map((item) => `
               <tr tabindex="0" data-quest="${esc(questKey(item))}">
                 <td class="adm-td-flag">${questNeedsAdmin(item) ? '<span class="adm-flag" title="Needs admin action"></span>' : ''}</td>
-                <td><span class="adm-who"><b>${esc(reconnectTeamLabel(item))}</b><span>${esc(reconnectPlainReason(item))}</span></span></td>
-                <td>${esc(item.goalLabel)}</td>
+                <td><span class="adm-who"><b>${esc(reconnectTeamLabel(item))}</b><span>${esc(questReason(item))}</span></span></td>
+                <td>${esc(plainLabel(item.goalLabel))}</td>
                 <td>${seatsBar(item)}</td>
-                <td>${streamedBar(item)}</td>
-                <td>${esc(shortDeadline(questDeadline(item)))}</td>
+                <td>${esc(questCurrentStage(item))}</td>
+                <td>${whenCell(item)}</td>
                 <td>${questBadge(item)}</td>
               </tr>`).join('')}</tbody>
           </table>
           <div class="adm-rows">${d.items.map((item) => `
             <button class="adm-li" type="button" data-quest="${esc(questKey(item))}">
-              <span class="adm-li-top"><span class="adm-who"><b>${esc(reconnectTeamLabel(item))}</b><span>${esc(item.goalLabel)} · ${esc(shortDeadline(questDeadline(item)))}</span></span>${questBadge(item)}</span>
-              <span class="adm-li-reason${questNeedsAdmin(item) ? ' is-bad' : ''}">${questNeedsAdmin(item) ? '<span class="adm-flag"></span> ' : ''}${esc(reconnectPlainReason(item))}</span>
-              <span class="adm-li-kv" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);">${seatsBar(item)}${streamedBar(item)}</span>
+              <span class="adm-li-top"><span class="adm-who"><b>${esc(reconnectTeamLabel(item))}</b><span>${esc(plainLabel(item.goalLabel))} · ${whenCell(item)}</span></span>${questBadge(item)}</span>
+              <span class="adm-li-reason${questNeedsAdmin(item) ? ' is-bad' : ''}">${questNeedsAdmin(item) ? '<span class="adm-flag"></span> ' : ''}${esc(questReason(item))}</span>
+              <span class="adm-li-kv" style="display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;">${seatsBar(item)}<span>Stage <b>${esc(questCurrentStage(item))}</b></span></span>
             </button>`).join('')}</div>
         </div>
       </div>
@@ -2151,82 +2174,141 @@ function paintReconnectList() {
     }
   }
   for (const el of box.querySelectorAll('[data-quest]')) {
-    const open = () => { const item = reconnectCases.find((i) => questKey(i) === el.dataset.quest); if (item) openQuest(item) }
+    const open = () => { const item = reconnectItems.find((i) => questKey(i) === el.dataset.quest); if (item) openQuest(item) }
     el.onclick = open
     if (el.tagName === 'TR') el.onkeydown = (e) => { if (e.key === 'Enter') open() }
   }
   if (sessionUnauthorized) setMutationButtonsDisabled(true)
 }
 
+function stagesHtml(stages) {
+  if (!stages?.length) return '<div class="adm-empty">Solo puzzle: no team stages.</div>'
+  return `<ol class="adm-stages">${stages.map((s) => `<li class="${STAGE_MARK[s.state] || ''}"><i></i><span><b>${esc(s.label)}</b>${
+    s.key === 'complete' && s.detail ? `<small>${esc(fmtDate(s.detail))}</small>` : s.detail && s.key !== 'complete' ? `<small>${esc(s.detail)}</small>` : ''
+  }${s.state === 'stopped' ? '<small>Stopped here</small>' : ''}</span></li>`).join('')}</ol>`
+}
+
+const MEMBER_STATUS = { joined: ['active', 'Joined'], invited: ['wait', 'Invited'], left: ['muted', 'Left'] }
+function contributionText(m) {
+  if (m.counted === 'not_applicable') return m.status === 'invited' ? 'Not joined' : 'No streams needed'
+  if (m.counted === 'cancelled') return 'Not counted (cancelled)'
+  if (!m.contribution) return '—'
+  const c = m.contribution
+  const value = c.of != null ? `${c.value}/${c.of} ${c.unit}` : `${c.value.toLocaleString()} ${c.unit}`
+  if (m.counted === 'frozen_at_exit') return `${value} · kept from before leaving`
+  if (m.counted === 'left_district') return `${value} · attempt lapsed`
+  if (m.counted === 'until_close') return `${value} · until close`
+  return value
+}
+
+function membersHtml(item, detail) {
+  const health = new Map([...(item.health?.agents || []), ...(item.health?.invites || [])].map((a) => [a.agentNo, a]))
+  const members = detail ? detail.members : (item.quest?.members || [...(item.agents || []).map((a) => ({ ...a, status: 'joined' })), ...(item.invites || []).map((a) => ({ ...a, status: 'invited' }))])
+  if (!members.length) return '<div class="adm-empty">No members.</div>'
+  return members.map((m) => {
+    const h = health.get(m.agentNo)
+    const [tone, label] = m.inviteLapsed ? ['muted', 'Invite lapsed'] : (MEMBER_STATUS[m.status] || ['muted', m.status])
+    const meta = [m.agentNo, h ? (h.online ? 'online' : `quiet ${h.quietDays ?? '—'}d`) : null,
+      m.joinedAt ? `${m.status === 'invited' ? 'invited' : 'joined'} ${relativeTime(m.joinedAt)}` : null,
+      detail?.members && m.warPlayed === true ? 'played War of Cards' : null].filter(Boolean).join(' · ')
+    return `<div class="adm-mate"><span class="adm-dot${h?.online ? ' is-on' : ''}"></span>
+      <span class="adm-who"><b>${esc(m.codename || m.agentNo)}</b><span>${esc(meta)}</span>
+        ${detail ? `<span class="adm-contrib">${esc(contributionText(m))}</span>` : ''}</span>
+      ${badge(tone, label)}
+      <button class="btn btn-ghost btn-sm" type="button" data-file="${esc(m.agentNo)}">File</button></div>`
+  }).join('')
+}
+
+function pooledHtml(detail) {
+  const p = detail?.pooled
+  if (!p) return ''
+  return `<div style="margin-top:10px;">${p.target ? bar(Math.min(p.total, p.target), p.target, `${p.total.toLocaleString()} / ${p.target.toLocaleString()} pooled ${p.unit}`)
+    : `<span class="adm-sub">${p.total.toLocaleString()} pooled ${p.unit}${p.capped ? ' (capped per track)' : ''}</span>`}</div>`
+}
+
+let questDetailSeq = 0
+async function loadQuestDetail(item) {
+  if (!item.missionId) return
+  const seq = ++questDetailSeq
+  const res = await call(QUEST_DETAIL_ACTION, { missionId: item.missionId })
+  if (seq !== questDetailSeq || $('questDrawer').hidden) return
+  const box = $('questMembers')
+  if (!box) return
+  if (!res?.success) {
+    box.insertAdjacentHTML('beforeend', `<p class="adm-note"><span class="is-gap">Contributions unavailable (${esc(res?.error || 'error')}).</span></p>`)
+    return
+  }
+  box.innerHTML = membersHtml(item, res.quest) + pooledHtml(res.quest)
+  $('questStages').innerHTML = stagesHtml(res.quest.stages)
+  const unit = { sharedTrack: 'plays of the shared track', sharedTracks: 'plays across the quest tracks, capped per track', checklist: 'checklist tracks played',
+    ownGoals: "plays of each teammate's own goal tracks", invite: 'no streaming needed' }[res.quest.mode] || ''
+  $('questContribNote').textContent = `Counted from each teammate's join time${res.quest.status === 'open' ? ' to now' : ' to when the quest closed, recounted from current play records'} · ${unit}.`
+  for (const b of $('questDrawerBody').querySelectorAll('[data-file]')) b.onclick = () => openAgentFile(b.dataset.file)
+}
+
 function openQuest(item, { focusRoster = false } = {}) {
-  const st = questStatus(item)
-  const p = questProgress(item)
-  const action = reconnectAdminAction(item)
-  $('questDrawerContext').textContent = `${item.districtName} · ${item.goalLabel}`
+  const h = item.health
+  const isOpenQuest = questOpen(item)
+  const action = h ? reconnectAdminAction(h) : { kind: 'none' }
+  $('questDrawerContext').textContent = `${item.districtName} · ${plainLabel(item.goalLabel)}`
   $('questDrawerTitle').textContent = reconnectTeamLabel(item)
   $('questDrawerBadge').innerHTML = questBadge(item)
-  const mates = (item.agents || []).map((a) => `
-    <div class="adm-mate"><span class="adm-dot${a.online ? ' is-on' : ''}" title="${a.online ? 'Online' : 'Offline'}"></span>
-      <span class="adm-who"><b>${esc(a.codename)}</b><span>${esc(a.agentNo)} · quiet ${esc(a.quietDays ?? '—')}d${a.lastSeenAt ? ` · seen ${esc(relativeTime(a.lastSeenAt))}` : ''}</span></span>
-      ${item.kind === 'mission' ? (a.streamed ? badge('active', 'Streamed') : badge('muted', 'No stream yet')) : ''}
-      <button class="btn btn-ghost btn-sm" type="button" data-file="${esc(a.agentNo)}">File</button></div>`).join('')
-  const invites = (item.invites || []).map((a) => `
-    <div class="adm-mate"><span class="adm-dot${a.online ? ' is-on' : ''}"></span>
-      <span class="adm-who"><b>${esc(a.codename)}</b><span>${esc(a.agentNo)} · invited ${esc(relativeTime(a.waitingSince))}</span></span>${badge('wait', 'Invited')}</div>`).join('')
-  const open = Math.max(0, p.required - p.joined - p.invited)
-  const seats = Array.from({ length: item.kind === 'mission' ? open : 0 }).map(() =>
-    `<div class="adm-mate"><span class="adm-dot"></span><span class="adm-who"><b class="muted">Open seat</b></span></div>`).join('')
-  const canPick = item.kind === 'mission' && !(item.flags || []).includes('expired')
+  const p = questProgress(item)
+  const q = item.quest
+  const canPick = !!h && isOpenQuest && h.kind === 'mission' && !(h.flags || []).includes('expired')
   const needsAdmin = questNeedsAdmin(item)
   $('questDrawerBody').innerHTML = `
-    <div class="adm-reason${needsAdmin ? '' : ' is-calm'}"><b>${esc(reconnectPlainReason(item))}</b>${esc(item.recommendedAction ? `Recommended: ${item.recommendedAction}` : '')}</div>
-    <div class="adm-sec"><h4>Progress</h4>
-      <div style="display:flex;flex-direction:column;gap:8px;">${seatsBar(item)}${streamedBar(item)}</div>
-      <p class="muted" style="margin-top:8px;">Quest stage and per-agent stream counts aren't reported by the backend yet.</p></div>
-    <div class="adm-sec"><h4>Teammates</h4>${mates}${invites}${seats || ''}</div>
-    <div class="adm-sec"><h4>Deadlines</h4><div class="adm-kv">
-      <div><span class="k">District deadline</span><span class="v">${esc(fmtDeadline(item.districtExpiresAt))}</span></div>
+    <div class="adm-reason${needsAdmin ? '' : ' is-calm'}"><b>${esc(questReason(item))}</b>${esc(h && isOpenQuest && h.recommendedAction ? `Recommended: ${h.recommendedAction}` : '')}</div>
+    <div class="adm-sec"><h4>Stages</h4><div id="questStages">${stagesHtml(q?.stages)}</div></div>
+    <div class="adm-sec"><h4>Teammates and contributions</h4>
+      <p class="muted" id="questContribNote" style="margin-bottom:6px;">${item.missionId ? '<span class="adm-spin"></span>Counting contributions…' : ''}</p>
+      <div id="questMembers">${membersHtml(item, null)}</div>
+      <div style="margin-top:8px;">${seatsBar(item)}</div></div>
+    <div class="adm-sec"><h4>Dates</h4><div class="adm-kv">
+      ${isOpenQuest ? `<div><span class="k">District deadline</span><span class="v">${esc(fmtDeadline(item.districtExpiresAt))}</span></div>
       <div><span class="k">Quest expires</span><span class="v">${esc(item.missionExpiresAt ? fmtDeadline(item.missionExpiresAt) : '—')}</span></div>
-      <div><span class="k">Waiting</span><span class="v">${esc(fmtWait(item.waitingSince))}</span></div>
+      <div><span class="k">Waiting</span><span class="v">${esc(fmtWait(item.waitingSince))}</span></div>` : `
+      <div><span class="k">Created</span><span class="v">${esc(fmtDate(q?.createdAt))}</span></div>
+      <div><span class="k">${q?.status === 'completed' ? 'Completed' : q?.status === 'expired' ? 'Expired' : 'Closed'}</span><span class="v">${esc(q?.status === 'cancelled' ? 'Cancelled' : fmtDate(item.closedAt))}</span></div>`}
       <div><span class="k">Seats required</span><span class="v">${esc(item.requiredAgents)}</span></div>
     </div></div>
     ${canPick ? `<div class="adm-sec" id="questRoster"><h4>Choose team manually</h4><div class="rh-roster-list"></div></div>` : ''}
-    ${item.kind === 'mission' ? `<div class="adm-sec"><h4>Random assignment</h4><p class="muted" style="margin-bottom:8px;">Lives on the ReConnect goal in Goals, behind its own confirmation.</p>
+    ${item.kind === 'mission' && isOpenQuest ? `<div class="adm-sec"><h4>Random assignment</h4><p class="muted" style="margin-bottom:8px;">Lives on the ReConnect goal in Goals, behind its own confirmation.</p>
       <button class="btn btn-ghost btn-sm" type="button" data-goto-goals>Open Goals</button></div>` : ''}`
   for (const b of $('questDrawerBody').querySelectorAll('[data-file]')) b.onclick = () => openAgentFile(b.dataset.file)
   $('questDrawerBody').querySelector('[data-goto-goals]')?.addEventListener('click', () => { closeQuestDrawer(); selectView('goals') })
 
   if (canPick) {
     const roster = $('questDrawerBody').querySelector('.rh-roster-list')
-    for (const agent of item.agents || []) {
+    for (const agent of h.agents || []) {
       const label = document.createElement('label')
       label.className = 'adm-pick'
       label.innerHTML = `<input type="checkbox" checked disabled value="${esc(agent.agentNo)}"><span>${esc(agent.codename)} · already joined</span>`
       roster.appendChild(label)
     }
-    for (const agent of item.availableAgents || []) {
+    for (const agent of h.availableAgents || []) {
       const label = document.createElement('label')
       label.className = 'adm-pick'
       label.innerHTML = `<input type="checkbox" value="${esc(agent.agentNo)}"><span>${esc(agent.codename)} · ${esc(agent.agentNo)}${agent.online ? ' · online' : agent.quietDays != null ? ` · quiet ${esc(agent.quietDays)}d` : ''}</span>`
       roster.appendChild(label)
     }
-    if (!(item.availableAgents || []).length) roster.insertAdjacentHTML('beforeend', '<div class="adm-empty">No other eligible agents right now.</div>')
+    if (!(h.availableAgents || []).length) roster.insertAdjacentHTML('beforeend', '<div class="adm-empty">No other eligible agents right now.</div>')
     const manualBtn = document.createElement('button')
     manualBtn.className = 'btn btn-ghost btn-block adm-mutate-btn'
     manualBtn.type = 'button'
     manualBtn.style.marginTop = '8px'
     const updateManual = () => {
       const selected = [...roster.querySelectorAll('input:checked')].map((input) => input.value)
-      manualBtn.disabled = selected.length !== item.requiredAgents || sessionUnauthorized
-      manualBtn.textContent = selected.length === item.requiredAgents
-        ? 'Preview selected team' : `Choose ${Math.max(0, item.requiredAgents - selected.length)} more`
+      manualBtn.disabled = selected.length !== h.requiredAgents || sessionUnauthorized
+      manualBtn.textContent = selected.length === h.requiredAgents
+        ? 'Preview selected team' : `Choose ${Math.max(0, h.requiredAgents - selected.length)} more`
     }
     roster.querySelectorAll('input:not(:disabled)').forEach((input) => input.onchange = () => {
       const checked = [...roster.querySelectorAll('input:checked')]
-      if (checked.length > item.requiredAgents) input.checked = false
+      if (checked.length > h.requiredAgents) input.checked = false
       updateManual()
     })
-    manualBtn.onclick = () => previewReconnectRoster(manualBtn, item,
+    manualBtn.onclick = () => previewReconnectRoster(manualBtn, h,
       [...roster.querySelectorAll('input:checked')].map((input) => input.value))
     roster.parentElement.appendChild(manualBtn)
     updateManual()
@@ -2238,10 +2320,10 @@ function openQuest(item, { focusRoster = false } = {}) {
   fileBtn.className = 'btn btn-ghost'; fileBtn.type = 'button'; fileBtn.textContent = 'Open agent file'
   fileBtn.onclick = () => openReconnectAgent(item)
   foot.appendChild(fileBtn)
-  if (action.kind === 'autofill' || canAutoFillReconnect(item)) {
+  if (h && isOpenQuest && (action.kind === 'autofill' || canAutoFillReconnect(h))) {
     const btn = document.createElement('button')
     btn.className = 'btn btn-primary adm-mutate-btn'; btn.type = 'button'; btn.textContent = 'Auto-fill best match'
-    btn.onclick = () => previewReconnectRoster(btn, item, item.suggestedAgentNos)
+    btn.onclick = () => previewReconnectRoster(btn, h, h.suggestedAgentNos)
     foot.appendChild(btn)
   } else if (action.kind === 'review' && canPick) {
     const btn = document.createElement('button')
@@ -2254,6 +2336,7 @@ function openQuest(item, { focusRoster = false } = {}) {
   $('btnCloseQuestDrawer').focus()
   if (focusRoster) $('questRoster')?.scrollIntoView({ block: 'start' })
   if (sessionUnauthorized) setMutationButtonsDisabled(true)
+  loadQuestDetail(item)
 }
 function closeQuestDrawer() {
   $('questDrawer').hidden = true
@@ -2262,14 +2345,18 @@ function closeQuestDrawer() {
 $('btnCloseQuestDrawer').onclick = closeQuestDrawer
 $('questDrawer').addEventListener('click', (event) => { if (event.target === $('questDrawer')) closeQuestDrawer() })
 
+const questDays = 30
 async function loadReconnectData() {
-  const res = await call('adminListStuckReconnects')
-  if (!res?.success) {
-    $('questDistricts').innerHTML = `<div class="adm-empty">${esc(res?.error || 'Failed to load')}</div>`
+  const [health, list] = await Promise.all([call('adminListStuckReconnects'), call(QUEST_LIST_ACTION, { days: questDays })])
+  if (!health?.success && !list?.success) {
+    $('questDistricts').innerHTML = `<div class="adm-empty">${esc(health?.error || list?.error || 'Failed to load')}</div>`
     return
   }
-  reconnectCases = res.cases || []
-  ov.reconnect = reconnectCases
+  reconnectCases = health?.success ? (health.cases || []) : []
+  questListError = list?.success ? '' : (list?.error || 'error')
+  reconnectItems = buildQuestItems(list?.success ? list.quests : [], reconnectCases)
+  ov.reconnect = reconnectItems
+  ov.reconnectCases = reconnectCases
   populateReconnectDistricts()
   paintReconnectList()
 }
@@ -2317,7 +2404,7 @@ function paintLeaves() {
   setCount('leaves', counts.active)
   $('moreLeavesSub').textContent = `${counts.active} on leave now`
   const rows = leaveRows(ov.leaves, { query: $('leaveFilter')?.value || '', filter: leaveFilterKey, sort: leaveSortKey })
-  const chips = [['all', 'All', counts.all], ['active', 'On leave', counts.active], ['upcoming', 'Upcoming', counts.upcoming], ['past', 'Past', counts.past]]
+  const chips = [['all', 'All', counts.all], ['active', 'On leave now', counts.active], ['past', 'Past', counts.past]]
   const sorts = [['start_desc', 'Newest'], ['end_asc', 'Ending soonest'], ['duration', 'Longest'], ['agent', 'Agent']]
   const q = $('leaveFilter')?.value || ''
   box.innerHTML = `
@@ -2333,12 +2420,12 @@ function paintLeaves() {
           <td>${badge(leaveTone(l.status), LEAVE_STATUS_LABELS[l.status])}</td>
           <td>${esc(fmtDay(l.startsAt))}</td>
           <td>${esc(fmtDay(l.endedAt || l.endsAt))}${l.endedAt ? `<span class="adm-sub">planned ${esc(fmtDay(l.endsAt))}</span>` : ''}</td>
-          <td>${l.days} d</td>
+          <td>${l.days < 1 ? '<1' : l.days} d</td>
           <td>${l.districtId ? `Paused${l.districtHoursGranted ? `<span class="adm-sub">+${Math.round(l.districtHoursGranted / 24)} d deadline</span>` : ''}` : '<span class="adm-sub">No active district</span>'}</td>
         </tr>`).join('')}</tbody></table>
       <div class="adm-rows">${rows.map((l) => `<button class="adm-li" type="button" data-leave-agent="${esc(l.agentNo)}">
         <span class="adm-li-top"><span class="adm-who"><b>${esc(l.codename || l.agentNo)}</b><span>${esc(l.agentNo)}</span></span>${badge(leaveTone(l.status), LEAVE_STATUS_LABELS[l.status])}</span>
-        <span class="adm-li-kv"><span><b>${esc(fmtDay(l.startsAt))}</b> – <b>${esc(fmtDay(l.endedAt || l.endsAt))}</b></span><span>${l.days} d</span><span>${l.districtId ? 'District paused' : 'No active district'}</span></span>
+        <span class="adm-li-kv"><span><b>${esc(fmtDay(l.startsAt))}</b> – <b>${esc(fmtDay(l.endedAt || l.endsAt))}</b></span><span>${l.days < 1 ? '<1' : l.days} d</span><span>${l.districtId ? 'District paused' : 'No active district'}</span></span>
       </button>`).join('')}</div>` : `<div class="adm-empty" style="padding:14px;">No leaves match this view.</div>`}
     </div>`
   $('leaveFilter').oninput = () => { const pos = $('leaveFilter').selectionStart; paintLeaves(); $('leaveFilter').focus(); $('leaveFilter').setSelectionRange(pos, pos) }

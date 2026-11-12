@@ -249,7 +249,7 @@ async function findMyCompletedMission(supabase: SupabaseDB, agentNo: string, dis
 
 /** Every key from a participant's OWN frozen track/album goals — this is
  *  what "connect" checks against, not one fixed shared track. */
-function ownGoalKeys(pd: any): string[] {
+export function ownGoalKeys(pd: any): string[] {
   const g = pd?.goals || {}
   const keys: string[] = []
   for (const t of g.trackGoals || []) keys.push(...(t.keys || []))
