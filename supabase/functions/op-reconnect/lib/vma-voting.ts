@@ -394,7 +394,11 @@ export async function adminListVmaPending(supabase: SupabaseDB, content: GameCon
 
   const rows = data || []
   const withUrls = await Promise.all(rows.map(async (r: any) => {
-    const { data: signed } = await supabase.storage.from(PROOF_BUCKET).createSignedUrl(r.proof_path, SIGNED_URL_TTL_SECONDS)
+    // Retention clears proof_path once the file is deleted (30 days after the
+    // event); such a row has no screenshot left to show.
+    const { data: signed } = r.proof_path
+      ? await supabase.storage.from(PROOF_BUCKET).createSignedUrl(r.proof_path, SIGNED_URL_TTL_SECONDS)
+      : { data: null }
     const { proof_path, ...rest } = r
     const allowedTotal = (r.is_double_day || r.is_power_hour) ? cfg.daily_cap_per_category * 2 : cfg.daily_cap_per_category
     const songKeywords = cfg.category_keywords[r.category] || []
