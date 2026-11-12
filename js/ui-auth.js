@@ -59,15 +59,19 @@ export function renderAuth(container, onAuthed, opts = {}) {
   // form says that — not the streaming game's pitch.
   let voting = false
   try { voting = fromVotingLink(location.search, readInvite(localStorage)) } catch { /* no storage */ }
-  wrap.appendChild(el('div', 'eyebrow', voting ? 'MAMA 2026 · Vote for BTS' : 'OP: ReConnect'))
-  wrap.appendChild(el('h1', 'title-sm', voting ? 'Make your account to start voting' : 'The network needs agents'))
-  wrap.appendChild(el('p', 'muted auth-lede', voting
-    ? 'Free, takes a minute. Then pick your side, vote on Mnet and upload your certificate here.'
-    : 'Make a free agent file to start streaming with ARMY.'))
-
-  // The ask ("make an account") should come after the reason, not before it —
-  // shown once, above the tabs, so it's read before anyone starts typing.
-  wrap.appendChild(authSteps(voting))
+  // One short header, then straight into the tabs. The three numbered
+  // "how it works" boxes that used to sit here are gone: onboarding already
+  // walks through streaming and the ARMY Bomb once the account exists, and on
+  // a phone they pushed the form itself below the fold.
+  const head = el('header', 'auth-head')
+  head.append(
+    el('div', 'eyebrow', voting ? 'MAMA 2026 · Vote for BTS' : 'OP: ReConnect'),
+    el('h1', 'title-sm', voting ? 'Make your account to start voting' : 'The network needs agents.'),
+    el('p', 'muted auth-lede', voting
+      ? 'Free, takes a minute. Then pick your side, vote on Mnet and upload your certificate here.'
+      : 'Make a free agent file to start streaming with ARMY.'),
+  )
+  wrap.appendChild(head)
 
   // The landing page's "I already have an agent file" link sends
   // ?mode=signin so it actually lands somewhere different from "Create your
@@ -132,28 +136,6 @@ export function renderAuth(container, onAuthed, opts = {}) {
   container.appendChild(wrap)
 }
 
-function authSteps(voting) {
-  const wrap = el('div', 'auth-steps')
-  const steps = voting ? [
-    'Make your account',
-    'Pick HOOLIGANS or ALIENS',
-    'Vote on Mnet, upload the certificate',
-  ] : [
-    'Create your private agent file',
-    'Connect Spotify or Apple Music tracking',
-    'Keep your ARMY Bomb charged and restore districts',
-  ]
-  steps.forEach((text, i) => {
-    const step = el('div', 'auth-step')
-    step.append(
-      el('span', 'auth-step-num', String(i + 1)),
-      el('span', 'auth-step-txt', esc(text)),
-    )
-    wrap.appendChild(step)
-  })
-  return wrap
-}
-
 /* ── Create an agent file ─────────────────────────────────────────────── */
 
 function buildRegister(onAuthed) {
@@ -184,13 +166,21 @@ function buildRegister(onAuthed) {
   email.autocomplete = 'email'
 
   const handleField = field('Instagram username', '', handle)
-  const xField = field('X (Twitter) username', 'Add at least one: Instagram, X, or both. Your teammates see them in fan battles, so keep your DMs open. Everyone else sees your codename.', xHandle)
+  const xField = field('X (Twitter) username', '', xHandle)
   const emailField = field('Email', 'Only ever used to get you back in if you lose your number or password.', email)
   // One password field: the eye toggle shows what was typed, which does the
   // job a second "type it again" field did, with one less thing to fill in.
   const pwField = field('Password', 'At least 6 characters — a couple of words works well.', pwWrap, pw)
 
-  panel.append(handleField, xField, emailField, pwField)
+  // Instagram and X read as one question ("at least one of these"), so they
+  // sit together in one group with the rule said once, underneath both.
+  const social = el('div', 'auth-group')
+  social.setAttribute('role', 'group')
+  social.setAttribute('aria-label', 'Instagram or X username')
+  social.append(handleField, xField,
+    el('div', 'auth-hint', 'Add at least one: Instagram, X, or both. Your teammates see them in fan battles, so keep your DMs open. Everyone else sees your codename.'))
+
+  panel.append(social, emailField, pwField)
 
   // Streams aren't collected here anymore. Registering used to also ask for
   // stats.fm / Musicat / ListenBrainz up front — three tabs and a live
@@ -216,9 +206,23 @@ function buildRegister(onAuthed) {
       if (handle.value.trim().replace(/^@/, '') !== h) return
       handle.classList.toggle('is-good', !!res.available)
       handle.classList.toggle('is-bad', !res.available)
+      // Say why, inline, with the same words the submit would use.
+      if (res.success && !res.available && res.reason) setFieldError(handleField, friendly(res.reason))
     }, 400)
   }
-  email.oninput = () => clearFieldError(emailField)
+  email.oninput = () => {
+    clearFieldError(emailField)
+    email.classList.remove('is-bad')
+  }
+  // Inline checks on leaving a field: the same rules the button applies,
+  // just said earlier. Empty fields stay quiet until the button is pressed.
+  email.onblur = () => {
+    const v = email.value.trim()
+    if (v && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) setFieldError(emailField, friendly('email_invalid'))
+  }
+  pw.onblur = () => {
+    if (pw.value && pw.value.length < 6) setFieldError(pwField, 'Password needs at least 6 characters')
+  }
   xHandle.oninput = () => {
     clearFieldError(xField)
     if (!handle.value.trim()) { clearFieldError(handleField); handle.classList.remove('is-bad') }
@@ -452,6 +456,11 @@ function showNumber(agent, onAuthed) {
 
 let fieldSeq = 0
 
+// Line icons for the password toggle (the emoji pair rendered differently on
+// every platform and looked out of place inside a form field).
+const EYE = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>'
+const EYE_OFF = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.6 5.1A10.8 10.8 0 0 1 12 5c6.4 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.1M6.6 6.6C3.8 8.4 2 12 2 12s3.6 7 10 7a10 10 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="M3 3l18 18"/></svg>'
+
 /** A labelled form field. `node` is what gets mounted (an input, or a
  *  password field's .pw-wrap); `labelFor` is the actual control the label
  *  and error message should point at — same element unless `node` wraps one.
@@ -503,14 +512,14 @@ function pwToggleInput(placeholder, autocomplete) {
   const wrap = el('div', 'pw-wrap')
   wrap.appendChild(input)
 
-  const toggle = el('button', 'pw-toggle', '👁')
+  const toggle = el('button', 'pw-toggle', EYE)
   toggle.type = 'button'
   toggle.setAttribute('aria-label', 'Show password')
   toggle.setAttribute('aria-pressed', 'false')
   toggle.onclick = () => {
     const showing = input.type === 'text'
     input.type = showing ? 'password' : 'text'
-    toggle.textContent = showing ? '👁' : '🙈'
+    toggle.innerHTML = showing ? EYE : EYE_OFF
     toggle.setAttribute('aria-pressed', String(!showing))
     toggle.setAttribute('aria-label', showing ? 'Show password' : 'Hide password')
   }

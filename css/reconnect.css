@@ -3710,43 +3710,91 @@ body.overlay-open { overflow: hidden; }
 }
 
 #auth:not([hidden]), #onboarding:not([hidden]) { min-height: 100svh; display: flex; width: 100%; }
-.auth-wrap { width: 100%; max-width: 440px; margin: auto; padding: 46px 20px 60px; position: relative; z-index: 1; }
-.auth-lede { margin: 10px 0 22px; }
 
-/* Three-step explainer, shown above the tabs so the ask ("make an account")
-   comes after the reason, not before it. */
-.auth-steps { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 24px; }
-.auth-step { flex: 1 1 150px; display: flex; gap: 9px; align-items: flex-start; padding: 12px;
-  border: 1px solid var(--border); border-radius: var(--r); background: var(--panel); }
-.auth-step-num { flex: none; width: 20px; height: 20px; border-radius: 50%;
-  background: var(--purple-soft); color: var(--purple-lt); font-family: var(--mono);
-  font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
-.auth-step-txt { font-size: 13px; line-height: 1.4; color: var(--muted); }
-@media (max-width: 480px) { .auth-step { flex-basis: 100%; } }
+/* The sign-in / create-file card. One centred surface on the plain page
+   background: no photo, glow or animation behind it. Every auth step
+   (create, sign in, recovery, code, the agent number) renders into this same
+   .auth-wrap, so they all share the card. */
+#auth:not([hidden]) { padding: 40px 16px; }
+.auth-wrap {
+  width: 100%; max-width: 440px; margin: auto; position: relative; z-index: 1;
+  padding: 32px 32px 28px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.35);
+}
+.auth-wrap > .eyebrow, .auth-head .eyebrow { letter-spacing: 1.6px; }
+.auth-wrap .title-sm {
+  font-size: 22px; line-height: 1.25; margin: 10px 0 8px; letter-spacing: 0;
+}
+.auth-wrap .auth-lede, .auth-lede { margin: 0 0 24px; font-size: 14.5px; line-height: 1.55; }
+.auth-head { margin-bottom: 4px; }
 
-.auth-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 22px; }
-.auth-tab { background: none; border: none; cursor: pointer; padding: 9px 2px 11px; margin-right: 20px;
-  font-family: var(--mono); font-size: 11px; letter-spacing: 1.6px; text-transform: uppercase;
-  color: var(--dim); border-bottom: 2px solid transparent; margin-bottom: -1px;
-  transition: color 0.2s, border-color 0.2s, filter 0.2s; }
-.auth-tab:hover { color: var(--muted); }
-.auth-tab.sel { color: var(--text); border-bottom-color: var(--purple); cursor: default;
-  filter: drop-shadow(0 3px 6px rgba(139,92,246,0.45)); }
-.auth-tab:focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; }
+/* Segmented control: two equal halves in one track. */
+.auth-tabs {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; margin-bottom: 24px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--r);
+}
+.auth-tab {
+  min-height: 40px; padding: 8px 12px; border: 1px solid transparent; border-radius: 9px;
+  background: transparent; color: var(--muted); cursor: pointer;
+  font-family: var(--body); font-size: 14px; font-weight: 600; letter-spacing: 0;
+  transition: background-color .15s ease, color .15s ease, border-color .15s ease;
+}
+.auth-tab:hover { color: var(--text); background: rgba(255, 255, 255, 0.04); }
+.auth-tab.sel {
+  color: var(--text); background: rgba(139, 92, 246, 0.16); border-color: rgba(167, 139, 250, 0.42); cursor: default;
+}
+.auth-tab:focus-visible { outline: 2px solid var(--purple-lt); outline-offset: 2px; box-shadow: none; }
 
-.auth-panel { animation: authIn 0.22s ease; }
-@keyframes authIn { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+.auth-panel { display: flex; flex-direction: column; gap: 18px; }
+.auth-wrap .auth-field { margin: 0; }
+.auth-wrap > .auth-field + .auth-field { margin-top: 18px; }
+.auth-group { display: flex; flex-direction: column; gap: 14px; }
+.auth-group > .auth-hint { margin-top: -6px; }
 
-.auth-field { margin-bottom: 15px; }
-.auth-label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 1.5px;
-  text-transform: uppercase; color: var(--purple-lt); margin-bottom: 7px; }
-.auth-hint { font-size: 14px; line-height: 1.5; color: var(--muted); margin-top: 6px; }
-.auth-error { font-size: 13px; line-height: 1.4; color: #ff8095; margin-top: 6px; }
+.auth-label {
+  display: block; margin-bottom: 7px;
+  font-family: var(--body); font-size: 13px; font-weight: 600; letter-spacing: 0;
+  color: var(--text);
+}
+.auth-hint { font-size: 12.5px; line-height: 1.5; color: var(--muted); margin-top: 7px; }
+.auth-error { font-size: 12.5px; line-height: 1.45; color: #ff8095; margin-top: 7px; font-weight: 500; }
+.auth-error:not([hidden]) + .auth-hint { display: none; }
 .auth-status { font-family: var(--mono); font-size: 12px; margin-top: 6px; color: var(--muted); }
 .auth-status.ok { color: #d9ad5f; }
 .auth-status.bad { color: var(--crimson); }
-.btn.auth-go { display: block; width: 100%; margin-top: 20px; padding: 15px 20px; font-size: 14px;
-  box-shadow: 0 4px 14px rgba(139,92,246,0.24); }
+
+/* Inputs on the card: one height, one border, quiet hover, clear focus. */
+.auth-wrap .ob-input {
+  display: block; height: 46px; padding: 0 14px; border-radius: 10px;
+  background: var(--bg); border: 1px solid var(--border-str); color: var(--text);
+  font-size: var(--fs-input); line-height: 46px;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.auth-wrap .ob-input::placeholder { color: var(--dim); opacity: 1; }
+.auth-wrap .ob-input:hover { border-color: rgba(255, 255, 255, 0.28); }
+.auth-wrap .ob-input:focus {
+  border-color: var(--purple-lt); outline: none; box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.22);
+}
+.auth-wrap .ob-input.is-good { border-color: rgba(217, 173, 95, 0.7); }
+.auth-wrap .ob-input.is-bad, .auth-wrap .ob-input[aria-invalid="true"] { border-color: rgba(255, 128, 149, 0.75); }
+.auth-wrap .ob-input.is-bad:focus, .auth-wrap .ob-input[aria-invalid="true"]:focus {
+  box-shadow: 0 0 0 3px rgba(229, 56, 79, 0.2);
+}
+
+.btn.auth-go {
+  display: flex; align-items: center; justify-content: center; width: 100%;
+  min-height: 48px; margin-top: 6px; padding: 12px 20px; border-radius: 10px;
+  background: #7950e8; color: #fff; box-shadow: none;
+  font-size: 13.5px; letter-spacing: 1px;
+  transition: background-color .15s ease, transform .15s ease;
+}
+.btn.auth-go:hover { background: #8a63f0; transform: none; }
+.btn.auth-go:active { background: #6c44d8; }
+.btn.auth-go:focus-visible { outline: 2px solid var(--purple-lt); outline-offset: 3px; box-shadow: none; }
+.btn.auth-go:disabled { opacity: .65; cursor: progress; }
+.auth-wrap > .btn.auth-go { margin-top: 22px; }
+
 .auth-foot { margin-top: 26px; padding-top: 18px; border-top: 1px solid var(--border);
   font-size: 13px; color: var(--dim); text-align: center; }
 .auth-foot a { color: var(--muted); text-decoration: none; }
@@ -3755,18 +3803,30 @@ body.overlay-open { overflow: hidden; }
 /* Password fields: a visibility toggle sits inside the input, so it needs
    right padding to keep typed text from running under the button. */
 .pw-wrap { position: relative; }
-.pw-wrap .ob-input { padding-right: 46px; }
+.pw-wrap .ob-input { padding-right: 48px; }
 .pw-toggle {
-  position: absolute; right: 3px; top: 50%; transform: translateY(-50%);
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
   width: 38px; height: 38px; display: flex; align-items: center; justify-content: center;
-  background: transparent; border: none; border-radius: 8px; color: var(--dim);
-  font-size: 15px; cursor: pointer; transition: color 0.15s, background 0.15s;
+  background: transparent; border: none; border-radius: 8px; color: var(--muted);
+  cursor: pointer; transition: color 0.15s, background 0.15s;
 }
-.pw-toggle:hover { color: var(--text); background: var(--panel); }
-.pw-toggle:focus-visible { outline: 2px solid var(--purple); outline-offset: 1px; }
+.pw-toggle svg { display: block; }
+.pw-toggle:hover { color: var(--text); background: rgba(255, 255, 255, 0.06); }
+.pw-toggle[aria-pressed="true"] { color: var(--purple-lt); }
+.pw-toggle:focus-visible { outline: 2px solid var(--purple-lt); outline-offset: 0; box-shadow: none; }
 
-@media (prefers-reduced-motion: reduce) {
-  .auth-panel { animation: none; }
+.auth-wrap .auth-notice { margin: 0 0 20px; font-size: 13.5px; }
+.auth-panel > .auth-link { margin-top: -8px; }
+
+/* The agent number reveal and its warning, inside the card. */
+.auth-wrap .agent-id-box { margin: 18px 0 4px; }
+.auth-wrap .warn-box { margin: 16px 0 0; }
+
+/* Phones: the card keeps its edge but gives the fields the width. */
+@media (max-width: 520px) {
+  #auth:not([hidden]) { padding: 64px 16px 32px; }
+  .auth-wrap { padding: 24px 20px 22px; margin: 0 auto auto; box-shadow: none; }
+  .auth-wrap .title-sm { font-size: 20px; }
 }
 
 /* ── onboarding / misc ── */
@@ -4619,6 +4679,12 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
   text-underline-offset: 3px; cursor: pointer;
 }
 .auth-link:hover { color: var(--text); }
+.auth-wrap .auth-link {
+  width: auto; margin: 16px auto 0; padding: 6px 8px; border-radius: 6px;
+  color: var(--muted); font-size: 13.5px; text-decoration: none; text-align: center;
+}
+.auth-wrap .auth-link:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+.auth-wrap .auth-link:focus-visible { outline: 2px solid var(--purple-lt); outline-offset: 2px; box-shadow: none; }
 
 /* ── Broadcasts ─────────────────────────────────────────────────────────
    Site-owner announcements (screen-world.js's broadcastCards, fed by
