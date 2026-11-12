@@ -13,6 +13,7 @@ import { hasWarStage } from './reconnect-war-stage.js'
 import { normKeyFull } from './text.ts'
 
 const MIGRATION = readFileSync(new URL('../../../migrations/20261112140000_rc_bangtan_seven_bridge_goals.sql', import.meta.url), 'utf8')
+const LIE_FIX = readFileSync(new URL('../../../migrations/20261112150000_rc_bridge_lie_artist.sql', import.meta.url), 'utf8')
 const modulePath = process.env.PGLITE_MODULE
 const skip = modulePath ? false : 'set PGLITE_MODULE to run the SQL suite'
 const D = 'mono-bangtan-seven-bridge'
@@ -52,6 +53,19 @@ test('targets: tracks 50/40/30, albums 5/3/2, as asked', { skip }, async () => {
   for (const a of ['ARIRANG', 'Keep Swimming']) assert.equal(t[a], 5, a)
   for (const a of ['Happy', 'Dark & Wild']) assert.equal(t[a], 3, a)
   for (const a of ['Proof', 'Right Place, Wrong Person', 'D-DAY']) assert.equal(t[a], 2, a)
+})
+
+test('artists: Lie is a BTS track (20261112150000), every other song keeps its artist', { skip }, async () => {
+  const db = await applied()
+  await db.exec(LIE_FIX)
+  await db.exec(LIE_FIX) // idempotent
+  const rows = (await db.query(`select label, artist from rc_goals where district_id = $1 and kind = 'track' order by sort_order`, [D])).rows
+  assert.deepEqual(Object.fromEntries(rows.map((r) => [r.label, r.artist])), {
+    Swim: 'BTS', Haegeum: 'Agust D', 'Wild Flower': 'RM', "Killin' It Girl": 'j-hope', Aliens: 'BTS',
+    'Running Wild': 'Jin', 'Spring Day': 'BTS', 'One More Night': 'BTS', Hooligan: 'BTS', 'Rainy Days': 'V',
+    Lie: 'BTS', Rain: 'BTS', 'Forever Rain': 'RM',
+  })
+  assert.equal((await db.query(`select count(*)::int n from rc_goals`)).rows[0].n, 21, 'no row added or removed')
 })
 
 test('freezeGoals: real keys, and the quest keeps its War of Cards stage', { skip }, async () => {
