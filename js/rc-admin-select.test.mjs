@@ -222,12 +222,21 @@ test('page CSS cannot out-rank the rule that hides the native control', () => {
   // <style> block comes after reconnect.css, so an un-excluded rule puts the
   // real <select> back on screen at full width. Measured once already: it
   // pushed a 375px phone 51px wider than itself.
-  assert.match(code('admin.html'), /\.adm-field \.ob-input:not\(\.rc-select-native\):not\(\.rc-multi-native\)/)
-  assert.match(code('admin.html'), /\.adm-roster-toolbar \.ob-input:not\(\.rc-select-native\)/)
+  // admin.html's styles live in css/admin.css (loaded after reconnect.css).
+  const adminCss = code('css/admin.css')
+  assert.match(adminCss, /\.adm-body \.ob-input:not\(\.rc-select-native\):not\(\.rc-multi-native\) \{/)
+  assert.match(adminCss, /\.adm-field \.ob-input:not\(\.rc-select-native\):not\(\.rc-multi-native\)/)
+  assert.match(adminCss, /\.adm-toolbar select:not\(\.rc-select-native\)/)
+  // no admin rule may size a bare .ob-input or select: each one excludes the hidden native control
+  for (const rule of adminCss.match(/[^{}]*\{/g) || []) {
+    for (const sel of rule.slice(0, -1).split(',')) {
+      // textareas and placeholders can't be a hidden native select
+      if (/(?<!textarea|input)(\.ob-input|select)(?![\w-]|:not\(\.rc-(select|multi)-native\)|::placeholder)/.test(sel)) assert.fail(`un-excluded admin selector: ${sel.trim()}`)
+    }
+  }
   assert.match(code('badge-admin.html'), /\.bv-filter-grid select:not\(\.rc-select-native\)/)
-  // and the mobile grid must place the trigger, not the control it replaced
-  assert.match(code('admin.html'), /\.adm-roster-toolbar \.rc-select-trigger \{ grid-column: 1 \/ -1/)
-  assert.match(code('admin.html'), /\.rh-toolbar \.rc-select-trigger \{ grid-column: 1 \/ -1/)
+  // and the mobile toolbar must place the trigger, not the control it replaced
+  assert.match(adminCss, /\.adm-toolbar \.rc-select-trigger \{ flex: 1 1 100%/)
 })
 
 test('admin keeps its own density without a second component', () => {

@@ -10,433 +10,12 @@
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/reconnect.css">
 <link rel="stylesheet" href="css/voting.css">
-<style>
-  body { max-width: 1120px; margin: 0 auto; padding: 24px var(--gut) 60px; line-height: 1.5; }
-  .adm-nav { font-size: 14px; font-weight: 500; margin-bottom: 22px; display: flex; gap: 10px; flex-wrap: wrap; }
-  .adm-nav a { color: var(--purple-lt); }
-  .adm-nav span { color: var(--dim); }
-
-  /* ── Unauthorized banner — shown when a key that worked at unlock stops
-     working mid-session (e.g. someone rotated SYNC_ADMIN_KEY). Sits above
-     everything, freezes every write action, never touches whatever the
-     admin was mid-typing. ── */
-  .adm-unauth { display: none; position: sticky; top: 0; z-index: 30; margin: -24px calc(var(--gut) * -1) 18px;
-    padding: 12px var(--gut); background: rgba(229,56,79,0.16); border-bottom: 1px solid rgba(229,56,79,0.4);
-    backdrop-filter: blur(10px); }
-  .adm-unauth.is-visible { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .adm-unauth-msg { font-size: 13px; color: var(--text); flex: 1; min-width: 200px; }
-  .adm-unauth-msg b { color: var(--crimson); }
-  .adm-unauth-row { display: flex; gap: 8px; align-items: center; }
-  .adm-unauth-row input { width: 180px; padding: 8px 10px; border-radius: var(--r); border: 1px solid var(--border);
-    background: var(--surface-2); color: var(--text); font: inherit; font-size: 13px; }
-  .adm-unauth-err { width: 100%; font-size: 12px; color: var(--crimson); }
-
-  .adm-head { margin: 12px 0 26px; }
-  .adm-head .eyebrow { font-size: 11px; letter-spacing: 2.2px; }
-  .adm-head h1 { font-family: var(--disp); font-size: clamp(26px, 3vw, 32px); line-height: 1.2;
-    letter-spacing: 0.01em; margin: 10px 0 8px; }
-  .adm-head .muted { max-width: 850px; font-size: 16px; line-height: 1.65; }
-
-  .adm-key-row { display: flex; gap: 8px; align-items: center; margin: 14px 0 18px; }
-  .adm-key-row .ob-input { flex: 1; }
-  .adm-key-status { font-size: 11px; font-family: var(--mono); white-space: nowrap; }
-  .adm-key-status.ok { color: var(--gold); }
-  .adm-key-status.bad { color: var(--crimson); }
-
-  /* ── Gate — nothing below fires until this is explicitly unlocked.
-     No automatic call ever runs against a key the agent hasn't submitted
-     themselves, so "rejected" only ever appears as the direct result of
-     something they just did — never as a surprise on page load. ── */
-  .adm-gate { display: flex; align-items: center; justify-content: center; min-height: 60vh; }
-  .adm-gate-card { width: 100%; max-width: 360px; background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--r-lg); padding: 22px; }
-  .adm-gate-label { font-family: var(--disp); font-size: 15px; font-weight: 700; letter-spacing: 1px;
-    color: var(--purple-lt); margin-bottom: 14px; }
-  .adm-gate-msg { font-size: 11.5px; margin-top: 10px; min-height: 14px; }
-  .adm-gate-msg.bad { color: var(--crimson); }
-  .adm-gate-msg.checking { color: var(--dim); }
-
-  /* ── Snapshot strip ── */
-  .adm-snapshot { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 22px; }
-  .adm-snap-tile {
-    background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
-    padding: 13px 14px; cursor: pointer; transition: border-color 0.15s;
-  }
-  .adm-snap-tile:hover { border-color: var(--border-str); }
-  .adm-snap-tile.is-alert { border-color: rgba(229,56,79,0.4); }
-  .adm-snap-tile.is-live { border-color: rgba(217,173,95,0.4); }
-  .adm-snap-label { font-family: var(--mono); font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--dim); }
-  .adm-snap-val { font-family: var(--disp); font-weight: 700; font-size: 22px; margin-top: 5px; }
-  .adm-snap-tile.is-alert .adm-snap-val { color: var(--crimson); }
-  .adm-snap-tile.is-live .adm-snap-val { color: var(--gold); }
-  .adm-snap-sub { font-size: 14px; color: var(--muted); margin-top: 3px; }
-
-  .vma-recheck-status { margin: 10px 0 14px; padding: 10px 12px; border: 1px solid var(--border);
-    border-radius: var(--r); background: var(--surface-2); font-family: var(--mono); font-size: 12px; color: var(--muted); }
-  .vma-recheck-status.is-running { border-color: rgba(139,92,246,.5); color: var(--purple-lt); }
-  .vma-recheck-status.is-done { border-color: rgba(217,173,95,.5); color: var(--gold); }
-  .vma-recheck-result { margin-top: 10px; padding: 9px 11px; border-radius: var(--r); border: 1px solid var(--border);
-    background: rgba(255,255,255,.025); font-family: var(--mono); font-size: 12px; }
-  .vma-recheck-result.is-pass { border-color: rgba(43,190,126,.45); color: #75dcae; }
-  .vma-recheck-result.is-miss { border-color: rgba(217,173,95,.45); color: var(--gold); }
-  .vma-recheck-result.is-error { border-color: rgba(229,56,79,.45); color: var(--crimson); }
-
-  /* ── Tabs ── sticky: every panel here runs long, so the way to switch
-     tabs — and the live snapshot tiles above it — should never scroll out
-     of reach. */
-  .adm-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 20px;
-    position: sticky; top: 0; z-index: 10; background: rgba(10, 9, 16, .96); backdrop-filter: blur(12px);
-    margin-left: calc(var(--gut) * -1); margin-right: calc(var(--gut) * -1); padding: 0 var(--gut); }
-  .adm-tab {
-    background: none; border: 0; color: var(--muted); font: inherit; font-size: 15.5px; font-weight: 600;
-    padding: 14px 16px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
-    display: flex; align-items: center; gap: 6px; transition: color 0.15s, border-color 0.15s;
-  }
-  .adm-tab:hover { color: var(--text); }
-  .adm-tab.is-active { color: var(--purple-lt); border-bottom-color: var(--purple); }
-  .adm-panel[hidden] { display: none; }
-  .adm-panel { animation: admIn 0.22s ease; }
-  @keyframes admIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
-
-  /* ── Cards / fields ── */
-  .adm-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
-    padding: 20px; margin-bottom: 16px; }
-  .adm-card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
-  .adm-card h2 { font-family: var(--disp); font-size: 18px; line-height: 1.35; letter-spacing: 0.02em; margin: 0 0 6px; }
-  .adm-card > .muted { font-size: 15px; line-height: 1.65; margin-bottom: 18px; }
-  .adm-card .btn-ghost { padding: 8px 13px; font-size: 12.5px; }
-
-  /* ── Agent command log ── this is an action queue, not a raw database
-     table. Identity, risk and deadline lead; secondary timestamps stay
-     readable without forcing a nine-column horizontal scroll. */
-  .adm-roster-intro { max-width: 760px; margin: 0 0 14px; }
-  .adm-roster-toolbar { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(160px, 220px) auto;
-    gap: 8px; align-items: center; margin-bottom: 12px; }
-  .adm-roster-toolbar .ob-input:not(.rc-select-native) { width: 100%; }
-  .adm-roster-summary { display: grid; grid-template-columns: repeat(6, minmax(105px, 1fr)); gap: 7px;
-    margin: 2px 0 14px; }
-  .adm-roster-chip { appearance: none; text-align: left; background: var(--surface-2); color: var(--muted);
-    border: 1px solid var(--border); border-radius: var(--r); padding: 9px 10px; cursor: pointer; min-width: 0; }
-  .adm-roster-chip:hover { border-color: var(--border-str); color: var(--text); }
-  .adm-roster-chip.is-active { border-color: var(--purple); background: var(--purple-soft); color: var(--purple-lt); }
-  .adm-roster-chip b { display: block; font-family: var(--disp); font-size: 19px; line-height: 1; color: var(--text); }
-  .adm-roster-chip span { display: block; font-family: var(--mono); font-size: 9.5px; letter-spacing: .45px;
-    text-transform: uppercase; margin-top: 5px; overflow: hidden; text-overflow: ellipsis; }
-  .adm-roster-meta { display: flex; align-items: center; justify-content: space-between; gap: 10px;
-    margin-bottom: 8px; }
-  .adm-roster-list { display: flex; flex-direction: column; gap: 7px; }
-  .adm-roster-row { appearance: none; width: 100%; display: grid;
-    grid-template-columns: minmax(190px, 1.25fr) 125px minmax(180px, 1fr) minmax(210px, 1.15fr) 20px;
-    gap: 13px; align-items: center; text-align: left; background: rgba(255,255,255,.015); color: var(--text);
-    border: 1px solid var(--border); border-radius: var(--r); padding: 11px 12px; cursor: pointer;
-    transition: border-color .15s, background .15s, transform .15s; }
-  .adm-roster-row:hover { border-color: var(--border-str); background: var(--surface-2); transform: translateY(-1px); }
-  .adm-roster-row:focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; }
-  .arr-name { display: block; font-size: 15.5px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .arr-id { display: block; font-family: var(--mono); font-size: 10.5px; color: var(--dim); margin-top: 2px;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .arr-cell { min-width: 0; }
-  .arr-label { display: block; font-family: var(--mono); font-size: 9.5px; letter-spacing: .7px;
-    text-transform: uppercase; color: var(--dim); margin-bottom: 3px; }
-  .arr-main { display: block; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .arr-sub { display: block; font-size: 11.5px; color: var(--muted); margin-top: 2px;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .arr-activity { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; }
-  .arr-activity span { min-width: 0; }
-  .arr-activity b { display: block; font-family: var(--mono); font-size: 9px; letter-spacing: .5px;
-    text-transform: uppercase; color: var(--dim); font-weight: 400; }
-  .arr-activity i { display: block; font-style: normal; font-size: 11.5px; margin-top: 2px;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .arr-go { color: var(--dim); font-size: 20px; text-align: right; }
-  .arr-badges { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
-  .arr-mini { font-family: var(--mono); font-size: 9px; letter-spacing: .35px; border: 1px solid var(--border);
-    color: var(--muted); border-radius: 999px; padding: 2px 6px; text-transform: uppercase; }
-  .arr-status { display: inline-flex; align-items: center; gap: 5px; width: fit-content; font-family: var(--mono);
-    font-size: 10px; letter-spacing: .45px; font-weight: 700; text-transform: uppercase; border: 1px solid var(--border);
-    border-radius: 999px; padding: 4px 8px; }
-  .arr-status::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-  .arr-status.is-healthy { color: #75dcae; border-color: rgba(43,190,126,.38); }
-  .arr-status.is-due { color: var(--gold); border-color: rgba(217,173,95,.42); }
-  .arr-status.is-risk, .arr-status.is-overdue { color: var(--crimson); border-color: rgba(229,56,79,.45); }
-  .arr-status.is-never { color: var(--purple-lt); border-color: rgba(139,92,246,.42); }
-  .arr-status.is-retired { color: var(--dim); }
-  .arr-status.is-protected { color: var(--purple-lt); border-color: rgba(139,92,246,.42); }
-
-  .adm-roster-drawer { position: fixed; inset: 0; z-index: 80; display: flex; justify-content: flex-end;
-    background: rgba(3,3,8,.7); backdrop-filter: blur(5px); }
-  .adm-roster-drawer[hidden] { display: none; }
-  .adm-roster-drawer-panel { width: min(560px, 100%); height: 100%; overflow-y: auto; background: #0e0c17;
-    border-left: 1px solid var(--border-str); box-shadow: -18px 0 45px rgba(0,0,0,.5); animation: admDrawerIn .2s ease; }
-  @keyframes admDrawerIn { from { transform: translateX(24px); opacity: .5; } to { transform: translateX(0); opacity: 1; } }
-  .adm-roster-drawer-head { position: sticky; top: 0; z-index: 2; display: flex; justify-content: space-between;
-    align-items: center; gap: 12px; padding: 14px 18px; background: rgba(14,12,23,.96); border-bottom: 1px solid var(--border);
-    backdrop-filter: blur(12px); }
-  .adm-roster-drawer-title { font-family: var(--disp); font-size: 15px; }
-  .adm-roster-drawer-close { appearance: none; background: var(--surface-2); color: var(--text); border: 1px solid var(--border);
-    border-radius: 999px; width: 34px; height: 34px; font-size: 19px; cursor: pointer; }
-  .adm-roster-drawer-body { padding: 0 18px 30px; }
-  .adm-roster-drawer-body .adm-agent-card { margin-top: 18px; }
-
-  /* ── ReConnect Health ── three human decisions, not diagnostic filters. */
-  .rh-intro { max-width: 680px; margin: 0 0 8px; }
-  .rh-compact-summary { margin: 0 0 18px; color: var(--text); font-family: var(--disp); font-size: 17px; }
-  .rh-compact-summary b { color: var(--purple-lt); }
-  .rh-section { margin-top: 18px; }
-  .rh-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 9px; }
-  .rh-section-head h3 { margin: 0; font-family: var(--mono); font-size: 11px; letter-spacing: 1.4px; }
-  .rh-section-head span { color: var(--dim); font-size: 12px; }
-  .rh-section.is-action .rh-section-head h3 { color: var(--crimson); }
-  .rh-section.is-watch .rh-section-head h3 { color: var(--gold); }
-  .rh-list { display: flex; flex-direction: column; gap: 9px; }
-  .rh-card { border: 1px solid var(--border); border-radius: var(--r-lg); background: rgba(255,255,255,.018); padding: 15px; }
-  .rh-card.is-action { border-color: rgba(229,56,79,.35); }
-  .rh-context { display: block; color: var(--dim); font-family: var(--mono); font-size: 9.5px; letter-spacing: .7px; text-transform: uppercase; }
-  .rh-team { display: block; margin-top: 5px; color: var(--text); font-size: 17px; font-weight: 700; }
-  .rh-reason { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
-  .rh-action { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; }
-  .rh-watch-action { color: var(--gold); font-family: var(--mono); font-size: 10.5px; letter-spacing: .35px; }
-  .rh-find { margin-top: 14px; }
-  .rh-find > summary { cursor: pointer; color: var(--dim); font-size: 12px; }
-  .rh-toolbar { display: grid; grid-template-columns: minmax(180px,1fr) minmax(170px,220px); gap: 8px; margin-top: 9px; }
-  .rh-fine { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid var(--border);
-    border-radius: var(--r-lg); padding: 13px 15px; background: rgba(43,190,126,.045); }
-  .rh-fine b { font-family: var(--disp); font-size: 17px; }
-  .rh-fine span { color: #75dcae; font-family: var(--mono); font-size: 11px; }
-  .rh-roster { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 10px; }
-  .rh-roster summary { color: var(--dim); cursor: pointer; font-size: 12px; }
-  .rh-roster-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 6px; margin-top: 8px; }
-  .rh-pick { display: flex; gap: 7px; align-items: center; min-width: 0; padding: 7px 8px; border: 1px solid var(--border);
-    border-radius: var(--r); font-size: 12px; }
-  .rh-pick span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .rh-drawer-card { border: 1px solid var(--border); border-radius: var(--r); padding: 10px 11px; margin-top: 8px; }
-  .rh-drawer-card b { display: block; }
-  .rh-drawer-card span { display: block; color: var(--muted); font-size: 12px; margin-top: 3px; }
-  .rh-match-dialog { width: min(460px, calc(100vw - 28px)); margin: auto; color: var(--text); background: #13101f;
-    border: 1px solid var(--border-str); border-radius: var(--r-lg); padding: 0; box-shadow: 0 22px 70px rgba(0,0,0,.62); }
-  .rh-match-dialog::backdrop { background: rgba(3,3,8,.76); backdrop-filter: blur(5px); }
-  .rh-match-body { padding: 20px; }
-  .rh-match-body h3 { margin: 4px 0 5px; }
-  .rh-match-line { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--border); }
-  .rh-match-line span { color: var(--dim); }
-  .rh-match-actions { display: flex; gap: 8px; margin-top: 16px; }
-  .rh-match-actions .btn { flex: 1; }
-
-  /* Agent Log: the default surface is a game diary. Account and raw signals
-     remain available, but never compete with the player's story. */
-  .agent-file-tabs { display: grid; grid-template-columns: repeat(3,1fr); gap: 5px; margin: 15px 0; }
-  .agent-file-tab { appearance: none; border: 1px solid var(--border); border-radius: var(--r); background: var(--surface-2);
-    color: var(--dim); padding: 9px 5px; font-family: var(--mono); font-size: 9px; letter-spacing: .55px; cursor: pointer; }
-  .agent-file-tab.is-active { color: var(--purple-lt); border-color: var(--purple); background: var(--purple-soft); }
-  .agent-file-panel[hidden] { display: none; }
-  .agent-diary-day { margin-top: 17px; }
-  .agent-diary-day:first-child { margin-top: 0; }
-  .agent-diary-date { color: var(--dim); font-family: var(--mono); font-size: 9.5px; letter-spacing: .8px; text-transform: uppercase; margin-bottom: 7px; }
-  .agent-diary-entry { display: grid; grid-template-columns: 28px 1fr auto; gap: 8px; align-items: center; padding: 9px 0;
-    border-bottom: 1px solid var(--border); }
-  .agent-diary-icon { font-size: 17px; text-align: center; }
-  .agent-diary-copy b { display: block; font-size: 14px; }
-  .agent-diary-copy span { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
-  .agent-diary-time { color: var(--dim); font-family: var(--mono); font-size: 9px; white-space: nowrap; }
-  .agent-tech-row { padding: 9px 0; border-bottom: 1px solid var(--border); }
-  .agent-tech-row b { display: block; font-family: var(--mono); font-size: 10.5px; }
-  .agent-tech-row span { display: block; color: var(--dim); font-size: 11px; margin-top: 2px; }
-
-  .adm-field { display: block; margin-bottom: 12px; }
-  .adm-field > span { display: block; font-family: var(--mono); font-size: 11px; letter-spacing: 0.8px;
-    text-transform: uppercase; color: var(--dim); margin-bottom: 6px; }
-  /* :not() so the controls rc-select/rc-multiselect hide stay hidden —
-     this block comes after reconnect.css and a two-class rule beats a
-     one-class one, which would put the real <select> back on screen. */
-  .adm-field .ob-input:not(.rc-select-native):not(.rc-multi-native) { width: 100%; font-family: inherit; font-size: 16px;
-    font-weight: 500; line-height: 1.35; letter-spacing: 0.1px; }
-  .adm-field .ob-input::placeholder { color: var(--dim); opacity: 0.9; font-weight: 400; }
-  .adm-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  textarea.ob-input { font-family: inherit; font-size: 16px; min-height: 84px; resize: vertical; }
-  .adm-block { display: block; width: 100%; margin-top: 6px; }
-  .adm-row { display: flex; gap: 8px; margin-bottom: 4px; }
-  .adm-row .ob-input { flex: 1; }
-
-  .adm-toggle { display: flex; border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; }
-  .adm-toggle-opt { flex: 1; background: transparent; border: 0; color: var(--muted); font: inherit;
-    font-size: 14px; font-weight: 600; padding: 11px 8px; cursor: pointer; transition: background 0.15s, color 0.15s; }
-  .adm-toggle-opt.is-active { background: var(--purple-soft); color: var(--purple-lt); }
-  .adm-toggle-opt.is-active[data-val="gold"] { background: var(--gold-soft); color: var(--gold); }
-
-  .adm-out { font-family: var(--mono); font-size: 12.5px; color: var(--muted); white-space: pre-wrap;
-    background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r); padding: 10px 12px;
-    margin-top: 12px; max-height: 220px; overflow-y: auto; display: none; }
-  .adm-out.is-visible { display: block; }
-  .adm-out.is-error { color: var(--crimson); border-color: rgba(229,56,79,0.4); }
-  .adm-out.is-ok { color: var(--gold); border-color: rgba(217,173,95,0.4); }
-
-  .adm-spin { width: 15px; height: 15px; border-radius: 50%; display: inline-block; vertical-align: -3px;
-    border: 2px solid var(--purple-soft); border-top-color: var(--purple); animation: admSpin 0.7s linear infinite; margin-right: 6px; }
-  @keyframes admSpin { to { transform: rotate(360deg); } }
-  .adm-empty { color: var(--dim); font-size: 12.5px; padding: 10px 2px; }
-
-  /* ── Red Zone status box ── */
-  .adm-rz-clear { display: flex; align-items: center; gap: 8px; padding: 10px 2px; color: var(--muted); font-size: 13px; }
-  .adm-rz-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
-  .adm-rz-dot.on { background: var(--crimson); box-shadow: 0 0 8px var(--crimson); animation: admPulse 1.4s ease-in-out infinite; }
-  @keyframes admPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.45; } }
-
-  /* ── Broadcast list ── */
-  .adm-list { display: flex; flex-direction: column; gap: 8px; }
-  .adm-list-row { border: 1px solid var(--border); border-radius: var(--r); padding: 10px 12px;
-    display: flex; align-items: flex-start; gap: 10px; }
-  .adm-list-row.is-expired { opacity: 0.5; }
-  .adm-list-dot { width: 7px; height: 7px; border-radius: 50%; margin-top: 6px; flex-shrink: 0; background: var(--purple); }
-  .adm-list-row[data-tone="gold"] .adm-list-dot { background: var(--gold); }
-  .adm-list-body { flex: 1; min-width: 0; }
-  .adm-list-title { font-weight: 700; font-size: 16px; }
-  .adm-list-msg { color: var(--muted); font-size: 15px; margin-top: 3px; line-height: 1.55; }
-  .adm-list-meta { font-family: var(--mono); font-size: 11.5px; color: var(--dim); margin-top: 5px; letter-spacing: 0.3px; }
-  .adm-list-del { background: none; border: none; color: var(--crimson); cursor: pointer; font-size: 13px; flex-shrink: 0; padding: 2px 4px; }
-  .adm-list-row.is-pick { cursor: pointer; transition: border-color 0.15s, background 0.15s; }
-  .adm-list-row.is-pick:hover { border-color: var(--border-str); }
-  .adm-list-row.is-pick.is-selected { border-color: var(--purple); background: var(--purple-soft); }
-  .adm-list-row.is-pick .adm-list-meta { margin-top: 2px; }
-
-  /* ── Goals editor ──
-     Two-column at desktop width (list left, add-forms right, form sticky
-     so it stays in reach while scrolling a long list) — see .adm-goals-layout
-     below. .adm-goal-input-row (bare, unlabeled inputs) stays as-is since
-     Reconnect's editor still uses it; Goals' own forms use the labeled
-     .adm-goal-form-grid instead. */
-  .adm-goals-layout { display: block; }
-  .adm-goal-form { margin-top: 16px; }
-  @media (min-width: 900px) {
-    .adm-goals-layout { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(320px, .65fr); gap: 20px; align-items: start; }
-    .adm-goal-form { position: sticky; top: 72px; margin-top: 0; }
-  }
-
-  .adm-callout { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14.5px; color: var(--muted);
-    border: 1px solid var(--border); border-radius: var(--r); padding: 9px 12px; margin-bottom: 14px; }
-  .adm-callout-more { background: none; border: 0; color: var(--purple-lt); font: inherit; font-size: 12.5px;
-    cursor: pointer; padding: 0; text-decoration: underline; text-underline-offset: 2px; }
-  .adm-callout-detail { font-size: 14.5px; line-height: 1.6; margin: -6px 0 14px; }
-
-  .adm-goal-row { display: flex; align-items: center; gap: 10px; border: 1px solid var(--border); border-radius: var(--r);
-    padding: 9px 11px; margin-bottom: 8px; }
-  .adm-goal-name { flex: 1; font-size: 15.5px; font-weight: 500; }
-  .adm-goal-target { font-family: var(--mono); font-size: 11.5px; color: var(--dim); flex-shrink: 0;
-    cursor: default; }
-  .adm-goal-row.is-inactive { background: rgba(255,255,255,.02); border-style: dashed; }
-  .adm-goal-row.is-inactive .adm-goal-name { color: var(--muted); }
-  .adm-goal-inactive-badge { display: inline-flex; align-items: center; font-family: var(--mono); font-size: 10px;
-    font-weight: 700; letter-spacing: 0.6px; color: var(--crimson); border: 1px solid rgba(229,56,79,0.4);
-    border-radius: 999px; padding: 2px 7px; margin-left: 8px; vertical-align: 1px; }
-  .adm-goal-collapse { background: none; border: 1px solid var(--border); border-radius: var(--r); color: var(--muted);
-    font: inherit; font-size: 12.5px; padding: 8px 12px; cursor: pointer; width: 100%; text-align: left;
-    display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
-  .adm-goal-collapse:hover { border-color: var(--border-str); color: var(--text); }
-  .adm-goal-inactive-list { margin-top: 8px; }
-
-  .adm-goal-form-grid { display: grid; grid-template-columns: 1fr 1fr 90px; gap: 8px; }
-  textarea.adm-goal-tracks { font-family: inherit; font-size: 16px; }
-  .adm-mode-preview { font-family: var(--mono); font-size: 11.5px; line-height: 1.5; letter-spacing: 0.4px; color: var(--dim);
-    margin-top: 6px; }
-  .adm-mode-preview b { color: var(--muted); font-weight: 700; }
-  .adm-goal-modes { font-family: var(--mono); font-size: 11.5px; line-height: 1.5; color: var(--dim); margin-top: 2px; }
-
-  /* Overflow menu (Delete, currently) — kept out of the main row actions
-     so "Deactivate" and "Delete" can't be fat-fingered for one another. */
-  .adm-goal-menu { position: relative; flex-shrink: 0; }
-  .adm-goal-menu-btn { background: none; border: 1px solid var(--border); border-radius: var(--r); color: var(--muted);
-    font: inherit; font-size: 15px; line-height: 1; padding: 7px 10px; cursor: pointer; }
-  .adm-goal-menu-btn:hover { border-color: var(--border-str); color: var(--text); }
-  .adm-goal-menu-pop { position: absolute; right: 0; top: calc(100% + 4px); z-index: 5; min-width: 170px;
-    background: var(--surface-2); border: 1px solid var(--border-str); border-radius: var(--r); box-shadow: 0 8px 20px rgba(0,0,0,.4);
-    overflow: hidden; }
-  .adm-goal-menu-pop button { display: block; width: 100%; text-align: left; background: none; border: 0;
-    color: var(--crimson); font: inherit; font-size: 13px; padding: 9px 12px; cursor: pointer; }
-  .adm-goal-menu-pop button:hover { background: var(--crimson-soft); }
-  .adm-goal-move-select { display: block; width: 100%; background: none; border: 0; border-bottom: 1px solid var(--border);
-    color: var(--text); font: inherit; font-size: 13px; padding: 9px 12px; cursor: pointer; border-radius: 0; }
-  .adm-goal-move-select:hover { background: var(--surface-3, rgba(255,255,255,.04)); }
-
-  /* ── Agent lookup: danger zone ── kept in its own bordered-off section at
-     the bottom of the card, same "don't let it sit next to a harmless
-     button" reasoning as the goals overflow menu above — this one deletes
-     across every table admin-agent.ts's adminDeleteAgent touches, not just
-     one row. */
-  .adm-agent-danger-btn { background: none; border: 1px solid rgba(229,56,79,0.4); border-radius: var(--r);
-    color: var(--crimson); font: inherit; font-size: 13px; font-weight: 600; padding: 9px 14px; cursor: pointer; }
-  .adm-agent-danger-btn:hover { background: var(--crimson-soft); }
-  .adm-agent-danger-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-  /* ── Weekly window ── */
-  .adm-week-box { display: flex; align-items: center; justify-content: space-between; gap: 10px;
-    border: 1px solid var(--border); border-radius: var(--r); padding: 10px 12px; margin-bottom: 14px; flex-wrap: wrap; }
-  .adm-week-box.is-active { border-color: rgba(217,173,95,0.35); background: var(--gold-soft); }
-  .adm-week-box.is-expired { border-color: rgba(229,56,79,0.35); background: rgba(229,56,79,0.05); }
-  .adm-week-status { font-size: 12.5px; }
-  .adm-week-status b { color: var(--text); }
-  .adm-week-box.is-active .adm-week-status b { color: var(--gold); }
-  .adm-week-box.is-expired .adm-week-status b { color: var(--crimson); }
-  .adm-week-sub { font-family: var(--mono); font-size: 10px; color: var(--dim); margin-top: 2px; }
-
-  /* ── Agent lookup result ── */
-  .adm-agent-card { border: 1px solid var(--border-str); border-radius: var(--r-lg); padding: 18px; margin-top: 16px; }
-  .adm-agent-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
-  .adm-agent-handle { font-family: var(--disp); font-weight: 700; font-size: 21px; }
-  .adm-agent-no { font-family: var(--mono); font-size: 11px; color: var(--dim); }
-  .adm-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700;
-    padding: 4px 9px; border-radius: 999px; border: 1px solid var(--border); }
-  .adm-badge.ok { color: var(--gold); border-color: rgba(217,173,95,0.4); }
-  .adm-badge.bad { color: var(--crimson); border-color: rgba(229,56,79,0.4); }
-  .adm-agent-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px 18px; margin-top: 16px; }
-  .adm-agent-stat .k { font-family: var(--mono); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--dim); }
-  .adm-agent-stat .v { font-size: 16px; margin-top: 3px; }
-  .adm-agent-section { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
-  .adm-agent-section h3 { font-family: var(--mono); font-size: 10.5px; letter-spacing: 1.2px; text-transform: uppercase;
-    color: var(--muted); margin-bottom: 8px; }
-
-  @media (max-width: 640px) {
-    /* .adm-goal-input-row is Reconnect's editor row now (Goals moved to the
-       labeled .adm-goal-form-grid below) — its fields aren't in a fixed
-       "main text field first" order the way Goals' old unlabeled row was,
-       so this just wraps every child to its own line instead of assuming
-       which one deserves to go full-width. */
-    .adm-goal-input-row { flex-wrap: wrap; }
-    .adm-goal-input-row .ob-input,
-    .adm-goal-input-row .adm-target-input { flex: 1 1 100%; max-width: none; }
-    .adm-goal-form-grid { grid-template-columns: 1fr; }
-    .adm-card { padding: 16px; }
-    .adm-roster-toolbar { grid-template-columns: 1fr auto; }
-    /* the trigger is what sits in the grid now; the <select> it stands in
-       for is absolutely positioned and no longer a grid item. */
-    .adm-roster-toolbar select,
-    .adm-roster-toolbar .rc-select-trigger { grid-column: 1 / -1; grid-row: 2; }
-    .adm-roster-summary { display: flex; overflow-x: auto; padding-bottom: 3px; scrollbar-width: thin; }
-    .adm-roster-chip { flex: 0 0 112px; }
-    .adm-roster-row { grid-template-columns: minmax(0,1fr) auto; gap: 10px; padding: 12px; }
-    .adm-roster-row .arr-status-cell { text-align: right; }
-    .adm-roster-row .arr-district, .adm-roster-row .arr-activity { grid-column: 1 / -1; }
-    .adm-roster-row .arr-district { border-top: 1px solid var(--border); padding-top: 9px; }
-    .adm-roster-row .arr-go { display: none; }
-    .adm-roster-drawer-panel { border-left: 0; }
-    .rh-toolbar { grid-template-columns: 1fr auto; }
-    .rh-toolbar select,
-    .rh-toolbar .rc-select-trigger { grid-column: 1 / -1; grid-row: 2; }
-    .rh-meta { grid-template-columns: 1fr 1fr; }
-    .rh-action { align-items: flex-start; flex-direction: column; }
-    .rh-action .btn { width: 100%; }
-    .rh-roster-list { grid-template-columns: 1fr; }
-  }
-
-  @media (max-width: 480px) {
-    .adm-snapshot { grid-template-columns: 1fr; }
-    .adm-grid2, .adm-agent-grid { grid-template-columns: 1fr; }
-    .adm-tabs { overflow-x: auto; }
-    .adm-tab { flex-shrink: 0; }
-  }
-</style>
+<link rel="stylesheet" href="css/admin.css">
 </head>
-<body>
+<body class="adm-body">
 
 <div id="admUnauthBanner" class="adm-unauth">
-  <span class="adm-unauth-msg"><b>Session expired.</b> Your admin key stopped working — nothing here will save until you sign back in. Anything you were typing is still there.</span>
+  <span class="adm-unauth-msg"><b>Session expired.</b> The admin key stopped working. Nothing saves until you sign back in; anything you were typing is still here.</span>
   <div class="adm-unauth-row">
     <input id="admUnauthKey" type="password" placeholder="Admin key" autocomplete="off">
     <button class="btn btn-primary" id="btnUnauthRetry" type="button">Re-enter admin key</button>
@@ -444,221 +23,286 @@
   <div id="admUnauthErr" class="adm-unauth-err" hidden></div>
 </div>
 
-<div class="adm-nav"><a href="game.html">← Back to the game</a> <span>&middot;</span> <a href="candy-star-admin.html">Candy Star admin →</a></div>
-
-<div class="adm-head">
-  <span class="eyebrow">OP: ReConnect — ADMIN</span>
-  <h1>🛰️ Command Panel</h1>
-  <p class="muted">Site-owner tools: launch and monitor Red Zone events, broadcast announcements straight into
-    every agent's World screen, and look up an account for support. Not part of the player-facing game —
-    reach it only from this direct link.</p>
-</div>
-
-<!-- ── GATE ── shown until the key is explicitly verified; nothing past
-     it ever fires a request on its own. -->
+<!-- Gate: shown until the key is explicitly verified; nothing past it ever
+     fires a request on its own. -->
 <div id="admGate" class="adm-gate">
   <div class="adm-gate-card">
-    <div class="adm-gate-label">🔐 Clearance required</div>
+    <div class="adm-brand">HopeTrackers</div>
+    <h1 class="adm-gate-title">Command Panel</h1>
+    <p class="adm-gate-lede">Site-owner tools. Enter the admin key to continue.</p>
+    <label class="adm-label" for="adminKey">Admin key</label>
     <div class="adm-key-row">
-      <input id="adminKey" class="ob-input" type="password" placeholder="Admin key (SYNC_ADMIN_KEY)" autocomplete="off">
+      <input id="adminKey" class="ob-input" type="password" placeholder="SYNC_ADMIN_KEY" autocomplete="off">
       <button class="btn btn-primary" id="btnUnlock" type="button">Unlock</button>
     </div>
     <div id="adminGateMsg" class="adm-gate-msg"></div>
+    <div class="adm-gate-links"><a href="game.html">Back to the game</a></div>
   </div>
 </div>
 
-<div id="admApp" hidden>
+<div id="admApp" class="adm-app" hidden>
 
-<div class="adm-snapshot">
-  <div class="adm-snap-tile" id="snapRZ" data-tab="redzone">
-    <div class="adm-snap-label">Red Zone</div>
-    <div class="adm-snap-val" id="snapRZVal">—</div>
-    <div class="adm-snap-sub" id="snapRZSub">Tap to check</div>
+<aside class="adm-side" aria-label="Admin sections">
+  <div class="adm-side-brand"><div class="adm-brand">HopeTrackers</div><h1>Command Panel</h1></div>
+  <nav class="adm-nav" id="admNav">
+    <button class="adm-nav-item" type="button" data-view="overview"><span>Overview</span><span class="adm-count" data-count="overview"></span></button>
+    <button class="adm-nav-item" type="button" data-view="agents"><span>Agents</span><span class="adm-count" data-count="agents"></span></button>
+    <button class="adm-nav-item" type="button" data-view="reconnect"><span>ReConnect</span><span class="adm-count" data-count="reconnect"></span></button>
+    <button class="adm-nav-item" type="button" data-view="leaves"><span>Leaves</span><span class="adm-count" data-count="leaves"></span></button>
+    <button class="adm-nav-item" type="button" data-view="redzone"><span>Red Zone</span><span class="adm-count" data-count="redzone"></span></button>
+    <button class="adm-nav-item" type="button" data-view="broadcast"><span>Broadcasts</span><span class="adm-count" data-count="broadcast"></span></button>
+    <button class="adm-nav-item" type="button" data-view="goals"><span>Goals</span><span class="adm-count" data-count="goals"></span></button>
+    <button class="adm-nav-item" type="button" data-view="reviews"><span>Reviews</span><span class="adm-count" data-count="reviews"></span></button>
+  </nav>
+  <div class="adm-side-foot">
+    <span class="adm-session" id="admSession"><i></i><span>Admin key verified</span></span>
+    <a href="game.html">Back to the game</a>
+    <a href="candy-star-admin.html">Candy Star admin</a>
   </div>
-  <div class="adm-snap-tile" id="snapBC" data-tab="broadcast">
-    <div class="adm-snap-label">Broadcasts</div>
-    <div class="adm-snap-val" id="snapBCVal">—</div>
-    <div class="adm-snap-sub" id="snapBCSub">Tap to check</div>
+</aside>
+
+<header class="adm-mtop">
+  <div><div class="adm-brand">HopeTrackers</div><h1>Command Panel</h1></div>
+  <span class="adm-session" id="admSessionM"><i></i><span>Key OK</span></span>
+</header>
+
+<main class="adm-main">
+
+<!-- ── Overview ── -->
+<section class="adm-panel" id="panel-overview" data-panel="overview">
+  <div class="adm-vhead">
+    <div><h2>Overview</h2><p>Live counts. Select a card to open its section.</p></div>
+    <button class="btn btn-ghost" id="btnRefreshAll" type="button">Refresh all</button>
   </div>
-</div>
+  <div class="adm-tiles" id="ovTiles"></div>
+  <div class="adm-cols">
+    <section class="adm-card"><div class="adm-card-head"><h3>Needs attention</h3></div><div id="ovAttention"><div class="adm-empty"><span class="adm-spin"></span>Loading…</div></div></section>
+    <section class="adm-card"><div class="adm-card-head"><h3>Today</h3></div><div class="adm-kv" id="ovToday"></div></section>
+  </div>
+</section>
 
-<div class="adm-tabs" role="tablist">
-  <button class="adm-tab is-active" data-tab="redzone" type="button">🛡️ Red Zone</button>
-  <button class="adm-tab" data-tab="broadcast" type="button">📡 Broadcasts</button>
-  <button class="adm-tab" data-tab="goals" type="button">🎯 Goals</button>
-  <button class="adm-tab" data-tab="lookup" type="button">🔎 Agent Lookup</button>
-  <button class="adm-tab" data-tab="roster" type="button">👥 Agent Log</button>
-  <button class="adm-tab" data-tab="vma" type="button">🎫 VMA Review</button>
-  <button class="adm-tab" data-tab="voting" type="button">🗳️ Voting Review</button>
-  <button class="adm-tab" data-tab="reconnect" type="button">🔗 Reconnect</button>
-</div>
-
-<!-- ── Red Zone ── -->
-<div class="adm-panel" id="panel-redzone" data-panel="redzone">
-  <section class="adm-card">
-    <div class="adm-card-head">
-      <h2>Live status</h2>
-      <button class="btn btn-ghost" id="btnRefreshRZ" type="button">↻ Refresh</button>
+<!-- ── Agents (Agent Log + Agent Lookup) ── -->
+<section class="adm-panel" id="panel-agents" data-panel="agents" hidden>
+  <div class="adm-vhead">
+    <div><h2>Agents</h2><p>The cleanup clock resets on a Bomb charge or a verified vote. Leave pauses it.</p></div>
+    <button class="btn btn-ghost" id="btnLoadRoster" type="button">Refresh</button>
+  </div>
+  <div class="adm-toolbar">
+    <input id="rosterFilter" class="ob-input is-grow" type="search" placeholder="Search agent, handle, codename, district" autocomplete="off">
+    <select id="rosterSort" class="ob-input" aria-label="Sort agents">
+      <option value="attention">Needs attention first</option>
+      <option value="deadline">Deadline soon</option>
+      <option value="recent">Recently active</option>
+      <option value="newest">Newest agents</option>
+      <option value="agent">Agent number</option>
+    </select>
+    <div class="adm-lookup">
+      <input id="lkQuery" class="ob-input" type="text" placeholder="Look up handle or AGENT###" autocomplete="off">
+      <button class="btn btn-ghost" id="btnLookup" type="button">Look up</button>
     </div>
-    <div id="rzStatus" class="adm-rz-clear"><span class="adm-spin"></span> Checking…</div>
-  </section>
-
-  <section class="adm-card">
-    <h2>Launch a Red Zone event</h2>
-    <p class="muted">Every agent sees a breach warning and streams together to defuse it before the timer
-      runs out. Only one Red Zone can run at a time; finish or expire the current event before launching another.</p>
-    <div class="adm-grid2">
-      <label class="adm-field"><span>Target streams</span>
-        <input id="rzTarget" class="ob-input" type="number" min="1" value="2000"></label>
-      <label class="adm-field"><span>Duration (hours, 1–72)</span>
-        <input id="rzHours" class="ob-input" type="number" min="1" max="72" value="24"></label>
-    </div>
-    <div class="adm-field"><span>What counts</span>
-      <select id="rzTargetGoal" class="ob-input adm-rz-targets" multiple size="7">
-        <option value="" selected>Any BTS song</option>
-      </select></div>
-    <p class="muted">Pick one, or several — tick as many as you need, and a track and an album can be mixed.
-      Players are told exactly what you pick: "stream the ARIRANG album and Keep Swimming", "stream Haegeum",
-      or "stream any BTS song". A track counts only that track; an album counts any track on it. The choice
-      is frozen when you launch, so editing a goal afterwards can't change a running event.</p>
-    <div id="rzTargetEcho" class="adm-rz-echo"></div>
-    <label class="adm-field"><span>Title</span>
-      <input id="rzTitle" class="ob-input" type="text" placeholder="INCOMING: RED ZONE"></label>
-    <label class="adm-field"><span>Message</span>
-      <textarea id="rzMessage" class="ob-input" placeholder="The ARMY Bomb is under attack. Stream together to defuse it before the timer runs out."></textarea></label>
-    <label class="adm-field"><span>Total XP pool</span>
-      <input id="rzReward" class="ob-input" type="number" min="1" value="500"></label>
-    <p class="muted">Only agents who stream at least 7 times during the event qualify. The full XP pool is divided equally among them.</p>
-    <button class="btn btn-alert adm-block adm-mutate-btn" id="btnLaunchRZ" type="button">🛡️ Launch Red Zone</button>
-    <div id="rzOut" class="adm-out"></div>
-  </section>
-</div>
-
-<!-- ── Broadcasts ── -->
-<div class="adm-panel" id="panel-broadcast" data-panel="broadcast" hidden>
-  <section class="adm-card">
-    <h2>New broadcast</h2>
-    <p class="muted">Shows as a dismissible card at the top of every agent's World screen the next time
-      their app polls (within ~90 seconds — see main.js).</p>
-    <label class="adm-field"><span>Title</span>
-      <input id="bcTitle" class="ob-input" type="text" placeholder="HT transmission"></label>
-    <label class="adm-field"><span>Message</span>
-      <textarea id="bcMessage" class="ob-input" placeholder="What do agents need to know?"></textarea></label>
-    <div class="adm-grid2">
-      <div class="adm-field">
-        <span>Tone</span>
-        <div class="adm-toggle" id="bcTone">
-          <button class="adm-toggle-opt is-active" data-val="info" type="button">📡 Info</button>
-          <button class="adm-toggle-opt" data-val="gold" type="button">★ Good news</button>
-        </div>
-      </div>
-      <label class="adm-field"><span>Expires in hours (blank = never)</span>
-        <input id="bcExpires" class="ob-input" type="number" min="1" placeholder="never"></label>
-    </div>
-    <button class="btn btn-primary adm-block adm-mutate-btn" id="btnSendBroadcast" type="button">📡 Send broadcast</button>
-    <div id="bcOut" class="adm-out"></div>
-  </section>
-
-  <section class="adm-card">
-    <div class="adm-card-head">
-      <h2>Recent broadcasts</h2>
-      <button class="btn btn-ghost" id="btnLoadBroadcasts" type="button">↻ Load</button>
-    </div>
-    <div id="bcList" class="adm-list"><div class="adm-empty">Not loaded yet — tap Load.</div></div>
-  </section>
-</div>
-
-<!-- ── District Goals ── -->
-<div class="adm-panel" id="panel-goals" data-panel="goals" hidden>
-  <div class="adm-card-head" style="margin-bottom:10px;">
-    <h2 style="font-family:var(--disp);">Goals</h2>
-    <button class="btn btn-ghost" id="btnLoadGoals" type="button">↻ Load</button>
   </div>
-  <div class="adm-callout">
-    <span>Goals are per-district now — nothing counts toward restoring a district until you assign a goal to it here.</span>
-    <button class="adm-callout-more" id="btnGoalsInfoToggle" type="button">How goal freezing works</button>
-  </div>
-  <p class="muted adm-callout-detail" id="goalsInfoDetail" hidden>
-    Each district restores on only the track/album goals explicitly assigned to it below — pick a district
-    first, then add or reassign goals for it. A district with nothing assigned can't be started at all yet
-    (agents get a clear "no goals assigned" message). Editing a goal only affects districts started after the
-    edit; a district already in progress keeps the goals it started with, and every district gets exactly one
-    week from activation to restore before the attempt lapses. Deleting a goal is safe even if it's currently
-    live in gameplay, for the same freezing reason.
-  </p>
+  <div id="lkOut"></div>
+  <div class="adm-seg is-groups" id="agentGroups" role="tablist" aria-label="Cleanup groups"></div>
+  <div class="adm-chips" id="rosterSummary" aria-label="More agent filters"></div>
+  <div class="adm-note" id="agentRule"></div>
+  <p class="muted" id="rosterCount" style="margin:0 0 8px;">Not loaded yet.</p>
+  <div class="adm-table-wrap has-rows" id="rosterList"></div>
+</section>
 
-  <div class="adm-field" style="max-width:360px;"><span>District</span>
-    <select id="goalDistrictFilter" class="ob-input">
-      <option value="">— Unassigned goals —</option>
+<!-- ── ReConnect Quests ── -->
+<section class="adm-panel" id="panel-reconnect" data-panel="reconnect" hidden>
+  <div class="adm-vhead">
+    <div><h2>ReConnect Quests</h2><p id="reconnectSummary">—</p></div>
+    <button class="btn btn-ghost" id="btnLoadReconnect" type="button">Refresh</button>
+  </div>
+  <div class="adm-toolbar">
+    <input class="ob-input is-grow" id="reconnectFilter" type="search" placeholder="Search district or agent" autocomplete="off">
+    <select class="ob-input" id="reconnectDistrictFilter" aria-label="Filter by district">
+      <option value="">All districts</option>
     </select>
   </div>
+  <div class="adm-chips" id="questStatusChips" aria-label="Status"></div>
+  <div class="adm-chips" id="questSortChips" aria-label="Sort"></div>
+  <div class="adm-note">Open quests only, as the backend reports them.
+    <span class="is-gap">Completed and cancelled quests, quest stages and per-agent stream counts aren't available yet.</span></div>
+  <div id="questDistricts"><div class="adm-empty">Not loaded yet.</div></div>
+</section>
 
+<!-- ── Leaves ── -->
+<section class="adm-panel" id="panel-leaves" data-panel="leaves" hidden>
+  <div class="adm-vhead">
+    <div><h2>Leaves</h2><p>Leave pauses the 14-day cleanup clock. Only the agent can start or end a leave.</p></div>
+    <button class="btn btn-ghost" id="btnLoadLeaves" type="button">Refresh</button>
+  </div>
+  <div id="leavesBody"></div>
+  <details class="adm-card adm-details" id="leaveRules" open>
+    <summary>How leave works</summary>
+    <dl class="adm-rules">
+      <div><dt>Length</dt><dd>3 to 14 days, starting the moment the agent takes it. Leave can't be scheduled ahead.</dd></div>
+      <div><dt>Frequency</dt><dd>One at a time. The next can start 14 days after the previous one ends.</dd></div>
+      <div><dt>Cleanup clock</dt><dd>Leave time is subtracted from the 14 days since the last Bomb charge or verified vote.</dd></div>
+      <div><dt>Deletion</dt><dd>Still 14+ days after leave, and for agents with an email, a warning delivered 2 to 45 days earlier.</dd></div>
+      <div><dt>District</dt><dd>The active attempt's deadline moves by the leave length. Streams on leave days don't count toward it.</dd></div>
+      <div><dt>ARMY Bomb</dt><dd>The charge, or the blackout clock, moves forward by the leave length.</dd></div>
+      <div><dt>Streak</dt><dd>Leave days bridge the streak without adding to it.</dd></div>
+      <div><dt>ReConnect</dt><dd>Team quests are not paused; their clocks belong to teammates too.</dd></div>
+      <div><dt>Ending early</dt><dd>Only the unused part of each change is reversed.</dd></div>
+    </dl>
+  </details>
+</section>
+
+<!-- ── Red Zone ── -->
+<section class="adm-panel" id="panel-redzone" data-panel="redzone" hidden>
+  <div class="adm-vhead">
+    <div><h2>Red Zone</h2><p>One event at a time. What counts is frozen at launch.</p></div>
+    <button class="btn btn-ghost" id="btnRefreshRZ" type="button">Refresh</button>
+  </div>
+  <div class="adm-cols">
+    <section class="adm-card">
+      <div class="adm-card-head"><h3>Live status</h3></div>
+      <div id="rzStatus" class="adm-rz-status"><span class="adm-spin"></span>Checking…</div>
+    </section>
+    <section class="adm-card">
+      <div class="adm-card-head"><h3>Launch a Red Zone</h3></div>
+      <div class="adm-grid2">
+        <label class="adm-field"><span>Target streams</span>
+          <input id="rzTarget" class="ob-input" type="number" min="1" value="2000"></label>
+        <label class="adm-field"><span>Duration in hours (1–72)</span>
+          <input id="rzHours" class="ob-input" type="number" min="1" max="72" value="24"></label>
+      </div>
+      <div class="adm-field"><span>What counts</span>
+        <select id="rzTargetGoal" class="ob-input adm-rz-targets" multiple size="7">
+          <option value="" selected>Any BTS song</option>
+        </select></div>
+      <details class="adm-details"><summary>How targets work</summary>
+        <p>Pick one or several; tracks and albums can be mixed. A track counts only that track; an album counts any track on it.
+          Players are told exactly what you pick. The choice is frozen at launch, so editing a goal later can't change a running event.</p></details>
+      <div id="rzTargetEcho" class="adm-rz-echo"></div>
+      <label class="adm-field"><span>Title</span>
+        <input id="rzTitle" class="ob-input" type="text" placeholder="INCOMING: RED ZONE"></label>
+      <label class="adm-field"><span>Message</span>
+        <textarea id="rzMessage" class="ob-input" placeholder="The ARMY Bomb is under attack. Stream together to defuse it before the timer runs out."></textarea></label>
+      <label class="adm-field"><span>Total XP pool</span>
+        <input id="rzReward" class="ob-input" type="number" min="1" value="500">
+        <small>Only agents with 7+ streams during the event qualify. The pool is split equally among them.</small></label>
+      <button class="btn btn-alert btn-block adm-mutate-btn" id="btnLaunchRZ" type="button">Launch Red Zone</button>
+      <div id="rzOut" class="adm-out"></div>
+    </section>
+  </div>
+</section>
+
+<!-- ── Broadcasts ── -->
+<section class="adm-panel" id="panel-broadcast" data-panel="broadcast" hidden>
+  <div class="adm-vhead">
+    <div><h2>Broadcasts</h2><p>A dismissible card on every agent's World screen, within about 90 seconds.</p></div>
+    <button class="btn btn-ghost" id="btnLoadBroadcasts" type="button">Load</button>
+  </div>
+  <div class="adm-cols">
+    <section class="adm-card">
+      <div class="adm-card-head"><h3>Recent broadcasts</h3></div>
+      <div id="bcList" class="adm-list"><div class="adm-empty">Not loaded yet. Select Load.</div></div>
+    </section>
+    <section class="adm-card">
+      <div class="adm-card-head"><h3>New broadcast</h3></div>
+      <label class="adm-field"><span>Title</span>
+        <input id="bcTitle" class="ob-input" type="text" placeholder="HT transmission"></label>
+      <label class="adm-field"><span>Message</span>
+        <textarea id="bcMessage" class="ob-input" placeholder="What do agents need to know?"></textarea></label>
+      <div class="adm-grid2">
+        <div class="adm-field">
+          <span>Tone</span>
+          <div class="adm-toggle" id="bcTone">
+            <button class="adm-toggle-opt is-active" data-val="info" type="button">Info</button>
+            <button class="adm-toggle-opt" data-val="gold" type="button">Good news</button>
+          </div>
+        </div>
+        <label class="adm-field"><span>Expires in hours</span>
+          <input id="bcExpires" class="ob-input" type="number" min="1" placeholder="Blank = never"></label>
+      </div>
+      <button class="btn btn-primary btn-block adm-mutate-btn" id="btnSendBroadcast" type="button">Send broadcast</button>
+      <div id="bcOut" class="adm-out"></div>
+    </section>
+  </div>
+</section>
+
+<!-- ── District Goals ── -->
+<section class="adm-panel" id="panel-goals" data-panel="goals" hidden>
+  <div class="adm-vhead">
+    <div><h2>Goals</h2><p>Goals are per district. Nothing counts toward a district until a goal is assigned.</p></div>
+    <button class="btn btn-ghost" id="btnLoadGoals" type="button">Load</button>
+  </div>
+  <div class="adm-toolbar">
+    <select id="goalDistrictFilter" class="ob-input" aria-label="District">
+      <option value="">Unassigned goals</option>
+    </select>
+    <button class="btn btn-ghost btn-sm" id="btnGoalsInfoToggle" type="button">How goal freezing works</button>
+  </div>
+  <p class="adm-note" id="goalsInfoDetail" hidden>
+    Each district restores on only the goals assigned to it. A district with no track goal can't be started.
+    Editing a goal only affects districts started after the edit; a district in progress keeps the goals it started with,
+    and every district gets one week from activation. Deleting a goal is safe even if it's live, for the same reason.
+  </p>
   <div class="adm-goals-layout">
-    <div class="adm-goals-lists">
+    <div>
       <section class="adm-card">
-        <h3 style="margin:0 0 8px;">Track goals <span class="muted" id="goalsTrackListDistrict" style="font-weight:400;"></span></h3>
-        <div id="goalsTrackList" class="adm-list"><div class="adm-empty">Pick a district above, then tap Load.</div></div>
+        <div class="adm-card-head"><h3>Track goals <span class="muted" id="goalsTrackListDistrict"></span></h3></div>
+        <div id="goalsTrackList" class="adm-list"><div class="adm-empty">Pick a district, then select Load.</div></div>
       </section>
-
       <section class="adm-card">
-        <h3 style="margin:0 0 4px;">Album goals <span class="muted" id="goalsAlbumListDistrict" style="font-weight:400;"></span></h3>
-        <p class="muted" style="margin-bottom:12px;">One full-album pass counted per target. A district can carry more than one album goal.</p>
+        <div class="adm-card-head"><h3>Album goals <span class="muted" id="goalsAlbumListDistrict"></span></h3></div>
+        <p class="muted">One full-album pass counts per target. A district can carry several.</p>
         <div id="goalsAlbumList" class="adm-list"><div class="adm-empty">Not loaded yet.</div></div>
       </section>
-
       <section class="adm-card">
-        <h3 style="margin:0 0 4px;">ReConnect goals <span class="muted" id="goalsReconnectListDistrict" style="font-weight:400;"></span></h3>
-        <p class="muted" style="margin-bottom:12px;">The 3rd restoration goal. A district can carry several flavors at once — each agent who starts it gets ONE picked at random, so two agents restoring the same district can land on different ReConnect Missions.</p>
-        <p class="adm-callout" id="goalNoTrackWarning" hidden style="border-color:rgba(229,56,79,0.4);">⚠️ This district has no track goal yet — it can't be started until it has at least one.</p>
+        <div class="adm-card-head"><h3>ReConnect goals <span class="muted" id="goalsReconnectListDistrict"></span></h3></div>
+        <p class="muted">The third restoration goal. Each agent who starts the district gets one flavor at random.</p>
+        <p class="adm-warn" id="goalNoTrackWarning" hidden>This district has no track goal yet, so it can't be started.</p>
         <div id="goalsReconnectList" class="adm-list"><div class="adm-empty">Not loaded yet.</div></div>
       </section>
     </div>
-
     <div class="adm-goal-form">
       <section class="adm-card">
-        <h3 style="margin:0 0 10px;">Add a track goal</h3>
-        <p class="muted" id="goalTrackDistrictNote" style="margin-bottom:10px;"></p>
+        <div class="adm-card-head"><h3>Add a track goal</h3></div>
+        <p class="muted" id="goalTrackDistrictNote"></p>
         <div class="adm-goal-form-grid">
           <label class="adm-field"><span>Track name</span>
             <input id="goalTrackLabel" class="ob-input" type="text" placeholder="e.g. Dynamite"></label>
           <label class="adm-field"><span>Artist</span>
             <input id="goalTrackArtist" class="ob-input" type="text" placeholder="BTS"></label>
           <label class="adm-field"><span>Base target</span>
-            <input id="goalTrackTarget" class="ob-input" type="number" min="1" value="20" title="Base target — multiplied per streaming mode"></label>
+            <input id="goalTrackTarget" class="ob-input" type="number" min="1" value="20" title="Base target, multiplied per streaming mode"></label>
         </div>
-        <label class="adm-field" style="margin-top:12px;"><span>Alternate titles (optional)</span>
-          <input id="goalTrackAliases" class="ob-input" type="text" placeholder="Comma-separated — helps match different platforms' naming"></label>
+        <label class="adm-field"><span>Alternate titles (optional)</span>
+          <input id="goalTrackAliases" class="ob-input" type="text" placeholder="Comma-separated"></label>
         <div class="adm-mode-preview" id="goalTrackPreview"></div>
-        <button class="btn btn-primary adm-block adm-mutate-btn" id="btnAddTrackGoal" type="button" style="margin-top:10px;">+ Add track goal</button>
+        <button class="btn btn-primary btn-block adm-mutate-btn" id="btnAddTrackGoal" type="button" style="margin-top:10px;">Add track goal</button>
       </section>
-
       <section class="adm-card">
-        <h3 style="margin:0 0 10px;">Add an album goal</h3>
-        <p class="muted" id="goalAlbumDistrictNote" style="margin-bottom:10px;"></p>
+        <div class="adm-card-head"><h3>Add an album goal</h3></div>
+        <p class="muted" id="goalAlbumDistrictNote"></p>
         <div class="adm-goal-form-grid">
           <label class="adm-field"><span>Album name</span>
             <input id="goalAlbumLabel" class="ob-input" type="text" placeholder="e.g. BE"></label>
           <label class="adm-field"><span>Artist</span>
             <input id="goalAlbumArtist" class="ob-input" type="text" placeholder="BTS"></label>
           <label class="adm-field"><span>Base passes</span>
-            <input id="goalAlbumTarget" class="ob-input" type="number" min="1" value="3" title="Base target — multiplied per streaming mode"></label>
+            <input id="goalAlbumTarget" class="ob-input" type="number" min="1" value="3" title="Base target, multiplied per streaming mode"></label>
         </div>
-        <label class="adm-field" style="margin-top:12px;"><span>Album tracks</span>
-          <textarea id="goalAlbumTracks" class="ob-input adm-goal-tracks" style="min-height:70px;" placeholder="One album track per line: Track Name | alias1, alias2 (aliases optional)"></textarea></label>
+        <label class="adm-field"><span>Album tracks</span>
+          <textarea id="goalAlbumTracks" class="ob-input adm-goal-tracks" placeholder="One per line: Track Name | alias1, alias2"></textarea></label>
         <div class="adm-mode-preview" id="goalAlbumPreview"></div>
-        <button class="btn btn-primary adm-block adm-mutate-btn" id="btnAddAlbumGoal" type="button" style="margin-top:10px;">+ Add album goal</button>
+        <button class="btn btn-primary btn-block adm-mutate-btn" id="btnAddAlbumGoal" type="button" style="margin-top:10px;">Add album goal</button>
       </section>
-
       <section class="adm-card">
-        <h3 style="margin:0 0 10px;">Add a ReConnect goal</h3>
-        <p class="muted" id="goalReconnectDistrictNote" style="margin-bottom:10px;"></p>
+        <div class="adm-card-head"><h3>Add a ReConnect goal</h3></div>
+        <p class="muted" id="goalReconnectDistrictNote"></p>
         <div class="adm-field"><span>Flavor</span>
           <select id="goalReconnectVariant" class="ob-input">
-            <option value="sotd">🎵 Song of the Day — guess a song from a hint</option>
-            <option value="cipher">🔐 Cipher — guess a song from its initials</option>
-            <option value="memory">📖 Memory Fragment — guess a piece of lore</option>
-            <option value="connect">🤝 Connect — agents pair up, both keep streaming</option>
-            <option value="invite">📡 Invite — invite helpers, no streaming needed from them</option>
+            <option value="sotd">Song of the Day: guess a song from a hint</option>
+            <option value="cipher">Cipher: guess a song from its initials</option>
+            <option value="memory">Memory Fragment: guess a piece of lore</option>
+            <option value="connect">Connect: agents pair up, both keep streaming</option>
+            <option value="invite">Invite: invite helpers, no streaming needed from them</option>
           </select>
         </div>
         <div id="goalReconnectSotdFields">
@@ -670,7 +314,7 @@
         <div id="goalReconnectTextFields" hidden>
           <label class="adm-field"><span>Prompt shown to the player</span>
             <input id="goalReconnectPrompt" class="ob-input" type="text" placeholder="e.g. Hint: it's about summer"></label>
-          <div class="adm-goal-form-grid">
+          <div class="adm-grid2">
             <label class="adm-field"><span>Correct answer</span>
               <input id="goalReconnectAnswer" class="ob-input" type="text" placeholder="e.g. Swim"></label>
             <label class="adm-field"><span>Also accept (optional)</span>
@@ -681,145 +325,121 @@
           <label class="adm-field"><span>Agents required</span>
             <input id="goalReconnectRequired" class="ob-input" type="number" min="2" value="2"></label>
         </div>
-        <button class="btn btn-primary adm-block adm-mutate-btn" id="btnAddReconnectGoal" type="button" style="margin-top:10px;">+ Add ReConnect goal</button>
+        <button class="btn btn-primary btn-block adm-mutate-btn" id="btnAddReconnectGoal" type="button" style="margin-top:10px;">Add ReConnect goal</button>
       </section>
-
       <div id="goalsOut" class="adm-out"></div>
     </div>
   </div>
-</div>
+</section>
 
-<!-- ── Agent Lookup ── -->
-<div class="adm-panel" id="panel-lookup" data-panel="lookup" hidden>
-  <section class="adm-card">
-    <h2>Find an agent</h2>
-    <p class="muted">Search by handle or agent number (e.g. <code>AGENT042</code>). Look-up only — this
-      doesn't edit anything.</p>
-    <div class="adm-row">
-      <input id="lkQuery" class="ob-input" type="text" placeholder="Handle or AGENT###" autocomplete="off">
-      <button class="btn btn-primary" id="btnLookup" type="button">Search</button>
-    </div>
-    <div id="lkOut"></div>
-  </section>
-</div>
-
-<!-- ── All Agents ── -->
-<div class="adm-panel" id="panel-roster" data-panel="roster" hidden>
-  <section class="adm-card">
-    <div class="adm-card-head">
-      <h2>Agent command log</h2>
-      <button class="btn btn-ghost" id="btnLoadRoster" type="button">↻ Refresh</button>
-    </div>
-    <p class="muted adm-roster-intro">See who needs help without confusing Bomb feeding, streaming and opening the app. The cleanup clock resets on a Bomb charge or a verified vote. Tap an agent for their full file.</p>
-    <div class="adm-roster-toolbar">
-      <input id="rosterFilter" class="ob-input" type="search" placeholder="Search agent, handle, codename or district" autocomplete="off">
-      <select id="rosterSort" class="ob-input" aria-label="Sort agents">
-        <option value="attention">Needs attention first</option>
-        <option value="deadline">Deadline soon</option>
-        <option value="recent">Recently active</option>
-        <option value="newest">Newest agents</option>
-        <option value="agent">Agent number</option>
-      </select>
-    </div>
-    <div class="adm-roster-summary" id="rosterSummary" aria-label="Agent filters"></div>
-    <div class="adm-roster-meta">
-      <p class="muted" id="rosterCount">Not loaded yet.</p>
-      <span class="muted" style="font-size:11px;">Auto-delete: 14 days without feeding</span>
-    </div>
-    <div class="adm-roster-list" id="rosterList"></div>
-  </section>
-
-  <div class="adm-roster-drawer" id="rosterDrawer" role="dialog" aria-modal="true" aria-labelledby="rosterDrawerTitle" hidden>
-    <div class="adm-roster-drawer-panel">
-      <div class="adm-roster-drawer-head">
-        <span class="adm-roster-drawer-title" id="rosterDrawerTitle">Agent file</span>
-        <button class="adm-roster-drawer-close" id="btnCloseRosterDrawer" type="button" aria-label="Close agent file">×</button>
+<!-- ── Reviews (Voting review + VMA proofs) ── -->
+<section class="adm-panel" id="panel-reviews" data-panel="reviews" hidden>
+  <div class="adm-vhead">
+    <div><h2>Reviews</h2><p>Vote proofs and reports waiting for a person.</p></div>
+  </div>
+  <div class="adm-seg is-plain" id="reviewSeg" role="tablist">
+    <button type="button" class="is-active" data-review="voting">Voting review</button>
+    <button type="button" data-review="vma">VMA proofs</button>
+  </div>
+  <div class="adm-subpanel" id="panel-voting"></div>
+  <div class="adm-subpanel" id="panel-vma" hidden>
+    <div class="adm-card">
+      <div class="adm-card-head">
+        <h3>Pending vote proofs <span class="muted" id="vmaPendingCount">—</span></h3>
+        <div class="adm-row">
+          <button class="btn btn-ghost btn-sm" id="btnRecheckAllVma" type="button">OCR check all</button>
+          <button class="btn btn-ghost btn-sm" id="btnLoadVma" type="button">Load</button>
+        </div>
       </div>
-      <div class="adm-roster-drawer-body" id="rosterDrawerBody"></div>
+      <div class="vma-recheck-status" id="vmaRecheckStatus" role="status" aria-live="polite" hidden></div>
+      <div id="vmaList"></div>
+      <div class="adm-pager" id="vmaPager">
+        <button class="btn btn-ghost btn-sm" id="btnVmaPrev" type="button">Prev</button>
+        <span id="vmaPageLabel"></span>
+        <button class="btn btn-ghost btn-sm" id="btnVmaNext" type="button">Next</button>
+      </div>
     </div>
+  </div>
+</section>
+
+</main>
+
+<nav class="adm-bnav" id="admBottomNav" aria-label="Admin sections">
+  <button type="button" data-view="overview"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M3 3h7v7H3zM14 3h7v4h-7zM14 10h7v11h-7zM3 13h7v8H3z"/></svg>Overview</button>
+  <button type="button" data-view="agents"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5M16 4.5a3.5 3.5 0 010 7M18.5 14.8c1.6.8 2.6 2.5 3 5.2"/></svg>Agents<span class="adm-count" data-count="agents"></span></button>
+  <button type="button" data-view="reconnect"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="6" cy="12" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M8.6 10.6l6.8-3.2M8.6 13.4l6.8 3.2"/></svg>ReConnect<span class="adm-count" data-count="reconnect"></span></button>
+  <button type="button" data-view="reviews"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M5 3h10l4 4v14H5z"/><path d="M9 13l2 2 4-4"/></svg>Reviews<span class="adm-count" data-count="reviews"></span></button>
+  <button type="button" data-view="more" id="btnMore" aria-haspopup="dialog"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>More<span class="adm-count" data-count="more"></span></button>
+</nav>
+
+<div class="adm-sheet-wrap" id="admMore" role="dialog" aria-modal="true" aria-label="More sections" hidden>
+  <div class="adm-sheet">
+    <div class="adm-grab"></div>
+    <button class="adm-sheet-item" type="button" data-view="leaves"><span>Leaves<small id="moreLeavesSub">Agents on leave and leave history</small></span><span aria-hidden="true">›</span></button>
+    <button class="adm-sheet-item" type="button" data-view="redzone"><span>Red Zone<small id="moreRZSub">Live status and launch</small></span><span aria-hidden="true">›</span></button>
+    <button class="adm-sheet-item" type="button" data-view="broadcast"><span>Broadcasts<small id="moreBCSub">Send and manage announcements</small></span><span aria-hidden="true">›</span></button>
+    <button class="adm-sheet-item" type="button" data-view="goals"><span>Goals<small>Track, album and ReConnect goals per district</small></span><span aria-hidden="true">›</span></button>
+    <div class="adm-sheet-links"><a href="game.html">Back to the game</a><a href="candy-star-admin.html">Candy Star admin</a></div>
   </div>
 </div>
 
-<!-- ── VMA Review ── -->
-<div class="adm-panel" id="panel-vma" data-panel="vma" hidden>
-  <section class="adm-card">
-    <div class="adm-card-head">
-      <h2>Pending vote proofs</h2>
-      <div class="adm-row" style="gap:8px;">
-        <button class="btn btn-primary" id="btnRecheckAllVma" type="button">⌁ OCR check all</button>
-        <button class="btn btn-ghost" id="btnLoadVma" type="button">↻ Load</button>
-      </div>
+<div class="adm-drawer" id="rosterDrawer" role="dialog" aria-modal="true" aria-labelledby="rosterDrawerTitle" hidden>
+  <div class="adm-drawer-panel">
+    <div class="adm-drawer-head">
+      <div><small>Agent file</small><span class="adm-drawer-title" id="rosterDrawerTitle">Agent file</span></div>
+      <button class="adm-x" id="btnCloseRosterDrawer" type="button" aria-label="Close agent file">×</button>
     </div>
-    <p class="muted" id="vmaPendingCount">—</p>
-    <div class="vma-recheck-status" id="vmaRecheckStatus" role="status" aria-live="polite" hidden></div>
-    <div id="vmaList"></div>
-    <div class="adm-row" id="vmaPager" style="margin-top:12px; justify-content:center; gap:10px;">
-      <button class="btn btn-ghost" id="btnVmaPrev" type="button">← Prev</button>
-      <span id="vmaPageLabel" class="muted"></span>
-      <button class="btn btn-ghost" id="btnVmaNext" type="button">Next →</button>
-    </div>
-  </section>
+    <div class="adm-drawer-body" id="rosterDrawerBody"></div>
+  </div>
 </div>
 
-<!-- ── Reconnect ── -->
-<!-- ── Voting Review (MAMA 2026 onward; js/voting-admin.js) ── -->
-<div class="adm-panel" id="panel-voting" data-panel="voting" hidden></div>
-
-<div class="adm-panel" id="panel-reconnect" data-panel="reconnect" hidden>
-  <section class="adm-card">
-    <div class="adm-card-head">
-      <h2>ReConnect Health</h2>
-      <button class="btn btn-ghost" id="btnLoadReconnect" type="button">↻ Refresh</button>
+<div class="adm-drawer" id="questDrawer" role="dialog" aria-modal="true" aria-labelledby="questDrawerTitle" hidden>
+  <div class="adm-drawer-panel">
+    <div class="adm-drawer-head">
+      <div><small id="questDrawerContext"></small><span class="adm-drawer-title" id="questDrawerTitle">Quest</span><span id="questDrawerBadge"></span></div>
+      <button class="adm-x" id="btnCloseQuestDrawer" type="button" aria-label="Close quest">×</button>
     </div>
-    <p class="muted rh-intro">Start with the people who need you. Everything healthy stays out of the way.</p>
-    <p class="rh-compact-summary" id="reconnectSummary">—</p>
-
-    <section class="rh-section is-action" aria-labelledby="rhNeedsTitle">
-      <div class="rh-section-head"><h3 id="rhNeedsTitle">NEEDS ACTION</h3><span id="reconnectNeedsCount">—</span></div>
-      <div class="rh-list" id="reconnectNeedsList"></div>
-    </section>
-
-    <section class="rh-section is-watch" aria-labelledby="rhWatchTitle">
-      <div class="rh-section-head"><h3 id="rhWatchTitle">WATCH</h3><span id="reconnectWatchCount">—</span></div>
-      <div class="rh-list" id="reconnectWatchList"></div>
-    </section>
-
-    <section class="rh-section" aria-labelledby="rhFineTitle">
-      <div class="rh-section-head"><h3 id="rhFineTitle">FINE</h3><span>count only</span></div>
-      <div class="rh-fine"><b id="reconnectFineCount">—</b><span>progressing normally</span></div>
-    </section>
-
-    <details class="rh-find">
-      <summary>Find a specific ReConnect case</summary>
-      <div class="rh-toolbar">
-        <input class="ob-input" id="reconnectFilter" type="search" placeholder="Search agent or district…" autocomplete="off">
-        <select class="ob-input" id="reconnectDistrictFilter" aria-label="Filter by district">
-          <option value="">All districts</option>
-        </select>
-      </div>
-    </details>
-  </section>
-
-  <dialog class="rh-match-dialog" id="reconnectMatchDialog">
-    <div class="rh-match-body" id="reconnectMatchBody"></div>
-  </dialog>
+    <div class="adm-drawer-body" id="questDrawerBody"></div>
+    <div class="adm-drawer-foot" id="questDrawerFoot"></div>
+  </div>
 </div>
 
 </div><!-- /admApp -->
 
+<dialog class="adm-dialog" id="reconnectMatchDialog">
+  <div class="adm-dialog-body" id="reconnectMatchBody"></div>
+</dialog>
+
+<dialog class="adm-dialog" id="admConfirm" aria-labelledby="admConfirmTitle">
+  <div class="adm-dialog-body">
+    <h3 id="admConfirmTitle">Are you sure?</h3>
+    <p id="admConfirmBody"></p>
+    <div class="adm-dialog-actions">
+      <button class="btn btn-ghost" id="admConfirmCancel" type="button">Cancel</button>
+      <button class="btn btn-primary" id="admConfirmOk" type="button">Confirm</button>
+    </div>
+  </div>
+</dialog>
+
 <script type="module">
-import { call as rawCall, API_URL } from './js/api.js'
+import { API_URL } from './js/api.js'
 import { enhanceSelect } from './js/rc-select.js'
 import { enhanceMultiSelect } from './js/rc-multiselect.js'
 import { scanVoteProofImage } from './js/vma.js'
 import { mountVotingReview } from './js/voting-admin.js'
 import { evaluateVoteProof } from './supabase/functions/op-reconnect/lib/vma-ocr.js'
 import {
-  reconnectAdminAction, reconnectAdminBucket, reconnectBucketCounts,
+  canAutoFillReconnect, reconnectAdminAction, reconnectAdminBucket, reconnectBucketCounts,
   reconnectPlainReason, reconnectTeamLabel,
   redZoneTargetOptions,
 } from './js/reconnect-admin-ui.js'
 import { redZoneTarget } from './js/red-zone-ui.js'
+import {
+  CLEANUP, fetchDeletionPreview, nextUtcHour, cleanupRows, agentGroup, agentGroupCounts, CLEANUP_LABELS,
+  QUEST_STATUSES, QUEST_UNAVAILABLE_STATUSES, questStatus, questNeedsAdmin, questDeadline, questDistricts,
+  questStatusCounts, questProgress,
+  LEAVES_ACTION, leavesUnavailable, leaveRows, leaveCounts, leaveStatus, leaveDurationDays, LEAVE_STATUS_LABELS,
+} from './js/admin-dashboard.js'
 
 const $ = (id) => document.getElementById(id)
 const KEY_STORAGE = 'rc_admin_key' // shared with candy-star-admin.html on purpose
@@ -836,8 +456,7 @@ async function call(action, params = {}) {
     })
     const json = await res.json()
     // Only past the gate — the gate's own unlock flow handles a rejected
-    // key itself; this is specifically the "it worked at unlock, then
-    // stopped mid-session" case (e.g. someone rotated the key).
+    // key itself; this is the "it worked at unlock, then stopped" case.
     if (json && json.error === 'Unauthorized' && !$('admApp').hidden) showUnauthBanner()
     return json
   } catch (e) {
@@ -845,24 +464,61 @@ async function call(action, params = {}) {
   }
 }
 
-/* ── Unauthorized banner ── every write button gets tagged adm-mutate-btn
-   (statically in HTML, or via its template string if rendered dynamically)
-   so one query freezes all of them at once, and again after every re-render
-   so newly-created buttons inherit the same frozen state. */
+/* ── Confirmation dialog ── one styled dialog for every action that asks
+   first. Resolves true only from the confirm button; Cancel, Esc, a click
+   on the backdrop or any other close resolve false. Each answer is settled
+   directly by the control that gave it, never by waiting on the dialog's
+   own close event. */
+let settleConfirm = null
+function confirmAction({ title, body = '', confirmLabel = 'Confirm', danger = false }) {
+  const dialog = $('admConfirm')
+  settleConfirm?.(false)
+  $('admConfirmTitle').textContent = title
+  $('admConfirmBody').textContent = body
+  const ok = $('admConfirmOk')
+  ok.textContent = confirmLabel
+  ok.className = `btn ${danger ? 'btn-alert' : 'btn-primary'}`
+  return new Promise((resolve) => {
+    settleConfirm = (answer) => {
+      settleConfirm = null
+      if (dialog.open) dialog.close()
+      resolve(answer === true)
+    }
+    dialog.showModal()
+    $('admConfirmCancel').focus()
+  })
+}
+$('admConfirmOk').onclick = () => settleConfirm?.(true)
+$('admConfirmCancel').onclick = () => settleConfirm?.(false)
+$('admConfirm').addEventListener('cancel', (e) => { e.preventDefault(); settleConfirm?.(false) })
+$('admConfirm').addEventListener('close', () => settleConfirm?.(false))
+$('admConfirm').addEventListener('click', (e) => { if (e.target === $('admConfirm')) settleConfirm?.(false) })
+
+/* ── Unauthorized banner ── every write button is tagged adm-mutate-btn so
+   one query freezes all of them, and again after every re-render. */
 let sessionUnauthorized = false
 function setMutationButtonsDisabled(disabled) {
   document.querySelectorAll('.adm-mutate-btn').forEach((b) => { b.disabled = disabled })
+}
+function paintSession() {
+  for (const id of ['admSession', 'admSessionM']) {
+    const el = $(id)
+    el.classList.toggle('is-bad', sessionUnauthorized)
+    el.querySelector('span').textContent = sessionUnauthorized ? 'Key rejected' : (id === 'admSession' ? 'Admin key verified' : 'Key OK')
+  }
 }
 function showUnauthBanner() {
   sessionUnauthorized = true
   $('admUnauthBanner').classList.add('is-visible')
   setMutationButtonsDisabled(true)
+  paintSession()
 }
 function hideUnauthBanner() {
   sessionUnauthorized = false
   $('admUnauthBanner').classList.remove('is-visible')
   $('admUnauthErr').hidden = true
   setMutationButtonsDisabled(false)
+  paintSession()
 }
 function showUnauthErr(text) {
   const el = $('admUnauthErr')
@@ -889,13 +545,11 @@ $('btnUnauthRetry').onclick = async () => {
 }
 $('admUnauthKey').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btnUnauthRetry').click() })
 
-/* ── Gate ─────────────────────────────────────────────────────────────
-   The backend's admin check is a single stateless comparison — every
-   'admin'-tagged action just checks params.adminKey against SYNC_ADMIN_KEY
-   on that one request, there's no login/session action to call first. So
-   "verifying" the key here means literally making one real admin call and
-   seeing whether it comes back Unauthorized — reusing adminGetActiveDefuse
-   since the panel needs that status anyway right after unlocking. */
+/* ── Gate ──
+   The backend's admin check is a single stateless comparison: every
+   'admin'-tagged action checks params.adminKey against SYNC_ADMIN_KEY on that
+   one request. "Verifying" the key means making one real admin call and
+   seeing whether it comes back Unauthorized. */
 function showGateMsg(text, kind) {
   const el = $('adminGateMsg')
   el.textContent = text
@@ -907,10 +561,11 @@ function revealApp(res) {
   $('admGate').hidden = true
   $('admApp').hidden = false
   paintRZStatus(res)
-  // The launch form's target picker needs the goal list too — without this
-  // it would sit on "Any BTS song" alone until someone hit Refresh.
+  // The launch form's target picker needs the goal list too.
   loadRZTargets()
-  loadBroadcastsSnapOnly()
+  const fromHash = (location.hash || '').slice(1)
+  selectView(VIEWS.includes(fromHash) ? fromHash : 'overview')
+  loadOverview()
 }
 
 async function unlockAdmin() {
@@ -918,7 +573,7 @@ async function unlockAdmin() {
   if (!key) { showGateMsg('Enter the admin key first.', 'bad'); return }
   const btn = $('btnUnlock')
   btn.disabled = true
-  btn.textContent = 'CHECKING…'
+  btn.textContent = 'Checking…'
   showGateMsg('Checking…', 'checking')
   const res = await call('adminGetActiveDefuse')
   btn.disabled = false
@@ -933,9 +588,8 @@ async function unlockAdmin() {
 $('btnUnlock').onclick = unlockAdmin
 $('adminKey').addEventListener('keydown', (e) => { if (e.key === 'Enter') unlockAdmin() })
 
-/** Silently tries a key saved from a previous visit. If it still works, skip
- *  straight past the gate. If not, fall back to the gate quietly — no
- *  alarming "rejected" flash for something the agent didn't just do. */
+/** Silently tries a key saved from a previous visit; falls back to the gate
+ *  quietly if it no longer works. */
 async function tryStoredKey() {
   let saved = ''
   try { saved = localStorage.getItem(KEY_STORAGE) || '' } catch (_) { /* unavailable */ }
@@ -961,16 +615,174 @@ function fmtDate(iso) {
   if (!iso) return '—'
   try { return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) } catch { return iso }
 }
-
-/* ── Tabs ── */
-const tabs = document.querySelectorAll('.adm-tab')
-function selectTab(name) {
-  for (const t of tabs) t.classList.toggle('is-active', t.dataset.tab === name)
-  for (const p of document.querySelectorAll('.adm-panel')) p.hidden = p.dataset.panel !== name
+function fmtDay(iso) {
+  if (!iso) return '—'
+  try { return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) } catch { return iso }
 }
-tabs.forEach((t) => t.onclick = () => selectTab(t.dataset.tab))
-$('snapRZ').onclick = () => selectTab('redzone')
-$('snapBC').onclick = () => selectTab('broadcast')
+function relativeTime(iso) {
+  if (!iso) return 'Never'
+  const ms = new Date(iso).getTime() - Date.now()
+  if (!Number.isFinite(ms)) return 'Unknown'
+  const future = ms > 0
+  const abs = Math.abs(ms)
+  const mins = Math.max(1, Math.round(abs / 60000))
+  let value
+  if (mins < 60) value = `${mins}m`
+  else if (mins < 1440) value = `${Math.round(mins / 60)}h`
+  else value = `${Math.round(mins / 1440)}d`
+  return future ? `in ${value}` : `${value} ago`
+}
+const badge = (tone, label) => `<span class="adm-badge${tone ? ` is-${tone}` : ''}">${esc(label)}</span>`
+const bar = (n, of, label) => {
+  const pct = of > 0 ? Math.min(100, Math.round((n / of) * 100)) : 0
+  return `<span class="adm-bar${n >= of && of > 0 ? ' is-full' : ''}"><i style="--p:${pct}%"></i><small>${esc(label)}</small></span>`
+}
+const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
+
+/* ── Navigation ── one view at a time; the sidebar on desktop, the bottom
+   bar plus the More sheet on mobile. */
+const VIEWS = ['overview', 'agents', 'reconnect', 'leaves', 'redzone', 'broadcast', 'goals', 'reviews']
+const MORE_VIEWS = ['leaves', 'redzone', 'broadcast', 'goals']
+let currentView = 'overview'
+const viewEnter = {}
+
+function selectView(name) {
+  if (!VIEWS.includes(name)) return
+  currentView = name
+  for (const p of document.querySelectorAll('.adm-panel')) p.hidden = p.dataset.panel !== name
+  for (const b of document.querySelectorAll('#admNav [data-view]')) b.classList.toggle('is-active', b.dataset.view === name)
+  for (const b of document.querySelectorAll('#admBottomNav [data-view]')) {
+    b.classList.toggle('is-active', b.dataset.view === name || (b.dataset.view === 'more' && MORE_VIEWS.includes(name)))
+  }
+  for (const b of document.querySelectorAll('#admMore [data-view]')) b.classList.toggle('is-active', b.dataset.view === name)
+  closeMore()
+  try { history.replaceState(null, '', `#${name}`) } catch (_) {}
+  window.scrollTo(0, 0)
+  viewEnter[name]?.()
+}
+function openMore() { $('admMore').hidden = false }
+function closeMore() { $('admMore').hidden = true }
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-view]')
+  if (!btn || !btn.closest('#admNav, #admBottomNav, #admMore, #ovTiles, #ovAttention')) return
+  if (btn.dataset.view === 'more') { $('admMore').hidden ? openMore() : closeMore(); return }
+  selectView(btn.dataset.view)
+})
+$('admMore').addEventListener('click', (e) => { if (e.target === $('admMore')) closeMore() })
+// Back/forward and pasted links move between sections too.
+window.addEventListener('hashchange', () => {
+  const name = (location.hash || '').slice(1)
+  if (!$('admApp').hidden && VIEWS.includes(name) && name !== currentView) selectView(name)
+})
+
+function setCount(key, value, tone = '') {
+  for (const el of document.querySelectorAll(`[data-count="${key}"]`)) {
+    el.textContent = value ? String(value) : ''
+    el.className = `adm-count${tone ? ` is-${tone}` : ''}`
+  }
+}
+
+/* ── Overview ── */
+const ov = { rz: null, broadcasts: null, reconnect: null, rows: null, preview: null, previewError: '', vma: null, voting: null, leaves: null }
+
+async function loadOverview() {
+  paintOverview()
+  await Promise.all([
+    loadRosterData(), loadReconnectData(), loadReviewCounts(), loadBroadcastsSnapOnly(), loadLeavesData(),
+  ])
+  paintOverview()
+}
+$('btnRefreshAll').onclick = async () => {
+  $('btnRefreshAll').disabled = true
+  const res = await call('adminGetActiveDefuse')
+  paintRZStatus(res)
+  await loadOverview()
+  $('btnRefreshAll').disabled = false
+}
+
+async function loadReviewCounts() {
+  const [vma, voting] = await Promise.all([
+    call('adminListVmaPending', { limit: 1, offset: 0 }),
+    call('adminListCampaignProofs', { status: 'review', reason: null, limit: 1, offset: 0 }),
+  ])
+  ov.vma = vma?.success ? Number(vma.pendingCount) || 0 : null
+  ov.voting = voting?.success ? voting.queue || null : null
+  paintReviewCounts()
+}
+function reviewTotal() {
+  return (ov.vma || 0) + (ov.voting ? (Number(ov.voting.review) || 0) + (Number(ov.voting.verifying) || 0) : 0)
+}
+function paintReviewCounts() {
+  const total = reviewTotal()
+  setCount('reviews', total, total ? 'warn' : '')
+}
+
+function tile(view, k, v, s, tone = '') {
+  return `<button class="adm-tile${tone ? ` is-${tone}` : ''}" type="button" data-view="${view}"><span class="k">${esc(k)}</span><span class="v">${esc(v)}</span><span class="s">${esc(s)}</span></button>`
+}
+
+function paintOverview() {
+  const nextDelete = nextUtcHour(CLEANUP.deleteHourUtc)
+  const nextRemind = nextUtcHour(CLEANUP.reminderHourUtc)
+  const rows = ov.rows
+  const counts = rows && ov.preview ? agentGroupCounts(rows) : null
+  const rc = ov.reconnect ? reconnectBucketCounts(ov.reconnect) : null
+  const live = ov.broadcasts ? ov.broadcasts.filter((b) => b.active).length : null
+  const rz = ov.rz
+  const tiles = [
+    tile('reconnect', 'ReConnect', rc ? rc.action : '—', rc ? `need action · ${rc.watch} to watch · ${rc.fine} fine` : 'Loading', rc?.action ? 'bad' : ''),
+    tile('agents', 'Deletes next run', counts ? counts.delete : '—', ov.previewError ? 'Preview unavailable' : `no email · ${relativeTime(nextDelete.toISOString())}`, counts?.delete ? 'bad' : ''),
+    tile('agents', 'Past 14 days, has email', counts ? counts.warning : '—', 'warning status unavailable', counts?.warning ? 'warn' : ''),
+    tile('agents', 'At risk', rows ? agentGroup(rows, 'risk').length : '—', 'cleanup clock 9–13 days', rows && agentGroup(rows, 'risk').length ? 'warn' : ''),
+    tile('reviews', 'Reviews', ov.vma == null && !ov.voting ? '—' : reviewTotal(),
+      `${ov.vma ?? '—'} VMA · ${ov.voting ? (Number(ov.voting.review) || 0) : '—'} in review`, reviewTotal() ? 'warn' : ''),
+    tile('redzone', 'Red Zone', rz?.active ? 'Active' : rz ? 'Clear' : '—',
+      rz?.active ? `${rz.defuse.progress.toLocaleString()} / ${rz.defuse.target.toLocaleString()} streams` : `${live ?? '—'} live broadcast${live === 1 ? '' : 's'}`, rz?.active ? 'bad' : ''),
+  ]
+  $('ovTiles').innerHTML = tiles.join('')
+
+  const items = []
+  if (rz?.active) items.push(['bad', 'Red Zone', esc(rz.defuse.title || 'Red Zone active'), `Ends ${esc(fmtDate(rz.defuse.activeUntil))}`, 'redzone'])
+  for (const item of (ov.reconnect || []).filter(questNeedsAdmin).slice(0, 4)) {
+    const st = questStatus(item)
+    items.push([st === 'expired' ? 'bad' : 'wait', st === 'expired' ? 'Expired' : 'Quest', `${esc(item.districtName)} · ${esc(reconnectTeamLabel(item))}`, esc(reconnectPlainReason(item)), `quest:${item.missionId || item.goalId + ':' + (item.agents?.[0]?.agentNo || '')}`])
+  }
+  for (const r of (rows && ov.preview ? agentGroup(rows, 'delete') : []).slice(0, 3)) {
+    items.push(['bad', 'Delete', `${esc(r.agent.agentNo)} · ${esc(r.agent.codename || r.agent.handle || '')}`, `No email · deleted at the 18:00 UTC run`, `agent:${r.agent.agentNo}`])
+  }
+  if (reviewTotal()) items.push(['wait', 'Review', `${reviewTotal()} proofs waiting`, `${ov.vma ?? 0} VMA · ${ov.voting ? Number(ov.voting.review) || 0 : 0} in review · ${ov.voting ? Number(ov.voting.verifying) || 0 : 0} verifying`, 'reviews'])
+  const loading = !rows || !ov.reconnect
+  $('ovAttention').innerHTML = items.length
+    ? items.slice(0, 7).map(([tone, label, title, reason, target]) => `
+      <div class="adm-att">${badge(tone, label)}<div><b>${title}</b><span class="r">${reason}</span></div>
+        <button class="btn btn-ghost btn-sm" type="button" data-open="${esc(target)}">Open</button></div>`).join('')
+    : `<div class="adm-empty">${loading ? '<span class="adm-spin"></span>Loading…' : 'Nothing needs you right now.'}</div>`
+
+  const openQuests = (ov.reconnect || []).filter((i) => i.kind === 'mission')
+  const leaveNow = Array.isArray(ov.leaves) ? leaveCounts(ov.leaves).active : null
+  const kv = [
+    ['Agents', rows ? rows.length : '—'],
+    ['Open quests', ov.reconnect ? `${openQuests.length} in ${new Set(openQuests.map((i) => i.districtId)).size} districts` : '—'],
+    ['On leave now', leaveNow ?? (ov.leaves === false ? 'Unavailable' : '—')],
+    ['Live broadcasts', live ?? '—'],
+    ['Reminder emails', `09:00 UTC · ${relativeTime(nextRemind.toISOString())}`],
+    ['Cleanup run', `18:00 UTC · ${relativeTime(nextDelete.toISOString())}`],
+  ]
+  $('ovToday').innerHTML = kv.map(([k, v]) => `<div><span class="k">${esc(k)}</span><span class="v">${esc(v)}</span></div>`).join('')
+  for (const btn of $('ovAttention').querySelectorAll('[data-open]')) btn.onclick = () => openTarget(btn.dataset.open)
+}
+
+function openTarget(target) {
+  if (target.startsWith('agent:')) { openAgentFile(target.slice(6)); return }
+  if (target.startsWith('quest:')) {
+    selectView('reconnect')
+    const key = target.slice(6)
+    const item = (ov.reconnect || []).find((i) => (i.missionId || `${i.goalId}:${i.agents?.[0]?.agentNo || ''}`) === key)
+    if (item) openQuest(item)
+    return
+  }
+  selectView(target)
+}
 
 /* ── Red Zone ── */
 let rzActive = false
@@ -983,53 +795,39 @@ function paintRZStatus(res) {
     paintSnapRZ(null)
     return
   }
+  ov.rz = res
   rzActive = !!res.active
   const launch = $('btnLaunchRZ')
   if (launch) {
     launch.disabled = sessionUnauthorized || rzActive
-    launch.textContent = rzActive ? '🛡️ Red Zone already active' : '🛡️ Launch Red Zone'
+    launch.textContent = rzActive ? 'Red Zone already active' : 'Launch Red Zone'
   }
   paintSnapRZ(res)
   if (!res.active) {
-    box.innerHTML = `<span class="adm-rz-dot"></span><span>No active Red Zone — the network is clear.</span>`
+    box.innerHTML = `<span>No active Red Zone. The network is clear.</span>`
     return
   }
   const d = res.defuse
-  const pct = Math.min(100, Math.round((d.progress / Math.max(1, d.target)) * 100))
-  const ends = fmtDate(d.activeUntil)
-  box.className = ''
   box.innerHTML = `
-    <div class="redzone" style="padding:0;background:none;border:none;">
-      <div class="rz-head"><span class="rz-dot"></span>Red Zone &middot; active</div>
-      <div class="rz-title">${esc(d.title)}</div>
-      <p class="rz-msg">${esc(d.message || '')}</p>
-      <div class="rz-goal-top"><span>Qualified streams</span><span class="rz-num">${d.progress.toLocaleString()}<i>/${d.target.toLocaleString()}</i></span></div>
-      <div class="rz-bar"><i style="width:${pct}%"></i></div>
-      <div class="rz-timer"><span>Ends</span><b style="font-size:13px;letter-spacing:0;">${esc(ends)}</b></div>
-      <div class="rz-foot">Counting: ${esc(redZoneTarget(d).name)}</div>
-      <div class="rz-foot">${d.rewardXp.toLocaleString()} XP pool &middot; ${d.qualifiedAgents} qualified agent${d.qualifiedAgents === 1 ? '' : 's'} &middot; minimum ${d.minimumStreams} streams each</div>
-    </div>
-  `
+    ${badge('bad', 'Active')}
+    <div class="t">${esc(d.title)}</div>
+    <div>${esc(d.message || '')}</div>
+    ${bar(d.progress, Math.max(1, d.target), `${d.progress.toLocaleString()} / ${d.target.toLocaleString()} qualified streams`)}
+    <div class="adm-kv">
+      <div><span class="k">Ends</span><span class="v">${esc(fmtDate(d.activeUntil))}</span></div>
+      <div><span class="k">Counting</span><span class="v">${esc(redZoneTarget(d).name)}</span></div>
+      <div><span class="k">XP pool</span><span class="v">${d.rewardXp.toLocaleString()}</span></div>
+      <div><span class="k">Qualified agents</span><span class="v">${d.qualifiedAgents} · min ${d.minimumStreams} streams</span></div>
+    </div>`
 }
 function paintSnapRZ(res) {
-  const tile = $('snapRZ'), val = $('snapRZVal'), sub = $('snapRZSub')
-  tile.classList.remove('is-alert')
-  if (!res) { val.textContent = '—'; sub.textContent = 'Tap to check'; return }
-  if (res.active) {
-    tile.classList.add('is-alert')
-    val.textContent = 'ACTIVE'
-    sub.textContent = `${res.defuse.progress.toLocaleString()} / ${res.defuse.target.toLocaleString()} streams`
-  } else {
-    val.textContent = 'Clear'
-    sub.textContent = 'No event running'
-  }
+  setCount('redzone', res?.active ? 'Live' : '', res?.active ? 'bad' : '')
+  $('moreRZSub').textContent = res?.active ? `Active · ${res.defuse.progress.toLocaleString()} / ${res.defuse.target.toLocaleString()} streams` : 'Clear · no event running'
+  setCount('more', res?.active ? '!' : '', res?.active ? 'bad' : '')
+  if (currentView === 'overview') paintOverview()
 }
-/** Fills the "What counts" picker from the same goal list the Goals tab
- *  edits — no separate catalog of song names to keep in sync, and no free
- *  text for a title to be typo'd into something that matches nothing.
- *  Reconnect goals are excluded: they're puzzles, not streamable targets.
- *  Loaded once per session; a goal added while the panel is open shows up
- *  on the next refresh, same as every other list here. */
+/** Fills "What counts" from the same goal list the Goals view edits.
+ *  ReConnect goals are excluded: they're puzzles, not stream targets. */
 let rzGoalsLoaded = false
 async function loadRZTargets() {
   if (rzGoalsLoaded) return
@@ -1053,20 +851,17 @@ async function loadRZTargets() {
   paintRZTargetEcho()
 }
 
-/** Every picked goal id, minus the "Any BTS song" entry — that one is the
- *  absence of a target, so it can never be combined with a real pick. */
+/** Every picked goal id, minus "Any BTS song" — that one is the absence of
+ *  a target, so it can never be combined with a real pick. */
 function rzPickedTargets() {
   return [...$('rzTargetGoal').selectedOptions].map((o) => o.value).filter(Boolean)
 }
 
-/** Shows the admin the exact phrase players will read, composed by the same
- *  helper the game itself uses — so "what will this say?" is answered here
- *  rather than after launching it at everyone. */
+/** The exact phrase players will read, from the game's own helper. */
 function paintRZTargetEcho() {
   const sel = $('rzTargetGoal')
   const picked = rzPickedTargets()
-  // "Any BTS song" and a real pick are mutually exclusive: keep whichever
-  // the admin touched last rather than silently ignoring one of them.
+  // "Any BTS song" and a real pick are mutually exclusive.
   const anyOpt = [...sel.options].find((o) => !o.value)
   if (anyOpt) anyOpt.selected = picked.length === 0
   const entries = picked.map((id) => {
@@ -1076,14 +871,10 @@ function paintRZTargetEcho() {
   const target = redZoneTarget({ targetNames: entries })
   $('rzTargetEcho').innerHTML = `Players will read: <b>Protect the ARMY Bomb by streaming ${esc(target.name)}</b>`
 }
-
-// Bound once, not re-bound every time the goal list reloads — the control
-// itself is in the static markup, so this works before any load and after
-// every one.
 $('rzTargetGoal').addEventListener('change', paintRZTargetEcho)
 
 async function refreshRZ() {
-  $('rzStatus').innerHTML = `<span class="adm-spin"></span> Checking…`
+  $('rzStatus').innerHTML = `<span class="adm-spin"></span>Checking…`
   loadRZTargets()
   const res = await call('adminGetActiveDefuse')
   paintRZStatus(res)
@@ -1095,19 +886,27 @@ $('btnLaunchRZ').onclick = async () => {
     showOut('rzOut', { success: false, error: 'Finish or expire the current Red Zone before launching another.' }, 'error')
     return
   }
-  const btn = $('btnLaunchRZ')
-  btn.disabled = true
-  btn.textContent = 'LAUNCHING…'
-  const res = await call('launchDefuse', {
+  const params = {
     target: parseInt($('rzTarget').value) || 2000,
     hours: parseInt($('rzHours').value) || 24,
     title: $('rzTitle').value.trim() || undefined,
     message: $('rzMessage').value.trim() || undefined,
     rewardXp: parseInt($('rzReward').value) || 500,
     targetGoalIds: rzPickedTargets(),
+  }
+  const counting = $('rzTargetEcho').textContent.replace(/^Players will read:\s*/, '')
+  const ok = await confirmAction({
+    title: 'Launch this Red Zone?',
+    body: `Every agent sees the breach warning right away.\n${params.target.toLocaleString()} streams in ${params.hours} h · ${params.rewardXp.toLocaleString()} XP pool\n${counting}`,
+    confirmLabel: 'Launch', danger: true,
   })
+  if (!ok) return
+  const btn = $('btnLaunchRZ')
+  btn.disabled = true
+  btn.textContent = 'Launching…'
+  const res = await call('launchDefuse', params)
   btn.disabled = sessionUnauthorized
-  btn.textContent = '🛡️ Launch Red Zone'
+  btn.textContent = 'Launch Red Zone'
   showOut('rzOut', res, res?.success ? 'ok' : 'error')
   if (res?.success) refreshRZ()
 }
@@ -1125,15 +924,22 @@ $('btnSendBroadcast').onclick = async () => {
   const title = $('bcTitle').value.trim()
   const message = $('bcMessage').value.trim()
   if (!title || !message) { showOut('bcOut', 'Title and message are both required.', 'error'); return }
+  const hours = $('bcExpires').value ? parseInt($('bcExpires').value) : undefined
+  const ok = await confirmAction({
+    title: 'Send this broadcast?',
+    body: `"${title}" appears on every agent's World screen within about 90 seconds.\n${hours ? `Expires after ${hours} h.` : 'No expiry.'}`,
+    confirmLabel: 'Send',
+  })
+  if (!ok) return
   const btn = $('btnSendBroadcast')
   btn.disabled = true
-  btn.textContent = 'SENDING…'
+  btn.textContent = 'Sending…'
   const res = await call('adminCreateBroadcast', {
     title, message, tone: bcTone,
-    expiresInHours: $('bcExpires').value ? parseInt($('bcExpires').value) : undefined,
+    expiresInHours: hours,
   })
   btn.disabled = sessionUnauthorized
-  btn.textContent = '📡 Send broadcast'
+  btn.textContent = 'Send broadcast'
   showOut('bcOut', res, res?.success ? 'ok' : 'error')
   if (res?.success) {
     $('bcTitle').value = ''
@@ -1145,7 +951,7 @@ $('btnSendBroadcast').onclick = async () => {
 
 async function loadBroadcasts() {
   const list = $('bcList')
-  list.innerHTML = `<div class="adm-empty"><span class="adm-spin"></span> Loading…</div>`
+  list.innerHTML = `<div class="adm-empty"><span class="adm-spin"></span>Loading…</div>`
   const res = await call('adminListBroadcasts')
   if (!res || !res.success) { list.innerHTML = `<div class="adm-empty">${esc(res?.error || "Couldn't load broadcasts")}</div>`; return }
   const rows = res.broadcasts || []
@@ -1153,19 +959,21 @@ async function loadBroadcasts() {
   if (!rows.length) { list.innerHTML = `<div class="adm-empty">No broadcasts yet.</div>`; return }
   list.innerHTML = rows.map((b) => `
     <div class="adm-list-row${b.active ? '' : ' is-expired'}" data-id="${b.id}" data-tone="${esc(b.tone)}">
-      <span class="adm-list-dot"></span>
       <div class="adm-list-body">
         <div class="adm-list-title">${esc(b.title)}</div>
         <div class="adm-list-msg">${esc(b.message)}</div>
-        <div class="adm-list-meta">${b.active ? 'LIVE' : 'EXPIRED'} &middot; sent ${fmtDate(b.createdAt)}${b.expiresAt ? ` &middot; expires ${fmtDate(b.expiresAt)}` : ' &middot; no expiry'}</div>
+        <div class="adm-list-meta">${b.active ? badge('active', 'Live') : badge('muted', 'Expired')}${b.tone === 'gold' ? badge('wait', 'Good news') : ''}
+          <span>Sent ${esc(fmtDate(b.createdAt))}${b.expiresAt ? ` · expires ${esc(fmtDate(b.expiresAt))}` : ' · no expiry'}</span></div>
       </div>
-      <button class="adm-list-del adm-mutate-btn" type="button" title="Delete">✕</button>
+      <button class="btn btn-danger btn-sm adm-list-del adm-mutate-btn" type="button">Delete</button>
     </div>
   `).join('')
   list.querySelectorAll('.adm-list-del').forEach((btn) => {
     btn.onclick = async () => {
       const row = btn.closest('.adm-list-row')
       const id = row.dataset.id
+      const title = row.querySelector('.adm-list-title').textContent
+      if (!(await confirmAction({ title: 'Delete this broadcast?', body: `"${title}" is removed for every agent. This can't be undone.`, confirmLabel: 'Delete', danger: true }))) return
       btn.disabled = true
       const res = await call('adminDeleteBroadcast', { id })
       if (res?.success) { row.remove(); loadBroadcastsSnapOnly() } else btn.disabled = sessionUnauthorized
@@ -1178,32 +986,27 @@ async function loadBroadcastsSnapOnly() {
   if (res?.success) paintSnapBC(res.broadcasts || [])
 }
 function paintSnapBC(rows) {
-  const tile = $('snapBC'), val = $('snapBCVal'), sub = $('snapBCSub')
+  ov.broadcasts = rows
   const live = rows.filter((r) => r.active).length
-  tile.classList.toggle('is-live', live > 0)
-  val.textContent = live
-  sub.textContent = live === 1 ? 'live announcement' : 'live announcements'
+  setCount('broadcast', live)
+  $('moreBCSub').textContent = `${plural(live, 'live announcement')}`
+  if (currentView === 'overview') paintOverview()
 }
 $('btnLoadBroadcasts').onclick = loadBroadcasts
+viewEnter.broadcast = () => { if ($('bcList').querySelector('.adm-empty')) loadBroadcasts() }
 
 /* ── Goals ──
-   rc_goals is per-district — each goal (track or album) carries a
-   district_id, assigned here, not auto-applied. A district can carry any
-   number of track goals AND any number of album goals; every one assigned
-   must be met to restore. Starting a district freezes in whatever's
-   assigned to it at that moment (districts.ts's freezeGoals); editing a
-   goal only affects districts started after the edit, and deleting one is
-   safe even if it's currently live for that same reason.
+   rc_goals is per-district — each goal carries a district_id, assigned here.
+   Starting a district freezes whatever's assigned to it at that moment;
+   editing only affects districts started after the edit.
 
-     adminListGoals()   → { success, modes, districts, goals: [{id,kind,label,artist,aliases,tracks,target,active,sortOrder,districtId}] }
-     adminAddGoal({kind,label,artist?,aliases?,tracks?,target,districtId?})   → { success, goal }
-     adminUpdateGoal({id, ...only the fields changing})            → { success, goal }
-     adminDeleteGoal({id})                                          → { success }
+     adminListGoals()   → { success, modes, districts, goals }
+     adminAddGoal({kind,label,artist?,aliases?,tracks?,target,districtId?})
+     adminUpdateGoal({id, ...only the fields changing})
+     adminDeleteGoal({id})
 
-   `target` is a BASE number — every mode's real target is
-   target * modes[key].multiplier (same math ui-onboarding.js's "Targets ×N"
-   describes), computed here for the live preview only; the backend does the
-   identical math when it freezes a district's goals. */
+   `target` is a BASE number; every mode's target is target * multiplier,
+   computed here for the preview only. */
 let allGoals = []
 let goalsModes = null
 let allDistricts = []
@@ -1216,7 +1019,7 @@ function districtName(id) {
 function renderDistrictFilterOptions() {
   const sel = $('goalDistrictFilter')
   const current = sel.value
-  sel.innerHTML = '<option value="">— Unassigned goals —</option>' +
+  sel.innerHTML = '<option value="">Unassigned goals</option>' +
     allDistricts.map((d) => `<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('')
   sel.value = current || ''
 }
@@ -1246,7 +1049,7 @@ function parseAlbumTracks(text) {
 }
 
 async function loadGoals() {
-  $('goalsTrackList').innerHTML = `<div class="adm-empty"><span class="adm-spin"></span> Loading…</div>`
+  $('goalsTrackList').innerHTML = `<div class="adm-empty"><span class="adm-spin"></span>Loading…</div>`
   $('goalsAlbumList').innerHTML = ''
   const res = await call('adminListGoals')
   if (!res || !res.success) {
@@ -1265,38 +1068,37 @@ $('goalDistrictFilter').addEventListener('change', () => {
   renderGoalLists()
 })
 
-/** Row shows only "N base" — the full Easy/Medium/Hard breakdown lives in
- *  the add-form's live preview (one place, not repeated under every row)
- *  and as a hover title on the badge for anyone who wants it without
- *  clicking anything. */
+// These labels are written INTO new ReConnect goal labels (adminAddGoal
+// below), so they stay exactly as they were. Rows display FLAVOR_NAMES.
 const RECONNECT_VARIANT_LABELS = {
   sotd: '🎵 Song of the Day', cipher: '🔐 Cipher', memory: '📖 Memory Fragment',
   connect: '🤝 Connect', invite: '📡 Invite',
 }
+const FLAVOR_NAMES = { sotd: 'Song of the Day', cipher: 'Cipher', memory: 'Memory Fragment', connect: 'Connect', invite: 'Invite' }
 const RECONNECT_COOP_VARIANTS = new Set(['connect', 'invite'])
 
 function goalRowHtml(g) {
   let sub
   if (g.kind === 'album') sub = `${(g.tracks || []).length} track${(g.tracks || []).length === 1 ? '' : 's'}`
   else if (g.kind === 'reconnect') {
-    const flavor = RECONNECT_VARIANT_LABELS[g.variant] || g.variant
-    sub = RECONNECT_COOP_VARIANTS.has(g.variant) ? `${flavor} — ${g.config?.requiredAgents || '?'} agents`
-      : g.variant === 'sotd' ? `${flavor} — ${g.config?.youtubeId ? `youtu.be/${g.config.youtubeId}` : 'no link set'}`
-      : `${flavor} — answer: ${g.config?.answerLabel || '?'}`
+    const flavor = FLAVOR_NAMES[g.variant] || g.variant
+    sub = RECONNECT_COOP_VARIANTS.has(g.variant) ? `${flavor} · ${g.config?.requiredAgents || '?'} agents`
+      : g.variant === 'sotd' ? `${flavor} · ${g.config?.youtubeId ? `youtu.be/${g.config.youtubeId}` : 'no link set'}`
+      : `${flavor} · answer: ${g.config?.answerLabel || '?'}`
   } else sub = g.artist || ''
   const modesTitle = modeTargets(g.target).map((m) => `${m.label || m.key} ${m.value}`).join(' · ')
   const assignAction = g.kind === 'reconnect' && RECONNECT_COOP_VARIANTS.has(g.variant)
-    ? `<button data-act="assign">🎲 Randomly assign missions…</button>` : ''
+    ? `<button data-act="assign" type="button">Randomly assign missions…</button>` : ''
   return `
     <div class="adm-goal-row${g.active ? '' : ' is-inactive'}" data-id="${esc(g.id)}">
-      <span class="adm-goal-name">${esc(g.label)}${sub ? ` <span class="muted" style="font-weight:400;">— ${esc(sub)}</span>` : ''}${g.active ? '' : ' <span class="adm-goal-inactive-badge">INACTIVE</span>'}</span>
+      <span class="adm-goal-name">${esc(g.label)}${sub ? ` <span class="muted">· ${esc(sub)}</span>` : ''}${g.active ? '' : ' <span class="adm-goal-inactive-badge">Inactive</span>'}</span>
       <span class="adm-goal-target" title="${esc(modesTitle)}">${g.kind === 'reconnect' ? '' : `${g.target} base`}</span>
-      <button class="btn btn-ghost adm-mutate-btn" data-act="toggle" type="button">${g.active ? 'Deactivate' : 'Activate'}</button>
+      <button class="btn btn-ghost btn-sm adm-mutate-btn" data-act="toggle" type="button">${g.active ? 'Deactivate' : 'Activate'}</button>
       <div class="adm-goal-menu">
-        <button class="adm-goal-menu-btn adm-mutate-btn" data-act="menu" type="button" title="More">•••</button>
+        <button class="adm-goal-menu-btn adm-mutate-btn" data-act="menu" type="button" aria-label="More actions">More</button>
         <div class="adm-goal-menu-pop" hidden>
           <select class="adm-goal-move-select" data-act="move" title="Move to district">
-            <option value=""${g.districtId ? '' : ' selected'}>— Unassigned —</option>
+            <option value=""${g.districtId ? '' : ' selected'}>Unassigned</option>
             ${allDistricts.map((d) => `<option value="${esc(d.id)}"${d.id === g.districtId ? ' selected' : ''}>Move to: ${esc(d.name)}</option>`).join('')}
           </select>
           ${assignAction}
@@ -1306,10 +1108,7 @@ function goalRowHtml(g) {
     </div>`
 }
 
-/** Active goals show in full; inactive ones collapse behind a count +
- *  Show/Hide toggle — with 14+ inactive goals possible (see the BTS
- *  milestone batch), showing them all by default buried what admins
- *  actually care about day to day. */
+/** Active goals show in full; inactive ones collapse behind a count. */
 let trackInactiveOpen = false
 let albumInactiveOpen = false
 function goalSectionHtml(items, kind, inactiveOpen, emptyLabel) {
@@ -1319,7 +1118,7 @@ function goalSectionHtml(items, kind, inactiveOpen, emptyLabel) {
   if (inactive.length) {
     html += `
       <button class="adm-goal-collapse" data-kind="${kind}" type="button">
-        <span>Inactive · ${inactive.length}</span><span>${inactiveOpen ? '▲ Hide' : '▼ Show'}</span>
+        <span>Inactive · ${inactive.length}</span><span>${inactiveOpen ? 'Hide' : 'Show'}</span>
       </button>
       <div class="adm-goal-inactive-list" ${inactiveOpen ? '' : 'hidden'}>${inactive.map(goalRowHtml).join('')}</div>`
   }
@@ -1333,13 +1132,14 @@ function renderGoalLists() {
   const tracks = scoped.filter((g) => g.kind === 'track')
   const albums = scoped.filter((g) => g.kind === 'album')
   const reconnects = scoped.filter((g) => g.kind === 'reconnect')
-  const label = `— ${esc(districtName(filterId))}`
+  const label = `· ${districtName(filterId)}`
   $('goalsTrackListDistrict').textContent = label
   $('goalsAlbumListDistrict').textContent = label
   $('goalsReconnectListDistrict').textContent = label
-  $('goalTrackDistrictNote').textContent = `Adding to: ${districtName(filterId)}. Change the district above first if that's wrong.`
-  $('goalAlbumDistrictNote').textContent = `Adding to: ${districtName(filterId)}. Change the district above first if that's wrong.`
-  $('goalReconnectDistrictNote').textContent = `Adding to: ${districtName(filterId)}. Change the district above first if that's wrong.`
+  const note = `Adding to: ${districtName(filterId)}. Change the district above first if that's wrong.`
+  $('goalTrackDistrictNote').textContent = note
+  $('goalAlbumDistrictNote').textContent = note
+  $('goalReconnectDistrictNote').textContent = note
   $('goalsTrackList').innerHTML = tracks.length
     ? goalSectionHtml(tracks, 'track', trackInactiveOpen, 'No active track goals for this district.')
     : `<div class="adm-empty">No track goals assigned to this district yet.</div>`
@@ -1350,8 +1150,7 @@ function renderGoalLists() {
     ? goalSectionHtml(reconnects, 'reconnect', reconnectInactiveOpen, 'No active ReConnect goals for this district.')
     : `<div class="adm-empty">No ReConnect goals assigned to this district yet.</div>`
   // A district with reconnect/album goals but no track goal can never be
-  // started (startDistrict requires at least one track goal) — surface
-  // that before it's a live surprise, matching handlers.ts's own check.
+  // started (startDistrict requires at least one track goal).
   $('goalNoTrackWarning').hidden = !filterId || tracks.length > 0 || (albums.length === 0 && reconnects.length === 0)
   wireGoalRowButtons($('goalsTrackList'))
   wireGoalRowButtons($('goalsAlbumList'))
@@ -1390,7 +1189,11 @@ function wireGoalRowButtons(container) {
     if (assignBtn) {
       assignBtn.onclick = async () => {
         closeAllGoalMenus()
-        if (!confirm(`Randomly assign missions for "${goal.label}"? This shuffles every eligible agent not already in a live mission for this goal and creates a new, already-staffed mission per full group of ${goal.config?.requiredAgents || '?'}.`)) return
+        if (!(await confirmAction({
+          title: 'Randomly assign missions?',
+          body: `Randomly assign missions for "${goal.label}"? This shuffles every eligible agent not already in a live mission for this goal and creates a new, already-staffed mission per full group of ${goal.config?.requiredAgents || '?'}.`,
+          confirmLabel: 'Assign missions',
+        }))) return
         assignBtn.disabled = true
         const res = await call('adminAutoAssignMissions', { goalId: id })
         assignBtn.disabled = sessionUnauthorized
@@ -1403,10 +1206,8 @@ function wireGoalRowButtons(container) {
       }
     }
     moveSel.onclick = (e) => e.stopPropagation()
-    // The trigger stands where the <select> did, inside the row's popup.
-    // The document-level click handler above only closes menus for clicks
-    // outside .adm-goal-menu, and the trigger is inside it, so opening the
-    // sheet does not dismiss the menu holding it.
+    // The trigger stands where the <select> did, inside the row's popup, so
+    // opening the sheet does not dismiss the menu holding it.
     enhanceSelect(moveSel, { title: 'MOVE TO DISTRICT', search: 'auto', variant: 'admin' })
     moveSel.onchange = async () => {
       const districtId = moveSel.value || null
@@ -1433,7 +1234,11 @@ function wireGoalRowButtons(container) {
     }
     delBtn.onclick = async () => {
       closeAllGoalMenus()
-      if (!confirm(`Delete "${goal.label}" for good? Districts already in progress keep it — this only affects newly-started ones.`)) return
+      if (!(await confirmAction({
+        title: `Delete "${goal.label}"?`,
+        body: `Delete "${goal.label}" for good? Districts already in progress keep it — this only affects newly-started ones.`,
+        confirmLabel: 'Delete', danger: true,
+      }))) return
       delBtn.disabled = true
       const res = await call('adminDeleteGoal', { id })
       if (res?.success) { allGoals = allGoals.filter((g) => g.id !== id); renderGoalLists() }
@@ -1458,6 +1263,7 @@ $('goalTrackTarget').addEventListener('input', updateTrackPreview)
 $('goalAlbumTarget').addEventListener('input', updateAlbumPreview)
 
 $('btnLoadGoals').onclick = loadGoals
+viewEnter.goals = () => { if (!allGoals.length) loadGoals() }
 
 $('btnAddTrackGoal').onclick = async () => {
   const label = $('goalTrackLabel').value.trim()
@@ -1466,7 +1272,7 @@ $('btnAddTrackGoal').onclick = async () => {
   const aliases = parseAliases($('goalTrackAliases').value)
   if (!label || target < 1) { showOut('goalsOut', 'Enter a track name and a target of at least 1.', 'error'); return }
   const dupe = allGoals.find((g) => g.kind === 'track' && g.label.toLowerCase() === label.toLowerCase())
-  if (dupe && !confirm(`"${dupe.label}" is already a goal${dupe.active ? '' : ' (inactive)'}. Add "${label}" as a separate duplicate anyway?`)) return
+  if (dupe && !(await confirmAction({ title: 'Add a duplicate goal?', body: `"${dupe.label}" is already a goal${dupe.active ? '' : ' (inactive)'}. Add "${label}" as a separate duplicate anyway?`, confirmLabel: 'Add duplicate' }))) return
   const btn = $('btnAddTrackGoal')
   btn.disabled = true
   const res = await call('adminAddGoal', { kind: 'track', label, artist: artist || undefined, aliases, target, districtId: goalDistrictFilter || null })
@@ -1491,7 +1297,7 @@ $('btnAddAlbumGoal').onclick = async () => {
   if (!label || target < 1) { showOut('goalsOut', 'Enter an album name and a target of at least 1.', 'error'); return }
   if (!tracks.length) { showOut('goalsOut', 'List at least one album track, one per line.', 'error'); return }
   const dupeAlbum = allGoals.find((g) => g.kind === 'album' && g.label.toLowerCase() === label.toLowerCase())
-  if (dupeAlbum && !confirm(`"${dupeAlbum.label}" is already an album goal${dupeAlbum.active ? '' : ' (inactive)'}. Add "${label}" as a separate duplicate anyway?`)) return
+  if (dupeAlbum && !(await confirmAction({ title: 'Add a duplicate goal?', body: `"${dupeAlbum.label}" is already an album goal${dupeAlbum.active ? '' : ' (inactive)'}. Add "${label}" as a separate duplicate anyway?`, confirmLabel: 'Add duplicate' }))) return
   const btn = $('btnAddAlbumGoal')
   btn.disabled = true
   const res = await call('adminAddGoal', { kind: 'album', label, artist: artist || undefined, tracks, target, districtId: goalDistrictFilter || null })
@@ -1507,13 +1313,8 @@ $('btnAddAlbumGoal').onclick = async () => {
   }
 }
 
-/* ── Reconnect goal form ──
-   Three field sets, toggled by the variant picked: sotd (a YouTube link to
-   match, same submission mechanic as the old arirang site — never a text
-   guess), cipher/memory (prompt + typed answer), connect/invite (just an
-   agent count). "Randomly assign missions" for connect/invite goals lives
-   on the goal row itself now (see wireGoalRowButtons' assignBtn), not a
-   separate panel. */
+/* ── ReConnect goal form ── sotd (a YouTube link to match), cipher/memory
+   (prompt + typed answer), connect/invite (an agent count). */
 const RECONNECT_TEXT_VARIANTS = new Set(['cipher', 'memory'])
 
 function toggleReconnectFields() {
@@ -1565,14 +1366,10 @@ $('btnAddReconnectGoal').onclick = async () => {
   }
 }
 
-/* ── Agent lookup ── */
-function progressBar(pct) {
-  return `<div class="pbar"><div class="pfill${pct >= 100 ? ' done' : ''}" style="width:${Math.min(100, pct)}%"></div></div>`
-}
+/* ── Agent file (lookup + roster drawer) ── */
 function kstToday(offsetDays = 0) {
   return new Date(Date.now() + (9 * 60 * 60 * 1000) + offsetDays * 86400000).toISOString().slice(0, 10)
 }
-
 function diaryDayLabel(dayKey) {
   if (dayKey === kstToday()) return 'Today'
   if (dayKey === kstToday(-1)) return 'Yesterday'
@@ -1592,7 +1389,6 @@ function renderAgentDiary(entries = []) {
       <div class="agent-diary-date">${esc(diaryDayLabel(dayKey))}</div>
       ${rows.map((entry) => `
         <div class="agent-diary-entry">
-          <span class="agent-diary-icon">${esc(entry.icon || '•')}</span>
           <span class="agent-diary-copy"><b>${esc(entry.title)}</b>${entry.detail ? `<span>${esc(entry.detail)}</span>` : ''}</span>
           <time class="agent-diary-time">${new Date(entry.occurredAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</time>
         </div>`).join('')}
@@ -1608,6 +1404,35 @@ function renderTechnicalEvents(events = []) {
     </div>`).join('')
 }
 
+/** The agent's cleanup position and leave history, from the roster row,
+ *  the dry run and the leave list — each only if it was actually loaded. */
+function renderCleanupPanel(agentNo) {
+  const row = (ov.rows || []).find((r) => r.agent.agentNo === agentNo)
+  let html = '<div class="adm-agent-section" style="margin-top:0;border-top:0;padding-top:0;"><h3>Cleanup</h3>'
+  if (!row) html += '<div class="adm-empty">Open Agents once to load the cleanup position.</div>'
+  else {
+    const a = row.agent
+    html += `<div class="adm-agent-grid">
+      <div class="adm-agent-stat"><div class="k">Status</div><div class="v">${badge(cleanupTone(row), cleanupLabel(row))}</div></div>
+      <div class="adm-agent-stat"><div class="k">Cleanup clock (before leave)</div><div class="v">${row.rawDays.toFixed(1)} days</div></div>
+      <div class="adm-agent-stat"><div class="k">After leave</div><div class="v">${row.adjustedDays != null ? `${row.adjustedDays.toFixed(1)} days` : row.state === 'leave_paused' ? 'Under 14 days' : 'Under 14 days or not checked'}</div></div>
+      <div class="adm-agent-stat"><div class="k">Email on file</div><div class="v">${row.hasEmail ? 'Yes' : 'No'}</div></div>
+      <div class="adm-agent-stat"><div class="k">Last Bomb charge</div><div class="v">${esc(relativeTime(a.lastFedAt))}</div></div>
+      <div class="adm-agent-stat"><div class="k">Last verified vote</div><div class="v">${esc(relativeTime(a.lastVoteAt))}</div></div>
+    </div>`
+    if (row.state === 'warning_unknown') html += '<p class="muted" style="margin-top:8px;">Deleted only 2–45 days after a delivered warning email. Delivery isn\'t visible here.</p>'
+  }
+  html += '</div><div class="adm-agent-section"><h3>Leave history</h3>'
+  if (ov.leaves === false) html += '<div class="adm-empty">Leave records aren\'t available to the admin panel yet.</div>'
+  else if (!Array.isArray(ov.leaves)) html += '<div class="adm-empty">Not loaded.</div>'
+  else {
+    const mine = leaveRows(ov.leaves.filter((l) => l.agentNo === agentNo))
+    html += mine.length ? mine.map((l) => `<div class="adm-leave-row"><span>${esc(fmtDay(l.startsAt))} – ${esc(fmtDay(l.endedAt || l.endsAt))} · ${l.days} d</span>${badge(leaveTone(l.status), LEAVE_STATUS_LABELS[l.status])}</div>`).join('')
+      : '<div class="adm-empty">No leave taken.</div>'
+  }
+  return html + '</div>'
+}
+
 function renderAgent(a) {
   const uplinkOk = !a.uplinkBroken
   const sourceLabel = { lb: 'ListenBrainz', direct: 'Scrobbler app (direct)', statsfm: 'stats.fm', musicat: 'musicat.fm' }[a.streamSource] || a.streamSource
@@ -1620,16 +1445,17 @@ function renderAgent(a) {
           <div class="adm-agent-handle">${esc(a.handle)}</div>
           <div class="adm-agent-no">${esc(a.agentNo)}</div>
         </div>
-        <span class="adm-badge ${uplinkOk ? 'ok' : 'bad'}">${uplinkOk ? '✓ Setup OK' : '⚠ Setup issue'}</span>
+        ${uplinkOk ? badge('done', 'Setup OK') : badge('bad', 'Setup issue')}
       </div>
 
       ${issue ? `<div class="rh-drawer-card"><b>ReConnect needs attention</b><span>${esc(reconnectPlainReason(issue))}</span>
-        <button class="btn btn-ghost" type="button" data-act="open-reconnect-health" data-agent="${esc(a.agentNo)}" style="margin-top:9px;">Open ReConnect</button></div>` : ''}
+        <button class="btn btn-ghost btn-sm" type="button" data-act="open-reconnect-health" data-agent="${esc(a.agentNo)}">Open ReConnect</button></div>` : ''}
 
       <div class="agent-file-tabs" role="tablist">
-        <button class="agent-file-tab is-active" type="button" data-agent-tab="diary">GAME DIARY</button>
-        <button class="agent-file-tab" type="button" data-agent-tab="account">ACCOUNT</button>
-        <button class="agent-file-tab" type="button" data-agent-tab="technical">TECHNICAL</button>
+        <button class="agent-file-tab is-active" type="button" data-agent-tab="diary">Diary</button>
+        <button class="agent-file-tab" type="button" data-agent-tab="account">Account</button>
+        <button class="agent-file-tab" type="button" data-agent-tab="cleanup">Cleanup</button>
+        <button class="agent-file-tab" type="button" data-agent-tab="technical">Technical</button>
       </div>
 
       <section class="agent-file-panel" data-agent-panel="diary">
@@ -1639,13 +1465,13 @@ function renderAgent(a) {
       <section class="agent-file-panel" data-agent-panel="account" hidden>
         <div class="adm-agent-grid">
           <div class="adm-agent-stat"><div class="k">Email</div><div class="v">${esc(a.email || '—')}</div></div>
-          <div class="adm-agent-stat"><div class="k">Joined game</div><div class="v">${a.joined ? 'Yes' : 'No — account only'}</div></div>
+          <div class="adm-agent-stat"><div class="k">Joined game</div><div class="v">${a.joined ? 'Yes' : 'No, account only'}</div></div>
           <div class="adm-agent-stat"><div class="k">Account created</div><div class="v">${esc(fmtDate(a.createdAt))}</div></div>
           <div class="adm-agent-stat"><div class="k">Last login</div><div class="v">${esc(fmtDate(a.lastLoginAt))}</div></div>
         </div>
         ${a.joined ? `
           <div class="adm-agent-section"><h3>Progress</h3><div class="adm-agent-grid">
-            <div class="adm-agent-stat"><div class="k">Level</div><div class="v">${a.level} &middot; ${esc(a.rank || '')}</div></div>
+            <div class="adm-agent-stat"><div class="k">Level</div><div class="v">${a.level} · ${esc(a.rank || '')}</div></div>
             <div class="adm-agent-stat"><div class="k">Lifetime XP</div><div class="v">${a.xp.toLocaleString()}</div></div>
             <div class="adm-agent-stat"><div class="k">Codename</div><div class="v">${esc(p.codename)} (${esc(p.mode)} mode)</div></div>
             <div class="adm-agent-stat"><div class="k">Active district</div><div class="v">${esc(p.activeDistrict || 'None')}</div></div>
@@ -1655,36 +1481,47 @@ function renderAgent(a) {
           <div class="adm-agent-stat"><div class="k">ListenBrainz user</div><div class="v">${esc(a.lbUsername || '—')}</div></div>
           <div class="adm-agent-stat"><div class="k">stats.fm user</div><div class="v">${esc(a.statsfmUsername || '—')}</div></div>
           <div class="adm-agent-stat"><div class="k">musicat.fm ID</div><div class="v">${esc(a.musicatPublicId || '—')}</div></div>
-        </div><div class="adm-agent-stat" style="margin-top:10px;"><div class="k">Direct scrobble PIN</div><div class="v">${a.hasPin ? 'Generated' : 'Not generated'}</div></div>
-        ${!uplinkOk ? `<p class="muted" style="margin-top:10px;color:var(--crimson);">This streaming source is incomplete, so plays cannot be counted until it is fixed in Settings.</p>` : ''}</div>
+          <div class="adm-agent-stat"><div class="k">Direct scrobble PIN</div><div class="v">${a.hasPin ? 'Generated' : 'Not generated'}</div></div>
+        </div>
+        ${!uplinkOk ? `<p class="muted" style="margin-top:10px;color:#ff8095;">This streaming source is incomplete, so plays can't be counted until it's fixed in Settings.</p>` : ''}</div>
         <div class="adm-agent-section"><h3>Danger zone</h3>
-          <p class="muted" style="font-size:13px;margin-bottom:10px;">Permanently deletes this account and all game data. Cannot be undone.</p>
-          <button class="adm-agent-danger-btn adm-mutate-btn" type="button" data-act="delete-agent">Delete agent…</button>
+          <p class="muted" style="margin-bottom:10px;">Permanently deletes this account and all game data. Cannot be undone.</p>
+          <button class="btn btn-danger adm-mutate-btn" type="button" data-act="delete-agent">Delete agent…</button>
           <div class="adm-out" id="lkAgentOut"></div></div>
       </section>
 
+      <section class="agent-file-panel" data-agent-panel="cleanup" hidden>
+        ${renderCleanupPanel(a.agentNo)}
+      </section>
+
       <section class="agent-file-panel" data-agent-panel="technical" hidden>
-        <div class="adm-agent-section"><h3>Recent telemetry</h3>${renderTechnicalEvents(a.technicalEvents || [])}</div>
+        <div class="adm-agent-section" style="margin-top:0;border-top:0;padding-top:0;"><h3>Recent telemetry</h3>${renderTechnicalEvents(a.technicalEvents || [])}</div>
       </section>
     </div>
   `
 }
 
-function wireAgentTabs(container) {
+function wireAgentTabs(container, initial = 'diary') {
   const tabs = [...container.querySelectorAll('[data-agent-tab]')]
   const panels = [...container.querySelectorAll('[data-agent-panel]')]
-  for (const tab of tabs) tab.onclick = () => {
-    for (const button of tabs) button.classList.toggle('is-active', button === tab)
-    for (const panel of panels) panel.hidden = panel.dataset.agentPanel !== tab.dataset.agentTab
+  const show = (name) => {
+    for (const button of tabs) button.classList.toggle('is-active', button.dataset.agentTab === name)
+    for (const panel of panels) panel.hidden = panel.dataset.agentPanel !== name
   }
+  for (const tab of tabs) tab.onclick = () => show(tab.dataset.agentTab)
+  show(initial)
 }
 function wireAgentDangerButton(container, agent) {
   const btn = container.querySelector('[data-act="delete-agent"]')
   if (!btn) return
   btn.onclick = async () => {
-    if (!confirm(`Permanently delete ${agent.handle} (${agent.agentNo})? This removes the account and every ` +
-      `row of game data tied to it across the database — progress, badges, XP, stream history, everything. ` +
-      `This cannot be undone.`)) return
+    if (!(await confirmAction({
+      title: `Delete ${agent.handle} (${agent.agentNo})?`,
+      body: `Permanently delete ${agent.handle} (${agent.agentNo})? This removes the account and every ` +
+        `row of game data tied to it across the database — progress, badges, XP, stream history, everything. ` +
+        `This cannot be undone.`,
+      confirmLabel: 'Delete agent', danger: true,
+    }))) return
     btn.disabled = true
     btn.textContent = 'Deleting…'
     const res = await call('adminDeleteAgent', { agentNo: agent.agentNo })
@@ -1701,192 +1538,192 @@ function wireAgentReconnectButton(container, agent) {
   const btn = container.querySelector('[data-act="open-reconnect-health"]')
   if (!btn) return
   btn.onclick = async () => {
-    selectTab('reconnect')
-    $('reconnectFilter').value = agent.agentNo
     closeRosterDrawer()
+    selectView('reconnect')
+    $('reconnectFilter').value = agent.agentNo
     await loadReconnectList()
   }
 }
+
+async function openAgentFile(query, { title, tab = 'diary' } = {}) {
+  closeQuestDrawer()
+  $('rosterDrawerTitle').textContent = title || query
+  $('rosterDrawerBody').innerHTML = `<div class="adm-empty"><span class="adm-spin"></span>Opening agent file…</div>`
+  $('rosterDrawer').hidden = false
+  document.body.style.overflow = 'hidden'
+  $('btnCloseRosterDrawer').focus()
+  const res = await call('adminGetAgent', { query })
+  if (!res || !res.success) {
+    $('rosterDrawerBody').innerHTML = `<div class="adm-empty">${res?.error === 'agent_not_found' ? `No agent found matching "${esc(query)}".` : esc(res?.error || 'Could not open this agent file.')}</div>`
+    return res
+  }
+  $('rosterDrawerTitle').textContent = `${res.agent.handle || res.agent.agentNo} · ${res.agent.agentNo}`
+  $('rosterDrawerBody').innerHTML = renderAgent(res.agent)
+  wireAgentTabs($('rosterDrawerBody'), tab)
+  wireAgentDangerButton($('rosterDrawerBody'), res.agent)
+  wireAgentReconnectButton($('rosterDrawerBody'), res.agent)
+  if (sessionUnauthorized) setMutationButtonsDisabled(true)
+  return res
+}
+
+function closeRosterDrawer() {
+  $('rosterDrawer').hidden = true
+  if ($('questDrawer').hidden) document.body.style.overflow = ''
+}
+$('btnCloseRosterDrawer').onclick = closeRosterDrawer
+$('rosterDrawer').addEventListener('click', (event) => { if (event.target === $('rosterDrawer')) closeRosterDrawer() })
+
 $('btnLookup').onclick = async () => {
   const q = $('lkQuery').value.trim()
   const out = $('lkOut')
-  if (!q) { out.innerHTML = `<div class="adm-empty">Enter a handle or agent number first.</div>`; return }
-  out.innerHTML = `<div class="adm-empty"><span class="adm-spin"></span> Searching…</div>`
-  const res = await call('adminGetAgent', { query: q })
-  if (!res || !res.success) {
-    out.innerHTML = `<div class="adm-empty">${res?.error === 'agent_not_found' ? `No agent found matching "${esc(q)}".` : esc(res?.error || 'Search failed')}</div>`
-    return
+  if (!q) { out.innerHTML = `<div class="adm-note">Enter a handle or agent number first.</div>`; return }
+  out.innerHTML = ''
+  const res = await openAgentFile(q)
+  if (res && !res.success) {
+    closeRosterDrawer()
+    out.innerHTML = `<div class="adm-note">${res?.error === 'agent_not_found' ? `No agent found matching "${esc(q)}".` : esc(res?.error || 'Search failed')}</div>`
   }
-  out.innerHTML = renderAgent(res.agent)
-  wireAgentTabs(out)
-  wireAgentDangerButton(out, res.agent)
-  wireAgentReconnectButton(out, res.agent)
-  if (sessionUnauthorized) setMutationButtonsDisabled(true)
 }
 $('lkQuery').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btnLookup').click() })
 
-/* ── All Agents ── */
+/* ── Agents: roster + cleanup groups ──
+   Eligibility comes from the dry run of the real cleanup (leave and verified
+   votes already applied) plus the email/warning gate. Nothing here can
+   delete: fetchDeletionPreview always sends dryRun: true. */
 let rosterCache = []
-let rosterScope = 'needs'
-const DELETE_AFTER_DAYS = 14
+let rosterLoadedOnce = false
+let rosterScope = 'delete'
 
-function feedDays(a) {
-  const n = Number(a.daysSinceFeed)
-  return Number.isFinite(n) ? n : 0
+function cleanupLabel(row) {
+  if (row.state === 'ok' && row.rawDays >= 7) return 'Feed soon'
+  if (row.state === 'ok' && !row.agent.lastFedAt) return 'Never fed'
+  return CLEANUP_LABELS[row.state]
+}
+function cleanupTone(row) {
+  return { delete_next_run: 'bad', warning_unknown: 'wait', unconfirmed: 'muted', leave_paused: 'active', at_risk: 'wait',
+    ok: row.rawDays >= 7 ? 'wait' : 'done', protected: 'active', retired: 'muted' }[row.state] || ''
+}
+function cleanupSub(row) {
+  if (row.state === 'delete_next_run') return `No email · ${relativeTime(nextUtcHour(CLEANUP.deleteHourUtc).toISOString())}`
+  if (row.state === 'warning_unknown') return 'Has email · warning gate'
+  if (row.state === 'leave_paused') return 'Leave keeps it under 14 days'
+  if (row.state === 'unconfirmed') return 'Dry run unavailable'
+  if (row.state === 'at_risk') return `${Math.max(0, CLEANUP.inactiveDays - row.rawDays).toFixed(1)} days to 14`
+  return ''
 }
 
-// The cleanup clock: days since the later of the last charge and the last
-// verified vote (migration 20261101090000). Status and sorting follow this,
-// so a daily voter who never charged isn't shown as overdue.
-function inactiveDays(a) {
-  const n = Number(a.daysInactive ?? a.daysSinceFeed)
-  return Number.isFinite(n) ? n : 0
+const SCOPES = {
+  delete: { label: 'Eligible for deletion', tone: 'bad' },
+  warning: { label: 'Past 14 days, has email', tone: '' },
+  charge: { label: 'Not charged 14+ days', tone: '' },
+  risk: { label: 'At risk · 9–13 days', tone: '' },
 }
+const EXTRA_SCOPES = [['all', 'All'], ['healthy', 'Healthy'], ['never', 'Never fed'], ['retired', 'Retired']]
 
-const votedMoreRecently = (a) => !!a.lastVoteAt && (!a.lastFedAt || new Date(a.lastVoteAt) > new Date(a.lastFedAt))
-
-function rosterStatus(a) {
-  if (a.retiredAt) return { key: 'retired', label: 'Retired' }
-  if (a.agentNo === 'AGENT001') return { key: 'protected', label: 'Protected' }
-  const days = inactiveDays(a)
-  if (days >= DELETE_AFTER_DAYS) return { key: 'overdue', label: 'Overdue' }
-  if (days >= 9) return { key: 'risk', label: 'At risk' }
-  if (days >= 7) return { key: 'due', label: 'Feed soon' }
-  if (!a.lastFedAt) return { key: 'never', label: 'Never fed' }
-  return { key: 'healthy', label: 'Healthy' }
-}
-
-function isNeedsAttention(a) {
-  return ['due', 'risk', 'overdue'].includes(rosterStatus(a).key)
-}
-
-function relativeTime(iso) {
-  if (!iso) return 'Never'
-  const ms = new Date(iso).getTime() - Date.now()
-  if (!Number.isFinite(ms)) return 'Unknown'
-  const future = ms > 0
-  const abs = Math.abs(ms)
-  const mins = Math.max(1, Math.round(abs / 60000))
-  let value
-  if (mins < 60) value = `${mins}m`
-  else if (mins < 1440) value = `${Math.round(mins / 60)}h`
-  else value = `${Math.round(mins / 1440)}d`
-  return future ? `in ${value}` : `${value} ago`
-}
-
-function recentActivityTime(a) {
-  return Math.max(...[a.lastSeenAt, a.lastStreamAt, a.lastFedAt, a.lastVoteAt]
-    .map((v) => v ? new Date(v).getTime() : 0))
+function scopeRows(key) {
+  const rows = ov.rows || []
+  if (SCOPES[key]) return agentGroup(rows, key)
+  if (key === 'healthy') return rows.filter((r) => r.state === 'ok' || r.state === 'protected')
+  if (key === 'never') return rows.filter((r) => !r.agent.retiredAt && !r.agent.lastFedAt)
+  if (key === 'retired') return rows.filter((r) => r.state === 'retired')
+  return rows
 }
 
 function paintRosterSummary() {
-  const summary = $('rosterSummary')
-  const counts = {
-    all: rosterCache.length,
-    needs: rosterCache.filter(isNeedsAttention).length,
-    healthy: rosterCache.filter((a) => ['healthy', 'protected'].includes(rosterStatus(a).key)).length,
-    risk: rosterCache.filter((a) => ['risk', 'overdue'].includes(rosterStatus(a).key)).length,
-    never: rosterCache.filter((a) => !a.retiredAt && !a.lastFedAt).length,
-    retired: rosterCache.filter((a) => !!a.retiredAt).length,
+  const deleteNext = nextUtcHour(CLEANUP.deleteHourUtc)
+  $('agentGroups').innerHTML = Object.entries(SCOPES).map(([key, s]) => {
+    const n = ov.preview || (key !== 'delete' && key !== 'warning') ? scopeRows(key).length : '—'
+    return `<button type="button" role="tab" data-scope="${key}" class="${rosterScope === key ? 'is-active' : ''}${s.tone && n ? ` is-${s.tone}` : ''}" aria-selected="${rosterScope === key}"><b>${n}</b>${esc(s.label)}</button>`
+  }).join('')
+  $('rosterSummary').innerHTML = EXTRA_SCOPES.map(([key, label]) =>
+    `<button type="button" class="adm-chip${rosterScope === key ? ' is-active' : ''}" data-scope="${key}" aria-pressed="${rosterScope === key}">${esc(label)} ${scopeRows(key).length}</button>`).join('')
+  for (const b of document.querySelectorAll('#agentGroups [data-scope], #rosterSummary [data-scope]')) {
+    b.onclick = () => { rosterScope = b.dataset.scope; applyRosterFilter() }
   }
-  const filters = [
-    ['all', 'All'], ['needs', 'Needs help'], ['healthy', 'Healthy'],
-    ['risk', 'At risk'], ['never', 'Never fed'], ['retired', 'Retired'],
-  ]
-  summary.innerHTML = ''
-  for (const [key, label] of filters) {
-    const chip = document.createElement('button')
-    chip.type = 'button'
-    chip.className = `adm-roster-chip${rosterScope === key ? ' is-active' : ''}`
-    chip.setAttribute('aria-pressed', rosterScope === key ? 'true' : 'false')
-    chip.innerHTML = `<b>${counts[key]}</b><span>${esc(label)}</span>`
-    chip.onclick = () => { rosterScope = key; applyRosterFilter() }
-    summary.appendChild(chip)
+  const gap = ov.previewError ? `<span class="is-gap">Cleanup preview unavailable (${esc(ov.previewError)}). No one is shown as eligible.</span>` : ''
+  const rules = {
+    delete: `<b>Deleted at the next 18:00 UTC run</b> (${esc(relativeTime(deleteNext.toISOString()))}): inactive 14+ days after leave, counting Bomb charges and verified votes, with no email on file.`,
+    warning: `<b>Inactive 14+ days after leave, with an email.</b> Deleted only 2–45 days after a warning email is delivered (reminders run at 09:00 UTC).
+      <span class="is-gap">Warning delivery isn't available to the admin panel, so these agents are not marked eligible.</span>`,
+    charge: `<b>No Bomb charge for 14+ days.</b> A verified vote or leave can still keep the account safe; Status shows the real cleanup position.`,
+    risk: `<b>Cleanup clock at 9–13 days</b>, before leave is subtracted. Reminder emails go out at 09:00 UTC.`,
   }
-}
-
-function rosterMatchesScope(a) {
-  const key = rosterStatus(a).key
-  if (rosterScope === 'all') return true
-  if (rosterScope === 'needs') return isNeedsAttention(a)
-  if (rosterScope === 'healthy') return key === 'healthy' || key === 'protected'
-  if (rosterScope === 'risk') return key === 'risk' || key === 'overdue'
-  if (rosterScope === 'never') return !a.retiredAt && !a.lastFedAt
-  if (rosterScope === 'retired') return !!a.retiredAt
-  return true
+  $('agentRule').innerHTML = (rules[rosterScope] || 'The cleanup clock resets on a Bomb charge or a verified vote. Leave pauses it.') + gap
+  const deletable = ov.preview ? agentGroup(ov.rows || [], 'delete').length : 0
+  setCount('agents', deletable, deletable ? 'bad' : '')
 }
 
 function sortRoster(list) {
   const sort = $('rosterSort').value
-  const urgency = { overdue: 6, risk: 5, due: 4, never: 2, healthy: 1, protected: 1, retired: 0 }
-  return [...list].sort((a, b) => {
+  const urgency = { delete_next_run: 8, warning_unknown: 7, unconfirmed: 6, at_risk: 5, leave_paused: 3, ok: 1, protected: 1, retired: 0 }
+  const recent = (a) => Math.max(...[a.lastSeenAt, a.lastStreamAt, a.lastFedAt, a.lastVoteAt].map((v) => v ? new Date(v).getTime() : 0))
+  return [...list].sort((ra, rb) => {
+    const a = ra.agent, b = rb.agent
     if (sort === 'agent') return a.agentNo.localeCompare(b.agentNo, undefined, { numeric: true })
     if (sort === 'newest') return new Date(b.joinedAt || 0) - new Date(a.joinedAt || 0)
-    if (sort === 'recent') return recentActivityTime(b) - recentActivityTime(a)
+    if (sort === 'recent') return recent(b) - recent(a)
     if (sort === 'deadline') {
       const aDeadline = a.districtExpiresAt ? new Date(a.districtExpiresAt).getTime() : Number.MAX_SAFE_INTEGER
       const bDeadline = b.districtExpiresAt ? new Date(b.districtExpiresAt).getTime() : Number.MAX_SAFE_INTEGER
       return aDeadline - bDeadline
     }
-    const statusDiff = urgency[rosterStatus(b).key] - urgency[rosterStatus(a).key]
-    return statusDiff || inactiveDays(b) - inactiveDays(a)
+    return (urgency[rb.state] - urgency[ra.state]) || rb.rawDays - ra.rawDays
   })
 }
 
 function paintRoster(list) {
   const body = $('rosterList')
-  body.innerHTML = ''
   if (!list.length) {
-    body.innerHTML = `<div class="adm-empty">No agents match this view.</div>`
+    body.innerHTML = `<div class="adm-empty" style="padding:14px;">No agents match this view.</div>`
     return
   }
-  for (const a of list) {
-    const status = rosterStatus(a)
-    const row = document.createElement('button')
-    row.type = 'button'
-    row.className = 'adm-roster-row'
-    row.setAttribute('aria-label', `Open ${a.codename || a.handle || a.agentNo}`)
-    const handle = a.handle ? `@${a.handle}` : 'No handle'
-    const district = a.currentDistrictName || 'No active district'
-    const deadline = a.districtExpiresAt
-      ? `${a.districtExpired ? 'Expired' : 'Due'} ${relativeTime(a.districtExpiresAt)}`
-      : 'No deadline running'
-    row.innerHTML = `
-      <span class="arr-cell arr-identity">
-        <span class="arr-name">${esc(a.codename || a.handle || a.agentNo)}</span>
-        <span class="arr-id">${esc(handle)} · ${esc(a.agentNo)}</span>
-        <span class="arr-badges">
-          <span class="arr-mini">${esc(a.mode || 'no mode')}</span>
-          ${a.appearOffline ? '<span class="arr-mini">Private status</span>' : ''}
-        </span>
-      </span>
-      <span class="arr-cell arr-status-cell">
-        <span class="arr-label">Bomb · cleanup clock</span>
-        <span class="arr-status is-${status.key}">${esc(status.label)}</span>
-        <span class="arr-sub">${votedMoreRecently(a) ? `${inactiveDays(a)}d since vote` : a.lastFedAt ? `${feedDays(a)}d since feed` : `${feedDays(a)}d since joining`}</span>
-      </span>
-      <span class="arr-cell arr-district">
-        <span class="arr-label">Current district</span>
-        <span class="arr-main">${esc(district)}</span>
-        <span class="arr-sub">${esc(deadline)}</span>
-      </span>
-      <span class="arr-cell arr-activity">
-        <span><b>App</b><i>${esc(relativeTime(a.lastSeenAt))}</i></span>
-        <span><b>Stream</b><i>${esc(relativeTime(a.lastStreamAt))}</i></span>
-        <span><b>Bomb</b><i>${esc(relativeTime(a.lastFedAt))}</i></span>
-        <span><b>Vote</b><i>${esc(relativeTime(a.lastVoteAt))}</i></span>
-      </span>
-      <span class="arr-go">›</span>
-    `
-    row.onclick = () => openRosterAgent(a)
-    body.appendChild(row)
+  const dayCell = (row) => {
+    const v = row.adjustedDays ?? row.rawDays
+    const tone = row.state === 'delete_next_run' ? 'is-bad' : v >= CLEANUP.atRiskFromDays ? 'is-warn' : ''
+    return `<span class="adm-num ${tone}">${row.rawDays.toFixed(1)}d</span>${row.adjustedDays != null && row.leaveDays ? `<span class="adm-sub">${row.adjustedDays.toFixed(1)}d after leave</span>` : ''}`
+  }
+  const district = (a) => a.currentDistrictName
+    ? `${esc(a.currentDistrictName)}<span class="adm-sub">${esc(a.districtExpiresAt ? `${a.districtExpired ? 'Expired' : 'Due'} ${relativeTime(a.districtExpiresAt)}` : 'No deadline')}</span>`
+    : '<span class="adm-sub">None</span>'
+  const name = (a) => a.codename || a.handle || a.agentNo
+  body.innerHTML = `
+    <table class="adm-table">
+      <colgroup><col style="width:20%"><col style="width:18%"><col style="width:11%"><col style="width:10%"><col style="width:10%"><col style="width:9%"><col style="width:8%"><col style="width:14%"></colgroup>
+      <thead><tr><th>Agent</th><th>Status</th><th>Cleanup clock</th><th>Last charge</th><th>Last vote</th><th>Last seen</th><th>Email</th><th>District</th></tr></thead>
+      <tbody>${list.map((row) => { const a = row.agent; return `
+        <tr tabindex="0" data-agent="${esc(a.agentNo)}">
+          <td><span class="adm-who"><b>${esc(name(a))}</b><span>${esc(a.handle ? `@${a.handle}` : 'No handle')} · ${esc(a.agentNo)}</span></span></td>
+          <td>${badge(cleanupTone(row), cleanupLabel(row))}<span class="adm-sub">${esc(cleanupSub(row))}</span></td>
+          <td>${dayCell(row)}</td>
+          <td>${esc(relativeTime(a.lastFedAt))}</td>
+          <td>${esc(relativeTime(a.lastVoteAt))}</td>
+          <td>${esc(a.appearOffline ? 'Private' : relativeTime(a.lastSeenAt))}</td>
+          <td>${row.hasEmail ? 'Yes' : 'None'}</td>
+          <td>${district(a)}</td>
+        </tr>` }).join('')}</tbody>
+    </table>
+    <div class="adm-rows">${list.map((row) => { const a = row.agent; return `
+      <button class="adm-li" type="button" data-agent="${esc(a.agentNo)}">
+        <span class="adm-li-top"><span class="adm-who"><b>${esc(name(a))}</b><span>${esc(a.handle ? `@${a.handle}` : 'No handle')} · ${esc(a.agentNo)}</span></span>${badge(cleanupTone(row), cleanupLabel(row))}</span>
+        ${cleanupSub(row) ? `<span class="adm-li-reason${row.state === 'delete_next_run' ? ' is-bad' : ''}">${esc(cleanupSub(row))}</span>` : ''}
+        <span class="adm-li-kv"><span>Clock <b>${row.rawDays.toFixed(1)}d</b>${row.adjustedDays != null && row.leaveDays ? ` · <b>${row.adjustedDays.toFixed(1)}d</b> after leave` : ''}</span>
+          <span>Charge <b>${esc(relativeTime(a.lastFedAt))}</b></span><span>Vote <b>${esc(relativeTime(a.lastVoteAt))}</b></span>
+          <span>Email <b>${row.hasEmail ? 'Yes' : 'None'}</b></span></span>
+      </button>` }).join('')}</div>`
+  for (const el of body.querySelectorAll('[data-agent]')) {
+    const open = () => {
+      const row = list.find((r) => r.agent.agentNo === el.dataset.agent)
+      openAgentFile(el.dataset.agent, { title: `${name(row.agent)} · ${row.agent.agentNo}` })
+    }
+    el.onclick = open
+    if (el.tagName === 'TR') el.onkeydown = (e) => { if (e.key === 'Enter') open() }
   }
 }
 
 function applyRosterFilter() {
   const q = $('rosterFilter').value.trim().toLowerCase()
-  let list = rosterCache.filter(rosterMatchesScope)
-  if (q) list = list.filter((a) =>
+  let list = scopeRows(rosterScope)
+  if (q) list = list.filter(({ agent: a }) =>
     a.agentNo.toLowerCase().includes(q) ||
     (a.handle || '').toLowerCase().includes(q) ||
     (a.codename || '').toLowerCase().includes(q) ||
@@ -1898,68 +1735,54 @@ function applyRosterFilter() {
   paintRoster(list)
 }
 
-async function openRosterAgent(agent) {
-  $('rosterDrawerTitle').textContent = `${agent.codename || agent.handle || agent.agentNo} · ${agent.agentNo}`
-  $('rosterDrawerBody').innerHTML = `<div class="adm-empty"><span class="adm-spin"></span> Opening agent file…</div>`
-  $('rosterDrawer').hidden = false
-  document.body.style.overflow = 'hidden'
-  $('btnCloseRosterDrawer').focus()
-  const res = await call('adminGetAgent', { query: agent.agentNo })
-  if (!res || !res.success) {
-    $('rosterDrawerBody').innerHTML = `<div class="adm-empty">${esc(res?.error || 'Could not open this agent file.')}</div>`
-    return
-  }
-  $('rosterDrawerBody').innerHTML = renderAgent(res.agent)
-  wireAgentTabs($('rosterDrawerBody'))
-  wireAgentDangerButton($('rosterDrawerBody'), res.agent)
-  wireAgentReconnectButton($('rosterDrawerBody'), res.agent)
-  if (sessionUnauthorized) setMutationButtonsDisabled(true)
-}
-
-function closeRosterDrawer() {
-  $('rosterDrawer').hidden = true
-  document.body.style.overflow = ''
-}
-
-$('btnCloseRosterDrawer').onclick = closeRosterDrawer
-$('rosterDrawer').addEventListener('click', (event) => { if (event.target === $('rosterDrawer')) closeRosterDrawer() })
-document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape' && !$('rosterDrawer').hidden) closeRosterDrawer()
-})
-
-$('btnLoadRoster').onclick = async () => {
+async function loadRosterData() {
   $('rosterCount').textContent = 'Loading…'
-  $('rosterList').innerHTML = `<div class="adm-empty"><span class="adm-spin"></span> Reading agent signals…</div>`
-  const res = await call('adminListAgents', {})
+  $('rosterList').innerHTML = `<div class="adm-empty" style="padding:14px;"><span class="adm-spin"></span>Reading agent signals…</div>`
+  const [res, preview] = await Promise.all([call('adminListAgents', {}), fetchDeletionPreview(call)])
   if (!res || !res.success) {
     $('rosterCount').textContent = res?.error || 'Load failed'
-    $('rosterList').innerHTML = `<div class="adm-empty">Could not load the agent log. Tap Refresh to try again.</div>`
+    $('rosterList').innerHTML = `<div class="adm-empty" style="padding:14px;">Could not load the agent log. Select Refresh to try again.</div>`
     return
   }
   rosterCache = res.agents
-  if (rosterScope === 'needs' && !rosterCache.some(isNeedsAttention)) rosterScope = 'all'
+  ov.preview = preview.ok ? preview : null
+  ov.previewError = preview.ok ? '' : preview.error
+  ov.rows = cleanupRows(rosterCache, ov.preview)
+  if (!rosterLoadedOnce && rosterScope === 'delete' && !agentGroup(ov.rows, 'delete').length) rosterScope = ov.preview ? 'warning' : 'risk'
+  if (!rosterLoadedOnce && rosterScope === 'warning' && !agentGroup(ov.rows, 'warning').length) rosterScope = 'risk'
+  rosterLoadedOnce = true
   applyRosterFilter()
 }
+$('btnLoadRoster').onclick = async () => { await loadRosterData(); paintOverview() }
 $('rosterFilter').addEventListener('input', applyRosterFilter)
 $('rosterSort').addEventListener('change', applyRosterFilter)
+viewEnter.agents = () => { if (!rosterCache.length) loadRosterData() }
 
-// Admin pickers, ReConnect sheet instead of the platform's own list. Every
-// one keeps its <select> as the value: the handlers on this page still read
-// $(id).value, renderDistrictFilterOptions() and the ReConnect district
-// loader still rebuild their option lists, and rc-select follows both.
+// Admin pickers use the ReConnect sheet instead of the platform's own list.
+// Every one keeps its <select> as the value.
 enhanceSelect($('goalDistrictFilter'), { title: 'DISTRICT', search: 'auto', variant: 'admin' })
 enhanceSelect($('goalReconnectVariant'), { title: 'FLAVOR', search: false, variant: 'admin' })
 enhanceSelect($('rosterSort'), { title: 'SORT AGENTS', search: false, variant: 'admin' })
 enhanceSelect($('reconnectDistrictFilter'), { title: 'DISTRICT', search: 'auto', variant: 'admin' })
-// Red Zone targets stay a real multi-select. Checkbox rows in place of the
-// platform's multi-choice dialog, inline so the echo line below still reads
-// alongside the list. paintRZTargetEcho() adjusts the selection during its
-// own change event (picking a goal clears "Any BTS song"); the panel
-// re-reads the DOM afterwards, so that write is what shows.
+// Red Zone targets stay a real multi-select, shown as checkbox rows.
 enhanceMultiSelect($('rzTargetGoal'), { label: 'What counts', empty: 'No streamable goals loaded.' })
-document.querySelector('[data-tab="roster"]').addEventListener('click', () => { if (!rosterCache.length) $('btnLoadRoster').click() })
 
-/* ── VMA Review ── */
+/* ── Reviews: Voting review + VMA proofs ── */
+let reviewTab = 'voting'
+let votingReview = null
+function selectReview(name) {
+  reviewTab = name
+  for (const b of document.querySelectorAll('#reviewSeg [data-review]')) b.classList.toggle('is-active', b.dataset.review === name)
+  $('panel-voting').hidden = name !== 'voting'
+  $('panel-vma').hidden = name !== 'vma'
+  if (name === 'voting') {
+    votingReview = votingReview || mountVotingReview($('panel-voting'), call, { confirm: confirmAction })
+    votingReview.load()
+  } else loadVmaPage()
+}
+for (const b of document.querySelectorAll('#reviewSeg [data-review]')) b.onclick = () => selectReview(b.dataset.review)
+viewEnter.reviews = () => selectReview(reviewTab)
+
 let vmaOffset = 0
 const VMA_PAGE_SIZE = 10
 const VMA_RECHECK_BATCH_SIZE = 5
@@ -1970,16 +1793,16 @@ let vmaRecheckStopRequested = false
 function vmaRecheckMarkup(result) {
   if (!result) return ''
   if (result.error) {
-    return `<div class="vma-recheck-result is-error">OCR ERROR · ${esc(result.error)}</div>`
+    return `<div class="vma-recheck-result is-error">OCR error · ${esc(result.error)}</div>`
   }
   if (result.proof.passed) {
-    return `<div class="vma-recheck-result is-pass">✓ OCR PASS · ${result.proof.displayedTotal} votes · SWIM · today’s code</div>`
+    return `<div class="vma-recheck-result is-pass">OCR pass · ${result.proof.displayedTotal} votes · SWIM · today’s code</div>`
   }
   const missing = []
   if (!result.proof.hasSong) missing.push('SWIM')
   if (!result.proof.voteTotalOk) missing.push('vote total')
   if (!result.proof.watermarkOk) missing.push('today’s code')
-  return `<div class="vma-recheck-result is-miss">△ OCR UNCLEAR · missing ${esc(missing.join(', ') || 'proof details')}</div>`
+  return `<div class="vma-recheck-result is-miss">OCR unclear · missing ${esc(missing.join(', ') || 'proof details')}</div>`
 }
 
 function paintVmaRecheckResult(voteId) {
@@ -2027,7 +1850,7 @@ async function recheckAllVmaPending() {
   vmaRecheckRunning = true
   vmaRecheckStopRequested = false
   const button = $('btnRecheckAllVma')
-  button.textContent = '■ Stop OCR check'
+  button.textContent = 'Stop OCR check'
   let checked = 0
   let passed = 0
   let unclear = 0
@@ -2069,7 +1892,7 @@ async function recheckAllVmaPending() {
   } finally {
     vmaRecheckRunning = false
     vmaRecheckStopRequested = false
-    button.textContent = '⌁ OCR check all'
+    button.textContent = 'OCR check all'
   }
 }
 
@@ -2083,26 +1906,27 @@ function vmaCard(row) {
   card.dataset.vmaVoteId = String(row.id)
   card.style.marginTop = '10px'
   card.innerHTML = `
-    <div class="adm-card-head"><h2>${esc(row.agent_no)} · ${esc(categoryLabel)}</h2><span class="muted">${fmtDate(row.voted_at)}</span></div>
+    <div class="adm-card-head"><h3>${esc(row.agent_no)} · ${esc(categoryLabel)}</h3><span class="muted">${fmtDate(row.voted_at)}</span></div>
     <p class="muted">${esc(row.verify_note || '')}</p>
-    ${row.proofUrl ? `<img src="${esc(row.proofUrl)}" alt="proof screenshot" style="max-width:100%; border-radius:10px; border:1px solid var(--border); margin:8px 0;">` : '<p class="muted">No preview available.</p>'}
+    ${row.proofUrl ? `<img class="adm-vma-img" src="${esc(row.proofUrl)}" alt="proof screenshot">` : '<p class="muted">No preview available.</p>'}
     <div class="adm-grid2">
       <label class="adm-field"><span>Valid total for this voting day</span>
         <input type="text" class="ob-input vma-total-input" value="${allowedTotal} votes" disabled>
-        <small class="muted">${storedTotal === allowedTotal ? `OCR read ${storedTotal}` : `OCR read ${storedTotal || 'nothing'} — approval will safely use ${allowedTotal}`}</small></label>
+        <small>${storedTotal === allowedTotal ? `OCR read ${storedTotal}` : `OCR read ${storedTotal || 'nothing'}; approval will safely use ${allowedTotal}`}</small></label>
       <label class="adm-field"><span>Watermark</span>
-        <input type="text" class="ob-input" value="${row.watermark_ok ? '✓ matched' : '✕ not found'}" disabled>
-        <small class="muted">Expected: ${esc(row.expected_code || '—')}</small></label>
+        <input type="text" class="ob-input" value="${row.watermark_ok ? 'Matched' : 'Not found'}" disabled>
+        <small>Expected: ${esc(row.expected_code || '—')}</small></label>
     </div>
-    <div class="adm-row" style="margin-top:8px;">
-      <button class="btn btn-primary adm-mutate-btn vma-approve-btn" type="button">✓ Approve ${allowedTotal}</button>
-      <button class="btn btn-alert adm-mutate-btn vma-reject-btn" type="button">✕ Reject</button>
+    <div class="adm-row">
+      <button class="btn btn-primary adm-mutate-btn vma-approve-btn" type="button">Approve ${allowedTotal}</button>
+      <button class="btn btn-danger adm-mutate-btn vma-reject-btn" type="button">Reject</button>
     </div>
     <div class="vma-recheck-slot">${vmaRecheckMarkup(vmaRecheckResults.get(String(row.id)))}</div>
     <div class="adm-out vma-out"></div>
   `
   card.querySelector('.vma-approve-btn').onclick = async (e) => {
     const btn = e.currentTarget
+    if (!(await confirmAction({ title: 'Approve this vote proof?', body: `${row.agent_no} · ${categoryLabel}: ${allowedTotal} votes are credited.`, confirmLabel: `Approve ${allowedTotal}` }))) return
     btn.disabled = true
     const res = await call('adminReviewVmaVote', {
       voteId: row.id, decision: 'approve',
@@ -2113,6 +1937,7 @@ function vmaCard(row) {
   }
   card.querySelector('.vma-reject-btn').onclick = async (e) => {
     const btn = e.currentTarget
+    if (!(await confirmAction({ title: 'Reject this vote proof?', body: `${row.agent_no} · ${categoryLabel}: no votes are credited for this proof.`, confirmLabel: 'Reject', danger: true }))) return
     btn.disabled = true
     const res = await call('adminReviewVmaVote', { voteId: row.id, decision: 'reject' })
     if (res?.success) { card.remove(); loadVmaCount() }
@@ -2123,35 +1948,36 @@ function vmaCard(row) {
 
 async function loadVmaCount() {
   const res = await call('adminListVmaPending', { limit: 1, offset: 0 })
-  $('vmaPendingCount').textContent = res?.success ? `${res.pendingCount} pending total` : ''
+  $('vmaPendingCount').textContent = res?.success ? `· ${res.pendingCount} pending` : ''
+  if (res?.success) { ov.vma = Number(res.pendingCount) || 0; paintReviewCounts() }
 }
 
 async function loadVmaPage() {
   const list = $('vmaList')
-  list.innerHTML = `<div class="adm-empty"><span class="adm-spin"></span> Loading…</div>`
+  list.innerHTML = `<div class="adm-empty"><span class="adm-spin"></span>Loading…</div>`
   const res = await call('adminListVmaPending', { limit: VMA_PAGE_SIZE, offset: vmaOffset })
   if (!res || !res.success) { list.innerHTML = `<div class="adm-empty">${esc(res?.error || 'Failed to load')}</div>`; return }
-  $('vmaPendingCount').textContent = `${res.pendingCount} pending total`
-  $('vmaPageLabel').textContent = `${vmaOffset + 1}–${vmaOffset + res.pending.length} of ${res.pendingCount}`
+  $('vmaPendingCount').textContent = `· ${res.pendingCount} pending`
+  $('vmaPageLabel').textContent = res.pending.length ? `${vmaOffset + 1}–${vmaOffset + res.pending.length} of ${res.pendingCount}` : ''
   list.innerHTML = ''
   if (!res.pending.length) { list.innerHTML = `<div class="adm-empty">Nothing pending right now.</div>`; return }
   for (const row of res.pending) list.appendChild(vmaCard(row))
+  if (sessionUnauthorized) setMutationButtonsDisabled(true)
 }
 $('btnLoadVma').onclick = () => { vmaOffset = 0; loadVmaPage() }
 $('btnRecheckAllVma').onclick = () => recheckAllVmaPending()
 $('btnVmaPrev').onclick = () => { vmaOffset = Math.max(0, vmaOffset - VMA_PAGE_SIZE); loadVmaPage() }
 $('btnVmaNext').onclick = () => { vmaOffset += VMA_PAGE_SIZE; loadVmaPage() }
-document.querySelector('[data-tab="vma"]').addEventListener('click', () => loadVmaPage())
 
-/* ── Voting Review — generic queue for voting campaigns (js/voting-admin.js) ── */
-let votingReview = null
-document.querySelector('[data-tab="voting"]').addEventListener('click', () => {
-  votingReview = votingReview || mountVotingReview($('panel-voting'), call)
-  votingReview.load()
-})
-
-/* ── Reconnect ── */
+/* ── ReConnect Quests ── district accordions over adminListStuckReconnects.
+   Statuses come from the backend's flags (questStatus); nothing is
+   estimated. Every action is the existing one: auto-fill and the manual
+   roster both go through "Confirm this team?" → adminPairReconnect. */
 let reconnectCases = []
+let questFilterKey = 'all'
+let questSortKey = 'deadline'
+const openDistricts = new Set()
+let districtsTouched = false
 
 function fmtWait(iso) {
   if (!iso) return '—'
@@ -2166,16 +1992,12 @@ function fmtDeadline(iso) {
   const hours = Math.ceil(msLeft / 3600000)
   return `${hours < 24 ? `${hours}h left` : `${Math.ceil(hours / 24)}d left`} · ${fmtDate(iso)}`
 }
-
-function reconnectCaseMatches(item) {
-  const district = $('reconnectDistrictFilter').value
-  if (district && item.districtId !== district) return false
-  const q = $('reconnectFilter').value.trim().toLowerCase()
-  if (!q) return true
-  const searchable = [item.districtName, item.goalLabel, item.goalId,
-    ...(item.agents || []).flatMap((a) => [a.agentNo, a.codename]),
-    ...(item.invites || []).flatMap((a) => [a.agentNo, a.codename])]
-  return searchable.some((value) => String(value || '').toLowerCase().includes(q))
+function shortDeadline(iso) {
+  if (!iso) return '—'
+  const msLeft = new Date(iso).getTime() - Date.now()
+  if (msLeft <= 0) return 'Passed'
+  const hours = Math.ceil(msLeft / 3600000)
+  return hours < 24 ? `${hours}h left` : `${Math.ceil(hours / 24)}d left`
 }
 
 function populateReconnectDistricts() {
@@ -2195,6 +2017,7 @@ async function connectReconnectRoster(btn, item, agentNos) {
   const res = await call('adminPairReconnect', { missionId: item.missionId,
     districtId: item.districtId, goalId: item.goalId, agentNos })
   if (res?.success) {
+    closeQuestDrawer()
     await loadReconnectList()
   } else {
     btn.textContent = ({ team_protected: 'Another real team is protected', roster_size_mismatch: 'Choose the full team',
@@ -2216,7 +2039,7 @@ function previewReconnectRoster(btn, item, agentNos) {
   body.innerHTML = `
     <span class="rh-context">${esc(item.districtName)} · ${esc(item.goalLabel)}</span>
     <h3>Confirm this team?</h3>
-    <p class="muted">The suggested match is available and restoring the same district.</p>
+    <p>The suggested match is available and restoring the same district.</p>
     <div class="rh-match-line"><span>Current team</span><b>${esc(current.join(' + ') || 'No one yet')}</b></div>
     <div class="rh-match-line"><span>Add</span><b>${esc(additions.join(' + ') || 'No change')}</b></div>
     <div class="rh-match-actions">
@@ -2231,36 +2054,169 @@ function previewReconnectRoster(btn, item, agentNos) {
   dialog.showModal()
 }
 
-function appendReconnectMoreOptions(card, item) {
-  const details = document.createElement('details')
-  details.className = 'rh-roster'
-  details.innerHTML = `<summary>More options</summary>
-    <div class="rh-match-line"><span>Quest</span><b>${esc(item.goalLabel)}</b></div>
-    <div class="rh-match-line"><span>Waiting</span><b>${esc(fmtWait(item.waitingSince))}</b></div>
-    <div class="rh-match-line"><span>District deadline</span><b>${esc(fmtDeadline(item.districtExpiresAt))}</b></div>`
+function openReconnectAgent(item) {
+  const agentNo = item.agents?.[0]?.agentNo || item.invites?.[0]?.agentNo
+  if (!agentNo) return
+  openAgentFile(agentNo)
+}
 
-  if (item.kind === 'mission' && !(item.flags || []).includes('expired')) {
-    const roster = document.createElement('div')
-    roster.className = 'rh-roster-list'
+const QUEST_TONE = { waiting: 'wait', active: 'active', completed: 'done', cancelled: 'muted', expired: 'bad' }
+const questBadge = (item) => { const s = questStatus(item); return badge(QUEST_TONE[s], QUEST_STATUSES[s]) }
+const questKey = (item) => item.missionId || `${item.goalId}:${item.agents?.[0]?.agentNo || ''}`
+
+function seatsBar(item) {
+  const p = questProgress(item)
+  return bar(p.joined, p.required, `${p.joined}/${p.required} joined${p.invited ? ` · ${p.invited} invited` : ''}`)
+}
+function streamedBar(item) {
+  const p = questProgress(item)
+  if (!p.streamKnown) return '<span class="adm-sub">Not reported</span>'
+  return bar(p.streamed, Math.max(1, p.joined), `${p.streamed}/${p.joined} streamed`)
+}
+
+function paintQuestChips() {
+  const counts = questStatusCounts(reconnectCases)
+  const chips = [['all', 'All', counts.all], ['attention', 'Needs attention', counts.attention], ['waiting', 'Waiting', counts.waiting],
+    ['active', 'Active', counts.active], ['expired', 'Expired', counts.expired]]
+  $('questStatusChips').innerHTML = chips.map(([k, l, n]) =>
+    `<button type="button" class="adm-chip${questFilterKey === k ? ' is-active' : ''}" data-qfilter="${k}" aria-pressed="${questFilterKey === k}">${esc(l)} ${n}</button>`).join('')
+    + QUEST_UNAVAILABLE_STATUSES.map((k) => `<button type="button" class="adm-chip" disabled title="Not available from the backend yet">${esc(QUEST_STATUSES[k])}</button>`).join('')
+  const sorts = [['deadline', 'Deadline'], ['waiting', 'Waiting longest'], ['attention', 'Needs attention'], ['district', 'District A–Z']]
+  $('questSortChips').innerHTML = '<span class="adm-chip-label">Sort</span>' + sorts.map(([k, l]) =>
+    `<button type="button" class="adm-chip${questSortKey === k ? ' is-active' : ''}" data-qsort="${k}" aria-pressed="${questSortKey === k}">${esc(l)}</button>`).join('')
+  for (const b of $('questStatusChips').querySelectorAll('[data-qfilter]')) b.onclick = () => { questFilterKey = b.dataset.qfilter; paintReconnectList() }
+  for (const b of $('questSortChips').querySelectorAll('[data-qsort]')) b.onclick = () => { questSortKey = b.dataset.qsort; paintReconnectList() }
+}
+
+function paintReconnectList() {
+  const counts = reconnectBucketCounts(reconnectCases)
+  $('reconnectSummary').textContent = `${counts.action} need action · ${counts.watch} to watch · ${counts.fine} fine`
+  setCount('reconnect', counts.action, counts.action ? 'bad' : '')
+  paintQuestChips()
+  const district = $('reconnectDistrictFilter').value
+  const scoped = district ? reconnectCases.filter((i) => i.districtId === district) : reconnectCases
+  const districts = questDistricts(scoped, { query: $('reconnectFilter').value, filter: questFilterKey, sort: questSortKey })
+  if (!districtsTouched) for (const d of districts) if (d.counts.attention) openDistricts.add(d.districtId)
+  const searching = !!$('reconnectFilter').value.trim() || !!district
+  const box = $('questDistricts')
+  if (!districts.length) {
+    box.innerHTML = `<div class="adm-empty">${reconnectCases.length ? 'No quests match this view.' : 'No open ReConnect quests right now.'}</div>`
+    return
+  }
+  box.innerHTML = districts.map((d) => {
+    const open = searching || openDistricts.has(d.districtId)
+    const c = d.counts
+    const sum = [c.attention ? badge('bad', `${c.attention} need action`) : '', c.waiting ? badge('wait', `${c.waiting} waiting`) : '',
+      c.active ? badge('active', `${c.active} active`) : '', c.expired ? badge('bad', `${c.expired} expired`) : ''].join('')
+    return `<div class="adm-acc${open ? ' is-open' : ''}" data-district="${esc(d.districtId)}">
+      <button class="adm-acc-h" type="button" aria-expanded="${open}">
+        <svg class="adm-chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 2l4 4-4 4"/></svg>
+        <span class="adm-acc-name"><b>${esc(d.districtName)}</b><span>${plural(d.items.length, 'quest')} · earliest deadline ${esc(shortDeadline(Number.isFinite(d.earliestDeadline) ? new Date(d.earliestDeadline).toISOString() : null))}</span></span>
+        <span class="adm-acc-sum">${sum}</span>
+      </button>
+      <div class="adm-acc-b">
+        <div class="adm-table-wrap has-rows" style="border:0;padding:0;background:none;">
+          <table class="adm-table">
+            <colgroup><col style="width:28px"><col style="width:27%"><col style="width:15%"><col style="width:17%"><col style="width:16%"><col style="width:9%"><col style="width:15%"></colgroup>
+            <thead><tr><th></th><th>Team</th><th>Quest</th><th>Seats</th><th>Streamed</th><th>Deadline</th><th>Status</th></tr></thead>
+            <tbody>${d.items.map((item) => `
+              <tr tabindex="0" data-quest="${esc(questKey(item))}">
+                <td class="adm-td-flag">${questNeedsAdmin(item) ? '<span class="adm-flag" title="Needs admin action"></span>' : ''}</td>
+                <td><span class="adm-who"><b>${esc(reconnectTeamLabel(item))}</b><span>${esc(reconnectPlainReason(item))}</span></span></td>
+                <td>${esc(item.goalLabel)}</td>
+                <td>${seatsBar(item)}</td>
+                <td>${streamedBar(item)}</td>
+                <td>${esc(shortDeadline(questDeadline(item)))}</td>
+                <td>${questBadge(item)}</td>
+              </tr>`).join('')}</tbody>
+          </table>
+          <div class="adm-rows">${d.items.map((item) => `
+            <button class="adm-li" type="button" data-quest="${esc(questKey(item))}">
+              <span class="adm-li-top"><span class="adm-who"><b>${esc(reconnectTeamLabel(item))}</b><span>${esc(item.goalLabel)} · ${esc(shortDeadline(questDeadline(item)))}</span></span>${questBadge(item)}</span>
+              <span class="adm-li-reason${questNeedsAdmin(item) ? ' is-bad' : ''}">${questNeedsAdmin(item) ? '<span class="adm-flag"></span> ' : ''}${esc(reconnectPlainReason(item))}</span>
+              <span class="adm-li-kv" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);">${seatsBar(item)}${streamedBar(item)}</span>
+            </button>`).join('')}</div>
+        </div>
+      </div>
+    </div>`
+  }).join('')
+  for (const acc of box.querySelectorAll('.adm-acc')) {
+    acc.querySelector('.adm-acc-h').onclick = () => {
+      districtsTouched = true
+      const id = acc.dataset.district
+      const open = !acc.classList.contains('is-open')
+      acc.classList.toggle('is-open', open)
+      acc.querySelector('.adm-acc-h').setAttribute('aria-expanded', String(open))
+      if (open) openDistricts.add(id); else openDistricts.delete(id)
+    }
+  }
+  for (const el of box.querySelectorAll('[data-quest]')) {
+    const open = () => { const item = reconnectCases.find((i) => questKey(i) === el.dataset.quest); if (item) openQuest(item) }
+    el.onclick = open
+    if (el.tagName === 'TR') el.onkeydown = (e) => { if (e.key === 'Enter') open() }
+  }
+  if (sessionUnauthorized) setMutationButtonsDisabled(true)
+}
+
+function openQuest(item, { focusRoster = false } = {}) {
+  const st = questStatus(item)
+  const p = questProgress(item)
+  const action = reconnectAdminAction(item)
+  $('questDrawerContext').textContent = `${item.districtName} · ${item.goalLabel}`
+  $('questDrawerTitle').textContent = reconnectTeamLabel(item)
+  $('questDrawerBadge').innerHTML = questBadge(item)
+  const mates = (item.agents || []).map((a) => `
+    <div class="adm-mate"><span class="adm-dot${a.online ? ' is-on' : ''}" title="${a.online ? 'Online' : 'Offline'}"></span>
+      <span class="adm-who"><b>${esc(a.codename)}</b><span>${esc(a.agentNo)} · quiet ${esc(a.quietDays ?? '—')}d${a.lastSeenAt ? ` · seen ${esc(relativeTime(a.lastSeenAt))}` : ''}</span></span>
+      ${item.kind === 'mission' ? (a.streamed ? badge('active', 'Streamed') : badge('muted', 'No stream yet')) : ''}
+      <button class="btn btn-ghost btn-sm" type="button" data-file="${esc(a.agentNo)}">File</button></div>`).join('')
+  const invites = (item.invites || []).map((a) => `
+    <div class="adm-mate"><span class="adm-dot${a.online ? ' is-on' : ''}"></span>
+      <span class="adm-who"><b>${esc(a.codename)}</b><span>${esc(a.agentNo)} · invited ${esc(relativeTime(a.waitingSince))}</span></span>${badge('wait', 'Invited')}</div>`).join('')
+  const open = Math.max(0, p.required - p.joined - p.invited)
+  const seats = Array.from({ length: item.kind === 'mission' ? open : 0 }).map(() =>
+    `<div class="adm-mate"><span class="adm-dot"></span><span class="adm-who"><b class="muted">Open seat</b></span></div>`).join('')
+  const canPick = item.kind === 'mission' && !(item.flags || []).includes('expired')
+  const needsAdmin = questNeedsAdmin(item)
+  $('questDrawerBody').innerHTML = `
+    <div class="adm-reason${needsAdmin ? '' : ' is-calm'}"><b>${esc(reconnectPlainReason(item))}</b>${esc(item.recommendedAction ? `Recommended: ${item.recommendedAction}` : '')}</div>
+    <div class="adm-sec"><h4>Progress</h4>
+      <div style="display:flex;flex-direction:column;gap:8px;">${seatsBar(item)}${streamedBar(item)}</div>
+      <p class="muted" style="margin-top:8px;">Quest stage and per-agent stream counts aren't reported by the backend yet.</p></div>
+    <div class="adm-sec"><h4>Teammates</h4>${mates}${invites}${seats || ''}</div>
+    <div class="adm-sec"><h4>Deadlines</h4><div class="adm-kv">
+      <div><span class="k">District deadline</span><span class="v">${esc(fmtDeadline(item.districtExpiresAt))}</span></div>
+      <div><span class="k">Quest expires</span><span class="v">${esc(item.missionExpiresAt ? fmtDeadline(item.missionExpiresAt) : '—')}</span></div>
+      <div><span class="k">Waiting</span><span class="v">${esc(fmtWait(item.waitingSince))}</span></div>
+      <div><span class="k">Seats required</span><span class="v">${esc(item.requiredAgents)}</span></div>
+    </div></div>
+    ${canPick ? `<div class="adm-sec" id="questRoster"><h4>Choose team manually</h4><div class="rh-roster-list"></div></div>` : ''}
+    ${item.kind === 'mission' ? `<div class="adm-sec"><h4>Random assignment</h4><p class="muted" style="margin-bottom:8px;">Lives on the ReConnect goal in Goals, behind its own confirmation.</p>
+      <button class="btn btn-ghost btn-sm" type="button" data-goto-goals>Open Goals</button></div>` : ''}`
+  for (const b of $('questDrawerBody').querySelectorAll('[data-file]')) b.onclick = () => openAgentFile(b.dataset.file)
+  $('questDrawerBody').querySelector('[data-goto-goals]')?.addEventListener('click', () => { closeQuestDrawer(); selectView('goals') })
+
+  if (canPick) {
+    const roster = $('questDrawerBody').querySelector('.rh-roster-list')
     for (const agent of item.agents || []) {
       const label = document.createElement('label')
-      label.className = 'rh-pick'
+      label.className = 'adm-pick'
       label.innerHTML = `<input type="checkbox" checked disabled value="${esc(agent.agentNo)}"><span>${esc(agent.codename)} · already joined</span>`
       roster.appendChild(label)
     }
     for (const agent of item.availableAgents || []) {
       const label = document.createElement('label')
-      label.className = 'rh-pick'
-      label.innerHTML = `<input type="checkbox" value="${esc(agent.agentNo)}"><span>${esc(agent.codename)}</span>`
+      label.className = 'adm-pick'
+      label.innerHTML = `<input type="checkbox" value="${esc(agent.agentNo)}"><span>${esc(agent.codename)} · ${esc(agent.agentNo)}${agent.online ? ' · online' : agent.quietDays != null ? ` · quiet ${esc(agent.quietDays)}d` : ''}</span>`
       roster.appendChild(label)
     }
-    details.appendChild(roster)
+    if (!(item.availableAgents || []).length) roster.insertAdjacentHTML('beforeend', '<div class="adm-empty">No other eligible agents right now.</div>')
     const manualBtn = document.createElement('button')
-    manualBtn.className = 'btn btn-ghost adm-mutate-btn'
+    manualBtn.className = 'btn btn-ghost btn-block adm-mutate-btn'
     manualBtn.type = 'button'
     manualBtn.style.marginTop = '8px'
     const updateManual = () => {
-      const selected = [...details.querySelectorAll('input:checked')].map((input) => input.value)
+      const selected = [...roster.querySelectorAll('input:checked')].map((input) => input.value)
       manualBtn.disabled = selected.length !== item.requiredAgents || sessionUnauthorized
       manualBtn.textContent = selected.length === item.requiredAgents
         ? 'Preview selected team' : `Choose ${Math.max(0, item.requiredAgents - selected.length)} more`
@@ -2271,89 +2227,140 @@ function appendReconnectMoreOptions(card, item) {
       updateManual()
     })
     manualBtn.onclick = () => previewReconnectRoster(manualBtn, item,
-      [...details.querySelectorAll('input:checked')].map((input) => input.value))
-    details.appendChild(manualBtn)
+      [...roster.querySelectorAll('input:checked')].map((input) => input.value))
+    roster.parentElement.appendChild(manualBtn)
     updateManual()
   }
-  card.appendChild(details)
-  return details
-}
 
-function openReconnectAgent(item) {
-  const agentNo = item.agents?.[0]?.agentNo || item.invites?.[0]?.agentNo
-  if (!agentNo) return
-  selectTab('lookup')
-  $('lkQuery').value = agentNo
-  $('btnLookup').click()
-}
-
-function makeReconnectCard(item, bucket) {
-  const card = document.createElement('article')
-  card.className = `rh-card is-${bucket}`
-  const actionSpec = reconnectAdminAction(item)
-  card.innerHTML = `
-    <span class="rh-context">${esc(item.districtName)}</span>
-    <strong class="rh-team">${esc(reconnectTeamLabel(item))}</strong>
-    <p class="rh-reason">${esc(reconnectPlainReason(item))}</p>`
-
-  const action = document.createElement('div')
-  action.className = 'rh-action'
-  if (actionSpec.kind === 'autofill') {
+  const foot = $('questDrawerFoot')
+  foot.innerHTML = ''
+  const fileBtn = document.createElement('button')
+  fileBtn.className = 'btn btn-ghost'; fileBtn.type = 'button'; fileBtn.textContent = 'Open agent file'
+  fileBtn.onclick = () => openReconnectAgent(item)
+  foot.appendChild(fileBtn)
+  if (action.kind === 'autofill' || canAutoFillReconnect(item)) {
     const btn = document.createElement('button')
-    btn.className = 'btn btn-primary adm-mutate-btn'; btn.type = 'button'; btn.textContent = actionSpec.label
+    btn.className = 'btn btn-primary adm-mutate-btn'; btn.type = 'button'; btn.textContent = 'Auto-fill best match'
     btn.onclick = () => previewReconnectRoster(btn, item, item.suggestedAgentNos)
-    action.appendChild(btn)
-  } else if (actionSpec.kind === 'open_agent') {
+    foot.appendChild(btn)
+  } else if (action.kind === 'review' && canPick) {
     const btn = document.createElement('button')
-    btn.className = 'btn btn-ghost'; btn.type = 'button'; btn.textContent = actionSpec.label
-    btn.onclick = () => openReconnectAgent(item)
-    action.appendChild(btn)
-  } else if (actionSpec.kind === 'review') {
-    const btn = document.createElement('button')
-    btn.className = 'btn btn-ghost'; btn.type = 'button'; btn.textContent = actionSpec.label
-    btn.onclick = () => { const more = card.querySelector('.rh-roster'); more.open = true; more.scrollIntoView({ block: 'nearest' }) }
-    action.appendChild(btn)
-  } else {
-    action.innerHTML = `<span class="rh-watch-action">Recommended: ${esc(actionSpec.label)}</span>`
+    btn.className = 'btn btn-ghost'; btn.type = 'button'; btn.textContent = 'Review team'
+    btn.onclick = () => $('questRoster')?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    foot.appendChild(btn)
   }
-  card.appendChild(action)
-  appendReconnectMoreOptions(card, item)
-  return card
-}
-
-function paintReconnectList() {
-  const counts = reconnectBucketCounts(reconnectCases)
-  $('reconnectSummary').innerHTML = `<b>${counts.action}</b> need action &middot; <b>${counts.watch}</b> to watch &middot; <b>${counts.fine}</b> fine`
-  $('reconnectFineCount').textContent = `${counts.fine} ${counts.fine === 1 ? 'mission' : 'missions'}`
-  const visible = reconnectCases.filter(reconnectCaseMatches)
-  const actionCases = visible.filter((item) => reconnectAdminBucket(item) === 'action')
-  const watchCases = visible.filter((item) => reconnectAdminBucket(item) === 'watch')
-  $('reconnectNeedsCount').textContent = `${actionCases.length}`
-  $('reconnectWatchCount').textContent = `${watchCases.length}`
-  const paint = (id, cases, bucket, empty) => {
-    const list = $(id)
-    list.innerHTML = ''
-    if (!cases.length) { list.innerHTML = `<div class="adm-empty">${empty}</div>`; return }
-    for (const item of cases) list.appendChild(makeReconnectCard(item, bucket))
-  }
-  paint('reconnectNeedsList', actionCases, 'action', 'Nobody needs you right now.')
-  paint('reconnectWatchList', watchCases, 'watch', 'Nothing needs watching right now.')
+  $('questDrawer').hidden = false
+  document.body.style.overflow = 'hidden'
+  $('btnCloseQuestDrawer').focus()
+  if (focusRoster) $('questRoster')?.scrollIntoView({ block: 'start' })
   if (sessionUnauthorized) setMutationButtonsDisabled(true)
 }
+function closeQuestDrawer() {
+  $('questDrawer').hidden = true
+  if ($('rosterDrawer').hidden) document.body.style.overflow = ''
+}
+$('btnCloseQuestDrawer').onclick = closeQuestDrawer
+$('questDrawer').addEventListener('click', (event) => { if (event.target === $('questDrawer')) closeQuestDrawer() })
 
-async function loadReconnectList() {
-  $('reconnectNeedsList').innerHTML = `<div class="adm-empty"><span class="adm-spin"></span> Loading…</div>`
-  $('reconnectWatchList').innerHTML = ''
+async function loadReconnectData() {
   const res = await call('adminListStuckReconnects')
-  if (!res?.success) { $('reconnectNeedsList').innerHTML = `<div class="adm-empty">${esc(res?.error || 'Failed to load')}</div>`; return }
+  if (!res?.success) {
+    $('questDistricts').innerHTML = `<div class="adm-empty">${esc(res?.error || 'Failed to load')}</div>`
+    return
+  }
   reconnectCases = res.cases || []
+  ov.reconnect = reconnectCases
   populateReconnectDistricts()
   paintReconnectList()
+}
+async function loadReconnectList() {
+  $('questDistricts').innerHTML = `<div class="adm-empty"><span class="adm-spin"></span>Loading…</div>`
+  await loadReconnectData()
+  paintOverview()
 }
 $('btnLoadReconnect').onclick = () => loadReconnectList()
 $('reconnectFilter').oninput = () => paintReconnectList()
 $('reconnectDistrictFilter').onchange = () => paintReconnectList()
-document.querySelector('[data-tab="reconnect"]').addEventListener('click', () => loadReconnectList())
+viewEnter.reconnect = () => loadReconnectList()
+
+/* ── Leaves ── read-only. The view asks for adminListLeaves; until the
+   backend has it, the answer is "not found" and the view says leave records
+   are unavailable rather than showing an empty list. There are no admin
+   leave actions: only the agent can start or end a leave. */
+let leaveFilterKey = 'all'
+let leaveSortKey = 'start_desc'
+
+function leaveTone(status) { return { active: 'active', upcoming: 'wait', ended_early: 'muted', completed: 'done' }[status] || '' }
+
+async function loadLeavesData() {
+  const res = await call(LEAVES_ACTION, {})
+  if (res?.success && Array.isArray(res.leaves)) ov.leaves = res.leaves
+  else ov.leaves = leavesUnavailable(res) ? false : null
+  ov.leavesError = res?.success ? '' : (res?.error || 'Could not load leaves')
+  paintLeaves()
+}
+function paintLeaves() {
+  const box = $('leavesBody')
+  if (ov.leaves === false) {
+    setCount('leaves', '')
+    $('moreLeavesSub').textContent = 'Leave records unavailable'
+    box.innerHTML = `<div class="adm-card"><div class="adm-card-head"><h3>Leave records aren't available yet</h3>${badge('muted', 'Backend')}</div>
+      <p class="muted">The admin API has no read action for leave records, so current, upcoming and past leaves can't be listed.
+        Nothing is estimated here. The rules below still apply, and each agent's cleanup position (Agents) already accounts for leave.</p></div>`
+    return
+  }
+  if (!Array.isArray(ov.leaves)) {
+    box.innerHTML = `<div class="adm-card"><div class="adm-empty">${ov.leavesError ? esc(ov.leavesError) : '<span class="adm-spin"></span>Loading…'}</div></div>`
+    return
+  }
+  const counts = leaveCounts(ov.leaves)
+  setCount('leaves', counts.active)
+  $('moreLeavesSub').textContent = `${counts.active} on leave now`
+  const rows = leaveRows(ov.leaves, { query: $('leaveFilter')?.value || '', filter: leaveFilterKey, sort: leaveSortKey })
+  const chips = [['all', 'All', counts.all], ['active', 'On leave', counts.active], ['upcoming', 'Upcoming', counts.upcoming], ['past', 'Past', counts.past]]
+  const sorts = [['start_desc', 'Newest'], ['end_asc', 'Ending soonest'], ['duration', 'Longest'], ['agent', 'Agent']]
+  const q = $('leaveFilter')?.value || ''
+  box.innerHTML = `
+    <div class="adm-toolbar"><input class="ob-input is-grow" id="leaveFilter" type="search" placeholder="Search agent number or codename" autocomplete="off" value="${esc(q)}"></div>
+    <div class="adm-chips">${chips.map(([k, l, n]) => `<button type="button" class="adm-chip${leaveFilterKey === k ? ' is-active' : ''}" data-lfilter="${k}" aria-pressed="${leaveFilterKey === k}">${l} ${n}</button>`).join('')}</div>
+    <div class="adm-chips"><span class="adm-chip-label">Sort</span>${sorts.map(([k, l]) => `<button type="button" class="adm-chip${leaveSortKey === k ? ' is-active' : ''}" data-lsort="${k}" aria-pressed="${leaveSortKey === k}">${l}</button>`).join('')}</div>
+    <div class="adm-table-wrap has-rows" style="margin-bottom:14px;">
+      ${rows.length ? `<table class="adm-table">
+        <colgroup><col style="width:24%"><col style="width:14%"><col style="width:16%"><col style="width:16%"><col style="width:10%"><col style="width:20%"></colgroup>
+        <thead><tr><th>Agent</th><th>Status</th><th>Start</th><th>End</th><th>Duration</th><th>District</th></tr></thead>
+        <tbody>${rows.map((l) => `<tr tabindex="0" data-leave-agent="${esc(l.agentNo)}">
+          <td><span class="adm-who"><b>${esc(l.codename || l.agentNo)}</b><span>${esc(l.agentNo)}</span></span></td>
+          <td>${badge(leaveTone(l.status), LEAVE_STATUS_LABELS[l.status])}</td>
+          <td>${esc(fmtDay(l.startsAt))}</td>
+          <td>${esc(fmtDay(l.endedAt || l.endsAt))}${l.endedAt ? `<span class="adm-sub">planned ${esc(fmtDay(l.endsAt))}</span>` : ''}</td>
+          <td>${l.days} d</td>
+          <td>${l.districtId ? `Paused${l.districtHoursGranted ? `<span class="adm-sub">+${Math.round(l.districtHoursGranted / 24)} d deadline</span>` : ''}` : '<span class="adm-sub">No active district</span>'}</td>
+        </tr>`).join('')}</tbody></table>
+      <div class="adm-rows">${rows.map((l) => `<button class="adm-li" type="button" data-leave-agent="${esc(l.agentNo)}">
+        <span class="adm-li-top"><span class="adm-who"><b>${esc(l.codename || l.agentNo)}</b><span>${esc(l.agentNo)}</span></span>${badge(leaveTone(l.status), LEAVE_STATUS_LABELS[l.status])}</span>
+        <span class="adm-li-kv"><span><b>${esc(fmtDay(l.startsAt))}</b> – <b>${esc(fmtDay(l.endedAt || l.endsAt))}</b></span><span>${l.days} d</span><span>${l.districtId ? 'District paused' : 'No active district'}</span></span>
+      </button>`).join('')}</div>` : `<div class="adm-empty" style="padding:14px;">No leaves match this view.</div>`}
+    </div>`
+  $('leaveFilter').oninput = () => { const pos = $('leaveFilter').selectionStart; paintLeaves(); $('leaveFilter').focus(); $('leaveFilter').setSelectionRange(pos, pos) }
+  for (const b of box.querySelectorAll('[data-lfilter]')) b.onclick = () => { leaveFilterKey = b.dataset.lfilter; paintLeaves() }
+  for (const b of box.querySelectorAll('[data-lsort]')) b.onclick = () => { leaveSortKey = b.dataset.lsort; paintLeaves() }
+  for (const el of box.querySelectorAll('[data-leave-agent]')) {
+    const open = () => openAgentFile(el.dataset.leaveAgent, { tab: 'cleanup' })
+    el.onclick = open
+    if (el.tagName === 'TR') el.onkeydown = (e) => { if (e.key === 'Enter') open() }
+  }
+}
+$('btnLoadLeaves').onclick = () => { ov.leaves = null; paintLeaves(); loadLeavesData() }
+viewEnter.leaves = () => { if (ov.leaves == null) loadLeavesData(); else paintLeaves() }
+
+/* ── Keyboard: Esc closes the top-most layer ── */
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape') return
+  if ($('admConfirm').open || $('reconnectMatchDialog').open) return
+  if (!$('rosterDrawer').hidden) closeRosterDrawer()
+  else if (!$('questDrawer').hidden) closeQuestDrawer()
+  else if (!$('admMore').hidden) closeMore()
+})
 
 tryStoredKey()
 </script>

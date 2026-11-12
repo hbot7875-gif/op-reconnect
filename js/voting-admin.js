@@ -211,7 +211,36 @@ export function chatCardHtml(item) {
   </article>`
 }
 
-export function mountVotingReview(panel, call) {
+/** What each decision says before it is sent. Verify, reject, approve and
+ *  remove change a player's record or what others see, so each asks first;
+ *  Save checks, Restore and Lift timeout do not. */
+export function votingConfirmText(kind, act, minutes) {
+  if (kind === 'proof') {
+    if (act === 'verify') return { title: 'Verify this proof?', body: 'The vote is credited to the agent.', confirmLabel: 'Verify' }
+    if (act === 'reject') return { title: 'Reject this proof?', body: 'The vote is not credited. The agent sees it as rejected.', confirmLabel: 'Reject', danger: true }
+    return null
+  }
+  if (kind === 'xrepl') {
+    if (act === 'approve') return { title: 'Approve this X account replacement?', body: 'The old account is retired and the new one is linked in its slot.', confirmLabel: 'Approve' }
+    if (act === 'reject') return { title: 'Reject this X account replacement?', body: 'The request is closed and nothing is linked.', confirmLabel: 'Reject', danger: true }
+    return null
+  }
+  if (kind === 'chat') {
+    if (act === 'remove') return { title: 'Remove this message?', body: 'It is hidden from everyone and its reports are cleared.', confirmLabel: 'Remove', danger: true }
+    if (act === 'timeout' && String(minutes) !== '0') {
+      const span = String(minutes) === 'event' ? 'the rest of the event' : Number(minutes) >= 1440 ? '24 hours' : '1 hour'
+      return { title: 'Time out this agent?', body: `They can't post in Chat for ${span}.`, confirmLabel: 'Time out', danger: true }
+    }
+    return null
+  }
+  return null
+}
+
+const browserConfirm = async (spec) => window.confirm(`${spec.title}
+
+${spec.body}`)
+
+export function mountVotingReview(panel, call, { confirm = browserConfirm } = {}) {
   let status = 'verifying'
   let reason = null
   let xrStatus = 'pending'
@@ -288,6 +317,8 @@ export function mountVotingReview(panel, call) {
   }
 
   async function decideReplacement(card, decision) {
+    const ask = votingConfirmText('xrepl', decision)
+    if (ask && !(await confirm(ask))) return
     const out = card.querySelector('.vta-out')
     for (const b of card.querySelectorAll('button')) b.disabled = true
     const res = await call('adminDecideXReplacement', { requestId: Number(card.dataset.vtaXrId), decision, note: card.querySelector('.vta-note')?.value || '' })
@@ -299,6 +330,8 @@ export function mountVotingReview(panel, call) {
   }
 
   async function moderate(card, btn) {
+    const ask = votingConfirmText('chat', btn.dataset.vtaChat, btn.dataset.vtaMin)
+    if (ask && !(await confirm(ask))) return
     const out = card.querySelector('.vta-out')
     for (const b of card.querySelectorAll('button')) b.disabled = true
     const res = await call('adminModerateBattleChat', { messageId: Number(card.dataset.vtaChatId), action: btn.dataset.vtaChat, minutes: btn.dataset.vtaMin })
@@ -317,6 +350,8 @@ export function mountVotingReview(panel, call) {
   }
 
   async function decide(card, decision) {
+    const ask = votingConfirmText('proof', decision)
+    if (ask && !(await confirm(ask))) return
     const out = card.querySelector('.vta-out')
     for (const b of card.querySelectorAll('button')) b.disabled = true
     const res = await call('adminReviewCampaignProof', {
