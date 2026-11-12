@@ -72,6 +72,8 @@ export function renderAuth(container, onAuthed, opts = {}) {
       : 'Make a free agent file to start streaming with ARMY.'),
   )
   wrap.appendChild(head)
+  const lede = head.querySelector('.auth-lede')
+  const newLede = lede.textContent
 
   // The landing page's "I already have an agent file" link sends
   // ?mode=signin so it actually lands somewhere different from "Create your
@@ -114,6 +116,8 @@ export function renderAuth(container, onAuthed, opts = {}) {
     tabOld.tabIndex = isNew ? -1 : 0
     panelNew.hidden = !isNew
     panelOld.hidden = isNew
+    // Signing back in gets its own line; the voting pitch stays as it is.
+    if (!voting) lede.textContent = isNew ? newLede : 'Welcome back. Access your agent file.'
     if (focus) (isNew ? tabNew : tabOld).focus()
   }
   selectTab(wantsSignIn || opts.notice ? 'old' : 'new')
@@ -167,10 +171,10 @@ function buildRegister(onAuthed) {
 
   const handleField = field('Instagram username', '', handle)
   const xField = field('X (Twitter) username', '', xHandle)
-  const emailField = field('Email', 'Only ever used to get you back in if you lose your number or password.', email)
+  const emailField = field('Email', 'Only used to recover your account.', email)
   // One password field: the eye toggle shows what was typed, which does the
   // job a second "type it again" field did, with one less thing to fill in.
-  const pwField = field('Password', 'At least 6 characters — a couple of words works well.', pwWrap, pw)
+  const pwField = field('Password', 'At least 6 characters.', pwWrap, pw)
 
   // Instagram and X read as one question ("at least one of these"), so they
   // sit together in one group with the rule said once, underneath both.
@@ -178,7 +182,7 @@ function buildRegister(onAuthed) {
   social.setAttribute('role', 'group')
   social.setAttribute('aria-label', 'Instagram or X username')
   social.append(handleField, xField,
-    el('div', 'auth-hint', 'Add at least one: Instagram, X, or both. Your teammates see them in fan battles, so keep your DMs open. Everyone else sees your codename.'))
+    el('div', 'auth-hint', 'Add Instagram or X (at least one). Your teammates can see your username to connect with you during team missions.'))
 
   panel.append(social, emailField, pwField)
 
@@ -289,7 +293,7 @@ function buildLogin(onAuthed) {
 
   const { wrap: pwWrap, input: pw } = pwToggleInput('Password', 'current-password')
 
-  const noField = field('Agent number', 'The one HT gave you when you signed up.', no)
+  const noField = field('Agent number', 'Shown when you created your file.', no)
   const pwField = field('Password', '', pwWrap, pw)
   panel.append(noField, pwField)
 

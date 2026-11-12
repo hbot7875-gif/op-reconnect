@@ -15,10 +15,18 @@ test('header is the heading and one subtitle; the numbered step boxes are gone',
   assert.doesNotMatch(css, /\.auth-step\b/)
 })
 
+test('the sign-in tab says welcome back; voting links keep their own line', () => {
+  assert.match(auth, /if \(!voting\) lede\.textContent = isNew \? newLede : 'Welcome back\. Access your agent file\.'/)
+})
+
+test('player-facing copy says ARMY, not fan, for BTS supporters', () => {
+  assert.doesNotMatch(auth + read('./screen-settings.js'), /fan battles/)
+})
+
 test('Instagram and X sit in one group with the at-least-one rule said once', () => {
   assert.match(auth, /const social = el\('div', 'auth-group'\)/)
   assert.match(auth, /social\.append\(handleField, xField,/)
-  assert.equal((auth.match(/Add at least one: Instagram, X, or both/g) || []).length, 1)
+  assert.equal((auth.match(/Add Instagram or X \(at least one\)\. Your teammates can see your username to connect with you during team missions\./g) || []).length, 1)
   assert.match(auth, /pickAccountHandle\(\{ handle: handle\.value, xHandle: xHandle\.value \}\)/)
 })
 

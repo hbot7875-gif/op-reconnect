@@ -147,7 +147,7 @@ function paintSections(body, state) {
     },
     {
       icon: 'xLogo', name: 'X (Twitter)', value: account.xHandle ? `@${account.xHandle}` : 'Not set',
-      body: 'Your team sees it in fan battles. Keep DMs open.',
+      body: 'Your team sees it in ARMY battles. Keep DMs open.',
       onClick: () => showOverlay(xHandleSheet(account, refresh)),
     },
     {
@@ -560,7 +560,7 @@ function xHandleSheet(acct, onSaved) {
   sheet.append(
     el('div', 'eyebrow', 'X (TWITTER)'),
     el('h3', '', acct.xHandle ? 'Change your X username' : 'Add your X username'),
-    el('p', 'muted', 'Your own team sees it during fan battles, so keep your DMs open. Leave it blank to remove it.'),
+    el('p', 'muted', 'Your own team sees it during ARMY battles, so keep your DMs open. Leave it blank to remove it.'),
   )
   const input = el('input', 'ob-input')
   input.placeholder = 'Your X username'
