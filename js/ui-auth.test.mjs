@@ -9,7 +9,9 @@ const auth = read('./ui-auth.js')
 const css = read('../css/reconnect.css')
 
 test('header is the heading and one subtitle; the numbered step boxes are gone', () => {
-  assert.match(auth, /'The network needs agents\.'/)
+  assert.match(auth, /el\('div', 'eyebrow auth-brand', 'HopeTrackers'\),\s*el\('h1', 'title-sm', 'OP: ReConnect'\),\s*el\('p', 'auth-tagline', 'The network needs agents\.'\),\s*el\('p', 'muted auth-lede', 'Stream together\. Restore districts\.'\)/)
+  assert.match(css, /\.auth-head \{[^}]*text-align: center/)
+  assert.match(css, /\.auth-head \.auth-brand \{[^}]*text-transform: none/)
   assert.match(auth, /el\('p', 'muted auth-lede'/)
   assert.doesNotMatch(auth, /authSteps|auth-step/)
   assert.doesNotMatch(css, /\.auth-step\b/)

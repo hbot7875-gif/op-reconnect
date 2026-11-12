@@ -64,13 +64,22 @@ export function renderAuth(container, onAuthed, opts = {}) {
   // walks through streaming and the ARMY Bomb once the account exists, and on
   // a phone they pushed the form itself below the fold.
   const head = el('header', 'auth-head')
-  head.append(
-    el('div', 'eyebrow', voting ? 'MAMA 2026 · Vote for BTS' : 'OP: ReConnect'),
-    el('h1', 'title-sm', voting ? 'Make your account to start voting' : 'The network needs agents.'),
-    el('p', 'muted auth-lede', voting
-      ? 'Free, takes a minute. Then pick your side, vote on Mnet and upload your certificate here.'
-      : 'Make a free agent file to start streaming with ARMY.'),
-  )
+  if (voting) {
+    head.append(
+      el('div', 'eyebrow', 'MAMA 2026 · Vote for BTS'),
+      el('h1', 'title-sm', 'Make your account to start voting'),
+      el('p', 'muted auth-lede', 'Free, takes a minute. Then pick your side, vote on Mnet and upload your certificate here.'),
+    )
+  } else {
+    // Brand, game, tagline, subtitle — centred, in that order. The brand is
+    // written exactly "HopeTrackers", so its label isn't uppercased.
+    head.append(
+      el('div', 'eyebrow auth-brand', 'HopeTrackers'),
+      el('h1', 'title-sm', 'OP: ReConnect'),
+      el('p', 'auth-tagline', 'The network needs agents.'),
+      el('p', 'muted auth-lede', 'Stream together. Restore districts.'),
+    )
+  }
   wrap.appendChild(head)
   const lede = head.querySelector('.auth-lede')
   const newLede = lede.textContent
