@@ -10,14 +10,14 @@ import { albumForState } from './album.ts'
 import { runAmiTesterForState } from './run-ami.ts'
 import { warQuestPassForState } from './war-quest-pass.ts'
 import { warUnlockForState } from './war-of-cards.ts'
-import { freezeGoals, computeBaseline, districtProgress, districtDeadline, districtDeadlineExtraDays, filesRevealedCount, albumGoalStreamTotal, lapseChoiceOpen, LAPSE_CHOICE_DAYS } from './districts.ts'
+import { freezeGoals, computeBaseline, districtProgress, districtDeadline, districtDeadlineExtraDays, filesRevealedCount, albumGoalStreamTotal, lapseChoiceOpen, LAPSE_CHOICE_DAYS, DEADLINE_EXTENSION_DAYS } from './districts.ts'
 import { recordDistrictLapse } from './district-lapse-store.ts'
 import { latestLapsesByDistrict } from './district-lapse.js'
 import { resolveReconnectStatus } from './reconnect-goal.ts'
 import { todayKst, nextKstMidnightUtc, kstDateOf } from './kst.ts'
 import { getBombView, launchDefuse } from './bomb.ts'
 import { getEraTimeline } from './era-timeline.ts'
-import { getMyInvites, getMyRecruitMissions, countWaitingAgents, getReconnectMatchAlerts, getTeamBoostOverlay } from './reconnect-missions.ts'
+import { getMyInvites, getMyRecruitMissions, countWaitingAgents, getReconnectMatchAlerts, getTeamBoostOverlay, extendQuestsWithAttempt } from './reconnect-missions.ts'
 import { creditChargeCells, resolveWalletCells, STREAMS_PER_CHARGE_CELL } from './charge-economy.ts'
 import { getAgentChargeView } from './agent-charge.ts'
 import { levelFor, applyLevelUpIfNeeded, nextLevelRewards } from './leveling.ts'
@@ -946,7 +946,15 @@ export async function extendDistrictDeadline(supabase: SupabaseDB, params: any) 
     restorationDays(content),
     districtDeadlineExtraDays({ ...activePd, deadline_extended: true, deadline_extension_hours: supportHours + lateHours }),
   )
-  return { success: true, expiresAt: newDeadline.expiresAt, daysLeft: Math.ceil(newDeadline.msLeft / 86400000), chargesRemaining: charges - 1 }
+  // The attempt's ReConnect quest keeps its own 7-day clock; give it the same
+  // extra time (3 days, plus any hours the attempt sat lapsed), capped at the
+  // new district deadline. Best effort: the extension itself already landed.
+  let questsExtended: { missionId: string; expiresAt: string }[] = []
+  try {
+    questsExtended = await extendQuestsWithAttempt(supabase, agentNo, districtId,
+      (DEADLINE_EXTENSION_DAYS * 24 + lateHours) * 3600000, newDeadline.expiresAt)
+  } catch (_) { /* the district extension stands either way */ }
+  return { success: true, expiresAt: newDeadline.expiresAt, daysLeft: Math.ceil(newDeadline.msLeft / 86400000), chargesRemaining: charges - 1, questsExtended }
 }
 
 /** The other answer to a lapsed attempt's "extend or reset" prompt: drop it

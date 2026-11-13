@@ -57,6 +57,7 @@ import { seatRule, countSeats, hasSeatFor, overSeats, seatError, composeTeams } 
 import type { SeatCounts } from './reconnect-seats.ts'
 import { hasWarStage, warStageStep, warStageView } from './reconnect-war-stage.js'
 import { warPlayedAgents } from './war-quest-pass.ts'
+import { extendedQuestExpiry } from './quest-extension.js'
 
 /** Wrong-guess budget for a mission's cipher phase (see submitReconnect
  *  MissionCipherAnswer) — one shared pool per cipher, not per agent, so the
@@ -2795,4 +2796,31 @@ export async function adminPairReconnect(supabase: SupabaseDB, params: any) {
   const result = !error && Array.isArray(data) ? data[0] : null
   if (error || !result?.success) return { success: false, error: result?.error || error?.message || 'pair_failed' }
   return { success: true, missionId: result.mission_id, agentsAssigned: agentNos.length }
+}
+
+/** An Extension Charge buys the attempt more time; give the agent's open
+ *  ReConnect quest(s) on that district the same extra time, capped at the
+ *  attempt's new deadline (quest-extension.js). Only quests the agent has
+ *  joined, only still-open ones, and the update is guarded by the old expiry
+ *  so a concurrent change is never overwritten. Returns the new expiries. */
+export async function extendQuestsWithAttempt(
+  supabase: SupabaseDB, agentNo: string, districtId: string, extraMs: number, attemptDeadline: string,
+): Promise<{ missionId: string; expiresAt: string }[]> {
+  const { data: rows } = await supabase.from('rc_reconnect_participants')
+    .select('mission_id').eq('agent_no', agentNo).eq('status', 'joined')
+  const ids = (rows || []).map((r: any) => r.mission_id)
+  if (!ids.length) return []
+  const { data: missions } = await supabase.from('rc_reconnect_missions')
+    .select('id, expires_at').in('id', ids).eq('district_id', districtId).eq('status', 'open')
+  const out: { missionId: string; expiresAt: string }[] = []
+  for (const m of missions || []) {
+    const next = extendedQuestExpiry(m.expires_at, extraMs, attemptDeadline)
+    if (!next) continue
+    const { data: moved } = await supabase.from('rc_reconnect_missions')
+      .update({ expires_at: next })
+      .eq('id', m.id).eq('status', 'open').eq('expires_at', m.expires_at)
+      .select('id').maybeSingle()
+    if (moved) out.push({ missionId: m.id, expiresAt: next })
+  }
+  return out
 }
