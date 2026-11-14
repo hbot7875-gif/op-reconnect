@@ -42,7 +42,7 @@ import { openHelpingZone } from './helping-zone.js'
 import { openRunArmy, runArmyIsNew } from './run-army.js'
 import { announceNewCover } from './album.js'
 import { albumEra } from '../supabase/functions/op-reconnect/lib/album-rules.js'
-import { vmaEventCard, openVmaMission } from './vma.js'
+import { openVmaMission } from './vma.js'
 import { votingEventCard } from './voting-view.js'
 import { startCityClock } from './voting-city-clock.js'
 import { redZoneSheet, defuseResultSheet, defenderCommsSheet, getCommsSeen } from './bomb-sheet.js'
@@ -74,7 +74,10 @@ export function renderWorld(container, state) {
   // Bomb itself (coreBlock, below) that turns compromised/crimson and shows
   // progress. See maybeShowDefuseResult for the one-shot success/failure
   // acknowledgement, which also used to be this card's job.
-  if (state.vma) wrap.appendChild(vmaEventCard(state))
+  // The VMA claim-chest banner no longer sits on top of the City (voting
+  // ended in September; it only showed for unclaimed chests). Its way in is
+  // unchanged: state.vma still puts the VMA marker on the city map
+  // (cityPlan below), which opens the same mission sheet.
   // Voting (MAMA 2026 first): one compact entry card with a live countdown
   // (voting-city-clock.js updates it in place each second). The page itself
   // is its own screen, not a sheet over the City.
@@ -963,8 +966,9 @@ export function coreBlock(state, shareOnly = false) {
   if (charge.feedHealth) {
     const stage = el('div', 'core-stage')
     stage.appendChild(btn)
-    const health = bombHealthStatus(charge.feedHealth)
-    const lastFed = lastFedLabel(charge.feedHealth)
+    // neverFed: no charge yet, so lastFedAt is just the join time.
+    const health = bombHealthStatus(charge.feedHealth, { neverCharged: neverFed })
+    const lastFed = neverFed ? null : lastFedLabel(charge.feedHealth)
     if (health) {
       const healthBtn = el('button', `core-health is-${health.tone}`, `
         <span class="core-health-kicker">Bora meter</span>
@@ -972,8 +976,8 @@ export function coreBlock(state, shareOnly = false) {
         <i>${health.detail}</i>
         ${lastFed ? `<i class="core-health-fed">${lastFed}</i>` : ''}
       `)
-      healthBtn.setAttribute('aria-label', `Bora meter ${health.label}. ${charge.feedHealth.daysLeft} days left before the 14-day feed limit.${lastFed ? ` ${lastFed.toLowerCase()}.` : ''} Tap to feed it.`)
-      healthBtn.onclick = () => showOverlay(boraMeterSheet(charge.feedHealth))
+      healthBtn.setAttribute('aria-label', `Bora meter ${health.label}. ${charge.feedHealth.daysLeft} days left before the 14-day ${neverFed ? 'first-charge' : 'feed'} limit.${lastFed ? ` ${lastFed.toLowerCase()}.` : ''} Tap to feed it.`)
+      healthBtn.onclick = () => showOverlay(boraMeterSheet(charge.feedHealth, { neverCharged: neverFed }))
       stage.appendChild(healthBtn)
     }
     zone.appendChild(stage)
