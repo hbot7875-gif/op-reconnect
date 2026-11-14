@@ -719,7 +719,7 @@ body {
 /* Sea, shoreline, land. The city reads as an island in open water rather than
    a rectangle of blocks bleeding off the edges. */
 .cm-sea { fill: #05040c; }
-.cm-shore { fill: #0a0817; stroke: rgba(139,92,246,0.16); stroke-width: 0.4; }
+.cm-shore { fill: #0a0817; stroke: rgba(139,92,246,0.26); stroke-width: 0.4; }
 .cm-land { fill: #0d0b16; }
 
 /* ── the core: Home Base with the ARMY Bomb in it ────────────────────
@@ -924,10 +924,10 @@ body {
 .cm-conduit.restored { stroke: rgba(217,173,95,0.6); stroke-width: 0.45; }
 .cm-conduit.available { stroke: rgba(255,255,255,0.16); }
 @keyframes cmChargeFlow { to { stroke-dashoffset: -7; } }
-.cm-zone { fill: rgba(255,255,255,0.022); }
+.cm-zone { fill: rgba(255,255,255,0.035); }
 /* Ward borders are roads between districts, not card frames. Heavy outlines
    were most of why the plan kept reading as a grid of menu tiles. */
-.cm-edge { fill: none; stroke: rgba(255,255,255,0.055); stroke-width: 0.22; }
+.cm-edge { fill: none; stroke: rgba(255,255,255,0.11); stroke-width: 0.22; }
 .cm-river { fill: #0a0917; stroke: rgba(139,92,246,0.22); stroke-width: 0.25; }
 .cm-bridge { fill: rgba(255,255,255,0.10); }
 
@@ -935,7 +935,7 @@ body {
    dark ward still reads as a real place rather than empty ground. */
 /* Streets. Barely there while a ward is dark; they pick up their lamps as it
    comes back, which is the "roads become visible" beat of restoration. */
-.cm-street { stroke: rgba(255,255,255,0.045); stroke-width: 0.18; transition: stroke 0.6s; }
+.cm-street { stroke: rgba(255,255,255,0.08); stroke-width: 0.18; transition: stroke 0.6s; }
 .cm-ward.active .cm-street { stroke: rgba(167,139,250,0.20); }
 .cm-ward.restored .cm-street { stroke: rgba(217,173,95,0.30); }
 
@@ -948,7 +948,7 @@ body {
 .cm-body.lit { fill: rgba(90,66,20,0.55); }
 .cm-body.now { fill: rgba(66,48,120,0.6); }
 
-.cm-block { fill: rgba(255,255,255,0.075); transition: fill 0.5s; }
+.cm-block { fill: rgba(255,255,255,0.10); transition: fill 0.5s; }
 .cm-block.lit { fill: var(--gold); }
 
 /* The bloom pass — a blurred copy of only the lit roofs, under the crisp ones,
@@ -970,10 +970,10 @@ body {
 .cm-ward.restored .cm-lm-o { stroke: rgba(217,173,95,0.55); }
 .cm-ward.restored .cm-lm-spoke { stroke: rgba(217,173,95,0.45); }
 .cm-ward.restored .cm-lm-l { fill: var(--gold); }
-.cm-ward.locked .cm-lm-s { fill: rgba(255,255,255,0.07); }
-.cm-ward.locked .cm-lm-o { stroke: rgba(255,255,255,0.09); }
-.cm-ward.locked .cm-lm-spoke { stroke: rgba(255,255,255,0.07); }
-.cm-ward.locked .cm-lm-l { fill: rgba(255,255,255,0.10); }
+.cm-ward.locked .cm-lm-s { fill: rgba(255,255,255,0.13); }
+.cm-ward.locked .cm-lm-o { stroke: rgba(255,255,255,0.17); }
+.cm-ward.locked .cm-lm-spoke { stroke: rgba(255,255,255,0.13); }
+.cm-ward.locked .cm-lm-l { fill: rgba(255,255,255,0.18); }
 /* The district you're actually working on right now — one block breathing in
    the middle of the plan, so "where am I" is answerable at a glance. */
 .cm-block.now { fill: var(--purple-lt); animation: cmNow 2.4s ease-in-out infinite; }
@@ -983,8 +983,8 @@ body {
 .cm-ward.restored .cm-edge { stroke: rgba(217,173,95,0.28); }
 .cm-ward.active .cm-block.lit { fill: var(--purple-lt); }
 .cm-ward.active .cm-edge { stroke: rgba(139,92,246,0.38); stroke-width: 0.3; }
-.cm-ward.locked .cm-block { fill: rgba(255,255,255,0.025); }
-.cm-ward.locked .cm-zone { fill: rgba(0,0,0,0.25); }
+.cm-ward.locked .cm-block { fill: rgba(255,255,255,0.055); }
+.cm-ward.locked .cm-zone { fill: rgba(0,0,0,0.18); }
 .cm-ward:hover:not(.locked) .cm-zone { fill: rgba(255,255,255,0.05); }
 
 /* The one ward with nothing restoring yet but nothing stopping you either —
@@ -1003,12 +1003,12 @@ body {
 .cm-name { fill: var(--text); font-family: var(--disp); font-weight: 700; font-size: 2.6px;
   text-anchor: middle;
   paint-order: stroke; stroke: rgba(6,5,13,0.9); stroke-width: 1.2px; }
-.cm-count { fill: var(--muted); font-family: var(--mono); font-size: 2px;
+.cm-count { fill: #aba5be; font-family: var(--mono); font-size: 2px;
   text-anchor: middle;
   paint-order: stroke; stroke: rgba(6,5,13,0.9); stroke-width: 1.1px; }
 .cm-label.restored .cm-count { fill: var(--gold); }
 .cm-label.active .cm-count { fill: var(--purple-lt); }
-.cm-label.locked .cm-name { fill: var(--muted); }
+.cm-label.locked .cm-name { fill: #bdb7cc; }
 
 body.red-zone .cm-ward.active .cm-block.lit { fill: var(--crimson); }
 
@@ -1190,14 +1190,14 @@ body.red-zone .wtb.now { fill: var(--crimson); filter: drop-shadow(0 0 3px rgba(
   background: rgba(8,6,16,.78); color: var(--muted); text-align: left; cursor: pointer;
   backdrop-filter: blur(8px); }
 .core-health:hover { border-color: rgba(167,139,250,.48); background: rgba(17,12,31,.88); }
-.core-health-kicker { color: var(--dim); font-family: var(--mono); font-size: 6.5px;
+.core-health-kicker { color: #aaa4be; font-family: var(--mono); font-size: 6.5px;
   line-height: 1; letter-spacing: .8px; text-transform: uppercase; white-space: nowrap; }
-.core-health strong { display: flex; align-items: center; gap: 4px; color: var(--purple-lt);
+.core-health strong { display: flex; align-items: center; gap: 4px; color: #cdbdff;
   font-family: var(--mono); font-size: 8px; line-height: 1.25; letter-spacing: .25px; white-space: nowrap; }
-.core-health strong b { color: var(--purple); font-size: 9px; }
-.core-health i { color: var(--dim); font-family: var(--mono); font-size: 7px;
+.core-health strong b { color: #b59dff; font-size: 9px; }
+.core-health i { color: #aaa4be; font-family: var(--mono); font-size: 7px;
   font-style: normal; letter-spacing: .5px; }
-.core-health-fed { opacity: .78; }
+.core-health-fed { opacity: .9; }
 .core-health.is-steady { border-color: rgba(217,173,95,.20); }
 .core-health.is-steady strong, .core-health.is-steady strong b { color: var(--gold); }
 .core-health.is-hungry { border-color: rgba(217,173,95,.38); }
@@ -1307,6 +1307,9 @@ body.red-zone .wtb.now { fill: var(--crimson); filter: drop-shadow(0 0 3px rgba(
 .rc-bomb { position: absolute; top: 14px; left: 50%; margin-left: -28px; width: 56px;
   display: flex; flex-direction: column; align-items: center;
   filter: drop-shadow(0 8px 20px rgba(0,0,0,0.6)); }
+/* On the City only: a soft purple halo so the Bomb doesn't sink into the
+   black scene, even when it's empty. */
+.command-core .army-core:not(.is-attack) .rc-bomb { filter: drop-shadow(0 8px 20px rgba(0,0,0,0.6)) drop-shadow(0 0 14px rgba(139,92,246,0.42)); }
 .army-core.is-attack .rc-bomb { animation: rcTick 1s linear infinite; }
 @keyframes rcTick { 0%, 90% { transform: scale(1); } 94% { transform: scale(1.018); } 100% { transform: scale(1); } }
 /* the armed LED: the handle button blinks once a second during a breach */
