@@ -21,6 +21,9 @@ export function lobbySeats(participants = [], requiredAgents = 0, seats = null) 
     isMe: !!p.isMe,
     agentNo: p.agentNo || null,
     removable: !!p.removable,
+    // What this teammate has counted toward the quest since joining, as the
+    // server computed it (shape()'s `streams`); null when not counted.
+    count: p.status === 'joined' && typeof p.streams === 'number' ? p.streams : null,
     ...(mixed ? { helper: !!p.helper } : {}),
   }))
   const empties = Math.max(0, requiredAgents - out.length)
@@ -54,12 +57,23 @@ export function seatNeedsPhrase(needs, localName, helperFrom) {
 
 const SEAT_STATE = { ready: 'Ready', quiet: 'Quiet', invited: 'Invited', empty: '' }
 
+/** One teammate's count line: "14 streams", "1 stream", or "3/5 tracks" on a
+ *  checklist quest. Empty when the quest counts nothing (invite quests) or the
+ *  seat has no count. */
+export function seatCountLabel(count, { unit = null, of = null } = {}) {
+  if (!unit || typeof count !== 'number' || !Number.isFinite(count)) return ''
+  if (unit === 'tracks') return `${Math.min(count, of ?? count)}/${of ?? count} tracks`
+  return `${count.toLocaleString('en-US')} stream${count === 1 ? '' : 's'}`
+}
+
 /** The seats as buttons/tiles. `canInvite` turns empty seats into an Invite
  *  button; `canCancel` shows a cancel control on pending invites the viewer
  *  may withdraw. On a mixed-district team (`localName`/`helperFrom` given and
- *  seats carrying `helper`) each seat names where it comes from. Agent
- *  numbers ride along as data attributes only. */
-export function lobbySeatsHtml(seats, { canInvite = false, canCancel = false, localName = '', helperFrom = '' } = {}) {
+ *  seats carrying `helper`) each seat names where it comes from. `countUnit`
+ *  ('streams' or 'tracks', with `countOf` for tracks) adds each joined
+ *  teammate's count under their state. Agent numbers ride along as data
+ *  attributes only. */
+export function lobbySeatsHtml(seats, { canInvite = false, canCancel = false, localName = '', helperFrom = '', countUnit = null, countOf = null } = {}) {
   const from = (s) => (typeof s.helper === 'boolean' && localName && helperFrom
     ? `<em class="rl-from${s.helper ? ' is-helper' : ''}">${escHtml(s.helper ? helperFrom : localName)}</em>` : '')
   return seats.map((s, i) => {
@@ -72,7 +86,9 @@ export function lobbySeatsHtml(seats, { canInvite = false, canCancel = false, lo
     const cancel = canCancel && s.kind === 'invited' && s.removable && s.agentNo
       ? `<button class="rl-cancel" type="button" data-seat-cancel="${escHtml(s.agentNo)}" aria-label="Cancel invite to ${escHtml(s.name)}">×</button>`
       : ''
-    return `<div class="rl-seat is-${s.kind}${s.isMe ? ' is-me' : ''}"><span class="rl-avatar" aria-hidden="true">${initial}</span><b>${escHtml(s.name)}</b><small>${SEAT_STATE[s.kind]}</small>${from(s)}${cancel}</div>`
+    const countText = seatCountLabel(s.count, { unit: countUnit, of: countOf })
+    const count = countText ? `<span class="rl-count">${escHtml(countText)}</span>` : ''
+    return `<div class="rl-seat is-${s.kind}${s.isMe ? ' is-me' : ''}"><span class="rl-avatar" aria-hidden="true">${initial}</span><b>${escHtml(s.name)}</b><small>${SEAT_STATE[s.kind]}</small>${count}${from(s)}${cancel}</div>`
   }).join('')
 }
 

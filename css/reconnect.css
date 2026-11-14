@@ -4884,6 +4884,7 @@ body.red-zone #hud { background: rgba(12, 6, 10, 0.9); border-bottom-color: rgba
   color: var(--text); font: inherit; }
 .rl-seat b { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .rl-seat small { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+.rl-seat .rl-count { font-size: 11.5px; font-weight: 600; color: var(--text); white-space: nowrap; }
 .rl-avatar { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--purple);
   color: #fff; font-family: var(--disp); font-size: 17px; }
 .rl-seat.is-me { border-color: rgba(139,92,246,.45); }

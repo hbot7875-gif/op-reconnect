@@ -1327,7 +1327,9 @@ function paintMissionPanel(box, d, res) {
   const seatsHost = el('section', 'reconnect-seats')
   seatsHost.innerHTML = `<div class="rl-head"><span>${rcIcon('users')}Your team</span><b>${spotsLeftLabel(need, pending.length)}</b></div>
     <div class="rl-seats">${lobbySeatsHtml(lobbySeats(m.participants, m.requiredAgents, seatInfo), {
-      canInvite, canCancel: !!m.isCreator, localName, helperFrom: seatInfo?.helperFrom || '' })}</div>`
+      canInvite, canCancel: !!m.isCreator, localName, helperFrom: seatInfo?.helperFrom || '',
+      // Each teammate's own count since joining; invite quests count nothing.
+      countUnit: res.variant === 'invite' ? null : m.checklist ? 'tracks' : 'streams', countOf: m.checklist?.total ?? null })}</div>`
   for (const b of seatsHost.querySelectorAll('[data-seat-invite]')) {
     b.onclick = () => (openPicker ? openPicker() : primaryHost.querySelector('button')?.focus())
   }

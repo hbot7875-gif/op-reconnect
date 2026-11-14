@@ -164,3 +164,23 @@ test('every quest says the rules players need to finish it', async () => {
   assert.match(sd, /const preNotes = questRuleNotes\(res\.config\)/)
   assert.match(sd, /const ruleNotes = questRuleNotes\(res\.config\)/)
 })
+
+test('each joined teammate shows their own count; invites and open spots do not', async () => {
+  const { seatCountLabel } = await import('./reconnect-lobby.js')
+  const seats = lobbySeats([
+    { agentNo: 'A1', codename: 'Me', status: 'joined', isMe: true, streams: 14 },
+    { agentNo: 'A2', codename: 'Rey', status: 'joined', streams: 1 },
+    { agentNo: 'A3', codename: 'Kai', status: 'invited', streams: null },
+  ], 4)
+  assert.deepEqual(seats.map((s) => s.count ?? null), [14, 1, null, null])
+  const html = lobbySeatsHtml(seats, { countUnit: 'streams' })
+  assert.match(html, /<span class="rl-count">14 streams<\/span>/)
+  assert.match(html, /<span class="rl-count">1 stream<\/span>/)
+  assert.equal((html.match(/rl-count/g) || []).length, 2, 'only the two joined teammates')
+  // Checklist quests count tracks cleared, out of the list's length.
+  assert.equal(seatCountLabel(3, { unit: 'tracks', of: 5 }), '3/5 tracks')
+  assert.equal(seatCountLabel(9, { unit: 'tracks', of: 5 }), '5/5 tracks')
+  // Invite quests count nothing, so no line at all.
+  assert.doesNotMatch(lobbySeatsHtml(seats, { countUnit: null }), /rl-count/)
+  assert.equal(seatCountLabel(1250, { unit: 'streams' }), '1,250 streams')
+})
