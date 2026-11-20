@@ -22,6 +22,7 @@ export async function adminSetMamaLive(supabase: SupabaseDB, params: Record<stri
   const next = nextMamaLive(row?.value || null, {
     state: String(params.state || ''),
     startsAt: params.startsAt === undefined ? undefined : (params.startsAt as string | null),
+    voteUrl: params.voteUrl === undefined ? undefined : (params.voteUrl as string | null),
   })
   if ('error' in next) return { success: false, error: next.error }
   const { error } = await supabase.from('rc_config').upsert({ key: KEY, value: next.value }, { onConflict: 'key' })

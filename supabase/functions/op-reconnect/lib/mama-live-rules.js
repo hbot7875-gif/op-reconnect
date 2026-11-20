@@ -15,6 +15,18 @@ export const MAMA_LIVE_URL = 'https://www.mnetplus.world/event/en/2026-mama'
 export const MAMA_LIVE_STATES = Object.freeze(['upcoming', 'live', 'hidden'])
 const SEEN_PREFIX = 'rc_seen_mama_live_popup:'
 
+/** The direct vote link Mnet publishes once voting opens (an app link on
+ *  mnetplus.onelink.me, or a page on mnetplus.world). Only those hosts, only
+ *  https — anything else is ignored and the event page is used instead. */
+export function cleanVoteUrl(v) {
+  try {
+    const u = new URL(String(v || '').trim())
+    if (u.protocol !== 'https:') return null
+    if (!/^(mnetplus\.onelink\.me|(www\.)?mnetplus\.world)$/i.test(u.hostname)) return null
+    return u.toString()
+  } catch { return null }
+}
+
 const isoOrNull = (v) => {
   const t = Date.parse(v || '')
   return Number.isFinite(t) ? new Date(t).toISOString() : null
@@ -27,18 +39,25 @@ export function normalizeMamaLive(raw) {
     state,
     startsAt: isoOrNull(raw?.startsAt),
     liveSince: state === 'live' ? isoOrNull(raw?.liveSince) : null,
+    voteUrl: cleanVoteUrl(raw?.voteUrl),
   }
 }
 
+/** Where the Live buttons go: the direct vote link when set, else the event page. */
+export const liveVoteUrl = (m) => normalizeMamaLive(m).voteUrl || MAMA_LIVE_URL
+
 /** The value the admin action stores. Switching to live stamps liveSince
  *  once (so the popup is once per Live session); staying live keeps it. */
-export function nextMamaLive(current, { state, startsAt }, now = new Date()) {
+export function nextMamaLive(current, { state, startsAt, voteUrl }, now = new Date()) {
   if (!MAMA_LIVE_STATES.includes(state)) return { error: 'bad_state' }
   const prev = normalizeMamaLive(current)
   const start = startsAt === undefined ? prev.startsAt : isoOrNull(startsAt)
   if (startsAt !== undefined && startsAt !== null && startsAt !== '' && !start) return { error: 'bad_start' }
   const liveSince = state === 'live' ? (prev.state === 'live' && prev.liveSince ? prev.liveSince : now.toISOString()) : null
-  return { value: { state, startsAt: start, liveSince } }
+  // voteUrl: undefined keeps the stored link, '' or null clears it.
+  const link = voteUrl === undefined ? prev.voteUrl : cleanVoteUrl(voteUrl)
+  if (voteUrl !== undefined && voteUrl !== null && voteUrl !== '' && !link) return { error: 'bad_vote_url' }
+  return { value: { state, startsAt: start, liveSince, voteUrl: link } }
 }
 
 /** "8 KST" written as an instant: a KST wall-clock date + time → ISO.
@@ -97,7 +116,7 @@ export function mamaBannerCopy(mama, opts = {}) {
       startLine: null,
       reminder: 'Complete all required steps and check your vote confirmation.',
       button: 'Vote on Mnet Plus',
-      url: MAMA_LIVE_URL,
+      url: liveVoteUrl(m),
     }
   }
   if (m.state === 'upcoming') {
@@ -125,7 +144,7 @@ export function mamaCityCopy(mama, opts = {}) {
   if (!banner) return null
   if (banner.state === 'live') {
     // The card's own LIVE badge says it's live, so the title doesn't repeat it.
-    return { state: 'live', title: 'MAMA Live Voting 💜', line: "Vote for BTS · Fans' Choice of the Year (Daesang)", url: MAMA_LIVE_URL }
+    return { state: 'live', title: 'MAMA Live Voting 💜', line: "Vote for BTS · Fans' Choice of the Year (Daesang)", url: liveVoteUrl(mama) }
   }
   return { state: 'upcoming', title: banner.heading, line: banner.startLine || 'Live voting opens during the MAMA Awards broadcast.', url: MAMA_LIVE_URL }
 }

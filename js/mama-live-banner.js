@@ -5,7 +5,7 @@
 // Plain DOM and localStorage only — works in Instagram's in-app browser.
 
 import { call } from './api.js'
-import { mamaBannerCopy, mamaPopupDue, markMamaPopupSeen, MAMA_POPUP_COPY } from '../supabase/functions/op-reconnect/lib/mama-live-rules.js'
+import { mamaBannerCopy, mamaPopupDue, markMamaPopupSeen, MAMA_POPUP_COPY, liveVoteUrl } from '../supabase/functions/op-reconnect/lib/mama-live-rules.js'
 
 const REFRESH_MS = 60_000
 const host = document.getElementById('mamaLive')
@@ -53,7 +53,7 @@ function renderPopup(mama) {
       <button class="ml-pop-x" type="button" aria-label="Close">×</button>
       <p class="ml-head" id="mlPopHead">${esc(MAMA_POPUP_COPY.heading)}</p>
       <p class="ml-text">${esc(MAMA_POPUP_COPY.text)}</p>
-      <a class="btn btn-primary ml-btn" href="${esc(MAMA_POPUP_COPY.url)}" target="_blank" rel="noopener noreferrer">${esc(MAMA_POPUP_COPY.button)}</a>
+      <a class="btn btn-primary ml-btn" href="${esc(liveVoteUrl(mama))}" target="_blank" rel="noopener noreferrer">${esc(MAMA_POPUP_COPY.button)}</a>
     </div>`
   popup.querySelector('.ml-pop-x').addEventListener('click', () => closePopup(mama))
   // Going to vote counts as seen too.

@@ -24,7 +24,7 @@ test('6 PM KST is 09:00 UTC, every day of the year (no daylight saving)', () => 
 })
 
 test('anything unknown is hidden; liveSince only exists while live', () => {
-  assert.deepEqual(normalizeMamaLive(null), { state: 'hidden', startsAt: null, liveSince: null })
+  assert.deepEqual(normalizeMamaLive(null), { state: 'hidden', startsAt: null, liveSince: null, voteUrl: null })
   assert.equal(normalizeMamaLive({ state: 'LIVE' }).state, 'hidden')
   assert.equal(normalizeMamaLive({ state: 'upcoming', liveSince: '2026-11-28T09:30:00Z' }).liveSince, null)
 })
@@ -32,7 +32,7 @@ test('anything unknown is hidden; liveSince only exists while live', () => {
 test('admin changes: Live stamps liveSince once, staying Live keeps it, Hidden clears it', () => {
   const t1 = new Date('2026-11-28T09:40:00Z'), t2 = new Date('2026-11-28T10:10:00Z')
   const up = nextMamaLive(null, { state: 'upcoming', startsAt: START }, t1).value
-  assert.deepEqual(up, { state: 'upcoming', startsAt: START, liveSince: null })
+  assert.deepEqual(up, { state: 'upcoming', startsAt: START, liveSince: null, voteUrl: null })
   const live = nextMamaLive(up, { state: 'live' }, t1).value
   assert.equal(live.liveSince, t1.toISOString())
   assert.equal(live.startsAt, START, 'start kept when not sent')
@@ -156,4 +156,23 @@ test('City card (signed-in players): Upcoming shows the show start, Live says vo
   assert.ok(world.includes('const mamaCard = mamaLiveCityCard(state.mamaLive)'))
   assert.ok(world.includes('if (mamaCard) wrap.appendChild(mamaCard)'))
   assert.ok(world.indexOf('mamaLiveCityCard(state.mamaLive)') < world.indexOf('votingEventCard(state.voting)'), 'top of the City, above the voting card')
+})
+
+test('direct vote link: Mnet Plus https only; Live buttons use it, Upcoming keeps the event page', async () => {
+  const { cleanVoteUrl, liveVoteUrl } = await import('./mama-live-rules.js')
+  const link = 'https://mnetplus.onelink.me/TRa8/gb25wolr?custom_link_value=vote%2Ftemplates%2Fmama-fans-choice-vote-final%2F6ae98e36e656c6520a18a71f%3Furl_fallback_type%3Dupdate'
+  assert.equal(cleanVoteUrl(link), link)
+  assert.equal(cleanVoteUrl('http://mnetplus.onelink.me/x'), null)
+  assert.equal(cleanVoteUrl('https://evil.example/mnetplus.onelink.me'), null)
+  const live = { state: 'live', liveSince: START, voteUrl: link }
+  assert.equal(liveVoteUrl(live), link)
+  assert.equal(mamaBannerCopy(live).url, link)
+  assert.equal(mamaCityCopy(live).url, link)
+  assert.equal(liveVoteUrl({ state: 'live', voteUrl: 'https://bad.example' }), MAMA_LIVE_URL)
+  assert.equal(mamaBannerCopy({ state: 'upcoming', startsAt: START, voteUrl: link }, { timeZone: 'UTC' }).url, MAMA_LIVE_URL)
+  const stored = { state: 'live', startsAt: START, liveSince: START, voteUrl: link }
+  assert.equal(nextMamaLive(stored, { state: 'live' }).value.voteUrl, link, 'kept when not sent')
+  assert.equal(nextMamaLive(stored, { state: 'live', voteUrl: '' }).value.voteUrl, null, 'blank clears')
+  assert.deepEqual(nextMamaLive(stored, { state: 'live', voteUrl: 'https://bad.example' }), { error: 'bad_vote_url' })
+  assert.equal(nextMamaLive(stored, { state: 'live' }).value.liveSince, START, 'adding the link does not re-show the popup')
 })

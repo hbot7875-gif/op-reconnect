@@ -8,7 +8,7 @@
 import { el, hideOverlay, showOverlay } from './state.js'
 import { getScreen } from './router.js'
 import { esc } from './voting-view.js'
-import { mamaPopupDue, markMamaPopupSeen, MAMA_POPUP_COPY } from '../supabase/functions/op-reconnect/lib/mama-live-rules.js'
+import { mamaPopupDue, markMamaPopupSeen, MAMA_POPUP_COPY, liveVoteUrl } from '../supabase/functions/op-reconnect/lib/mama-live-rules.js'
 
 export function checkForMamaLivePopup(state) {
   if (!state?.joined || state.mamaLive?.state !== 'live') return
@@ -29,7 +29,8 @@ export function checkForMamaLivePopup(state) {
     </div>`)
   sheet.querySelector('[data-vp="primary"]').onclick = () => {
     hideOverlay()
-    try { window.open(MAMA_POPUP_COPY.url, '_blank', 'noopener') } catch (_) { location.href = MAMA_POPUP_COPY.url }
+    const url = liveVoteUrl(state.mamaLive)
+    try { window.open(url, '_blank', 'noopener') } catch (_) { location.href = url }
   }
   showOverlay(sheet)
 }

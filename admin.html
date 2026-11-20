@@ -239,6 +239,9 @@
         <label class="adm-field"><span>Start time (KST)</span>
           <input id="mlTime" class="ob-input" type="time" value="18:00"></label>
       </div>
+      <label class="adm-field"><span>Direct vote link (Live)</span>
+        <input id="mlVoteUrl" class="ob-input" type="url" placeholder="https://mnetplus.onelink.me/…">
+        <small>Mnet Plus links only. Blank = the MAMA event page.</small></label>
       <button class="btn btn-primary btn-block adm-mutate-btn" id="btnSaveMamaLive" type="button">Save banner state</button>
       <div id="mlOut" class="adm-out"></div>
     </section>
@@ -1036,6 +1039,7 @@ function paintMamaLive(m) {
     <div><span class="k">Starts (KST)</span><span class="v">${start ? `${esc(start.date)} ${esc(start.time)}` : '—'}</span></div>`
   pickMlState(m.state)
   if (start) { $('mlDate').value = start.date; $('mlTime').value = start.time }
+  $('mlVoteUrl').value = m.voteUrl || ''
 }
 async function loadMamaLive() {
   const res = await call('getMamaLive')
@@ -1057,7 +1061,7 @@ $('btnSaveMamaLive').onclick = async () => {
   if (!ok) return
   const btn = $('btnSaveMamaLive')
   btn.disabled = true
-  const res = await call('adminSetMamaLive', { state: mlState, startsAt })
+  const res = await call('adminSetMamaLive', { state: mlState, startsAt, voteUrl: $('mlVoteUrl').value.trim() })
   btn.disabled = sessionUnauthorized
   showOut('mlOut', res?.success ? `Saved: ${ML_LABEL[res.mamaLive.state]}.` : res, res?.success ? 'ok' : 'error')
   if (res?.success) paintMamaLive(res.mamaLive)
