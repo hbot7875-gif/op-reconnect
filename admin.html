@@ -221,6 +221,27 @@
       <button class="btn btn-primary btn-block adm-mutate-btn" id="btnSendBroadcast" type="button">Send broadcast</button>
       <div id="bcOut" class="adm-out"></div>
     </section>
+    <section class="adm-card">
+      <div class="adm-card-head"><h3>MAMA live voting banner</h3></div>
+      <p class="adm-note">Temporary banner under the homepage hero. Nothing switches by itself: set <b>Live</b> only once you've confirmed voting is open, and <b>Hidden</b> as soon as it closes. Live also shows a one-time popup (homepage and City screen).</p>
+      <div class="adm-kv" id="mlNow" style="margin-bottom:12px"><div><span class="k">Now</span><span class="v">—</span></div><div><span class="k">Starts (KST)</span><span class="v">—</span></div></div>
+      <div class="adm-field">
+        <span>State</span>
+        <div class="adm-toggle" id="mlState">
+          <button class="adm-toggle-opt" data-val="upcoming" type="button">Upcoming</button>
+          <button class="adm-toggle-opt" data-val="live" type="button">Live</button>
+          <button class="adm-toggle-opt is-active" data-val="hidden" type="button">Hidden</button>
+        </div>
+      </div>
+      <div class="adm-grid2">
+        <label class="adm-field"><span>Ceremony date (KST)</span>
+          <input id="mlDate" class="ob-input" type="date"></label>
+        <label class="adm-field"><span>Start time (KST)</span>
+          <input id="mlTime" class="ob-input" type="time" value="18:00"></label>
+      </div>
+      <button class="btn btn-primary btn-block adm-mutate-btn" id="btnSaveMamaLive" type="button">Save banner state</button>
+      <div id="mlOut" class="adm-out"></div>
+    </section>
   </div>
 </section>
 
@@ -992,7 +1013,55 @@ function paintSnapBC(rows) {
   if (currentView === 'overview') paintOverview()
 }
 $('btnLoadBroadcasts').onclick = loadBroadcasts
-viewEnter.broadcast = () => { if ($('bcList').querySelector('.adm-empty')) loadBroadcasts() }
+viewEnter.broadcast = () => { if ($('bcList').querySelector('.adm-empty')) loadBroadcasts(); loadMamaLive() }
+
+/* ── MAMA live voting banner ── three manual states (mama-live-rules.js).
+   The ceremony start is typed as a KST date + time and stored as an instant;
+   visitors see it in their own time zone. */
+let mlState = 'hidden'
+function pickMlState(val) {
+  mlState = val
+  document.querySelectorAll('#mlState .adm-toggle-opt').forEach((b) => b.classList.toggle('is-active', b.dataset.val === val))
+}
+document.querySelectorAll('#mlState .adm-toggle-opt').forEach((btn) => { btn.onclick = () => pickMlState(btn.dataset.val) })
+const ML_LABEL = { upcoming: 'Upcoming', live: 'Live', hidden: 'Hidden' }
+function kstParts(iso) {
+  const p = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(iso))
+  const g = (t) => p.find((x) => x.type === t)?.value
+  return { date: `${g('year')}-${g('month')}-${g('day')}`, time: `${g('hour')}:${g('minute')}` }
+}
+function paintMamaLive(m) {
+  const start = m.startsAt ? kstParts(m.startsAt) : null
+  $('mlNow').innerHTML = `<div><span class="k">Now</span><span class="v">${esc(ML_LABEL[m.state] || 'Hidden')}${m.state === 'live' && m.liveSince ? ` · since ${esc(fmtDate(m.liveSince))}` : ''}</span></div>
+    <div><span class="k">Starts (KST)</span><span class="v">${start ? `${esc(start.date)} ${esc(start.time)}` : '—'}</span></div>`
+  pickMlState(m.state)
+  if (start) { $('mlDate').value = start.date; $('mlTime').value = start.time }
+}
+async function loadMamaLive() {
+  const res = await call('getMamaLive')
+  if (res?.success) paintMamaLive(res.mamaLive)
+}
+function kstIso(date, time) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date || ''), n = /^(\d{2}):(\d{2})$/.exec(time || '')
+  return m && n ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +n[1] - 9, +n[2])).toISOString() : null
+}
+$('btnSaveMamaLive').onclick = async () => {
+  const startsAt = kstIso($('mlDate').value, $('mlTime').value)
+  if (mlState === 'upcoming' && !startsAt) { showOut('mlOut', 'Set the ceremony date and start time (KST) for Upcoming.', 'error'); return }
+  const what = {
+    upcoming: 'The homepage shows "MAMA Live Voting" with the start time in each visitor’s own time. No popup.',
+    live: 'The homepage switches to "LIVE NOW · Vote for BTS" and every visitor gets the live popup once (homepage and City screen). Only do this once voting has opened.',
+    hidden: 'The banner and the popup disappear everywhere within about a minute.',
+  }[mlState]
+  const ok = await confirmAction({ title: `Set the MAMA banner to ${ML_LABEL[mlState]}?`, body: what, confirmLabel: `Set ${ML_LABEL[mlState]}`, danger: mlState === 'live' })
+  if (!ok) return
+  const btn = $('btnSaveMamaLive')
+  btn.disabled = true
+  const res = await call('adminSetMamaLive', { state: mlState, startsAt })
+  btn.disabled = sessionUnauthorized
+  showOut('mlOut', res?.success ? `Saved: ${ML_LABEL[res.mamaLive.state]}.` : res, res?.success ? 'ok' : 'error')
+  if (res?.success) paintMamaLive(res.mamaLive)
+}
 
 /* ── Goals ──
    rc_goals is per-district — each goal carries a district_id, assigned here.

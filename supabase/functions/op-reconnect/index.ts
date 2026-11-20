@@ -11,6 +11,7 @@ import { handleWebScrobblerWebhook, handleListenBrainzLike } from './lib/scrobbl
 import { placeItem, useItem } from './lib/items.ts'
 import { getSignalLog, getMySelfCheck } from './lib/signal-log.ts'
 import { getPublicStats } from './lib/public.ts'
+import { getMamaLive, adminSetMamaLive } from './lib/mama-live.ts'
 import { isAdminAuthorized } from './lib/spotify-shared.ts'
 import { spotifyAuthUrl, spotifyExchangeCode, getSpotifyConnection, disconnectSpotify } from './lib/spotify-oauth.ts'
 import {
@@ -107,6 +108,8 @@ const ROUTES: Record<string, Route> = {
   ping: { auth: 'public', handler: async () => ({ success: true, pong: true, at: new Date().toISOString() }) },
   // Landing page. Aggregate counts only — never anything per-player.
   getPublicStats: { auth: 'public', handler: (sb, p) => getPublicStats(sb, p) },
+  // MAMA 2026 live voting banner/popup state (lib/mama-live.ts) — read-only, no session.
+  getMamaLive: { auth: 'public', handler: (sb, p) => getMamaLive(sb, p) },
   getPublicShareSnapshot: { auth: 'public', handler: (sb, p) => getPublicShareSnapshot(sb, p) },
   // MAMA Battle page + share poster: team totals only, from the shared cache.
   getPublicBattle: { auth: 'public', handler: (sb) => getPublicBattle(sb) },
@@ -370,6 +373,7 @@ const ROUTES: Record<string, Route> = {
   // can show whether an event is already active before firing a new one.
   adminGetActiveDefuse: { auth: 'admin', handler: (sb) => adminGetActiveDefuse(sb) },
   adminCreateBroadcast: { auth: 'admin', handler: (sb, p) => adminCreateBroadcast(sb, p) },
+  adminSetMamaLive: { auth: 'admin', handler: (sb, p) => adminSetMamaLive(sb, p) },
   adminListBroadcasts: { auth: 'admin', handler: (sb) => adminListBroadcasts(sb) },
   adminDeleteBroadcast: { auth: 'admin', handler: (sb, p) => adminDeleteBroadcast(sb, p) },
   adminGetAgent: { auth: 'admin', handler: (sb, p) => adminGetAgent(sb, p) },

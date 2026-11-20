@@ -95,10 +95,11 @@ test('the hero scroll cue points at a section that actually exists', () => {
   assert.ok(indexHtml.includes(`id="${target}"`), `#${target} does not exist on the page`)
 })
 
-test('the page below the hero is exactly activity, closing, footer', () => {
+test('the page below the hero is exactly the temporary MAMA banner, activity, closing, footer', () => {
   const below = indexHtml.slice(indexHtml.indexOf('<main class="below">'))
   const sections = [...below.matchAll(/<(section|footer)\b[^>]*class="([^"]+)"/g)].map((m) => m[2])
-  assert.deepEqual(sections, ['sec activity', 'sec closing', 'foot'])
+  // mama-live is hidden unless the admin sets Upcoming/Live (js/mama-live-banner.js).
+  assert.deepEqual(sections, ['mama-live', 'sec activity', 'sec closing', 'foot'])
 })
 
 /* ── The markup ────────────────────────────────────────────────────────── */

@@ -69,6 +69,10 @@
   <!-- ── Below the fold: the detail ────────────────────────────── -->
   <main class="below">
 
+    <!-- Temporary: MAMA 2026 live voting (js/mama-live-banner.js). Hidden
+         unless the owner sets Upcoming or Live in the admin dashboard. -->
+    <section class="mama-live" id="mamaLive" hidden aria-live="polite"></section>
+
     <!-- One line, not a dashboard. A stranger doesn't need three labelled
          cards to feel "something real is happening here" — a terminal
          readout does it in less space and reads as HT's own monitor, not
@@ -120,5 +124,6 @@
   </main>
 
   <script type="module" src="js/landing.js"></script>
+  <script type="module" src="js/mama-live-banner.js"></script>
 </body>
 </html>

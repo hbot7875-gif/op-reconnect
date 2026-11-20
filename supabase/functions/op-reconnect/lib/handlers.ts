@@ -8,6 +8,7 @@ import { ensureDailyRollups, computeStreak, awardStreakBadges, totalXp, spendabl
 import { awardDailySideMissionXp, awardWeeklySideMissionXp, buildSideMissions } from './side-missions.ts'
 import { albumForState } from './album.ts'
 import { runAmiTesterForState } from './run-ami.ts'
+import { normalizeMamaLive } from './mama-live-rules.js'
 import { warQuestPassForState } from './war-quest-pass.ts'
 import { warUnlockForState } from './war-of-cards.ts'
 import { freezeGoals, computeBaseline, districtProgress, districtDeadline, districtDeadlineExtraDays, filesRevealedCount, albumGoalStreamTotal, lapseChoiceOpen, LAPSE_CHOICE_DAYS, DEADLINE_EXTENSION_DAYS } from './districts.ts'
@@ -731,6 +732,8 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     sideMissions,
     album,
     runAmiTester,
+    // MAMA live voting popup (mama-live-rules.js): state only, no per-agent data.
+    mamaLive: normalizeMamaLive(content.config.mama_live),
     warQuestPass,
     warUnlockDue,
     help,
