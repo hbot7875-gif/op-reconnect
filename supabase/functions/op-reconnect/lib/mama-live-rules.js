@@ -125,7 +125,7 @@ export function mamaCityCopy(mama, opts = {}) {
   if (!banner) return null
   if (banner.state === 'live') {
     // The card's own LIVE badge says it's live, so the title doesn't repeat it.
-    return { state: 'live', title: 'Vote for BTS 💜', line: "Fans' Choice of the Year (Daesang)", url: MAMA_LIVE_URL }
+    return { state: 'live', title: 'MAMA Live Voting 💜', line: "Vote for BTS · Fans' Choice of the Year (Daesang)", url: MAMA_LIVE_URL }
   }
   return { state: 'upcoming', title: banner.heading, line: banner.startLine || 'Live voting opens during the MAMA Awards broadcast.', url: MAMA_LIVE_URL }
 }
