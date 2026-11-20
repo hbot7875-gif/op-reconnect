@@ -67,21 +67,23 @@ function ymd(at, timeZone) {
   return `${g('year')}-${g('month')}-${g('day')}`
 }
 
-/** The ceremony start in the visitor's own zone: "Sat, 28 Nov · 2:30 PM IST",
- *  plus whether that is today / tomorrow for them. */
+/** The show start in the visitor's own zone: "Nov 20, 2:30 PM IST", plus
+ *  whether that is today / tomorrow for them. Always written the same way
+ *  (month day, 12-hour clock) so every visitor reads one format; only the
+ *  date, time and zone change with where they are. */
 export function localStart(startsAt, { timeZone, locale = 'en', now = new Date() } = {}) {
   const at = new Date(startsAt || '')
   if (!Number.isFinite(at.getTime())) return null
   let tz = timeZone
   try { new Intl.DateTimeFormat('en', { timeZone: tz }) } catch { tz = 'UTC' }
-  const date = new Intl.DateTimeFormat(locale, { timeZone: tz, weekday: 'short', day: 'numeric', month: 'short' }).format(at)
-  const time = new Intl.DateTimeFormat(locale, { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true }).format(at)
+  const date = new Intl.DateTimeFormat('en-US', { timeZone: tz, month: 'short', day: 'numeric' }).format(at)
+  const time = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true }).format(at)
   const zone = zoneLabel(tz, locale, at)
   const startDay = ymd(at, tz)
   const today = ymd(now, tz)
   const tomorrow = ymd(new Date(now.getTime() + 86_400_000), tz)
   const when = startDay === today ? 'today' : startDay === tomorrow ? 'tomorrow' : startDay < today ? 'past' : 'later'
-  return { date, time, zone, when, text: `${date} · ${time}${zone ? ` ${zone}` : ''}` }
+  return { date, time, zone, when, text: `${date}, ${time}${zone ? ` ${zone}` : ''}` }
 }
 
 /** The banner, or null when nothing should show. */
@@ -105,10 +107,11 @@ export function mamaBannerCopy(mama, opts = {}) {
     return {
       state: 'upcoming',
       heading: `MAMA Live Voting · ${day} 💜`,
-      text: 'Get ready to vote for BTS! The MAMA Awards begin at 6 PM KST. Live voting will open during the broadcast.',
-      startLine: start ? `Starts ${start.text} your time` : null,
-      reminder: 'Update Mnet Plus, sign in and keep your device ready.',
-      button: 'Get Ready to Vote',
+      text: 'Get ready to vote for BTS! Live voting opens during the MAMA Awards broadcast.',
+      // The show start, not the voting start — voting opens during the show.
+      startLine: start ? `Show starts · ${start.text}` : null,
+      reminder: 'Update Mnet Plus and sign in before voting begins.',
+      button: 'Open Mnet Plus',
       url: MAMA_LIVE_URL,
     }
   }
@@ -116,8 +119,8 @@ export function mamaBannerCopy(mama, opts = {}) {
 }
 
 export const MAMA_POPUP_COPY = Object.freeze({
-  heading: '🔴 LIVE NOW · Vote for BTS 💜',
-  text: "MAMA live voting is open! Vote for BTS in Fans' Choice of the Year with VISA on Mnet Plus.",
+  heading: 'LIVE NOW · Vote for BTS 💜',
+  text: "MAMA live voting is open! Head to Mnet Plus and vote for BTS in Fans' Choice of the Year (Daesang).",
   button: 'VOTE NOW',
   url: MAMA_LIVE_URL,
 })

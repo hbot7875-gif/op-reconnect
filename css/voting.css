@@ -754,6 +754,9 @@
 .vt-pop-ico.is-warn { background: var(--vt-warn-soft); color: var(--vt-warn); }
 .vt-pop-eyebrow { margin: 0 0 4px; font: 500 12px var(--vt-sans); letter-spacing: .3px; color: var(--vt-text-3); }
 .vt-pop-title, .vt-pop h3.vt-pop-title { margin: 0 0 8px; font: 600 19px/1.25 var(--vt-sans); letter-spacing: 0; color: var(--vt-text); text-align: center; }
+/* MAMA live popup (mama-live-popup.js): no icon above the heading, so it
+   clears the sheet's × instead. */
+.ml-live-pop .vt-pop-title, .ml-live-pop h3.vt-pop-title { margin-top: 22px; }
 .vt-pop-body { margin: 0 auto; max-width: 32ch; font-size: 14.5px; line-height: 1.5; color: var(--vt-text-2); text-align: center; }
 .vt-pop-body b { color: var(--vt-text); font-weight: 600; }
 .vt-pop-teams { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; margin: 16px 0 2px; }
