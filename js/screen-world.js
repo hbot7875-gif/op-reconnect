@@ -44,6 +44,7 @@ import { announceNewCover } from './album.js'
 import { albumEra } from '../supabase/functions/op-reconnect/lib/album-rules.js'
 import { openVmaMission } from './vma.js'
 import { votingEventCard } from './voting-view.js'
+import { mamaLiveCityCard } from './mama-live-city.js'
 import { startCityClock } from './voting-city-clock.js'
 import { redZoneSheet, defuseResultSheet, defenderCommsSheet, getCommsSeen } from './bomb-sheet.js'
 import { tickCountdowns } from './countdown.js'
@@ -81,6 +82,10 @@ export function renderWorld(container, state) {
   // Voting (MAMA 2026 first): one compact entry card with a live countdown
   // (voting-city-clock.js updates it in place each second). The page itself
   // is its own screen, not a sheet over the City.
+  // MAMA 2026 live voting (admin-set Upcoming / Live): the same compact
+  // card shape as the voting entry below; it opens Mnet Plus.
+  const mamaCard = mamaLiveCityCard(state.mamaLive)
+  if (mamaCard) wrap.appendChild(mamaCard)
   if (state.voting) {
     const holder = el('div', '', votingEventCard(state.voting))
     const entry = holder.firstElementChild

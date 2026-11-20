@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import {
   MAMA_LIVE_URL, normalizeMamaLive, nextMamaLive, kstToIso, zoneLabel, localStart,
-  mamaBannerCopy, MAMA_POPUP_COPY, mamaPopupDue, markMamaPopupSeen,
+  mamaBannerCopy, mamaCityCopy, MAMA_POPUP_COPY, mamaPopupDue, markMamaPopupSeen,
 } from './mama-live-rules.js'
 
 // A sample ceremony: 6 PM KST on a Saturday.
@@ -143,4 +143,17 @@ test('game popup: heading, text and VOTE NOW only — no icon, no second button'
   const css = read('../../../../css/landing.css')
   const block = css.slice(css.indexOf('/* ── Temporary: MAMA 2026')).replace(/\/\*[\s\S]*?\*\//g, '')
   assert.doesNotMatch(block, /gradient|animation|@keyframes/, 'flat: no gradients or animation')
+})
+
+test('City card (signed-in players): Upcoming shows the show start, Live says vote; Hidden shows nothing', () => {
+  const opts = { timeZone: 'Asia/Kolkata', locale: 'en-IN', now: new Date('2026-11-28T03:00:00Z') }
+  assert.deepEqual(mamaCityCopy({ state: 'upcoming', startsAt: START }, opts),
+    { state: 'upcoming', title: 'MAMA Live Voting · Today 💜', line: 'Show starts · Nov 28, 2:30 PM IST', url: MAMA_LIVE_URL })
+  assert.deepEqual(mamaCityCopy({ state: 'live', liveSince: START }, opts),
+    { state: 'live', title: 'LIVE NOW · Vote for BTS 💜', line: "Fans' Choice of the Year (Daesang)", url: MAMA_LIVE_URL })
+  assert.equal(mamaCityCopy({ state: 'hidden' }, opts), null)
+  const world = read('../../../../js/screen-world.js')
+  assert.ok(world.includes('const mamaCard = mamaLiveCityCard(state.mamaLive)'))
+  assert.ok(world.includes('if (mamaCard) wrap.appendChild(mamaCard)'))
+  assert.ok(world.indexOf('mamaLiveCityCard(state.mamaLive)') < world.indexOf('votingEventCard(state.voting)'), 'top of the City, above the voting card')
 })

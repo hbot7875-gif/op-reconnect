@@ -118,6 +118,17 @@ export function mamaBannerCopy(mama, opts = {}) {
   return null
 }
 
+/** The compact card at the top of the City (signed-in players), in the same
+ *  shape as the MAMA Round 2 voting card: a title and one short line. */
+export function mamaCityCopy(mama, opts = {}) {
+  const banner = mamaBannerCopy(mama, opts)
+  if (!banner) return null
+  if (banner.state === 'live') {
+    return { state: 'live', title: 'LIVE NOW · Vote for BTS 💜', line: "Fans' Choice of the Year (Daesang)", url: MAMA_LIVE_URL }
+  }
+  return { state: 'upcoming', title: banner.heading, line: banner.startLine || 'Live voting opens during the MAMA Awards broadcast.', url: MAMA_LIVE_URL }
+}
+
 export const MAMA_POPUP_COPY = Object.freeze({
   heading: 'LIVE NOW · Vote for BTS 💜',
   text: "MAMA live voting is open! Head to Mnet Plus and vote for BTS in Fans' Choice of the Year (Daesang).",
