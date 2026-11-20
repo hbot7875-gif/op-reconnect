@@ -150,7 +150,7 @@ test('City card (signed-in players): Upcoming shows the show start, Live says vo
   assert.deepEqual(mamaCityCopy({ state: 'upcoming', startsAt: START }, opts),
     { state: 'upcoming', title: 'MAMA Live Voting · Today 💜', line: 'Show starts · Nov 28, 2:30 PM IST', url: MAMA_LIVE_URL })
   assert.deepEqual(mamaCityCopy({ state: 'live', liveSince: START }, opts),
-    { state: 'live', title: 'LIVE NOW · Vote for BTS 💜', line: "Fans' Choice of the Year (Daesang)", url: MAMA_LIVE_URL })
+    { state: 'live', title: 'Vote for BTS 💜', line: "Fans' Choice of the Year (Daesang)", url: MAMA_LIVE_URL })
   assert.equal(mamaCityCopy({ state: 'hidden' }, opts), null)
   const world = read('../../../../js/screen-world.js')
   assert.ok(world.includes('const mamaCard = mamaLiveCityCard(state.mamaLive)'))
