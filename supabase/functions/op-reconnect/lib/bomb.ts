@@ -32,6 +32,9 @@ import {
 import { resolvedAgentStreamSource } from './streams.ts'
 import { goalKeys } from './transmission.ts'
 import { activeRankingRows } from './ranking-rules.js'
+import { redZoneSourceAllowed, redZoneEligibleRows } from './red-zone-feeds.ts'
+
+export { redZoneSourceAllowed }
 
 const RED_ZONE_DEFAULT_XP_POOL = 500
 const RED_ZONE_MIN_STREAMS = 7
@@ -376,7 +379,7 @@ async function redZoneScrobbles(supabase: SupabaseDB, ev: any) {
   const rows: any[] = []
   for (let offset = 0; ; offset += RED_ZONE_PAGE_SIZE) {
     const { data, error } = await supabase.from('rc_scrobbles')
-      .select('agent_no, track_name, artist_name, listened_at, source')
+      .select('agent_no, track_name, artist_name, listened_at, source, source_client, source_clients')
       .gte('listened_at', bounds.fromInclusive)
       .lt('listened_at', bounds.untilExclusive)
       .order('listened_at', { ascending: true })
@@ -398,14 +401,11 @@ async function redZoneSourceMap(supabase: SupabaseDB): Promise<Map<string, strin
   return new Map((data || []).map((agent: any) => [String(agent.agent_no), String(resolvedAgentStreamSource(agent))]))
 }
 
-// Also used by the RE:CELEBRATE battle (recelebrate-battle.ts): a play only
-// counts from the source the agent currently has selected, so an agent with
-// two linked sources can never be counted twice for one listen.
-export function redZoneSourceAllowed(selected: string | undefined, stored: string | null | undefined) {
-  if (!selected) return false
-  if (selected === 'direct') return stored === 'webhook' || stored === 'lb-like'
-  return stored === selected
-}
+// redZoneSourceAllowed (re-exported above) is also used by the RE:CELEBRATE
+// battle (recelebrate-battle.ts): a play only counts from the source the
+// agent currently has selected. Red Zone itself goes through
+// redZoneEligibleRows, which also lets a ListenBrainz agent's direct
+// Pano / Web Scrobbler plays count (see red-zone-feeds.ts).
 
 function cachedDefuseResult(ev: any) {
   return {
@@ -534,8 +534,7 @@ async function refreshDefuse(
   // re-read from rc_goals, so an admin editing the goal mid-event cannot
   // change which plays count. Null set = every eligible BTS play counts.
   const targetKeys = redZoneTargetKeySet(ev.target_keys)
-  const counted = countRedZoneRows(exact.rows, ev.target, minimumStreams, (row: any) => {
-    if (!redZoneSourceAllowed(sources.get(row.agent_no), row.source)) return false
+  const counted = countRedZoneRows(redZoneEligibleRows(exact.rows, sources), ev.target, minimumStreams, (row: any) => {
     const trackKey = normKeyFull(row.track_name || '')
     if (!trackKey) return false
     if (!redZoneTrackCounts(targetKeys, trackKey)) return false
