@@ -7,9 +7,11 @@
 // counting already reads those rows next to the ListenBrainz ones, while Red
 // Zone accepted only 'listenbrainz' rows — 52 target plays, 0 counted.
 //
-// So for a ListenBrainz agent the direct feeds count too, and every second
-// report of one listen is removed with the same withoutCopies() daily
-// counting uses (Pano often writes to ListenBrainz as well as to us).
+// So for a ListenBrainz agent the direct feeds count too. For every agent
+// whose plays come from more than one feed, each second report of one listen
+// is removed with the same withoutCopies() daily counting uses (Pano often
+// writes to ListenBrainz as well as to us; some direct agents run Web
+// Scrobbler and Pano at once).
 
 import { withoutCopies } from './listen-copies.ts'
 
@@ -47,10 +49,13 @@ export function redZoneEligibleRows<T extends FeedRow>(rows: T[], sources: Map<s
     else byAgent.set(row.agent_no, [row])
   }
   const kept = new Set<T>()
-  for (const [agent, list] of byAgent) {
-    // Only a ListenBrainz agent's feeds are newly mixed here; every other
-    // source counts exactly as before.
-    const mixed = sources.get(agent) === 'listenbrainz' && new Set(list.map((r) => r.source || '')).size > 1
+  for (const list of byAgent.values()) {
+    // Any agent whose plays arrive from more than one feed (a ListenBrainz
+    // agent's Pano plays, or a direct agent running Web Scrobbler and Pano
+    // side by side) is checked for copies, as daily counting does.
+    // AGENT005, Nov 21 2026: 14 listens, each reported by both apps ~80 s
+    // apart, had counted 28.
+    const mixed = new Set(list.map((r) => r.source || '')).size > 1
     for (const row of mixed ? withoutCopies(list) : list) kept.add(row)
   }
   return rows.filter((row) => kept.has(row))

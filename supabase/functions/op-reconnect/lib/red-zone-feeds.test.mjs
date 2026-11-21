@@ -51,11 +51,19 @@ test('a Stats.fm agent’s direct rows still do not count', () => {
   assert.equal(redZoneEligibleRows(rows, new Map([['B1', 'statsfm']])).length, 0)
 })
 
-test('a direct agent with two scrobblers counts exactly as before', () => {
+test('a direct agent with two scrobblers reporting the same listens counts each once', () => {
+  // AGENT005's pattern: Web Scrobbler and Pano, ~80 s apart, every play.
   const rows = []
-  for (let i = 0; i < 4; i++) {
-    rows.push({ agent_no: 'D1', track_name: 'SWIM', listened_at: 1000 + i * 240, source: 'webhook' })
-    rows.push({ agent_no: 'D1', track_name: 'SWIM', listened_at: 1000 + i * 240, source: 'lb-like' })
+  for (let i = 0; i < 6; i++) {
+    const t = 1000 + i * 240
+    rows.push({ agent_no: 'D1', track_name: 'SWIM', listened_at: t, source: 'webhook' })
+    rows.push({ agent_no: 'D1', track_name: 'SWIM', listened_at: t + 80, source: 'lb-like' })
   }
-  assert.equal(redZoneEligibleRows(rows, new Map([['D1', 'direct']])).length, 8)
+  rows.sort((a, b) => a.listened_at - b.listened_at)
+  assert.equal(redZoneEligibleRows(rows, new Map([['D1', 'direct']])).length, 6)
+})
+
+test('a single-feed agent is never checked for copies', () => {
+  const rows = [1, 2, 3].map((i) => ({ agent_no: 'D2', track_name: 'SWIM', listened_at: 1000 + i * 30, source: 'webhook' }))
+  assert.equal(redZoneEligibleRows(rows, new Map([['D2', 'direct']])).length, 3)
 })
