@@ -217,18 +217,33 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
       <p class="muted"><b>⏳ Your ReConnect team ran out of time</b>${helping.expiredAt ? ` on ${esc(new Date(helping.expiredAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))}` : ''} before the quest finished.
       You joined to help, so ${esc(districtDisplayName(mapD))} was never your own district and its meter stays at 0% for you.
       Your plays still count toward your own district's goals.</p>`)
-  } else if (helping) {
-    container.querySelector('.stage-eyebrow').textContent = 'YOUR TEAM'
+  }
+  // A team they helped here has finished, and the district is open to them:
+  // their own "Light it up" comes first, the finished team quest below it.
+  // (Showing only the quest left a helper whose own attempt here had ended
+  // with no way to start it again for the 3 days a finished quest stays.)
+  const helpedAndCanStart = !!helping && !helping.expired && helping.complete && mapD.status === 'available'
+  let helpedQuest = null
+  if (helping && !helping.expired) {
     const mounted = board.querySelector(':scope > .reconnect-card.is-recruit')
-    if (mounted?.dataset.districtId === districtId) { mounted.refreshMission?.(); return }
-    board.innerHTML = ''
+    // Keep a mounted quest as it is — unless the start card should now be
+    // there too and isn't yet (the quest finished while this page was open).
+    if (mounted?.dataset.districtId === districtId && (!helpedAndCanStart || board.querySelector('.op-go'))) {
+      mounted.refreshMission?.()
+      return
+    }
     const head = el('div', 'board-head mission-section')
     head.innerHTML = `<span class="board-title">🤝 ReConnect Quest</span><span class="board-count${helping.complete ? ' all' : ''}">${helping.complete ? 'Complete' : 'You joined to help'}</span>`
     const box = reconnectPanel({ ...mapD, reconnect: { variant: 'connect' } })
     box.classList.add('is-recruit')
     box.dataset.districtId = districtId
-    board.append(head, box)
-    return
+    if (!helpedAndCanStart) {
+      container.querySelector('.stage-eyebrow').textContent = 'YOUR TEAM'
+      board.innerHTML = ''
+      board.append(head, box)
+      return
+    }
+    helpedQuest = [head, box]
   }
 
   board.innerHTML = ''
@@ -291,6 +306,7 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
   }
 
   board.appendChild(card)
+  if (helpedQuest) board.append(...helpedQuest)
 }
 
 /* ── Who's here ─────────────────────────────────────────────────────────
