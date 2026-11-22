@@ -8,8 +8,8 @@ import { readFileSync } from 'node:fs'
 
 const src = readFileSync(new URL('./screen-district.js', import.meta.url), 'utf8').split('\r\n').join('\n')
 
-test('a finished helped quest on an open district shows Light it up first, then the quest', () => {
-  assert.match(src, /const helpedAndCanStart = !!helping && !helping\.expired && helping\.complete && mapD\.status === 'available'/)
+test('a helped quest (finished or still running) on an open district shows Light it up first, then the quest', () => {
+  assert.match(src, /const helpedAndCanStart = !!helping && !helping\.expired && mapD\.status === 'available' && !state\.activeDistrict/)
   // Only the quest (and return) when they can't start here.
   assert.match(src, /if \(!helpedAndCanStart\) \{[\s\S]*?board\.append\(head, box\)\s*return\s*\}/)
   // Otherwise the start card is built as usual and the quest follows it.

@@ -218,11 +218,15 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
       You joined to help, so ${esc(districtDisplayName(mapD))} was never your own district and its meter stays at 0% for you.
       Your plays still count toward your own district's goals.</p>`)
   }
-  // A team they helped here has finished, and the district is open to them:
-  // their own "Light it up" comes first, the finished team quest below it.
-  // (Showing only the quest left a helper whose own attempt here had ended
-  // with no way to start it again for the 3 days a finished quest stays.)
-  const helpedAndCanStart = !!helping && !helping.expired && helping.complete && mapD.status === 'available'
+  // A team they help(ed) here, and the district is open to them with nothing
+  // else running: their own "Light it up" comes first, the team quest below
+  // it. Showing only the quest left a helper whose own attempt here had ended
+  // with no way to start again — for the 3 days a finished quest stays
+  // (AGENT244) and for as long as an unfinished one keeps running (AGENT120,
+  // whose own attempt lapsed while their team was still on War of Cards).
+  // The server has always allowed this start; staying on the team carries
+  // over to the new attempt.
+  const helpedAndCanStart = !!helping && !helping.expired && mapD.status === 'available' && !state.activeDistrict
   let helpedQuest = null
   if (helping && !helping.expired) {
     const mounted = board.querySelector(':scope > .reconnect-card.is-recruit')
