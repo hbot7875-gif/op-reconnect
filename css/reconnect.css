@@ -2304,6 +2304,11 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 .ia-sleeve-edge { fill: none; stroke: rgba(255,255,255,.10); stroke-width: .5; }
 .ia-film-disc { fill: #cfd3e0; opacity: .85; }
 /* In the detail sheet a record is the whole object, so it gets more room. */
+/* Item art in the detail card: 62px left most items small in a 132x176
+   card; 92px fills it without crowding (albums keep their own size below). */
+.item-sheet .is-art > svg { width: 92px; height: 92px; }
+.item-sheet .is-art .ia-body { fill: #2b2545; }
+.item-sheet.r-legendary .is-art .ia-body { fill: #3a2a18; }
 .is-art > svg.ia-album-vinyl { width: 104px; height: 104px; }
 .is-art > svg.ia-album-cover { width: 118px; height: auto; }
 /* The sheet pads its first block clear of the close button; the art card is
@@ -2392,16 +2397,20 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 .cx-intro-ico { font-size: 17px; line-height: 1; }
 .cx-intro-when { margin: 0 0 14px; color: var(--gold); font-size: 13px; font-weight: 600; }
 /* ARMY's Corner (district page): a small personal display, not another
-   inventory. Pieces stand on the page with a soft shadow and their name
-   underneath; no cards, frames, rarity lines or XP chips. */
-.kept .collection-shelf.army-corner { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 10px; margin-top: 4px; }
-.kept .collection-object.is-plain .co-art { aspect-ratio: 1; padding: 4px; border: 0; border-radius: 0; background: none; box-shadow: none; }
+   inventory. Two pieces to a row, standing on the page with a soft shadow
+   and their name underneath; no cards, frames, rarity lines or XP chips. */
+.kept .collection-shelf.army-corner { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 14px; margin-top: 4px; }
+.kept .collection-object.is-plain .co-art { aspect-ratio: 4 / 3; padding: 6% 18%; border: 0; border-radius: 0; background: none; box-shadow: none; }
 .kept .collection-object.is-plain .co-art::after { content: none; }
 .kept .collection-object.is-plain .co-art::before { content: ''; position: absolute; left: 18%; right: 18%; bottom: 2px; height: 7px;
   border-radius: 50%; background: rgba(0,0,0,.45); filter: blur(3px); }
 .kept .collection-object.is-plain .co-art svg { position: relative; z-index: 1; filter: drop-shadow(0 4px 6px rgba(0,0,0,.35)); }
-.kept .collection-object.is-plain:has(svg.ia-album-cover) .co-art { padding: 10% 2%; }
-.kept .collection-object.is-plain .co-name { margin-top: 4px; font-size: 12.5px; font-weight: 600; text-align: center; color: var(--v-ink-2); }
+.kept .collection-object.is-plain:has(svg.ia-album-cover) .co-art { padding: 8% 4%; }
+/* No tinted tile behind them here, so the dark item bodies are lifted a
+   step to read against the page (tees, cushions, figures, plushies). */
+.kept .collection-object.is-plain .ia-body { fill: #2b2545; }
+.kept .collection-object.is-plain.r-legendary .ia-body { fill: #3a2a18; }
+.kept .collection-object.is-plain .co-name { margin-top: 6px; font-size: 13px; font-weight: 600; text-align: center; color: var(--v-ink-2); }
 .kept .collection-object.is-plain:focus-visible .co-art { outline: 2px solid var(--purple-lt); outline-offset: 2px; border-radius: 10px; }
 
 /* ── today's queue ──
