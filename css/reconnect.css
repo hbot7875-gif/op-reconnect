@@ -9039,3 +9039,10 @@ select.rc-multi-native {
 .item-sheet .is-move-pack { display: block; margin: 12px auto 0; padding: 6px 10px; border: 0; background: none;
   color: var(--v-ink-3, var(--muted)); font: 500 12.5px var(--body); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .item-sheet .is-move-pack.is-armed { color: #f0a3a3; text-decoration: none; }
+/* One-time Weekly Collection XP announcement (collection-xp-announce.js). */
+.cx-intro-eyebrow { font-family: var(--mono); font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--purple-lt); }
+.cx-intro h3 { margin: 6px 0 8px; }
+.cx-intro-lede { margin: 0 0 10px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.cx-intro-points { display: flex; flex-direction: column; gap: 8px; margin: 0 0 10px; padding: 0 0 0 18px; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.cx-intro-points b { color: var(--text); }
+.cx-intro-when { margin: 0 0 14px; color: var(--gold); font-size: 13px; font-weight: 600; }

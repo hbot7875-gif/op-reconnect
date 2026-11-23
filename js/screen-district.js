@@ -1854,7 +1854,7 @@ function shelf(state, mapD) {
   // Pack's front pocket, so they never show on a shelf or in the picker
   // (any already placed stay where they are and keep working).
   const kept = itemsAt(state, mapD.id).filter(isCollectible)
-  const spare = itemsInPack(state).filter((i) => isCollectible(i) && !i.usedAt)
+  const spare = itemsInPack(state).filter(isCollectible)
   const ctx = collectionContext(state)
   const wrap = el('section', 'shelf kept')
   const head = el('div', 'shelf-head')

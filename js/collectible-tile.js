@@ -8,11 +8,19 @@ import { itemArt, RARITY } from './items.js'
 import { collectibleWeeklyXp } from '../supabase/functions/op-reconnect/lib/collectible-values.js'
 import { collectionChip } from './collection-xp-ui.js'
 
-/** A keepsake you can place and that can earn Collection XP. Backup Passes
- *  (utility) and tickets are things you use, so they live in the Pack's
- *  front pocket, never on a shelf or in the picker. */
+/** Something you can keep on a shelf. Backup Passes (utility) are purely
+ *  functional, so they never show on a shelf or in the picker. Concert and
+ *  Tour tickets are keepsakes too: placeable whether used or not (using one
+ *  leaves the stub), and still usable from their sheet or the Pack's front
+ *  pocket. Tickets earn no Collection XP (collectible-values.js). */
 export function isCollectible(item) {
-  return !!item && item.kind !== 'utility' && item.kind !== 'ticket' && item.itemId !== 'backup-pass'
+  return !!item && item.kind !== 'utility' && item.itemId !== 'backup-pass'
+}
+
+/** Pack's Recovered Objects: collectibles minus tickets, which already have
+ *  their own slot in the Pack's front pocket. */
+export function isPackObject(item) {
+  return isCollectible(item) && item.kind !== 'ticket'
 }
 
 /** What the chips need, worked out once per render: the copy of each

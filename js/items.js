@@ -63,7 +63,7 @@ export async function moveItem(item, districtId, districtName = '') {
   const res = await call('placeItem', {
     agentNo: getAgentNo(), playerItemId: item.id, districtId,
   })
-  if (!res?.success) { toast(res?.error || 'Could not move that — it may bounce back'); return }
+  if (!res?.success) { toast(res?.error === 'not_placeable' ? 'Backup Passes stay in your Pack — use them from there.' : (res?.error || 'Could not move that — it may bounce back')); return }
   // Placing can earn this week's collection XP (collectible-rewards.ts runs
   // on the next game state), so fetch it now instead of waiting for a poll.
   const fresh = await call('getGameState', { agentNo: getAgentNo() })

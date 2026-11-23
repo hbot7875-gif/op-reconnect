@@ -11,7 +11,7 @@
 // the palette is restated here and inlined into the SVG: shapes stay in one
 // place, colours are stated twice on purpose.
 
-import { itemArt } from './items-art.js'
+import { itemSceneArt } from './items-art.js'
 
 // Mirrors .ia-* in css/reconnect.css.
 const INK = {
@@ -48,7 +48,8 @@ const imgCache = new Map()
 /** One rasterised drawing per kind+rarity — the palette is baked in. */
 function itemImage(item) {
   const rarity = item.rarity || 'common'
-  const key = `${item.kind || 'unknown'}|${rarity}`
+  // Albums are each their own cover, so they can't share one image per kind.
+  const key = `${item.kind || 'unknown'}|${rarity}|${item.kind === 'album' ? item.era || item.itemId || '' : ''}`
   const hit = imgCache.get(key)
   if (hit) return hit
 
@@ -60,7 +61,7 @@ function itemImage(item) {
     + `.ia-perf{stroke:${INK.perf};stroke-width:0.8;stroke-dasharray:1.6 1.6}`
     + `.ia-groove{fill:none;stroke:${INK.groove};stroke-width:1.4}`
 
-  const svg = itemArt(item)
+  const svg = itemSceneArt(item)
     .replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" ')
     .replace(/^(<svg[^>]*>)/, `$1<style>${style}</style>`)
 

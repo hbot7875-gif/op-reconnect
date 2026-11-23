@@ -45,12 +45,29 @@ test('tile wording: placed / in your Pack / used, never "Kept at"', () => {
 test('districts: only collectibles on the shelf and in the picker; safe Move to Pack', () => {
   const district = read('./screen-district.js')
   assert.match(district, /const kept = itemsAt\(state, mapD\.id\)\.filter\(isCollectible\)/)
-  assert.match(district, /const spare = itemsInPack\(state\)\.filter\(\(i\) => isCollectible\(i\) && !i\.usedAt\)/)
+  assert.match(district, /const spare = itemsInPack\(state\)\.filter\(isCollectible\)/)
   assert.match(district, /collectibleTile\(it, ctx, \{\s+showPlace: false,/, 'shelf reuses the Pack tile')
   assert.doesNotMatch(district, /itemTile\(/)
   const tile = read('./collectible-tile.js')
-  assert.match(tile, /item\.kind !== 'utility' && item\.kind !== 'ticket' && item\.itemId !== 'backup-pass'/)
+  assert.match(tile, /return !!item && item\.kind !== 'utility' && item\.itemId !== 'backup-pass'/, 'tickets stay placeable keepsakes')
+  assert.match(tile, /return isCollectible\(item\) && item\.kind !== 'ticket'/, 'Pack grid leaves tickets to the front pocket')
   const items = read('./items.js')
   assert.match(items, /'Tap again to move it to your Pack'/, 'moving off a shelf asks twice')
   assert.doesNotMatch(items, /'btn btn-ghost', 'Back to Pack'/)
+})
+
+test('one-time Weekly Collection XP announcement is wired in', () => {
+  const ann = read('./collection-xp-announce.js')
+  assert.match(ann, /const KEY = 'rc_collection_xp_intro_seen:'/)
+  assert.match(ann, /if \(localStorage\.getItem\(`\$\{KEY\}\$\{agentNo\}`\) === '1'\) return/)
+  assert.match(ann, /if \(overlay && !overlay\.hidden\) return/, 'never over another sheet')
+  assert.match(read('./main.js'), /checkForCollectionXpIntro\(state\)/)
+})
+
+test('district scene draws an album as its framed cover, one image per album', () => {
+  const scene = read('./scene-items.js')
+  assert.match(scene, /const svg = itemSceneArt\(item\)/)
+  assert.match(scene, /item\.kind === 'album' \? item\.era \|\| item\.itemId \|\| '' : ''/)
+  const art = read('./items-art.js')
+  assert.doesNotMatch(art.slice(art.indexOf('export function coverSleeveArt')), /clip-path="url\(#/, 'no clipPath: it blacked out the cover as an image')
 })

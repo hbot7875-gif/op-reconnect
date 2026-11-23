@@ -146,13 +146,13 @@ const escText = (s) => String(s).replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': 
 
 /** The record itself, centred on (cx, cy) with radius r. */
 function disc(cx, cy, r, p) {
-  const grooves = [0.92, 0.82, 0.72, 0.62].map((k) => `<circle cx="${cx}" cy="${cy}" r="${(r * k).toFixed(2)}" class="ia-vinyl-groove"/>`).join('')
+  const grooves = [0.92, 0.82, 0.72, 0.62].map((k) => `<circle cx="${cx}" cy="${cy}" r="${(r * k).toFixed(2)}" class="ia-vinyl-groove" fill="none" stroke="rgba(255,255,255,.07)" stroke-width=".5"/>`).join('')
   const lr = r * 0.42
   const fs = lr * (p.word.length > 5 ? 0.36 : p.word.length > 3 ? 0.44 : 0.62)
-  return `<circle cx="${cx}" cy="${cy}" r="${r}" class="ia-vinyl"/>${grooves}
-    <path d="M ${cx - r * 0.78} ${cy - r * 0.42} A ${r * 0.88} ${r * 0.88} 0 0 1 ${cx - r * 0.1} ${cy - r * 0.86}" class="ia-vinyl-shine"/>
+  return `<circle cx="${cx}" cy="${cy}" r="${r}" class="ia-vinyl" fill="#0d0b14"/>${grooves}
+    <path d="M ${cx - r * 0.78} ${cy - r * 0.42} A ${r * 0.88} ${r * 0.88} 0 0 1 ${cx - r * 0.1} ${cy - r * 0.86}" class="ia-vinyl-shine" fill="none" stroke="rgba(255,255,255,.16)" stroke-width="1.1" stroke-linecap="round"/>
     <circle cx="${cx}" cy="${cy}" r="${lr.toFixed(2)}" fill="${p.label}"/>
-    <text x="${cx}" y="${(cy - lr * 0.18).toFixed(2)}" text-anchor="middle" dominant-baseline="middle" class="ia-vinyl-word" fill="${p.ink}" font-size="${fs.toFixed(2)}">${escText(p.word)}</text>
+    <text x="${cx}" y="${(cy - lr * 0.18).toFixed(2)}" text-anchor="middle" dominant-baseline="middle" class="ia-vinyl-word" font-family="sans-serif" font-weight="800" fill="${p.ink}" font-size="${fs.toFixed(2)}">${escText(p.word)}</text>
     <circle cx="${cx}" cy="${cy + lr * 0.42}" r="${(r * 0.06).toFixed(2)}" fill="${p.ink}" opacity=".55"/>`
 }
 
@@ -178,7 +178,7 @@ function filmArt() {
   return `<svg viewBox="0 0 40 40" class="ia">
     <rect x="7" y="5" width="24" height="30" rx="2" class="ia-body"/>
     <rect x="9.5" y="7.5" width="19" height="25" rx="1" class="ia-spine"/>
-    <circle cx="23" cy="20" r="9" class="ia-film-disc"/>
+    <circle cx="23" cy="20" r="9" class="ia-film-disc" fill="#cfd3e0" fill-opacity=".85"/>
     <circle cx="23" cy="20" r="2.4" class="ia-hole"/>
     <rect x="9.5" y="9" width="3" height="22" class="ia-accent" opacity=".85"/>
   </svg>`
@@ -190,20 +190,37 @@ export function coverSleeveArt(item) {
   const p = albumLabel(item)
   const cover = p.cover ? eraCoverBody(p.cover) : null
   if (!cover) return vinylSleeveArt(item)
-  const id = `cv${++coverSeq}`
   // The view is cropped to the sleeve + record (no square margin), so the
-  // cover fills as much of a tile as it can.
+  // cover fills as much of a tile as it can. The nested <svg> clips the cover
+  // to the sleeve by itself: a clipPath here turned the cover solid black
+  // when the drawing is used as an image (the district scene does that).
   return `<svg viewBox="0.4 6.4 39 27.2" class="ia ia-album-vinyl ia-album-cover">
     ${disc(27, 20, 12.2, p)}
-    <clipPath id="${id}"><rect x="1" y="7" width="26" height="26" rx="1.4"/></clipPath>
     <rect x="1.4" y="7.6" width="26" height="26" rx="1.4" fill="rgba(0,0,0,.45)"/>
-    <g clip-path="url(#${id})"><svg x="1" y="7" width="26" height="26" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">${cover}</svg>
-      <path d="M1 7 L27 7 L1 22 Z" fill="rgba(255,255,255,.07)"/></g>
-    <rect x="1" y="7" width="26" height="26" rx="1.4" class="ia-sleeve-edge"/>
+    <svg x="1" y="7" width="26" height="26" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">${cover}<path d="M0 0 L100 0 L0 58 Z" fill="rgba(255,255,255,.07)"/></svg>
+    <rect x="1" y="7" width="26" height="26" rx="1.4" class="ia-sleeve-edge" fill="none" stroke="rgba(255,255,255,.10)" stroke-width=".5"/>
   </svg>`
 }
 
-let coverSeq = 0
+/** How an item looks standing in a district's illustration (scene-items.js
+ *  draws it as an image on a wall or the pavement). An album there is its
+ *  cover in a slim dark frame, like a print on the wall; a record poking out
+ *  of a sleeve at that size reads as a black shape. Everything else is its
+ *  usual drawing. */
+export function itemSceneArt(item) {
+  if (item?.kind === 'album' && String(item?.era || '').toLowerCase() !== 'media') {
+    const p = albumLabel(item)
+    const cover = p.cover ? eraCoverBody(p.cover) : null
+    if (cover) {
+      return `<svg viewBox="0 0 40 40" class="ia">
+        <rect x="4" y="4" width="32" height="32" rx="1.2" fill="#15121f"/>
+        <rect x="4" y="4" width="32" height="32" rx="1.2" fill="none" stroke="rgba(255,255,255,.18)" stroke-width=".6"/>
+        <svg x="6.5" y="6.5" width="27" height="27" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">${cover}</svg>
+      </svg>`
+    }
+  }
+  return itemArt(item)
+}
 
 function albumArt(item) {
   if (String(item?.era || '').toLowerCase() === 'media') return filmArt()

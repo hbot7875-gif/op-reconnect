@@ -43,7 +43,7 @@ import { cachedDiaryTheme, closedDiaryObject, rememberDiaryTheme } from './scree
 import { importantDatesOn, nextImportantDate } from '../supabase/functions/op-reconnect/lib/diary-dates.js'
 import { collectibleWeeklyXp, COLLECTION_WEEKLY_CAP } from '../supabase/functions/op-reconnect/lib/collectible-values.js'
 import { kstMidnightLabel, shortReset } from './collection-xp-ui.js'
-import { collectibleTile, collectionContext, isCollectible } from './collectible-tile.js'
+import { collectibleTile, collectionContext, isPackObject } from './collectible-tile.js'
 
 /* ── Agent ID ─────────────────────────────────────────────────────────── */
 function agentIdCard(state) {
@@ -443,7 +443,7 @@ export function renderResources(container, state) {
   // ── Merch — Backup Pass/Tickets now live in the case's front pocket
   // above, so they're excluded here to avoid showing the same item twice.
   const allItems = state.items || []
-  const items = allItems.filter(isCollectible)
+  const items = allItems.filter(isPackObject)
   const inPack = items.filter((i) => !i.districtId).length
   const placed = items.length - inPack
 
