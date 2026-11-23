@@ -12,11 +12,14 @@ const cache = new Map() // districtId -> server reply (records don't change once
 const fmt = (n) => Number(n || 0).toLocaleString()
 const day = (iso) => (iso ? new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '')
 
-export function contributionsSection(districtId, districtName) {
-  const box = el('section', 'yc')
+/** @param opts.compact  the version inside the restoration card: a small
+ *  label instead of the section title, no intro line, tighter rows. */
+export function contributionsSection(districtId, districtName, opts = {}) {
+  const box = el('section', opts.compact ? 'yc yc-compact' : 'yc')
   box.innerHTML = `
-    <div class="yc-head"><h3 class="yc-title">Your Contributions</h3><span class="yc-when"></span></div>
+    <div class="yc-head">${opts.compact ? '<span class="yc-label">Your Contributions</span>' : '<h3 class="yc-title">Your Contributions</h3>'}<span class="yc-when"></span></div>
     <div class="yc-body"><p class="yc-note">Loading your record…</p></div>`
+  box.dataset.compact = opts.compact ? '1' : ''
   const load = async () => {
     let res = cache.get(districtId)
     if (!res) {
@@ -42,10 +45,17 @@ function paint(box, res, districtName, retry) {
   }
   box.querySelector('.yc-when').textContent = `${day(res.activatedAt)} – ${day(res.completedAt)}`
   body.innerHTML = ''
-  body.appendChild(el('p', 'yc-lede', `What you streamed while restoring ${esc(districtName)}.`))
+  const tracks = res.tracks || []
+  const albums = res.albums || []
+  const r = res.reconnect
+  // Nothing in any category: one quiet line, not three empty rows.
+  if (!tracks.length && !albums.length && (!r || r.state === 'none')) {
+    body.appendChild(el('p', 'yc-note yc-empty', 'No contributions were recorded for you here.'))
+    return
+  }
+  if (!box.dataset.compact) body.appendChild(el('p', 'yc-lede', `What you streamed while restoring ${esc(districtName)}.`))
 
   // Tracks
-  const tracks = res.tracks || []
   const trackPlays = tracks.reduce((s, t) => s + t.plays, 0)
   body.appendChild(line({
     icon: 'music', name: 'Tracks',
@@ -57,7 +67,6 @@ function paint(box, res, districtName, retry) {
   }))
 
   // Albums
-  const albums = res.albums || []
   const passes = albums.reduce((s, a) => s + a.passes, 0)
   body.appendChild(line({
     icon: 'disc', name: 'Albums',
@@ -71,7 +80,6 @@ function paint(box, res, districtName, retry) {
   }))
 
   // ReConnect
-  const r = res.reconnect
   const rc = !r ? { value: '—', sub: 'No ReConnect quest in this district', detail: '' }
     : r.state === 'played' && r.plays != null ? {
       value: `${fmt(r.plays)} plays`,

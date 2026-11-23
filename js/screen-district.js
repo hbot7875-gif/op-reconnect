@@ -137,6 +137,7 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
     container.querySelector('.stage-eyebrow').textContent = 'ONLINE'
     if (!inlineRestore) {
       clearPendingRestore(getAgentNo(), districtId)
+      document.querySelector('.restored-notice')?.remove() // already here, the notice has done its job
       const startPct = parseInt(container.querySelector('.pw-val')?.textContent || '0', 10) || 0
       fractionOverride = Math.max(0.05, startPct / 100)
       const ward = (state.map?.wards || []).find((w) => w.id === wardId)
@@ -144,7 +145,8 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
       inlineRestore = { districtId, node }
     }
     board.innerHTML = ''
-    board.append(inlineRestore.node, contributionsSection(districtId, districtDisplayName(mapD)), shelf(state, mapD))
+    // Your Contributions is inside the card (celebrate.js), not below it.
+    board.append(inlineRestore.node, shelf(state, mapD))
     return
   }
 

@@ -17,6 +17,7 @@ import { openShare } from './share.js'
 import { itemArt, RARITY, itemsAt } from './items.js'
 import { wardDisplayName, districtDisplayName } from './ward-tiles.js'
 import { keepInDiaryControl } from './diary-keep.js'
+import { contributionsSection } from './district-contributions.js'
 
 const REDUCED = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
 const buzz = (pattern) => { try { navigator.vibrate?.(pattern) } catch {} }
@@ -77,6 +78,11 @@ export function playRestorationInline(snap, ward, page, state, setFraction) {
     : '<span class="cel-flag">District restored</span>')
   body.appendChild(banner)
   body.appendChild(rewards(snap, { bomb: { charge: snap.bombCharge ?? undefined } }))
+  // Your Contributions lives in the card now, under the rewards and before
+  // the collectible (it used to be a separate section below everything).
+  const contrib = contributionsSection(snap.id, districtDisplayName(snap), { compact: true })
+  contrib.classList.add('cel-contrib')
+  body.appendChild(contrib)
   const drop = snap.itemDropped
   if (drop) {
     const r = RARITY[drop.rarity] || RARITY.common
@@ -149,6 +155,7 @@ export function playRestorationInline(snap, ward, page, state, setFraction) {
     buzz(wardWhole ? [30, 60, 30, 60, 80] : [40, 60, 40])
   })
   at(3700, () => body.querySelector('.cel-rewards')?.classList.add('on'))
+  at(3900, () => contrib.classList.add('on'))
   at(4100, () => body.querySelector('.cel-drop')?.classList.add('on'))
   at(4600, () => reveal.classList.add('on'))
 
@@ -160,11 +167,12 @@ export function playRestorationInline(snap, ward, page, state, setFraction) {
     beatNodes.forEach((b) => b.classList.add('on'))
     banner.classList.add('on')
     body.querySelector('.cel-rewards')?.classList.add('on')
+    contrib.classList.add('on')
     body.querySelector('.cel-drop')?.classList.add('on')
     reveal.classList.add('on')
   }
   if (stage) stage.addEventListener('click', finish, { once: true })
-  body.onclick = (e) => { if (!e.target.closest('button, a, input')) finish() }
+  body.onclick = (e) => { if (!e.target.closest('button, a, input, .yc')) finish() }
   cel.finish = finish
   return cel
 }

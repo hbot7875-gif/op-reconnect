@@ -35,7 +35,7 @@ test('no pop-up: the overlay sequence is no longer triggered', () => {
 test('the district page plays it in place once, then keeps the card on re-render', () => {
   assert.match(district, /playRestorationInline\(pendingRestore, ward, container,/)
   assert.match(district, /clearPendingRestore\(getAgentNo\(\), districtId\)/)
-  assert.match(district, /board\.append\(inlineRestore\.node, contributionsSection/)
+  assert.match(district, /board\.append\(inlineRestore\.node, shelf\(state, mapD\)\)/)
   assert.match(district, /\(\) => fractionOverride \?\? \(isLiveActive/)
 })
 
@@ -57,4 +57,17 @@ test('a saved moment waits per agent and district until cleared', () => {
   assert.equal(peekPendingRestore('AGENT001', 'mono-7').xpAwarded, 25)
   clearPendingRestore('AGENT001', 'mono-7')
   assert.equal(peekPendingRestore('AGENT001', 'mono-7'), null)
+})
+
+test('Your Contributions sits inside the card: after the rewards, before the collectible', () => {
+  const fn = celebrate.slice(celebrate.indexOf('export function playRestorationInline'))
+  const rewardsAt = fn.indexOf('body.appendChild(rewards(snap')
+  const contribAt = fn.indexOf("contributionsSection(snap.id, districtDisplayName(snap), { compact: true })")
+  const dropAt = fn.indexOf('const drop = snap.itemDropped')
+  assert.ok(rewardsAt > 0 && rewardsAt < contribAt && contribAt < dropAt)
+})
+
+test('one quiet line when every category is empty', () => {
+  const contrib = read('./district-contributions.js')
+  assert.match(contrib, /if \(!tracks\.length && !albums\.length && \(!r \|\| r\.state === 'none'\)\) \{\s+body\.appendChild\(el\('p', 'yc-note yc-empty'/)
 })
