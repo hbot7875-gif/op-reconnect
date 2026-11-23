@@ -39,8 +39,8 @@ test('Backup Passes never stand in the district scene', () => {
   const m = { w: 400, groundY: 300, h: 160, buildings: [] }
   const props = layoutProps([
     { id: 'a', itemId: 'backup-pass', kind: 'utility' },
-    { id: 'b', itemId: 'tee-popup', kind: 'apparel' },
+    { id: 'b', itemId: 'plush-mascot', kind: 'plush' },
   ], m)
   assert.equal(props.length, 1)
-  assert.equal(props[0].item.itemId, 'tee-popup')
+  assert.equal(props[0].item.itemId, 'plush-mascot')
 })
