@@ -103,7 +103,8 @@ function paintList(body, agents, state) {
       <span class="rank-agent-icon${hasEquippedBadge ? ' has-equipped-badge' : ''}${frame && !photoOnlySrc ? ' is-polaroid' : ''}">${photoOnlySrc ? `<img class="rank-agent-photo" src="${photoOnlySrc}" alt="" decoding="async" width="60" height="60">` : badgeArt ? `<img class="rank-agent-photo" src="${esc(badgeThumb(badgeArt))}" data-badge-full="${esc(badgeArt)}" alt="" loading="lazy" decoding="async" width="60" height="60">` : (collectionBadge ? '🎖️' : badge ? badge.icon : '⟭⟬')}</span>
       <span class="rank-main">
         ${name}
-        <span class="rank-sub">Level ${a.level}${activeTab === 'all' ? ` · ${esc(MODE_LABEL[a.mode] || a.mode)}` : ''}${Number.isFinite(a.districtsOwned) ? `<span class="rank-owned" aria-label="${a.districtsOwned} district${a.districtsOwned === 1 ? '' : 's'} restored"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 14V7l3-2v9M5 14V3h6v11M11 14V8l3 1.5V14M1.5 14h13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>${a.districtsOwned}</span>` : ''}</span>
+        <span class="rank-sub">Level ${a.level}${activeTab === 'all' ? ` · ${esc(MODE_LABEL[a.mode] || a.mode)}` : ''}</span>
+        ${Number.isFinite(a.districtsOwned) ? `<span class="rank-owned">${a.districtsOwned} district${a.districtsOwned === 1 ? '' : 's'} restored</span>` : ''}
       </span>
       <span class="rank-xp">${a.xp.toLocaleString()} <span class="rank-xp-unit">total XP</span></span>
     `
@@ -127,8 +128,6 @@ function paintList(body, agents, state) {
     body.appendChild(el('div', 'dim rank-hint',
       'All compares every mode. For a fair board, choose the mode you play.'))
   }
-  // Key for the small city mark beside each level.
-  body.appendChild(el('div', 'dim rank-hint rank-owned-key', `<span class="rank-owned"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 14V7l3-2v9M5 14V3h6v11M11 14V8l3 1.5V14M1.5 14h13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg></span> Districts each agent has restored. Ranking order is by XP.`))
 }
 
 const MODE_LABEL = { exam: 'School/Exam', easy: 'Easy', steady: 'Easy+', medium: 'Medium', hard: 'Hard' }

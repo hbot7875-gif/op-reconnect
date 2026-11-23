@@ -42,6 +42,7 @@ import { goDiary } from './router.js'
 import { cachedDiaryTheme, closedDiaryObject, rememberDiaryTheme } from './screen-diary.js'
 import { importantDatesOn, nextImportantDate } from '../supabase/functions/op-reconnect/lib/diary-dates.js'
 import { collectibleWeeklyXp, COLLECTION_WEEKLY_CAP } from '../supabase/functions/op-reconnect/lib/collectible-values.js'
+import { collectionChip, kstMidnightLabel, shortReset } from './collection-xp-ui.js'
 
 /* ── Agent ID ─────────────────────────────────────────────────────────── */
 function agentIdCard(state) {
@@ -365,10 +366,6 @@ function earningCopies(items, state) {
   return new Set(pick.values())
 }
 
-const shortReset = (iso) => {
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? '' : d.toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })
-}
 
 /** One compact strip: this week's collection XP against the cap, and what
  *  it takes to earn (or when it starts / resets). */
@@ -378,8 +375,9 @@ function collectionXpStrip(state) {
   const box = el('button', 'cx-strip')
   box.type = 'button'
   const pct = Math.max(0, Math.min(100, Math.round((c.earned / (c.cap || COLLECTION_WEEKLY_CAP)) * 100)))
-  const startDay = new Date(`${c.startsWeek}T00:00:00+09:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-  const note = !c.started ? `Starts ${startDay} · place collectibles in districts you restored`
+  // The start is Monday 00:00 KST, shown in the viewer's own time zone
+  // (Sunday 8:30 PM in India), with its day and time so it can't read a day off.
+  const note = !c.started ? `Starts ${kstMidnightLabel(c.startsWeek)} · place collectibles in districts you restored`
     : c.qualified ? (c.earned >= c.cap ? `Weekly max reached · resets ${shortReset(c.resetsAt)}` : `Resets ${shortReset(c.resetsAt)}`)
     : `Unlock: ${c.plays}/${c.qualifyPlays} goal-song plays or restore a district this week`
   box.innerHTML = `
@@ -407,7 +405,7 @@ function collectionXpSheet(c) {
   return sheet
 }
 
-function collectionObject(item, earning = null, earned = null) {
+function collectionObject(item, earning = null, earned = null, restoredIds = null, collection = null, countedIds = null) {
   const rarity = RARITY[item.rarity] || RARITY.common
   const button = el('button', `collection-object ${rarity.cls}${item.usedAt ? ' is-used' : ''}`)
   // district_id is where the player placed it (the game doesn't record
@@ -415,13 +413,13 @@ function collectionObject(item, earning = null, earned = null) {
   const location = item.usedAt ? 'Used' : item.districtName ? `Placed in ${item.districtName}` : 'In your Pack'
   button.dataset.kind = item.kind || ''
   button.setAttribute('aria-label', `${item.name}. ${rarity.label}${item.era ? `, ${item.era}` : ''}. ${location}.`)
-  // Weekly XP chip: what it earns, and a tick once it has this week.
+  // Weekly XP chip (collection-xp-ui.js): potential, locked, or earned —
+  // never a number that reads as already paid unless it was.
   const weekly = collectibleWeeklyXp(item)
   const isEarning = !!earning?.has(item.id)
-  const paid = isEarning && !!earned?.has(item.itemId)
-  const chip = weekly > 0
-    ? `<span class="co-xp${paid ? ' is-earned' : isEarning ? ' is-live' : ''}">${paid ? `✓ +${weekly} XP` : `${weekly} XP/wk`}</span>`
-    : ''
+  const where = !item.districtId ? 'pack' : restoredIds?.has(item.districtId) ? 'restored' : 'unowned'
+  const chipState = item.usedAt ? null : collectionChip(weekly, where, !isEarning && !!countedIds?.has(item.itemId), isEarning && !!earned?.has(item.itemId), collection)
+  const chip = chipState ? `<span class="co-xp is-${chipState.state}">${esc(chipState.text)}</span>` : ''
   button.innerHTML = `
     <span class="co-art">${itemArt(item)}${chip}</span>
     <span class="co-name">${esc(item.name)}</span>
@@ -521,7 +519,10 @@ export function renderResources(container, state) {
       const grid = el('div', 'collection-shelf')
       const earning = earningCopies(items, state)
       const earned = new Set(state.collection?.earnedItemIds || [])
-      for (const it of visible) grid.appendChild(collectionObject(it, earning, earned))
+      const restoredIds = new Set((state.map?.districts || []).filter((d) => d.status === 'restored').map((d) => d.id))
+      // Collectibles with a copy that already counts (a second copy never adds).
+      const countedIds = new Set(items.filter((i) => earning.has(i.id)).map((i) => i.itemId))
+      for (const it of visible) grid.appendChild(collectionObject(it, earning, earned, restoredIds, state.collection, countedIds))
       wrap.appendChild(grid)
     } else {
       wrap.appendChild(el('div', 'dim pack-hint', 'Nothing in this filter yet.'))
