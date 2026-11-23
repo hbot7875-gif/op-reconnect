@@ -23,21 +23,150 @@ const buzz = (pattern) => { try { navigator.vibrate?.(pattern) } catch {} }
 
 // The server reports a restoration once (activeDistrict.restoredNow), on the
 // refresh that finishes the district, whichever screen the player is on.
-// This used to play only from the district's own page, so a player on City
-// (most of them) never saw it — the promo showed a moment the game rarely
-// gave. main.js now calls this on every state, and the id guard keeps a
-// later poll or a local setState() from replaying it.
+// main.js keeps a copy (restore-pending.js) and the district page plays the
+// moment in place (playRestorationInline below) the first time it's opened.
+// The id guard keeps a later poll or a local setState() from re-reporting it.
 let celebratedRestoreFor = null
 
-/** Play the restoration sequence if this state just restored a district.
- *  Returns true when it started (onDone then runs when it's dismissed). */
-export function maybePlayRestoration(state, onDone) {
+/** The district this state just restored, once per district; else null. */
+export function takeRestorationDue(state) {
   const d = state?.activeDistrict
-  if (!d?.restoredNow || d.id === celebratedRestoreFor) return false
+  if (!d?.restoredNow || d.id === celebratedRestoreFor) return null
   celebratedRestoreFor = d.id
-  const ward = (state.map?.wards || []).find((w) => w.id === d.wardId)
-  playRestoration(d, ward, state, onDone)
-  return true
+  return d
+}
+
+/**
+ * The restoration moment, played on the district page itself instead of a
+ * pop-up: the page's own hero relights (setFraction ramps its scene, the
+ * meter fills to 100%), and the card below ticks through the same beats the
+ * pop-up had. Tap the card or the hero to skip to the end.
+ *
+ * @param snap      restore-pending.js snapshot (or the restored district)
+ * @param ward      its ward, if known
+ * @param page      the .district-screen element (hero + board)
+ * @param state     full game state (share sheet)
+ * @param setFraction  (0..1) => void — drives the hero scene's light
+ * @returns the card element, to keep across re-renders of the same page
+ */
+export function playRestorationInline(snap, ward, page, state, setFraction) {
+  const reduced = REDUCED()
+  const wardWhole = !!ward && ward.totalCount > 0 && ward.restoredCount >= ward.totalCount
+  const stage = page.querySelector('.stage')
+  const meterFill = page.querySelector('.stage-meter-fill')
+  const pctVal = page.querySelector('.pw-val')
+  const startPct = parseInt(pctVal?.textContent || '0', 10) || 0
+
+  const cel = el('div', 'cel cel-inline' + (wardWhole ? ' is-ward' : ''))
+  const body = el('div', 'cel-body')
+  body.appendChild(el('div', 'cel-eyebrow', 'RESTORATION SEQUENCE'))
+  body.appendChild(el('div', 'cel-title', esc(districtDisplayName(snap))))
+  const beatBox = el('div', 'cel-beats')
+  const beatNodes = [
+    ['💡', 'Power restored'],
+    ['🏮', 'Street lights on'],
+    ['📡', 'Signal routed to the ARMY Bomb'],
+  ].map(([icon, label]) => {
+    const b = el('div', 'cel-beat', `<span class="cb-i">${icon}</span><span class="cb-l">${esc(label)}</span><span class="cb-ok">✓</span>`)
+    beatBox.appendChild(b)
+    return b
+  })
+  body.appendChild(beatBox)
+  const banner = el('div', 'cel-banner', wardWhole
+    ? `<span class="cel-flag">${esc(wardDisplayName(ward))} is whole</span>`
+    : '<span class="cel-flag">District restored</span>')
+  body.appendChild(banner)
+  body.appendChild(rewards(snap, { bomb: { charge: snap.bombCharge ?? undefined } }))
+  const drop = snap.itemDropped
+  if (drop) {
+    const r = RARITY[drop.rarity] || RARITY.common
+    const box = el('div', `cel-drop ${r.cls}`)
+    box.innerHTML = `
+      <div class="cd-label">You found something</div>
+      <div class="cd-art">${itemArt(drop)}</div>
+      <div class="cd-name">${esc(drop.name)}</div>
+      <div class="cd-rarity">${esc(r.label)}</div>
+      ${drop.blurb ? `<div class="cd-blurb">${esc(drop.blurb)}</div>` : ''}
+      <div class="cd-where">It's in your Pack — keep it anywhere you've restored.</div>
+    `
+    body.appendChild(box)
+  }
+  if (snap.backupPassDropped) {
+    body.appendChild(el('div', 'cel-bonus', `
+      <span class="cbn-ico">🤝</span>
+      <span class="cbn-copy"><b>Backup Pass</b> added to your Pack
+        <small>Open one of your goals to a teammate — their streams count with yours.</small></span>
+    `))
+  }
+  const reveal = el('div', 'cel-reveal')
+  if (snap.echoOf) reveal.appendChild(el('div', 'cel-guardian', `<span>👤 Guardian</span><b>${esc(snap.echoOf)}</b>`))
+  if (wardWhole && ward.centerpieces?.length) {
+    const names = joinNames(ward.centerpieces.map((c) => c.name))
+    reveal.appendChild(el('div', 'cel-centerpiece', `${esc(names)} ${ward.centerpieces.length > 1 ? 'are' : 'is'} awake`))
+  }
+  const actions = el('div', 'cel-actions')
+  const share = el('button', 'btn btn-primary cel-go', '📤 Share this')
+  share.onclick = () => showOverlay(openShare(state, { districtId: snap.id, progress: 1 }))
+  actions.appendChild(share)
+  reveal.appendChild(actions)
+  reveal.appendChild(keepInDiaryControl({ kind: 'district', ref: snap.id, close: () => {} }))
+  body.appendChild(reveal)
+  cel.appendChild(body)
+
+  let sparkHost = stage?.querySelector('.cel-sparks')
+  if (stage && !sparkHost) { sparkHost = el('div', 'cel-sparks'); stage.appendChild(sparkHost) }
+
+  const timers = []
+  const at = (ms, fn) => timers.push(setTimeout(fn, reduced ? Math.min(ms, 120) : ms))
+  let ramp = null
+  const setPct = (pct) => {
+    if (pctVal) pctVal.textContent = `${pct}%`
+    if (meterFill) meterFill.style.width = `${pct}%`
+  }
+  const lightUp = () => {
+    if (reduced) { setFraction(1); setPct(100); stage?.classList.remove('is-dark'); return }
+    const from = Math.max(0.05, startPct / 100)
+    const t0 = performance.now()
+    const tick = (t) => {
+      const k = Math.min(1, (t - t0) / 1700)
+      const e = 1 - Math.pow(1 - k, 3)
+      setFraction(from + (1 - from) * e)
+      setPct(Math.round(startPct + (100 - startPct) * e))
+      if (k >= 0.4) stage?.classList.remove('is-dark')
+      if (k < 1) ramp = requestAnimationFrame(tick)
+    }
+    ramp = requestAnimationFrame(tick)
+  }
+
+  at(250, lightUp)
+  at(700, () => { beatNodes[0].classList.add('on'); buzz(18) })
+  at(1500, () => { beatNodes[1].classList.add('on'); buzz(18) })
+  at(2300, () => { beatNodes[2].classList.add('on'); buzz([24, 40, 24]) })
+  at(3100, () => {
+    banner.classList.add('on')
+    stage?.classList.add('cel-flash')
+    if (!reduced) sparks(sparkHost, wardWhole ? 26 : 16)
+    buzz(wardWhole ? [30, 60, 30, 60, 80] : [40, 60, 40])
+  })
+  at(3700, () => body.querySelector('.cel-rewards')?.classList.add('on'))
+  at(4100, () => body.querySelector('.cel-drop')?.classList.add('on'))
+  at(4600, () => reveal.classList.add('on'))
+
+  const finish = () => {
+    for (const t of timers) clearTimeout(t)
+    timers.length = 0
+    if (ramp) cancelAnimationFrame(ramp)
+    setFraction(1); setPct(100); stage?.classList.remove('is-dark')
+    beatNodes.forEach((b) => b.classList.add('on'))
+    banner.classList.add('on')
+    body.querySelector('.cel-rewards')?.classList.add('on')
+    body.querySelector('.cel-drop')?.classList.add('on')
+    reveal.classList.add('on')
+  }
+  if (stage) stage.addEventListener('click', finish, { once: true })
+  body.onclick = (e) => { if (!e.target.closest('button, a, input')) finish() }
+  cel.finish = finish
+  return cel
 }
 
 /**

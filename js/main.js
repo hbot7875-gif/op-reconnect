@@ -7,7 +7,7 @@ import { getAgentNo, clearSession } from './session.js'
 import { renderAuth } from './ui-auth.js'
 import { sessionDecision, SESSION_RECHECK_MS, SIGNED_OUT_ELSEWHERE } from './session-guard.js'
 import { setState, getState, subscribe, toast, el, esc, showOverlay, hideOverlay } from './state.js'
-import { getScreen, onScreenChange } from './router.js'
+import { getScreen, onScreenChange, goDistrict } from './router.js'
 import { renderOnboarding } from './ui-onboarding.js'
 import { renderHud, renderTabbar } from './ui-hud.js'
 import { startMoonReviewCheck } from './moon-review-dot.js'
@@ -27,7 +27,8 @@ import { renderRanking } from './screen-ranking.js'
 import { renderMoonStation, teardownMoonStation } from './screen-moon.js'
 import { renderVoting } from './voting.js'
 import { renderRunAmi, teardownRunAmi } from './screen-run-ami.js'
-import { playLevelUp, maybePlayRestoration } from './celebrate.js'
+import { playLevelUp, takeRestorationDue } from './celebrate.js'
+import { savePendingRestore } from './restore-pending.js'
 import { checkForBadgeUnlocks } from './badge-reveal.js'
 import { checkForExamModeAnnounce } from './exam-mode-announce.js'
 import { checkForMamaTeamPopup } from './mama-team-popup.js'
@@ -151,6 +152,17 @@ let shownModeReview = null
 const celebratedEraCards = new Set()
 let promptedLapse = null
 
+/** "X is restored! Tap to see it" — a toast that opens the district page,
+ *  where the restore moment plays. */
+function restoredNotice(d) {
+  const t = el('button', 'toast toast-action restored-notice', `✨ ${esc(districtDisplayName(d))} is restored! <b>Tap to see it</b>`)
+  t.type = 'button'
+  t.setAttribute('role', 'status')
+  t.onclick = () => { t.remove(); hideOverlay(); goDistrict(d.wardId, d.id) }
+  document.body.appendChild(t)
+  setTimeout(() => t.remove(), 12000)
+}
+
 subscribe((state) => {
   if (!state || !state.joined) return
   if (!engagementStarted) {
@@ -160,6 +172,11 @@ subscribe((state) => {
     trackScreen(scr)
   }
   window.__rcState = state
+  // A district just restored: keep its moment until the district page plays
+  // it (restore-pending.js). Saved before renderScreen so a player already on
+  // that page sees it play right away.
+  const restoredNow = takeRestorationDue(state)
+  if (restoredNow) savePendingRestore(getAgentNo(), restoredNow, state.bomb?.charge)
   show('game')
   renderHud($('hud'), state)
   refreshCompactHud()
@@ -171,13 +188,18 @@ subscribe((state) => {
     const now = getState()
     if (now?.joined) renderTabbar($('tabbar'), now)
   })
-  // A restored district gets its sequence wherever the player is; a level-up
-  // reached on the same refresh (the +25 XP often does it) follows it instead
-  // of replacing it on the shared overlay.
-  const levelUpDue = !!state.levelUp && state.levelUp.level !== celebratedLevel
-  if (levelUpDue) celebratedLevel = state.levelUp.level
-  const playLevel = () => playLevelUp(state)
-  if (!maybePlayRestoration(state, levelUpDue ? playLevel : undefined) && levelUpDue) playLevel()
+  // The restore moment plays on the district page itself. Already there: a
+  // level-up from the same refresh (the +25 XP often does it) waits until the
+  // sequence has played instead of covering it. Anywhere else: a notice that
+  // takes them to the page.
+  const scr = getScreen()
+  const onRestoredPage = !!restoredNow && scr.name === 'district' && scr.districtId === restoredNow.id
+  if (restoredNow && !onRestoredPage) restoredNotice(restoredNow)
+  if (state.levelUp && state.levelUp.level !== celebratedLevel) {
+    celebratedLevel = state.levelUp.level
+    if (onRestoredPage) setTimeout(() => playLevelUp(state), 5200)
+    else playLevelUp(state)
+  }
   if (state.modeReview) {
     const reviewKey = `${state.modeReview.mode}:${state.modeReview.highVolumeDays}`
     if (reviewKey !== shownModeReview) {

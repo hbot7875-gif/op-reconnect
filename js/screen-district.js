@@ -11,6 +11,8 @@ import { getAgentNo } from './session.js'
 import { goWard, goDistrict, goWorld, goRunAmi } from './router.js'
 import { openAgentCharge } from './agent-charge.js'
 import { wardDisplayName, districtDisplayName } from './ward-tiles.js'
+import { playRestorationInline } from './celebrate.js'
+import { peekPendingRestore, clearPendingRestore } from './restore-pending.js'
 import { mountScene } from './scene.js'
 import { districtFraction, renderBoard } from './ui-district.js'
 import { districtPercent } from './district-progress.js'
@@ -35,6 +37,11 @@ import { warmShareArtwork } from './share-scene-image.js'
 
 let teardown = null
 let sceneFor = null
+// The restore moment playing on this page (restore-pending.js): the hero
+// scene's light while it ramps, and the card, kept so a poll's re-render
+// moves it instead of replaying it. Both reset when the page changes.
+let fractionOverride = null
+let inlineRestore = null
 let celebratedCellAward = null
 
 export function renderDistrictScreen(container, state, wardId, districtId) {
@@ -46,6 +53,8 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
   if (sceneFor !== districtId) {
     if (teardown) { teardown(); teardown = null }
     container.innerHTML = ''
+    fractionOverride = null
+    inlineRestore = null
 
     const wrap = el('div', 'district-screen')
     const head = el('div', 'screen-head')
@@ -80,7 +89,7 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
     teardown = mountScene(
       stage.querySelector('.stage-canvas'),
       districtId,
-      () => isLiveActive ? districtFraction(window.__rcState?.activeDistrict) : (fixedFraction[mapD.status] ?? 0),
+      () => fractionOverride ?? (isLiveActive ? districtFraction(window.__rcState?.activeDistrict) : (fixedFraction[mapD.status] ?? 0)),
       () => window.__rcState?.bomb?.charge || 0,
       mapD.name,
       () => itemsAt(window.__rcState || state, districtId),
@@ -119,6 +128,25 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
   container.querySelector('.stage-eyebrow').textContent = eyebrowText
 
   const board = container.querySelector('.board')
+
+  // Just restored: the moment plays here, on the page itself — the hero
+  // relights and the restoration card takes the missions' place. Once per
+  // district per device; afterwards this is the ordinary restored page.
+  const pendingRestore = inlineRestore?.districtId === districtId ? null : peekPendingRestore(getAgentNo(), districtId)
+  if (inlineRestore?.districtId === districtId || (pendingRestore && (isLiveActive || mapD.status === 'restored'))) {
+    container.querySelector('.stage-eyebrow').textContent = 'ONLINE'
+    if (!inlineRestore) {
+      clearPendingRestore(getAgentNo(), districtId)
+      const startPct = parseInt(container.querySelector('.pw-val')?.textContent || '0', 10) || 0
+      fractionOverride = Math.max(0.05, startPct / 100)
+      const ward = (state.map?.wards || []).find((w) => w.id === wardId)
+      const node = playRestorationInline(pendingRestore, ward, container, window.__rcState || state, (f) => { fractionOverride = f })
+      inlineRestore = { districtId, node }
+    }
+    board.innerHTML = ''
+    board.append(inlineRestore.node, contributionsSection(districtId, districtDisplayName(mapD)), shelf(state, mapD))
+    return
+  }
 
   if (isLiveActive) {
     const d = state.activeDistrict
@@ -185,8 +213,6 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
     // section is back, otherwise the browser clamps to the shorter interim
     // page and the player visibly jumps upward on each poll.
     if (document.scrollingElement) document.scrollingElement.scrollTop = pageScrollBeforeBoardRefresh
-    // The restoration sequence itself plays from main.js on any screen
-    // (celebrate.js maybePlayRestoration).
     return
   }
 
