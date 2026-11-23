@@ -191,7 +191,9 @@ export function coverSleeveArt(item) {
   const cover = p.cover ? eraCoverBody(p.cover) : null
   if (!cover) return vinylSleeveArt(item)
   const id = `cv${++coverSeq}`
-  return `<svg viewBox="0 0 40 40" class="ia ia-album-vinyl ia-album-cover">
+  // The view is cropped to the sleeve + record (no square margin), so the
+  // cover fills as much of a tile as it can.
+  return `<svg viewBox="0.4 6.4 39 27.2" class="ia ia-album-vinyl ia-album-cover">
     ${disc(27, 20, 12.2, p)}
     <clipPath id="${id}"><rect x="1" y="7" width="26" height="26" rx="1.4"/></clipPath>
     <rect x="1.4" y="7.6" width="26" height="26" rx="1.4" fill="rgba(0,0,0,.45)"/>
@@ -201,30 +203,10 @@ export function coverSleeveArt(item) {
   </svg>`
 }
 
-/** The cover alone, as a square sleeve with a little depth. */
-export function coverOnlyArt(item) {
-  const p = albumLabel(item)
-  const cover = p.cover ? eraCoverBody(p.cover) : null
-  if (!cover) return vinylDiscArt(item)
-  const id = `cv${++coverSeq}`
-  return `<svg viewBox="0 0 40 40" class="ia ia-album-vinyl ia-album-cover">
-    <rect x="5.6" y="5.6" width="30" height="30" rx="1.6" fill="rgba(0,0,0,.45)"/>
-    <clipPath id="${id}"><rect x="5" y="5" width="30" height="30" rx="1.6"/></clipPath>
-    <g clip-path="url(#${id})"><svg x="5" y="5" width="30" height="30" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">${cover}</svg>
-      <path d="M5 5 L35 5 L5 22 Z" fill="rgba(255,255,255,.07)"/></g>
-    <rect x="5" y="5" width="30" height="30" rx="1.6" class="ia-sleeve-edge"/>
-  </svg>`
-}
 let coverSeq = 0
-
-let albumStyle = 'cover-sleeve'
-/** Preview only, while the album styles are being compared. */
-export function setAlbumStyle(style) { albumStyle = style }
 
 function albumArt(item) {
   if (String(item?.era || '').toLowerCase() === 'media') return filmArt()
-  if (albumStyle === 'label') return vinylDiscArt(item)
-  if (albumStyle === 'cover') return coverOnlyArt(item)
   return coverSleeveArt(item)
 }
 

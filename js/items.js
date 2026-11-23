@@ -76,7 +76,7 @@ export function itemSheet(item, opts = {}) {
   if (item.blurb) sheet.appendChild(el('p', 'muted is-blurb', esc(item.blurb)))
 
   const where = item.districtId
-    ? `Kept at ${esc(item.districtName || 'a district')}`
+    ? `Placed in ${esc(item.districtName || 'a district')}`
     : 'In your Pack'
   sheet.appendChild(el('div', 'is-where', item.usedAt ? 'Used — the stub stays with you' : where))
 

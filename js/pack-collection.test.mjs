@@ -5,7 +5,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { itemArt, setAlbumStyle } from './items-art.js'
+import { itemArt } from './items-art.js'
 
 const read = (f) => readFileSync(new URL(f, import.meta.url), 'utf8').split('\r\n').join('\n')
 
@@ -20,14 +20,6 @@ test('albums: a record in a sleeve made from the War of Cards cover art', () => 
   assert.doesNotMatch(mots, /mix-blend-mode/)
   // An era with no cover artwork still draws as its own labelled record.
   assert.match(itemArt({ kind: 'album', era: 'Golden', name: 'Golden' }), />GOLDEN<\/text>/)
-})
-
-test('the other two compared styles still draw', () => {
-  setAlbumStyle('label')
-  assert.match(itemArt({ kind: 'album', era: 'Proof', name: 'Proof' }), />PROOF<\/text>/)
-  setAlbumStyle('cover')
-  assert.doesNotMatch(itemArt({ kind: 'album', era: 'Proof', name: 'Proof' }), /ia-vinyl"/)
-  setAlbumStyle('cover-sleeve')
 })
 
 test('War of Cards keeps its own artwork untouched', () => {
