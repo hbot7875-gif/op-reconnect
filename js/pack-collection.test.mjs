@@ -67,7 +67,7 @@ test('one-time Weekly Collection XP announcement is wired in', () => {
 test('district scene draws an album as its framed cover, one image per album', () => {
   const scene = read('./scene-items.js')
   assert.match(scene, /const svg = itemSceneArt\(item\)/)
-  assert.match(scene, /item\.kind === 'album' \? item\.era \|\| item\.itemId \|\| '' : ''/)
+  assert.match(scene, /item\.kind === 'album' \? item\.era \|\| item\.itemId \|\| '' : item\.itemId \|\| ''/)
   const art = read('./items-art.js')
   assert.doesNotMatch(art.slice(art.indexOf('export function coverSleeveArt')), /clip-path="url\(#/, 'no clipPath: it blacked out the cover as an image')
 })

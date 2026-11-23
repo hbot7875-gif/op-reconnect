@@ -48,8 +48,9 @@ const imgCache = new Map()
 /** One rasterised drawing per kind+rarity — the palette is baked in. */
 function itemImage(item) {
   const rarity = item.rarity || 'common'
-  // Albums are each their own cover, so they can't share one image per kind.
-  const key = `${item.kind || 'unknown'}|${rarity}|${item.kind === 'album' ? item.era || item.itemId || '' : ''}`
+  // Albums and items with their own drawing (items-art.js ITEM_ART) can't
+  // share one image per kind, so the key carries the item id.
+  const key = `${item.kind || 'unknown'}|${rarity}|${item.kind === 'album' ? item.era || item.itemId || '' : item.itemId || ''}`
   const hit = imgCache.get(key)
   if (hit) return hit
 
@@ -85,7 +86,9 @@ export function propsKey(items) {
  * off each item's own id, so that part never moves.
  */
 export function layoutProps(items, m) {
-  const list = (items || []).slice(0, MAX_PROPS)
+  // Backup Passes (utility) are tools, not things on display: never in the
+  // street, even if one was placed before shelves stopped offering them.
+  const list = (items || []).filter((i) => i && i.kind !== 'utility' && i.itemId !== 'backup-pass').slice(0, MAX_PROPS)
   if (!list.length || !m) return []
 
   const { w, groundY } = m
