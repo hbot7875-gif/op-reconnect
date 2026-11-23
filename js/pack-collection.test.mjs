@@ -9,16 +9,31 @@ import { itemArt, setAlbumStyle } from './items-art.js'
 
 const read = (f) => readFileSync(new URL(f, import.meta.url), 'utf8').split('\r\n').join('\n')
 
-test('albums are records with their era on the label', () => {
-  const proof = itemArt({ kind: 'album', era: 'Proof', name: 'Proof' })
-  assert.match(proof, /class="ia ia-album-vinyl"/)
-  assert.match(proof, />PROOF<\/text>/)
-  assert.notEqual(itemArt({ kind: 'album', era: 'BE', name: 'BE' }), proof)
-  // A new album row with an unknown era still draws as its own record.
+test('albums: a record in a sleeve made from the War of Cards cover art', () => {
+  const be = itemArt({ kind: 'album', era: 'BE', name: 'BE' })
+  assert.match(be, /class="ia ia-album-vinyl ia-album-cover"/)
+  assert.match(be, /life goes on/, 'the BE cover artwork itself')
+  assert.match(itemArt({ kind: 'album', era: 'MOTS', name: 'Map of the Soul: 7' }), /MAP OF THE SOUL/)
+  assert.match(itemArt({ kind: 'album', era: 'Arirang', name: 'Arirang' }), /class="ia ia-album-vinyl ia-album-cover"/)
+  // Chrome-safe copy: no blend modes, no element opacity inside the sleeve.
+  const mots = itemArt({ kind: 'album', era: 'MOTS', name: 'x' })
+  assert.doesNotMatch(mots, /mix-blend-mode/)
+  // An era with no cover artwork still draws as its own labelled record.
   assert.match(itemArt({ kind: 'album', era: 'Golden', name: 'Golden' }), />GOLDEN<\/text>/)
-  setAlbumStyle('sleeve')
-  assert.match(itemArt({ kind: 'album', era: 'Proof', name: 'Proof' }), /ia-sleeve-edge/)
-  setAlbumStyle('disc')
+})
+
+test('the other two compared styles still draw', () => {
+  setAlbumStyle('label')
+  assert.match(itemArt({ kind: 'album', era: 'Proof', name: 'Proof' }), />PROOF<\/text>/)
+  setAlbumStyle('cover')
+  assert.doesNotMatch(itemArt({ kind: 'album', era: 'Proof', name: 'Proof' }), /ia-vinyl"/)
+  setAlbumStyle('cover-sleeve')
+})
+
+test('War of Cards keeps its own artwork untouched', () => {
+  const src = read('./run-ami-art.js')
+  assert.match(src, /export function eraCoverBody\(era\) \{\s+const art = MOTIF\[era\]/)
+  assert.match(src, /style="mix-blend-mode:multiply"/, 'cards keep their blend')
 })
 
 test('films are not records; other kinds keep their drawings', () => {

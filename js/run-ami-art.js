@@ -252,6 +252,14 @@ function value(k, x, y) {
 
 const svg = (body) => `<svg class="ra-card-art" viewBox="0 0 62 88" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">${body}</svg>`
 
+/** One era's cover artwork on its own, in its 100×100 box, with fresh ids —
+ *  the same picture the cards carry. Pack's album collectibles use it for
+ *  their sleeves (items-art.js). null for an era with no artwork. */
+export function eraCoverBody(era) {
+  const art = MOTIF[era]
+  return art ? art(nextId()) : null
+}
+
 /** The face for { c, k }. `c` is 'r' | 'y' | 'g' | 'b', or 'w' for wilds. */
 export function cardFaceSvg(c, k) {
   const u = nextId()

@@ -10,6 +10,16 @@
 // forever without a code change — a new cushion is a new row, and it draws
 // itself.
 
+import { eraCoverBody as coverBody } from './run-ami-art.js'
+
+// A cover inside a small tile: the cards' artwork, with two things Chrome
+// won't paint inside a clipped, nested SVG on a button swapped for
+// equivalents (MOTS:7's "7" vanished): blend modes are dropped, and element
+// opacity becomes fill/stroke opacity. At tile size it reads the same.
+const eraCoverBody = (era) => coverBody(era)
+  ?.replace(/ style="mix-blend-mode:[a-z-]+"/g, '')
+  .replace(/ opacity="([\d.]+)"/g, ' fill-opacity="$1" stroke-opacity="$1"') ?? null
+
 const D = {
   album: `<rect x="4" y="4" width="32" height="32" rx="1.5" class="ia-body"/>
     <circle cx="20" cy="20" r="9" class="ia-accent"/><circle cx="20" cy="20" r="2.4" class="ia-hole"/>
@@ -106,11 +116,13 @@ const FALLBACK = `<rect x="8" y="8" width="24" height="24" rx="2" class="ia-body
    get a disc in a slim case instead. Unknown eras fall back to a colour
    picked from the name, so a new album row still draws as a distinct record. */
 
+// `cover` names the War of Cards era artwork (run-ami-art.js) used as the
+// sleeve; label colours are taken from that cover.
 const ALBUM_LABELS = {
-  arirang: { label: '#b8324a', ink: '#fbe9d7', sleeve: '#3a1420', word: 'ARIRANG' },
-  proof: { label: '#f2efe8', ink: '#141414', sleeve: '#1a1a1a', word: 'PROOF' },
-  be: { label: '#d9cfbf', ink: '#2c2620', sleeve: '#4a4038', word: 'BE' },
-  mots: { label: '#c9ccd6', ink: '#16161c', sleeve: '#2a2b33', word: 'MOTS:7' },
+  arirang: { label: '#c3102d', ink: '#fbe9d7', sleeve: '#2f2a26', word: 'ARIRANG', cover: 'arirang' },
+  proof: { label: '#f2efe8', ink: '#141414', sleeve: '#000000', word: 'PROOF', cover: 'proof' },
+  be: { label: '#161616', ink: '#f7f7f5', sleeve: '#f7f7f5', word: 'BE', cover: 'be' },
+  mots: { label: '#2a64c5', ink: '#fbfbfb', sleeve: '#fbfbfb', word: 'MOTS:7', cover: 'mots7' },
 }
 const FALLBACK_LABELS = [
   { label: '#8b5cf6', ink: '#f4efff', sleeve: '#2a1d52' },
@@ -172,13 +184,48 @@ function filmArt() {
   </svg>`
 }
 
-let albumStyle = 'disc'
-/** Preview only, while the two record styles are being compared. */
-export function setAlbumStyle(style) { albumStyle = style === 'sleeve' ? 'sleeve' : 'disc' }
+/** The real cover (the War of Cards artwork) as a sleeve, the record
+ *  sliding out of it. */
+export function coverSleeveArt(item) {
+  const p = albumLabel(item)
+  const cover = p.cover ? eraCoverBody(p.cover) : null
+  if (!cover) return vinylSleeveArt(item)
+  const id = `cv${++coverSeq}`
+  return `<svg viewBox="0 0 40 40" class="ia ia-album-vinyl ia-album-cover">
+    ${disc(27, 20, 12.2, p)}
+    <clipPath id="${id}"><rect x="1" y="7" width="26" height="26" rx="1.4"/></clipPath>
+    <rect x="1.4" y="7.6" width="26" height="26" rx="1.4" fill="rgba(0,0,0,.45)"/>
+    <g clip-path="url(#${id})"><svg x="1" y="7" width="26" height="26" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">${cover}</svg>
+      <path d="M1 7 L27 7 L1 22 Z" fill="rgba(255,255,255,.07)"/></g>
+    <rect x="1" y="7" width="26" height="26" rx="1.4" class="ia-sleeve-edge"/>
+  </svg>`
+}
+
+/** The cover alone, as a square sleeve with a little depth. */
+export function coverOnlyArt(item) {
+  const p = albumLabel(item)
+  const cover = p.cover ? eraCoverBody(p.cover) : null
+  if (!cover) return vinylDiscArt(item)
+  const id = `cv${++coverSeq}`
+  return `<svg viewBox="0 0 40 40" class="ia ia-album-vinyl ia-album-cover">
+    <rect x="5.6" y="5.6" width="30" height="30" rx="1.6" fill="rgba(0,0,0,.45)"/>
+    <clipPath id="${id}"><rect x="5" y="5" width="30" height="30" rx="1.6"/></clipPath>
+    <g clip-path="url(#${id})"><svg x="5" y="5" width="30" height="30" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">${cover}</svg>
+      <path d="M5 5 L35 5 L5 22 Z" fill="rgba(255,255,255,.07)"/></g>
+    <rect x="5" y="5" width="30" height="30" rx="1.6" class="ia-sleeve-edge"/>
+  </svg>`
+}
+let coverSeq = 0
+
+let albumStyle = 'cover-sleeve'
+/** Preview only, while the album styles are being compared. */
+export function setAlbumStyle(style) { albumStyle = style }
 
 function albumArt(item) {
   if (String(item?.era || '').toLowerCase() === 'media') return filmArt()
-  return albumStyle === 'sleeve' ? vinylSleeveArt(item) : vinylDiscArt(item)
+  if (albumStyle === 'label') return vinylDiscArt(item)
+  if (albumStyle === 'cover') return coverOnlyArt(item)
+  return coverSleeveArt(item)
 }
 
 export function itemArt(item) {
