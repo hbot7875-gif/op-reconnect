@@ -27,7 +27,7 @@ import { renderRanking } from './screen-ranking.js'
 import { renderMoonStation, teardownMoonStation } from './screen-moon.js'
 import { renderVoting } from './voting.js'
 import { renderRunAmi, teardownRunAmi } from './screen-run-ami.js'
-import { playLevelUp } from './celebrate.js'
+import { playLevelUp, maybePlayRestoration } from './celebrate.js'
 import { checkForBadgeUnlocks } from './badge-reveal.js'
 import { checkForExamModeAnnounce } from './exam-mode-announce.js'
 import { checkForMamaTeamPopup } from './mama-team-popup.js'
@@ -171,10 +171,13 @@ subscribe((state) => {
     const now = getState()
     if (now?.joined) renderTabbar($('tabbar'), now)
   })
-  if (state.levelUp && state.levelUp.level !== celebratedLevel) {
-    celebratedLevel = state.levelUp.level
-    playLevelUp(state)
-  }
+  // A restored district gets its sequence wherever the player is; a level-up
+  // reached on the same refresh (the +25 XP often does it) follows it instead
+  // of replacing it on the shared overlay.
+  const levelUpDue = !!state.levelUp && state.levelUp.level !== celebratedLevel
+  if (levelUpDue) celebratedLevel = state.levelUp.level
+  const playLevel = () => playLevelUp(state)
+  if (!maybePlayRestoration(state, levelUpDue ? playLevel : undefined) && levelUpDue) playLevel()
   if (state.modeReview) {
     const reviewKey = `${state.modeReview.mode}:${state.modeReview.highVolumeDays}`
     if (reviewKey !== shownModeReview) {

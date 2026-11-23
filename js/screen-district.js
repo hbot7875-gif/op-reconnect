@@ -15,7 +15,6 @@ import { mountScene } from './scene.js'
 import { districtFraction, renderBoard } from './ui-district.js'
 import { districtPercent } from './district-progress.js'
 import { lastAttemptHtml } from './last-attempt.js'
-import { playRestoration } from './celebrate.js'
 import { itemTile, itemSheet, itemsAt, itemsInPack } from './items.js'
 import { trackEngagementOnce } from './engagement.js'
 import { reconnectPlayerNext, sharedTracksPitch, questRuleNotes } from './reconnect-player-ui.js'
@@ -36,9 +35,6 @@ import { warmShareArtwork } from './share-scene-image.js'
 
 let teardown = null
 let sceneFor = null
-// The 90s poll re-renders with restoredNow still true, so remember which
-// district already got its moment and never replay it.
-let celebratedFor = null
 let celebratedCellAward = null
 
 export function renderDistrictScreen(container, state, wardId, districtId) {
@@ -189,12 +185,8 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
     // section is back, otherwise the browser clamps to the shorter interim
     // page and the player visibly jumps upward on each poll.
     if (document.scrollingElement) document.scrollingElement.scrollTop = pageScrollBeforeBoardRefresh
-    // Fires once, on the refresh that reports the district finished.
-    if (d.restoredNow && celebratedFor !== d.id) {
-      celebratedFor = d.id
-      const ward = (state.map?.wards || []).find((w) => w.id === wardId)
-      playRestoration(d, ward, state)
-    }
+    // The restoration sequence itself plays from main.js on any screen
+    // (celebrate.js maybePlayRestoration).
     return
   }
 

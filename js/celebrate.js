@@ -21,6 +21,25 @@ import { keepInDiaryControl } from './diary-keep.js'
 const REDUCED = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
 const buzz = (pattern) => { try { navigator.vibrate?.(pattern) } catch {} }
 
+// The server reports a restoration once (activeDistrict.restoredNow), on the
+// refresh that finishes the district, whichever screen the player is on.
+// This used to play only from the district's own page, so a player on City
+// (most of them) never saw it — the promo showed a moment the game rarely
+// gave. main.js now calls this on every state, and the id guard keeps a
+// later poll or a local setState() from replaying it.
+let celebratedRestoreFor = null
+
+/** Play the restoration sequence if this state just restored a district.
+ *  Returns true when it started (onDone then runs when it's dismissed). */
+export function maybePlayRestoration(state, onDone) {
+  const d = state?.activeDistrict
+  if (!d?.restoredNow || d.id === celebratedRestoreFor) return false
+  celebratedRestoreFor = d.id
+  const ward = (state.map?.wards || []).find((w) => w.id === d.wardId)
+  playRestoration(d, ward, state, onDone)
+  return true
+}
+
 /**
  * @param d      the restored district (state.activeDistrict)
  * @param ward   its ward from state.map.wards, if known
