@@ -36,7 +36,9 @@ export function restoreSnapshot(d, bombCharge) {
     rewardXp: Number.isFinite(d.rewardXp) ? d.rewardXp : null,
     itemDropped: d.itemDropped || null,
     backupPassDropped: !!d.backupPassDropped,
-    trackGoals: (d.trackGoals || []).map((g) => ({ progress: g.progress || 0, target: g.target || 0 })),
+    trackGoals: (d.trackGoals || []).map((g) => ({ progress: g.progress || 0, target: g.target || 0, done: typeof g.done === 'boolean' ? g.done : null })),
+    albums: (d.albums || []).map((a) => ({ done: !!a.done })),
+    reconnect: d.reconnect ? { done: !!d.reconnect.done, skipped: !!d.reconnect.skipped } : null,
     bombCharge: Number.isFinite(bombCharge) ? bombCharge : null,
     at: Date.now(),
   }
@@ -69,4 +71,19 @@ export function clearPendingRestore(agentNo, districtId) {
   if (!(k in map)) return
   delete map[k]
   writeAll(map)
+}
+
+/** What this district asked for and got done — goals, not streams: track
+ *  goals and album goals completed, and whether its ReConnect quest was
+ *  completed (the same done-and-not-skipped test the Mission Bond badge
+ *  uses). Your Contributions below has the plays behind each. */
+export function restoreCounts(d) {
+  const tracks = (d.trackGoals || []).filter((g) => g.done ?? (g.target > 0 && (g.progress || 0) >= g.target)).length
+  const albums = (d.albums || []).filter((a) => a.done).length
+  const rc = d.reconnect || null
+  return {
+    tracks, hasTracks: (d.trackGoals || []).length > 0,
+    albums, hasAlbums: (d.albums || []).length > 0,
+    reconnect: rc ? (rc.done && !rc.skipped ? 'completed' : rc.skipped ? 'skipped' : 'open') : null,
+  }
 }

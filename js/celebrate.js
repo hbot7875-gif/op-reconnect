@@ -18,6 +18,7 @@ import { itemArt, RARITY, itemsAt } from './items.js'
 import { wardDisplayName, districtDisplayName } from './ward-tiles.js'
 import { keepInDiaryControl } from './diary-keep.js'
 import { contributionsSection } from './district-contributions.js'
+import { restoreCounts } from './restore-pending.js'
 
 const REDUCED = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
 const buzz = (pattern) => { try { navigator.vibrate?.(pattern) } catch {} }
@@ -349,23 +350,30 @@ function rewards(d, state) {
   if (Number.isFinite(d.xpAwarded)) rows.push(['⚡', `+${d.xpAwarded} XP`])
   else if (Number.isFinite(d.rewardXp)) rows.push(['⚡', `+${d.rewardXp} XP`])
 
-  const streams = countStreams(d)
-  if (streams > 0) rows.push(['🎧', `${streams.toLocaleString()} streams routed`])
-
   const charge = state?.bomb?.charge
-  if (Number.isFinite(charge)) rows.push(['🔋', `ARMY Bomb at ${Math.round(charge * 100)}%`])
+  const bomb = Number.isFinite(charge) ? ['🔋', `ARMY Bomb at ${Math.round(charge * 100)}%`] : null
 
-  if (!rows.length) return box
   for (const [icon, label] of rows) {
     box.appendChild(el('div', 'cel-reward', `<span>${icon}</span><span>${esc(label)}</span>`))
   }
+  const summary = restoreSummary(d)
+  if (summary) box.appendChild(summary)
+  if (bomb) box.appendChild(el('div', 'cel-reward', `<span>${bomb[0]}</span><span>${esc(bomb[1])}</span>`))
   return box
 }
 
-function countStreams(d) {
-  let n = 0
-  for (const g of d.trackGoals || []) n += Math.min(g.progress || 0, g.target || 0)
-  return n
+function restoreSummary(d) {
+  const c = restoreCounts(d)
+  const tiles = []
+  if (c.hasTracks) tiles.push([String(c.tracks), c.tracks === 1 ? 'track routed' : 'tracks routed'])
+  if (c.hasAlbums) tiles.push([String(c.albums), c.albums === 1 ? 'album routed' : 'albums routed'])
+  if (c.reconnect === 'completed') tiles.push(['1', 'ReConnect quest completed'])
+  else if (c.reconnect === 'skipped') tiles.push(['—', 'ReConnect quest skipped'])
+  if (!tiles.length) return null
+  const box = el('div', 'cel-summary')
+  box.setAttribute('aria-label', tiles.map(([n, l]) => `${n} ${l}`).join(', '))
+  for (const [n, label] of tiles) box.appendChild(el('div', 'cel-sum', `<b>${esc(n)}</b><span>${esc(label)}</span>`))
+  return box
 }
 
 /* ── sparks ── */

@@ -17,7 +17,7 @@ globalThis.localStorage = {
   setItem: (k, v) => store.set(k, String(v)),
   removeItem: (k) => store.delete(k),
 }
-const { savePendingRestore, peekPendingRestore, clearPendingRestore } = await import('./restore-pending.js')
+const { savePendingRestore, peekPendingRestore, clearPendingRestore, restoreCounts } = await import('./restore-pending.js')
 
 test('main.js keeps the moment before painting, and offers a notice off the page', () => {
   assert.match(main, /const restoredNow = takeRestorationDue\(state\)\n\s+if \(restoredNow\) savePendingRestore\(getAgentNo\(\), restoredNow, state\.bomb\?\.charge\)\n\s+show\('game'\)/)
@@ -70,4 +70,30 @@ test('Your Contributions sits inside the card: after the rewards, before the col
 test('one quiet line when every category is empty', () => {
   const contrib = read('./district-contributions.js')
   assert.match(contrib, /if \(!tracks\.length && !albums\.length && \(!r \|\| r\.state === 'none'\)\) \{\s+body\.appendChild\(el\('p', 'yc-note yc-empty'/)
+})
+
+test('the summary counts completed goals, not streams', () => {
+  assert.doesNotMatch(celebrate, /streams routed/)
+  const d = {
+    trackGoals: [{ progress: 14, target: 14, done: true }, { progress: 30, target: 10, done: true }, { progress: 2, target: 10, done: false }],
+    albums: [{ done: true }, { done: false }],
+    reconnect: { done: true, skipped: false },
+  }
+  assert.deepEqual(restoreCounts(d), { tracks: 2, hasTracks: true, albums: 1, hasAlbums: true, reconnect: 'completed' })
+  assert.equal(restoreCounts({ ...d, reconnect: { done: true, skipped: true } }).reconnect, 'skipped')
+  assert.equal(restoreCounts({ trackGoals: [] }).reconnect, null)
+  // A snapshot without done flags falls back to progress vs target.
+  assert.equal(restoreCounts({ trackGoals: [{ progress: 5, target: 5, done: null }, { progress: 1, target: 5, done: null }] }).tracks, 1)
+  // The saved moment keeps what the summary needs.
+  savePendingRestore('A9', { id: 'x-1', ...d }, 0.5)
+  const snap = peekPendingRestore('A9', 'x-1')
+  assert.deepEqual(restoreCounts(snap), restoreCounts(d))
+})
+
+test('Your Contributions: one request per district, cached, and opening a row never fetches', () => {
+  const c = read('./district-contributions.js')
+  assert.match(c, /if \(!pending\.has\(districtId\)\) \{/)
+  assert.match(c, /if \(hit\) \{ cache\.set\(districtId, hit\); return hit \}/)
+  assert.match(c, /head\.onclick = \(\) => setOpen\(more\.hidden\)/)
+  assert.match(c, /<div class="yc-body">\$\{LOADING\}<\/div>/)
 })

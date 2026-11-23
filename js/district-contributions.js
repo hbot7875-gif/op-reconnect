@@ -8,7 +8,50 @@ import { call } from './api.js'
 import { getAgentNo } from './session.js'
 import { rcIcon } from './reconnect-icons.js'
 
-const cache = new Map() // districtId -> server reply (records don't change once restored)
+// A restored district's record never changes, so one reply per district is
+// kept: in memory for this visit (the request itself too, so a page refresh
+// while it's still loading joins it instead of sending another), and on
+// this device so the next visit shows it straight away.
+const cache = new Map() // districtId -> server reply
+const pending = new Map() // districtId -> in-flight request
+const openRows = new Map() // districtId -> Set of open row names, kept across re-renders
+const STORE_KEY = 'rc_contrib_v1'
+const STORE_MAX = 30
+
+function stored(agentNo, districtId) {
+  try {
+    const v = JSON.parse(localStorage.getItem(STORE_KEY) || '{}')[`${agentNo}:${districtId}`]
+    return v?.success ? v : null
+  } catch { return null }
+}
+
+function store(agentNo, districtId, res) {
+  try {
+    const map = JSON.parse(localStorage.getItem(STORE_KEY) || '{}')
+    map[`${agentNo}:${districtId}`] = res
+    const keys = Object.keys(map)
+    for (const k of keys.slice(0, Math.max(0, keys.length - STORE_MAX))) delete map[k]
+    localStorage.setItem(STORE_KEY, JSON.stringify(map))
+  } catch { /* storage full or private mode: memory cache still works */ }
+}
+
+function fetchRecord(districtId) {
+  const agentNo = getAgentNo()
+  const hit = cache.get(districtId) || stored(agentNo, districtId)
+  if (hit) { cache.set(districtId, hit); return hit }
+  if (!pending.has(districtId)) {
+    pending.set(districtId, call('getDistrictContributions', { agentNo, districtId }).then((res) => {
+      pending.delete(districtId)
+      if (res?.success) { cache.set(districtId, res); store(agentNo, districtId, res) }
+      return res
+    }, (err) => { pending.delete(districtId); return { success: false, error: String(err?.message || err) } }))
+  }
+  return pending.get(districtId)
+}
+
+const LOADING = `<div class="yc-skel" role="status" aria-label="Loading your record">
+  <div class="yc-skel-row"><i></i><span></span></div><div class="yc-skel-row"><i></i><span></span></div><div class="yc-skel-row"><i></i><span></span></div></div>`
+
 const fmt = (n) => Number(n || 0).toLocaleString()
 const day = (iso) => (iso ? new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '')
 
@@ -18,16 +61,14 @@ export function contributionsSection(districtId, districtName, opts = {}) {
   const box = el('section', opts.compact ? 'yc yc-compact' : 'yc')
   box.innerHTML = `
     <div class="yc-head">${opts.compact ? '<span class="yc-label">Your Contributions</span>' : '<h3 class="yc-title">Your Contributions</h3>'}<span class="yc-when"></span></div>
-    <div class="yc-body"><p class="yc-note">Loading your record…</p></div>`
+    <div class="yc-body">${LOADING}</div>`
   box.dataset.compact = opts.compact ? '1' : ''
-  const load = async () => {
-    let res = cache.get(districtId)
-    if (!res) {
-      res = await call('getDistrictContributions', { agentNo: getAgentNo(), districtId })
-      if (res?.success) cache.set(districtId, res)
-    }
-    if (!box.isConnected && !box.parentNode) return
-    paint(box, res, districtName, load)
+  box.dataset.districtId = districtId
+  const load = () => {
+    const got = fetchRecord(districtId)
+    // Already known: paint now, so a re-render never flashes the loader.
+    if (!(got instanceof Promise)) { paint(box, got, districtName, load); return }
+    got.then((res) => { if (box.isConnected || box.parentNode) paint(box, res, districtName, load) })
   }
   load()
   return box
@@ -39,10 +80,13 @@ function paint(box, res, districtName, retry) {
     body.innerHTML = '<p class="yc-note">Couldn\'t load your record right now.</p>'
     const again = el('button', 'yc-retry', 'Try again')
     again.type = 'button'
-    again.onclick = () => { body.innerHTML = '<p class="yc-note">Loading your record…</p>'; retry() }
+    again.onclick = () => { body.innerHTML = LOADING; retry() }
     body.appendChild(again)
     return
   }
+  const id = box.dataset.districtId
+  if (!openRows.has(id)) openRows.set(id, new Set())
+  const L = (o) => line(o, openRows.get(id))
   box.querySelector('.yc-when').textContent = `${day(res.activatedAt)} – ${day(res.completedAt)}`
   body.innerHTML = ''
   const tracks = res.tracks || []
@@ -57,7 +101,7 @@ function paint(box, res, districtName, retry) {
 
   // Tracks
   const trackPlays = tracks.reduce((s, t) => s + t.plays, 0)
-  body.appendChild(line({
+  body.appendChild(L({
     icon: 'music', name: 'Tracks',
     value: tracks.length ? `${fmt(trackPlays)} plays` : '—',
     sub: tracks.length ? `${tracks.length} song${tracks.length === 1 ? '' : 's'}` : 'No track songs in this district',
@@ -68,7 +112,7 @@ function paint(box, res, districtName, retry) {
 
   // Albums
   const passes = albums.reduce((s, a) => s + a.passes, 0)
-  body.appendChild(line({
+  body.appendChild(L({
     icon: 'disc', name: 'Albums',
     value: albums.length ? `${fmt(passes)} pass${passes === 1 ? '' : 'es'}` : '—',
     sub: albums.length ? `${albums.length} album${albums.length === 1 ? '' : 's'}` : 'No albums in this district',
@@ -90,11 +134,11 @@ function paint(box, res, districtName, retry) {
     : r.state === 'skipped' ? { value: 'Skipped', sub: 'Quest skipped', detail: '<p class="yc-note">You skipped this district\'s ReConnect quest, so there are no team plays to show.</p>' }
     : r.state === 'solo' ? { value: 'Solved', sub: 'Solo puzzle', detail: '<p class="yc-note">This district\'s ReConnect quest was a solo puzzle, with no team plays.</p>' }
     : { value: '—', sub: 'No team plays recorded', detail: '<p class="yc-note">There\'s no completed ReConnect team for you in this district.</p>' }
-  body.appendChild(line({ icon: 'handshake', name: 'ReConnect', ...rc }))
+  body.appendChild(L({ icon: 'handshake', name: 'ReConnect', ...rc }))
 }
 
 /** One overview line; tapping it opens its detail right underneath. */
-function line({ icon, name, value, sub, detail }) {
+function line({ icon, name, value, sub, detail }, open = null) {
   const row = el('div', 'yc-line')
   const head = el('button', 'yc-line-head')
   head.type = 'button'
@@ -106,13 +150,15 @@ function line({ icon, name, value, sub, detail }) {
   row.appendChild(head)
   if (!detail) { head.disabled = true; return row }
   const more = el('div', 'yc-more', detail)
-  more.hidden = true
-  head.setAttribute('aria-expanded', 'false')
-  head.onclick = () => {
-    more.hidden = !more.hidden
-    head.setAttribute('aria-expanded', String(!more.hidden))
-    row.classList.toggle('is-open', !more.hidden)
+  const setOpen = (on) => {
+    more.hidden = !on
+    head.setAttribute('aria-expanded', String(on))
+    row.classList.toggle('is-open', on)
+    if (open) { if (on) open.add(name); else open.delete(name) }
   }
+  setOpen(!!open?.has(name))
+  // Opening a row only shows detail already in the reply — never a request.
+  head.onclick = () => setOpen(more.hidden)
   row.appendChild(more)
   return row
 }

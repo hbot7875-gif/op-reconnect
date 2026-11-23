@@ -27,9 +27,11 @@ test('own plays: baseline on the start day, uncapped by the target, leave days s
 test('the lookup ends at the restore moment, reads only, and only the asking agent', () => {
   const src = read('./district-contributions.ts')
   assert.match(src, /\.lt\('kst_date', endDate\)/, 'daily totals stop the day before restoration')
-  assert.match(src, /track_counts: await rawCounts\(sb, agentNo, kstDayBounds\(endDate\)\.fromTs, endSec\)/, 'restoration day: raw plays up to the exact moment')
+  assert.match(src, /rawCounts\(sb, agentNo, kstDayBounds\(endDate\)\.fromTs, endSec\)/, 'restoration day: raw plays up to the exact moment')
+  assert.match(src, /track_counts: endDayCounts/)
   assert.match(src, /if \(!row \|\| row\.status !== 'restored'/)
-  assert.match(src, /contributionTotals\(sb, agentNo, me\.joined_at, true, me\.left_at \|\| mission\.completed_at\)/, 'ReConnect: own plays while on the team')
+  // Same window as the live contributionTotals (district-contributions-fast.test.mjs checks the totals match).
+  assert.match(src, /questTotals\(sb, agentNo, me\.joined_at, me\.left_at \|\| mission\.completed_at\)/, 'ReConnect: own plays while on the team')
   assert.doesNotMatch(src, /\.(insert|update|upsert|delete)\(/, 'read-only')
   assert.doesNotMatch(src, /rc_xp_ledger/, 'no XP')
   assert.match(read('../index.ts'), /getDistrictContributions: \{ auth: 'agent'/)
