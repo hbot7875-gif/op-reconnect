@@ -61,7 +61,7 @@ test('counts, gates and actions are unchanged', () => {
   assert.match(pack, /\$\{unusedTickets\.length \? `\$\{unusedTickets\.length\} ready` : tickets\.length \? 'All used' : 'None yet'\}/)
   assert.match(pack, /const value = p\[def\.key\] \|\| 0/)
   assert.match(pack, /if \(items\.length >= 15\)/)
-  assert.match(pack, /button\.onclick = \(\) => showOverlay\(itemSheet\(item\)\)/)
+  assert.match(pack, /collectibleTile\(it, ctx, \{ onPick: \(item\) => showOverlay\(itemSheet\(item\)\) \}\)/)
   assert.match(keepsake, /card\.onclick = \(\) => showOverlay\(passSheet\(readCache\(\), false\)\)/)
 })
 
@@ -73,7 +73,7 @@ test('the identity card keeps its dossier header and the mono agent ID', () => {
 })
 
 test('Recovered Objects: two columns on every phone width', () => {
-  assert.match(block, /\.res-screen \.collection-shelf \{ grid-template-columns: repeat\(2, minmax\(0,1fr\)\)/)
+  assert.match(block, /:is\(\.res-screen, \.kept\) \.collection-shelf \{ grid-template-columns: repeat\(2, minmax\(0,1fr\)\)/)
   assert.doesNotMatch(block, /collection-shelf \{ grid-template-columns: repeat\(3/)
 })
 

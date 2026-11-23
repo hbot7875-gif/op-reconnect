@@ -50,7 +50,9 @@ export function itemTile(item, onPick) {
 
 /* ── moving things around ─────────────────────────────────────────────── */
 
-async function moveItem(item, districtId, districtName = '') {
+/** Put an owned item on a district's shelf (or back in the Pack with
+ *  districtId null). Exported for the "Place something" picker. */
+export async function moveItem(item, districtId, districtName = '') {
   const state = getState()
   // Optimistic: the shelf should respond instantly, it's a tiny action.
   const list = state.items || []
@@ -104,15 +106,32 @@ export function itemSheet(item, opts = {}) {
     place.onclick = async () => { hideOverlay(); await moveItem(item, districtId, districtName); toast(`Placed at ${districtName}`) }
     sheet.appendChild(place)
   }
-  if (item.districtId) {
-    const back = el('button', 'btn btn-ghost', 'Back to Pack')
-    back.onclick = async () => { hideOverlay(); await moveItem(item, null); toast('Moved to your Pack') }
-    sheet.appendChild(back)
-  }
 
   const close = el('button', 'btn btn-ghost', 'Close')
   close.onclick = hideOverlay
   sheet.appendChild(close)
+
+  // Taking it off the shelf sits last, as a small action, and asks twice:
+  // it used to be the first full-width button, right where Close is
+  // expected, so a quick tap moved the item without meaning to.
+  if (item.districtId) {
+    const back = el('button', 'is-move-pack', 'Move to Pack')
+    back.type = 'button'
+    let armed = null
+    back.onclick = async () => {
+      if (!armed) {
+        back.textContent = 'Tap again to move it to your Pack'
+        back.classList.add('is-armed')
+        armed = setTimeout(() => { armed = null; back.textContent = 'Move to Pack'; back.classList.remove('is-armed') }, 3500)
+        return
+      }
+      clearTimeout(armed)
+      hideOverlay()
+      await moveItem(item, null)
+      toast('Moved to your Pack')
+    }
+    sheet.appendChild(back)
+  }
   return sheet
 }
 

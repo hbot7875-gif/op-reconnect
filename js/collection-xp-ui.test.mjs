@@ -37,7 +37,7 @@ test('Monday 00:00 KST shows as the viewer’s own day and time', () => {
 test('the Pack uses these helpers; Rankings says districts in words', () => {
   const pack = readFileSync(new URL('./screen-resources.js', import.meta.url), 'utf8')
   assert.match(pack, /Starts \$\{kstMidnightLabel\(c\.startsWeek\)\}/)
-  assert.match(pack, /collectionChip\(weekly, where,/)
+  assert.match(readFileSync(new URL('./collectible-tile.js', import.meta.url), 'utf8'), /collectionChip\(weekly, where,/)
   const ranks = readFileSync(new URL('./screen-ranking.js', import.meta.url), 'utf8')
   assert.match(ranks, /\$\{a\.districtsOwned\} district\$\{a\.districtsOwned === 1 \? '' : 's'\} restored/)
   assert.doesNotMatch(ranks, /rank-owned-key/)

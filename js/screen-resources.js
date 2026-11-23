@@ -42,7 +42,8 @@ import { goDiary } from './router.js'
 import { cachedDiaryTheme, closedDiaryObject, rememberDiaryTheme } from './screen-diary.js'
 import { importantDatesOn, nextImportantDate } from '../supabase/functions/op-reconnect/lib/diary-dates.js'
 import { collectibleWeeklyXp, COLLECTION_WEEKLY_CAP } from '../supabase/functions/op-reconnect/lib/collectible-values.js'
-import { collectionChip, kstMidnightLabel, shortReset } from './collection-xp-ui.js'
+import { kstMidnightLabel, shortReset } from './collection-xp-ui.js'
+import { collectibleTile, collectionContext, isCollectible } from './collectible-tile.js'
 
 /* ── Agent ID ─────────────────────────────────────────────────────────── */
 function agentIdCard(state) {
@@ -349,23 +350,7 @@ function agentBag(state) {
   return wrap
 }
 
-/** Pack-only shelf object. District shelves can keep their collectible-card
- * treatment; the Agent Pack is a physical locker, so objects sit directly on
- * a shelf with a small label instead of inside another rectangle. */
 /* ── weekly collection XP (lib/collectible-rewards.ts pays it) ── */
-
-/** Which owned copy earns for each collectible: the first one placed in a
- *  district this player restored (a second copy never adds). */
-function earningCopies(items, state) {
-  const restored = new Set((state.map?.districts || []).filter((d) => d.status === 'restored').map((d) => d.id))
-  const pick = new Map()
-  for (const it of items) {
-    if (!it.districtId || it.usedAt || !restored.has(it.districtId) || pick.has(it.itemId)) continue
-    if (collectibleWeeklyXp(it) > 0) pick.set(it.itemId, it.id)
-  }
-  return new Set(pick.values())
-}
-
 
 /** One compact strip: this week's collection XP against the cap, and what
  *  it takes to earn (or when it starts / resets). */
@@ -403,31 +388,6 @@ function collectionXpSheet(c) {
   close.onclick = hideOverlay
   sheet.appendChild(close)
   return sheet
-}
-
-function collectionObject(item, earning = null, earned = null, restoredIds = null, collection = null, countedIds = null) {
-  const rarity = RARITY[item.rarity] || RARITY.common
-  const button = el('button', `collection-object ${rarity.cls}${item.usedAt ? ' is-used' : ''}`)
-  // district_id is where the player placed it (the game doesn't record
-  // where it was found), so the wording says placed, not found.
-  const location = item.usedAt ? 'Used' : item.districtName ? `Placed in ${item.districtName}` : 'In your Pack'
-  button.dataset.kind = item.kind || ''
-  button.setAttribute('aria-label', `${item.name}. ${rarity.label}${item.era ? `, ${item.era}` : ''}. ${location}.`)
-  // Weekly XP chip (collection-xp-ui.js): potential, locked, or earned —
-  // never a number that reads as already paid unless it was.
-  const weekly = collectibleWeeklyXp(item)
-  const isEarning = !!earning?.has(item.id)
-  const where = !item.districtId ? 'pack' : restoredIds?.has(item.districtId) ? 'restored' : 'unowned'
-  const chipState = item.usedAt ? null : collectionChip(weekly, where, !isEarning && !!countedIds?.has(item.itemId), isEarning && !!earned?.has(item.itemId), collection)
-  const chip = chipState ? `<span class="co-xp is-${chipState.state}">${esc(chipState.text)}</span>` : ''
-  button.innerHTML = `
-    <span class="co-art">${itemArt(item)}${chip}</span>
-    <span class="co-name">${esc(item.name)}</span>
-    <span class="co-meta"><span class="co-rarity">${esc(rarity.label)}</span>${item.era && item.era.toLowerCase() !== String(item.name || '').toLowerCase() ? `<span class="co-era">${esc(item.era)}</span>` : ''}</span>
-    <span class="co-place">${esc(location)}</span>
-  `
-  button.onclick = () => showOverlay(itemSheet(item))
-  return button
 }
 
 /** The shared HUD ReConnect button, moved under the Pack title the way City
@@ -483,7 +443,7 @@ export function renderResources(container, state) {
   // ── Merch — Backup Pass/Tickets now live in the case's front pocket
   // above, so they're excluded here to avoid showing the same item twice.
   const allItems = state.items || []
-  const items = allItems.filter((i) => i.itemId !== 'backup-pass' && i.kind !== 'ticket')
+  const items = allItems.filter(isCollectible)
   const inPack = items.filter((i) => !i.districtId).length
   const placed = items.length - inPack
 
@@ -517,12 +477,8 @@ export function renderResources(container, state) {
 
     if (visible.length) {
       const grid = el('div', 'collection-shelf')
-      const earning = earningCopies(items, state)
-      const earned = new Set(state.collection?.earnedItemIds || [])
-      const restoredIds = new Set((state.map?.districts || []).filter((d) => d.status === 'restored').map((d) => d.id))
-      // Collectibles with a copy that already counts (a second copy never adds).
-      const countedIds = new Set(items.filter((i) => earning.has(i.id)).map((i) => i.itemId))
-      for (const it of visible) grid.appendChild(collectionObject(it, earning, earned, restoredIds, state.collection, countedIds))
+      const ctx = collectionContext(state)
+      for (const it of visible) grid.appendChild(collectibleTile(it, ctx, { onPick: (item) => showOverlay(itemSheet(item)) }))
       wrap.appendChild(grid)
     } else {
       wrap.appendChild(el('div', 'dim pack-hint', 'Nothing in this filter yet.'))

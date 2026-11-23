@@ -17,7 +17,8 @@ import { mountScene } from './scene.js'
 import { districtFraction, renderBoard } from './ui-district.js'
 import { districtPercent } from './district-progress.js'
 import { lastAttemptHtml } from './last-attempt.js'
-import { itemTile, itemSheet, itemsAt, itemsInPack } from './items.js'
+import { itemSheet, itemsAt, itemsInPack, moveItem } from './items.js'
+import { collectibleTile, collectionContext, isCollectible } from './collectible-tile.js'
 import { trackEngagementOnce } from './engagement.js'
 import { reconnectPlayerNext, sharedTracksPitch, questRuleNotes } from './reconnect-player-ui.js'
 import { rcIcon } from './reconnect-icons.js'
@@ -1849,47 +1850,70 @@ export function sharedSetlist(st, { onGuess = null } = {}) {
    the same map still have different cities. */
 
 function shelf(state, mapD) {
-  const kept = itemsAt(state, mapD.id)
-  const wrap = el('section', 'shelf')
-  wrap.appendChild(el('div', 'shelf-head', `
-    <span class="shelf-title">Kept here</span>
-    <span class="shelf-count">${kept.length || 'empty'}</span>
-  `))
-
-  const grid = el('div', 'shelf-grid')
-  for (const it of kept) {
-    grid.appendChild(itemTile(it, (item) => showOverlay(itemSheet(item, {
-      districtId: mapD.id, districtName: districtDisplayName(mapD),
-    }))))
-  }
-
-  const spare = itemsInPack(state)
-  const add = el('button', 'shelf-add')
-  add.innerHTML = `<span class="sa-plus">+</span><span class="sa-lbl">${spare.length ? 'Place something' : 'Nothing spare'}</span>`
+  // Only real collectibles: Backup Passes and tickets are used from the
+  // Pack's front pocket, so they never show on a shelf or in the picker
+  // (any already placed stay where they are and keep working).
+  const kept = itemsAt(state, mapD.id).filter(isCollectible)
+  const spare = itemsInPack(state).filter((i) => isCollectible(i) && !i.usedAt)
+  const ctx = collectionContext(state)
+  const wrap = el('section', 'shelf kept')
+  const head = el('div', 'shelf-head')
+  head.innerHTML = `<span class="shelf-title">Kept here</span><span class="shelf-count">${kept.length || 'empty'}</span>`
+  const add = el('button', 'kept-add', '<span aria-hidden="true">+</span> Place')
+  add.type = 'button'
   add.disabled = !spare.length
+  add.setAttribute('aria-label', spare.length ? `Place a collectible at ${districtDisplayName(mapD)}` : 'No collectibles in your Pack to place')
   add.onclick = () => showOverlay(placeSheet(state, mapD, spare))
-  grid.appendChild(add)
+  head.appendChild(add)
+  wrap.appendChild(head)
 
-  wrap.appendChild(grid)
-  if (!kept.length) {
-    wrap.appendChild(el('div', 'dim shelf-empty',
-      'Restore districts to find things worth keeping — albums, posters, photocards. Rarely, a ticket.'))
+  if (kept.length) {
+    const grid = el('div', 'collection-shelf')
+    for (const it of kept) {
+      grid.appendChild(collectibleTile(it, ctx, {
+        showPlace: false,
+        onPick: (item) => showOverlay(itemSheet(item, { districtId: mapD.id, districtName: districtDisplayName(mapD) })),
+      }))
+    }
+    wrap.appendChild(grid)
+  } else {
+    wrap.appendChild(el('div', 'dim shelf-empty', spare.length
+      ? 'Nothing kept here yet. Place a collectible from your Pack.'
+      : 'Restore districts to find things worth keeping: albums, posters, photocards.'))
   }
   return wrap
 }
 
-/** Pick something out of the Pack to put here. */
+/** Pick a collectible out of the Pack to put here: one tile per
+ *  collectible (copies shown as ×2), and one tap places it. */
 function placeSheet(state, mapD, spare) {
-  const sheet = el('div', 'sheet')
+  const sheet = el('div', 'sheet place-sheet kept')
   sheet.appendChild(el('div', 'eyebrow', 'FROM YOUR PACK'))
   sheet.appendChild(el('h3', '', `Keep something at ${esc(districtDisplayName(mapD))}`))
-  const grid = el('div', 'shelf-grid')
+  const groups = new Map()
   for (const it of spare) {
-    grid.appendChild(itemTile(it, (item) => showOverlay(itemSheet(item, {
-      districtId: mapD.id, districtName: districtDisplayName(mapD),
-    }))))
+    const g = groups.get(it.itemId)
+    if (g) g.count++
+    else groups.set(it.itemId, { item: it, count: 1 })
   }
-  sheet.appendChild(grid)
+  if (!groups.size) {
+    sheet.appendChild(el('p', 'muted', 'No collectibles in your Pack right now.'))
+  } else {
+    sheet.appendChild(el('p', 'muted place-hint', 'Tap one to place it here.'))
+    const ctx = collectionContext(state)
+    const grid = el('div', 'collection-shelf')
+    for (const { item, count } of groups.values()) {
+      grid.appendChild(collectibleTile(item, ctx, {
+        showPlace: false, count,
+        onPick: async (picked) => {
+          hideOverlay()
+          await moveItem(picked, mapD.id, districtDisplayName(mapD))
+          toast(`Placed at ${districtDisplayName(mapD)}`)
+        },
+      }))
+    }
+    sheet.appendChild(grid)
+  }
   const close = el('button', 'btn btn-ghost', 'Close')
   close.onclick = hideOverlay
   sheet.appendChild(close)

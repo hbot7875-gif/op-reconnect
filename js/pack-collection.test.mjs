@@ -36,9 +36,21 @@ test('films are not records; other kinds keep their drawings', () => {
 })
 
 test('tile wording: placed / in your Pack / used, never "Kept at"', () => {
-  const src = read('./screen-resources.js')
-  const fn = src.slice(src.indexOf('function collectionObject('), src.indexOf('function packReconnectRow('))
+  const fn = read('./collectible-tile.js')
   assert.match(fn, /item\.usedAt \? 'Used' : item\.districtName \? `Placed in \$\{item\.districtName\}` : 'In your Pack'/)
   assert.doesNotMatch(fn, /Kept at/)
-  assert.match(fn, /button\.onclick = \(\) => showOverlay\(itemSheet\(item\)\)/, 'tap opens the existing details')
+  assert.match(fn, /if \(opts\.onPick\) button\.onclick = \(\) => opts\.onPick\(item\)/, 'tap opens what the caller passes (the existing details)')
+})
+
+test('districts: only collectibles on the shelf and in the picker; safe Move to Pack', () => {
+  const district = read('./screen-district.js')
+  assert.match(district, /const kept = itemsAt\(state, mapD\.id\)\.filter\(isCollectible\)/)
+  assert.match(district, /const spare = itemsInPack\(state\)\.filter\(\(i\) => isCollectible\(i\) && !i\.usedAt\)/)
+  assert.match(district, /collectibleTile\(it, ctx, \{\s+showPlace: false,/, 'shelf reuses the Pack tile')
+  assert.doesNotMatch(district, /itemTile\(/)
+  const tile = read('./collectible-tile.js')
+  assert.match(tile, /item\.kind !== 'utility' && item\.kind !== 'ticket' && item\.itemId !== 'backup-pass'/)
+  const items = read('./items.js')
+  assert.match(items, /'Tap again to move it to your Pack'/, 'moving off a shelf asks twice')
+  assert.doesNotMatch(items, /'btn btn-ghost', 'Back to Pack'/)
 })
