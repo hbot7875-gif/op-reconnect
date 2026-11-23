@@ -397,6 +397,11 @@ function reconnectTeamChat(state) {
   const district = state?.activeDistrict
   const mission = district?.reconnect?.mission
   if (!mission?.id) return null
+  // A finished quest folds into a "done" row with no Team Chat to open
+  // (screen-district.js only mounts the quest panel while it's not done), so
+  // its unread count could never be cleared: Signals kept saying "2 new
+  // messages" and Open quest led nowhere (Nov 2026 report).
+  if (district.reconnect.done) return null
   const unread = reconnectChatUnreadCount(mission.messageCount, getReconnectChatSeen(mission.id))
   return unread > 0 ? { unread, district } : null
 }
