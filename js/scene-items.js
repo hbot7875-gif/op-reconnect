@@ -1,12 +1,13 @@
 // The things you keep, standing in the place you keep them.
 //
 // ARMY's Corner under the scene lists everything you've placed. This puts a
-// few of them into the street itself, arranged the way someone would really
-// leave them: posters, prints and shirts on a wall at street level, the
-// things that stand (a light stick, a plush, a mug) in a little group at the
-// foot of that wall, a rug lying flat on the pavement in front. Each side of
-// the landmark gets one such corner, so the props read as a place someone
-// keeps rather than stickers spread along the road.
+// few of them into the street itself as small decorations: a little group
+// standing on the near pavement, a rug under it. They never reach above the
+// ground line, so they can't cover the landmark, the train, a lamp post, or
+// a window that lights up as the district is restored. Each side of the
+// landmark gets at most one small group; anything that doesn't fit (or has
+// no sensible way to stand on a pavement, like a shirt) stays out of the
+// picture and is still in ARMY's Corner.
 //
 // The art is the SAME SVG the collection cards use (items-art.js), rasterised
 // once per item and cached. Card CSS can't reach inside an <img>, so the
@@ -16,10 +17,11 @@
 
 import { itemSceneArt } from './items-art.js'
 
-// Mirrors .ia-* in css/reconnect.css.
+// Mirrors .ia-* in css/reconnect.css, with the bodies lifted a step (as
+// ARMY's Corner does): the card colour vanishes against a night pavement.
 const INK = {
-  body: '#1d1834',
-  bodyLegendary: '#2a1c12',
+  body: '#352d5c',
+  bodyLegendary: '#4a3420',
   purple: '#8b5cf6',
   gold: '#d9ad5f',
   shine: 'rgba(255,255,255,0.5)',
@@ -31,46 +33,87 @@ const INK = {
   groove: 'rgba(255,255,255,0.14)',
 }
 
-// Where a kind goes. Anything not listed stands on the ground, the safe
-// default: a new catalogue row places itself without a code change.
-const WALL_KINDS = new Set(['poster', 'photocard', 'album', 'record', 'banner', 'ticket', 'magnet', 'apparel'])
-const FLOOR_KINDS = new Set(['rug', 'tray'])        // lie flat on the pavement
-const PLACE_BY_ID = { 'picket-image': 'stand', 'record-crate': 'stand' }
-// Wall things that look wrong standing on the pavement (a shirt, a pennant, a
-// ticket stood on end): without a facade nearby they stay out of the picture.
-// Posters, prints and albums can be propped against the kerb instead.
-const WALL_ONLY = new Set(['apparel', 'banner', 'ticket', 'magnet'])
+// Rugs and trays lie flat under the group. Shirts, banners, tickets and
+// magnets have no natural way to stand on a pavement, so they stay in
+// ARMY's Corner only. Everything else stands, posters and prints propped
+// up like a street-stall display. A new catalogue kind stands by default.
+const FLOOR_KINDS = new Set(['rug', 'tray'])
+const CORNER_ONLY = new Set(['apparel', 'banner', 'ticket', 'magnet'])
+const STAND_BY_ID = new Set(['picket-image'])      // a placard on a stick does stand
 // These two are light sources, so they earn a glow.
 const LIT_KINDS = new Set(['lightstick', 'lightbox'])
 
-// How tall each thing stands, in scene units (UNIT × scene height): a poster
-// is about door height, a mug comes up to a plush's middle. Floor kinds are
-// widths (they're seen lying down).
-const UNIT = 0.085
+// Relative heights (a poster is the tallest thing at 1.25; a mug comes up to
+// a plush's middle). The tallest has to fit between the ground line and the
+// pavement the group stands on, which sets the scale.
 const SIZE = {
-  poster: 1.25, photocard: 0.8, ticket: 0.5, magnet: 0.6, album: 1.0, record: 1.0,
-  apparel: 1.1, banner: 0.8, lightstick: 1.1, plush: 0.85, figure: 0.9, mug: 0.55,
-  cushion: 0.75, keyring: 0.75, lightbox: 0.7, blanket: 0.65, rug: 2.0, tray: 1.4,
+  poster: 1.25, photocard: 0.8, album: 1.0, record: 1.0, lightstick: 1.1, plush: 0.85,
+  figure: 0.9, mug: 0.6, cushion: 0.8, keyring: 0.75, lightbox: 0.75, blanket: 0.7,
+  rug: 2.2, tray: 1.6,
 }
 const SIZE_BY_ID = {
-  'picket-image': 1.4, 'bottle-souvenir': 0.7, 'record-crate': 0.9,
-  'lightstick-v4-full': 1.0, 'lightstick-hat': 0.85,
+  'picket-image': 1.25, 'bottle-souvenir': 0.75, 'record-crate': 0.95,
+  'lightstick-v4-full': 1.05, 'lightstick-hat': 0.85,
 }
+const TALLEST = 1.25
 const MAX_WIDE = 1.7        // nothing gets wider than this many units
 
 // Past this the street reads as clutter, not a home. Everything placed still
 // shows in ARMY's Corner below the scene.
 export const MAX_PROPS = 6
-const PER_CORNER = 3        // upright things in one corner (a rug lies extra)
-const GAP = 1.5             // px between neighbours in a group
+const PER_CORNER = 3        // upright things in one group (a rug lies extra)
+const GAP = 1               // px between neighbours in a group
 
 const RARITY_RANK = { legendary: 0, rare: 1, common: 2 }
 
+/** 'floor' (lies under the group), 'stand', or null (ARMY's Corner only). */
 export function placementOf(item) {
-  if (PLACE_BY_ID[item.itemId]) return PLACE_BY_ID[item.itemId]
+  if (STAND_BY_ID.has(item.itemId)) return 'stand'
   if (FLOOR_KINDS.has(item.kind)) return 'floor'
-  if (WALL_KINDS.has(item.kind)) return 'wall'
+  if (CORNER_ONLY.has(item.kind)) return null
   return 'stand'
+}
+
+/** Where the group stands: the near pavement, just behind any full-width
+ *  fence, railing or rope line (so its posts never cross an item), and the
+ *  scale that keeps the tallest thing below the ground line. */
+export function pavement(m) {
+  const strip = m.h - m.groundY
+  const fgTop = { fence: 0.42, railing: 0.5, ropes: 0.5 }[m.fg?.kind] ?? 0.48
+  const base = m.groundY + strip * Math.min(0.48, fgTop) - 0.5
+  return { base, unit: (base - m.groundY - 1) / TALLEST }
+}
+
+/** The landmark's scale, as scene.js draws it. */
+function landmarkScale(m) {
+  return (m.h / 158) * (m.landmark?.lift || 1) * (m.centerpiece ? 1.3 : 1)
+}
+
+/** A pier has no pavement, only water: things stand on its deck instead,
+ *  clear of the mooring posts and the lamps at each end. */
+function pierDeck(m) {
+  const s = landmarkScale(m), cx = m.w / 2, dw = 80 * s
+  const posts = [-0.55, 0.15, 0.7].map((mo) => cx + mo * dw + 1.2 * s)
+    .concat([-1, 1].map((e) => cx + e * (dw - 3 * s)))
+  return {
+    base: m.groundY - 9 * s,
+    halves: [[cx - dw + 6 * s, cx - 4 * s], [cx + 4 * s, cx + dw - 6 * s]],
+    blocks: posts.map((x) => [x - 5, x + 5]),
+  }
+}
+
+/** The near-camera props that stand where the group would: keep clear. */
+function foregroundBlocks(m) {
+  const fg = m.fg
+  if (!fg || fg.kind === 'none') return []
+  const x = fg.flip ? m.w - fg.x * m.w : fg.x * m.w
+  switch (fg.kind) {
+    case 'bench': return [[x - 16, x + 16]]
+    case 'lamp': return [[x - 7, x + 7]]
+    case 'bicycle': case 'crates': return [[x - 15, x + 16]]
+    case 'lantern': return [-1, 1].map((o) => { const lx = m.w / 2 + o * m.w * 0.34; return [lx - 8, lx + 8] })
+    default: return []       // fence / railing / ropes run the full width, in front
+  }
 }
 
 const artCache = new Map()
@@ -188,159 +231,113 @@ export function pickShown(items, max = MAX_PROPS) {
   return out
 }
 
-/** Drawn size in px: height for things upright, width for things lying down. */
+/** Drawn size in px: height for things upright. */
 function sizeOf(item, art, unit) {
-  const units = SIZE_BY_ID[item.itemId] ?? SIZE[item.kind] ?? 0.75
-  if (placementOf(item) === 'floor') {
-    const w = units * unit
-    return { w, h: Math.max(3, w * 0.36) }   // seen lying down, in perspective
-  }
-  let h = Math.max(7, units * unit)
+  const units = SIZE_BY_ID[item.itemId] ?? SIZE[item.kind] ?? 0.8
+  let h = Math.max(6, units * unit)
   let w = h * art.aspect
   if (w > MAX_WIDE * unit) { w = MAX_WIDE * unit; h = w / art.aspect }
   return { w, h }
 }
 
+/** The free stretches of pavement in [a, b] once the blocks are taken out. */
+function freeRuns(a, b, blocks) {
+  let runs = [[a, b]]
+  for (const [x0, x1] of blocks) {
+    runs = runs.flatMap(([r0, r1]) => (x1 <= r0 || x0 >= r1 ? [[r0, r1]] : [[r0, x0], [x1, r1]].filter(([p, q]) => q - p > 0)))
+  }
+  return runs
+}
+
 /**
- * Where each kept item goes. Two corners, one each side of the landmark (or
- * of the middle, when the district has none). A corner with a building gets
- * its wall things on that facade at street level; without one they stand
- * propped on the pavement with the rest. Standing things gather in a tight
- * row at the foot of the wall, a rug lies in front of them. Anything that
- * doesn't fit is left out of the picture (it's still in ARMY's Corner).
+ * Where each kept item goes: at most one small group each side of the
+ * landmark (or of the middle, when the district has none), standing on the
+ * near pavement, tallest in the middle, a rug under it. The first group
+ * fills before the second starts, so a few things stay together. Anything
+ * that doesn't fit is left out of the picture (it's still in ARMY's Corner).
  */
 export function layoutProps(items, m) {
-  const list = pickShown(items, Infinity)
+  const list = pickShown(items, Infinity).filter((i) => placementOf(i))
   if (!list.length || !m) return []
 
-  const { w, h, groundY } = m
-  const unit = h * UNIT
+  const { w } = m
+  const ground = pavement(m)
+  const unit = ground.unit
+  let base = ground.base
   const pad = 6
-  const centerGap = m.landmark && m.landmark.type !== 'bridge' ? Math.min(w * 0.28, 120) : 0
-  const segs = centerGap
+  const type = m.landmark?.type
+  const centerGap = type && type !== 'bridge' ? Math.min(w * 0.28, 120) : 0
+  let halves = centerGap
     ? [[pad, w / 2 - centerGap], [w / 2 + centerGap, w - pad]]
     : [[pad, w * 0.42], [w * 0.58, w - pad]]
+  let blocks = foregroundBlocks(m)
+  if (type === 'pier') {
+    const deck = pierDeck(m)
+    base = deck.base; halves = deck.halves; blocks = deck.blocks
+  } else if (type === 'bridge') {
+    // the river runs under the span, between the two towers
+    const s = landmarkScale(m)
+    blocks = blocks.concat([[w / 2 - 62 * s - 8, w / 2 + 62 * s + 8]])
+  }
 
-  const sides = segs.filter(([a, b]) => b - a > unit * 1.5).map(([a, b]) => {
-    // The widest stretch of facade inside this side that is tall enough to
-    // hang something on above the standing things.
-    let facade = null
-    for (const bl of m.buildings || []) {
-      const x0 = Math.max(a, bl.x), x1 = Math.min(b, bl.x + bl.w)
-      if (x1 - x0 < unit * 1.2 || bl.h < unit * 2.6) continue
-      if (!facade || x1 - x0 > facade.x1 - facade.x0) facade = { x0, x1, top: bl.y }
-    }
-    return { a, b, facade, wall: [], stand: [], floor: [], wallW: 0, standW: 0, standH: 0 }
-  })
+  // Each side's spot is its widest clear run of pavement.
+  const sides = halves.map(([a, b], i) => {
+    const runs = freeRuns(a, b, blocks).sort((p, q) => (q[1] - q[0]) - (p[1] - p[0]))
+    const run = runs[0]
+    return run && run[1] - run[0] > unit * 1.5
+      ? { a: run[0], b: run[1], left: i === 0, stand: [], floor: null, standW: 0 }
+      : null
+  }).filter(Boolean)
   if (!sides.length) return []
 
-  // Start on the side with a wall when there's something to hang; the second
-  // corner only fills once the first is full, so a few items stay together.
-  const wantsWall = list.some((i) => placementOf(i) === 'wall')
-  const home = Math.max(0, sides.findIndex((s) => wantsWall && s.facade))
-  const order = sides.length > 1 && home === 1 ? [sides[1], sides[0]] : sides
-  // A rug's spot: under the corner, clear of the near-camera bench / bike /
-  // post if one stands there. null when there's no clear spot.
-  const fgX = m.fg && m.fg.kind !== 'none' && m.fg.kind !== 'railing' && m.fg.kind !== 'fence'
-    ? (m.fg.flip ? w - m.fg.x * w : m.fg.x * w) : null
-  const rugSpot = (side, rw) => {
-    const anchor = side.facade ? (side.facade.x0 + side.facade.x1) / 2 : (side.a + side.b) / 2
-    const lo = side.a + rw / 2, hi = side.b - rw / 2
-    if (lo > hi) return null
-    const cx = Math.max(lo, Math.min(hi, anchor))
-    if (fgX === null || Math.abs(cx - fgX) >= rw / 2 + 16) return cx
-    const l = fgX - 16 - rw / 2, r = fgX + 16 + rw / 2
-    if (l >= lo && l <= hi) return l
-    if (r >= lo && r <= hi) return r
-    return null
-  }
-  const fits = (side, item, size) => {
-    const place = placementOf(item)
-    // A rug only goes where something already stands: alone it would just
-    // be a ring on an empty road.
-    if (place === 'floor') return side.floor.length === 0 && (side.wall.length || side.stand.length) && rugSpot(side, size.w) !== null ? 'floor' : null
-    if (side.wall.length + side.stand.length >= PER_CORNER) return null
-    if (place === 'wall' && side.facade && side.wallW + size.w + GAP <= side.facade.x1 - side.facade.x0 - 4) return 'wall'
-    if (place === 'wall' && WALL_ONLY.has(item.kind)) return null
-    return side.standW + size.w + GAP <= side.b - side.a - 4 ? 'stand' : null
-  }
-
-  // Upright things first, then a rug in front of a corner that has some;
-  // one place in the cap is kept for the rug when there is one.
+  // Uprights first; one place in the cap is kept for a rug when there is one.
   const floors = list.filter((i) => placementOf(i) === 'floor')
-  const uprights = list.filter((i) => placementOf(i) !== 'floor')
+  const uprights = list.filter((i) => placementOf(i) === 'stand')
   let shown = 0
-  let cap = MAX_PROPS - (floors.length ? 1 : 0)
-  for (const item of [...uprights, null, ...floors]) {
-    if (item === null) { cap = MAX_PROPS; continue }
-    if (shown >= cap) continue
+  const cap = MAX_PROPS - (floors.length ? 1 : 0)
+  for (const item of uprights) {
+    if (shown >= cap) break
     const art = sceneArt(item)
     const size = sizeOf(item, art, unit)
-    for (const side of order) {
-      const slot = fits(side, item, size)
-      if (!slot) continue
-      shown++
-      side[slot].push({ item, art, ...size })
-      if (slot === 'wall') side.wallW += size.w + GAP
-      if (slot === 'stand') { side.standW += size.w + GAP; side.standH = Math.max(side.standH, size.h) }
-      break
-    }
+    const side = sides.find((s) => s.stand.length < PER_CORNER && s.standW + size.w + GAP <= s.b - s.a - 4)
+    if (!side) continue
+    side.stand.push({ item, art, ...size })
+    side.standW += size.w + GAP
+    shown++
+  }
+  // A rug only goes under a group: alone it'd be a ring on an empty road.
+  for (const item of floors) {
+    if (shown >= MAX_PROPS) break
+    const side = sides.find((s) => s.stand.length && !s.floor)
+    if (!side) break
+    side.floor = { item, art: sceneArt(item) }
+    shown++
   }
 
   const out = []
-  const lamps = (m.lamps || []).map((l) => l.x)
-  // Where a row starts: centred on the corner, within [lo, hi], and off any
-  // lamp post (something over a lamp post reads as a mistake). If it can't
-  // clear one, the row gives up its last thing and tries again; whatever
-  // drops out is still in ARMY's Corner.
-  const placeRow = (row, lo, hi, anchor) => {
-    const items = [...row]
-    while (items.length) {
-      const W = items.reduce((n, p) => n + p.w, 0) + GAP * (items.length - 1)
-      const hit = (x) => lamps.find((lx) => lx > x - 2 && lx < x + W + 2)
-      const x0 = Math.max(lo, Math.min(hi - W, anchor - W / 2))
-      const lamp = hit(x0)
-      if (lamp === undefined) return { x: x0, items }
-      const left = lamp - 3 - W, right = lamp + 3
-      if (left >= lo && hit(left) === undefined) return { x: left, items }
-      if (right + W <= hi && hit(right) === undefined) return { x: right, items }
-      items.pop()
-    }
-    return { x: lo, items }
-  }
   for (const side of sides) {
-    const anchor = side.facade ? (side.facade.x0 + side.facade.x1) / 2 : (side.a + side.b) / 2
+    if (!side.stand.length) continue
+    const sorted = [...side.stand].sort((p, q) => q.h - p.h)
+    const row = []
+    sorted.forEach((p, i) => (i % 2 ? row.unshift(p) : row.push(p)))
+    const W = side.standW - GAP
+    // Toward the landmark end of the run, so it reads as part of the place.
+    const room = side.b - side.a - W
+    const x0 = side.a + room * (side.left ? 0.7 : 0.3)
+    const cx = x0 + W / 2
 
-    // Wall things: one row on the facade at street level, lifted just clear
-    // of the standing things' heads so nothing hides behind anything.
-    if (side.wall.length) {
-      let { x, items } = placeRow(side.wall, side.facade.x0 + 2, side.facade.x1 - 2, anchor)
-      const bottom = groundY - (side.standH ? side.standH + 2 : unit * 0.45)
-      for (const p of items) {
-        const y = Math.max(side.facade.top + 3, bottom - p.h)
-        out.push({ item: p.item, art: p.art, x, y, w: p.w, h: p.h, place: 'wall', lit: false })
-        x += p.w + GAP
-      }
+    if (side.floor) {
+      const { item, art } = side.floor
+      const units = SIZE_BY_ID[item.itemId] ?? SIZE[item.kind] ?? 2
+      const rw = Math.min(side.b - side.a, Math.max(units * unit, W + 8))
+      const rh = Math.max(3, rw * 0.22)
+      const rx = Math.max(side.a, Math.min(side.b - rw, cx - rw / 2))
+      out.push({ item, art, x: rx, y: base - rh * 0.6, w: rw, h: rh, place: 'floor', lit: false })
     }
-
-    // Standing things: a tight group at the foot of the wall, tallest in
-    // the middle so the group has a shape; nudged off a lamp post.
-    if (side.stand.length) {
-      const sorted = [...side.stand].sort((p, q) => q.h - p.h)
-      const row = []
-      sorted.forEach((p, i) => (i % 2 ? row.unshift(p) : row.push(p)))
-      let { x, items } = placeRow(row, side.a + 2, side.b - 2, anchor)
-      for (const p of items) {
-        out.push({ item: p.item, art: p.art, x, y: groundY + 1 - p.h, w: p.w, h: p.h, place: 'stand', lit: LIT_KINDS.has(p.item.kind) })
-        x += p.w + GAP
-      }
-    }
-
-    // A rug lies on the pavement in front of the group.
-    for (const p of side.floor) {
-      const cx = rugSpot(side, p.w)
-      const cy = groundY + (h - groundY) * 0.32
-      out.push({ item: p.item, art: p.art, x: cx - p.w / 2, y: cy - p.h / 2, w: p.w, h: p.h, place: 'floor', lit: false })
+    let x = x0
+    for (const p of row) {
+      out.push({ item: p.item, art: p.art, x, y: base - p.h, w: p.w, h: p.h, place: 'stand', lit: LIT_KINDS.has(p.item.kind) })
+      x += p.w + GAP
     }
   }
   return out
@@ -356,9 +353,8 @@ export function drawProps(ctx, m, props, p, t, reduced) {
   const a = Math.max(0, Math.min(1, (p - 0.25) / 0.45))
   if (a <= 0.01) return
 
-  // Back to front: rugs under everything, then the wall, then what stands.
-  const layer = { floor: 0, wall: 1, stand: 2 }
-  const sorted = [...props].sort((x, y) => layer[x.place] - layer[y.place])
+  // Rugs first, then what stands on them.
+  const sorted = [...props].sort((x, y) => (x.place === 'floor' ? 0 : 1) - (y.place === 'floor' ? 0 : 1))
   for (const pr of sorted) {
     const { img, sx, sy, sw, sh } = pr.art
     if (!img || !img.complete || !img.naturalWidth) continue   // still decoding — next frame
@@ -367,9 +363,9 @@ export function drawProps(ctx, m, props, p, t, reduced) {
       const pulse = reduced ? 1 : 0.88 + 0.12 * Math.sin(t * 0.002 + pr.x)
       const cx = pr.x + pr.w / 2
       const cy = pr.y + pr.h * 0.3
-      const r = pr.h * 1.3
+      const r = pr.h * 1.1
       const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, r)
-      glow.addColorStop(0, `rgba(196, 181, 253, ${0.3 * a * pulse})`)
+      glow.addColorStop(0, `rgba(196, 181, 253, ${0.28 * a * pulse})`)
       glow.addColorStop(1, 'rgba(196, 181, 253, 0)')
       ctx.fillStyle = glow
       ctx.fillRect(cx - r, cy - r, r * 2, r * 2)
@@ -377,14 +373,10 @@ export function drawProps(ctx, m, props, p, t, reduced) {
 
     if (pr.place === 'stand') {
       // A contact shadow is what stops it looking pasted on.
-      ctx.fillStyle = `rgba(0,0,0,${0.4 * a})`
+      ctx.fillStyle = `rgba(0,0,0,${0.45 * a})`
       ctx.beginPath()
-      ctx.ellipse(pr.x + pr.w / 2, m.groundY + 1.2, pr.w * 0.5 + 1, 1.6, 0, 0, Math.PI * 2)
+      ctx.ellipse(pr.x + pr.w / 2, pr.y + pr.h, pr.w * 0.5 + 0.5, 1.3, 0, 0, Math.PI * 2)
       ctx.fill()
-    } else if (pr.place === 'wall') {
-      // Pasted flat on the facade: a hairline shadow under one edge.
-      ctx.fillStyle = `rgba(0,0,0,${0.35 * a})`
-      ctx.fillRect(pr.x + 0.8, pr.y + 0.8, pr.w, pr.h)
     }
 
     ctx.globalAlpha = a
