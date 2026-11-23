@@ -116,10 +116,16 @@ function paint(box, res, districtName, retry) {
     icon: 'disc', name: 'Albums',
     value: albums.length ? `${fmt(passes)} pass${passes === 1 ? '' : 'es'}` : '—',
     sub: albums.length ? `${albums.length} album${albums.length === 1 ? '' : 's'}` : 'No albums in this district',
+    // Each album is its own row (name + passes), closed until tapped; its
+    // songs then list one per row with the plays on the right.
     detail: albums.length ? albums.map((a) => `
-      <div class="yc-album">
-        <div class="yc-album-head"><span>${esc(a.label)}</span><b>${fmt(a.passes)} pass${a.passes === 1 ? '' : 'es'}</b></div>
-        <p class="yc-songs">${a.songs.map((s) => `${esc(s.label)} <i>${fmt(s.plays)}</i>`).join(' · ')}</p>
+      <div class="yc-album" data-album="${esc(a.label)}">
+        <button type="button" class="yc-album-head" aria-expanded="false">
+          <span class="yc-album-name">${esc(a.label)}</span>
+          <b>${fmt(a.passes)} pass${a.passes === 1 ? '' : 'es'}</b>
+          <span class="yc-chev" aria-hidden="true">›</span>
+        </button>
+        <ul class="yc-list yc-album-songs" hidden>${(a.songs || []).map((s) => `<li><span>${esc(s.label)}</span><b>${fmt(s.plays)}</b></li>`).join('')}</ul>
       </div>`).join('') : '',
   }))
 
@@ -159,6 +165,20 @@ function line({ icon, name, value, sub, detail }, open = null) {
   setOpen(!!open?.has(name))
   // Opening a row only shows detail already in the reply — never a request.
   head.onclick = () => setOpen(more.hidden)
+  // Albums inside the row open one at a time, each remembered like the rows.
+  const setAlbum = (box, on) => {
+    const list = box.querySelector('.yc-album-songs')
+    if (!list) return
+    list.hidden = !on
+    box.querySelector('.yc-album-head')?.setAttribute('aria-expanded', String(on))
+    box.classList.toggle('is-open', on)
+    const key = `album:${box.dataset.album}`
+    if (open) { if (on) open.add(key); else open.delete(key) }
+  }
+  for (const box of more.querySelectorAll('.yc-album')) setAlbum(box, !!open?.has(`album:${box.dataset.album}`))
+  for (const albumHead of more.querySelectorAll('.yc-album-head')) {
+    albumHead.onclick = () => setAlbum(albumHead.parentElement, albumHead.parentElement.querySelector('.yc-album-songs').hidden)
+  }
   row.appendChild(more)
   return row
 }

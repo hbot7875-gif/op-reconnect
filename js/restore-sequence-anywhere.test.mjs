@@ -97,3 +97,13 @@ test('Your Contributions: one request per district, cached, and opening a row ne
   assert.match(c, /head\.onclick = \(\) => setOpen\(more\.hidden\)/)
   assert.match(c, /<div class="yc-body">\$\{LOADING\}<\/div>/)
 })
+
+test('Albums: each album is its own collapsed row; songs are separate rows', () => {
+  const c = read('./district-contributions.js')
+  assert.doesNotMatch(c, /yc-songs"|join\(' · '\)/, 'no songs-in-one-paragraph')
+  assert.match(c, /<button type="button" class="yc-album-head" aria-expanded="false">/)
+  assert.match(c, /<ul class="yc-list yc-album-songs" hidden>\$\{\(a\.songs \|\| \[\]\)\.map\(\(s\) => `<li><span>\$\{esc\(s\.label\)\}<\/span><b>\$\{fmt\(s\.plays\)\}<\/b><\/li>`\)/)
+  const css = read('../css/reconnect.css')
+  assert.match(css, /\.yc-line\.is-open > \.yc-line-head \.yc-chev \{ transform: rotate\(90deg\); \}/, 'opening Albums does not turn the album arrows')
+  assert.match(css, /\.yc-album-name \{ min-width: 0;[^}]*overflow-wrap: anywhere;/, 'long album names wrap')
+})
