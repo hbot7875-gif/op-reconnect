@@ -4,10 +4,9 @@
 // the game state carries the collection block, never during a War of Cards
 // game or over another sheet (it waits for the next state update instead).
 
-import { el, esc, showOverlay, hideOverlay } from './state.js'
+import { el, showOverlay, hideOverlay } from './state.js'
 import { getAgentNo } from './session.js'
-import { getScreen, goResources } from './router.js'
-import { kstMidnightLabel, shortReset } from './collection-xp-ui.js'
+import { getScreen } from './router.js'
 
 const KEY = 'rc_collection_xp_intro_seen:'
 
@@ -23,28 +22,28 @@ export function checkForCollectionXpIntro(state) {
   const overlay = document.getElementById('overlay')
   if (overlay && !overlay.hidden) return
   try { localStorage.setItem(`${KEY}${agentNo}`, '1') } catch (_) {}
-  showOverlay(collectionXpIntroSheet(state.collection))
+  showOverlay(collectionXpIntroSheet())
 }
 
-export function collectionXpIntroSheet(c) {
-  const sheet = el('div', 'sheet cx-intro')
-  const when = c.started ? `It's on now. This week resets ${shortReset(c.resetsAt)}.` : `Starts ${kstMidnightLabel(c.startsWeek)}.`
+// Copy as written by the owner. The start is stated in IST on purpose (the
+// owner's wording); the Pack strip shows it in each player's own time zone.
+export function collectionXpIntroSheet() {
+  const sheet = el('div', 'sheet help-sheet help-intro cx-intro')
+  const point = (icon, text) => `<li><span class="help-intro-ico cx-intro-ico" aria-hidden="true">${icon}</span><p>${text}</p></li>`
   sheet.innerHTML = `
-    <span class="cx-intro-eyebrow">New in ReConnect</span>
-    <h3 tabindex="-1" data-autofocus="true">Weekly Collection XP</h3>
-    <p class="cx-intro-lede">Your collectibles now earn XP. Place them in districts you've restored and each one pays once a week.</p>
-    <ul class="cx-intro-points">
-      <li><b>Albums 15 XP</b>, concert films and ARMY Bombs 12, clothing 10, photocards 8, posters, banners, figures and plushies 7, other decor 5.</li>
-      <li><b>Up to ${esc(String(c.cap))} XP a week.</b> A second copy of the same collectible doesn't add.</li>
-      <li><b>Keep restoring to unlock it:</b> ${esc(String(c.qualifyPlays))} goal-song plays, a restored district, or ${esc(String(c.qualifyPlays))} plays for a ReConnect team you're helping.</li>
+    <span class="help-eyebrow">New in ReConnect</span>
+    <h3 tabindex="-1" data-autofocus="true">YOUR COLLECTIBLES NOW EARN XP! 💜</h3>
+    <p class="help-lede">Your collectibles aren't just for decoration anymore!</p>
+    <ul class="help-intro-steps">
+      ${point('💿', "Place collectibles in districts you've restored.")}
+      ${point('⚡', 'Stay active and earn up to <b>50 bonus XP every week</b> from your placed collectibles!')}
+      ${point('🎒', "Want to see which collectibles you've earned? <b>Check your Pack!</b>")}
+      ${point('🏙', 'Your <b>restored district count</b> is now visible in Rankings!')}
     </ul>
-    <p class="cx-intro-when">${esc(when)}</p>`
-  const open = el('button', 'btn btn-primary', 'See my collection')
-  open.type = 'button'
-  open.onclick = () => { hideOverlay(); goResources() }
-  const later = el('button', 'btn btn-ghost', 'Got it')
-  later.type = 'button'
-  later.onclick = hideOverlay
-  sheet.append(open, later)
+    <p class="cx-intro-when">Rewards begin November 29 at 8:30 PM IST.</p>`
+  const ok = el('button', 'btn btn-primary help-send', 'Got it')
+  ok.type = 'button'
+  ok.onclick = hideOverlay
+  sheet.append(ok)
   return sheet
 }

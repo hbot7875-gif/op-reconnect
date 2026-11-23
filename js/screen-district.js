@@ -1858,7 +1858,9 @@ function shelf(state, mapD) {
   const ctx = collectionContext(state)
   const wrap = el('section', 'shelf kept')
   const head = el('div', 'shelf-head')
-  head.innerHTML = `<span class="shelf-title">Kept here</span><span class="shelf-count">${kept.length || 'empty'}</span>`
+  // ARMY's Corner: the player's own small spot in a big district, where
+  // their BTS collectibles are on show.
+  head.innerHTML = `<span class="shelf-title">ARMY's Corner</span>`
   const add = el('button', 'kept-add', '<span aria-hidden="true">+</span> Place')
   add.type = 'button'
   add.disabled = !spare.length
@@ -1868,18 +1870,18 @@ function shelf(state, mapD) {
   wrap.appendChild(head)
 
   if (kept.length) {
-    const grid = el('div', 'collection-shelf')
+    const grid = el('div', 'collection-shelf army-corner')
     for (const it of kept) {
       grid.appendChild(collectibleTile(it, ctx, {
-        showPlace: false,
+        showPlace: false, plain: true,
         onPick: (item) => showOverlay(itemSheet(item, { districtId: mapD.id, districtName: districtDisplayName(mapD) })),
       }))
     }
     wrap.appendChild(grid)
   } else {
     wrap.appendChild(el('div', 'dim shelf-empty', spare.length
-      ? 'Nothing kept here yet. Place a collectible from your Pack.'
-      : 'Restore districts to find things worth keeping: albums, posters, photocards.'))
+      ? 'Your corner is looking a little empty. Pick something from your Pack!'
+      : 'Your corner is looking a little empty. Restore districts to find BTS collectibles to put here!'))
   }
   return wrap
 }
