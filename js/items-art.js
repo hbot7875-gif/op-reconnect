@@ -98,7 +98,91 @@ const D = {
 
 const FALLBACK = `<rect x="8" y="8" width="24" height="24" rx="2" class="ia-body"/>`
 
+/* ── albums as records ────────────────────────────────────────────────────
+   An album collectible is drawn as a vinyl record. What makes each one its
+   own is the centre label: the era's colours and its name set in type —
+   never the cover artwork (see the note at the top of this file). Media
+   items (a tour documentary, a concert film) are films, not records, so they
+   get a disc in a slim case instead. Unknown eras fall back to a colour
+   picked from the name, so a new album row still draws as a distinct record. */
+
+const ALBUM_LABELS = {
+  arirang: { label: '#b8324a', ink: '#fbe9d7', sleeve: '#3a1420', word: 'ARIRANG' },
+  proof: { label: '#f2efe8', ink: '#141414', sleeve: '#1a1a1a', word: 'PROOF' },
+  be: { label: '#d9cfbf', ink: '#2c2620', sleeve: '#4a4038', word: 'BE' },
+  mots: { label: '#c9ccd6', ink: '#16161c', sleeve: '#2a2b33', word: 'MOTS:7' },
+}
+const FALLBACK_LABELS = [
+  { label: '#8b5cf6', ink: '#f4efff', sleeve: '#2a1d52' },
+  { label: '#d9ad5f', ink: '#241a08', sleeve: '#3b2c12' },
+  { label: '#5fb3c9', ink: '#081d24', sleeve: '#16323b' },
+  { label: '#e58fb0', ink: '#2a0d19', sleeve: '#3d1a28' },
+]
+
+function albumLabel(item) {
+  const key = String(item?.era || '').toLowerCase().replace(/[^a-z]/g, '')
+  const known = ALBUM_LABELS[key]
+  if (known) return known
+  const name = String(item?.name || item?.era || 'album')
+  let h = 0
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0
+  const pick = FALLBACK_LABELS[h % FALLBACK_LABELS.length]
+  return { ...pick, word: name.toUpperCase().slice(0, 8) }
+}
+
+const escText = (s) => String(s).replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]))
+
+/** The record itself, centred on (cx, cy) with radius r. */
+function disc(cx, cy, r, p) {
+  const grooves = [0.92, 0.82, 0.72, 0.62].map((k) => `<circle cx="${cx}" cy="${cy}" r="${(r * k).toFixed(2)}" class="ia-vinyl-groove"/>`).join('')
+  const lr = r * 0.42
+  const fs = lr * (p.word.length > 5 ? 0.36 : p.word.length > 3 ? 0.44 : 0.62)
+  return `<circle cx="${cx}" cy="${cy}" r="${r}" class="ia-vinyl"/>${grooves}
+    <path d="M ${cx - r * 0.78} ${cy - r * 0.42} A ${r * 0.88} ${r * 0.88} 0 0 1 ${cx - r * 0.1} ${cy - r * 0.86}" class="ia-vinyl-shine"/>
+    <circle cx="${cx}" cy="${cy}" r="${lr.toFixed(2)}" fill="${p.label}"/>
+    <text x="${cx}" y="${(cy - lr * 0.18).toFixed(2)}" text-anchor="middle" dominant-baseline="middle" class="ia-vinyl-word" fill="${p.ink}" font-size="${fs.toFixed(2)}">${escText(p.word)}</text>
+    <circle cx="${cx}" cy="${cy + lr * 0.42}" r="${(r * 0.06).toFixed(2)}" fill="${p.ink}" opacity=".55"/>`
+}
+
+/** 1 — the whole record, label centre stage. */
+export function vinylDiscArt(item) {
+  return `<svg viewBox="0 0 40 40" class="ia ia-album-vinyl">${disc(20, 20, 17, albumLabel(item))}</svg>`
+}
+
+/** 2 — the record half out of its sleeve; the sleeve carries the colour. */
+export function vinylSleeveArt(item) {
+  const p = albumLabel(item)
+  return `<svg viewBox="0 0 40 40" class="ia ia-album-vinyl">
+    ${disc(26.5, 20, 12, p)}
+    <rect x="1.5" y="8.5" width="23" height="23" rx="1.6" fill="${p.sleeve}"/>
+    <rect x="1.5" y="8.5" width="23" height="23" rx="1.6" class="ia-sleeve-edge"/>
+    <rect x="4.5" y="25" width="10" height="1.4" rx=".6" fill="${p.label}" opacity=".9"/>
+    <text x="4.5" y="22.4" class="ia-vinyl-word" fill="${p.label}" font-size="${p.word.length > 5 ? 2.8 : 4}">${escText(p.word)}</text>
+  </svg>`
+}
+
+/** Films: a disc in a slim case. */
+function filmArt() {
+  return `<svg viewBox="0 0 40 40" class="ia">
+    <rect x="7" y="5" width="24" height="30" rx="2" class="ia-body"/>
+    <rect x="9.5" y="7.5" width="19" height="25" rx="1" class="ia-spine"/>
+    <circle cx="23" cy="20" r="9" class="ia-film-disc"/>
+    <circle cx="23" cy="20" r="2.4" class="ia-hole"/>
+    <rect x="9.5" y="9" width="3" height="22" class="ia-accent" opacity=".85"/>
+  </svg>`
+}
+
+let albumStyle = 'disc'
+/** Preview only, while the two record styles are being compared. */
+export function setAlbumStyle(style) { albumStyle = style === 'sleeve' ? 'sleeve' : 'disc' }
+
+function albumArt(item) {
+  if (String(item?.era || '').toLowerCase() === 'media') return filmArt()
+  return albumStyle === 'sleeve' ? vinylSleeveArt(item) : vinylDiscArt(item)
+}
+
 export function itemArt(item) {
+  if (item?.kind === 'album') return albumArt(item)
   return `<svg viewBox="0 0 40 40" class="ia">${D[item?.kind] || FALLBACK}</svg>`
 }
 

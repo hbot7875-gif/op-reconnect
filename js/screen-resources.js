@@ -353,12 +353,15 @@ function agentBag(state) {
 function collectionObject(item) {
   const rarity = RARITY[item.rarity] || RARITY.common
   const button = el('button', `collection-object ${rarity.cls}${item.usedAt ? ' is-used' : ''}`)
-  const location = item.districtName ? `Kept at ${item.districtName}` : item.usedAt ? 'Used' : 'In Pack'
-  button.setAttribute('aria-label', `${item.name}. ${rarity.label}. ${location}.`)
+  // district_id is where the player placed it (the game doesn't record
+  // where it was found), so the wording says placed, not found.
+  const location = item.usedAt ? 'Used' : item.districtName ? `Placed in ${item.districtName}` : 'In your Pack'
+  button.dataset.kind = item.kind || ''
+  button.setAttribute('aria-label', `${item.name}. ${rarity.label}${item.era ? `, ${item.era}` : ''}. ${location}.`)
   button.innerHTML = `
     <span class="co-art">${itemArt(item)}</span>
     <span class="co-name">${esc(item.name)}</span>
-    <span class="co-meta"><span class="co-rarity">${esc(rarity.label)}</span></span>
+    <span class="co-meta"><span class="co-rarity">${esc(rarity.label)}</span>${item.era && item.era.toLowerCase() !== String(item.name || '').toLowerCase() ? `<span class="co-era">${esc(item.era)}</span>` : ''}</span>
     <span class="co-place">${esc(location)}</span>
   `
   button.onclick = () => showOverlay(itemSheet(item))

@@ -72,10 +72,9 @@ test('the identity card keeps its dossier header and the mono agent ID', () => {
   assert.match(block, /\.res-screen \.aid-head \{[^}]*border-bottom: 1px dashed/)
 })
 
-test('Recovered Objects: two columns at 320, three from 360 up', () => {
-  assert.match(block, /\.res-screen \.collection-shelf \{ grid-template-columns: repeat\(3, minmax\(0,1fr\)\)/)
-  const narrow = block.slice(block.indexOf('@media (max-width: 359px)'))
-  assert.match(narrow, /\.res-screen \.collection-shelf \{ grid-template-columns: repeat\(2, minmax\(0,1fr\)\); \}/)
+test('Recovered Objects: two columns on every phone width', () => {
+  assert.match(block, /\.res-screen \.collection-shelf \{ grid-template-columns: repeat\(2, minmax\(0,1fr\)\)/)
+  assert.doesNotMatch(block, /collection-shelf \{ grid-template-columns: repeat\(3/)
 })
 
 test('the event keepsake stays special without glow or gradient', () => {
