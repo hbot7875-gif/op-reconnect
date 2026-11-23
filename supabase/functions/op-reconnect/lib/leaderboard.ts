@@ -28,10 +28,16 @@ async function computeLeaderboard(supabase: SupabaseDB) {
   // ledger remain as historical records. rc_leaderboard therefore still
   // returns them unless this public response explicitly gates against the
   // authoritative rc_agents.retired_at flag.
-  const [{ data: activeAgents }, { data: profiles }] = await Promise.all([
+  // Districts owned = districts this agent restored themselves (their own
+  // rc_player_districts row reached 'restored'). Not visits, contributions,
+  // ReConnect help or placed collectibles. Display only: the order stays XP.
+  const [{ data: activeAgents }, { data: profiles }, { data: restoredRows }] = await Promise.all([
     supabase.from('rc_agents').select('agent_no').is('retired_at', null),
     supabase.from('rc_players').select('agent_no, equipped_badge_id'),
+    supabase.from('rc_player_districts').select('agent_no').eq('status', 'restored').range(0, 9999),
   ])
+  const owned = new Map<string, number>()
+  for (const r of restoredRows || []) owned.set(r.agent_no, (owned.get(r.agent_no) || 0) + 1)
   const active = new Set((activeAgents || []).map((a: any) => String(a.agent_no)))
   const activeProfiles = (profiles || []).filter((p: any) => active.has(String(p.agent_no)))
   // Keyed by agent_no, not codename — codenames are only checked against the
@@ -53,6 +59,7 @@ async function computeLeaderboard(supabase: SupabaseDB) {
     mode: row.mode,
     xp: Number(row.xp) || 0,
     level: levelFor(content, Number(row.xp) || 0).level,
+    districtsOwned: owned.get(row.agent_no) || 0,
     equippedBadgeId: icons.get(row.agent_no) || null,
     equippedBadgeArtwork: artwork.get(row.agent_no) || null,
   }))

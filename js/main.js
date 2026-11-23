@@ -150,6 +150,7 @@ function renderScreen(state) {
 let celebratedLevel = null
 let shownModeReview = null
 const celebratedEraCards = new Set()
+const celebratedCollection = new Set()
 let promptedLapse = null
 
 /** "X is restored! Tap to see it" — a toast that opens the district page,
@@ -219,6 +220,14 @@ subscribe((state) => {
   checkForMamaLivePopup(state)
   checkForGcInvite(state)
   checkForVotingAlerts(state.voting?.alerts)
+  // Weekly collection XP just paid (collectible-rewards.ts): one small toast.
+  const paidNow = state.collection?.newlyAwarded || []
+  const paidKey = paidNow.length ? `${state.collection.weekKey}:${paidNow.map((a) => a.itemId).join(',')}` : ''
+  if (paidKey && !celebratedCollection.has(paidKey)) {
+    celebratedCollection.add(paidKey)
+    const total = paidNow.reduce((s, a) => s + a.xp, 0)
+    toast(paidNow.length === 1 ? `+${total} XP · ${paidNow[0].name} (weekly collection)` : `+${total} XP from your collection this week`, 4200)
+  }
   for (const eraId of state.agentCharge?.newlyLitEraIds || []) {
     if (celebratedEraCards.has(eraId)) continue
     celebratedEraCards.add(eraId)

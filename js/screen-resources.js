@@ -41,6 +41,7 @@ import { packIcon } from './pack-icons.js'
 import { goDiary } from './router.js'
 import { cachedDiaryTheme, closedDiaryObject, rememberDiaryTheme } from './screen-diary.js'
 import { importantDatesOn, nextImportantDate } from '../supabase/functions/op-reconnect/lib/diary-dates.js'
+import { collectibleWeeklyXp, COLLECTION_WEEKLY_CAP } from '../supabase/functions/op-reconnect/lib/collectible-values.js'
 
 /* ── Agent ID ─────────────────────────────────────────────────────────── */
 function agentIdCard(state) {
@@ -350,7 +351,63 @@ function agentBag(state) {
 /** Pack-only shelf object. District shelves can keep their collectible-card
  * treatment; the Agent Pack is a physical locker, so objects sit directly on
  * a shelf with a small label instead of inside another rectangle. */
-function collectionObject(item) {
+/* ── weekly collection XP (lib/collectible-rewards.ts pays it) ── */
+
+/** Which owned copy earns for each collectible: the first one placed in a
+ *  district this player restored (a second copy never adds). */
+function earningCopies(items, state) {
+  const restored = new Set((state.map?.districts || []).filter((d) => d.status === 'restored').map((d) => d.id))
+  const pick = new Map()
+  for (const it of items) {
+    if (!it.districtId || it.usedAt || !restored.has(it.districtId) || pick.has(it.itemId)) continue
+    if (collectibleWeeklyXp(it) > 0) pick.set(it.itemId, it.id)
+  }
+  return new Set(pick.values())
+}
+
+const shortReset = (iso) => {
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })
+}
+
+/** One compact strip: this week's collection XP against the cap, and what
+ *  it takes to earn (or when it starts / resets). */
+function collectionXpStrip(state) {
+  const c = state.collection
+  if (!c) return null
+  const box = el('button', 'cx-strip')
+  box.type = 'button'
+  const pct = Math.max(0, Math.min(100, Math.round((c.earned / (c.cap || COLLECTION_WEEKLY_CAP)) * 100)))
+  const startDay = new Date(`${c.startsWeek}T00:00:00+09:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  const note = !c.started ? `Starts ${startDay} · place collectibles in districts you restored`
+    : c.qualified ? (c.earned >= c.cap ? `Weekly max reached · resets ${shortReset(c.resetsAt)}` : `Resets ${shortReset(c.resetsAt)}`)
+    : `Unlock: ${c.plays}/${c.qualifyPlays} goal-song plays or restore a district this week`
+  box.innerHTML = `
+    <span class="cx-top"><span class="cx-title">Collection XP</span><span class="cx-amount"><b>${c.earned}</b> / ${c.cap} this week</span></span>
+    <span class="cx-bar"><i style="width:${pct}%"></i></span>
+    <span class="cx-note">${esc(note)}</span>`
+  box.setAttribute('aria-label', `Collection XP: ${c.earned} of ${c.cap} this week. ${note}. Tap for how it works.`)
+  box.onclick = () => showOverlay(collectionXpSheet(c))
+  return box
+}
+
+function collectionXpSheet(c) {
+  const sheet = el('div', 'sheet cx-sheet')
+  sheet.appendChild(el('div', 'eyebrow', 'COLLECTION XP'))
+  sheet.appendChild(el('p', 'cx-sheet-lede', `Collectibles placed in districts you restored earn XP once a week, up to ${c.cap} XP. Keep restoring that week to unlock it: ${c.qualifyPlays} goal-song plays, a restored district, or ${c.qualifyPlays} plays for a ReConnect team you're helping.`))
+  const rows = [
+    ['Albums', 15], ['Concert films', 12], ['ARMY Bomb', 12], ['Hoodies & clothing', 10], ['Photocards', 8],
+    ['Posters & banners', 7], ['Figures & plushies', 7], ['Mugs, cushions, rugs', 5], ['Light boxes & other decor', 5],
+  ]
+  sheet.appendChild(el('ul', 'cx-values', rows.map(([n, xp]) => `<li><span>${esc(n)}</span><b>${xp} XP</b></li>`).join('')))
+  sheet.appendChild(el('p', 'cx-sheet-foot', 'A second copy of the same collectible doesn’t add. Items in your Pack, tickets and Backup Passes don’t earn. Moving an item doesn’t earn again.'))
+  const close = el('button', 'btn btn-primary', 'Got it')
+  close.onclick = hideOverlay
+  sheet.appendChild(close)
+  return sheet
+}
+
+function collectionObject(item, earning = null, earned = null) {
   const rarity = RARITY[item.rarity] || RARITY.common
   const button = el('button', `collection-object ${rarity.cls}${item.usedAt ? ' is-used' : ''}`)
   // district_id is where the player placed it (the game doesn't record
@@ -358,8 +415,15 @@ function collectionObject(item) {
   const location = item.usedAt ? 'Used' : item.districtName ? `Placed in ${item.districtName}` : 'In your Pack'
   button.dataset.kind = item.kind || ''
   button.setAttribute('aria-label', `${item.name}. ${rarity.label}${item.era ? `, ${item.era}` : ''}. ${location}.`)
+  // Weekly XP chip: what it earns, and a tick once it has this week.
+  const weekly = collectibleWeeklyXp(item)
+  const isEarning = !!earning?.has(item.id)
+  const paid = isEarning && !!earned?.has(item.itemId)
+  const chip = weekly > 0
+    ? `<span class="co-xp${paid ? ' is-earned' : isEarning ? ' is-live' : ''}">${paid ? `✓ +${weekly} XP` : `${weekly} XP/wk`}</span>`
+    : ''
   button.innerHTML = `
-    <span class="co-art">${itemArt(item)}</span>
+    <span class="co-art">${itemArt(item)}${chip}</span>
     <span class="co-name">${esc(item.name)}</span>
     <span class="co-meta"><span class="co-rarity">${esc(rarity.label)}</span>${item.era && item.era.toLowerCase() !== String(item.name || '').toLowerCase() ? `<span class="co-era">${esc(item.era)}</span>` : ''}</span>
     <span class="co-place">${esc(location)}</span>
@@ -430,6 +494,9 @@ export function renderResources(container, state) {
     <span class="ps-count">${inPack} in Pack &middot; ${placed} placed</span>
   `))
 
+  const cxStrip = items.length ? collectionXpStrip(state) : null
+  if (cxStrip) wrap.appendChild(cxStrip)
+
   if (!items.length) {
     wrap.appendChild(el('div', 'dim pack-hint', 'Restore a district to find your first thing worth keeping.'))
   } else {
@@ -452,7 +519,9 @@ export function renderResources(container, state) {
 
     if (visible.length) {
       const grid = el('div', 'collection-shelf')
-      for (const it of visible) grid.appendChild(collectionObject(it))
+      const earning = earningCopies(items, state)
+      const earned = new Set(state.collection?.earnedItemIds || [])
+      for (const it of visible) grid.appendChild(collectionObject(it, earning, earned))
       wrap.appendChild(grid)
     } else {
       wrap.appendChild(el('div', 'dim pack-hint', 'Nothing in this filter yet.'))

@@ -1351,6 +1351,7 @@ export async function getMyRecruitMissions(supabase: SupabaseDB, content: GameCo
         districtId: m.district_id,
         districtName: district?.name || m.district_id,
         wardId: district?.ward_id || null,
+        goalId: m.goal_id,
         questLabel: goal?.label || 'ReConnect Quest',
         trackLabel: goal?.config?.sharedTrack?.label || null,
         complete: m.status === 'complete',

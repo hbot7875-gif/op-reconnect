@@ -61,7 +61,11 @@ async function moveItem(item, districtId, districtName = '') {
   const res = await call('placeItem', {
     agentNo: getAgentNo(), playerItemId: item.id, districtId,
   })
-  if (!res?.success) toast(res?.error || 'Could not move that — it may bounce back')
+  if (!res?.success) { toast(res?.error || 'Could not move that — it may bounce back'); return }
+  // Placing can earn this week's collection XP (collectible-rewards.ts runs
+  // on the next game state), so fetch it now instead of waiting for a poll.
+  const fresh = await call('getGameState', { agentNo: getAgentNo() })
+  if (fresh?.success) setState(fresh)
 }
 
 /** Detail sheet: what it is, where it lives, and what you can do with it. */

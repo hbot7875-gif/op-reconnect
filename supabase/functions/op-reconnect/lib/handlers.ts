@@ -36,6 +36,7 @@ import { getDistrictMessageSummary } from './district-presence.ts'
 import { getModeVolumeReview } from './mode-guard.ts'
 import { activationDayBounds, activationDayCounts } from './activation-window.ts'
 import { activeLeave, leaveStatus, frozenDistrictDates } from './leave.ts'
+import { awardCollectibleXp, questKeys } from './collectible-rewards.ts'
 
 
 // rc_agents (migration 016) is this season's own account table — a clean
@@ -640,6 +641,16 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     districtName: r.district_id ? (content.districts.find((d) => d.id === r.district_id)?.name || null) : null,
     usedAt: r.used_at,
   }))
+  // Weekly collectible XP (collectible-rewards.ts): pays at most once per
+  // collectible per week, only for districts this player restored and only
+  // in a restoring week. Added to this response's XP so the HUD and the Pack
+  // agree; a level-up it causes is picked up on the next poll.
+  const collection = await timed('collection', awardCollectibleXp(supabase, {
+    agentNo: player.agent_no, today, items, restored, rollups, activePd, pdRows: pdRows || [],
+    helpingQuests: (reconnectHelping || []).filter((h: any) => !h.expired && h.goalId)
+      .map((h: any) => ({ keys: questKeys(content.goals.find((g) => g.id === h.goalId)?.config || {}) })),
+  })).catch((e: unknown) => { console.error('collectible XP failed:', e instanceof Error ? e.message : e); return null })
+  const xpNow = xp + (collection?.awardedXp || 0)
 
   const bucket = todayRow?.track_counts || {}
   const counted = goalXpCountForDate(bucket, today, allowlist, cap, goalXpScope, trackArtistOverrides(content))
@@ -648,9 +659,9 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     success: true,
     joined: true,
     player: {
-      codename: player.codename, mode: player.mode, xp, spendableXp: walletXp,
-      rank: rankFor(content, xp),
-      level: { ...level, nextRewards: nextLevelRewards(content, level.level,
+      codename: player.codename, mode: player.mode, xp: xpNow, spendableXp: walletXp + (collection?.awardedXp || 0),
+      rank: rankFor(content, xpNow),
+      level: { ...(xpNow === xp ? level : levelFor(content, xpNow)), nextRewards: nextLevelRewards(content, level.level,
         levelUp?.backupPassLevel ?? (player.last_backup_pass_level || 0)) },
       streakFreezeCharges: streak.freezeChargesRemaining,
       deadlineExtensionCharges: (player.deadline_extension_charges || 0) + (levelUp?.extensionChargeGranted || 0),
@@ -716,6 +727,7 @@ async function buildState(supabase: SupabaseDB, content: GameContent, agent: any
     invites,
     reconnectAlerts,
     reconnectHelping,
+    collection,
     broadcasts,
     // The one-time legal-pages notice: the notice's own id for an agent who
     // predates the release, otherwise null. Deliberately not joined_at —
