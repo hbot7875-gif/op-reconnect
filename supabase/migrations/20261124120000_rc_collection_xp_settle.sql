@@ -15,6 +15,10 @@
 --      whether it's used), with the value it had BEFORE the change, so the
 --      settle can read placements exactly as they were at the reset, however
 --      late it runs. Moves after the reset don't change the week that ended.
+--   2b. rc_player_district_log — the same for district attempts. An attempt
+--      that expires (or a restored district lost to Bora decay) deletes its
+--      rc_player_districts row; the settle reads the row as it stood at the
+--      reset, so goal-song plays from the finished week still count.
 --   3. rc_award_collectible_xp() — the one way Collection XP is written, by
 --      the app's poll and by the settle alike. A per-player-per-week lock
 --      makes concurrent calls take turns; inside it the cap is checked
@@ -25,6 +29,15 @@
 --      15:40–15:50 fleet sync has finished reading Sunday), then again 24 h
 --      and 48 h later for plays that arrive late (ListenBrainz is re-read 48 h
 --      back, Musicat 24 h).
+--
+--   5. ARMY's Corner holds at most 7 collectibles per district (OT7). A
+--      trigger refuses a new placement into a full district; existing
+--      placements are never touched, and moving to the Pack is always allowed.
+--
+-- Both logs start empty and only record CHANGES: an item or district that
+-- hasn't changed since the migration is read from its current row, which is
+-- exactly how it stood at the reset. Apply before rewards start
+-- (2026-11-29 15:00 UTC = 8:30 PM IST).
 --
 -- Nothing existing is changed or backfilled: there are no collectible rows yet
 -- (rewards start with the week of 2026-11-30), and no collectible is moved.
@@ -79,6 +92,46 @@ create trigger rc_player_items_placement_log
   after update of district_id, used_at or delete on public.rc_player_items
   for each row execute function public.rc_log_item_placement();
 
+-- ── 2b. District attempt history ─────────────────────────────────────────
+create table if not exists public.rc_player_district_log (
+  id          bigint generated always as identity primary key,
+  agent_no    text        not null,
+  district_id text        not null,
+  op          text        not null check (op in ('update', 'delete')),
+  old_row     jsonb       not null,
+  changed_at  timestamptz not null default now()
+);
+create index if not exists rc_player_district_log_agent_idx on public.rc_player_district_log (agent_no, changed_at);
+create index if not exists rc_player_district_log_changed_idx on public.rc_player_district_log (changed_at);
+alter table public.rc_player_district_log enable row level security;
+revoke all on public.rc_player_district_log from anon, authenticated;
+
+create or replace function public.rc_log_player_district()
+returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  if tg_op = 'DELETE' then
+    insert into rc_player_district_log (agent_no, district_id, op, old_row)
+    values (old.agent_no, old.district_id, 'delete',
+            jsonb_build_object('district_id', old.district_id, 'status', old.status, 'goals', old.goals,
+                               'activated_at', old.activated_at, 'completed_at', old.completed_at));
+    return old;
+  end if;
+  if old.status is distinct from new.status or old.activated_at is distinct from new.activated_at
+     or old.completed_at is distinct from new.completed_at or old.goals is distinct from new.goals then
+    insert into rc_player_district_log (agent_no, district_id, op, old_row)
+    values (old.agent_no, old.district_id, 'update',
+            jsonb_build_object('district_id', old.district_id, 'status', old.status, 'goals', old.goals,
+                               'activated_at', old.activated_at, 'completed_at', old.completed_at));
+  end if;
+  return new;
+end $$;
+revoke all on function public.rc_log_player_district() from public, anon, authenticated;
+
+drop trigger if exists rc_player_districts_log on public.rc_player_districts;
+create trigger rc_player_districts_log
+  after update of status, activated_at, completed_at, goals or delete on public.rc_player_districts
+  for each row execute function public.rc_log_player_district();
+
 -- ── 3. The one writer ────────────────────────────────────────────────────
 -- p_awards: [{ "itemId": "...", "xp": 15 }, ...] best first (the order the
 -- caller's planAwards uses, so the cap keeps the most valuable ones).
@@ -129,6 +182,34 @@ begin
 end $$;
 revoke all on function public.rc_award_collectible_xp(text, date, integer, jsonb, text) from public, anon, authenticated;
 grant execute on function public.rc_award_collectible_xp(text, date, integer, jsonb, text) to service_role;
+
+-- ── 5. ARMY's Corner: 7 per district ─────────────────────────────────────
+-- Counts every placed collectible in that district (duplicates, and kinds the
+-- illustration doesn't draw); Backup Passes / utility items aren't
+-- collectibles and can't be placed. A lock per player + district makes two
+-- placements at once take turns, so neither can slip past 7.
+create or replace function public.rc_enforce_corner_limit()
+returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
+declare n integer;
+begin
+  if new.district_id is null then return new; end if;
+  if tg_op = 'UPDATE' and new.district_id is not distinct from old.district_id then return new; end if;
+  perform pg_advisory_xact_lock(hashtextextended('corner:' || new.agent_no || ':' || new.district_id, 0));
+  select count(*) into n
+    from rc_player_items pi join rc_items i on i.id = pi.item_id
+   where pi.agent_no = new.agent_no and pi.district_id = new.district_id and pi.id <> new.id
+     and i.kind <> 'utility' and pi.item_id <> 'backup-pass';
+  if n >= 7 then
+    raise exception 'district_full' using errcode = 'P0001', hint = 'ARMY''s Corner holds 7 collectibles';
+  end if;
+  return new;
+end $$;
+revoke all on function public.rc_enforce_corner_limit() from public, anon, authenticated;
+
+drop trigger if exists rc_player_items_corner_limit on public.rc_player_items;
+create trigger rc_player_items_corner_limit
+  before insert or update of district_id on public.rc_player_items
+  for each row execute function public.rc_enforce_corner_limit();
 
 -- ── 4. Schedule ──────────────────────────────────────────────────────────
 create or replace function public.rc_invoke_collection_settle()

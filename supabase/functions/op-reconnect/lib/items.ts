@@ -2,6 +2,7 @@
 // Split out from handlers.ts to keep it under the project's ~300-line rule.
 
 import type { SupabaseDB } from './config.ts'
+import { CORNER_LIMIT } from './collectible-values.js'
 
 /** Can this go on a district shelf? Backup Passes / utility items can't. */
 export function isPlaceableItem(item: { itemId?: string | null; kind?: string | null }) {
@@ -23,13 +24,24 @@ export async function placeItem(supabase: SupabaseDB, params: Record<string, unk
       .select('item_id, rc_items(kind)').eq('id', playerItemId).eq('agent_no', agentNo).maybeSingle()
     if (!owned) return { success: false, error: 'item_not_found' }
     if (!isPlaceableItem({ itemId: owned.item_id, kind: owned.rc_items?.kind })) return { success: false, error: 'not_placeable' }
+    // ARMY's Corner is full at CORNER_LIMIT. The database trigger is the real
+    // guard (it also stops two taps racing past it); this is the friendly
+    // answer. Already-placed items are never moved; the Pack always works.
+    const { data: here, error: hereErr } = await supabase.from('rc_player_items')
+      .select('id, item_id, rc_items(kind)').eq('agent_no', agentNo).eq('district_id', districtId)
+    if (hereErr) return { success: false, error: hereErr.message }
+    const taken = (here || []).filter((r: any) => r.id !== playerItemId && isPlaceableItem({ itemId: r.item_id, kind: r.rc_items?.kind })).length
+    if (taken >= CORNER_LIMIT) return { success: false, error: 'district_full', limit: CORNER_LIMIT }
   }
 
   const { data, error } = await supabase.from('rc_player_items')
     .update({ district_id: districtId })
     .eq('id', playerItemId).eq('agent_no', agentNo)
     .select('id').maybeSingle()
-  if (error) return { success: false, error: error.message }
+  if (error) {
+    if (/district_full/.test(error.message || '')) return { success: false, error: 'district_full', limit: CORNER_LIMIT }
+    return { success: false, error: error.message }
+  }
   if (!data) return { success: false, error: 'item_not_found' }
   return { success: true }
 }

@@ -9,8 +9,9 @@
 //   - placements: current rc_player_items rolled back through
 //     rc_item_placement_log, so a move, a Move to Pack or a ticket used after
 //     the reset doesn't change the week that ended;
-//   - restored districts and the active attempt: completed_at / activated_at
-//     before the reset;
+//   - restored districts and the active attempt: rc_player_districts rolled
+//     back through rc_player_district_log, so an attempt that expired (its
+//     row deleted) after the reset still counts for the week it ran in;
 //   - plays: rc_daily_activity for the seven KST days of that week, which the
 //     hourly fleet sync keeps current for everyone (and re-reads when plays
 //     arrive late);
@@ -84,6 +85,29 @@ export function itemsAt(current: ItemRow[], log: LogRow[], atIso: string) {
     if (!out.has(id) && !(current || []).some((r) => r.id === id)) add(id, l.item_id, l.obtained_at, l.old_district_id, l.old_used_at)
   }
   return [...out.values()]
+}
+
+/** rc_player_districts rows as they stood at `atIso`: a row changed or
+ *  deleted since (an attempt that expired, a district lost to Bora decay,
+ *  one restored after the reset) comes back from rc_player_district_log as
+ *  it was. Rows created after are left for districtsAt to drop. */
+export function districtRowsAt(current: any[], log: any[], atIso: string) {
+  const at = Date.parse(atIso)
+  const key = (r: any) => `${r.district_id}|${r.activated_at ? Date.parse(r.activated_at) : ''}`
+  const firstAfter = new Map<string, any>()
+  for (const l of [...(log || [])].sort((a, b) => Date.parse(a.changed_at) - Date.parse(b.changed_at))) {
+    if (Date.parse(l.changed_at) < at || !l.old_row) continue
+    const k = key(l.old_row)
+    if (!firstAfter.has(k)) firstAfter.set(k, l.old_row)
+  }
+  const out: any[] = []
+  const seen = new Set<string>()
+  for (const r of current || []) {
+    const k = key(r)
+    out.push(firstAfter.get(k) || r); seen.add(k)
+  }
+  for (const [k, row] of firstAfter) if (!seen.has(k)) out.push(row)
+  return out
 }
 
 /** Districts as they stood at `atIso`: restored before it, and the attempt
@@ -181,26 +205,28 @@ export async function settleCollectionXp(supabase: SupabaseDB, params: Record<st
     }))
   }
 
-  // The log only has to reach back past the catch-up window.
+  // The logs only have to reach back past the catch-up window.
   if (!dryRun) {
-    await supabase.from('rc_item_placement_log').delete()
-      .lt('changed_at', new Date(nowMs - 21 * 86400_000).toISOString())
+    const cutoff = new Date(nowMs - 21 * 86400_000).toISOString()
+    await supabase.from('rc_item_placement_log').delete().lt('changed_at', cutoff)
+    await supabase.from('rc_player_district_log').delete().lt('changed_at', cutoff)
   }
   return { success: true, weekKey, dryRun, considered: agents.length, qualified, paidPlayers, paidXp, failed, results }
 }
 
 async function settleOne(supabase: SupabaseDB, agentNo: string, weekKey: string, goals: any[], dryRun: boolean) {
   const b = weekBounds(weekKey)
-  const [items, log, pd, daily, parts, ledger] = await Promise.all([
+  const [items, log, pd, pdLog, daily, parts, ledger] = await Promise.all([
     supabase.from('rc_player_items').select('id, agent_no, item_id, district_id, used_at, obtained_at').eq('agent_no', agentNo),
     supabase.from('rc_item_placement_log').select('player_item_id, agent_no, item_id, obtained_at, old_district_id, old_used_at, changed_at')
       .eq('agent_no', agentNo).gte('changed_at', b.endIso),
     supabase.from('rc_player_districts').select('district_id, status, goals, activated_at, completed_at').eq('agent_no', agentNo),
+    supabase.from('rc_player_district_log').select('old_row, changed_at').eq('agent_no', agentNo).gte('changed_at', b.endIso),
     supabase.from('rc_daily_activity').select('kst_date, track_counts').eq('agent_no', agentNo).gte('kst_date', weekKey).lte('kst_date', b.lastDay),
     supabase.from('rc_reconnect_participants').select('mission_id, status, joined_at, left_at').eq('agent_no', agentNo),
     supabase.from('rc_xp_ledger').select('dedup_key, amount').eq('agent_no', agentNo).eq('source', 'collectible').eq('earned_week', weekKey),
   ])
-  for (const r of [items, log, pd, daily, parts, ledger]) if (r.error) throw new Error(r.error.message)
+  for (const r of [items, log, pd, pdLog, daily, parts, ledger]) if (r.error) throw new Error(r.error.message)
 
   const asOf = itemsAt(items.data || [], log.data || [], b.endIso)
   const placedIds = [...new Set(asOf.filter((x) => x.districtId).map((x) => x.itemId))]
@@ -221,7 +247,7 @@ async function settleOne(supabase: SupabaseDB, agentNo: string, weekKey: string,
   for (const r of ledger.data || []) if (String(r.dedup_key).startsWith(prefix)) paid.set(String(r.dedup_key).slice(prefix.length), Number(r.amount) || 0)
 
   const plan = planWeek({
-    weekKey, items: owned, pdRows: pd.data || [], rollups: daily.data || [],
+    weekKey, items: owned, pdRows: districtRowsAt(pd.data || [], pdLog.data || [], b.endIso), rollups: daily.data || [],
     helping: helpingDuring(parts.data || [], missions || [], goals, b.startIso, b.endIso), paid,
   })
   const already = [...paid.values()].reduce((s, n) => s + n, 0)

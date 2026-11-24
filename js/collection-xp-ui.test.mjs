@@ -69,3 +69,27 @@ test('announcement: automatic XP line, how to stay active, the closing call to a
   assert.match(src, /Go place your collectibles now and start earning XP from November 29, 8:30 PM IST!/)
   assert.doesNotMatch(src, /Rewards begin/)
 })
+
+test("ARMY's Corner: n/7 beside the title, the full message, the Place button off, the 7th centred", async () => {
+  const { CORNER_LIMIT } = await import('../supabase/functions/op-reconnect/lib/collectible-values.js')
+  assert.equal(CORNER_LIMIT, 7)
+  const district = readFileSync(new URL('./screen-district.js', import.meta.url), 'utf8')
+  const items = readFileSync(new URL('./items.js', import.meta.url), 'utf8')
+  const css = readFileSync(new URL('../css/reconnect.css', import.meta.url), 'utf8')
+  assert.match(items, /export const CORNER_FULL_MSG = "Your ARMY's Corner is full! Try another district or move an item to your Pack\."/)
+  assert.match(district, /\$\{kept\.length\}\/\$\{CORNER_LIMIT\}/)
+  assert.match(district, /add\.disabled = !spare\.length \|\| full/)
+  assert.match(district, /if \(full\) wrap\.appendChild\(el\('p', 'kept-full', CORNER_FULL_MSG\)\)/)
+  // A refused placement goes back where it was and says why.
+  assert.match(items, /res\?\.error === 'district_full' \? CORNER_FULL_MSG/)
+  assert.match(items, /Object\.assign\(hit, before\)/)
+  assert.match(css, /\.army-corner > :last-child:nth-child\(odd\) \{ grid-column: 1 \/ -1; justify-self: center;/)
+  // The street illustration still shows at most 6.
+  assert.match(readFileSync(new URL('./scene-items.js', import.meta.url), 'utf8'), /export const MAX_PROPS = 6/)
+})
+
+test('announcement: fits a 375×812 phone with spacing, not by cutting the automatic-XP line', () => {
+  const css = readFileSync(new URL('../css/reconnect.css', import.meta.url), 'utf8')
+  assert.match(css, /\.cx-intro\.sheet \{ padding-top: 16px; padding-bottom: 16px; \}/)
+  assert.match(css, /\.cx-intro \.help-intro-steps p \{ line-height: 1\.35; \}/)
+})

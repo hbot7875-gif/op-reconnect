@@ -4,6 +4,12 @@
 
 export const COLLECTION_WEEKLY_CAP = 50
 
+// ARMY's Corner holds at most this many placed collectibles per district (OT7).
+// Every placed collectible counts, copies and kinds the illustration doesn't
+// draw included. Enforced by placeItem and by a database trigger
+// (migration 20261124120000); the district page shows it as n/7.
+export const CORNER_LIMIT = 7
+
 /** Weekly XP for one collectible, by what it is. 0 = never earns. */
 export function collectibleWeeklyXp(item) {
   const kind = String(item?.kind || '')

@@ -17,7 +17,8 @@ import { mountScene } from './scene.js'
 import { districtFraction, renderBoard } from './ui-district.js'
 import { districtPercent } from './district-progress.js'
 import { lastAttemptHtml } from './last-attempt.js'
-import { itemSheet, itemsAt, itemsInPack, moveItem } from './items.js'
+import { itemSheet, itemsAt, itemsInPack, moveItem, CORNER_FULL_MSG } from './items.js'
+import { CORNER_LIMIT } from '../supabase/functions/op-reconnect/lib/collectible-values.js'
 import { collectibleTile, collectionContext, isCollectible } from './collectible-tile.js'
 import { trackEngagementOnce } from './engagement.js'
 import { reconnectPlayerNext, sharedTracksPitch, questRuleNotes } from './reconnect-player-ui.js'
@@ -1860,14 +1861,18 @@ function shelf(state, mapD) {
   const head = el('div', 'shelf-head')
   // ARMY's Corner: the player's own small spot in a big district, where
   // their BTS collectibles are on show.
-  head.innerHTML = `<span class="shelf-title">ARMY's Corner</span>`
+  // n/7: every placed collectible counts (copies, and kinds the street
+  // illustration doesn't draw) — the same rule the server enforces.
+  const full = kept.length >= CORNER_LIMIT
+  head.innerHTML = `<span class="shelf-title">ARMY's Corner <span class="kept-count${full ? ' is-full' : ''}" aria-label="${kept.length} of ${CORNER_LIMIT} places used">${kept.length}/${CORNER_LIMIT}</span></span>`
   const add = el('button', 'kept-add', '<span aria-hidden="true">+</span> Place')
   add.type = 'button'
-  add.disabled = !spare.length
-  add.setAttribute('aria-label', spare.length ? `Place a collectible at ${districtDisplayName(mapD)}` : 'No collectibles in your Pack to place')
+  add.disabled = !spare.length || full
+  add.setAttribute('aria-label', full ? CORNER_FULL_MSG : spare.length ? `Place a collectible at ${districtDisplayName(mapD)}` : 'No collectibles in your Pack to place')
   add.onclick = () => showOverlay(placeSheet(state, mapD, spare))
   head.appendChild(add)
   wrap.appendChild(head)
+  if (full) wrap.appendChild(el('p', 'kept-full', CORNER_FULL_MSG))
 
   if (kept.length) {
     const grid = el('div', 'collection-shelf army-corner')
@@ -1909,8 +1914,7 @@ function placeSheet(state, mapD, spare) {
         showPlace: false, count, chipBelow: true,
         onPick: async (picked) => {
           hideOverlay()
-          await moveItem(picked, mapD.id, districtDisplayName(mapD))
-          toast(`Placed at ${districtDisplayName(mapD)}`)
+          if (await moveItem(picked, mapD.id, districtDisplayName(mapD))) toast(`Placed at ${districtDisplayName(mapD)}`)
         },
       }))
     }

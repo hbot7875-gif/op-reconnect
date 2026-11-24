@@ -7,7 +7,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
 import {
-  settleCollectionXp, itemsAt, districtsAt, helpingDuring, weekToSettle, weekBounds, CATCH_UP_HOURS,
+  settleCollectionXp, itemsAt, districtsAt, districtRowsAt, helpingDuring, weekToSettle, weekBounds, CATCH_UP_HOURS,
 } from './collectible-settle.ts'
 import { awardCollectibleXp, WEEKLY_CAP, QUALIFY_PLAYS } from './collectible-rewards.ts'
 
@@ -24,7 +24,7 @@ const BEFORE = '2026-11-20T10:00:00.000Z'                  // long before reward
 // the paid read and the inserts so racing callers really interleave.
 function fakeDb(seed) {
   const t = {
-    rc_player_items: [], rc_item_placement_log: [], rc_player_districts: [], rc_daily_activity: [],
+    rc_player_items: [], rc_item_placement_log: [], rc_player_districts: [], rc_player_district_log: [], rc_daily_activity: [],
     rc_reconnect_participants: [], rc_reconnect_missions: [], rc_xp_ledger: [], rc_agents: [], rc_players: [],
     rc_items: [
       { id: 'album-be', name: 'BE', kind: 'album', era: 'BE' },
@@ -336,4 +336,65 @@ test('the migration: one locked writer, an earning week, a placement log, and th
   assert.match(sql, /cron\.schedule\('rc-collection-settle', '5 16 \* \* 0,1,2'/)
   assert.match(sql, /grant execute on function public\.rc_award_collectible_xp\(text, date, integer, jsonb, text\) to service_role/)
   assert.doesNotMatch(sql, /update public\.rc_player_items|delete from public\.rc_player_items/)
+  // District attempts are logged too, so one that expires after the reset still counts.
+  assert.match(sql, /after update of status, activated_at, completed_at, goals or delete on public\.rc_player_districts/)
+  // ARMY's Corner: 7, enforced under a lock, existing rows never touched.
+  assert.match(sql, /before insert or update of district_id on public\.rc_player_items/)
+  assert.match(sql, /if n >= 7 then\s+raise exception 'district_full'/)
+  assert.doesNotMatch(sql, /delete from public\.rc_player_districts|update public\.rc_player_districts/)
+})
+
+// Deletes / changes an rc_player_districts row the way the trigger logs it.
+const dropDistrict = (db, agentNo, districtId, when) => {
+  const i = db.t.rc_player_districts.findIndex((r) => r.agent_no === agentNo && r.district_id === districtId)
+  const [r] = db.t.rc_player_districts.splice(i, 1)
+  db.t.rc_player_district_log.push({ agent_no: agentNo, district_id: districtId, op: 'delete', changed_at: when,
+    old_row: { district_id: r.district_id, status: r.status, goals: r.goals, activated_at: r.activated_at, completed_at: r.completed_at } })
+}
+
+test('an attempt that expires after the reset (row deleted) still qualifies the week it ran in', async () => {
+  const db = fakeDb()
+  const A = player(db, 'AGENT110')
+  restored(db, A, 'd1'); own(db, A, 'i1', 'album-be', 'd1')
+  active(db, A, 'd2', ['k1'], '2026-11-29T15:30:00Z')
+  plays(db, A, '2026-12-03', 'k1', 12)
+  dropDistrict(db, A, 'd2', '2026-12-06T15:20:00Z')        // 20 min after the reset, 45 min before the first run
+  const r = await settle(db)
+  assert.equal(r.paidXp, 15)
+  // And a new attempt started after the reset doesn't stand in for it.
+  const db2 = fakeDb()
+  const B = player(db2, 'AGENT111')
+  restored(db2, B, 'd1'); own(db2, B, 'i1', 'album-be', 'd1')
+  active(db2, B, 'd2', ['k1'], '2026-11-29T15:30:00Z'); plays(db2, B, '2026-12-03', 'k1', 12)
+  dropDistrict(db2, B, 'd2', '2026-12-06T15:10:00Z')
+  active(db2, B, 'd3', ['k9'], '2026-12-06T15:40:00Z')
+  assert.equal((await settle(db2)).paidXp, 15)
+})
+
+test('a restored district lost after the reset still counts as restored for that week', async () => {
+  const db = fakeDb()
+  const A = player(db, 'AGENT112')
+  restored(db, A, 'd1'); own(db, A, 'i1', 'lightstick-v4', 'd1'); active(db, A, 'd2', ['k1']); plays(db, A, '2026-12-02', 'k1', 10)
+  dropDistrict(db, A, 'd1', '2026-12-06T15:30:00Z')
+  assert.equal((await settle(db)).paidXp, 12)
+})
+
+test('district rows at the reset: later changes undone, later rows left to districtsAt', () => {
+  const cur = [{ district_id: 'd2', status: 'restored', activated_at: '2026-12-01T00:00:00Z', completed_at: '2026-12-06T15:30:00Z', goals: {} }]
+  const log = [{ changed_at: '2026-12-06T15:30:00Z', old_row: { district_id: 'd2', status: 'active', activated_at: '2026-12-01T00:00:00+00:00', completed_at: null, goals: {} } }]
+  const rows = districtRowsAt(cur, log, RESET)
+  assert.equal(rows.length, 1)
+  assert.equal(rows[0].status, 'active')
+  assert.equal(districtsAt(rows, RESET).activePd.district_id, 'd2')
+})
+
+test('collectibles placed before the migration (no history) are read as placed, even if moved after the reset', async () => {
+  const db = fakeDb()
+  const A = player(db, 'AGENT113')
+  restored(db, A, 'd1', '2026-09-01T00:00:00Z'); active(db, A, 'd2', ['k1']); plays(db, A, '2026-12-04', 'k1', 10)
+  own(db, A, 'i1', 'album-be', 'd1', '2026-08-01T00:00:00Z')     // placed months ago, never touched since
+  own(db, A, 'i2', 'pc-arirang', 'd1', '2026-08-01T00:00:00Z')
+  move(db, 'i2', null, '2026-12-06T16:00:00Z')                    // its first logged change is after the reset
+  await settle(db)
+  assert.deepEqual(db.t.rc_xp_ledger.map((r) => r.meta.itemId).sort(), ['album-be', 'pc-arirang'])
 })

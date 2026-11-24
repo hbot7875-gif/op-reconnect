@@ -52,22 +52,33 @@ export function itemTile(item, onPick) {
 
 /** Put an owned item on a district's shelf (or back in the Pack with
  *  districtId null). Exported for the "Place something" picker. */
+export const CORNER_FULL_MSG = "Your ARMY's Corner is full! Try another district or move an item to your Pack."
+
 export async function moveItem(item, districtId, districtName = '') {
   const state = getState()
   // Optimistic: the shelf should respond instantly, it's a tiny action.
   const list = state.items || []
   const hit = list.find((x) => x.id === item.id)
+  const before = hit ? { districtId: hit.districtId, districtName: hit.districtName } : null
   if (hit) { hit.districtId = districtId; hit.districtName = districtId ? districtName : null }
   setState({ ...state, items: [...list] })
 
   const res = await call('placeItem', {
     agentNo: getAgentNo(), playerItemId: item.id, districtId,
   })
-  if (!res?.success) { toast(res?.error === 'not_placeable' ? 'Backup Passes stay in your Pack — use them from there.' : (res?.error || 'Could not move that — it may bounce back')); return }
+  if (!res?.success) {
+    // Put it back where it was: the server said no.
+    if (hit && before) { Object.assign(hit, before); const now = getState(); setState({ ...now, items: [...(now.items || [])] }) }
+    toast(res?.error === 'district_full' ? CORNER_FULL_MSG
+      : res?.error === 'not_placeable' ? 'Backup Passes stay in your Pack — use them from there.'
+      : (res?.error || 'Could not move that — it may bounce back'))
+    return false
+  }
   // Placing can earn this week's collection XP (collectible-rewards.ts runs
   // on the next game state), so fetch it now instead of waiting for a poll.
   const fresh = await call('getGameState', { agentNo: getAgentNo() })
   if (fresh?.success) setState(fresh)
+  return true
 }
 
 /** Detail sheet: what it is, where it lives, and what you can do with it. */
@@ -103,7 +114,7 @@ export function itemSheet(item, opts = {}) {
 
   if (districtId && item.districtId !== districtId) {
     const place = el('button', 'btn btn-primary', `Keep it at ${esc(districtName)}`)
-    place.onclick = async () => { hideOverlay(); await moveItem(item, districtId, districtName); toast(`Placed at ${districtName}`) }
+    place.onclick = async () => { hideOverlay(); if (await moveItem(item, districtId, districtName)) toast(`Placed at ${districtName}`) }
     sheet.appendChild(place)
   }
 
