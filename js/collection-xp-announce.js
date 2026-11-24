@@ -40,7 +40,8 @@ export function collectionXpIntroSheet() {
       ${point('🎒', "Want to see which collectibles you've earned? <b>Check your Pack!</b>")}
       ${point('🏙', 'Your <b>restored district count</b> is now visible in Rankings!')}
     </ul>
-    <p class="cx-intro-when">Rewards begin November 29 at 8:30 PM IST.</p>`
+    <p class="cx-intro-when">Rewards begin November 29 at 8:30 PM IST.</p>
+    <p class="cx-intro-cta">Go place your collectibles now and start earning XP from November 29, 8:30 PM IST!</p>`
   const ok = el('button', 'btn btn-primary help-send', 'Got it')
   ok.type = 'button'
   ok.onclick = hideOverlay

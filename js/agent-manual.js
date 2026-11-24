@@ -10,10 +10,14 @@
 // (side-missions.ts), +50 district restoration (config.ts), 24-hour invite
 // expiry (reconnect-missions.ts), and the 7/14-day safety clocks. Run ARMY
 // and the Album follow album-rules.js: 15 covers, one per daily Signal Sweep,
-// one gift sent and one received a day, gifting from day 3.
+// one gift sent and one received a day, gifting from day 3. Weekly
+// Collection XP follows collectible-values.js (per-type XP, 50 cap) and
+// collectible-rewards.ts (10 qualifying plays, the Monday 00:00 KST week).
 
 import { el, hideOverlay } from './state.js'
 import { ALBUM_SIZE, ALBUM_GIFT_MIN_DAYS } from '../supabase/functions/op-reconnect/lib/album-rules.js'
+import { COLLECTION_WEEKLY_CAP } from '../supabase/functions/op-reconnect/lib/collectible-values.js'
+import { COLLECTION_XP_ROWS } from './collection-xp-ui.js'
 
 const QUICK_START = [
   ['1', 'Check your ARMY Bomb', 'Open City and tap the Bomb. Feed it a Charge Cell, or switch on Auto Feed so it can use one when power runs out.'],
@@ -27,6 +31,17 @@ const XP_SOURCES = [
   ['📡', 'Signal Sweep', "Stream Wild Flower, Don't Say You Love Me, Haegeum, and Killin' It Girl. All four once before midnight KST earns +10 XP and one new BTS album cover; all four at 20 streams in one week earns another +30 XP."],
   ['🏙️', 'Restore a district', 'Complete every mission on its board to bring it online and earn +50 XP.'],
   ['🚨', 'Red Zone', 'Stream at least 7 times to qualify. If the network wins, the displayed XP pool is split among all qualifying agents.'],
+  ['🏠', 'Placed collectibles', `Up to ${COLLECTION_WEEKLY_CAP} XP a week. See Weekly Collection XP below.`],
+]
+
+// Weekly Collection XP — the full rules. The announcement pop-up stays short
+// and points here; the Pack's Collection XP sheet says the same in brief.
+const COLLECTION_RULES = [
+  ['🏙️', 'Where it counts', "Place collectibles in districts you've personally restored. Collectibles in your Pack don't earn XP until they're placed."],
+  ['🔓', 'Unlock each week', 'Do one of these during the week: 10 qualifying goal-song plays, restore a district, or 10 qualifying ReConnect plays while helping another team.'],
+  ['⚡', 'How much', `Each type earns its own weekly amount (albums earn 15 XP a week). Your collectibles can earn up to ${COLLECTION_WEEKLY_CAP} XP a week in total.`],
+  ['1️⃣', 'Once each', "Each unique collectible earns once a week. Duplicate copies don't earn extra XP, and moving an item doesn't earn it again."],
+  ['🔁', 'Weekly reset', 'Rewards reset every Sunday at 8:30 PM IST.'],
 ]
 
 const RUN_ZONE = [
@@ -91,6 +106,13 @@ export function agentManualSheet() {
   xp.body.appendChild(infoRow('⬆️', 'Level up', 'Every Level grants 1 Deadline Extension Charge, 1 Streak Freeze, and 2× XP for 60 minutes. Fuel is no longer a Level reward.'))
   xp.body.appendChild(el('p', 'am-footnote', 'XP raises your Level and Rank. Spendable XP can buy Wings or Skip a ReConnect Quest. Spending it never lowers a Level, Rank, badge, or reward you already earned.'))
   content.appendChild(xp.section)
+
+  const collection = detailSection('Weekly Collection XP')
+  for (const [icon, title, body] of COLLECTION_RULES) collection.body.appendChild(infoRow(icon, title, body))
+  collection.body.appendChild(el('ul', 'cx-values am-cx-values', COLLECTION_XP_ROWS.map(([n, xp]) => `<li><span>${n}</span><b>${xp} XP</b></li>`).join('')))
+  collection.body.appendChild(infoRow('💎', 'Common, Rare and Legendary', 'Rarity shows how hard a collectible is to find: Common turns up often, Rare less often, Legendary least of all. Rarity doesn’t change weekly XP — the collectible’s type does.'))
+  collection.body.appendChild(el('p', 'am-footnote', 'Tickets and Backup Passes don’t earn Collection XP. Your weekly total is in your Pack.'))
+  content.appendChild(collection.section)
 
   const team = detailSection('How ReConnect teams work')
   team.body.appendChild(el('p', 'am-intro', 'Some districts need one other agent before they can come back online.'))

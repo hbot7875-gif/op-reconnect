@@ -2399,7 +2399,8 @@ body.red-zone .wt-sweep { fill: var(--crimson); animation-duration: 1.1s; }
 /* One-time Weekly Collection XP announcement (collection-xp-announce.js):
    the Get help intro's layout, with emoji in the icon squares. */
 .cx-intro-ico { font-size: 17px; line-height: 1; }
-.cx-intro-when { margin: 0 0 14px; color: var(--gold); font-size: 13px; font-weight: 600; }
+.cx-intro-when { margin: 0 0 8px; color: var(--gold); font-size: 13px; font-weight: 600; }
+.cx-intro-cta { margin: 0 0 14px; color: var(--v-ink-1, #fff); font-size: 14px; font-weight: 700; line-height: 1.4; }
 /* ARMY's Corner (district page): a small personal display, not another
    inventory. Two pieces to a row, standing on the page with a soft shadow
    and their name underneath; no cards, frames, rarity lines or XP chips. */

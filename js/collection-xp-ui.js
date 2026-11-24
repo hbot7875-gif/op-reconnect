@@ -10,6 +10,15 @@
 //   live      — placed right and unlocked; pays on the next refresh
 //   earned    — paid this week
 
+/** Weekly XP by collectible type, as players read it. Mirrors
+ *  collectibleWeeklyXp (collectible-values.js); a test keeps them in step.
+ *  Shown in the Pack's Collection XP sheet and in How to Play. */
+export const COLLECTION_XP_ROWS = [
+  ['Albums', 15], ['Concert films & documentaries', 12], ['ARMY Bombs', 12], ['Clothing', 10],
+  ['Photocards', 8], ['Posters, banners & bandanas', 7], ['Figures & plushies', 7],
+  ['Mugs, cushions, rugs & other decor', 5],
+]
+
 /**
  * @param weekly     the collectible's weekly XP (0 = never earns)
  * @param where      'pack' | 'unowned' | 'restored'

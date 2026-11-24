@@ -42,7 +42,7 @@ import { goDiary } from './router.js'
 import { cachedDiaryTheme, closedDiaryObject, rememberDiaryTheme } from './screen-diary.js'
 import { importantDatesOn, nextImportantDate } from '../supabase/functions/op-reconnect/lib/diary-dates.js'
 import { collectibleWeeklyXp, COLLECTION_WEEKLY_CAP } from '../supabase/functions/op-reconnect/lib/collectible-values.js'
-import { kstMidnightLabel, shortReset } from './collection-xp-ui.js'
+import { kstMidnightLabel, shortReset, COLLECTION_XP_ROWS } from './collection-xp-ui.js'
 import { collectibleTile, collectionContext, isPackObject } from './collectible-tile.js'
 
 /* ── Agent ID ─────────────────────────────────────────────────────────── */
@@ -364,7 +364,7 @@ function collectionXpStrip(state) {
   // (Sunday 8:30 PM in India), with its day and time so it can't read a day off.
   const note = !c.started ? `Starts ${kstMidnightLabel(c.startsWeek)} · place collectibles in districts you restored`
     : c.qualified ? (c.earned >= c.cap ? `Weekly max reached · resets ${shortReset(c.resetsAt)}` : `Resets ${shortReset(c.resetsAt)}`)
-    : `Unlock: ${c.plays}/${c.qualifyPlays} goal-song plays or restore a district this week`
+    : `Unlock: ${c.plays}/${c.qualifyPlays} goal-song plays, restore a district, or ${c.qualifyPlays} ReConnect plays this week`
   box.innerHTML = `
     <span class="cx-top"><span class="cx-title">Collection XP</span><span class="cx-amount"><b>${c.earned}</b> / ${c.cap} this week</span></span>
     <span class="cx-bar"><i style="width:${pct}%"></i></span>
@@ -377,13 +377,10 @@ function collectionXpStrip(state) {
 function collectionXpSheet(c) {
   const sheet = el('div', 'sheet cx-sheet')
   sheet.appendChild(el('div', 'eyebrow', 'COLLECTION XP'))
-  sheet.appendChild(el('p', 'cx-sheet-lede', `Collectibles placed in districts you restored earn XP once a week, up to ${c.cap} XP. Keep restoring that week to unlock it: ${c.qualifyPlays} goal-song plays, a restored district, or ${c.qualifyPlays} plays for a ReConnect team you're helping.`))
-  const rows = [
-    ['Albums', 15], ['Concert films', 12], ['ARMY Bomb', 12], ['Hoodies & clothing', 10], ['Photocards', 8],
-    ['Posters & banners', 7], ['Figures & plushies', 7], ['Mugs, cushions, rugs', 5], ['Light boxes & other decor', 5],
-  ]
-  sheet.appendChild(el('ul', 'cx-values', rows.map(([n, xp]) => `<li><span>${esc(n)}</span><b>${xp} XP</b></li>`).join('')))
-  sheet.appendChild(el('p', 'cx-sheet-foot', 'A second copy of the same collectible doesn’t add. Items in your Pack, tickets and Backup Passes don’t earn. Moving an item doesn’t earn again.'))
+  // Same rules as How to Play → Weekly Collection XP (agent-manual.js), in brief.
+  sheet.appendChild(el('p', 'cx-sheet-lede', `Collectibles placed in districts you've personally restored earn XP once a week, up to ${c.cap} XP. Unlock each week with ${c.qualifyPlays} qualifying goal-song plays, a restored district, or ${c.qualifyPlays} qualifying ReConnect plays while helping another team.`))
+  sheet.appendChild(el('ul', 'cx-values', COLLECTION_XP_ROWS.map(([n, xp]) => `<li><span>${esc(n)}</span><b>${xp} XP</b></li>`).join('')))
+  sheet.appendChild(el('p', 'cx-sheet-foot', 'The type sets the XP, not the rarity. Each unique collectible earns once a week; duplicate copies don’t add. Collectibles in your Pack, tickets and Backup Passes don’t earn. Resets every Sunday at 8:30 PM IST.'))
   const close = el('button', 'btn btn-primary', 'Got it')
   close.onclick = hideOverlay
   sheet.appendChild(close)
