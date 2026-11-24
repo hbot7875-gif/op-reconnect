@@ -42,7 +42,7 @@ import { goDiary } from './router.js'
 import { cachedDiaryTheme, closedDiaryObject, rememberDiaryTheme } from './screen-diary.js'
 import { importantDatesOn, nextImportantDate } from '../supabase/functions/op-reconnect/lib/diary-dates.js'
 import { collectibleWeeklyXp, COLLECTION_WEEKLY_CAP } from '../supabase/functions/op-reconnect/lib/collectible-values.js'
-import { kstMidnightLabel, shortReset, COLLECTION_XP_ROWS } from './collection-xp-ui.js'
+import { kstMidnightLabel, shortReset, COLLECTION_XP_ROWS, collectionChip } from './collection-xp-ui.js'
 import { collectibleTile, collectionContext, isPackObject } from './collectible-tile.js'
 
 /* ── Agent ID ─────────────────────────────────────────────────────────── */
@@ -317,7 +317,9 @@ function frontPocket(state) {
     // The real "Use the ticket" action lives in itemSheet — reused
     // directly, not reimplemented, so Launch the Voyage keeps working
     // exactly as it did before this screen's layout changed.
-    ticketSlot.onclick = () => showOverlay(itemSheet(unusedTickets[0] || tickets[0]))
+    // One ticket opens straight to it; several (used ones included, now the
+    // Recovered Objects filters are gone) open a short list of them all.
+    ticketSlot.onclick = () => showOverlay(tickets.length === 1 ? itemSheet(tickets[0]) : ticketListSheet(tickets))
   } else {
     ticketSlot.disabled = true
   }
@@ -413,16 +415,48 @@ function packReconnectRow() {
   return button
 }
 
-const FILTERS = [
-  { key: 'all', label: 'All', test: () => true },
-  { key: 'pack', label: 'In Pack', test: (i) => !i.districtId },
-  { key: 'placed', label: 'Placed', test: (i) => !!i.districtId },
-  { key: 'used', label: 'Used', test: (i) => !!i.usedAt },
-]
-// Module-level, same pattern screen-ranking.js's activeTab already uses —
-// survives the poll-driven re-render so the chosen filter doesn't reset
-// every 90s.
-let activeFilter = 'all'
+/** Every ticket, ready ones first, each opening its own details (Use the
+ *  ticket, Move to Pack) — so a used or placed ticket is never out of reach. */
+function ticketListSheet(tickets) {
+  const sheet = el('div', 'sheet ticket-list-sheet')
+  sheet.appendChild(el('div', 'eyebrow', 'FRONT POCKET'))
+  sheet.appendChild(el('h3', '', 'Tickets'))
+  const list = el('div', 'placed-list')
+  const sorted = [...tickets].sort((a, b) => (a.usedAt ? 1 : 0) - (b.usedAt ? 1 : 0))
+  for (const t of sorted) {
+    const row = el('button', 'placed-row')
+    row.type = 'button'
+    const status = t.usedAt ? 'Used' : t.districtId ? `Ready · placed in ${t.districtName || 'a district'}` : 'Ready to use'
+    row.innerHTML = `<span class="pr-thumb">${itemArt(t)}</span><span class="pr-text"><b>${esc(t.name)}</b><small>${esc(status)}</small></span>`
+    row.setAttribute('aria-label', `${t.name}, ${status}`)
+    row.onclick = () => showOverlay(itemSheet(t))
+    list.appendChild(row)
+  }
+  sheet.appendChild(list)
+  return sheet
+}
+
+// Placed list: first few rows, then "View all" (kept across poll re-renders).
+let placedExpanded = false
+
+/** One placed collectible as a compact row: thumbnail, name, where, and its
+ *  weekly XP status (collection-xp-ui.js, same words as the tiles). */
+function placedRow(item, ctx, onOpen) {
+  const row = el('button', `placed-row ${(RARITY[item.rarity] || RARITY.common).cls}`)
+  row.type = 'button'
+  const weekly = collectibleWeeklyXp(item)
+  const isEarning = !!ctx?.earning?.has(item.id)
+  const where = ctx?.restoredIds?.has(item.districtId) ? 'restored' : 'unowned'
+  const chip = item.usedAt ? null : collectionChip(weekly, where, !isEarning && !!ctx?.countedIds?.has(item.itemId), isEarning && !!ctx?.earned?.has(item.itemId), ctx?.collection)
+  const place = item.usedAt ? 'Used' : item.districtName || 'A district'
+  row.innerHTML = `
+    <span class="pr-thumb">${itemArt(item)}</span>
+    <span class="pr-text"><b>${esc(item.name)}</b><small>${esc(place)}</small></span>
+    ${chip ? `<span class="co-xp pr-xp is-${chip.state}">${esc(chip.text)}</span>` : ''}`
+  row.setAttribute('aria-label', `${item.name}, ${place}${chip ? `, ${chip.text}` : ''}`)
+  row.onclick = () => onOpen(item)
+  return row
+}
 
 export function renderResources(container, state) {
   container.innerHTML = ''
@@ -444,10 +478,13 @@ export function renderResources(container, state) {
   const inPack = items.filter((i) => !i.districtId).length
   const placed = items.length - inPack
 
-  wrap.appendChild(el('div', 'pack-section pack-after-bag', `
+  const section = el('div', 'pack-section pack-after-bag', `
     <span class="ps-title">Recovered Objects</span>
-    <span class="ps-count">${inPack} in Pack &middot; ${placed} placed</span>
-  `))
+    <span class="ps-count">${inPack} in Pack &middot; ${placed
+      ? `<button type="button" class="ps-count-link" aria-label="Jump to your ${placed} placed collectibles">${placed} placed</button>`
+      : '0 placed'}</span>
+  `)
+  wrap.appendChild(section)
 
   const cxStrip = items.length ? collectionXpStrip(state) : null
   if (cxStrip) wrap.appendChild(cxStrip)
@@ -455,30 +492,52 @@ export function renderResources(container, state) {
   if (!items.length) {
     wrap.appendChild(el('div', 'dim pack-hint', 'Restore a district to find your first thing worth keeping.'))
   } else {
-    if (!inPack) wrap.appendChild(el('div', 'dim pack-hint', 'All collectibles are placed.'))
+    const ctx = collectionContext(state)
+    const open = (item) => showOverlay(itemSheet(item))
 
-    let visible = items
-    // Filter tabs only earn their keep once there's enough to actually sift
-    // through — under ~15 items the grid alone already answers everything
-    // these would ask.
-    if (items.length >= 15) {
-      const tabs = el('div', 'filter-tabs')
-      for (const f of FILTERS) {
-        const btn = el('button', 'filter-tab' + (f.key === activeFilter ? ' sel' : ''), f.label)
-        btn.onclick = () => { activeFilter = f.key; renderResources(container, state) }
-        tabs.appendChild(btn)
+    // In your Pack: only what can still be placed, as the artwork gallery.
+    // Copies of one collectible share a tile (×N); a copy that's placed
+    // elsewhere doesn't hide the ones still in the Pack.
+    wrap.appendChild(el('div', 'pack-sub', `<span>In your Pack</span><small>Ready to place in a district</small>`))
+    const unplaced = items.filter((i) => !i.districtId && !i.usedAt)
+    if (!unplaced.length) {
+      wrap.appendChild(el('div', 'dim pack-hint', 'Everything is placed. New finds land here.'))
+    } else {
+      const groups = new Map()
+      for (const it of unplaced) {
+        const g = groups.get(it.itemId)
+        if (g) g.count++
+        else groups.set(it.itemId, { item: it, count: 1 })
       }
-      wrap.appendChild(tabs)
-      visible = items.filter((FILTERS.find((f) => f.key === activeFilter) || FILTERS[0]).test)
+      const grid = el('div', 'collection-shelf')
+      for (const { item, count } of groups.values()) grid.appendChild(collectibleTile(item, ctx, { onPick: open, count, showPlace: false }))
+      wrap.appendChild(grid)
     }
 
-    if (visible.length) {
-      const grid = el('div', 'collection-shelf')
-      const ctx = collectionContext(state)
-      for (const it of visible) grid.appendChild(collectibleTile(it, ctx, { onPick: (item) => showOverlay(itemSheet(item)) }))
-      wrap.appendChild(grid)
-    } else {
-      wrap.appendChild(el('div', 'dim pack-hint', 'Nothing in this filter yet.'))
+    // Placed in districts: a compact list — the full artwork lives in each
+    // district's ARMY's Corner. Tap a row for its details (Move to Pack).
+    const placedItems = items.filter((i) => i.districtId || i.usedAt)
+    if (placedItems.length) {
+      const placedHead = el('div', 'pack-sub', `<span>Placed in districts</span><small>${placedItems.length}</small>`)
+      placedHead.id = 'pack-placed'
+      wrap.appendChild(placedHead)
+      section.querySelector('.ps-count-link')?.addEventListener('click', () => {
+        // Clear of the sticky HUD, which would otherwise sit over the heading.
+        const hud = document.getElementById('hud')?.getBoundingClientRect().bottom || 0
+        window.scrollTo({ top: placedHead.getBoundingClientRect().top + window.scrollY - Math.max(0, hud) - 12,
+          behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
+      })
+      const list = el('div', 'placed-list')
+      const LIMIT = 5
+      const showAll = placedExpanded || placedItems.length <= LIMIT + 1
+      for (const it of showAll ? placedItems : placedItems.slice(0, LIMIT)) list.appendChild(placedRow(it, ctx, open))
+      wrap.appendChild(list)
+      if (!showAll) {
+        const more = el('button', 'placed-more', `View all ${placedItems.length}`)
+        more.type = 'button'
+        more.onclick = () => { placedExpanded = true; renderResources(container, state) }
+        wrap.appendChild(more)
+      }
     }
   }
 

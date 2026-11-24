@@ -44,6 +44,7 @@ export function collectionXpIntroSheet() {
           <span>💜 Complete 10 qualifying ReConnect plays while helping a team</span>
         </span>
         <span class="cx-intro-more">📖 For more details, check How to Play → Weekly Collection XP.</span>`)}
+      ${point('✨', "XP is added automatically once you're eligible. <b>No claiming needed!</b>")}
       ${point('🎒', "Want to see which collectibles you've earned? <b>Check your Pack!</b>")}
       ${point('🏙', 'Your <b>restored district count</b> is now visible in Rankings!')}
     </ul>

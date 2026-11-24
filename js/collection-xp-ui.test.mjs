@@ -61,3 +61,11 @@ test('the XP table players read matches what the server pays', async () => {
   assert.match(manual, /Sunday at 8:30 PM IST/)
   assert.match(manual, /Rarity doesn’t change weekly XP/)
 })
+
+test('announcement: automatic XP line, how to stay active, the closing call to action', () => {
+  const src = readFileSync(new URL('./collection-xp-announce.js', import.meta.url), 'utf8')
+  assert.match(src, /point\('✨', "XP is added automatically once you're eligible\. <b>No claiming needed!<\/b>"\)/)
+  assert.match(src, /How to stay active\? Complete any <b>ONE<\/b> of these each week:/)
+  assert.match(src, /Go place your collectibles now and start earning XP from November 29, 8:30 PM IST!/)
+  assert.doesNotMatch(src, /Rewards begin/)
+})

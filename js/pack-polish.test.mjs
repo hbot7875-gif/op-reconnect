@@ -57,11 +57,18 @@ test('purple for progress, gold for ready, no crimson in the Pack outside the ev
 test('counts, gates and actions are unchanged', () => {
   assert.match(pack, /if \(backup\) backupSlot\.onclick = \(\) => openBackupPassFlow\(backup\)\n\s*else backupSlot\.disabled = true/)
   assert.match(pack, /helpSlot\.onclick = \(\) => openBackupHelpFlow\(\)/)
-  assert.match(pack, /ticketSlot\.onclick = \(\) => showOverlay\(itemSheet\(unusedTickets\[0\] \|\| tickets\[0\]\)\)/)
+  // One ticket opens its details; several open a list of every ticket, used
+  // ones included, each opening its own details.
+  assert.match(pack, /ticketSlot\.onclick = \(\) => showOverlay\(tickets\.length === 1 \? itemSheet\(tickets\[0\]\) : ticketListSheet\(tickets\)\)/)
+  assert.match(pack, /row\.onclick = \(\) => showOverlay\(itemSheet\(t\)\)/)
   assert.match(pack, /\$\{unusedTickets\.length \? `\$\{unusedTickets\.length\} ready` : tickets\.length \? 'All used' : 'None yet'\}/)
   assert.match(pack, /const value = p\[def\.key\] \|\| 0/)
-  assert.match(pack, /if \(items\.length >= 15\)/)
-  assert.match(pack, /collectibleTile\(it, ctx, \{ onPick: \(item\) => showOverlay\(itemSheet\(item\)\) \}\)/)
+  // Recovered Objects: the Pack gallery and the placed list replace the
+  // All / In Pack / Placed / Used tabs; every row and tile opens itemSheet.
+  assert.doesNotMatch(pack, /FILTERS|activeFilter|filter-tabs/)
+  assert.match(pack, /const open = \(item\) => showOverlay\(itemSheet\(item\)\)/)
+  assert.match(pack, /collectibleTile\(item, ctx, \{ onPick: open, count, showPlace: false \}\)/)
+  assert.match(pack, /row\.onclick = \(\) => onOpen\(item\)/)
   assert.match(keepsake, /card\.onclick = \(\) => showOverlay\(passSheet\(readCache\(\), false\)\)/)
 })
 
@@ -100,7 +107,7 @@ test('the dossier meta line is the level name and level only; the ID is the real
 })
 
 test('Pack ReConnect reuses the HUD button as a compact action row', () => {
-  const fn = pack.slice(pack.indexOf('function packReconnectRow'), pack.indexOf('const FILTERS'))
+  const fn = pack.slice(pack.indexOf('function packReconnectRow'), pack.indexOf('function ticketListSheet'))
   // the exact element renderHud() built and wired: same visibility, label, badge and tap
   assert.match(fn, /document\.getElementById\('hudReconnectStatus'\)/)
   assert.match(fn, /if \(!button\) return null/)

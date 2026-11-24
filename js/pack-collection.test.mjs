@@ -71,3 +71,22 @@ test('district scene draws an album as its framed cover, one image per album', (
   const art = read('./items-art.js')
   assert.doesNotMatch(art.slice(art.indexOf('export function coverSleeveArt')), /clip-path="url\(#/, 'no clipPath: it blacked out the cover as an image')
 })
+
+test('Pack: unplaced copies in the gallery, placed ones in a compact list, a count that jumps to it', () => {
+  const src = read('./screen-resources.js')
+  const render = src.slice(src.indexOf('export function renderResources'))
+  // In your Pack: only unplaced, unused collectibles; copies share one tile.
+  assert.match(render, /const unplaced = items\.filter\(\(i\) => !i\.districtId && !i\.usedAt\)/)
+  assert.match(render, /if \(g\) g\.count\+\+\s+else groups\.set\(it\.itemId, \{ item: it, count: 1 \}\)/)
+  // Placed in districts: thumbnail, name, district and weekly XP status; 5 then View all.
+  assert.match(render, /const placedItems = items\.filter\(\(i\) => i\.districtId \|\| i\.usedAt\)/)
+  assert.match(render, /const LIMIT = 5/)
+  assert.match(render, /`View all \$\{placedItems\.length\}`/)
+  const row = src.slice(src.indexOf('function placedRow'), src.indexOf('export function renderResources'))
+  assert.match(row, /pr-thumb">\$\{itemArt\(item\)\}/)
+  assert.match(row, /item\.districtName/)
+  assert.match(row, /collectionChip\(/)
+  // The "N placed" count at the top is a button that scrolls to the list.
+  assert.match(render, /class="ps-count-link"/)
+  assert.match(render, /window\.scrollTo\(\{ top: placedHead\.getBoundingClientRect\(\)\.top/)
+})
