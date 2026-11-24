@@ -678,6 +678,38 @@ function reconnectPanel(d) {
   return box
 }
 
+/** Why a teammate stopped counting, in words that match what happened
+ *  (refreshMission's leftReason). Only a lapse is "ran out of time". */
+export function leftDistrictNote(p, state, need) {
+  const me = !!p.isMe
+  const who = me ? 'You' : esc(p.codename)
+  const place = (id) => {
+    const d = (state?.map?.districts || []).find((x) => x.id === id)
+    return esc(d ? districtDisplayName(d) : 'that district')
+  }
+  const below = need > 0 ? ' below' : ''
+  switch (p.leftReason) {
+    case 'finished': {
+      const from = place(p.leftFrom)
+      return me
+        ? `You finished ${from}, so you no longer fill the ${from} spot on this team. Your plays so far still count.`
+        : `${who} finished ${from}, so they no longer fill the ${from} spot on this team. Their plays so far still count. You can invite someone still restoring ${from}${below}.`
+    }
+    case 'restored_here':
+      return me
+        ? "You've finished restoring this district, so you no longer count toward this team."
+        : `${who} finished restoring this district, so they no longer count toward this team. You're free to team up with someone else${below}.`
+    case 'no_district':
+      return me
+        ? "You aren't restoring a district right now, so you don't count toward this team until you start one."
+        : `${who} isn't restoring a district right now, so they don't count toward this team until they start one. You're free to team up with someone else${below}.`
+    default:
+      return me
+        ? "Your time restoring this district ran out, so you can't contribute here until you start it again."
+        : `${who} ran out of time restoring this district, so they can't contribute here until they start it again. You're free to team up with someone else${below}.`
+  }
+}
+
 /** "You're helping …" links for ReConnect teams this agent joined as a
  *  recruit on another district (getMyRecruitMissions). Accepting used to be
  *  the last a recruit ever saw of their team. Only teams still in progress:
@@ -1502,10 +1534,8 @@ function paintMissionPanel(box, d, res) {
   // restoration window on this district ran out, which deletes their attempt
   // and leaves them unable to see this mission at all. Without this the
   // partner just watches the shared total stop moving forever.
-  if (dropped.length) {
-    const who = dropped.map((p) => esc(p.codename)).join(', ')
-    problemHost.appendChild(el('p', 'muted reconnect-expired-note',
-      `${who} ran out of time restoring this district, so they can't contribute here until they start it again. You're free to team up with someone else${need > 0 ? ' below' : ''}.`))
+  for (const p of dropped) {
+    problemHost.appendChild(el('p', 'muted reconnect-expired-note', leftDistrictNote(p, getState(), need)))
   }
 
   // A teammate who's gone quiet. Named plainly so the person still playing

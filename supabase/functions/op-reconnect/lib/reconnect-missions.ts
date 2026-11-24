@@ -797,6 +797,9 @@ async function shape(
       // (see refreshMission). They contribute nothing and cannot see this
       // mission until they start the district again.
       leftDistrict: !!p._leftDistrict,
+      // Why (leftReasonFor) — the client words the note to match.
+      leftReason: p._leftDistrict ? (p._leftReason || 'lapsed') : null,
+      leftFrom: p._leftDistrict ? (p._leftFrom || null) : null,
       // Joined and still on the district, but has streamed nothing at all for
       // long enough to count as stalled for whoever is looking — the bar
       // tightens on the final day of a restoration, see idleThresholdFor.
@@ -932,6 +935,18 @@ async function refreshMission(
   // same distinction to stop a dropped partner from blocking them.
   const stillOn = await agentsStillOnDistrict(supabase, [mission.district_id, ...(config?.crossDistrictEligible || [])])
   for (const p of joined) p._leftDistrict = !stillOn.has(p.agent_no)
+  // Why they stopped counting — it isn't always a lapse. A helper who joined
+  // from Home Base and then FINISHED it was told they'd "run out of time"
+  // (AGENT298, AGENT294, Nov 2026). Display only: nothing here changes who
+  // counts.
+  const droppedNos = joined.filter((p: any) => p._leftDistrict).map((p: any) => p.agent_no)
+  if (droppedNos.length) {
+    const why = await leftDistrictReasons(supabase, mission.district_id, config?.crossDistrictEligible || [], droppedNos)
+    for (const p of joined) {
+      const r = why.get(p.agent_no)
+      if (r) { p._leftReason = r.reason; p._leftFrom = r.from }
+    }
+  }
   // Days since each teammate last streamed anything — surfaced so whoever is
   // carrying the mission can see WHY it stopped moving. Stored as a count
   // rather than a boolean because how much silence is tolerable depends on
@@ -1691,6 +1706,34 @@ function isSpokenFor(rosters: Map<string, any[]>, agentNo: string, stillOnDistri
  *  has dropped out. A recruited helper from a different district is
  *  exactly as "still on" as a native one; they just hold their active
  *  attempt somewhere else. */
+/** For roster members no longer on an allowed district: what happened.
+ *  'restored_here' — they finished this district; 'finished' — they joined
+ *  from another allowed district (e.g. Home Base) and finished that one;
+ *  'no_district' — an any-district team and they aren't restoring anything;
+ *  'lapsed' — their attempt ended without restoring (deadline / reset). */
+export function leftReasonFor(
+  missionDistrictId: string, crossDistrictEligible: string[], restoredRows: { district_id: string }[],
+): { reason: 'restored_here' | 'finished' | 'no_district' | 'lapsed'; from: string | null } {
+  if (restoredRows.some((r) => r.district_id === missionDistrictId)) return { reason: 'restored_here', from: missionDistrictId }
+  if (crossDistrictEligible.includes(ANY_DISTRICT)) return { reason: 'no_district', from: null }
+  const cross = restoredRows.find((r) => crossDistrictEligible.includes(r.district_id))
+  if (cross) return { reason: 'finished', from: cross.district_id }
+  return { reason: 'lapsed', from: null }
+}
+
+async function leftDistrictReasons(
+  supabase: SupabaseDB, missionDistrictId: string, crossDistrictEligible: string[], agentNos: string[],
+): Promise<Map<string, { reason: string; from: string | null }>> {
+  const ids = [missionDistrictId, ...crossDistrictEligible.filter((d) => d !== ANY_DISTRICT)]
+  const { data } = await supabase.from('rc_player_districts').select('agent_no, district_id')
+    .eq('status', 'restored').in('agent_no', agentNos).in('district_id', ids)
+  const out = new Map<string, { reason: string; from: string | null }>()
+  for (const a of agentNos) {
+    out.set(a, leftReasonFor(missionDistrictId, crossDistrictEligible, (data || []).filter((r: any) => r.agent_no === a)))
+  }
+  return out
+}
+
 async function agentsStillOnDistrict(supabase: SupabaseDB, districtId: string | string[]): Promise<Set<string>> {
   const ids = Array.isArray(districtId) ? districtId : [districtId]
   let query = supabase.from('rc_player_districts').select('agent_no').eq('status', 'active')
