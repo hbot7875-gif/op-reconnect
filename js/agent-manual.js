@@ -110,7 +110,7 @@ export function agentManualSheet() {
   const collection = detailSection('Weekly Collection XP')
   for (const [icon, title, body] of COLLECTION_RULES) collection.body.appendChild(infoRow(icon, title, body))
   collection.body.appendChild(el('ul', 'cx-values am-cx-values', COLLECTION_XP_ROWS.map(([n, xp]) => `<li><span>${n}</span><b>${xp} XP</b></li>`).join('')))
-  collection.body.appendChild(infoRow('💎', 'Common, Rare and Legendary', 'Rarity shows how hard a collectible is to find: Common turns up often, Rare less often, Legendary least of all. Rarity doesn’t change weekly XP — the collectible’s type does.'))
+  collection.body.appendChild(infoRow('💎', 'Common, Rare and Legendary', 'Common collectibles turn up often, Rare ones less often, and Legendary ones are the hardest to find. Some special collectibles only come from events or special rewards. Rarity doesn’t change weekly XP — the collectible’s type does.'))
   collection.body.appendChild(el('p', 'am-footnote', 'Tickets and Backup Passes don’t earn Collection XP. Your weekly total is in your Pack.'))
   content.appendChild(collection.section)
 

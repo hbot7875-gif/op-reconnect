@@ -36,11 +36,17 @@ export function collectionXpIntroSheet() {
     <p class="help-lede">Your collectibles aren't just for decoration anymore!</p>
     <ul class="help-intro-steps">
       ${point('💿', "Place collectibles in districts you've restored.")}
-      ${point('⚡', 'Stay active and earn up to <b>50 bonus XP every week</b> from your placed collectibles!')}
+      ${point('⚡', `Stay active and earn up to <b>50 bonus XP every week</b> from your placed collectibles!
+        <span class="cx-intro-how">How to stay active? Complete any <b>ONE</b> of these each week:</span>
+        <span class="cx-intro-ways">
+          <span>🎵 Stream 10 qualifying district goal-song plays</span>
+          <span>🏙 Restore 1 district</span>
+          <span>💜 Complete 10 qualifying ReConnect plays while helping a team</span>
+        </span>
+        <span class="cx-intro-more">📖 For more details, check How to Play → Weekly Collection XP.</span>`)}
       ${point('🎒', "Want to see which collectibles you've earned? <b>Check your Pack!</b>")}
       ${point('🏙', 'Your <b>restored district count</b> is now visible in Rankings!')}
     </ul>
-    <p class="cx-intro-when">Rewards begin November 29 at 8:30 PM IST.</p>
     <p class="cx-intro-cta">Go place your collectibles now and start earning XP from November 29, 8:30 PM IST!</p>`
   const ok = el('button', 'btn btn-primary help-send', 'Got it')
   ok.type = 'button'
