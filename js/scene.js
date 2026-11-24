@@ -331,14 +331,15 @@ export function renderScene(ctx, m, progress, t, reduced, charge = 0, props = []
     }
   }
 
-  // what you keep here — after the streetlights so the props read as lit by
-  // them, before the rain so the weather still falls in front of everything
-  drawProps(ctx, m, props, p, t, reduced)
-
   // rain — heavy while the district is dead, clears as it comes back
   drawWeather(ctx, m, p, t, reduced)
   drawLife(ctx, m, p, t, reduced)
   drawForeground(ctx, m, p)
+
+  // what you keep here — last, standing on the nearest strip of pavement
+  // (scene-items.js keeps them clear of the near-camera props and below the
+  // ground line, so nothing of the district is covered)
+  drawProps(ctx, m, props, p, t, reduced)
 }
 
 /** Whatever is falling — or not. Always thins as the district comes back. */

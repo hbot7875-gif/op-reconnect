@@ -60,7 +60,9 @@ test('a pier: things stand on the deck, not the water', () => {
   const props = layoutProps(TEN.slice(0, 4), m)
   const s = m.h / 158
   for (const p of props.filter((q) => q.place === 'stand')) {
-    assert.ok(Math.abs(p.y + p.h - (m.groundY - 9 * s)) < 0.01)
+    // feet just behind the deck's front edge (clipped there), so they stand on the planks
+    assert.ok(Math.abs(p.y + p.h - (m.groundY - 9 * s + 2.4 * s)) < 0.01)
+    assert.ok(Math.abs(p.clipY - (m.groundY - 9 * s + 1.1 * s)) < 0.01)
     assert.ok(p.x > m.w / 2 - 80 * s && p.x + p.w < m.w / 2 + 80 * s, 'on the deck')
   }
 })

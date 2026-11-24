@@ -1891,7 +1891,7 @@ function shelf(state, mapD) {
 function placeSheet(state, mapD, spare) {
   const sheet = el('div', 'sheet place-sheet kept')
   sheet.appendChild(el('div', 'eyebrow', 'FROM YOUR PACK'))
-  sheet.appendChild(el('h3', '', `Keep something at ${esc(districtDisplayName(mapD))}`))
+  sheet.appendChild(el('h3', '', `Place a collectible at ${esc(districtDisplayName(mapD))}`))
   const groups = new Map()
   for (const it of spare) {
     const g = groups.get(it.itemId)
@@ -1906,7 +1906,7 @@ function placeSheet(state, mapD, spare) {
     const grid = el('div', 'collection-shelf')
     for (const { item, count } of groups.values()) {
       grid.appendChild(collectibleTile(item, ctx, {
-        showPlace: false, count,
+        showPlace: false, count, chipBelow: true,
         onPick: async (picked) => {
           hideOverlay()
           await moveItem(picked, mapD.id, districtDisplayName(mapD))

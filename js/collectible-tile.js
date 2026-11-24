@@ -50,6 +50,8 @@ export function collectionContext(state) {
  * @param opts.onPick     tap handler
  * @param opts.showPlace  show "Placed in …" (off on a district's own shelf)
  * @param opts.count      copies owned, for the picker ("×2")
+ * @param opts.chipBelow  the placement picker: XP chip under the artwork,
+ *                        not over it
  * @param opts.plain      ARMY's Corner: just the artwork and its name — no
  *                        card, rarity line or XP chip (it's a display, not
  *                        an inventory)
@@ -69,11 +71,11 @@ export function collectibleTile(item, ctx, opts = {}) {
   const isEarning = !!ctx?.earning?.has(item.id)
   const where = !item.districtId ? 'pack' : ctx?.restoredIds?.has(item.districtId) ? 'restored' : 'unowned'
   const chipState = item.usedAt ? null : collectionChip(weekly, where, !isEarning && !!ctx?.countedIds?.has(item.itemId), isEarning && !!ctx?.earned?.has(item.itemId), ctx?.collection)
-  const chip = chipState && !opts.plain ? `<span class="co-xp is-${chipState.state}">${esc(chipState.text)}</span>` : ''
+  const chip = chipState && !opts.plain ? `<span class="co-xp is-${chipState.state}${opts.chipBelow ? ' is-below' : ''}">${esc(chipState.text)}</span>` : ''
   const count = opts.count > 1 ? `<span class="co-count">×${opts.count}</span>` : ''
   button.innerHTML = `
-    <span class="co-art">${itemArt(item)}${chip}${count}</span>
-    <span class="co-name">${esc(item.name)}</span>
+    <span class="co-art">${itemArt(item)}${opts.chipBelow ? '' : chip}${count}</span>
+    ${opts.chipBelow ? chip : ''}<span class="co-name">${esc(item.name)}</span>
     ${opts.plain ? '' : `<span class="co-meta"><span class="co-rarity">${esc(rarity.label)}</span>${item.era && item.era.toLowerCase() !== String(item.name || '').toLowerCase() ? `<span class="co-era">${esc(item.era)}</span>` : ''}</span>`}
     ${opts.showPlace === false ? '' : `<span class="co-place">${esc(location)}</span>`}
   `

@@ -11,6 +11,7 @@
 // itself.
 
 import { eraCoverBody as coverBody } from './run-ami-art.js'
+import { MERCH_ART } from './items-art-merch.js'
 
 // A cover inside a small tile: the cards' artwork, with two things Chrome
 // won't paint inside a clipped, nested SVG on a button swapped for
@@ -351,10 +352,16 @@ const ITEM_ART = {
 }
 
 export function itemArt(item) {
+  // Merch-inspired drawings (items-art-merch.js) first: they carry their own
+  // colours. The album sleeves stay as they are (album ids aren't in there;
+  // the concert media are, drawn as cases).
+  const merch = MERCH_ART[item?.itemId]
+  if (merch) return `<svg viewBox="0 0 40 40" class="ia ia-merch">${merch}</svg>`
   if (item?.kind === 'album') return albumArt(item)
   return `<svg viewBox="0 0 40 40" class="ia">${ITEM_ART[item?.itemId] || D[item?.kind] || FALLBACK}</svg>`
 }
 
-export const ITEM_IDS_WITH_OWN_ART = Object.keys(ITEM_ART)
+export const ITEM_IDS_WITH_OWN_ART = [...new Set([...Object.keys(ITEM_ART), ...Object.keys(MERCH_ART)])]
+export const MERCH_ITEM_IDS = Object.keys(MERCH_ART)
 
 export const ITEM_KINDS = Object.keys(D)

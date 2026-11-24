@@ -74,13 +74,12 @@ export function placementOf(item) {
   return 'stand'
 }
 
-/** Where the group stands: the near pavement, just behind any full-width
- *  fence, railing or rope line (so its posts never cross an item), and the
- *  scale that keeps the tallest thing below the ground line. */
+/** Where the group stands: two-thirds of the way down the near pavement —
+ *  drawn after the near-camera layer, so a fence or railing runs behind it —
+ *  and the scale that keeps the tallest thing below the ground line. */
 export function pavement(m) {
   const strip = m.h - m.groundY
-  const fgTop = { fence: 0.42, railing: 0.5, ropes: 0.5 }[m.fg?.kind] ?? 0.48
-  const base = m.groundY + strip * Math.min(0.48, fgTop) - 0.5
+  const base = m.groundY + strip * 0.66
   return { base, unit: (base - m.groundY - 1) / TALLEST }
 }
 
@@ -96,7 +95,10 @@ function pierDeck(m) {
   const posts = [-0.55, 0.15, 0.7].map((mo) => cx + mo * dw + 1.2 * s)
     .concat([-1, 1].map((e) => cx + e * (dw - 3 * s)))
   return {
-    base: m.groundY - 9 * s,
+    // Feet a little behind the deck's front edge, which hides them: they
+    // stand ON the planks rather than balancing on the edge.
+    base: m.groundY - 9 * s + 2.4 * s,
+    clipY: m.groundY - 9 * s + 1.1 * s,
     halves: [[cx - dw + 6 * s, cx - 4 * s], [cx + 4 * s, cx + dw - 6 * s]],
     blocks: posts.map((x) => [x - 5, x + 5]),
   }
@@ -264,6 +266,7 @@ export function layoutProps(items, m) {
   const ground = pavement(m)
   const unit = ground.unit
   let base = ground.base
+  let clipY = null
   const pad = 6
   const type = m.landmark?.type
   const centerGap = type && type !== 'bridge' ? Math.min(w * 0.28, 120) : 0
@@ -273,7 +276,7 @@ export function layoutProps(items, m) {
   let blocks = foregroundBlocks(m)
   if (type === 'pier') {
     const deck = pierDeck(m)
-    base = deck.base; halves = deck.halves; blocks = deck.blocks
+    base = deck.base; halves = deck.halves; blocks = deck.blocks; clipY = deck.clipY
   } else if (type === 'bridge') {
     // the river runs under the span, between the two towers
     const s = landmarkScale(m)
@@ -332,11 +335,11 @@ export function layoutProps(items, m) {
       const rw = Math.min(side.b - side.a, Math.max(units * unit, W + 8))
       const rh = Math.max(3, rw * 0.22)
       const rx = Math.max(side.a, Math.min(side.b - rw, cx - rw / 2))
-      out.push({ item, art, x: rx, y: base - rh * 0.6, w: rw, h: rh, place: 'floor', lit: false })
+      if (clipY === null) out.push({ item, art, x: rx, y: base - rh * 0.6, w: rw, h: rh, place: 'floor', lit: false })
     }
     let x = x0
     for (const p of row) {
-      out.push({ item: p.item, art: p.art, x, y: base - p.h, w: p.w, h: p.h, place: 'stand', lit: LIT_KINDS.has(p.item.kind) })
+      out.push({ item: p.item, art: p.art, x, y: base - p.h, w: p.w, h: p.h, place: 'stand', lit: LIT_KINDS.has(p.item.kind), clipY })
       x += p.w + GAP
     }
   }
@@ -369,6 +372,16 @@ export function drawProps(ctx, m, props, p, t, reduced) {
       glow.addColorStop(1, 'rgba(196, 181, 253, 0)')
       ctx.fillStyle = glow
       ctx.fillRect(cx - r, cy - r, r * 2, r * 2)
+    }
+
+    if (pr.clipY != null) {
+      // On a pier deck: the front edge of the planks hides the feet.
+      ctx.save()
+      ctx.beginPath(); ctx.rect(pr.x - 4, pr.y - pr.h, pr.w + 8, pr.clipY - pr.y + pr.h); ctx.clip()
+      ctx.globalAlpha = a
+      ctx.drawImage(img, sx, sy, sw, sh, pr.x, pr.y, pr.w, pr.h)
+      ctx.restore()
+      continue
     }
 
     if (pr.place === 'stand') {
