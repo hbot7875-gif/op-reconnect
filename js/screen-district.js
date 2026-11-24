@@ -640,13 +640,15 @@ function reconnectPanel(d) {
 
 /** "You're helping …" links for ReConnect teams this agent joined as a
  *  recruit on another district (getMyRecruitMissions). Accepting used to be
- *  the last a recruit ever saw of their team. */
-function recruitLinks(state, hereId) {
-  return (state.reconnectHelping || []).filter((h) => h.districtId !== hereId).map((h) => {
+ *  the last a recruit ever saw of their team. Only teams still in progress:
+ *  a finished or timed-out quest has nothing left to do, so its card goes
+ *  (the district itself still shows how it ended). */
+export function recruitLinks(state, hereId) {
+  return (state.reconnectHelping || []).filter((h) => h.districtId !== hereId && !h.complete && !h.expired).map((h) => {
     const link = el('button', 'recruit-link', `
       <span class="recruit-link-eyebrow">RECONNECT TEAM</span>
       <b>You're helping ${esc(h.districtName)}</b>
-      <small>${h.complete ? 'Quest complete' : h.expired ? 'Team ran out of time' : esc(h.trackLabel ? `Streaming ${h.trackLabel} together — see your team` : 'See your team')}</small>
+      <small>${esc(h.trackLabel ? `Streaming ${h.trackLabel} together — see your team` : 'See your team')}</small>
       <i aria-hidden="true">→</i>`)
     link.type = 'button'
     link.onclick = (e) => goDistrict(h.wardId, h.districtId, { x: e.clientX, y: e.clientY })
