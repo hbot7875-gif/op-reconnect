@@ -9056,17 +9056,25 @@ select.rc-multi-native {
    another district (screen-district.js recruitLinks). Same weight as the
    Playlist Vault card: a way somewhere, not this district's own work. */
 .recruit-link {
-  display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: 12px;
-  width: 100%; margin: var(--space-4) 0; padding: 13px 15px; appearance: none; cursor: pointer; text-align: left;
-  border: 1px solid rgba(139,92,246,.35); border-radius: var(--radius-md);
-  background: rgba(139,92,246,.08); color: var(--text);
+  display: grid; grid-template-columns: 1fr; align-items: center;
+  width: 100%; margin: 0 0 var(--space-4); padding: 12px 14px; appearance: none; cursor: pointer; text-align: left;
+  border: 1px solid rgba(45,212,191,.38); border-left: 4px solid #2dd4bf; border-radius: var(--radius-md);
+  background: rgba(45,212,191,.07); color: var(--text);
 }
-.recruit-link:hover { border-color: var(--purple-lt); }
-.recruit-link-eyebrow { grid-column: 1; font-family: var(--mono); font-size: 10.5px; font-weight: 700;
-  letter-spacing: .6px; color: var(--purple-lt); }
-.recruit-link b { grid-column: 1; margin-top: 3px; font-size: 14.5px; }
-.recruit-link small { grid-column: 1; margin-top: 2px; font-size: 12px; color: var(--muted); }
-.recruit-link > i { grid-column: 2; grid-row: 1 / span 3; font-style: normal; font-size: 18px; color: var(--purple-lt); }
+.recruit-link:hover { border-color: #5eead4; }
+.recruit-link-eyebrow { font-family: var(--mono); font-size: 10.5px; font-weight: 700; letter-spacing: .6px; color: #5eead4; }
+.recruit-link b { margin-top: 3px; font-size: 14.5px; }
+.recruit-link small { margin-top: 2px; font-size: 12px; color: var(--muted); }
+.recruit-link-go { justify-self: start; margin-top: 8px; font-size: 12.5px; font-weight: 700; color: #5eead4; }
+.recruit-link-go i { font-style: normal; }
+/* "Start restoring X?" (screen-district.js startConfirmSheet). */
+.start-confirm h3 { margin: 6px 0 8px; }
+.start-confirm p { line-height: 1.45; }
+.start-confirm-team { margin: 10px 0 14px; padding: 10px 12px; border-left: 4px solid #2dd4bf; border-radius: 10px;
+  background: rgba(45,212,191,.07); font-size: 13px; line-height: 1.45; color: var(--muted); }
+.start-confirm-team b { color: var(--text); }
+.start-confirm-goteam { margin-top: 8px; width: 100%; }
+.start-own-title { font-weight: 700; font-size: 14.5px; margin-bottom: 4px; }
 
 /* ── a compact shared header, per screen (compact-hud.js) ──
    Same contract as Moon Station's: every rule sits under the body class a

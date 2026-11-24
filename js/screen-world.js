@@ -1308,7 +1308,7 @@ function opCard(state) {
 
     card.classList.add('is-live')
     card.innerHTML = `
-      <div class="op-top"><span class="op-eyebrow">Now restoring</span></div>
+      <div class="op-top"><span class="op-eyebrow">Your active district</span></div>
       <div class="op-name">${esc(name)}</div>
       <div class="op-meter"><div class="op-meter-fill" style="width:${pct}%"></div></div>
       <div class="op-foot">

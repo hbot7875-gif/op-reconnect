@@ -101,7 +101,7 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
   }
 
   const eyebrowText = {
-    locked: 'SEALED', available: 'OFFLINE', active: 'RESTORING',
+    locked: 'SEALED', available: 'OFFLINE', active: 'YOUR DISTRICT · RESTORING',
     restored: 'ONLINE', centerpiece_dark: 'DORMANT', centerpiece_lit: 'AWAKE',
   }[mapD.status] || ''
   const head = container.querySelector('.screen-head')
@@ -179,8 +179,10 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
     renderBoard(board, d, { reconnectBox, vaultBox })
     if (d.reconnect?.done) maybeCelebrateQuest(d)
     // A team this agent joined as a recruit somewhere else: the way back to it.
+    // Above this district's own missions, not among them: helping a team
+    // somewhere else is a different thing from restoring this place.
     const helpingCards = recruitLinks(state, districtId)
-    if (helpingCards.length) board.querySelector(':scope > .board-head')?.after(...helpingCards)
+    if (helpingCards.length) board.prepend(...helpingCards)
     if (focusedComposer?.isConnected) {
       focusedComposer.focus({ preventScroll: true })
       if (composerSelection?.start != null) {
@@ -308,9 +310,16 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
     return
   } else {
     // available
-    card.appendChild(el('p', 'muted', 'This place has been dark for years. Start it up and your streams bring it back.'))
-    const go = el('button', 'btn btn-primary op-go', 'Light it up')
-    go.onclick = async () => {
+    if (helpedQuest) card.appendChild(el('div', 'start-own-title', `Restore ${esc(districtDisplayName(mapD))} yourself`))
+    card.appendChild(el('p', 'muted', helpedQuest
+      ? "Your team quest above doesn't need this. Only start it if you want this to be your own district."
+      : 'This place has been dark for years. Start it up and your streams bring it back.'))
+    const go = el('button', `btn ${helpedQuest ? 'btn-ghost' : 'btn-primary'} op-go`, 'Light it up')
+    // One tap used to start the attempt: players opened the wrong district
+    // (AGENT294, twice in one evening). Ask first, name the place, and point a
+    // helper who only meant to reach their team back to it.
+    go.onclick = () => showOverlay(startConfirmSheet(state, mapD, start))
+    const start = async () => {
       go.disabled = true
       go.textContent = 'STARTING…'
       const res = await call('startDistrict', { agentNo: getAgentNo(), districtId })
@@ -331,8 +340,39 @@ export function renderDistrictScreen(container, state, wardId, districtId) {
     card.appendChild(go)
   }
 
-  board.appendChild(card)
+  // A helper's team quest comes first: it's usually why they're here.
   if (helpedQuest) board.append(...helpedQuest)
+  board.appendChild(card)
+}
+
+/** "Start restoring X?" — the one step before an attempt begins. */
+export function startConfirmSheet(state, mapD, onStart) {
+  const name = districtDisplayName(mapD)
+  const sheet = el('div', 'sheet start-confirm')
+  sheet.appendChild(el('div', 'eyebrow', 'START YOUR OWN DISTRICT'))
+  sheet.appendChild(el('h3', '', `Start restoring ${esc(name)}?`))
+  sheet.appendChild(el('p', 'muted', `<b>${esc(name)}</b> becomes your active district, the one you restore yourself. You can only restore one district at a time, and its deadline starts now.`))
+  const teams = (state.reconnectHelping || []).filter((h) => !h.complete && !h.expired)
+  const here = teams.find((h) => h.districtId === mapD.id)
+  const elsewhere = teams.filter((h) => h.districtId !== mapD.id)
+  if (here) sheet.appendChild(el('p', 'start-confirm-team', `Your ReConnect team here stays as it is.`))
+  for (const h of elsewhere) {
+    const box = el('div', 'start-confirm-team')
+    box.innerHTML = `You're also helping a team at <b>${esc(h.districtName)}</b>. That stays as it is. <b>Only looking for your team?</b>`
+    const goTeam = el('button', 'btn btn-ghost start-confirm-goteam', `Go to my team at ${esc(h.districtName)}`)
+    goTeam.type = 'button'
+    goTeam.onclick = (e) => { hideOverlay(); goDistrict(h.wardId, h.districtId, { x: e.clientX, y: e.clientY }) }
+    box.appendChild(goTeam)
+    sheet.appendChild(box)
+  }
+  const yes = el('button', 'btn btn-primary', `Yes, start ${esc(name)}`)
+  yes.type = 'button'
+  yes.onclick = () => { hideOverlay(); onStart() }
+  const no = el('button', 'btn btn-ghost', 'Cancel')
+  no.type = 'button'
+  no.onclick = hideOverlay
+  sheet.append(yes, no)
+  return sheet
 }
 
 /* ── Who's here ─────────────────────────────────────────────────────────
@@ -646,10 +686,11 @@ function reconnectPanel(d) {
 export function recruitLinks(state, hereId) {
   return (state.reconnectHelping || []).filter((h) => h.districtId !== hereId && !h.complete && !h.expired).map((h) => {
     const link = el('button', 'recruit-link', `
-      <span class="recruit-link-eyebrow">RECONNECT TEAM</span>
-      <b>You're helping ${esc(h.districtName)}</b>
-      <small>${esc(h.trackLabel ? `Streaming ${h.trackLabel} together — see your team` : 'See your team')}</small>
-      <i aria-hidden="true">→</i>`)
+      <span class="recruit-link-eyebrow">HELPING A TEAM · RECONNECT</span>
+      <b>You're helping at ${esc(h.districtName)}</b>
+      <small>${esc(h.trackLabel ? `Streaming ${h.trackLabel} together. Not your own district.` : 'Not your own district.')}</small>
+      <span class="recruit-link-go">Go to team quest <i aria-hidden="true">→</i></span>`)
+    link.setAttribute('aria-label', `You're helping at ${h.districtName}. Go to the team quest. This isn't your own district.`)
     link.type = 'button'
     link.onclick = (e) => goDistrict(h.wardId, h.districtId, { x: e.clientX, y: e.clientY })
     return link

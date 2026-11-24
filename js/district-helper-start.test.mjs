@@ -8,14 +8,15 @@ import { readFileSync } from 'node:fs'
 
 const src = readFileSync(new URL('./screen-district.js', import.meta.url), 'utf8').split('\r\n').join('\n')
 
-test('a helped quest (finished or still running) on an open district shows Light it up first, then the quest', () => {
+test('a helped quest on an open district shows the team quest first, then the start card (with a confirmation)', () => {
   assert.match(src, /const helpedAndCanStart = !!helping && !helping\.expired && mapD\.status === 'available' && !state\.activeDistrict/)
   // Only the quest (and return) when they can't start here.
   assert.match(src, /if \(!helpedAndCanStart\) \{[\s\S]*?board\.append\(head, box\)\s*return\s*\}/)
-  // Otherwise the start card is built as usual and the quest follows it.
-  const end = src.indexOf("board.appendChild(card)\n  if (helpedQuest) board.append(...helpedQuest)")
-  assert.ok(end > 0, 'quest appended after the start card')
-  assert.ok(src.indexOf("'Light it up'") < end)
+  // Otherwise the team quest comes first and the start card follows it.
+  const end = src.indexOf("if (helpedQuest) board.append(...helpedQuest)\n  board.appendChild(card)")
+  assert.ok(end > 0, 'quest appended before the start card')
+  // Starting still goes through a confirmation, never one tap.
+  assert.match(src, /go\.onclick = \(\) => showOverlay\(startConfirmSheet\(state, mapD, start\)\)/)
 })
 
 test('a page opened while the quest ran gets the start card once it finishes', () => {
