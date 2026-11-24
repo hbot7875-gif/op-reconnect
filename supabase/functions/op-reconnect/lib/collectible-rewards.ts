@@ -15,8 +15,11 @@
 //
 // Awards are rc_xp_ledger rows, source 'collectible', one per player + week +
 // collectible (dedup_key), so moving, removing or re-placing an item can
-// never pay twice, and two polls racing insert the same keys. Rewards start
-// at START_WEEK (the first weekly reset after release); nothing earlier is
+// never pay twice. They're written only through rc_award_collectible_xp
+// (payAwards), which locks the player's week and re-checks the cap, so the
+// poll and the weekly settle (collectible-settle.ts) can race safely.
+// earned_week records the week earned, apart from created_at (credited).
+// Rewards start at START_WEEK (the first weekly reset after release); nothing earlier is
 // paid. Everything here except awardCollectibleXp is pure, for the tests.
 
 import { kstWeekKey, addDaysStr } from './kst.ts'
@@ -128,6 +131,23 @@ export function weekQualifies(input: {
 // deno-lint-ignore no-explicit-any
 type Sb = any
 
+/** Writes awards through rc_award_collectible_xp — the only writer, shared by
+ *  the app's poll and the weekly settle. It locks the player's week, re-checks
+ *  the cap against what that week already paid, and skips any key already
+ *  there, so racing callers can't pay twice or pass the cap. Returns what was
+ *  actually written (itemId -> xp); an error writes nothing. */
+export async function payAwards(supabase: Sb, agentNo: string, weekKey: string, award: { itemId: string; xp: number }[], via: 'app' | 'settle') {
+  const got = new Map<string, number>()
+  if (!award.length) return got
+  const { data, error } = await supabase.rpc('rc_award_collectible_xp', {
+    p_agent_no: agentNo, p_week: weekKey, p_cap: WEEKLY_CAP,
+    p_awards: award.map((a) => ({ itemId: a.itemId, xp: a.xp })), p_via: via,
+  })
+  if (error) { console.error('collectible award failed:', error.message); return got }
+  for (const r of data || []) got.set(String(r.item_id), Number(r.amount) || 0)
+  return got
+}
+
 /** Pays this week's collectible XP if due, and returns what the Pack shows.
  *  Cheap on a normal poll: one ledger read, and only when something placed
  *  could earn. */
@@ -161,20 +181,11 @@ export async function awardCollectibleXp(supabase: Sb, input: {
   let awardedXp = 0
   const newlyAwarded: { itemId: string; name: string; xp: number }[] = []
   if (plan.award.length) {
-    const { data: inserted, error } = await supabase.from('rc_xp_ledger').upsert(
-      plan.award.map((a) => ({
-        agent_no: input.agentNo, amount: a.xp, source: 'collectible',
-        dedup_key: dedupKey(input.agentNo, weekKey, a.itemId),
-        meta: { weekKey, itemId: a.itemId },
-      })),
-      { onConflict: 'dedup_key', ignoreDuplicates: true },
-    ).select('dedup_key, amount')
-    if (!error) {
-      const got = new Set((inserted || []).map((r: any) => String(r.dedup_key)))
-      for (const a of plan.award) {
-        if (!got.has(dedupKey(input.agentNo, weekKey, a.itemId))) continue
-        newlyAwarded.push(a); awardedXp += a.xp; paid.set(a.itemId, a.xp)
-      }
+    const got = await payAwards(supabase, input.agentNo, weekKey, plan.award, 'app')
+    for (const a of plan.award) {
+      const xp = got.get(a.itemId)
+      if (xp == null) continue
+      newlyAwarded.push({ ...a, xp }); awardedXp += xp; paid.set(a.itemId, xp)
     }
   }
   return {

@@ -48,7 +48,9 @@ test('cap: highest value first, the last one trimmed to land on 50', () => {
 test('a move can never pay twice: one ledger key per player + week + collectible', () => {
   assert.equal(dedupKey('A1', '2026-11-30', 'album-be'), 'collectible:A1:2026-11-30:album-be')
   const src = readFileSync(new URL('./collectible-rewards.ts', import.meta.url), 'utf8')
-  assert.match(src, /onConflict: 'dedup_key', ignoreDuplicates: true/)
+  // Written only through the locked writer, whose dedup key is unique.
+  assert.match(src, /rpc\('rc_award_collectible_xp'/)
+  assert.doesNotMatch(src, /from\('rc_xp_ledger'\)\.(upsert|insert)/)
 })
 
 test('restoring week: 10 goal-song plays, a restore, or ReConnect help', () => {

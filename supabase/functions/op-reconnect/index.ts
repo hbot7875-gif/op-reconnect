@@ -76,6 +76,7 @@ import { runAmiState, runAmiCreateRoom, runAmiJoinRoom, runAmiWatchRoom, runAmiL
 import { albumState, albumGift } from './lib/album.ts'
 import { cronRaplineRefresh, getRaplineTracker } from './lib/rapline-tracker.ts'
 import { cronMamaRankCheck, getMamaRanking } from './lib/mama-rank.ts'
+import { settleCollectionXp } from './lib/collectible-settle.ts'
 import { getWarLeaderboard, markWarUnlockSeen, markWarUnlockAction } from './lib/war-of-cards.ts'
 import { submitHelpRequest, getMyHelpRequests, helpInbox, helpReply } from './lib/help.ts'
 import { getDistrictContributions } from './lib/district-contributions.ts'
@@ -419,6 +420,12 @@ const ROUTES: Record<string, Route> = {
   // fetches every 3 days; migration 20261027200500). Takes no params.
   cronRaplineRefresh: { auth: 'cron', handler: (sb) => cronRaplineRefresh(sb) },
   cronMamaRankCheck: { auth: 'cron', handler: (sb) => cronMamaRankCheck(sb) },
+  // Weekly Collection XP for the week that just ended, for everyone eligible
+  // (pg_cron rc-collection-settle, migration 20261124120000). Only the week
+  // that just ended, within its catch-up window; forwards nothing else.
+  cronSettleCollectionXp: { auth: 'cron', handler: (sb) => settleCollectionXp(sb, {}) },
+  // The same plan, never paid: who would get what for a week (admin check).
+  adminPreviewCollectionSettle: { auth: 'admin', handler: (sb, p) => settleCollectionXp(sb, { weekKey: p.weekKey, dryRun: true }) },
   adminGetEngagementReport: { auth: 'admin', handler: (sb, p) => adminGetEngagementReport(sb, p) },
 
   // Batch-assign a series of connect/invite missions for one reconnect goal
