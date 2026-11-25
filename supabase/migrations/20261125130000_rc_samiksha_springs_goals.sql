@@ -7,7 +7,8 @@
 -- have been matching in production (same label, aliases, track list), so the
 -- Hangul spellings come across byte for byte. New here: the songs Like
 -- Animals and Merry Go Round, and the albums HYYH Pt. 2 and FACE YOURSELF,
--- whose track names are the ones players' scrobbles actually report.
+-- whose track lists match Spotify (checked 2026-11-25) and the names players'
+-- scrobbles actually report.
 --
 -- FACE YOURSELF lists only the "- Japanese ver." spellings: a bracketed
 -- "(Japanese Version)" is dropped by title matching ("DNA (Japanese
@@ -74,12 +75,12 @@ begin
        {"aliases":["Blood Sweat & Tears - Japanese ver."],"label":"血、汗、涙 - Japanese ver."},
        {"aliases":[],"label":"DNA - Japanese ver."},
        {"aliases":[],"label":"Not Today - Japanese ver."},
-       {"aliases":[],"label":"Go Go - Japanese ver."},
        {"aliases":[],"label":"MIC Drop - Japanese ver."},
        {"aliases":[],"label":"Don''t Leave Me"},
-       {"aliases":[],"label":"Let Go"},
-       {"aliases":[],"label":"Spring Day - Japanese ver."},
+       {"aliases":[],"label":"Go Go - Japanese ver."},
        {"aliases":[],"label":"Crystal Snow"},
+       {"aliases":[],"label":"Spring Day - Japanese ver."},
+       {"aliases":[],"label":"Let Go"},
        {"aliases":[],"label":"OUTRO : Crack"}]'::jsonb,
      2, true, 666, 'mono-samiksha-springs', null, '{}'::jsonb)
   on conflict (id) do nothing;
