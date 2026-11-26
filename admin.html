@@ -2168,8 +2168,7 @@ function whenCell(item) {
 function paintQuestChips() {
   const counts = questStatusCounts(reconnectItems)
   const chips = [['all', 'All', counts.all], ['attention', 'Needs attention', counts.attention], ['open', 'Open', counts.open],
-    ['waiting', 'Waiting', counts.waiting], ['active', 'Active', counts.active], ['completed', 'Completed', counts.completed],
-    ['cancelled', 'Cancelled', counts.cancelled]]
+    ['waiting', 'Waiting', counts.waiting], ['active', 'Active', counts.active], ['completed', 'Completed', counts.completed]]
   $('questStatusChips').innerHTML = chips.map(([k, l, n]) =>
     `<button type="button" class="adm-chip${questFilterKey === k ? ' is-active' : ''}" data-qfilter="${k}" aria-pressed="${questFilterKey === k}">${esc(l)} ${n}</button>`).join('')
   const sorts = [['deadline', 'Deadline'], ['waiting', 'Waiting longest'], ['attention', 'Needs attention'], ['district', 'District A–Z']]
@@ -2186,7 +2185,7 @@ function paintReconnectList() {
   setCount('reconnect', counts.action, counts.action ? 'bad' : '')
   $('questDataNote').innerHTML = questListError
     ? `<span class="is-gap">Quest history unavailable (${esc(questListError)}). Showing open cases from the health check only.</span>`
-    : `Open quests, plus every quest created or completed in the last ${questDays} days (expired ones are left out). Stages are the stored quest phase.`
+    : `Open quests, plus every quest created or completed in the last ${questDays} days (expired and cancelled ones are left out). Stages are the stored quest phase.`
   paintQuestChips()
   const district = $('reconnectDistrictFilter').value
   const scoped = district ? reconnectItems.filter((i) => i.districtId === district) : reconnectItems
@@ -2202,8 +2201,7 @@ function paintReconnectList() {
     const open = searching || openDistricts.has(d.districtId)
     const c = d.counts
     const sum = [c.attention ? badge('bad', `${c.attention} need action`) : '', c.waiting ? badge('wait', `${c.waiting} waiting`) : '',
-      c.active ? badge('active', `${c.active} active`) : '', c.completed ? badge('done', `${c.completed} completed`) : '',
-      c.cancelled ? badge('muted', `${c.cancelled} cancelled`) : ''].join('')
+      c.active ? badge('active', `${c.active} active`) : '', c.completed ? badge('done', `${c.completed} completed`) : ''].join('')
     const openCount = c.waiting + c.active
     return `<div class="adm-acc${open ? ' is-open' : ''}" data-district="${esc(d.districtId)}">
       <button class="adm-acc-h" type="button" aria-expanded="${open}">
@@ -2426,13 +2424,13 @@ async function loadReconnectData() {
     $('questDistricts').innerHTML = `<div class="adm-empty">${esc(health?.error || list?.error || 'Failed to load')}</div>`
     return
   }
-  // Expired quests (and open teams already past their deadline) have nothing
-  // left for the admin to do, so they're left out of the panel entirely —
-  // not counted as "need action", not listed. Their rows stay in the
-  // database for players' history.
+  // Expired and cancelled quests (and open teams already past their
+  // deadline) have nothing left for the admin to do, so they're left out of
+  // the panel entirely — not counted as "need action", not listed. Their
+  // rows stay in the database for players' history.
   reconnectCases = (health?.success ? (health.cases || []) : []).filter((c) => !(c.flags || []).includes('expired'))
   questListError = list?.success ? '' : (list?.error || 'error')
-  reconnectItems = buildQuestItems(list?.success ? list.quests : [], reconnectCases).filter((i) => questStatus(i) !== 'expired')
+  reconnectItems = buildQuestItems(list?.success ? list.quests : [], reconnectCases).filter((i) => !['expired', 'cancelled'].includes(questStatus(i)))
   ov.reconnect = reconnectItems
   ov.reconnectCases = reconnectCases
   populateReconnectDistricts()
