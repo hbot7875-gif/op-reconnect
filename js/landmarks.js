@@ -41,7 +41,17 @@ const TYPES = [
   [/\blane\b|alley|boulevard|avenue|street|\brow\b|backstreet|corner|steps\b|\bwalk\b/i, 'street'],
 ]
 
+// A district renamed after launch keeps the artwork it was drawn with:
+// the scene, its icon and its variation all come from the name, so a
+// rename would redraw the place. Home Base was "Relay Zero" until
+// 2026-11-25 (its tower comes from "relay").
+const ART_NAMES = { 'Home Base': 'Relay Zero' }
+export function artName(name) {
+  return ART_NAMES[name] || name
+}
+
 export function landmarkType(name) {
+  name = artName(name)
   for (const [re, type] of TYPES) if (re.test(name || '')) return type
   return null
 }
@@ -57,6 +67,7 @@ const SHOP_KINDS = [
   [/parlou?r|studio|atelier|apothecary|records|booth|post office/i, 'parlor'],
 ]
 export function shopKindOf(name) {
+  name = artName(name)
   for (const [re, kind] of SHOP_KINDS) if (re.test(name || '')) return kind
   return null
 }

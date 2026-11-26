@@ -8,7 +8,7 @@
 // skyline keeps its distance so the place the district is named for reads
 // against clean sky.
 
-import { landmarkType, drawLandmark, shopKindOf } from './landmarks.js'
+import { landmarkType, drawLandmark, shopKindOf, artName } from './landmarks.js'
 import { layoutProps, drawProps, propsKey } from './scene-items.js'
 
 function hashStr(s) {
@@ -52,6 +52,8 @@ function weatherFor(districtId, wardId) {
 
 /** Deterministic skyline + window layout for one district. */
 export function buildModel(districtId, w, h, name = '', opts = {}) {
+  // The name the artwork was drawn from (a renamed district keeps its look).
+  name = artName(name)
   const { wardId = '', centerpiece = false } = opts
   const rnd = mulberry32(hashStr(districtId))
   const groundY = h * 0.82
